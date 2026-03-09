@@ -153,9 +153,10 @@ func (c *ChatPage) SetSession(sess api.Session) {
 	}
 
 	// Connect directly to the session pod's chat WS endpoint.
-	wsURL := api.ChatWSURL(sess.ChatEndpoint, c.token)
+	// WSClient.Connect handles token injection for full wss:// URLs.
+	chatEndpoint := sess.ChatEndpoint
 	go func() {
-		if err := c.ws.Connect(wsURL); err != nil {
+		if err := c.ws.Connect(chatEndpoint); err != nil {
 			select {
 			case connCh <- ChatDisconnectedMsg{Err: err}:
 			default:
@@ -393,9 +394,11 @@ func (c ChatPage) renderModelBar() string {
 	if c.connected {
 		connStatus = lipgloss.NewStyle().Foreground(theme.AccentEmerald).Render("● Connected")
 	} else if c.connErr != nil {
-		connStatus = lipgloss.NewStyle().Foreground(theme.AccentRed).Render(fmt.Sprintf("○ %v", c.connErr))
-	} else {
+		connStatus = lipgloss.NewStyle().Foreground(theme.AccentRed).Render("○ " + friendlyConnError(c.connErr))
+	} else if c.session != nil {
 		connStatus = lipgloss.NewStyle().Foreground(theme.AccentAmber).Render("◌ Connecting...")
+	} else {
+		connStatus = lipgloss.NewStyle().Foreground(theme.TextMuted).Render("○ No session")
 	}
 
 	// Thinking budget bar
@@ -547,6 +550,24 @@ func (c ChatPage) renderInput() string {
 		Width(c.width - 6).
 		Padding(0, 1).
 		Render(inputContent + "  " + badge)
+}
+
+// friendlyConnError converts a raw WebSocket/connection error into a user-friendly message.
+func friendlyConnError(err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "bad handshake"):
+		return "Connection refused (auth may have expired — try: volundr login)"
+	case strings.Contains(msg, "connection refused"):
+		return "Session unreachable (is it running?)"
+	case strings.Contains(msg, "no such host"):
+		return "Session host not found"
+	case strings.Contains(msg, "no chat endpoint"):
+		return msg // already friendly
+	case strings.Contains(msg, "i/o timeout"):
+		return "Connection timed out"
+	}
+	return msg
 }
 
 // wrapText wraps text to the given width.
