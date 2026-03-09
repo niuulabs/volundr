@@ -8,9 +8,23 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/niuulabs/volundr/cli/internal/api"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
+
+// ChatMessageReceivedMsg carries an incoming message from the WS.
+type ChatMessageReceivedMsg struct {
+	Message api.WSMessage
+}
+
+// ChatConnectedMsg signals that the chat WS connected.
+type ChatConnectedMsg struct{}
+
+// ChatDisconnectedMsg signals that the chat WS disconnected.
+type ChatDisconnectedMsg struct {
+	Err error
+}
 
 // ChatMessage represents a single message in the chat view.
 type ChatMessage struct {
@@ -30,26 +44,143 @@ type ChatPage struct {
 	inputActive bool
 	width       int
 	height      int
+
+	// Session & connection state
+	session   *api.Session
+	ws        *api.WSClient
+	token     string
+	connected bool
+	connErr   error
+	msgCh     chan ChatMessageReceivedMsg
+	connCh    chan tea.Msg
 }
 
-// NewChatPage creates a new chat page with demo data.
-func NewChatPage() ChatPage {
+// NewChatPage creates a new chat page.
+func NewChatPage(token string) ChatPage {
 	return ChatPage{
-		messages:    demoChatMessages(),
 		model:       "claude-sonnet-4",
 		thinking:    50,
 		inputActive: true,
+		token:       token,
+		msgCh:       make(chan ChatMessageReceivedMsg, 256),
+		connCh:      make(chan tea.Msg, 16),
 	}
 }
 
-// Init initializes the chat page.
+// Init starts listening for async messages.
 func (c ChatPage) Init() tea.Cmd {
-	return nil
+	return tea.Batch(
+		c.waitForMsg(),
+		c.waitForConn(),
+	)
+}
+
+// waitForMsg returns a command that waits for incoming chat messages.
+func (c ChatPage) waitForMsg() tea.Cmd {
+	ch := c.msgCh
+	return func() tea.Msg {
+		return <-ch
+	}
+}
+
+// waitForConn returns a command that waits for connection state changes.
+func (c ChatPage) waitForConn() tea.Cmd {
+	ch := c.connCh
+	return func() tea.Msg {
+		return <-ch
+	}
+}
+
+// SetSession connects to a session's chat WebSocket.
+func (c *ChatPage) SetSession(sess api.Session) {
+	// Close any existing connection.
+	if c.ws != nil {
+		_ = c.ws.Close()
+	}
+
+	c.session = &sess
+	c.messages = nil
+	c.connected = false
+	c.connErr = nil
+
+	// No chat endpoint means session isn't running or doesn't support chat.
+	if sess.ChatEndpoint == "" {
+		c.connErr = fmt.Errorf("session has no chat endpoint (status: %s)", sess.Status)
+		return
+	}
+
+	c.ws = api.NewWSClient("", c.token)
+
+	msgCh := c.msgCh
+	connCh := c.connCh
+
+	c.ws.OnMessage = func(msg api.WSMessage) {
+		select {
+		case msgCh <- ChatMessageReceivedMsg{Message: msg}:
+		default:
+		}
+	}
+
+	c.ws.OnStateChange = func(state api.WSState) {
+		switch state {
+		case api.WSConnected:
+			select {
+			case connCh <- ChatConnectedMsg{}:
+			default:
+			}
+		case api.WSDisconnected:
+			select {
+			case connCh <- ChatDisconnectedMsg{}:
+			default:
+			}
+		}
+	}
+
+	c.ws.OnError = func(err error) {
+		select {
+		case connCh <- ChatDisconnectedMsg{Err: err}:
+		default:
+		}
+	}
+
+	// Connect directly to the session pod's chat WS endpoint.
+	wsURL := api.ChatWSURL(sess.ChatEndpoint, c.token)
+	go func() {
+		if err := c.ws.Connect(wsURL); err != nil {
+			select {
+			case connCh <- ChatDisconnectedMsg{Err: err}:
+			default:
+			}
+		}
+	}()
 }
 
 // Update handles messages for the chat page.
 func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 	switch msg := msg.(type) {
+	case ChatMessageReceivedMsg:
+		wsMsg := msg.Message
+		chatMsg := ChatMessage{
+			Role:      wsMsg.Role,
+			Content:   wsMsg.Content,
+			Timestamp: time.Now(),
+		}
+		if chatMsg.Role == "" {
+			chatMsg.Role = "assistant"
+		}
+		c.messages = append(c.messages, chatMsg)
+		return c, c.waitForMsg()
+
+	case ChatConnectedMsg:
+		c.connected = true
+		c.connErr = nil
+		return c, c.waitForConn()
+
+	case ChatDisconnectedMsg:
+		c.connected = false
+		c.connErr = msg.Err
+		return c, c.waitForConn()
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up":
@@ -64,16 +195,26 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 			c.inputActive = !c.inputActive
 		case "enter":
 			if c.inputActive && c.input != "" {
-				c.messages = append(c.messages, ChatMessage{
+				userMsg := ChatMessage{
 					Role:      "user",
 					Content:   c.input,
 					Timestamp: time.Now(),
-				})
+				}
+				c.messages = append(c.messages, userMsg)
+
+				// Send over WS if connected.
+				if c.ws != nil && c.connected {
+					_ = c.ws.SendText(c.input)
+				}
 				c.input = ""
 			}
 		case "backspace":
 			if c.inputActive && len(c.input) > 0 {
 				c.input = c.input[:len(c.input)-1]
+			}
+		case "space":
+			if c.inputActive {
+				c.input += " "
 			}
 		default:
 			if c.inputActive && len(msg.String()) == 1 {
@@ -94,11 +235,24 @@ func (c *ChatPage) SetSize(w, h int) {
 func (c ChatPage) View() string {
 	theme := tui.DefaultTheme
 
+	// No session selected
+	if c.session == nil {
+		return lipgloss.NewStyle().
+			Width(c.width).
+			Height(c.height).
+			Padding(1, 2).
+			Render(lipgloss.JoinVertical(lipgloss.Left,
+				lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true).Render("  Chat"),
+				"",
+				lipgloss.NewStyle().Foreground(theme.AccentAmber).Render("  Select a session first (press 1 to go to Sessions, then Enter)"),
+			))
+	}
+
 	// Model indicator bar
 	modelBar := c.renderModelBar()
 
 	// Chat messages viewport
-	viewportHeight := c.height - 8 // Reserve space for header, input, model bar
+	viewportHeight := c.height - 8
 	messages := c.renderMessages(viewportHeight)
 
 	// Input area
@@ -129,13 +283,38 @@ func (c ChatPage) renderModelBar() string {
 	thinkingStyle := lipgloss.NewStyle().
 		Foreground(theme.AccentAmber)
 
+	// Session info
+	var sessionInfo string
+	if c.session != nil {
+		sessionInfo = lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render(fmt.Sprintf("  %s", c.session.Name))
+	}
+
+	// Connection status
+	var connStatus string
+	if c.connected {
+		connStatus = lipgloss.NewStyle().Foreground(theme.AccentEmerald).Render("● Connected")
+	} else if c.connErr != nil {
+		connStatus = lipgloss.NewStyle().Foreground(theme.AccentRed).Render(fmt.Sprintf("○ %v", c.connErr))
+	} else {
+		connStatus = lipgloss.NewStyle().Foreground(theme.AccentAmber).Render("◌ Connecting...")
+	}
+
 	// Thinking budget bar
 	budgetWidth := 20
 	filled := budgetWidth * c.thinking / 100
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", budgetWidth-filled)
 
-	return fmt.Sprintf("  %s  %s %s %s",
-		modelStyle.Render("◈ "+c.model),
+	modelName := c.model
+	if c.session != nil && c.session.Model != "" {
+		modelName = c.session.Model
+	}
+
+	return fmt.Sprintf("  %s%s  %s  %s %s %s",
+		modelStyle.Render("◈ "+modelName),
+		sessionInfo,
+		connStatus,
 		thinkingStyle.Render("Thinking:"),
 		thinkingStyle.Render(bar),
 		lipgloss.NewStyle().Foreground(theme.TextMuted).Render(fmt.Sprintf("%d%%", c.thinking)),
@@ -145,6 +324,21 @@ func (c ChatPage) renderModelBar() string {
 // renderMessages renders the chat message history.
 func (c ChatPage) renderMessages(maxHeight int) string {
 	theme := tui.DefaultTheme
+
+	if len(c.messages) == 0 {
+		hint := "  Send a message to start the conversation"
+		if !c.connected {
+			hint = "  Waiting for connection..."
+		}
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(theme.BorderSubtle).
+			Width(c.width - 6).
+			Height(maxHeight).
+			Padding(2, 1).
+			Foreground(theme.TextMuted).
+			Render(hint)
+	}
 
 	var lines []string
 	for _, msg := range c.messages {
@@ -189,7 +383,7 @@ func (c ChatPage) renderMessage(msg ChatMessage) string {
 
 	switch msg.Role {
 	case "user":
-		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentCyan).Bold(true)
+		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentAmber).Bold(true)
 		roleIcon = "▸ You"
 	case "assistant":
 		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentPurple).Bold(true)
@@ -205,7 +399,6 @@ func (c ChatPage) renderMessage(msg ChatMessage) string {
 		Foreground(theme.TextPrimary).
 		PaddingLeft(2)
 
-	// Wrap long content
 	maxWidth := c.width - 12
 	wrappedContent := wrapText(msg.Content, maxWidth)
 
@@ -218,33 +411,39 @@ func (c ChatPage) renderInput() string {
 
 	var borderColor color.Color
 	if c.inputActive {
-		borderColor = theme.AccentCyan
+		borderColor = theme.AccentAmber
 	} else {
 		borderColor = theme.BorderSubtle
 	}
 
 	prompt := lipgloss.NewStyle().
-		Foreground(theme.AccentCyan).
+		Foreground(theme.AccentAmber).
 		Bold(true).
 		Render("▸ ")
 
 	cursor := ""
 	if c.inputActive {
 		cursor = lipgloss.NewStyle().
-			Foreground(theme.AccentCyan).
+			Foreground(theme.AccentAmber).
 			Render("█")
 	}
 
 	inputContent := prompt + c.input + cursor
 
-	badge := components.NewStatusBadge("running")
+	// Show connection badge
+	var badge string
+	if c.connected {
+		badge = components.NewStatusBadge("running").View()
+	} else {
+		badge = components.NewStatusBadge("stopped").View()
+	}
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Width(c.width - 6).
 		Padding(0, 1).
-		Render(inputContent + "  " + badge.View())
+		Render(inputContent + "  " + badge)
 }
 
 // wrapText wraps text to the given width.
@@ -278,41 +477,4 @@ func wrapText(text string, width int) string {
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-// demoChatMessages returns realistic demo chat data.
-func demoChatMessages() []ChatMessage {
-	base := time.Date(2026, 3, 8, 14, 0, 0, 0, time.UTC)
-	return []ChatMessage{
-		{
-			Role:      "user",
-			Content:   "Can you add WebSocket reconnection logic to the API client? It should automatically retry with exponential backoff when the connection drops.",
-			Timestamp: base,
-		},
-		{
-			Role:      "assistant",
-			Content:   "I'll implement WebSocket reconnection with exponential backoff. Let me start by examining the current WebSocket client implementation.\n\nI can see the client in `internal/api/ws.go`. I'll add:\n\n1. A reconnection loop with configurable max retries\n2. Exponential backoff starting at 1s, capping at 30s\n3. A jitter factor to prevent thundering herd\n4. State change notifications so the UI can show connection status\n\nLet me make the changes now.",
-			Timestamp: base.Add(15 * time.Second),
-		},
-		{
-			Role:      "system",
-			Content:   "Modified: internal/api/ws.go (+47 lines, -3 lines)",
-			Timestamp: base.Add(45 * time.Second),
-		},
-		{
-			Role:      "assistant",
-			Content:   "Done. The reconnection logic is now in place. Key changes:\n\n- Added `reconnect()` method with exponential backoff (1s -> 2s -> 4s -> ... -> 30s cap)\n- Added jitter of 0-500ms to prevent synchronized reconnection storms\n- The `OnStateChange` callback now fires with `WSReconnecting` state\n- Max 10 retry attempts before giving up (configurable via `MaxRetries` field)\n\nWould you like me to add unit tests for the reconnection logic?",
-			Timestamp: base.Add(90 * time.Second),
-		},
-		{
-			Role:      "user",
-			Content:   "Yes, please add tests. Also make sure the reconnection preserves any pending message queue.",
-			Timestamp: base.Add(120 * time.Second),
-		},
-		{
-			Role:      "assistant",
-			Content:   "Good call on the message queue. I'll add a buffered channel that holds messages during disconnection, and flush them on reconnect. Let me implement both the queue and the tests.",
-			Timestamp: base.Add(135 * time.Second),
-		},
-	}
 }

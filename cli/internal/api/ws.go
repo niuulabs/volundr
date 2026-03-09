@@ -57,19 +57,29 @@ func NewWSClient(baseURL, token string) *WSClient {
 	}
 }
 
-// Connect establishes a WebSocket connection to the given path.
-func (w *WSClient) Connect(path string) error {
+// Connect establishes a WebSocket connection.
+// pathOrURL can be a relative path (appended to baseURL with Bearer auth)
+// or a full ws(s):// URL (used as-is with access_token query param).
+func (w *WSClient) Connect(pathOrURL string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	w.setState(WSConnecting)
 
+	var url string
 	header := http.Header{}
-	if w.token != "" {
-		header.Set("Authorization", "Bearer "+w.token)
+
+	if strings.HasPrefix(pathOrURL, "ws://") || strings.HasPrefix(pathOrURL, "wss://") {
+		// Full URL — append token as query param (session-pod style auth).
+		url = appendAccessToken(pathOrURL, w.token)
+	} else {
+		// Relative path — use base URL with Bearer header.
+		url = w.baseURL + pathOrURL
+		if w.token != "" {
+			header.Set("Authorization", "Bearer "+w.token)
+		}
 	}
 
-	url := w.baseURL + path
 	conn, _, err := websocket.DefaultDialer.Dial(url, header)
 	if err != nil {
 		w.setState(WSDisconnected)
@@ -180,6 +190,27 @@ func (w *WSClient) setState(state WSState) {
 	if w.OnStateChange != nil {
 		w.OnStateChange(state)
 	}
+}
+
+// appendAccessToken appends an access_token query parameter to a URL.
+func appendAccessToken(rawURL, token string) string {
+	if token == "" {
+		return rawURL
+	}
+	sep := "?"
+	if strings.Contains(rawURL, "?") {
+		sep = "&"
+	}
+	return rawURL + sep + "access_token=" + token
+}
+
+// SessionWSURL builds a full WebSocket URL for a session pod endpoint.
+// codeEndpoint is the session's HTTPS code_endpoint, path is the WS path to append.
+func SessionWSURL(codeEndpoint, path string) string {
+	base := strings.TrimRight(codeEndpoint, "/")
+	base = strings.Replace(base, "https://", "wss://", 1)
+	base = strings.Replace(base, "http://", "ws://", 1)
+	return base + path
 }
 
 // String returns a human-readable representation of the connection state.

@@ -163,12 +163,72 @@ type ChatMessage struct {
 
 // StatsResponse holds aggregate statistics.
 type StatsResponse struct {
-	TotalSessions   int     `json:"total_sessions"`
-	ActiveSessions  int     `json:"active_sessions"`
-	TotalTokens     int     `json:"total_tokens"`
-	TotalCost       float64 `json:"total_cost"`
-	AvgSessionTime  float64 `json:"avg_session_time_minutes"`
-	RunningPods     int     `json:"running_pods"`
+	ActiveSessions int     `json:"active_sessions"`
+	TotalSessions  int     `json:"total_sessions"`
+	TokensToday    int     `json:"tokens_today"`
+	LocalTokens    int     `json:"local_tokens"`
+	CloudTokens    int     `json:"cloud_tokens"`
+	CostToday      float64 `json:"cost_today"`
+}
+
+// UserProfile represents the current authenticated user.
+type UserProfile struct {
+	UserID      string   `json:"user_id"`
+	Email       string   `json:"email"`
+	TenantID    string   `json:"tenant_id"`
+	Roles       []string `json:"roles"`
+	DisplayName string   `json:"display_name"`
+	Status      string   `json:"status"`
+}
+
+// UserInfo represents a user in admin views.
+type UserInfo struct {
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	Status      string `json:"status"`
+	HomePVC     string `json:"home_pvc"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// Tenant represents an organization/tenant.
+type Tenant struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	ParentID  string `json:"parent_id,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
+// IntegrationCatalogEntry represents an available integration type.
+type IntegrationCatalogEntry struct {
+	Slug            string `json:"slug"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	IntegrationType string `json:"integration_type"`
+	Adapter         string `json:"adapter"`
+	Icon            string `json:"icon"`
+}
+
+// IntegrationConnection represents a user's configured integration.
+type IntegrationConnection struct {
+	ID              string         `json:"id"`
+	IntegrationType string         `json:"integration_type"`
+	Adapter         string         `json:"adapter"`
+	CredentialName  string         `json:"credential_name"`
+	Config          map[string]any `json:"config"`
+	Enabled         bool           `json:"enabled"`
+	Slug            string         `json:"slug"`
+	CreatedAt       string         `json:"created_at"`
+	UpdatedAt       string         `json:"updated_at"`
+}
+
+// AdminWorkspace represents a workspace in admin views.
+type AdminWorkspace struct {
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	Status    string `json:"status"`
+	PodName   string `json:"pod_name"`
+	CreatedAt string `json:"created_at"`
 }
 
 // do executes an HTTP request with auth headers.
@@ -222,7 +282,7 @@ func decodeResponse[T any](resp *http.Response) (T, error) {
 
 // ListSessions returns all sessions for the current user.
 func (c *Client) ListSessions() ([]Session, error) {
-	resp, err := c.do("GET", "/api/sessions", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +291,7 @@ func (c *Client) ListSessions() ([]Session, error) {
 
 // GetSession returns a single session by ID.
 func (c *Client) GetSession(id string) (*Session, error) {
-	resp, err := c.do("GET", "/api/sessions/"+id, nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +300,7 @@ func (c *Client) GetSession(id string) (*Session, error) {
 
 // CreateSession creates a new session.
 func (c *Client) CreateSession(create SessionCreate) (*Session, error) {
-	resp, err := c.do("POST", "/api/sessions", create)
+	resp, err := c.do("POST", "/api/v1/volundr/sessions", create)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +309,7 @@ func (c *Client) CreateSession(create SessionCreate) (*Session, error) {
 
 // StartSession starts a stopped session.
 func (c *Client) StartSession(id string) error {
-	resp, err := c.do("POST", "/api/sessions/"+id+"/start", nil)
+	resp, err := c.do("POST", "/api/v1/volundr/sessions/"+id+"/start", nil)
 	if err != nil {
 		return err
 	}
@@ -263,7 +323,7 @@ func (c *Client) StartSession(id string) error {
 
 // StopSession stops a running session.
 func (c *Client) StopSession(id string) error {
-	resp, err := c.do("POST", "/api/sessions/"+id+"/stop", nil)
+	resp, err := c.do("POST", "/api/v1/volundr/sessions/"+id+"/stop", nil)
 	if err != nil {
 		return err
 	}
@@ -277,7 +337,7 @@ func (c *Client) StopSession(id string) error {
 
 // DeleteSession deletes a session by ID.
 func (c *Client) DeleteSession(id string) error {
-	resp, err := c.do("DELETE", "/api/sessions/"+id, nil)
+	resp, err := c.do("DELETE", "/api/v1/volundr/sessions/"+id, nil)
 	if err != nil {
 		return err
 	}
@@ -291,7 +351,7 @@ func (c *Client) DeleteSession(id string) error {
 
 // ListChronicles returns all chronicles.
 func (c *Client) ListChronicles() ([]Chronicle, error) {
-	resp, err := c.do("GET", "/api/chronicles", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/chronicles", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +360,7 @@ func (c *Client) ListChronicles() ([]Chronicle, error) {
 
 // GetTimeline returns timeline events for a session.
 func (c *Client) GetTimeline(sessionID string) ([]TimelineEvent, error) {
-	resp, err := c.do("GET", "/api/sessions/"+sessionID+"/timeline", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+sessionID+"/timeline", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +369,7 @@ func (c *Client) GetTimeline(sessionID string) ([]TimelineEvent, error) {
 
 // ListModels returns all available AI models.
 func (c *Client) ListModels() ([]ModelInfo, error) {
-	resp, err := c.do("GET", "/api/models", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/models", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +378,7 @@ func (c *Client) ListModels() ([]ModelInfo, error) {
 
 // GetStats returns aggregate statistics.
 func (c *Client) GetStats() (*StatsResponse, error) {
-	resp, err := c.do("GET", "/api/stats", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/stats", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +392,87 @@ func decodeResponsePtr[T any](resp *http.Response) (*T, error) {
 		return nil, err
 	}
 	return &result, nil
+}
+
+// GetMe returns the current authenticated user's profile.
+func (c *Client) GetMe() (*UserProfile, error) {
+	resp, err := c.do("GET", "/api/v1/volundr/me", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponsePtr[UserProfile](resp)
+}
+
+// ListUsers returns all users (admin only).
+func (c *Client) ListUsers() ([]UserInfo, error) {
+	resp, err := c.do("GET", "/api/v1/volundr/users", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]UserInfo](resp)
+}
+
+// ListTenants returns all tenants.
+func (c *Client) ListTenants() ([]Tenant, error) {
+	resp, err := c.do("GET", "/api/v1/volundr/tenants", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]Tenant](resp)
+}
+
+// ListIntegrationCatalog returns all available integration definitions.
+func (c *Client) ListIntegrationCatalog() ([]IntegrationCatalogEntry, error) {
+	resp, err := c.do("GET", "/api/v1/volundr/integrations/catalog", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]IntegrationCatalogEntry](resp)
+}
+
+// ListIntegrations returns the current user's integration connections.
+func (c *Client) ListIntegrations() ([]IntegrationConnection, error) {
+	resp, err := c.do("GET", "/api/v1/volundr/integrations", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]IntegrationConnection](resp)
+}
+
+// TestIntegration tests an integration connection.
+func (c *Client) TestIntegration(connectionID string) error {
+	resp, err := c.do("POST", "/api/v1/volundr/integrations/"+connectionID+"/test", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+// ListAdminWorkspaces returns all workspaces (admin only).
+func (c *Client) ListAdminWorkspaces() ([]AdminWorkspace, error) {
+	resp, err := c.do("GET", "/api/v1/volundr/admin/workspaces", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]AdminWorkspace](resp)
+}
+
+// Ping checks if the server is reachable by hitting the stats endpoint.
+func (c *Client) Ping() error {
+	resp, err := c.do("GET", "/api/v1/volundr/stats", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // AuthDiscoveryResponse holds the OIDC configuration returned by the Volundr server.

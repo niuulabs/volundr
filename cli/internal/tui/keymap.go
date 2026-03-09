@@ -14,13 +14,11 @@ const (
 	PageDiffs                  // Git diff viewer
 	PageChronicles             // Event log / timeline
 	PageSettings               // Settings and configuration
-	PageRealms                 // Infrastructure overview
-	PageCampaigns              // Campaign tracking
 	PageAdmin                  // Admin panel
 )
 
 // PageCount is the total number of pages.
-const PageCount = 9
+const PageCount = 7
 
 // PageInfo holds display metadata for a page.
 type PageInfo struct {
@@ -37,9 +35,7 @@ var Pages = map[Page]PageInfo{
 	PageDiffs:      {Name: "Diffs", Icon: "◧", Key: "4"},
 	PageChronicles: {Name: "Chronicles", Icon: "◷", Key: "5"},
 	PageSettings:   {Name: "Settings", Icon: "◎", Key: "6"},
-	PageRealms:     {Name: "Realms", Icon: "◆", Key: "7"},
-	PageCampaigns:  {Name: "Campaigns", Icon: "◇", Key: "8"},
-	PageAdmin:      {Name: "Admin", Icon: "◈", Key: "9"},
+	PageAdmin:      {Name: "Admin", Icon: "◈", Key: "7"},
 }
 
 // PageOrder defines the display order of pages in the sidebar.
@@ -50,8 +46,6 @@ var PageOrder = []Page{
 	PageDiffs,
 	PageChronicles,
 	PageSettings,
-	PageRealms,
-	PageCampaigns,
 	PageAdmin,
 }
 
@@ -71,10 +65,6 @@ func IsNavigationKey(msg tea.KeyMsg) (Page, bool) {
 	case "6":
 		return PageSettings, true
 	case "7":
-		return PageRealms, true
-	case "8":
-		return PageCampaigns, true
-	case "9":
 		return PageAdmin, true
 	}
 	return 0, false

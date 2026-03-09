@@ -11,36 +11,77 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
 
+// SessionsLoadedMsg carries fetched sessions from the API.
+type SessionsLoadedMsg struct {
+	Sessions []api.Session
+	Err      error
+}
+
+// SessionSelectedMsg is emitted when the user opens a session (Enter).
+type SessionSelectedMsg struct {
+	Session api.Session
+}
+
+// SessionActionDoneMsg is emitted after a session action completes.
+type SessionActionDoneMsg struct {
+	Action string // "start", "stop", "delete"
+	Err    error
+}
+
 // SessionsPage displays a list of sessions with search and filter.
 type SessionsPage struct {
+	client    *api.Client
 	sessions  []api.Session
 	filtered  []api.Session
 	cursor    int
 	filter    string // "all", "running", "stopped", "error"
 	search    string
 	searching bool
+	loading   bool
+	loadErr   error
 	width     int
 	height    int
 }
 
-// NewSessionsPage creates a new sessions page with demo data.
-func NewSessionsPage() SessionsPage {
-	sessions := demoSessions()
+// NewSessionsPage creates a new sessions page.
+func NewSessionsPage(client *api.Client) SessionsPage {
 	return SessionsPage{
-		sessions: sessions,
-		filtered: sessions,
-		filter:   "all",
+		client: client,
+		filter: "all",
 	}
 }
 
-// Init initializes the sessions page.
+// Init fetches sessions from the API.
 func (s SessionsPage) Init() tea.Cmd {
-	return nil
+	if s.client == nil {
+		return nil
+	}
+	client := s.client
+	return func() tea.Msg {
+		sessions, err := client.ListSessions()
+		return SessionsLoadedMsg{Sessions: sessions, Err: err}
+	}
 }
 
 // Update handles messages for the sessions page.
 func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 	switch msg := msg.(type) {
+	case SessionsLoadedMsg:
+		s.loading = false
+		if msg.Err != nil {
+			s.loadErr = msg.Err
+			return s, nil
+		}
+		s.sessions = msg.Sessions
+		s.applyFilter()
+		return s, nil
+	case SessionActionDoneMsg:
+		if msg.Err != nil {
+			s.loadErr = msg.Err
+			return s, nil
+		}
+		// Refresh session list after action.
+		return s, s.Init()
 	case tea.KeyMsg:
 		if s.searching {
 			return s.handleSearchInput(msg)
@@ -55,21 +96,25 @@ func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 			if s.cursor < len(s.filtered)-1 {
 				s.cursor++
 			}
+		case "enter":
+			if sess := s.selectedSession(); sess != nil {
+				return s, func() tea.Msg { return SessionSelectedMsg{Session: *sess} }
+			}
+		case "s":
+			return s, s.doAction("start")
+		case "x":
+			return s, s.doAction("stop")
+		case "d":
+			return s, s.doAction("delete")
 		case "/":
 			s.searching = true
 			s.search = ""
-		case "1":
-			s.filter = "all"
-			s.applyFilter()
-		case "2":
-			s.filter = "running"
-			s.applyFilter()
-		case "3":
-			s.filter = "stopped"
-			s.applyFilter()
-		case "4":
-			s.filter = "error"
-			s.applyFilter()
+		case "tab":
+			s.cycleFilter(1)
+		case "shift+tab":
+			s.cycleFilter(-1)
+		case "r":
+			return s, s.Init()
 		}
 	}
 	return s, nil
@@ -84,6 +129,8 @@ func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) 
 		if len(s.search) > 0 {
 			s.search = s.search[:len(s.search)-1]
 		}
+	case "space":
+		s.search += " "
 	default:
 		if len(msg.String()) == 1 {
 			s.search += msg.String()
@@ -91,6 +138,17 @@ func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) 
 	}
 	s.applyFilter()
 	return s, nil
+}
+
+// sessionFilters defines the filter cycle order.
+var sessionFilters = []string{"all", "running", "stopped", "error"}
+
+// cycleFilter moves to the next or previous filter.
+func (s *SessionsPage) cycleFilter(dir int) {
+	idx := filterIndex(s.filter)
+	idx = (idx + dir + len(sessionFilters)) % len(sessionFilters)
+	s.filter = sessionFilters[idx]
+	s.applyFilter()
 }
 
 // applyFilter filters sessions by status and search term.
@@ -146,9 +204,10 @@ func (s SessionsPage) View() string {
 		}
 		totalTokens += sess.TokensUsed
 	}
+	_ = errored
 
 	cards := components.MetricRow([]components.MetricCard{
-		components.NewMetricCard("Total", fmt.Sprintf("%d", len(s.sessions)), "◉", theme.AccentCyan),
+		components.NewMetricCard("Total", fmt.Sprintf("%d", len(s.sessions)), "◉", theme.AccentAmber),
 		components.NewMetricCard("Running", fmt.Sprintf("%d", running), "▶", theme.AccentEmerald),
 		components.NewMetricCard("Stopped", fmt.Sprintf("%d", stopped), "■", theme.TextMuted),
 		components.NewMetricCard("Tokens", formatTokens(totalTokens), "◈", theme.AccentAmber),
@@ -156,7 +215,7 @@ func (s SessionsPage) View() string {
 
 	// Filter tabs
 	tabs := components.Tabs{
-		Items:     []string{"All (1)", "Running (2)", "Stopped (3)", "Error (4)"},
+		Items:     []string{"All", "Running", "Stopped", "Error"},
 		ActiveTab: filterIndex(s.filter),
 		Width:     s.width,
 	}
@@ -179,7 +238,17 @@ func (s SessionsPage) View() string {
 		rows = append(rows, s.renderSessionCard(sess, i == s.cursor))
 	}
 
-	if len(rows) == 0 {
+	if s.loading {
+		rows = append(rows, lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Padding(2, 0).
+			Render("  Loading sessions..."))
+	} else if s.loadErr != nil {
+		rows = append(rows, lipgloss.NewStyle().
+			Foreground(theme.AccentRed).
+			Padding(2, 0).
+			Render(fmt.Sprintf("  Error: %v  (r to retry)", s.loadErr)))
+	} else if len(rows) == 0 {
 		rows = append(rows, lipgloss.NewStyle().
 			Foreground(theme.TextMuted).
 			Padding(2, 0).
@@ -269,6 +338,37 @@ func filterIndex(filter string) int {
 	return 0
 }
 
+// selectedSession returns the session under the cursor, or nil.
+func (s SessionsPage) selectedSession() *api.Session {
+	if s.cursor < 0 || s.cursor >= len(s.filtered) {
+		return nil
+	}
+	sess := s.filtered[s.cursor]
+	return &sess
+}
+
+// doAction performs a session action (start/stop/delete) asynchronously.
+func (s SessionsPage) doAction(action string) tea.Cmd {
+	sess := s.selectedSession()
+	if sess == nil || s.client == nil {
+		return nil
+	}
+	client := s.client
+	id := sess.ID
+	return func() tea.Msg {
+		var err error
+		switch action {
+		case "start":
+			err = client.StartSession(id)
+		case "stop":
+			err = client.StopSession(id)
+		case "delete":
+			err = client.DeleteSession(id)
+		}
+		return SessionActionDoneMsg{Action: action, Err: err}
+	}
+}
+
 // formatTokens formats a token count with K/M suffixes.
 func formatTokens(tokens int) string {
 	if tokens >= 1_000_000 {
@@ -278,53 +378,4 @@ func formatTokens(tokens int) string {
 		return fmt.Sprintf("%.1fK", float64(tokens)/1_000)
 	}
 	return fmt.Sprintf("%d", tokens)
-}
-
-// demoSessions returns realistic demo session data.
-func demoSessions() []api.Session {
-	return []api.Session{
-		{
-			ID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", Name: "feat/auth-flow",
-			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "feat/auth-flow",
-			Status: "running", MessageCount: 42, TokensUsed: 128450,
-			CreatedAt: "2026-03-08T10:30:00Z", LastActive: "2026-03-08T14:22:00Z",
-		},
-		{
-			ID: "b2c3d4e5-f6a7-8901-bcde-f12345678901", Name: "fix/ws-reconnect",
-			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "fix/ws-reconnect",
-			Status: "running", MessageCount: 18, TokensUsed: 67200,
-			CreatedAt: "2026-03-08T09:15:00Z", LastActive: "2026-03-08T14:18:00Z",
-		},
-		{
-			ID: "c3d4e5f6-a7b8-9012-cdef-123456789012", Name: "refactor/api-client",
-			Model: "claude-opus-4", Repo: "niuu/hlidskjalf", Branch: "refactor/api",
-			Status: "stopped", MessageCount: 95, TokensUsed: 342100,
-			CreatedAt: "2026-03-07T16:00:00Z", LastActive: "2026-03-07T23:45:00Z",
-		},
-		{
-			ID: "d4e5f6a7-b8c9-0123-defa-234567890123", Name: "feat/tui-client",
-			Model: "claude-opus-4", Repo: "niuu/volundr", Branch: "feat/niu-130-go-tui",
-			Status: "running", MessageCount: 156, TokensUsed: 891200,
-			CreatedAt: "2026-03-08T08:00:00Z", LastActive: "2026-03-08T14:25:00Z",
-		},
-		{
-			ID: "e5f6a7b8-c9d0-1234-efab-345678901234", Name: "docs/api-reference",
-			Model: "claude-haiku-3.5", Repo: "niuu/docs", Branch: "docs/api",
-			Status: "completed", MessageCount: 12, TokensUsed: 15800,
-			CreatedAt: "2026-03-06T11:00:00Z", LastActive: "2026-03-06T11:45:00Z",
-		},
-		{
-			ID: "f6a7b8c9-d0e1-2345-fabc-456789012345", Name: "fix/migration-lock",
-			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "fix/migration",
-			Status: "error", MessageCount: 7, TokensUsed: 23400,
-			Error: "Pod OOMKilled after 4.2GB memory usage",
-			CreatedAt: "2026-03-08T13:00:00Z", LastActive: "2026-03-08T13:12:00Z",
-		},
-		{
-			ID: "a7b8c9d0-e1f2-3456-abcd-567890123456", Name: "feat/campaign-tracker",
-			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "feat/campaigns",
-			Status: "stopped", MessageCount: 67, TokensUsed: 198500,
-			CreatedAt: "2026-03-05T14:30:00Z", LastActive: "2026-03-05T22:15:00Z",
-		},
-	}
 }

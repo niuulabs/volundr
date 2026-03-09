@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/niuulabs/volundr/cli/internal/api"
+	"github.com/niuulabs/volundr/cli/internal/remote"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
@@ -20,36 +22,86 @@ const (
 	SectionAppearance
 )
 
+// SettingsLoadedMsg carries data fetched for the settings page.
+type SettingsLoadedMsg struct {
+	Profile      *api.UserProfile
+	Integrations []api.IntegrationConnection
+	Catalog      []api.IntegrationCatalogEntry
+	Err          error
+}
+
 // SettingsPage displays configuration with tabbed sections.
 type SettingsPage struct {
+	client  *api.Client
+	cfg     *remote.Config
 	section SettingsSection
 	cursor  int
 	width   int
 	height  int
+	editing bool
+	editBuf string
+	loading bool
+	loadErr error
 
-	// Configuration values
-	serverURL string
-	authToken string
-	theme     string
+	// Loaded data
+	profile      *api.UserProfile
+	integrations []api.IntegrationConnection
+	catalog      []api.IntegrationCatalogEntry
 }
 
 // NewSettingsPage creates a new settings page.
-func NewSettingsPage() SettingsPage {
+func NewSettingsPage(client *api.Client, cfg *remote.Config) SettingsPage {
 	return SettingsPage{
-		serverURL: "http://localhost:8000",
-		theme:     "dark",
+		client:  client,
+		cfg:     cfg,
+		loading: true,
 	}
 }
 
-// Init initializes the settings page.
+// Init fetches settings data from the API.
 func (s SettingsPage) Init() tea.Cmd {
-	return nil
+	if s.client == nil {
+		return nil
+	}
+	client := s.client
+	return func() tea.Msg {
+		var result SettingsLoadedMsg
+
+		profile, err := client.GetMe()
+		if err != nil {
+			result.Err = err
+			return result
+		}
+		result.Profile = profile
+
+		integrations, _ := client.ListIntegrations()
+		result.Integrations = integrations
+
+		catalog, _ := client.ListIntegrationCatalog()
+		result.Catalog = catalog
+
+		return result
+	}
 }
 
 // Update handles messages for the settings page.
 func (s SettingsPage) Update(msg tea.Msg) (SettingsPage, tea.Cmd) {
 	switch msg := msg.(type) {
+	case SettingsLoadedMsg:
+		s.loading = false
+		if msg.Err != nil {
+			s.loadErr = msg.Err
+			return s, nil
+		}
+		s.profile = msg.Profile
+		s.integrations = msg.Integrations
+		s.catalog = msg.Catalog
+		return s, nil
 	case tea.KeyMsg:
+		if s.editing {
+			s.handleEditInput(msg)
+			return s, nil
+		}
 		switch msg.String() {
 		case "tab":
 			s.section = (s.section + 1) % 4
@@ -63,9 +115,59 @@ func (s SettingsPage) Update(msg tea.Msg) (SettingsPage, tea.Cmd) {
 			}
 		case "down", "j":
 			s.cursor++
+		case "enter":
+			s.startEditing()
+		case "r":
+			s.loading = true
+			return s, s.Init()
 		}
 	}
 	return s, nil
+}
+
+// startEditing enters edit mode for the currently selected setting.
+func (s *SettingsPage) startEditing() {
+	if s.section == SectionConnection && s.cursor == 0 && s.cfg != nil {
+		s.editing = true
+		s.editBuf = s.cfg.Server
+	}
+}
+
+// handleEditInput handles key input while in edit mode.
+func (s *SettingsPage) handleEditInput(msg tea.KeyMsg) {
+	switch msg.String() {
+	case "enter":
+		s.applyEdit()
+		s.editing = false
+	case "esc":
+		s.editing = false
+	case "backspace":
+		if len(s.editBuf) > 0 {
+			s.editBuf = s.editBuf[:len(s.editBuf)-1]
+		}
+	case "space":
+		s.editBuf += " "
+	default:
+		if len(msg.String()) == 1 {
+			s.editBuf += msg.String()
+		}
+	}
+}
+
+// applyEdit saves the edit buffer to the appropriate setting.
+func (s *SettingsPage) applyEdit() {
+	if s.cfg != nil {
+		s.cfg.Server = s.editBuf
+		_ = s.cfg.Save()
+	}
+}
+
+// settingsHelp returns contextual help text.
+func (s SettingsPage) settingsHelp() string {
+	if s.editing {
+		return "  Enter: save  Esc: cancel"
+	}
+	return "  Tab/Shift+Tab: switch section  ↑↓: navigate  Enter: edit  r: refresh"
 }
 
 // SetSize updates the page dimensions.
@@ -83,21 +185,31 @@ func (s SettingsPage) View() string {
 		Bold(true)
 
 	tabs := components.Tabs{
-		Items:     []string{"Connection", "Credentials", "Integrations", "Appearance"},
+		Items:     []string{"Connection", "Profile", "Integrations", "Appearance"},
 		ActiveTab: int(s.section),
 		Width:     s.width,
 	}
 
 	var content string
-	switch s.section {
-	case SectionConnection:
-		content = s.renderConnection()
-	case SectionCredentials:
-		content = s.renderCredentials()
-	case SectionIntegrations:
-		content = s.renderIntegrations()
-	case SectionAppearance:
-		content = s.renderAppearance()
+	if s.loading {
+		content = lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Render("  Loading settings...")
+	} else if s.loadErr != nil {
+		content = lipgloss.NewStyle().
+			Foreground(theme.AccentRed).
+			Render(fmt.Sprintf("  Error: %v  (r to retry)", s.loadErr))
+	} else {
+		switch s.section {
+		case SectionConnection:
+			content = s.renderConnection()
+		case SectionCredentials:
+			content = s.renderProfile()
+		case SectionIntegrations:
+			content = s.renderIntegrations()
+		case SectionAppearance:
+			content = s.renderAppearance()
+		}
 	}
 
 	return lipgloss.NewStyle().
@@ -111,7 +223,7 @@ func (s SettingsPage) View() string {
 			"",
 			content,
 			"",
-			lipgloss.NewStyle().Foreground(theme.TextMuted).Render("  Tab/Shift+Tab: switch section  ↑↓: navigate  Enter: edit"),
+			lipgloss.NewStyle().Foreground(theme.TextMuted).Render(s.settingsHelp()),
 		))
 }
 
@@ -119,9 +231,22 @@ func (s SettingsPage) View() string {
 func (s SettingsPage) renderConnection() string {
 	theme := tui.DefaultTheme
 
+	serverURL := "(not set)"
+	if s.cfg != nil {
+		serverURL = s.cfg.Server
+	}
+	if s.editing && s.cursor == 0 {
+		serverURL = s.editBuf + "█"
+	}
+
+	tokenDisplay := "(not set)"
+	if s.cfg != nil && s.cfg.Token != "" {
+		tokenDisplay = maskToken(s.cfg.Token)
+	}
+
 	rows := []settingRow{
-		{Label: "Server URL", Value: s.serverURL, Desc: "Volundr API server address"},
-		{Label: "Auth Token", Value: maskToken(s.authToken), Desc: "OIDC Bearer token for API authentication"},
+		{Label: "Server URL", Value: serverURL, Desc: "Volundr API server address"},
+		{Label: "Auth Token", Value: tokenDisplay, Desc: "OIDC Bearer token for API authentication"},
 		{Label: "WebSocket", Value: "Auto (derived from server URL)", Desc: "WebSocket endpoint for real-time features"},
 		{Label: "Timeout", Value: "30s", Desc: "HTTP request timeout"},
 	}
@@ -129,14 +254,24 @@ func (s SettingsPage) renderConnection() string {
 	return s.renderSettingRows(rows, theme)
 }
 
-// renderCredentials renders the credentials section.
-func (s SettingsPage) renderCredentials() string {
+// renderProfile renders the user profile section.
+func (s SettingsPage) renderProfile() string {
 	theme := tui.DefaultTheme
 
+	if s.profile == nil {
+		return lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render("  No profile loaded")
+	}
+
+	p := s.profile
 	rows := []settingRow{
-		{Label: "GitHub Token", Value: "●●●●●●●●●●●●ghp_x4k", Desc: "Personal access token for GitHub API"},
-		{Label: "GitLab Token", Value: "(not set)", Desc: "Personal access token for GitLab API"},
-		{Label: "Linear API Key", Value: "●●●●●●●●●●●●lin_k9p", Desc: "API key for Linear issue tracking"},
+		{Label: "User ID", Value: p.UserID, Desc: "Unique identifier"},
+		{Label: "Display Name", Value: p.DisplayName, Desc: "Your display name"},
+		{Label: "Email", Value: p.Email, Desc: "Email address"},
+		{Label: "Tenant", Value: p.TenantID, Desc: "Organization / tenant"},
+		{Label: "Roles", Value: strings.Join(p.Roles, ", "), Desc: "Assigned roles"},
+		{Label: "Status", Value: p.Status, Desc: "Account status"},
 	}
 
 	return s.renderSettingRows(rows, theme)
@@ -146,40 +281,75 @@ func (s SettingsPage) renderCredentials() string {
 func (s SettingsPage) renderIntegrations() string {
 	theme := tui.DefaultTheme
 
-	type integration struct {
-		Name    string
-		Status  string
-		Desc    string
+	// Build a map of connected integrations by slug.
+	connected := make(map[string]bool)
+	for _, conn := range s.integrations {
+		connected[conn.Slug] = conn.Enabled
 	}
 
-	integrations := []integration{
-		{Name: "GitHub", Status: "connected", Desc: "Repository hosting and CI/CD"},
-		{Name: "Linear", Status: "connected", Desc: "Issue tracking and project management"},
-		{Name: "GitLab", Status: "disconnected", Desc: "Alternative repository hosting"},
-		{Name: "Slack", Status: "disconnected", Desc: "Team notifications"},
-		{Name: "Sentry", Status: "disconnected", Desc: "Error tracking and monitoring"},
-	}
-
+	// Show catalog entries with connection status.
 	var lines []string
-	for i, intg := range integrations {
-		nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true).Width(14)
-		badge := components.NewStatusBadge(intg.Status)
+	items := s.catalog
+	if len(items) == 0 && len(s.integrations) > 0 {
+		// No catalog but have connections — show connections directly.
+		for i, conn := range s.integrations {
+			nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true).Width(16)
+			typeStyle := lipgloss.NewStyle().Foreground(theme.AccentPurple)
+			var badge components.StatusBadge
+			if conn.Enabled {
+				badge = components.NewStatusBadge("running")
+			} else {
+				badge = components.NewStatusBadge("stopped")
+			}
+			line := fmt.Sprintf("  %s  %s  %s",
+				nameStyle.Render(conn.Slug),
+				badge.View(),
+				typeStyle.Render(conn.IntegrationType),
+			)
+			if i == s.cursor {
+				lines = append(lines, lipgloss.NewStyle().
+					Background(theme.BgTertiary).Width(s.width-8).Render(line))
+			} else {
+				lines = append(lines, line)
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	for i, entry := range items {
+		nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true).Width(16)
 		descStyle := lipgloss.NewStyle().Foreground(theme.TextMuted)
 
-		line := fmt.Sprintf("  %s  %s  %s",
-			nameStyle.Render(intg.Name),
+		status := "disconnected"
+		if connected[entry.Slug] {
+			status = "connected"
+		}
+		badge := components.NewStatusBadge(status)
+
+		icon := entry.Icon
+		if icon == "" {
+			icon = "◈"
+		}
+
+		line := fmt.Sprintf("  %s %s  %s  %s",
+			icon,
+			nameStyle.Render(entry.Name),
 			badge.View(),
-			descStyle.Render(intg.Desc),
+			descStyle.Render(entry.Description),
 		)
 
 		if i == s.cursor {
 			lines = append(lines, lipgloss.NewStyle().
-				Background(theme.BgTertiary).
-				Width(s.width - 8).
-				Render(line))
+				Background(theme.BgTertiary).Width(s.width-8).Render(line))
 		} else {
 			lines = append(lines, line)
 		}
+	}
+
+	if len(lines) == 0 {
+		return lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render("  No integrations available")
 	}
 
 	return strings.Join(lines, "\n")
@@ -190,8 +360,8 @@ func (s SettingsPage) renderAppearance() string {
 	theme := tui.DefaultTheme
 
 	rows := []settingRow{
-		{Label: "Theme", Value: s.theme, Desc: "Color scheme (dark is the only option, obviously)"},
-		{Label: "Sidebar", Value: "Expanded", Desc: "Sidebar display mode"},
+		{Label: "Theme", Value: "dark", Desc: "Color scheme (dark is the only option, obviously)"},
+		{Label: "Sidebar", Value: "Expanded", Desc: "Sidebar display mode (toggle with [)"},
 		{Label: "Timestamps", Value: "Relative", Desc: "How to display timestamps"},
 		{Label: "Unicode Icons", Value: "Enabled", Desc: "Use unicode icons in navigation"},
 	}

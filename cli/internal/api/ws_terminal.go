@@ -41,18 +41,26 @@ func NewTerminalWSClient(baseURL, token string) *TerminalWSClient {
 }
 
 // Connect establishes a WebSocket connection to the terminal endpoint.
-func (t *TerminalWSClient) Connect(path string) error {
+// pathOrURL can be a relative path (appended to baseURL with Bearer auth)
+// or a full ws(s):// URL (used as-is with access_token query param).
+func (t *TerminalWSClient) Connect(pathOrURL string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	t.setState(WSConnecting)
 
+	var url string
 	header := http.Header{}
-	if t.token != "" {
-		header.Set("Authorization", "Bearer "+t.token)
+
+	if strings.HasPrefix(pathOrURL, "ws://") || strings.HasPrefix(pathOrURL, "wss://") {
+		url = appendAccessToken(pathOrURL, t.token)
+	} else {
+		url = t.baseURL + pathOrURL
+		if t.token != "" {
+			header.Set("Authorization", "Bearer "+t.token)
+		}
 	}
 
-	url := t.baseURL + path
 	conn, _, err := websocket.DefaultDialer.Dial(url, header)
 	if err != nil {
 		t.setState(WSDisconnected)
