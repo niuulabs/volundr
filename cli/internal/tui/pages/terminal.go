@@ -255,10 +255,13 @@ func (t *TerminalPage) ConnectSession(sess api.Session) {
 		}
 	}
 
-	// Prefer direct session-pod URL; fall back to control-plane proxy.
+	// Derive terminal WS URL from chat endpoint (matches web UI pattern).
+	// Fallback to control-plane proxy if no endpoint is available.
 	var wsURL string
-	if sess.CodeEndpoint != "" {
-		wsURL = api.SessionWSURL(sess.CodeEndpoint, fmt.Sprintf("/ws/cli/%s", sess.ID))
+	if sess.ChatEndpoint != "" {
+		wsURL = api.TerminalWSURLFromChat(sess.ChatEndpoint)
+	} else if sess.CodeEndpoint != "" {
+		wsURL = api.SessionWSURL(sess.CodeEndpoint, "/terminal/ws")
 	} else {
 		wsURL = fmt.Sprintf("/api/v1/volundr/sessions/%s/terminal", sess.ID)
 	}

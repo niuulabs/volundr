@@ -111,7 +111,6 @@ func (m tuiModel) Init() tea.Cmd {
 		pingCmd,
 		m.terminal.Init(),
 		m.sessions.Init(),
-		m.chronicles.Init(),
 		m.chat.Init(),
 		m.settings.Init(),
 		m.admin.Init(),
@@ -143,13 +142,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		return m, tea.Batch(cmds...)
-	case pages.ChroniclesLoadedMsg:
+	case pages.TimelineLoadedMsg:
 		m.chronicles, cmd = m.chronicles.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 		return m, tea.Batch(cmds...)
-	case pages.ChatMessageReceivedMsg, pages.ChatConnectedMsg, pages.ChatDisconnectedMsg:
+	case pages.ChatStreamEventMsg, pages.ChatConnectedMsg, pages.ChatDisconnectedMsg:
 		m.chat, cmd = m.chat.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -277,6 +276,11 @@ func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model
 
 	// Load diffs from session pod.
 	if cmd := m.diffs.SetSession(sess); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	// Load chronicles timeline for the session.
+	if cmd := m.chronicles.SetSession(sess); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
 

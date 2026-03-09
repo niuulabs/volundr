@@ -13,9 +13,9 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
 
-// ChatMessageReceivedMsg carries an incoming message from the WS.
-type ChatMessageReceivedMsg struct {
-	Message api.WSMessage
+// ChatStreamEventMsg carries an incoming stream event from the WS.
+type ChatStreamEventMsg struct {
+	Event api.StreamEvent
 }
 
 // ChatConnectedMsg signals that the chat WS connected.
@@ -32,6 +32,7 @@ type ChatMessage struct {
 	Content   string
 	Timestamp time.Time
 	Thinking  bool
+	Status    string // "running", "complete", "error"
 }
 
 // ChatPage implements the chat interface for a session.
@@ -51,33 +52,38 @@ type ChatPage struct {
 	token     string
 	connected bool
 	connErr   error
-	msgCh     chan ChatMessageReceivedMsg
+	eventCh   chan ChatStreamEventMsg
 	connCh    chan tea.Msg
+
+	// Streaming state: tracks the in-flight assistant message
+	streamingIdx int // index into messages, -1 when not streaming
+	streamingBuf strings.Builder
 }
 
 // NewChatPage creates a new chat page.
 func NewChatPage(token string) ChatPage {
 	return ChatPage{
-		model:       "claude-sonnet-4",
-		thinking:    50,
-		inputActive: true,
-		token:       token,
-		msgCh:       make(chan ChatMessageReceivedMsg, 256),
-		connCh:      make(chan tea.Msg, 16),
+		model:        "claude-sonnet-4",
+		thinking:     50,
+		inputActive:  true,
+		token:        token,
+		eventCh:      make(chan ChatStreamEventMsg, 256),
+		connCh:       make(chan tea.Msg, 16),
+		streamingIdx: -1,
 	}
 }
 
 // Init starts listening for async messages.
 func (c ChatPage) Init() tea.Cmd {
 	return tea.Batch(
-		c.waitForMsg(),
+		c.waitForEvent(),
 		c.waitForConn(),
 	)
 }
 
-// waitForMsg returns a command that waits for incoming chat messages.
-func (c ChatPage) waitForMsg() tea.Cmd {
-	ch := c.msgCh
+// waitForEvent returns a command that waits for incoming stream events.
+func (c ChatPage) waitForEvent() tea.Cmd {
+	ch := c.eventCh
 	return func() tea.Msg {
 		return <-ch
 	}
@@ -102,6 +108,8 @@ func (c *ChatPage) SetSession(sess api.Session) {
 	c.messages = nil
 	c.connected = false
 	c.connErr = nil
+	c.streamingIdx = -1
+	c.streamingBuf.Reset()
 
 	// No chat endpoint means session isn't running or doesn't support chat.
 	if sess.ChatEndpoint == "" {
@@ -111,12 +119,12 @@ func (c *ChatPage) SetSession(sess api.Session) {
 
 	c.ws = api.NewWSClient("", c.token)
 
-	msgCh := c.msgCh
+	eventCh := c.eventCh
 	connCh := c.connCh
 
-	c.ws.OnMessage = func(msg api.WSMessage) {
+	c.ws.OnMessage = func(event api.StreamEvent) {
 		select {
-		case msgCh <- ChatMessageReceivedMsg{Message: msg}:
+		case eventCh <- ChatStreamEventMsg{Event: event}:
 		default:
 		}
 	}
@@ -158,18 +166,9 @@ func (c *ChatPage) SetSession(sess api.Session) {
 // Update handles messages for the chat page.
 func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 	switch msg := msg.(type) {
-	case ChatMessageReceivedMsg:
-		wsMsg := msg.Message
-		chatMsg := ChatMessage{
-			Role:      wsMsg.Role,
-			Content:   wsMsg.Content,
-			Timestamp: time.Now(),
-		}
-		if chatMsg.Role == "" {
-			chatMsg.Role = "assistant"
-		}
-		c.messages = append(c.messages, chatMsg)
-		return c, c.waitForMsg()
+	case ChatStreamEventMsg:
+		c.handleStreamEvent(msg.Event)
+		return c, c.waitForEvent()
 
 	case ChatConnectedMsg:
 		c.connected = true
@@ -179,6 +178,8 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 	case ChatDisconnectedMsg:
 		c.connected = false
 		c.connErr = msg.Err
+		// Finalize any in-flight streaming message.
+		c.finalizeStreaming()
 		return c, c.waitForConn()
 
 	case tea.KeyMsg:
@@ -199,6 +200,7 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 					Role:      "user",
 					Content:   c.input,
 					Timestamp: time.Now(),
+					Status:    "complete",
 				}
 				c.messages = append(c.messages, userMsg)
 
@@ -223,6 +225,95 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 		}
 	}
 	return c, nil
+}
+
+// handleStreamEvent processes a single Claude CLI stream-json event.
+func (c *ChatPage) handleStreamEvent(event api.StreamEvent) {
+	switch event.Type {
+	case "assistant":
+		// Start of a new assistant turn — finalize any previous streaming message.
+		c.finalizeStreaming()
+
+		c.streamingBuf.Reset()
+		c.streamingIdx = len(c.messages)
+		c.messages = append(c.messages, ChatMessage{
+			Role:      "assistant",
+			Content:   "",
+			Timestamp: time.Now(),
+			Status:    "running",
+		})
+
+	case "content_block_delta":
+		if event.Delta == nil {
+			return
+		}
+
+		// Accumulate text deltas
+		if event.Delta.Text != "" {
+			c.streamingBuf.WriteString(event.Delta.Text)
+			if c.streamingIdx >= 0 && c.streamingIdx < len(c.messages) {
+				c.messages[c.streamingIdx].Content = c.streamingBuf.String()
+			}
+		}
+
+		// Accumulate thinking deltas (show as thinking indicator)
+		if event.Delta.Thinking != "" && c.streamingIdx >= 0 && c.streamingIdx < len(c.messages) {
+			c.messages[c.streamingIdx].Thinking = true
+		}
+
+	case "content_block_start":
+		// Reset thinking flag when a text block starts
+		if event.ContentBlock != nil && event.ContentBlock.Type == "text" {
+			if c.streamingIdx >= 0 && c.streamingIdx < len(c.messages) {
+				c.messages[c.streamingIdx].Thinking = false
+			}
+		}
+
+	case "content_block_stop":
+		// Block finished, nothing special to do
+
+	case "message_delta":
+		// Message-level delta (e.g., stop_reason) — nothing to render
+
+	case "result":
+		c.finalizeStreaming()
+
+	case "error":
+		errText := string(event.Error)
+		if errText == "" || errText == "null" {
+			errText = "unknown error"
+		}
+		c.finalizeStreaming()
+		c.messages = append(c.messages, ChatMessage{
+			Role:      "system",
+			Content:   "Error: " + errText,
+			Timestamp: time.Now(),
+			Status:    "error",
+		})
+
+	case "system":
+		// System events (hook output, etc.) — show as system message
+		content := string(event.Content)
+		if content != "" && content != "null" {
+			c.messages = append(c.messages, ChatMessage{
+				Role:      "system",
+				Content:   content,
+				Timestamp: time.Now(),
+				Status:    "complete",
+			})
+		}
+	}
+}
+
+// finalizeStreaming marks the current streaming message as complete.
+func (c *ChatPage) finalizeStreaming() {
+	if c.streamingIdx < 0 || c.streamingIdx >= len(c.messages) {
+		return
+	}
+	c.messages[c.streamingIdx].Content = c.streamingBuf.String()
+	c.messages[c.streamingIdx].Status = "complete"
+	c.messages[c.streamingIdx].Thinking = false
+	c.streamingIdx = -1
 }
 
 // SetSize updates the page dimensions.
@@ -388,6 +479,12 @@ func (c ChatPage) renderMessage(msg ChatMessage) string {
 	case "assistant":
 		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentPurple).Bold(true)
 		roleIcon = "◈ Assistant"
+		if msg.Thinking {
+			roleIcon = "◈ Assistant (thinking...)"
+		}
+		if msg.Status == "running" && !msg.Thinking {
+			roleIcon = "◈ Assistant ▍"
+		}
 	case "system":
 		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentAmber).Bold(true)
 		roleIcon = "⚙ System"

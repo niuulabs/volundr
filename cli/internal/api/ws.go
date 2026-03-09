@@ -20,12 +20,56 @@ const (
 	WSReconnecting
 )
 
-// WSMessage represents a message received over WebSocket.
-type WSMessage struct {
-	Type    string          `json:"type"`
-	Content string          `json:"content"`
-	Role    string          `json:"role"`
-	Data    json.RawMessage `json:"data,omitempty"`
+// StreamEvent represents a Claude CLI stream-json event received over WebSocket.
+type StreamEvent struct {
+	Type string `json:"type"`
+
+	// 'assistant' event — start of assistant turn
+	Message *StreamEventMessage `json:"message,omitempty"`
+
+	// 'content_block_start' event
+	Index        *int                `json:"index,omitempty"`
+	ContentBlock *StreamContentBlock `json:"content_block,omitempty"`
+
+	// 'content_block_delta' event
+	Delta *StreamDelta `json:"delta,omitempty"`
+
+	// 'result' event
+	Subtype  string  `json:"subtype,omitempty"`
+	CostUSD  float64 `json:"cost_usd,omitempty"`
+	IsError  bool    `json:"is_error,omitempty"`
+	Result   string  `json:"result,omitempty"`
+
+	// 'error' event
+	Error json.RawMessage `json:"error,omitempty"`
+
+	// 'system' event
+	Content json.RawMessage `json:"content,omitempty"`
+
+	// Legacy / fallback fields
+	Role string `json:"role,omitempty"`
+}
+
+// StreamEventMessage holds the message field from an 'assistant' event.
+type StreamEventMessage struct {
+	ID    string `json:"id,omitempty"`
+	Role  string `json:"role,omitempty"`
+	Model string `json:"model,omitempty"`
+}
+
+// StreamContentBlock describes a content block from a 'content_block_start' event.
+type StreamContentBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+// StreamDelta carries the delta payload from a 'content_block_delta' event.
+type StreamDelta struct {
+	Type     string `json:"type,omitempty"`
+	Text     string `json:"text,omitempty"`
+	Thinking string `json:"thinking,omitempty"`
 }
 
 // WSClient manages a WebSocket connection to the Volundr API.
@@ -36,8 +80,8 @@ type WSClient struct {
 	state   WSState
 	mu      sync.Mutex
 
-	// OnMessage is called when a message is received.
-	OnMessage func(WSMessage)
+	// OnMessage is called for each stream event received.
+	OnMessage func(StreamEvent)
 	// OnStateChange is called when the connection state changes.
 	OnStateChange func(WSState)
 	// OnError is called when an error occurs.
@@ -94,13 +138,11 @@ func (w *WSClient) Connect(pathOrURL string) error {
 	return nil
 }
 
-// Send sends a message over the WebSocket connection.
-func (w *WSClient) Send(msg WSMessage) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if w.conn == nil {
-		return fmt.Errorf("not connected")
+// SendText sends a user chat message in the Claude CLI expected format.
+func (w *WSClient) SendText(content string) error {
+	msg := map[string]string{
+		"type":    "user",
+		"content": content,
 	}
 
 	data, err := json.Marshal(msg)
@@ -108,16 +150,14 @@ func (w *WSClient) Send(msg WSMessage) error {
 		return fmt.Errorf("marshaling message: %w", err)
 	}
 
-	return w.conn.WriteMessage(websocket.TextMessage, data)
-}
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-// SendText sends a plain text chat message.
-func (w *WSClient) SendText(content string) error {
-	return w.Send(WSMessage{
-		Type:    "message",
-		Role:    "user",
-		Content: content,
-	})
+	if w.conn == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	return w.conn.WriteMessage(websocket.TextMessage, data)
 }
 
 // SendRaw sends raw bytes over the WebSocket (used for terminal PTY data).
@@ -154,7 +194,7 @@ func (w *WSClient) State() WSState {
 	return w.state
 }
 
-// readLoop continuously reads messages from the WebSocket.
+// readLoop continuously reads messages from the WebSocket, handling NDJSON.
 func (w *WSClient) readLoop() {
 	for {
 		_, data, err := w.conn.ReadMessage()
@@ -169,17 +209,28 @@ func (w *WSClient) readLoop() {
 			return
 		}
 
-		var msg WSMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			// If it's not JSON, treat it as raw terminal data
-			msg = WSMessage{
-				Type:    "raw",
-				Content: string(data),
+		// Handle NDJSON: a single WS frame may contain multiple newline-separated JSON events.
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
 			}
-		}
 
-		if w.OnMessage != nil {
-			w.OnMessage(msg)
+			// Strip SSE prefix if present
+			if strings.HasPrefix(line, "data:") {
+				line = strings.TrimSpace(line[5:])
+			}
+
+			var event StreamEvent
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				// Not valid JSON — emit as raw event
+				event = StreamEvent{Type: "raw", Result: line}
+			}
+
+			if w.OnMessage != nil {
+				w.OnMessage(event)
+			}
 		}
 	}
 }
@@ -211,6 +262,20 @@ func SessionWSURL(codeEndpoint, path string) string {
 	base = strings.Replace(base, "https://", "wss://", 1)
 	base = strings.Replace(base, "http://", "ws://", 1)
 	return base + path
+}
+
+// TerminalWSURLFromChat derives the terminal WebSocket URL from the chat endpoint.
+// This matches the web UI pattern: strip /session or /api/session, append /terminal/ws.
+func TerminalWSURLFromChat(chatEndpoint string) string {
+	// Convert wss to wss (already ws), or https to wss
+	wsURL := strings.Replace(chatEndpoint, "https://", "wss://", 1)
+	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
+
+	// Strip /session or /api/session suffix
+	wsURL = strings.TrimSuffix(wsURL, "/session")
+	wsURL = strings.TrimSuffix(wsURL, "/api/session")
+
+	return wsURL + "/terminal/ws"
 }
 
 // String returns a human-readable representation of the connection state.

@@ -17,80 +17,102 @@ import (
 type EventType string
 
 const (
-	EventThink    EventType = "think"
-	EventObserve  EventType = "observe"
-	EventDecide   EventType = "decide"
-	EventAct      EventType = "act"
-	EventComplete EventType = "complete"
-	EventMerge    EventType = "merge"
+	EventSession  EventType = "session"
+	EventMessage  EventType = "message"
+	EventFile     EventType = "file"
+	EventGit      EventType = "git"
+	EventTerminal EventType = "terminal"
 	EventError    EventType = "error"
 )
 
 // ChronicleEvent represents a single event in the chronicles timeline.
 type ChronicleEvent struct {
 	Type      EventType
-	Title     string
-	Content   string
-	Session   string
-	Timestamp time.Time
-	Duration  time.Duration
+	Label     string
+	Action    string
+	Ins       int
+	Del       int
+	Hash      string
+	Elapsed   int // seconds since session start
 	Tokens    int
+	Timestamp time.Time
 }
 
-// ChroniclesLoadedMsg carries fetched chronicles from the API.
-type ChroniclesLoadedMsg struct {
-	Chronicles []api.Chronicle
-	Err        error
+// TimelineLoadedMsg carries the fetched timeline from the API.
+type TimelineLoadedMsg struct {
+	Timeline *api.TimelineResponse
+	Err      error
 }
 
 // ChroniclesPage displays a filterable event log with a timeline feel.
 type ChroniclesPage struct {
 	client    *api.Client
+	sessionID string
 	events    []ChronicleEvent
+	files     []api.TimelineFile
+	commits   []api.TimelineCommit
 	filtered  []ChronicleEvent
 	cursor    int
 	scrollPos int
-	filter    string // "all", "think", "observe", "decide", "act", "complete", "merge"
+	filter    string // "all", "session", "message", "file", "git", "terminal", "error"
 	loading   bool
 	loadErr   error
+	noSession bool
 	width     int
 	height    int
 }
 
 // chronicleFilters defines the filter cycle order.
-var chronicleFilters = []string{"all", "think", "observe", "decide", "act", "complete", "merge"}
+var chronicleFilters = []string{"all", "session", "message", "file", "git", "terminal", "error"}
 
 // NewChroniclesPage creates a new chronicles page.
 func NewChroniclesPage(client *api.Client) ChroniclesPage {
 	return ChroniclesPage{
-		client:  client,
-		filter:  "all",
-		loading: true,
+		client:    client,
+		filter:    "all",
+		noSession: true,
 	}
 }
 
-// Init fetches chronicles from the API.
-func (c ChroniclesPage) Init() tea.Cmd {
-	if c.client == nil {
-		return nil
-	}
+// SetSession loads the timeline for the given session.
+func (c *ChroniclesPage) SetSession(sess api.Session) tea.Cmd {
+	c.sessionID = sess.ID
+	c.loading = true
+	c.loadErr = nil
+	c.noSession = false
+	c.events = nil
+	c.filtered = nil
+	c.files = nil
+	c.commits = nil
+	c.cursor = 0
+
 	client := c.client
+	sessionID := sess.ID
 	return func() tea.Msg {
-		chronicles, err := client.ListChronicles()
-		return ChroniclesLoadedMsg{Chronicles: chronicles, Err: err}
+		timeline, err := client.GetTimeline(sessionID)
+		return TimelineLoadedMsg{Timeline: timeline, Err: err}
 	}
+}
+
+// Init does not load data on startup — chronicles require a session selection.
+func (c ChroniclesPage) Init() tea.Cmd {
+	return nil
 }
 
 // Update handles messages for the chronicles page.
 func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) {
 	switch msg := msg.(type) {
-	case ChroniclesLoadedMsg:
+	case TimelineLoadedMsg:
 		c.loading = false
 		if msg.Err != nil {
 			c.loadErr = msg.Err
 			return c, nil
 		}
-		c.events = chroniclesFromAPI(msg.Chronicles)
+		if msg.Timeline != nil {
+			c.events = timelineEventsFromAPI(msg.Timeline.Events)
+			c.files = msg.Timeline.Files
+			c.commits = msg.Timeline.Commits
+		}
 		c.applyFilter()
 		return c, nil
 	case tea.KeyMsg:
@@ -108,63 +130,70 @@ func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) {
 		case "shift+tab":
 			c.cycleFilter(-1)
 		case "r":
-			c.loading = true
-			return c, c.Init()
+			if c.sessionID != "" {
+				c.loading = true
+				client := c.client
+				sessionID := c.sessionID
+				return c, func() tea.Msg {
+					timeline, err := client.GetTimeline(sessionID)
+					return TimelineLoadedMsg{Timeline: timeline, Err: err}
+				}
+			}
 		}
 	}
 	return c, nil
 }
 
-// chroniclesFromAPI converts API chronicles to timeline events.
-func chroniclesFromAPI(chronicles []api.Chronicle) []ChronicleEvent {
-	var events []ChronicleEvent
-	for _, ch := range chronicles {
-		eventType := guessEventType(ch.Status)
-		ts, _ := time.Parse(time.RFC3339, ch.CreatedAt)
-		dur := time.Duration(ch.DurationSeconds) * time.Second
+// timelineEventsFromAPI converts API timeline events to display events.
+func timelineEventsFromAPI(events []api.TimelineEvent) []ChronicleEvent {
+	var result []ChronicleEvent
+	for _, ev := range events {
+		eventType := mapEventType(ev.Type)
 
-		title := ch.Summary
-		if title == "" {
-			title = ch.Status
+		tokens := 0
+		if ev.Tokens != nil {
+			tokens = *ev.Tokens
+		}
+		ins := 0
+		if ev.Ins != nil {
+			ins = *ev.Ins
+		}
+		del := 0
+		if ev.Del != nil {
+			del = *ev.Del
 		}
 
-		content := strings.Join(ch.KeyChanges, "; ")
-		if content == "" {
-			content = ch.UnfinishedWork
-		}
-
-		events = append(events, ChronicleEvent{
-			Type:      eventType,
-			Title:     title,
-			Content:   content,
-			Session:   ch.SessionID,
-			Timestamp: ts,
-			Duration:  dur,
-			Tokens:    ch.TokenUsage,
+		result = append(result, ChronicleEvent{
+			Type:    eventType,
+			Label:   ev.Label,
+			Action:  ev.Action,
+			Ins:     ins,
+			Del:     del,
+			Hash:    ev.Hash,
+			Elapsed: ev.T,
+			Tokens:  tokens,
 		})
 	}
-	return events
+	return result
 }
 
-// guessEventType maps a chronicle status string to an EventType.
-func guessEventType(status string) EventType {
-	switch strings.ToLower(status) {
-	case "thinking", "think":
-		return EventThink
-	case "observing", "observe":
-		return EventObserve
-	case "deciding", "decide":
-		return EventDecide
-	case "acting", "act":
-		return EventAct
-	case "completed", "complete", "done":
-		return EventComplete
-	case "merged", "merge":
-		return EventMerge
-	case "error", "failed":
+// mapEventType maps a timeline event type string to an EventType.
+func mapEventType(t string) EventType {
+	switch t {
+	case "session":
+		return EventSession
+	case "message":
+		return EventMessage
+	case "file":
+		return EventFile
+	case "git":
+		return EventGit
+	case "terminal":
+		return EventTerminal
+	case "error":
 		return EventError
 	}
-	return EventAct
+	return EventMessage
 }
 
 // cycleFilter moves to the next or previous filter.
@@ -202,20 +231,34 @@ func (c ChroniclesPage) View() string {
 		Foreground(theme.TextPrimary).
 		Bold(true)
 
+	// No session selected
+	if c.noSession {
+		return lipgloss.NewStyle().
+			Width(c.width).
+			Height(c.height).
+			Padding(1, 2).
+			Render(lipgloss.JoinVertical(lipgloss.Left,
+				titleStyle.Render("◷ Chronicles"),
+				"",
+				lipgloss.NewStyle().Foreground(theme.AccentAmber).
+					Render("  Select a session first (press 1 to go to Sessions, then Enter)"),
+			))
+	}
+
 	// Stats row
 	counts := c.countByType()
 	cards := components.MetricRow([]components.MetricCard{
 		components.NewMetricCard("Total", fmt.Sprintf("%d", len(c.events)), "◷", theme.AccentAmber),
-		components.NewMetricCard("Think", fmt.Sprintf("%d", counts["think"]), "◐", theme.AccentPurple),
-		components.NewMetricCard("Act", fmt.Sprintf("%d", counts["act"]), "▶", theme.AccentEmerald),
-		components.NewMetricCard("Decide", fmt.Sprintf("%d", counts["decide"]), "◈", theme.AccentAmber),
+		components.NewMetricCard("Messages", fmt.Sprintf("%d", counts["message"]), "◈", theme.AccentPurple),
+		components.NewMetricCard("Files", fmt.Sprintf("%d", counts["file"]), "▶", theme.AccentEmerald),
+		components.NewMetricCard("Git", fmt.Sprintf("%d", counts["git"]), "⊕", theme.AccentIndigo),
 	})
 
 	// Filter tabs
 	tabs := components.Tabs{
 		Items: []string{
 			fmt.Sprintf("All (%d)", len(c.events)),
-			"Think", "Observe", "Decide", "Act", "Complete", "Merge",
+			"Session", "Message", "File", "Git", "Terminal", "Error",
 		},
 		ActiveTab: c.filterTabIndex(),
 		Width:     c.width,
@@ -229,7 +272,7 @@ func (c ChroniclesPage) View() string {
 		timeline = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Padding(2, 0).
-			Render("  Loading chronicles...")
+			Render("  Loading timeline...")
 	} else if c.loadErr != nil {
 		timeline = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
@@ -266,20 +309,8 @@ func (c ChroniclesPage) renderTimeline(maxHeight int) string {
 	}
 
 	var entries []string
-	var lastDate string
 
 	for i, event := range c.filtered {
-		// Date separator
-		dateStr := event.Timestamp.Format("Jan 02, 2006")
-		if dateStr != lastDate {
-			lastDate = dateStr
-			dateSep := lipgloss.NewStyle().
-				Foreground(theme.TextMuted).
-				Bold(true).
-				Render(fmt.Sprintf("  ─── %s ───", dateStr))
-			entries = append(entries, dateSep)
-		}
-
 		entry := c.renderTimelineEntry(event, i == c.cursor)
 		entries = append(entries, entry)
 	}
@@ -290,13 +321,9 @@ func (c ChroniclesPage) renderTimeline(maxHeight int) string {
 	lines := strings.Split(content, "\n")
 	if len(lines) > maxHeight {
 		cursorLine := 0
-		lineCount := 0
-		for i, event := range c.filtered {
-			dateStr := event.Timestamp.Format("Jan 02, 2006")
-			_ = dateStr
-			lineCount += 4
+		for i := range c.filtered {
+			cursorLine += 3 // each entry is ~3 lines
 			if i == c.cursor {
-				cursorLine = lineCount
 				break
 			}
 		}
@@ -322,7 +349,8 @@ func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool)
 
 	icon, clr := eventTypeStyle(event.Type)
 
-	timeStr := event.Timestamp.Format("15:04:05")
+	// Format elapsed time
+	elapsed := formatElapsed(event.Elapsed)
 	timeStyle := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
 		Width(10)
@@ -331,20 +359,13 @@ func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool)
 		Foreground(clr).
 		Bold(true)
 
-	titleStyle := lipgloss.NewStyle().
+	labelStyle := lipgloss.NewStyle().
 		Foreground(theme.TextPrimary).
 		Bold(true)
 
 	typeStyle := lipgloss.NewStyle().
 		Foreground(clr).
 		Bold(true)
-
-	contentStyle := lipgloss.NewStyle().
-		Foreground(theme.TextSecondary).
-		PaddingLeft(14)
-
-	sessionStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber)
 
 	metaStyle := lipgloss.NewStyle().
 		Foreground(theme.TextMuted)
@@ -355,35 +376,39 @@ func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool)
 		Render("│")
 
 	// Build the entry
-	line1 := fmt.Sprintf("  %s %s %s  %s  %s",
-		timeStyle.Render(timeStr),
+	line1 := fmt.Sprintf("  %s %s %s  %s",
+		timeStyle.Render(elapsed),
 		iconStyle.Render(icon),
-		titleStyle.Render(event.Title),
+		labelStyle.Render(event.Label),
 		typeStyle.Render(string(event.Type)),
-		sessionStyle.Render(event.Session),
 	)
 
-	line2 := fmt.Sprintf("  %s %s  %s",
-		lipgloss.NewStyle().Width(10).Render(""),
-		connector,
-		contentStyle.Render(event.Content),
-	)
-
-	// Metadata line with duration and tokens
+	// Metadata line
 	var metaParts []string
-	if event.Duration > 0 {
-		metaParts = append(metaParts, fmt.Sprintf("⏱ %s", event.Duration.Round(time.Second)))
-	}
 	if event.Tokens > 0 {
 		metaParts = append(metaParts, fmt.Sprintf("◈ %s tokens", formatTokens(event.Tokens)))
 	}
-	line3 := fmt.Sprintf("  %s %s  %s",
+	if event.Action != "" {
+		metaParts = append(metaParts, event.Action)
+	}
+	if event.Ins > 0 || event.Del > 0 {
+		metaParts = append(metaParts, fmt.Sprintf("+%d/-%d", event.Ins, event.Del))
+	}
+	if event.Hash != "" {
+		display := event.Hash
+		if len(display) > 8 {
+			display = display[:8]
+		}
+		metaParts = append(metaParts, display)
+	}
+
+	line2 := fmt.Sprintf("  %s %s  %s",
 		lipgloss.NewStyle().Width(10).Render(""),
 		connector,
 		metaStyle.Render(strings.Join(metaParts, "  ")),
 	)
 
-	entry := line1 + "\n" + line2 + "\n" + line3
+	entry := line1 + "\n" + line2
 
 	if selected {
 		return lipgloss.NewStyle().
@@ -395,22 +420,35 @@ func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool)
 	return entry
 }
 
+// formatElapsed formats seconds elapsed into a human-friendly string.
+func formatElapsed(seconds int) string {
+	if seconds < 60 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	m := seconds / 60
+	s := seconds % 60
+	if m < 60 {
+		return fmt.Sprintf("%dm%02ds", m, s)
+	}
+	h := m / 60
+	m = m % 60
+	return fmt.Sprintf("%dh%02dm", h, m)
+}
+
 // eventTypeStyle returns the icon and color for an event type.
 func eventTypeStyle(t EventType) (string, color.Color) {
 	theme := tui.DefaultTheme
 	switch t {
-	case EventThink:
-		return "◐", theme.AccentPurple
-	case EventObserve:
+	case EventSession:
 		return "◉", theme.AccentCyan
-	case EventDecide:
-		return "◈", theme.AccentAmber
-	case EventAct:
+	case EventMessage:
+		return "◈", theme.AccentPurple
+	case EventFile:
 		return "▶", theme.AccentEmerald
-	case EventComplete:
-		return "✓", theme.AccentEmerald
-	case EventMerge:
+	case EventGit:
 		return "⊕", theme.AccentIndigo
+	case EventTerminal:
+		return "▸", theme.AccentAmber
 	case EventError:
 		return "✗", theme.AccentRed
 	}
@@ -428,21 +466,10 @@ func (c ChroniclesPage) countByType() map[string]int {
 
 // filterTabIndex maps the current filter to a tab index.
 func (c ChroniclesPage) filterTabIndex() int {
-	switch c.filter {
-	case "all":
-		return 0
-	case "think":
-		return 1
-	case "observe":
-		return 2
-	case "decide":
-		return 3
-	case "act":
-		return 4
-	case "complete":
-		return 5
-	case "merge":
-		return 6
+	for i, f := range chronicleFilters {
+		if c.filter == f {
+			return i
+		}
 	}
 	return 0
 }

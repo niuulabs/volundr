@@ -136,12 +136,38 @@ type Chronicle struct {
 
 // TimelineEvent represents a single event in a session timeline.
 type TimelineEvent struct {
-	ID        string `json:"id"`
-	SessionID string `json:"session_id"`
-	Type      string `json:"type"`
-	Content   string `json:"content"`
-	Timestamp string `json:"timestamp"`
-	Metadata  any    `json:"metadata"`
+	T      int    `json:"t"`
+	Type   string `json:"type"`
+	Label  string `json:"label"`
+	Tokens *int   `json:"tokens,omitempty"`
+	Action string `json:"action,omitempty"`
+	Ins    *int   `json:"ins,omitempty"`
+	Del    *int   `json:"del,omitempty"`
+	Hash   string `json:"hash,omitempty"`
+	Exit   *int   `json:"exit,omitempty"`
+}
+
+// TimelineFile represents a file summary in the timeline.
+type TimelineFile struct {
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	Ins    int    `json:"ins"`
+	Del    int    `json:"del"`
+}
+
+// TimelineCommit represents a commit summary in the timeline.
+type TimelineCommit struct {
+	Hash string `json:"hash"`
+	Msg  string `json:"msg"`
+	Time string `json:"time"`
+}
+
+// TimelineResponse represents the full timeline for a session.
+type TimelineResponse struct {
+	Events    []TimelineEvent  `json:"events"`
+	Files     []TimelineFile   `json:"files"`
+	Commits   []TimelineCommit `json:"commits"`
+	TokenBurn []int            `json:"token_burn"`
 }
 
 // ModelInfo describes an available AI model.
@@ -358,13 +384,13 @@ func (c *Client) ListChronicles() ([]Chronicle, error) {
 	return decodeResponse[[]Chronicle](resp)
 }
 
-// GetTimeline returns timeline events for a session.
-func (c *Client) GetTimeline(sessionID string) ([]TimelineEvent, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+sessionID+"/timeline", nil)
+// GetTimeline returns the full timeline for a session's chronicle.
+func (c *Client) GetTimeline(sessionID string) (*TimelineResponse, error) {
+	resp, err := c.do("GET", "/api/v1/volundr/chronicles/"+sessionID+"/timeline", nil)
 	if err != nil {
 		return nil, err
 	}
-	return decodeResponse[[]TimelineEvent](resp)
+	return decodeResponsePtr[TimelineResponse](resp)
 }
 
 // ListModels returns all available AI models.
