@@ -205,6 +205,25 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// When chat input is active, intercept printable keys so they go to the
+	// input field instead of being swallowed by the app (e.g., "?" opening help).
+	if m.app.ActivePage == tuipkg.PageChat && m.chat.InputActive() {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			key := keyMsg.String()
+			switch {
+			case key == "ctrl+c", key == "esc":
+				// Let through to app layer
+			default:
+				// Forward directly to chat page
+				m.chat, cmd = m.chat.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+	}
+
 	// Update the root app first (handles global keys, window resize)
 	newApp, appCmd := m.app.Update(msg)
 	m.app = newApp

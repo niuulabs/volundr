@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/glamour"
 	"github.com/niuulabs/volundr/cli/internal/api"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
@@ -170,6 +171,8 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ChatStreamEventMsg:
 		c.handleStreamEvent(msg.Event)
+		// Auto-scroll to bottom on new content.
+		c.scrollPos = 0
 		return c, c.waitForEvent()
 
 	case ChatConnectedMsg:
@@ -186,13 +189,36 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up":
-			if !c.inputActive && c.scrollPos > 0 {
-				c.scrollPos--
-			}
-		case "down":
+		case "up", "k":
 			if !c.inputActive {
 				c.scrollPos++
+			}
+		case "down", "j":
+			if !c.inputActive {
+				if c.scrollPos > 0 {
+					c.scrollPos--
+				}
+			}
+		case "pgup":
+			if !c.inputActive {
+				c.scrollPos += 10
+			}
+		case "pgdown":
+			if !c.inputActive {
+				c.scrollPos -= 10
+				if c.scrollPos < 0 {
+					c.scrollPos = 0
+				}
+			}
+		case "G":
+			// Jump to bottom (latest messages)
+			if !c.inputActive {
+				c.scrollPos = 0
+			}
+		case "g":
+			// Jump to top
+			if !c.inputActive {
+				c.scrollPos = 999999
 			}
 		case "tab":
 			c.inputActive = !c.inputActive
@@ -342,6 +368,11 @@ func (c *ChatPage) finalizeStreaming() {
 	c.streamingIdx = -1
 }
 
+// InputActive returns whether the chat input field is focused.
+func (c ChatPage) InputActive() bool {
+	return c.inputActive
+}
+
 // SetSize updates the page dimensions.
 func (c *ChatPage) SetSize(w, h int) {
 	c.width = w
@@ -385,7 +416,7 @@ func (c ChatPage) View() string {
 			messages,
 			"",
 			inputArea,
-			lipgloss.NewStyle().Foreground(theme.TextMuted).Render("  Tab: toggle focus  Enter: send  ↑↓: scroll"),
+			lipgloss.NewStyle().Foreground(theme.TextMuted).Render("  Tab: scroll/input  Enter: send  ↑↓/j/k: scroll  PgUp/PgDn: page  G/g: bottom/top"),
 		))
 }
 
@@ -471,17 +502,45 @@ func (c ChatPage) renderMessages(maxHeight int) string {
 
 	content := strings.Join(lines, "\n")
 
-	// Truncate to viewport
+	// Scroll viewport: scrollPos=0 means bottom (latest), higher means further back.
 	contentLines := strings.Split(content, "\n")
 	if len(contentLines) > maxHeight {
-		start := len(contentLines) - maxHeight
-		if c.scrollPos > 0 && c.scrollPos < start {
-			start = len(contentLines) - maxHeight - c.scrollPos
+		// Default: show the last maxHeight lines (bottom-anchored).
+		end := len(contentLines)
+		start := end - maxHeight
+
+		// Apply scroll offset (scroll up from bottom).
+		if c.scrollPos > 0 {
+			end -= c.scrollPos
+			start = end - maxHeight
 		}
+
+		// Clamp bounds.
 		if start < 0 {
 			start = 0
 		}
-		contentLines = contentLines[start : start+maxHeight]
+		if end < maxHeight {
+			end = min(maxHeight, len(contentLines))
+			start = 0
+		}
+		if end > len(contentLines) {
+			end = len(contentLines)
+		}
+		contentLines = contentLines[start:end]
+	}
+
+	// Scroll position indicator
+	scrollHint := ""
+	totalLines := len(strings.Split(content, "\n"))
+	if totalLines > maxHeight && c.scrollPos > 0 {
+		scrollHint = lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render(fmt.Sprintf(" ↑ %d lines above", c.scrollPos))
+	}
+
+	rendered := strings.Join(contentLines, "\n")
+	if scrollHint != "" {
+		rendered = scrollHint + "\n" + rendered
 	}
 
 	return lipgloss.NewStyle().
@@ -490,7 +549,7 @@ func (c ChatPage) renderMessages(maxHeight int) string {
 		Width(c.width - 6).
 		Height(maxHeight).
 		Padding(0, 1).
-		Render(strings.Join(contentLines, "\n"))
+		Render(rendered)
 }
 
 // renderMessage renders a single chat message.
@@ -498,7 +557,6 @@ func (c ChatPage) renderMessage(msg ChatMessage) string {
 	theme := tui.DefaultTheme
 
 	timeStr := msg.Timestamp.Format("15:04")
-	timeStyle := lipgloss.NewStyle().Foreground(theme.TextMuted)
 
 	var roleStyle lipgloss.Style
 	var roleIcon string
@@ -523,14 +581,23 @@ func (c ChatPage) renderMessage(msg ChatMessage) string {
 
 	header := fmt.Sprintf("%s  %s", roleStyle.Render(roleIcon), timeStr)
 
-	contentStyle := lipgloss.NewStyle().
-		Foreground(theme.TextPrimary).
-		PaddingLeft(2)
-
 	maxWidth := c.width - 12
-	wrappedContent := wrapText(msg.Content, maxWidth)
+	if maxWidth < 20 {
+		maxWidth = 20
+	}
 
-	return header + "\n" + contentStyle.Render(wrappedContent) + "\n" + timeStyle.Render("")
+	var renderedContent string
+	if msg.Role == "assistant" && msg.Content != "" {
+		// Render assistant messages as markdown with glamour.
+		renderedContent = renderMarkdown(msg.Content, maxWidth)
+	} else {
+		renderedContent = lipgloss.NewStyle().
+			Foreground(theme.TextPrimary).
+			PaddingLeft(2).
+			Render(wrapText(msg.Content, maxWidth))
+	}
+
+	return header + "\n" + renderedContent
 }
 
 // renderInput renders the chat input area.
@@ -572,6 +639,26 @@ func (c ChatPage) renderInput() string {
 		Width(c.width - 6).
 		Padding(0, 1).
 		Render(inputContent + "  " + badge)
+}
+
+// renderMarkdown renders markdown content for terminal display using glamour.
+func renderMarkdown(content string, width int) string {
+	r, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		// Fallback to plain text.
+		return "  " + content
+	}
+
+	rendered, err := r.Render(content)
+	if err != nil {
+		return "  " + content
+	}
+
+	// Glamour adds trailing newlines; trim them.
+	return strings.TrimRight(rendered, "\n")
 }
 
 // friendlyConnError converts a raw WebSocket/connection error into a user-friendly message.
