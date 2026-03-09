@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"strings"
@@ -56,8 +57,8 @@ type ChatPage struct {
 	connCh    chan tea.Msg
 
 	// Streaming state: tracks the in-flight assistant message
-	streamingIdx int // index into messages, -1 when not streaming
-	streamingBuf strings.Builder
+	streamingIdx  int    // index into messages, -1 when not streaming
+	streamingText string // accumulated text for current stream
 }
 
 // NewChatPage creates a new chat page.
@@ -109,7 +110,7 @@ func (c *ChatPage) SetSession(sess api.Session) {
 	c.connected = false
 	c.connErr = nil
 	c.streamingIdx = -1
-	c.streamingBuf.Reset()
+	c.streamingText = ""
 
 	// No chat endpoint means session isn't running or doesn't support chat.
 	if sess.ChatEndpoint == "" {
@@ -234,7 +235,7 @@ func (c *ChatPage) handleStreamEvent(event api.StreamEvent) {
 		// Start of a new assistant turn — finalize any previous streaming message.
 		c.finalizeStreaming()
 
-		c.streamingBuf.Reset()
+		c.streamingText = ""
 		c.streamingIdx = len(c.messages)
 		c.messages = append(c.messages, ChatMessage{
 			Role:      "assistant",
@@ -250,9 +251,9 @@ func (c *ChatPage) handleStreamEvent(event api.StreamEvent) {
 
 		// Accumulate text deltas
 		if event.Delta.Text != "" {
-			c.streamingBuf.WriteString(event.Delta.Text)
+			c.streamingText += event.Delta.Text
 			if c.streamingIdx >= 0 && c.streamingIdx < len(c.messages) {
-				c.messages[c.streamingIdx].Content = c.streamingBuf.String()
+				c.messages[c.streamingIdx].Content = c.streamingText
 			}
 		}
 
@@ -292,8 +293,13 @@ func (c *ChatPage) handleStreamEvent(event api.StreamEvent) {
 		})
 
 	case "system":
-		// System events (hook output, etc.) — show as system message
+		// System events (hook output, etc.) — show as system message.
+		// Content is json.RawMessage; try to unquote if it's a JSON string.
 		content := string(event.Content)
+		var unquoted string
+		if json.Unmarshal(event.Content, &unquoted) == nil {
+			content = unquoted
+		}
 		if content != "" && content != "null" {
 			c.messages = append(c.messages, ChatMessage{
 				Role:      "system",
@@ -310,7 +316,7 @@ func (c *ChatPage) finalizeStreaming() {
 	if c.streamingIdx < 0 || c.streamingIdx >= len(c.messages) {
 		return
 	}
-	c.messages[c.streamingIdx].Content = c.streamingBuf.String()
+	c.messages[c.streamingIdx].Content = c.streamingText
 	c.messages[c.streamingIdx].Status = "complete"
 	c.messages[c.streamingIdx].Thinking = false
 	c.streamingIdx = -1
