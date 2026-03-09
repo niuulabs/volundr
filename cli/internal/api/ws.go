@@ -53,9 +53,16 @@ type StreamEvent struct {
 
 // StreamEventMessage holds the message field from an 'assistant' event.
 type StreamEventMessage struct {
-	ID    string `json:"id,omitempty"`
-	Role  string `json:"role,omitempty"`
-	Model string `json:"model,omitempty"`
+	ID      string                `json:"id,omitempty"`
+	Role    string                `json:"role,omitempty"`
+	Model   string                `json:"model,omitempty"`
+	Content []StreamMessageBlock  `json:"content,omitempty"`
+}
+
+// StreamMessageBlock represents a content block inside a message (text, tool_use, etc.).
+type StreamMessageBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
 }
 
 // StreamContentBlock describes a content block from a 'content_block_start' event.

@@ -236,11 +236,22 @@ func (c *ChatPage) handleStreamEvent(event api.StreamEvent) {
 		// Start of a new assistant turn — finalize any previous streaming message.
 		c.finalizeStreaming()
 
-		c.streamingText = ""
+		// Extract any initial text from the assistant event's message.content blocks.
+		// The session pod often sends the complete response here (no content_block_delta).
+		var initialText string
+		if event.Message != nil {
+			for _, block := range event.Message.Content {
+				if block.Type == "text" && block.Text != "" {
+					initialText += block.Text
+				}
+			}
+		}
+
+		c.streamingText = initialText
 		c.streamingIdx = len(c.messages)
 		c.messages = append(c.messages, ChatMessage{
 			Role:      "assistant",
-			Content:   "",
+			Content:   initialText,
 			Timestamp: time.Now(),
 			Status:    "running",
 		})
@@ -278,6 +289,14 @@ func (c *ChatPage) handleStreamEvent(event api.StreamEvent) {
 		// Message-level delta (e.g., stop_reason) — nothing to render
 
 	case "result":
+		// The result event carries the final text in its Result field.
+		// Use it if the streaming message has no content yet (no deltas arrived).
+		if event.Result != "" && c.streamingIdx >= 0 && c.streamingIdx < len(c.messages) {
+			if c.streamingText == "" {
+				c.streamingText = event.Result
+				c.messages[c.streamingIdx].Content = event.Result
+			}
+		}
 		c.finalizeStreaming()
 
 	case "error":
