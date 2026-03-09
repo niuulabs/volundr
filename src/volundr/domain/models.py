@@ -384,7 +384,7 @@ class Chronicle(BaseModel):
     """A chronicle entry capturing session metadata for continuity."""
 
     id: UUID = Field(default_factory=uuid4)
-    session_id: UUID
+    session_id: UUID | None = None
     status: ChronicleStatus = Field(default=ChronicleStatus.DRAFT)
     project: str = Field(..., min_length=1, max_length=255)
     repo: str = Field(..., min_length=1, max_length=500)
