@@ -1,0 +1,28 @@
+{{- if .Values.web.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "volundr.web.fullname" . }}
+  labels:
+    {{- include "volundr.web.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {
+      "apiBaseUrl": {{ .Values.web.config.apiBaseUrl | default (printf "http://%s.%s.svc.cluster.local:%v" (include "volundr.fullname" .) .Release.Namespace (.Values.service.port | default 80)) | quote }}
+      {{- if .Values.web.config.oidc.authority }},
+      "oidc": {
+        "authority": {{ .Values.web.config.oidc.authority | quote }},
+        "clientId": {{ .Values.web.config.oidc.clientId | quote }}
+        {{- if .Values.web.config.oidc.redirectUri }},
+        "redirectUri": {{ .Values.web.config.oidc.redirectUri | quote }}
+        {{- end }}
+        {{- if .Values.web.config.oidc.postLogoutRedirectUri }},
+        "postLogoutRedirectUri": {{ .Values.web.config.oidc.postLogoutRedirectUri | quote }}
+        {{- end }}
+        {{- if .Values.web.config.oidc.scope }},
+        "scope": {{ .Values.web.config.oidc.scope | quote }}
+        {{- end }}
+      }
+      {{- end }}
+    }
+{{- end }}

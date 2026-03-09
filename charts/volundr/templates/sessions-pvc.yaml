@@ -1,0 +1,15 @@
+{{- if .Values.storage.sessions.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "volundr.sessionsPvcName" . }}
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.storage.sessions.accessMode }}
+  storageClassName: {{ .Values.storage.sessions.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.sessions.size }}
+{{- end }}

@@ -1,0 +1,44 @@
+# Production Checklist
+
+## Required
+
+- [ ] PostgreSQL database provisioned and accessible
+- [ ] Database migrations applied
+- [ ] `DATABASE__PASSWORD` set via Kubernetes secret
+- [ ] Ingress configured with TLS
+- [ ] Identity adapter set to `EnvoyHeaderIdentityAdapter` (not AllowAll)
+- [ ] Authorization adapter set to `CerbosAuthorizationAdapter` or `SimpleRoleAuthorizationAdapter`
+
+## Recommended
+
+- [ ] HPA enabled with appropriate min/max replicas
+- [ ] PDB configured to maintain availability during rollouts
+- [ ] NetworkPolicy restricting pod-to-pod traffic
+- [ ] Resource requests and limits set
+- [ ] Kyverno PVC isolation policy applied
+- [ ] Log format set to `json` for structured logging
+- [ ] OpenTelemetry sink enabled for observability
+
+## Security
+
+- [ ] OIDC/OAuth2 configured via Envoy sidecar
+- [ ] Gateway API security policies enforce JWT validation on session routes
+- [ ] Credential store uses Vault or Infisical (not in-memory)
+- [ ] Secret injection uses CSI driver (not in-memory)
+- [ ] Git tokens stored in Kubernetes secrets, referenced by `token_env`
+
+## Monitoring
+
+Volundr exposes:
+
+- `/health` — liveness/readiness probe
+- SSE stream at `/api/v1/volundr/sessions/stream` — real-time state
+- Event pipeline health at `/api/v1/volundr/events/health` — sink status
+- OpenTelemetry traces and metrics (when enabled)
+
+## Scaling
+
+- Volundr API is stateless — scale horizontally via HPA
+- SSE connections are per-instance (in-memory broadcaster) — consider sticky sessions or external pub/sub for multi-replica SSE
+- Skuld brokers run one-per-session — they scale with session count
+- Database pool size should match total connections across all API replicas

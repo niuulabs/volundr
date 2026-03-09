@@ -1,0 +1,50 @@
+package cli
+
+import (
+	"fmt"
+	"runtime"
+
+	"charm.land/lipgloss/v2"
+	"github.com/spf13/cobra"
+
+	tuipkg "github.com/niuulabs/volundr/cli/internal/tui"
+)
+
+// These variables are set at build time via ldflags.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show version information",
+	Run: func(cmd *cobra.Command, args []string) {
+		theme := tuipkg.DefaultTheme
+
+		hammerStyle := lipgloss.NewStyle().
+			Foreground(theme.AccentCyan)
+
+		titleStyle := lipgloss.NewStyle().
+			Foreground(theme.AccentCyan).
+			Bold(true)
+
+		versionStyle := lipgloss.NewStyle().
+			Foreground(theme.TextSecondary)
+
+		taglineStyle := lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Italic(true)
+
+		fmt.Println(hammerStyle.Render(tuipkg.HammerLogo))
+		fmt.Println(titleStyle.Render("  Volundr — The Coding Forge"))
+		fmt.Println(versionStyle.Render(fmt.Sprintf("  Version: %s", version)))
+		fmt.Println(taglineStyle.Render("  \"Skilled craftsman of the gods\""))
+		fmt.Println()
+		fmt.Printf("  commit:  %s\n", commit)
+		fmt.Printf("  built:   %s\n", date)
+		fmt.Printf("  go:      %s\n", runtime.Version())
+		fmt.Printf("  os/arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	},
+}

@@ -1,0 +1,77 @@
+{{- if .Values.sessionGateway.enabled -}}
+# Shared Gateway resource for all Volundr sessions.
+# Each session creates its own HTTPRoute (in the Skuld Helm chart)
+# that attaches to this Gateway via parentRefs.
+#
+# Requires:
+#   - Envoy Gateway controller deployed (GatewayClass "eg")
+#   - cert-manager with Gateway API support enabled
+#   - external-dns with gateway-httproute source enabled
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.sessionGateway.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    helm.sh/chart: {{ include "volundr.chart" . }}
+    {{- include "volundr.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: session-gateway
+    app.kubernetes.io/part-of: volundr
+  annotations:
+    {{- with .Values.sessionGateway.certIssuer }}
+    cert-manager.io/cluster-issuer: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.sessionGateway.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  gatewayClassName: {{ .Values.sessionGateway.gatewayClassName }}
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: {{ .Values.sessionGateway.hostname | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: {{ .Values.sessionGateway.tlsSecretName | default (printf "%s-tls" .Values.sessionGateway.name) }}
+      allowedRoutes:
+        namespaces:
+          from: {{ .Values.sessionGateway.allowedRouteNamespaces | default "All" }}
+    {{- if .Values.sessionGateway.httpRedirect }}
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: {{ .Values.sessionGateway.hostname | quote }}
+      allowedRoutes:
+        namespaces:
+          from: {{ .Values.sessionGateway.allowedRouteNamespaces | default "All" }}
+    {{- end }}
+{{- if .Values.sessionGateway.httpRedirect }}
+---
+# Redirect HTTP to HTTPS
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Values.sessionGateway.name }}-http-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    helm.sh/chart: {{ include "volundr.chart" . }}
+    {{- include "volundr.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: session-gateway
+    app.kubernetes.io/part-of: volundr
+spec:
+  parentRefs:
+    - name: {{ .Values.sessionGateway.name }}
+      namespace: {{ .Release.Namespace }}
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}
+{{- end }}

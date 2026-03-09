@@ -1,0 +1,397 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  CHART_REPO: oci://ghcr.io/${{ github.repository_owner }}/charts
+
+jobs:
+  # Determine if this is a release commit and calculate version
+  version:
+    name: Determine Version
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.version.outputs.should_release }}
+      new_version: ${{ steps.version.outputs.new_version }}
+      version_type: ${{ steps.version.outputs.version_type }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version bump
+        id: version
+        run: |
+          # Get the last release tag or use 0.0.0 if none exists
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LAST_VERSION=${LAST_TAG#v}
+
+          # Get all commit messages since last tag (or all if no tag)
+          # This handles both merge commits and squash merges
+          if [ "$LAST_TAG" = "v0.0.0" ]; then
+            # No previous tag, get all commits on main
+            COMMIT_MSGS=$(git log --pretty=%B HEAD)
+          else
+            # Get commits since last tag
+            COMMIT_MSGS=$(git log --pretty=%B ${LAST_TAG}..HEAD)
+          fi
+
+          echo "Last version: $LAST_VERSION"
+          echo "Commit messages since last release:"
+          echo "$COMMIT_MSGS"
+          echo "---"
+
+          # Determine version bump type from conventional commits
+          # Check all commits since last release for the highest priority bump
+          VERSION_TYPE="none"
+          if echo "$COMMIT_MSGS" | grep -qiE "^feat(\(.+\))?!:|^BREAKING CHANGE:"; then
+            VERSION_TYPE="major"
+          elif echo "$COMMIT_MSGS" | grep -qiE "^(feat|refactor)(\(.+\))?:"; then
+            VERSION_TYPE="minor"
+          elif echo "$COMMIT_MSGS" | grep -qiE "^(fix|style)(\(.+\))?:"; then
+            VERSION_TYPE="patch"
+          fi
+
+          echo "Version bump type: $VERSION_TYPE"
+
+          if [ "$VERSION_TYPE" = "none" ]; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "new_version=$LAST_VERSION" >> $GITHUB_OUTPUT
+            echo "version_type=none" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Calculate new version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
+          case $VERSION_TYPE in
+            major)
+              NEW_VERSION="$((MAJOR + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+              ;;
+          esac
+
+          echo "New version: $NEW_VERSION"
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_type=$VERSION_TYPE" >> $GITHUB_OUTPUT
+
+  # Run tests before release
+  test:
+    name: Test
+    needs: version
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run linting
+        run: uv run ruff check src/ tests/
+
+      - name: Run tests
+        run: uv run pytest --cov=src/volundr --cov-report=xml --cov-fail-under=85
+
+  # Build and publish the @niuulabs/volundr-ui npm package
+  publish-web-package:
+    name: Publish Web Package
+    needs: [version, test]
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:coverage
+
+      - name: Update package version
+        run: npm version ${{ needs.version.outputs.new_version }} --no-git-tag-version
+
+      - name: Build library
+        run: npm run build:lib
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build and push container images
+  build-containers:
+    name: Build ${{ matrix.container }} Container
+    needs: [version, test]
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - container: volundr
+            platforms: linux/amd64
+          - container: skuld
+            platforms: linux/amd64
+          - container: skuld-codex
+            platforms: linux/amd64
+          - container: devrunner
+            platforms: linux/amd64
+          - container: volundr-web
+            platforms: linux/amd64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}
+          tags: |
+            type=raw,value=${{ needs.version.outputs.new_version }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./containers/${{ matrix.container }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: ${{ matrix.platforms }}
+
+  # Build CLI binaries for all platforms
+  build-cli:
+    name: Build CLI Binaries
+    needs: [version, test]
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd web && npm ci --ignore-scripts && npm run build
+          cd ..
+          rm -rf cli/internal/web/dist
+          cp -r web/dist cli/internal/web/dist
+
+      - name: Build CLI
+        working-directory: cli
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+          BINARY="volundr-${{ matrix.goos }}-${{ matrix.goarch }}"
+          go build -tags embed_web \
+            -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=${VERSION}" \
+            -o "dist/${BINARY}" ./cmd/volundr
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: volundr-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: cli/dist/volundr-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  # Package and push Helm charts
+  build-charts:
+    name: Build Helm Charts
+    needs: [version, test]
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Update chart versions
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+
+          # Update skuld chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/skuld/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/skuld/Chart.yaml
+
+          # Update volundr chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/volundr/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/volundr/Chart.yaml
+
+          cat charts/skuld/Chart.yaml
+          cat charts/volundr/Chart.yaml
+
+      - name: Package Helm charts
+        run: |
+          helm package charts/skuld -d .helm-packages/
+          helm package charts/volundr -d .helm-packages/
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Helm charts to OCI registry
+        run: |
+          helm push .helm-packages/skuld-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
+
+  # Create GitHub release and update version files
+  release:
+    name: Create Release
+    needs: [version, build-containers, build-charts, build-cli, publish-web-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version in files
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+
+          # Update pyproject.toml
+          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
+          # Update skuld chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/skuld/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/skuld/Chart.yaml
+
+          # Update volundr chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/volundr/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/volundr/Chart.yaml
+
+          # Update version references in volundr values.yaml
+          sed -i 's/chartVersion: "[0-9]*\.[0-9]*\.[0-9]*[^"]*"/chartVersion: "'"$VERSION"'"/' charts/volundr/values.yaml
+          sed -i 's/version: "[0-9]*\.[0-9]*\.[0-9]*[^"]*"/version: "'"$VERSION"'"/' charts/volundr/values.yaml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Update web package version
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+          cd web && npm version "$VERSION" --no-git-tag-version
+
+      - name: Commit version bump
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml charts/*/Chart.yaml charts/volundr/values.yaml web/package.json web/package-lock.json
+          git commit -m "chore: bump version to $VERSION [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Create Git tag
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Download CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: cli-binaries
+          pattern: volundr-*
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          for dir in cli-binaries/volundr-*/; do
+            binary=$(basename "$dir")
+            cp "${dir}${binary}" "release-assets/${binary}"
+            chmod +x "release-assets/${binary}"
+          done
+          cd release-assets && sha256sum volundr-* > checksums.txt
+          ls -lh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.new_version }}
+          name: Release v${{ needs.version.outputs.new_version }}
+          generate_release_notes: true
+          files: |
+            release-assets/volundr-*
+            release-assets/checksums.txt

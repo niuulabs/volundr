@@ -1,0 +1,19 @@
+apiVersion: v2
+name: volundr
+description: A Helm chart for Volundr - Claude Code Session Manager
+type: application
+version: 0.67.2
+appVersion: "0.67.2"
+keywords:
+  - claude
+  - code
+  - session
+  - manager
+  - ai
+  - kubernetes
+maintainers:
+  - name: Volundr Team
+home: https://github.com/niuulabs/volundr
+sources:
+  - https://github.com/niuulabs/volundr
+dependencies: []

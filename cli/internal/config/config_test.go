@@ -1,0 +1,226 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestDefaultConfig(t *testing.T) {
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+
+	if cfg.Runtime != "local" {
+		t.Errorf("expected runtime 'local', got %q", cfg.Runtime)
+	}
+	if cfg.Listen.Host != DefaultListenHost {
+		t.Errorf("expected listen host %q, got %q", DefaultListenHost, cfg.Listen.Host)
+	}
+	if cfg.Listen.Port != DefaultListenPort {
+		t.Errorf("expected listen port %d, got %d", DefaultListenPort, cfg.Listen.Port)
+	}
+	if cfg.Database.Mode != "embedded" {
+		t.Errorf("expected database mode 'embedded', got %q", cfg.Database.Mode)
+	}
+	if cfg.Database.Port != DefaultDBPort {
+		t.Errorf("expected database port %d, got %d", DefaultDBPort, cfg.Database.Port)
+	}
+	if cfg.Database.User != DefaultDBUser {
+		t.Errorf("expected database user %q, got %q", DefaultDBUser, cfg.Database.User)
+	}
+	if cfg.Database.Name != DefaultDBName {
+		t.Errorf("expected database name %q, got %q", DefaultDBName, cfg.Database.Name)
+	}
+	if cfg.Database.Password == "" {
+		t.Error("expected generated password, got empty string")
+	}
+	if cfg.TLS.Mode != "off" {
+		t.Errorf("expected TLS mode 'off', got %q", cfg.TLS.Mode)
+	}
+}
+
+func TestConfigSaveAndLoad(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+
+	cfg.Anthropic.APIKey = "sk-ant-test"
+	cfg.Database.DataDir = filepath.Join(tmpDir, "data", "pg")
+
+	if err := cfg.SaveTo(path); err != nil {
+		t.Fatalf("SaveTo() error: %v", err)
+	}
+
+	loaded, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom() error: %v", err)
+	}
+
+	if loaded.Runtime != cfg.Runtime {
+		t.Errorf("runtime: expected %q, got %q", cfg.Runtime, loaded.Runtime)
+	}
+	if loaded.Listen.Port != cfg.Listen.Port {
+		t.Errorf("listen port: expected %d, got %d", cfg.Listen.Port, loaded.Listen.Port)
+	}
+	if loaded.Database.Mode != cfg.Database.Mode {
+		t.Errorf("database mode: expected %q, got %q", cfg.Database.Mode, loaded.Database.Mode)
+	}
+	if loaded.Database.Password != cfg.Database.Password {
+		t.Errorf("database password mismatch")
+	}
+	if loaded.Anthropic.APIKey != cfg.Anthropic.APIKey {
+		t.Errorf("anthropic api key: expected %q, got %q", cfg.Anthropic.APIKey, loaded.Anthropic.APIKey)
+	}
+}
+
+func TestConfigValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(*Config)
+		wantErr bool
+	}{
+		{
+			name:    "valid default config",
+			modify:  func(_ *Config) {},
+			wantErr: false,
+		},
+		{
+			name:    "invalid runtime",
+			modify:  func(c *Config) { c.Runtime = "invalid" },
+			wantErr: true,
+		},
+		{
+			name:    "invalid listen port zero",
+			modify:  func(c *Config) { c.Listen.Port = 0 },
+			wantErr: true,
+		},
+		{
+			name:    "invalid listen port too high",
+			modify:  func(c *Config) { c.Listen.Port = 70000 },
+			wantErr: true,
+		},
+		{
+			name:    "invalid database mode",
+			modify:  func(c *Config) { c.Database.Mode = "sqlite" },
+			wantErr: true,
+		},
+		{
+			name:    "external db without host",
+			modify:  func(c *Config) { c.Database.Mode = "external"; c.Database.Host = "" },
+			wantErr: true,
+		},
+		{
+			name: "external db with host",
+			modify: func(c *Config) {
+				c.Database.Mode = "external"
+				c.Database.Host = "db.example.com"
+			},
+			wantErr: false,
+		},
+		{
+			name:    "docker runtime is valid",
+			modify:  func(c *Config) { c.Runtime = "docker" },
+			wantErr: false,
+		},
+		{
+			name:    "k3s runtime is valid",
+			modify:  func(c *Config) { c.Runtime = "k3s" },
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := DefaultConfig()
+			if err != nil {
+				t.Fatalf("DefaultConfig() error: %v", err)
+			}
+			tt.modify(cfg)
+			err = cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfigDSN(t *testing.T) {
+	cfg := &Config{
+		Database: DatabaseConfig{
+			Mode:     "embedded",
+			Port:     5433,
+			User:     "volundr",
+			Password: "secret",
+			Name:     "volundr",
+		},
+	}
+
+	expected := "postgres://volundr:secret@127.0.0.1:5433/volundr?sslmode=disable"
+	if got := cfg.DSN(); got != expected {
+		t.Errorf("DSN() = %q, want %q", got, expected)
+	}
+
+	// External mode with host.
+	cfg.Database.Mode = "external"
+	cfg.Database.Host = "db.example.com"
+	cfg.Database.Port = 5432
+	expected = "postgres://volundr:secret@db.example.com:5432/volundr?sslmode=disable"
+	if got := cfg.DSN(); got != expected {
+		t.Errorf("DSN() = %q, want %q", got, expected)
+	}
+}
+
+func TestLoadFromNonExistent(t *testing.T) {
+	_, err := LoadFrom("/nonexistent/path/config.yaml")
+	if err == nil {
+		t.Error("expected error for non-existent file")
+	}
+}
+
+func TestConfigFilePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+
+	if err := cfg.SaveTo(path); err != nil {
+		t.Fatalf("SaveTo() error: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat() error: %v", err)
+	}
+
+	perm := info.Mode().Perm()
+	if perm != 0o600 {
+		t.Errorf("expected file permissions 0600, got %o", perm)
+	}
+}
+
+func TestGeneratePassword(t *testing.T) {
+	p1, err := generatePassword()
+	if err != nil {
+		t.Fatalf("generatePassword() error: %v", err)
+	}
+	p2, err := generatePassword()
+	if err != nil {
+		t.Fatalf("generatePassword() error: %v", err)
+	}
+
+	if p1 == p2 {
+		t.Error("expected unique passwords, got identical")
+	}
+	if len(p1) != 32 {
+		t.Errorf("expected 32-char hex password, got %d chars", len(p1))
+	}
+}

@@ -1,0 +1,334 @@
+{{- if and .Values.localServices.enabled .Values.localServices.terminal.debug }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "skuld.fullname" . }}-terminal-debug
+  labels:
+    {{- include "skuld.labels" . | nindent 4 }}
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Skuld Terminal Debug</title>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          background: #0d1117;
+          color: #e6edf3;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          display: flex;
+          flex-direction: column;
+          height: 100vh;
+        }
+        header {
+          background: #161b22;
+          border-bottom: 1px solid #21262d;
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-shrink: 0;
+        }
+        header h1 {
+          font-size: 14px;
+          font-weight: 600;
+          color: #e6edf3;
+          letter-spacing: 0.02em;
+        }
+        header h1 span { color: #e94560; }
+        .status {
+          font-size: 11px;
+          padding: 3px 10px;
+          border-radius: 10px;
+          font-weight: 500;
+          transition: background 0.2s, color 0.2s;
+        }
+        .status.connected { background: #1b4332; color: #7ee787; }
+        .status.disconnected { background: #3d0000; color: #ff7b72; }
+        .status.connecting { background: #3d3400; color: #d29922; }
+        .info {
+          margin-left: auto;
+          font-size: 11px;
+          color: #484f58;
+        }
+        #terminal-container {
+          flex: 1;
+          padding: 4px;
+          overflow: hidden;
+          background: #010409;
+        }
+        #terminal-container .xterm {
+          padding: 6px;
+        }
+        /* Custom scrollbar for xterm viewport */
+        .xterm-viewport::-webkit-scrollbar {
+          width: 8px;
+        }
+        .xterm-viewport::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .xterm-viewport::-webkit-scrollbar-thumb {
+          background: #30363d;
+          border-radius: 4px;
+        }
+        .xterm-viewport::-webkit-scrollbar-thumb:hover {
+          background: #484f58;
+        }
+        /* Clickable links */
+        .xterm a {
+          color: #58a6ff;
+          text-decoration: none;
+        }
+        .xterm a:hover {
+          text-decoration: underline;
+        }
+        .controls {
+          background: #161b22;
+          border-top: 1px solid #21262d;
+          padding: 8px 16px;
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-shrink: 0;
+        }
+        button {
+          background: #21262d;
+          color: #c9d1d9;
+          border: 1px solid #30363d;
+          padding: 5px 12px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+          font-family: inherit;
+          font-weight: 500;
+          transition: background 0.15s, border-color 0.15s;
+        }
+        button:hover { background: #30363d; border-color: #484f58; }
+        button:active { background: #282e33; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        button.danger { background: #490202; border-color: #6e1717; color: #ff7b72; }
+        button.danger:hover { background: #6e1717; border-color: #9b2c2c; }
+        #ws-url {
+          background: #0d1117;
+          color: #c9d1d9;
+          border: 1px solid #30363d;
+          padding: 5px 10px;
+          border-radius: 6px;
+          font-family: 'JetBrains Mono', 'Fira Code', monospace;
+          font-size: 12px;
+          flex: 1;
+          outline: none;
+          transition: border-color 0.15s;
+        }
+        #ws-url:focus { border-color: #58a6ff; }
+        .log {
+          background: #010409;
+          border-top: 1px solid #21262d;
+          padding: 6px 16px;
+          font-family: 'JetBrains Mono', 'Fira Code', monospace;
+          font-size: 11px;
+          max-height: 90px;
+          overflow-y: auto;
+          flex-shrink: 0;
+          line-height: 1.5;
+        }
+        .log::-webkit-scrollbar { width: 6px; }
+        .log::-webkit-scrollbar-track { background: transparent; }
+        .log::-webkit-scrollbar-thumb { background: #21262d; border-radius: 3px; }
+        .log-entry { padding: 1px 0; color: #484f58; }
+        .log-entry.error { color: #ff7b72; }
+        .log-entry.info { color: #58a6ff; }
+        .log-entry.data { color: #7ee787; }
+      </style>
+    </head>
+    <body>
+      <header>
+        <h1><span>skuld</span> terminal</h1>
+        <span id="status" class="status disconnected">disconnected</span>
+        <span class="info">xterm.js 5.5 | restricted shell</span>
+      </header>
+
+      <div class="controls">
+        <input id="ws-url" type="text" value="" placeholder="ws://..." />
+        <button id="btn-connect" onclick="connect()">Connect</button>
+        <button id="btn-disconnect" class="danger" onclick="disconnect()" disabled>Disconnect</button>
+      </div>
+
+      <div id="terminal-container"></div>
+
+      <div id="debug-log" class="log" role="log"></div>
+
+      <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+      <script>
+        const term = new window.Terminal({
+          theme: {
+            background: '#010409',
+            foreground: '#e6edf3',
+            cursor: '#e94560',
+            cursorAccent: '#010409',
+            selectionBackground: '#264f78',
+            selectionForeground: '#ffffff',
+            selectionInactiveBackground: '#264f7844',
+            // ANSI standard colors
+            black: '#484f58',
+            red: '#ff7b72',
+            green: '#7ee787',
+            yellow: '#d29922',
+            blue: '#58a6ff',
+            magenta: '#bc8cff',
+            cyan: '#76e3ea',
+            white: '#e6edf3',
+            // ANSI bright colors
+            brightBlack: '#6e7681',
+            brightRed: '#ffa198',
+            brightGreen: '#aff5b4',
+            brightYellow: '#e3b341',
+            brightBlue: '#79c0ff',
+            brightMagenta: '#d2a8ff',
+            brightCyan: '#a5d6ff',
+            brightWhite: '#f0f6fc',
+          },
+          fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
+          fontSize: 14,
+          lineHeight: 1.2,
+          letterSpacing: 0,
+          cursorBlink: true,
+          cursorStyle: 'bar',
+          cursorWidth: 2,
+          convertEol: true,
+          scrollback: 5000,
+          smoothScrollDuration: 100,
+          allowProposedApi: true,
+        });
+
+        const fitAddon = new window.FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+
+        const webLinksAddon = new window.WebLinksAddon.WebLinksAddon();
+        term.loadAddon(webLinksAddon);
+
+        const container = document.getElementById('terminal-container');
+        term.open(container);
+        fitAddon.fit();
+
+        let ws = null;
+
+        // Auto-detect WebSocket URL
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const defaultUrl = proto + '//' + location.host + '/terminal/ws';
+        document.getElementById('ws-url').value = defaultUrl;
+
+        function log(msg, cls = 'info') {
+          const el = document.getElementById('debug-log');
+          const entry = document.createElement('div');
+          entry.className = 'log-entry ' + cls;
+          entry.textContent = new Date().toISOString().substr(11, 12) + ' ' + msg;
+          el.appendChild(entry);
+          el.scrollTop = el.scrollHeight;
+        }
+
+        function setStatus(s) {
+          const el = document.getElementById('status');
+          el.textContent = s;
+          el.className = 'status ' + s;
+        }
+
+        function connect() {
+          const url = document.getElementById('ws-url').value;
+          if (ws) disconnect();
+
+          setStatus('connecting');
+          log('Connecting to ' + url);
+          term.clear();
+
+          try {
+            ws = new WebSocket(url);
+          } catch (e) {
+            log('Failed to create WebSocket: ' + e.message, 'error');
+            setStatus('disconnected');
+            return;
+          }
+
+          ws.onopen = () => {
+            setStatus('connected');
+            log('Connected');
+            document.getElementById('btn-connect').disabled = true;
+            document.getElementById('btn-disconnect').disabled = false;
+
+            // Send initial size
+            ws.send(JSON.stringify({
+              type: 'resize',
+              cols: term.cols,
+              rows: term.rows,
+            }));
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'output') {
+                term.write(msg.data);
+              }
+            } catch (e) {
+              // Raw text fallback
+              term.write(event.data);
+            }
+          };
+
+          ws.onerror = (event) => {
+            log('WebSocket error', 'error');
+          };
+
+          ws.onclose = (event) => {
+            setStatus('disconnected');
+            log('Disconnected (code=' + event.code + ', reason=' + (event.reason || 'none') + ')');
+            document.getElementById('btn-connect').disabled = false;
+            document.getElementById('btn-disconnect').disabled = true;
+            ws = null;
+          };
+        }
+
+        function disconnect() {
+          if (ws) {
+            ws.close();
+            ws = null;
+          }
+          setStatus('disconnected');
+          document.getElementById('btn-connect').disabled = false;
+          document.getElementById('btn-disconnect').disabled = true;
+        }
+
+        // Terminal input -> WebSocket
+        term.onData((data) => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'input', data: data }));
+          }
+        });
+
+        // Handle resize
+        const resizeObserver = new ResizeObserver(() => {
+          fitAddon.fit();
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'resize',
+              cols: term.cols,
+              rows: term.rows,
+            }));
+          }
+        });
+        resizeObserver.observe(container);
+
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+          setTimeout(connect, 500);
+        });
+      </script>
+    </body>
+    </html>
+{{- end }}

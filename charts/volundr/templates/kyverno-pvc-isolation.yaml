@@ -1,0 +1,74 @@
+{{- if contains "K8sStorageAdapter" .Values.storageAdapter.adapter }}
+# Kyverno policy: enforce PVC mount isolation by owner and session labels.
+#
+# A single rule fetches PVC labels once per volume mount and checks both:
+#   1. Owner isolation — PVC "volundr/owner" must match Pod "volundr/owner".
+#      Prevents User A's pod from mounting User B's PVC.
+#   2. Session isolation — PVC "volundr/session-id" (workspace PVCs) must match
+#      Pod "volundr/session-id". Prevents Session 1 from mounting Session 2's workspace.
+#
+# PVCs without the checked label are allowed through (shared PVCs).
+#
+# Requires Kyverno >= 1.9 (apiCall context in foreach).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: {{ include "volundr.fullname" . }}-{{ .Release.Namespace }}-pvc-isolation
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+  annotations:
+    policies.kyverno.io/title: Restrict PVC Mount by Owner and Session
+    policies.kyverno.io/category: Multi-Tenancy
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Ensures that Pods can only mount Volundr-managed PVCs whose
+      "volundr/owner" and "volundr/session-id" labels match the Pod's
+      own labels. PVCs without these labels (shared PVCs) are allowed.
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: pvc-isolation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - {{ .Values.storageAdapter.kwargs.namespace | default .Release.Namespace }}
+      preconditions:
+        all:
+          - key: "{{`{{ request.operation || 'BACKGROUND' }}`}}"
+            operator: NotEquals
+            value: DELETE
+      validate:
+        message: "PVC isolation violation: a mounted PVC's owner or session-id label does not match the Pod."
+        foreach:
+          - list: "request.object.spec.volumes[?persistentVolumeClaim].persistentVolumeClaim"
+            context:
+              - name: pvcLabels
+                apiCall:
+                  urlPath: "/api/v1/namespaces/{{`{{request.namespace}}`}}/persistentvolumeclaims/{{`{{element.claimName}}`}}"
+                  jmesPath: "metadata.labels"
+              - name: pvcOwner
+                variable:
+                  jmesPath: "pvcLabels.\"volundr/owner\" || ''"
+              - name: pvcSession
+                variable:
+                  jmesPath: "pvcLabels.\"volundr/session-id\" || ''"
+            deny:
+              conditions:
+                any:
+                  # Deny if PVC has an owner label that doesn't match the pod's owner
+                  - key: "{{`{{ pvcOwner }}`}}"
+                    operator: AllNotIn
+                    value:
+                      - ""
+                      - "{{`{{ request.object.metadata.labels.\"volundr/owner\" || '' }}`}}"
+                  # Deny if PVC has a session-id label that doesn't match the pod's session-id
+                  - key: "{{`{{ pvcSession }}`}}"
+                    operator: AllNotIn
+                    value:
+                      - ""
+                      - "{{`{{ request.object.metadata.labels.\"volundr/session-id\" || '' }}`}}"
+{{- end }}

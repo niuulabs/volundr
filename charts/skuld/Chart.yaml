@@ -1,0 +1,16 @@
+apiVersion: v2
+name: skuld
+description: Claude Code CLI session pod with WebSocket broker and code-server IDE
+type: application
+version: 0.67.2
+appVersion: "0.67.2"
+keywords:
+  - claude
+  - code
+  - session
+  - websocket
+  - code-server
+  - vscode
+  - ide
+maintainers:
+  - name: Volundr Team

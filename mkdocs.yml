@@ -1,0 +1,107 @@
+site_name: Volundr
+site_description: Self-hosted remote development platform on Kubernetes
+site_url: https://niuulabs.github.io/volundr/
+repo_url: https://github.com/niuulabs/volundr
+repo_name: niuulabs/volundr
+
+docs_dir: docs/site
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  palette:
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font: false
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/hammer-wrench
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.instant
+    - navigation.instant.progress
+    - content.code.copy
+    - content.code.annotate
+    - search.highlight
+    - search.suggest
+    - toc.follow
+    - header.autohide
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - Running: getting-started/running.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Hexagonal Design: architecture/hexagonal.md
+      - Components: architecture/components.md
+  - API Reference:
+      - Sessions: api/sessions.md
+      - Chronicles: api/chronicles.md
+      - Git Workflows: api/git.md
+      - Profiles & Templates: api/profiles.md
+      - Presets: api/presets.md
+      - Prompts: api/prompts.md
+      - Tenants & Users: api/tenants.md
+      - Credentials: api/credentials.md
+      - Secrets: api/secrets.md
+      - Events: api/events.md
+      - Integrations: api/integrations.md
+      - Issue Tracker: api/tracker.md
+  - Backends:
+      - Database: backends/database.md
+      - Git Providers: backends/git.md
+      - Secret Management: backends/secrets.md
+      - Credential Stores: backends/credentials.md
+      - Event Sinks: backends/events.md
+      - Storage: backends/storage.md
+      - Authorization: backends/authorization.md
+      - Identity: backends/identity.md
+      - Issue Trackers: backends/trackers.md
+  - Web UI: web-ui/index.md
+  - Deployment:
+      - Helm: deployment/helm.md
+      - Migrations: deployment/migrations.md
+      - Production: deployment/production.md
+  - Contributing:
+      - Development: contributing/development.md
+      - Code Style: contributing/code-style.md
+      - Testing: contributing/testing.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search

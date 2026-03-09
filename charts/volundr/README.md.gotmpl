@@ -1,0 +1,171 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.badgesSection" . }}
+
+Helm chart for deploying **Volundr** — a self-hosted Claude Code session manager with pluggable adapters for identity, authorization, storage, secret management, and session orchestration.
+
+## Prerequisites
+
+- Kubernetes 1.24+
+- Helm 3.8+
+- PostgreSQL database
+- ReadWriteMany-capable storage class (e.g., Longhorn, NFS, EFS)
+- (Optional) NVIDIA Farm or Flux for session orchestration
+- (Optional) Envoy Gateway + GatewayClass for session routing
+- (Optional) Kyverno for multi-tenant PVC isolation
+
+## Installation
+
+```bash
+# Add the helm repository (if using OCI registry)
+helm pull oci://ghcr.io/niuulabs/charts/volundr --version {{ template "chart.version" . }}
+
+# Create namespace
+kubectl create namespace volundr
+
+# Install the chart
+helm install volundr ./charts/volundr -n volundr
+
+# Or install with custom values
+helm install volundr ./charts/volundr -n volundr -f my-values.yaml
+```
+
+## Quick Start
+
+1. Create the required secrets:
+
+```bash
+# Database credentials
+kubectl create secret generic volundr-db -n volundr \
+  --from-literal=username=volundr \
+  --from-literal=password=your-db-password
+
+# Anthropic API credentials
+kubectl create secret generic volundr-anthropic-api -n volundr \
+  --from-literal=ANTHROPIC_API_KEY=your-api-key
+```
+
+2. Install the chart:
+
+```bash
+helm install volundr ./charts/volundr -n volundr \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=volundr.example.com
+```
+
+## Architecture: Dynamic Adapter Pattern
+
+Volundr uses a **dynamic adapter pattern** for all pluggable subsystems. Each adapter section in `values.yaml` follows this structure:
+
+```yaml
+<adapterSection>:
+  # Fully-qualified Python class path -- dynamically imported at startup
+  adapter: "volundr.adapters.outbound.<module>.<ClassName>"
+  # All kwargs forwarded to the adapter constructor as **kwargs
+  kwargs:
+    key1: value1
+    key2: value2
+```
+
+**How it works:**
+
+1. The `adapter` value is a fully-qualified Python class path (e.g., `volundr.adapters.outbound.farm.FarmPodManager`).
+2. At startup, Volundr dynamically imports the class using `importlib`.
+3. All keys under `kwargs` are passed to the class constructor as keyword arguments.
+4. **No code changes** are required to swap backends -- only update the Helm values.
+
+The following subsystems use this pattern:
+
+| Section | Port Interface | Purpose |
+|---------|---------------|---------|
+| `podManager` | `PodManager` | Session pod orchestration |
+| `identity` | `IdentityPort` | Authentication / user resolution |
+| `authorization` | `AuthorizationPort` | Access control decisions |
+| `credentialStore` | `CredentialStorePort` | Secret storage backend |
+| `secretInjection` | `SecretInjectionPort` | CSI volume injection into session pods |
+| `storageAdapter` | `StoragePort` | PVC lifecycle management |
+| `gateway` | `GatewayPort` | Session routing configuration |
+
+## Values
+
+{{ template "chart.valuesTable" . }}
+
+## Secrets
+
+This chart expects secrets to be created externally (via External Secrets or manually).
+
+### Required Secrets
+
+| Secret Name | Keys | Description |
+|-------------|------|-------------|
+| `volundr-db` | `username`, `password` | PostgreSQL database credentials |
+| `volundr-anthropic-api` | `ANTHROPIC_API_KEY`, (optional) `ANTHROPIC_BASE_URL` | Anthropic API credentials |
+
+### Optional Secrets
+
+| Secret Name | Keys | Used By |
+|-------------|------|---------|
+| Pod manager token (configurable) | `token` | `podManager.existingSecret` -- API token for Farm/Flux backend |
+| GitHub token (configurable) | `token` | `git.github.existingSecret` -- GitHub API access |
+| GitLab token (configurable) | `token` | `git.gitlab.existingSecret` -- GitLab API access |
+| `claude-credentials` | (credential files) | Session pods -- Claude credential files symlinked into `$HOME/.claude/` |
+| `codex-credentials` | (credential files) | Session pods -- Codex credential files symlinked into `$HOME/.codex/` |
+
+## Storage Layout
+
+Sessions are stored at `/volundr/sessions/{uuid}/`:
+
+```
+/volundr/sessions/{uuid}/
+├── .claude/          # Claude Code configuration
+└── workspace/        # User workspace files
+```
+
+## Upgrading
+
+### From 0.1.x to 0.2.x
+
+Version 0.2.0 adds the full Volundr service deployment. If you were only using the FarmSessionDefinition CRD, no changes are required.
+
+## Uninstallation
+
+```bash
+helm uninstall volundr -n volundr
+```
+
+Note: The PVC will be retained by default. Delete manually if needed:
+
+```bash
+kubectl delete pvc volundr-sessions -n volundr
+```
+
+## Troubleshooting
+
+### Check pod status
+
+```bash
+kubectl get pods -n volundr -l app.kubernetes.io/name=volundr
+```
+
+### View logs
+
+```bash
+kubectl logs -n volundr -l app.kubernetes.io/name=volundr -f
+```
+
+### Check service endpoints
+
+```bash
+kubectl get endpoints -n volundr volundr
+```
+
+### Test health endpoint
+
+```bash
+kubectl port-forward -n volundr svc/volundr 8080:80
+curl http://localhost:8080/health
+```
+
+---
+
+<!-- This README was generated by helm-docs using charts/volundr/README.md.gotmpl -->

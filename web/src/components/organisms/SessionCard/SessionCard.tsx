@@ -1,0 +1,90 @@
+import type { CSSProperties } from 'react';
+import { GitBranch, Globe, MessageSquare, Zap, Server } from 'lucide-react';
+import type { VolundrSession, VolundrModel } from '@/models';
+import { StatusBadge } from '@/components/atoms/StatusBadge';
+import { LinearIssueBadge } from '@/components/molecules/LinearIssueBadge';
+import { cn, formatTime, formatTokens } from '@/utils';
+import styles from './SessionCard.module.css';
+
+export interface SessionCardProps {
+  /** Session data */
+  session: VolundrSession;
+  /** Model data for the session's model */
+  model?: VolundrModel;
+  /** Whether this card is selected */
+  selected?: boolean;
+  /** Click handler */
+  onClick?: () => void;
+  /** Additional CSS class */
+  className?: string;
+}
+
+export function SessionCard({
+  session,
+  model,
+  selected = false,
+  onClick,
+  className,
+}: SessionCardProps) {
+  const isManual = session.source === 'manual';
+  const isLocal = model?.provider === 'local';
+  const lastActiveTime = formatTime(session.lastActive);
+  const tokens = formatTokens(session.tokensUsed);
+
+  return (
+    <div
+      className={cn(styles.card, styles[session.status], selected && styles.selected, className)}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
+      <div className={styles.header}>
+        <div className={styles.nameGroup}>
+          <h3 className={styles.name}>{session.name}</h3>
+          {isManual ? (
+            <div className={styles.repo}>
+              <Globe className={styles.repoIcon} />
+              <span>{session.hostname}</span>
+            </div>
+          ) : (
+            <div className={styles.repo}>
+              <GitBranch className={styles.repoIcon} />
+              <span>{session.repo}</span>
+              <span className={styles.branch}>{session.branch}</span>
+            </div>
+          )}
+        </div>
+        <div className={styles.badges}>
+          {session.linearIssue && <LinearIssueBadge issue={session.linearIssue} />}
+          {isManual && <span className={styles.manualBadge}>manual</span>}
+          <StatusBadge status={session.status} />
+        </div>
+      </div>
+
+      {!isManual && model && (
+        <div
+          className={styles.modelBadge}
+          style={{ '--model-color': model.color } as CSSProperties}
+        >
+          {isLocal ? <Zap className={styles.modelIcon} /> : <Server className={styles.modelIcon} />}
+          <span>{model.name}</span>
+          <span className={styles.modelType}>{isLocal ? 'GPU' : 'API'}</span>
+        </div>
+      )}
+
+      {session.error && <p className={styles.error}>{session.error}</p>}
+
+      <div className={styles.footer}>
+        <div className={styles.stats}>
+          <div className={styles.stat}>
+            <MessageSquare className={styles.statIcon} />
+            <span>{session.messageCount}</span>
+          </div>
+          <span className={styles.dot}>&middot;</span>
+          <span className={styles.stat}>{tokens} tokens</span>
+        </div>
+        <span className={styles.lastActive}>{lastActiveTime}</span>
+      </div>
+    </div>
+  );
+}

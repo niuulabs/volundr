@@ -1,0 +1,15 @@
+{{- if .Values.storage.home.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "volundr.homePvcName" . }}
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.storage.home.accessMode }}
+  storageClassName: {{ .Values.storage.home.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.home.size }}
+{{- end }}

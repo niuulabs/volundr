@@ -1,0 +1,245 @@
+import { useState, useCallback } from 'react';
+import { ChevronLeft, ChevronRight, Rocket } from 'lucide-react';
+import type {
+  VolundrPreset,
+  VolundrTemplate,
+  VolundrRepo,
+  VolundrModel,
+  McpServerConfig,
+  LinearIssue,
+} from '@/models';
+import type { IVolundrService } from '@/ports';
+import { WizardStepper } from './WizardStepper';
+import { TemplateStep, BLANK_TEMPLATE } from './steps/TemplateStep';
+import { ConfigureStep } from './steps/ConfigureStep';
+import { ReviewStep } from './steps/ReviewStep';
+import styles from './LaunchWizard.module.css';
+
+export interface LaunchConfig {
+  name: string;
+  repo: string;
+  branch: string;
+  model: string;
+  templateName?: string;
+  presetId?: string;
+  taskType?: string;
+  linearIssue?: LinearIssue;
+  terminalRestricted?: boolean;
+  workspaceId?: string;
+  credentialNames?: string[];
+  integrationIds?: string[];
+}
+
+export interface WizardState {
+  template: VolundrTemplate;
+  preset: VolundrPreset | null;
+  name: string;
+  repo: string;
+  branch: string;
+  model: string;
+  taskType: string;
+  linearIssue?: LinearIssue;
+  workspaceId?: string;
+  terminalRestricted: boolean;
+  mcpServers: McpServerConfig[];
+  resourceConfig: Record<string, string | undefined>;
+  envVars: Record<string, string>;
+  systemPrompt: string;
+  setupScripts: string[];
+  selectedCredentials: string[];
+  selectedIntegrations: string[];
+  yamlMode: boolean;
+  yamlContent: string;
+}
+
+export interface LaunchWizardProps {
+  templates: VolundrTemplate[];
+  presets: VolundrPreset[];
+  repos: VolundrRepo[];
+  models: Record<string, VolundrModel>;
+  availableMcpServers: McpServerConfig[];
+  availableSecrets: string[];
+  service: IVolundrService;
+  onLaunch: (config: LaunchConfig) => Promise<void>;
+  onSaveTemplate: (template: VolundrTemplate) => Promise<void>;
+  onSavePreset: (
+    preset: Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ) => Promise<VolundrPreset>;
+  isLaunching: boolean;
+  searchLinearIssues?: (query: string) => Promise<LinearIssue[]>;
+}
+
+const STEPS = ['Choose Template', 'Configure', 'Review & Launch'];
+
+function buildInitialState(template: VolundrTemplate, repos: VolundrRepo[]): WizardState {
+  let repo = '';
+  let branch = '';
+
+  if (template.repos.length > 0) {
+    const tmplRepo = template.repos[0];
+    const matched = repos.find(r => r.cloneUrl === tmplRepo.repo);
+    if (matched) {
+      repo = matched.cloneUrl;
+      branch = tmplRepo.branch ?? matched.defaultBranch;
+    }
+  }
+
+  return {
+    template,
+    preset: null,
+    name: '',
+    repo,
+    branch,
+    model: template.model ?? '',
+    taskType: `skuld-${template.cliTool}`,
+    mcpServers: [...template.mcpServers],
+    resourceConfig: { ...template.resourceConfig },
+    envVars: { ...template.envVars },
+    systemPrompt: template.systemPrompt ?? '',
+    setupScripts: [...template.setupScripts],
+    terminalRestricted: false,
+    selectedCredentials: [...template.envSecretRefs],
+    selectedIntegrations: [],
+    yamlMode: false,
+    yamlContent: '',
+  };
+}
+
+export function LaunchWizard(props: LaunchWizardProps) {
+  const {
+    templates,
+    presets,
+    repos,
+    models,
+    availableMcpServers,
+    availableSecrets,
+    service,
+    onLaunch,
+    onSavePreset,
+    isLaunching,
+    searchLinearIssues,
+  } = props;
+  const [step, setStep] = useState(1);
+  const [state, setState] = useState<WizardState | null>(null);
+
+  const handleTemplateSelect = useCallback(
+    (template: VolundrTemplate | null) => {
+      const chosen = template ?? BLANK_TEMPLATE;
+      setState(buildInitialState(chosen, repos));
+      setStep(2);
+    },
+    [repos]
+  );
+
+  const updateState = useCallback((updates: Partial<WizardState>) => {
+    setState(prev => (prev ? { ...prev, ...updates } : prev));
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (step === 2) {
+      setState(null);
+      setStep(1);
+      return;
+    }
+    setStep(prev => Math.max(1, prev - 1));
+  }, [step]);
+
+  const handleNext = useCallback(() => {
+    setStep(prev => Math.min(3, prev + 1));
+  }, []);
+
+  const handleLaunch = useCallback(async () => {
+    if (!state) {
+      return;
+    }
+
+    await onLaunch({
+      name: state.name.trim(),
+      repo: state.repo,
+      branch: state.branch,
+      model: state.model,
+      templateName: state.template.name || undefined,
+      presetId: state.preset?.id,
+      taskType: state.taskType || undefined,
+      linearIssue: state.linearIssue,
+      terminalRestricted: state.terminalRestricted,
+      workspaceId: state.workspaceId,
+      credentialNames: state.selectedCredentials.length ? state.selectedCredentials : undefined,
+      integrationIds: state.selectedIntegrations.length ? state.selectedIntegrations : undefined,
+    });
+  }, [state, onLaunch]);
+
+  const canProceedToStep3 =
+    state !== null && state.name.trim() !== '' && state.repo !== '' && state.model !== '';
+
+  const canLaunch = canProceedToStep3 && !isLaunching;
+
+  return (
+    <div className={styles.wizard}>
+      <WizardStepper currentStep={step} steps={STEPS} />
+
+      <div className={styles.content}>
+        {step === 1 && <TemplateStep templates={templates} onSelect={handleTemplateSelect} />}
+
+        {step === 2 && state && (
+          <ConfigureStep
+            state={state}
+            presets={presets}
+            repos={repos}
+            models={models}
+            availableMcpServers={availableMcpServers}
+            availableSecrets={availableSecrets}
+            service={service}
+            searchLinearIssues={searchLinearIssues}
+            onChange={updateState}
+            onSavePreset={onSavePreset}
+          />
+        )}
+
+        {step === 3 && state && <ReviewStep state={state} repos={repos} models={models} />}
+      </div>
+
+      {step > 1 && (
+        <div className={styles.footer}>
+          <button
+            className={styles.backButton}
+            onClick={handleBack}
+            type="button"
+            disabled={isLaunching}
+          >
+            <ChevronLeft className={styles.buttonIcon} />
+            Back
+          </button>
+
+          <div className={styles.footerRight}>
+            {step === 2 && (
+              <button
+                className={styles.nextButton}
+                onClick={handleNext}
+                type="button"
+                disabled={!canProceedToStep3}
+              >
+                Next
+                <ChevronRight className={styles.buttonIcon} />
+              </button>
+            )}
+
+            {step === 3 && (
+              <button
+                className={styles.launchButton}
+                onClick={handleLaunch}
+                type="button"
+                disabled={!canLaunch}
+              >
+                <Rocket className={styles.buttonIcon} />
+                {isLaunching ? 'Launching...' : 'Launch Session'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export type { WizardState as LaunchWizardState };

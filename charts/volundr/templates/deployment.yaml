@@ -1,0 +1,364 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "volundr.fullname" . }}
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+  {{- with .Values.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit | default 10 }}
+  selector:
+    matchLabels:
+      {{- include "volundr.selectorLabels" . | nindent 6 }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        {{- include "volundr.checksumAnnotations" . | nindent 8 }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "volundr.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "volundr.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "volundr.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- if .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ include "volundr.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort | default 8080 }}
+              protocol: TCP
+          env:
+            # Database secrets (override YAML config)
+            - name: DATABASE__HOST
+              value: {{ include "volundr.databaseHost" . | quote }}
+            - name: DATABASE__PORT
+              value: {{ include "volundr.databasePort" . | quote }}
+            - name: DATABASE__NAME
+              value: {{ .Values.database.name | quote }}
+            - name: DATABASE__USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "volundr.databaseSecretName" . }}
+                  key: {{ .Values.database.userKey | default "username" }}
+            - name: DATABASE__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "volundr.databaseSecretName" . }}
+                  key: {{ .Values.database.passwordKey | default "password" }}
+            # Pod manager token (if configured)
+            {{- if .Values.podManager.existingSecret }}
+            - name: POD_MANAGER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.podManager.existingSecret }}
+                  key: {{ .Values.podManager.tokenKey | default "token" }}
+            {{- end }}
+            # Git provider tokens (from secrets)
+            {{- if and .Values.git.github.enabled .Values.git.github.existingSecret }}
+            - name: GIT__GITHUB__TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.git.github.existingSecret }}
+                  key: {{ .Values.git.github.tokenKey | default "token" }}
+            {{- end }}
+            {{- if and .Values.git.gitlab.enabled .Values.git.gitlab.existingSecret }}
+            - name: GIT__GITLAB__TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.git.gitlab.existingSecret }}
+                  key: {{ .Values.git.gitlab.tokenKey | default "token" }}
+            {{- end }}
+            # Per-instance GitHub tokens (from secrets)
+            {{- range $i, $inst := .Values.git.github.instances }}
+            {{- if $inst.existingSecret }}
+            - name: GIT_GITHUB_INSTANCE_{{ $i }}_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $inst.existingSecret }}
+                  key: {{ $inst.tokenKey | default "token" }}
+            {{- end }}
+            {{- end }}
+            # Per-instance GitLab tokens (from secrets)
+            {{- range $i, $inst := .Values.git.gitlab.instances }}
+            {{- if $inst.existingSecret }}
+            - name: GIT_GITLAB_INSTANCE_{{ $i }}_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $inst.existingSecret }}
+                  key: {{ $inst.tokenKey | default "token" }}
+            {{- end }}
+            {{- end }}
+            # Dynamic adapter secretKwargs (env vars from K8s Secrets)
+            {{- range .Values.podManager.secretKwargs }}
+            - name: POD_MANAGER_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.storageAdapter.secretKwargs }}
+            - name: STORAGE_ADAPTER_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.identity.secretKwargs }}
+            - name: IDENTITY_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.authorization.secretKwargs }}
+            - name: AUTHORIZATION_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.credentialStore.secretKwargs }}
+            - name: CREDENTIAL_STORE_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.secretInjection.secretKwargs }}
+            - name: SECRET_INJECTION_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.gateway.secretKwargs }}
+            - name: GATEWAY_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range $i, $contributor := .Values.sessionContributors }}
+            {{- range $contributor.secretKwargs }}
+            - name: SESSION_CONTRIBUTOR_{{ $i }}_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path | default "/health" }}
+              port: http
+              scheme: {{ .Values.livenessProbe.scheme | default "HTTP" }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds | default 10 }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds | default 30 }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds | default 10 }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold | default 1 }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold | default 3 }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path | default "/health" }}
+              port: http
+              scheme: {{ .Values.readinessProbe.scheme | default "HTTP" }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds | default 5 }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold | default 1 }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold | default 3 }}
+          {{- end }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.startupProbe.path | default "/health" }}
+              port: http
+              scheme: {{ .Values.startupProbe.scheme | default "HTTP" }}
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds | default 5 }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds | default 5 }}
+            successThreshold: {{ .Values.startupProbe.successThreshold | default 1 }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold | default 30 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/volundr
+              readOnly: true
+            {{- if .Values.storage.sessions.enabled }}
+            - name: sessions
+              mountPath: {{ .Values.storage.sessions.mountPath | default "/volundr/sessions" }}
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.lifecycle }}
+          lifecycle:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- if .Values.envoy.enabled }}
+        - name: envoy
+          image: "{{ .Values.envoy.image.repository }}:{{ .Values.envoy.image.tag }}"
+          imagePullPolicy: {{ .Values.envoy.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: envoy
+              containerPort: {{ .Values.envoy.port }}
+              protocol: TCP
+          {{- with .Values.envoy.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.envoy.port }}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.envoy.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 15
+        {{- end }}
+        {{- with .Values.sidecars }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.migrations.enabled .Values.initContainers }}
+      initContainers:
+        {{- if .Values.migrations.enabled }}
+        - name: migrate
+          image: "{{ .Values.migrations.image.repository }}:{{ .Values.migrations.image.tag }}"
+          imagePullPolicy: {{ .Values.migrations.image.pullPolicy }}
+          args:
+            - "-path=/migrations"
+            - "-database=postgres://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=disable"
+            - "up"
+          env:
+            - name: DATABASE_HOST
+              value: {{ include "volundr.databaseHost" . | quote }}
+            - name: DATABASE_PORT
+              value: {{ include "volundr.databasePort" . | quote }}
+            - name: DATABASE_NAME
+              value: {{ .Values.database.name | quote }}
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "volundr.databaseSecretName" . }}
+                  key: {{ .Values.database.userKey | default "username" }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "volundr.databaseSecretName" . }}
+                  key: {{ .Values.database.passwordKey | default "password" }}
+          {{- with .Values.migrations.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+        {{- end }}
+        {{- with .Values.initContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "volundr.fullname" . }}
+        {{- if .Values.envoy.enabled }}
+        - name: envoy-config
+          configMap:
+            name: {{ include "volundr.fullname" . }}-envoy
+        {{- end }}
+        {{- if .Values.migrations.enabled }}
+        - name: migrations
+          configMap:
+            name: {{ include "volundr.fullname" . }}-migrations
+        {{- end }}
+        {{- if .Values.storage.sessions.enabled }}
+        - name: sessions
+          persistentVolumeClaim:
+            claimName: {{ include "volundr.sessionsPvcName" . }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.dnsPolicy }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- end }}

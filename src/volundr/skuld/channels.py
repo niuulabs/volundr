@@ -1,0 +1,598 @@
+"""Message channel abstraction for Skuld broker.
+
+Provides a uniform interface for sending CLI events to different
+channel types (browser WebSocket, Telegram, etc.). The broker
+broadcasts events to all registered channels via send_event().
+"""
+
+import asyncio
+import json
+import logging
+from abc import ABC, abstractmethod
+
+logger = logging.getLogger("skuld.channels")
+
+# Telegram API max message length
+TELEGRAM_MAX_MESSAGE_LENGTH = 4096
+
+# Buffer flush interval for streaming text (seconds)
+TELEGRAM_BUFFER_FLUSH_INTERVAL = 1.5
+
+try:
+    from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram.ext import (
+        Application,
+        CallbackQueryHandler,
+        CommandHandler,
+        MessageHandler,
+        filters,
+    )
+
+    HAS_TELEGRAM = True
+except ImportError:
+    HAS_TELEGRAM = False
+
+
+# ---------------------------------------------------------------------------
+# MessageChannel ABC
+# ---------------------------------------------------------------------------
+
+
+class MessageChannel(ABC):
+    """Abstract base class for a message delivery channel.
+
+    Channels receive CLI events from the broker and deliver them
+    to their respective endpoints (browser, Telegram, etc.).
+    """
+
+    @abstractmethod
+    async def send_event(self, event: dict) -> None:
+        """Send a CLI event to this channel."""
+        ...
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close this channel and release resources."""
+        ...
+
+    @property
+    @abstractmethod
+    def channel_type(self) -> str:
+        """Return channel type identifier (e.g., 'browser', 'telegram')."""
+        ...
+
+    @property
+    @abstractmethod
+    def is_open(self) -> bool:
+        """Return True if the channel is open and can accept events."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# WebSocketChannel — wraps existing browser WebSocket
+# ---------------------------------------------------------------------------
+
+
+class WebSocketChannel(MessageChannel):
+    """Message channel backed by a FastAPI WebSocket connection.
+
+    Wraps the existing browser WebSocket so it can participate in the
+    broker's channel registry alongside other channel types.
+    """
+
+    def __init__(self, ws: object) -> None:
+        """Initialize with a FastAPI WebSocket instance.
+
+        Args:
+            ws: A FastAPI WebSocket (typed as object to avoid import
+                dependency at module level).
+        """
+        self._ws = ws
+        self._closed = False
+
+    async def send_event(self, event: dict) -> None:
+        """Send a JSON-encoded CLI event over the WebSocket."""
+        if self._closed:
+            return
+        await self._ws.send_text(json.dumps(event))
+
+    async def close(self) -> None:
+        """Close the underlying WebSocket connection."""
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            await self._ws.close()
+        except Exception:
+            pass
+
+    @property
+    def channel_type(self) -> str:
+        return "browser"
+
+    @property
+    def is_open(self) -> bool:
+        return not self._closed
+
+    @property
+    def ws(self) -> object:
+        """Access the underlying WebSocket (for receive operations)."""
+        return self._ws
+
+
+# ---------------------------------------------------------------------------
+# TelegramChannel — sends CLI events to a Telegram chat
+# ---------------------------------------------------------------------------
+
+
+def format_telegram_event(event: dict) -> str | None:
+    """Format a CLI event as a Telegram-friendly message.
+
+    Returns None if the event should be skipped (e.g., thinking blocks).
+
+    Formatting rules:
+    - Text responses: plain text (Telegram MarkdownV2 is fragile)
+    - Code blocks: wrapped in triple backticks
+    - Tool use: prefixed with wrench indicator
+    - Errors: prefixed with warning indicator
+    - Thinking blocks: skipped
+    - content_block_delta: returns the delta text fragment
+    """
+    event_type = event.get("type", "")
+
+    if event_type == "content_block_delta":
+        delta = event.get("delta", {})
+        text = delta.get("text", "")
+        if not text:
+            return None
+        return text
+
+    if event_type == "assistant":
+        content = event.get("content", event.get("message", {}).get("content", []))
+        if not isinstance(content, list):
+            return None
+
+        parts = []
+        for block in content:
+            block_type = block.get("type", "")
+
+            if block_type == "thinking":
+                continue
+
+            if block_type == "text":
+                parts.append(block.get("text", ""))
+
+            if block_type == "tool_use":
+                name = block.get("name", "unknown")
+                tool_input = block.get("input", {})
+                # Show relevant input fields
+                detail = ""
+                if "command" in tool_input:
+                    detail = tool_input["command"]
+                elif "file_path" in tool_input:
+                    detail = tool_input["file_path"]
+                elif "pattern" in tool_input:
+                    detail = tool_input["pattern"]
+
+                if detail:
+                    parts.append(f"[tool] {name}: {detail}")
+                else:
+                    parts.append(f"[tool] {name}")
+
+        if not parts:
+            return None
+        return "\n".join(parts)
+
+    if event_type == "error":
+        error_content = event.get("content", event.get("error", "Unknown error"))
+        if isinstance(error_content, dict):
+            error_content = error_content.get("message", str(error_content))
+        return f"[error] {error_content}"
+
+    if event_type == "result":
+        return None
+
+    if event_type == "system":
+        content = event.get("content", "")
+        if content:
+            return f"[system] {content}"
+        return None
+
+    return None
+
+
+def split_message(text: str, max_length: int = TELEGRAM_MAX_MESSAGE_LENGTH) -> list[str]:
+    """Split a long message into chunks respecting Telegram's limit.
+
+    Splits at newline boundaries when possible, falling back to
+    hard breaks at max_length.
+    """
+    if len(text) <= max_length:
+        return [text]
+
+    chunks: list[str] = []
+    while text:
+        if len(text) <= max_length:
+            chunks.append(text)
+            break
+
+        # Find last newline within the limit
+        split_pos = text.rfind("\n", 0, max_length)
+        if split_pos == -1:
+            split_pos = max_length
+
+        chunks.append(text[:split_pos])
+        text = text[split_pos:].lstrip("\n")
+
+    return chunks
+
+
+class TelegramChannel(MessageChannel):
+    """Message channel that sends CLI events to a Telegram chat.
+
+    Requires the `python-telegram-bot` package (>=21.0, async).
+    When the package is not installed, instantiation raises RuntimeError.
+
+    Args:
+        bot_token: Telegram Bot API token.
+        chat_id: Target chat ID to send messages to.
+        notify_only: If True, only send outbound notifications (no inbound).
+        on_message: Optional async callback for inbound Telegram messages.
+    """
+
+    def __init__(
+        self,
+        bot_token: str,
+        chat_id: str,
+        *,
+        notify_only: bool = False,
+        on_message: object | None = None,
+    ) -> None:
+        if not HAS_TELEGRAM:
+            raise RuntimeError(
+                "python-telegram-bot is not installed. "
+                "Install it with: pip install 'python-telegram-bot>=21.0'"
+            )
+
+        self._bot_token = bot_token
+        self._chat_id = chat_id
+        self._notify_only = notify_only
+        self._on_message = on_message
+        self._bot: object | None = None
+        self._application: object | None = None
+        self._started = False
+        self._closed = False
+        self._text_buffer: list[str] = []
+        self._flush_task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        """Start the Telegram bot (initialize, but don't poll if notify_only)."""
+        if self._started:
+            return
+
+        self._bot = Bot(token=self._bot_token)
+        self._started = True
+        logger.info(
+            "TelegramChannel started (chat_id=%s, notify_only=%s)",
+            self._chat_id,
+            self._notify_only,
+        )
+
+        if not self._notify_only:
+            self._application = Application.builder().token(self._bot_token).build()
+
+            # Register handlers
+            self._application.add_handler(CommandHandler("status", self._cmd_status))
+            self._application.add_handler(CommandHandler("interrupt", self._cmd_interrupt))
+            self._application.add_handler(CommandHandler("model", self._cmd_model))
+            self._application.add_handler(
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    self._handle_text_message,
+                )
+            )
+            self._application.add_handler(CallbackQueryHandler(self._handle_callback_query))
+
+            await self._application.initialize()
+            await self._application.start()
+            asyncio.create_task(self._application.updater.start_polling())
+
+    async def send_event(self, event: dict) -> None:
+        """Format and send a CLI event to the Telegram chat."""
+        if self._closed or not self._started:
+            return
+
+        text = format_telegram_event(event)
+        if not text:
+            return
+
+        event_type = event.get("type", "")
+
+        # Buffer streaming text deltas and flush periodically
+        if event_type == "content_block_delta":
+            self._text_buffer.append(text)
+            if not self._flush_task or self._flush_task.done():
+                self._flush_task = asyncio.create_task(self._scheduled_flush())
+            return
+
+        # Non-delta event: flush buffer first, then send
+        await self._flush_buffer()
+        await self._send_text(text)
+
+    async def _scheduled_flush(self) -> None:
+        """Wait then flush the text buffer."""
+        await asyncio.sleep(TELEGRAM_BUFFER_FLUSH_INTERVAL)
+        await self._flush_buffer()
+
+    async def _flush_buffer(self) -> None:
+        """Send accumulated text buffer to Telegram."""
+        if not self._text_buffer:
+            return
+
+        combined = "".join(self._text_buffer)
+        self._text_buffer.clear()
+
+        if self._flush_task and not self._flush_task.done():
+            self._flush_task.cancel()
+            self._flush_task = None
+
+        if combined.strip():
+            await self._send_text(combined)
+
+    async def _send_text(self, text: str) -> None:
+        """Send text to the Telegram chat, splitting if too long."""
+        if not self._bot:
+            return
+
+        chunks = split_message(text)
+        for chunk in chunks:
+            try:
+                await self._bot.send_message(
+                    chat_id=self._chat_id,
+                    text=chunk,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to send Telegram message to chat %s",
+                    self._chat_id,
+                    exc_info=True,
+                )
+
+    async def send_permission_request(
+        self,
+        request_id: str,
+        tool_name: str,
+        tool_input: dict,
+    ) -> None:
+        """Send a permission request with inline keyboard buttons."""
+        if not self._bot or not HAS_TELEGRAM:
+            return
+
+        detail = ""
+        if "command" in tool_input:
+            detail = tool_input["command"]
+        elif "file_path" in tool_input:
+            detail = tool_input["file_path"]
+
+        text = f"[permission] {tool_name}"
+        if detail:
+            text += f": {detail}"
+
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "Allow",
+                        callback_data=f"perm:allow:{request_id}",
+                    ),
+                    InlineKeyboardButton(
+                        "Deny",
+                        callback_data=f"perm:deny:{request_id}",
+                    ),
+                ]
+            ]
+        )
+        try:
+            await self._bot.send_message(
+                chat_id=self._chat_id,
+                text=text,
+                reply_markup=keyboard,
+            )
+        except Exception:
+            logger.warning("Failed to send permission request to Telegram", exc_info=True)
+
+    async def close(self) -> None:
+        """Stop the Telegram bot and clean up."""
+        if self._closed:
+            return
+        self._closed = True
+
+        await self._flush_buffer()
+
+        if self._application and hasattr(self._application, "stop"):
+            try:
+                if hasattr(self._application, "updater") and self._application.updater:
+                    await self._application.updater.stop()
+                await self._application.stop()
+                await self._application.shutdown()
+            except Exception:
+                logger.warning("Error stopping Telegram application", exc_info=True)
+
+        self._bot = None
+        self._application = None
+        self._started = False
+        logger.info("TelegramChannel closed")
+
+    @property
+    def channel_type(self) -> str:
+        return "telegram"
+
+    @property
+    def is_open(self) -> bool:
+        return self._started and not self._closed
+
+    # --- Bot command handlers ---
+
+    async def _cmd_status(self, update: object, context: object) -> None:
+        """Handle /status command."""
+        if not self._validate_chat(update):
+            return
+        # Status info is injected by the broker via a callback
+        await update.message.reply_text("[status] Session active")
+
+    async def _cmd_interrupt(self, update: object, context: object) -> None:
+        """Handle /interrupt command."""
+        if not self._validate_chat(update):
+            return
+        if self._on_message:
+            await self._on_message({"type": "interrupt"})
+        await update.message.reply_text("[interrupt] Interrupt signal sent")
+
+    async def _cmd_model(self, update: object, context: object) -> None:
+        """Handle /model <name> command."""
+        if not self._validate_chat(update):
+            return
+        text = update.message.text or ""
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            await update.message.reply_text("Usage: /model <model_name>")
+            return
+        model_name = parts[1].strip()
+        if self._on_message:
+            await self._on_message({"type": "set_model", "model": model_name})
+        await update.message.reply_text(f"[model] Switching to {model_name}")
+
+    async def _handle_text_message(self, update: object, context: object) -> None:
+        """Handle incoming text messages (dispatch to broker)."""
+        if not self._validate_chat(update):
+            return
+        text = update.message.text or ""
+        if not text:
+            return
+        if self._on_message:
+            await self._on_message({"type": "message", "content": text})
+
+    async def _handle_callback_query(self, update: object, context: object) -> None:
+        """Handle inline keyboard button presses (permission responses)."""
+        query = update.callback_query
+        if not query:
+            return
+
+        data = query.data or ""
+        if not data.startswith("perm:"):
+            return
+
+        parts = data.split(":", 2)
+        if len(parts) < 3:
+            return
+
+        action = parts[1]  # "allow" or "deny"
+        request_id = parts[2]
+
+        behavior = "allowOnce" if action == "allow" else "deny"
+        if self._on_message:
+            await self._on_message(
+                {
+                    "type": "permission_response",
+                    "request_id": request_id,
+                    "behavior": behavior,
+                }
+            )
+
+        await query.answer(f"Permission {action}ed")
+        await query.edit_message_text(f"[permission] {action}ed (request {request_id[:8]})")
+
+    def _validate_chat(self, update: object) -> bool:
+        """Check that the message comes from the authorized chat."""
+        if not hasattr(update, "effective_chat"):
+            return False
+        chat = update.effective_chat
+        if not chat:
+            return False
+        return str(chat.id) == str(self._chat_id)
+
+
+# ---------------------------------------------------------------------------
+# ChannelRegistry — manages active channels
+# ---------------------------------------------------------------------------
+
+
+class ChannelRegistry:
+    """Thread-safe registry of active message channels.
+
+    The broker uses this to track all connected channels and broadcast
+    events to them. Channels that fail to receive events are automatically
+    removed.
+    """
+
+    def __init__(self) -> None:
+        self._channels: list[MessageChannel] = []
+
+    def add(self, channel: MessageChannel) -> None:
+        """Register a channel."""
+        self._channels.append(channel)
+        logger.info(
+            "Channel added: type=%s, total=%d",
+            channel.channel_type,
+            len(self._channels),
+        )
+
+    def remove(self, channel: MessageChannel) -> None:
+        """Unregister a channel."""
+        try:
+            self._channels.remove(channel)
+        except ValueError:
+            pass
+        logger.info(
+            "Channel removed: type=%s, total=%d",
+            channel.channel_type,
+            len(self._channels),
+        )
+
+    async def broadcast(self, event: dict) -> None:
+        """Send an event to all registered channels.
+
+        Channels that raise exceptions during send are automatically
+        removed from the registry.
+        """
+        failed: list[MessageChannel] = []
+
+        for channel in list(self._channels):
+            if not channel.is_open:
+                failed.append(channel)
+                continue
+            try:
+                await channel.send_event(event)
+            except Exception:
+                logger.warning(
+                    "Channel send failed, removing: type=%s",
+                    channel.channel_type,
+                    exc_info=True,
+                )
+                failed.append(channel)
+
+        for ch in failed:
+            self.remove(ch)
+
+    async def close_all(self) -> None:
+        """Close and remove all channels."""
+        for channel in list(self._channels):
+            try:
+                await channel.close()
+            except Exception:
+                pass
+        self._channels.clear()
+
+    @property
+    def count(self) -> int:
+        """Number of registered channels."""
+        return len(self._channels)
+
+    @property
+    def channels(self) -> list[MessageChannel]:
+        """List of registered channels (copy)."""
+        return list(self._channels)
+
+    def by_type(self, channel_type: str) -> list[MessageChannel]:
+        """Return channels filtered by type."""
+        return [c for c in self._channels if c.channel_type == channel_type]

@@ -1,0 +1,1270 @@
+# Volundr Helm Chart Values
+# Self-hosted Claude Code session manager
+
+# Global values (can be set by parent chart)
+global:
+  # -- Global image pull secrets (list of secret names)
+  imagePullSecrets: []
+  # - ghcr-pull-secret
+  image:
+    # -- Global image registry override
+    registry: ""
+    # -- Global image repository override
+    repository: ""
+    # -- Global image tag override
+    tag: ""
+
+# -- Override the name of the chart
+nameOverride: ""
+# -- Override the full name of the chart
+fullnameOverride: ""
+
+# -- Number of replicas (ignored if autoscaling is enabled)
+replicaCount: 1
+
+# -- Number of old ReplicaSets to retain
+revisionHistoryLimit: 10
+
+# Image configuration
+image:
+  # -- Container registry
+  registry: ghcr.io
+  # -- Image repository
+  repository: niuulabs/volundr
+  # -- Image tag (defaults to Chart.appVersion)
+  tag: ""
+  # -- Image pull policy
+  pullPolicy: Always
+
+# Service Account
+serviceAccount:
+  # -- Create a service account
+  create: true
+  # -- Service account name (defaults to fullname)
+  name: ""
+  # -- Annotations for the service account
+  annotations: {}
+  # -- Automount API credentials
+  automount: true
+
+# RBAC Configuration
+rbac:
+  # -- Create RBAC resources
+  create: true
+  # -- Enable cluster-wide RBAC (ClusterRole/ClusterRoleBinding)
+  clusterWide: false
+  # -- Additional rules for the Role
+  extraRules: []
+  # -- Additional rules for the ClusterRole
+  extraClusterRules: []
+
+# Service configuration
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Service port
+  port: 80
+  # -- Target port on the container
+  targetPort: 8080
+  # -- Cluster IP (only for ClusterIP type)
+  clusterIP: ""
+  # -- Load balancer IP (only for LoadBalancer type)
+  loadBalancerIP: ""
+  # -- Load balancer source ranges
+  loadBalancerSourceRanges: []
+  # -- External traffic policy
+  externalTrafficPolicy: ""
+  # -- Session affinity
+  sessionAffinity: ""
+  # -- Session affinity config
+  sessionAffinityConfig: {}
+  # -- Node port (only for NodePort type)
+  nodePort: ""
+  # -- Service annotations
+  annotations: {}
+  # -- Additional service ports
+  extraPorts: []
+
+# Ingress configuration
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name (nginx, traefik, haproxy, etc.)
+  className: ""
+  # -- Ingress annotations (controller-specific)
+  # Examples for different controllers:
+  #
+  # NGINX:
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  #
+  # Traefik:
+  #   traefik.ingress.kubernetes.io/router.middlewares: default-timeout@kubernetescrd
+  #
+  # HAProxy:
+  #   haproxy.org/timeout-server: "3600s"
+  annotations: {}
+  # -- Ingress hosts
+  # Note: The API is served at /api/v1/volundr/* for path-based routing
+  # with multiple services on the same domain
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /api/v1/volundr
+          pathType: Prefix
+  # -- Ingress TLS configuration
+  tls: []
+  #   - secretName: volundr-tls
+  #     hosts:
+  #       - volundr.local
+
+# Storage configuration
+storage:
+  sessions:
+    # -- Enable sessions PVC
+    enabled: true
+    # -- Storage class for the sessions PVC
+    storageClass: longhorn
+    # -- Access mode - must be ReadWriteMany for shared access
+    accessMode: ReadWriteMany
+    # -- Size of the sessions PVC
+    size: 1Gi
+    # -- Mount path for sessions
+    mountPath: /volundr/sessions
+  home:
+    # -- Enable home PVC (persistent user config across sessions)
+    enabled: true
+    # -- Storage class for the home PVC
+    storageClass: longhorn
+    # -- Access mode - must be ReadWriteMany for shared access
+    accessMode: ReadWriteMany
+    # -- Size of the home PVC (user config is small)
+    size: 1Gi
+    # -- Mount path inside session pods
+    mountPath: /volundr/home
+
+# Database configuration
+database:
+  # -- Database name
+  name: volundr
+  # -- Minimum connection pool size
+  minPoolSize: 5
+  # -- Maximum connection pool size
+  maxPoolSize: 20
+  # -- Create a secret for database credentials
+  createSecret: false
+  # -- Use an existing secret for database credentials
+  existingSecret: "volundr-db"
+  # -- Key in secret containing the username
+  userKey: username
+  # -- Key in secret containing the password
+  passwordKey: password
+  # -- Username (only if createSecret is true)
+  username: ""
+  # -- Password (only if createSecret is true)
+  password: ""
+  # -- Extra secret data
+  extraSecretData: {}
+  # -- Secret annotations
+  secretAnnotations: {}
+  # External database configuration
+  external:
+    # -- Use external database
+    enabled: true
+    # -- External database host
+    host: postgresql.default.svc.cluster.local
+    # -- External database port
+    port: 5432
+
+# Pod manager adapter (dynamic adapter pattern)
+# Selects how Volundr deploys session pods. The "adapter" key is a
+# fully-qualified Python class; all keys under "kwargs" are forwarded
+# to the constructor as **kwargs. No code changes needed to switch
+# backends — just update this section.
+#
+# ── Flux example ─────────────────────────────────────────────────
+# Creates HelmRelease CRs directly; Flux reconciles them.
+#
+#   podManager:
+#     adapter: "volundr.adapters.outbound.flux.FluxPodManager"
+#     kwargs:
+#       namespace: "default"
+#       chart_name: "skuld"
+#       chart_version: "0.67.2"
+#       source_ref_kind: "HelmRepository"
+#       source_ref_name: "skuld"
+#       source_ref_namespace: ""
+#       timeout: "5m"
+#       interval: "5m"
+#       base_domain: "skuld.valhalla.asgard.niuu.world"
+#       chat_scheme: "wss"
+#       code_scheme: "https"
+#       chat_path: "/session"
+#       code_path: "/"
+#       session_defaults:              # values passed to the skuld Helm chart
+#         session:
+#           model: "claude-sonnet-4-20250514"
+#         image:
+#           repository: "ghcr.io/niuulabs/skuld"
+#           tag: "latest"
+#
+# Session provisioning readiness polling
+provisioning:
+  # -- Maximum time to wait for infrastructure readiness in seconds
+  timeoutSeconds: 300.0
+  # -- Initial delay before starting readiness polls in seconds
+  initialDelaySeconds: 5.0
+
+podManager:
+  # -- Fully-qualified class path for the PodManager adapter
+  adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+  # -- Existing secret containing the backend API token (mounted as POD_MANAGER_TOKEN)
+  existingSecret: ""
+  # -- Key in secret containing the token
+  tokenKey: token
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs:
+    base_url: "http://farm-tasks.default.svc.cluster.local"
+    timeout: 30
+    task_type: "skuld-claude"
+    user: "volundr"
+    labels:
+      - session
+    base_domain: "skuld.valhalla.asgard.niuu.world"
+    chat_scheme: "wss"
+    code_scheme: "https"
+    chat_path: "/session"
+    code_path: "/"
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  # Each entry: { kwarg: "name", secretName: "k8s-secret", secretKey: "key" }
+  secretKwargs: []
+
+# Chronicle configuration
+chronicle:
+  # -- Auto-create chronicle when a session stops
+  autoCreateOnStop: true
+  # -- Model used for generating session summaries
+  summaryModel: "claude-haiku-4-5-20251001"
+  # -- Max tokens for summary generation
+  summaryMaxTokens: 2000
+  # -- Retention period in days (0 = keep forever)
+  retentionDays: 0
+
+# Forge profiles (argument templates for workload instantiation)
+# Profiles define base values that Volundr assembles into Farm task_args.
+profiles: []
+  # - name: standard
+  #   description: "Standard Claude Code session"
+  #   workloadType: session
+  #   sessionDefinition: skuld-claude   # which FarmSessionDefinition to use
+  #   model: "claude-sonnet-4-20250514"
+  #   resourceConfig:
+  #     cpu: "500m"
+  #     memory: "1Gi"
+  #   mcpServers: []
+  #   envVars: {}
+  #   envSecretRefs: []
+  #   workloadConfig: {}
+  #   isDefault: true
+  #
+  # - name: codex-standard
+  #   description: "Standard OpenAI Codex session"
+  #   workloadType: session
+  #   sessionDefinition: skuld-codex   # routes to the Codex FarmSessionDefinition
+  #   model: "o4-mini"
+  #   resourceConfig:
+  #     cpu: "500m"
+  #     memory: "1Gi"
+  #   isDefault: false
+  #
+  # - name: gpu-heavy
+  #   description: "GPU-accelerated data science"
+  #   workloadType: session
+  #   sessionDefinition: skuld-claude
+  #   model: "claude-sonnet-4-20250514"
+  #   resourceConfig:
+  #     cpu: "2"
+  #     memory: "8Gi"
+  #     gpu: "1"
+  #   isDefault: false
+
+# Workspace templates (combine a profile with repos and setup)
+templates: []
+  # - name: default-session
+  #   description: "Default coding session"
+  #   profileName: standard
+  #   repos:
+  #     - url: "https://github.com/org/repo"
+  #       branch: main
+  #   setupScripts:
+  #     - "pip install -r requirements.txt"
+  #   workspaceLayout:
+  #     editor: vscode
+  #   isDefault: true
+  #
+  # - name: data-science
+  #   description: "Data science workspace"
+  #   profileName: gpu-heavy
+  #   repos: []
+  #   setupScripts:
+  #     - "conda install numpy pandas"
+  #   isDefault: false
+
+# Git provider configuration
+git:
+  # -- Validate repositories on session creation
+  validateOnCreate: true
+  # GitHub configuration
+  github:
+    # -- Enable GitHub provider (creates default github.com instance)
+    enabled: true
+    # -- Existing secret containing GitHub token (key: token)
+    existingSecret: ""
+    # -- Key in secret containing the token
+    tokenKey: token
+    # -- Additional GitHub instances (for GitHub Enterprise, etc.)
+    # instances:
+    #   - name: GitHub Enterprise
+    #     baseUrl: https://github.company.com/api/v3
+    #     # Token from existingSecret above, or specify per-instance secret:
+    #     existingSecret: github-enterprise-secret
+    #     tokenKey: token
+    #     # Organizations to list repos from (GET /repos endpoint)
+    #     orgs:
+    #       - engineering
+    #       - platform
+    instances: []
+  # GitLab configuration
+  gitlab:
+    # -- Enable GitLab provider (creates default gitlab.com instance)
+    enabled: false
+    # -- Existing secret containing GitLab token (key: token)
+    existingSecret: ""
+    # -- Key in secret containing the token
+    tokenKey: token
+    # -- Additional GitLab instances (for self-hosted GitLab, etc.)
+    # instances:
+    #   - name: Internal GitLab
+    #     baseUrl: https://git.company.com
+    #     existingSecret: gitlab-internal-secret
+    #     tokenKey: token
+    #     # Groups to list repos from (GET /repos endpoint)
+    #     orgs:
+    #       - platform
+    #       - infra
+    instances: []
+  # Git workflow configuration (PR-based development)
+  workflow:
+    # -- Auto-create branches for new sessions
+    autoBranch: true
+    # -- Branch name prefix for session branches
+    branchPrefix: "volundr/session"
+    # -- Protect main/master from direct commits
+    protectMain: true
+    # -- Default merge method (merge, squash, rebase)
+    defaultMergeMethod: "squash"
+    # -- Confidence threshold for auto-merge (0.0-1.0)
+    autoMergeThreshold: 0.9
+    # -- Confidence threshold for notify-then-merge (0.0-1.0)
+    notifyMergeThreshold: 0.6
+
+# Envoy sidecar proxy (JWT validation, header extraction)
+envoy:
+  # -- Enable Envoy sidecar proxy
+  enabled: false
+  image:
+    # -- Envoy image repository
+    repository: envoyproxy/envoy
+    # -- Envoy image tag
+    tag: "v1.32-latest"
+    # -- Envoy image pull policy
+    pullPolicy: IfNotPresent
+  # -- Envoy listener port (becomes the service target when enabled)
+  port: 8443
+  # -- Envoy admin interface port (localhost only)
+  adminPort: 9901
+  # -- Upstream connect timeout
+  connectTimeout: "0.25s"
+  # -- Upstream request timeout
+  upstreamTimeout: "60s"
+  # -- Resource limits for the Envoy sidecar
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  # -- Header names Envoy sets on upstream requests
+  headerNames:
+    userId: x-auth-user-id
+    email: x-auth-email
+    tenant: x-auth-tenant
+    roles: x-auth-roles
+  # JWT authentication (via Keycloak)
+  # Uncomment and configure to enable JWT validation
+  jwt:
+    # -- Enable JWT authentication filter
+    enabled: false
+    # -- JWT issuer URL (Keycloak realm)
+    # issuer: "https://keycloak.example.com/realms/volundr"
+    issuer: ""
+    # -- Allowed JWT audiences
+    # audiences:
+    #   - volundr
+    audiences: []
+    # -- JWKS URI for key retrieval
+    # jwksUri: "https://keycloak.example.com/realms/volundr/protocol/openid-connect/certs"
+    jwksUri: ""
+    # -- JWKS fetch timeout
+    jwksTimeout: "5s"
+    # -- JWKS cache duration in seconds
+    jwksCacheDurationSeconds: 300
+    # -- JWT claim containing tenant ID
+    tenantClaim: "tenant_id"
+    # -- JWT claim containing roles (supports nested via dot notation)
+    rolesClaim: "resource_access.volundr.roles"
+    # -- Keycloak upstream host (for JWKS fetching)
+    # keycloakHost: "keycloak.default.svc.cluster.local"
+    keycloakHost: ""
+    # -- Keycloak upstream port
+    keycloakPort: 8080
+    # -- Enable TLS for Keycloak upstream
+    keycloakTls: false
+    # -- Additional JWT claim-to-header mappings
+    # extraClaimHeaders:
+    #   - headerName: x-auth-display-name
+    #     claimName: preferred_username
+    extraClaimHeaders: []
+    # -- Path prefixes that bypass JWT validation (no auth required)
+    # Rules are evaluated in order; matching prefixes skip the JWT check.
+    bypassPrefixes:
+      - /api/v1/volundr/auth/config
+      - /health
+  # -- Extra HTTP filters (inserted before the router filter)
+  extraHttpFilters: []
+  # -- Extra upstream clusters
+  extraClusters: []
+
+# Identity adapter (dynamic adapter pattern)
+# Switch between identity/authentication backends by changing the adapter class.
+# user_repository is always injected at runtime — do not add it to kwargs.
+#
+# ── Envoy trusted headers (production) ─────────────────────────
+#   identity:
+#     adapter: "volundr.adapters.outbound.identity.EnvoyHeaderIdentityAdapter"
+#     kwargs:
+#       user_id_header: "x-auth-user-id"
+#       email_header: "x-auth-email"
+#       tenant_header: "x-auth-tenant"
+#       roles_header: "x-auth-roles"
+#
+# Storage adapter (dynamic adapter pattern)
+# Controls how session/home PVCs are created and deleted.
+# The in-memory adapter generates PVC names without creating K8s resources.
+#
+# ── Kubernetes PVC ─────────────────────────────────────────────
+#   storageAdapter:
+#     adapter: "volundr.adapters.outbound.k8s_storage_adapter.K8sStorageAdapter"
+#     kwargs:
+#       namespace: "skuld"
+#       home_storage_class: "longhorn"
+#       workspace_storage_class: "longhorn"
+#       workspace_size_gb: 2
+#
+storageAdapter:
+  # -- Fully-qualified class path for the StoragePort adapter
+  adapter: "volundr.adapters.outbound.k8s_storage.InMemoryStorageAdapter"
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  secretKwargs: []
+
+identity:
+  # -- Fully-qualified class path for the IdentityPort adapter
+  adapter: "volundr.adapters.outbound.identity.AllowAllIdentityAdapter"
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  secretKwargs: []
+  # -- Role mapping from IDP claim roles to Volundr roles
+  roleMapping:
+    admin: "volundr:admin"
+    developer: "volundr:developer"
+    viewer: "volundr:viewer"
+
+# Authorization adapter (dynamic adapter pattern)
+# Switch between authorization backends by changing the adapter class.
+#
+# ── Simple role-based ──────────────────────────────────────────
+#   authorization:
+#     adapter: "volundr.adapters.outbound.authorization.SimpleRoleAuthorizationAdapter"
+#     kwargs: {}
+#
+# ── Cerbos PDP ─────────────────────────────────────────────────
+#   authorization:
+#     adapter: "volundr.adapters.outbound.cerbos.CerbosAuthorizationAdapter"
+#     kwargs:
+#       url: "http://cerbos:3592"
+#       timeout: 5
+#
+authorization:
+  # -- Fully-qualified class path for the AuthorizationPort adapter
+  adapter: "volundr.adapters.outbound.authorization.AllowAllAuthorizationAdapter"
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  secretKwargs: []
+
+# Credential store adapter (dynamic adapter pattern)
+# Switch between secret management backends by changing the adapter class.
+#
+# ── Vault/OpenBao ──────────────────────────────────────────────
+#   credentialStore:
+#     adapter: "volundr.adapters.outbound.vault_credential_store.VaultCredentialStore"
+#     kwargs:
+#       url: "http://vault:8200"
+#       auth_method: "kubernetes"
+#       mount_path: "secret"
+#
+# ── Infisical ──────────────────────────────────────────────────
+#   credentialStore:
+#     adapter: "volundr.adapters.outbound.infisical_credential_store.InfisicalCredentialStore"
+#     kwargs:
+#       site_url: "https://app.infisical.com"
+#       client_id: ""
+#       client_secret: ""
+#       project_id: ""
+#
+credentialStore:
+  # -- Fully-qualified class path for the CredentialStorePort adapter
+  adapter: "volundr.adapters.outbound.memory_credential_store.MemoryCredentialStore"
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  secretKwargs: []
+
+# ── Secret Injection ─────────────────────────────────────────
+# Controls how secrets (e.g. Infisical CSI volumes) are injected
+# into session pods. The in-memory adapter is a no-op for development.
+#
+# ── Infisical CSI ────────────────────────────────────────────
+#   secretInjection:
+#     adapter: >-
+#       volundr.adapters.outbound.infisical_secret_injection
+#       .InfisicalCSISecretInjectionAdapter
+#     kwargs:
+#       infisical_url: "https://infisical.example.com"
+#
+secretInjection:
+  # -- Fully-qualified class path for the SecretInjectionPort adapter
+  adapter: "volundr.adapters.outbound.memory_secret_injection.InMemorySecretInjectionAdapter"
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  secretKwargs: []
+
+# ── Gateway ──────────────────────────────────────────────────
+# Controls how session HTTPRoute/SecurityPolicy resources are
+# configured in Kubernetes Gateway API. The in-memory adapter
+# returns static config without touching Kubernetes.
+#
+# ── K8s Gateway API ──────────────────────────────────────────
+#   gateway:
+#     adapter: "volundr.adapters.outbound.k8s_gateway.K8sGatewayAdapter"
+#     kwargs:
+#       namespace: "volundr"               # namespace where sessions run
+#       gateway_name: "volundr-gateway"     # must match sessionGateway.name
+#       gateway_namespace: "volundr"        # must match release namespace
+#       gateway_domain: "sessions.valhalla.asgard.niuu.world"
+#       issuer_url: "https://idp.example.com"
+#       audience: "volundr"
+#       jwks_uri: "https://idp.example.com/.well-known/jwks"
+#
+gateway:
+  # -- Fully-qualified class path for the GatewayPort adapter
+  adapter: "volundr.adapters.outbound.k8s_gateway.InMemoryGatewayAdapter"
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  secretKwargs: []
+
+# Session contributor pipeline (dynamic adapter pattern)
+# Controls how session specs are assembled before submission to the
+# pod manager. Each contributor wraps a single port/adapter and
+# contributes Helm values or pod spec additions.
+#
+# Contributors run sequentially in config order. Cleanup runs in
+# reverse order on stop/delete.
+#
+# Each entry has:
+#   adapter  – fully-qualified Python class path
+#   kwargs   – forwarded to the constructor as **kwargs (ports are
+#              injected automatically by the factory)
+#
+sessionContributors:
+  - adapter: "volundr.adapters.outbound.contributors.core.CoreSessionContributor"
+    kwargs:
+      base_domain: "skuld.valhalla.asgard.niuu.world"
+      ingress_enabled: true
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.template.TemplateContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.git.GitContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.integrations.IntegrationContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.storage.StorageContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.gateway.GatewayContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.isolation.IsolationContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.secrets.SecretInjectionContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.secrets.SecretsContributor"
+    kwargs: {}
+    secretKwargs: []
+
+# ── Session Gateway (Kubernetes Gateway API resource) ──────
+# The shared Gateway that all session HTTPRoutes attach to.
+# Requires Envoy Gateway controller + GatewayClass deployed
+# in the cluster (see NIU-120).
+#
+# cert-manager: annotate with cluster-issuer to auto-provision TLS.
+# external-dns: watches Gateway resources and creates DNS records
+#   from the listener hostname automatically.
+sessionGateway:
+  # -- Enable the shared Gateway resource
+  enabled: false
+  # -- Gateway resource name
+  name: "volundr-gateway"
+  # -- GatewayClass to use (Envoy Gateway default: "eg")
+  gatewayClassName: "eg"
+  # -- Hostname for the HTTPS listener (wildcard for session routing)
+  # external-dns creates a DNS record for this hostname automatically
+  hostname: "sessions.valhalla.asgard.niuu.world"
+  # -- cert-manager ClusterIssuer name for TLS certificate provisioning
+  certIssuer: "letsencrypt-prod"
+  # -- TLS secret name (defaults to "{name}-tls" if not set)
+  tlsSecretName: ""
+  # -- Which namespaces can attach HTTPRoutes to this Gateway
+  # "All" = any namespace, "Same" = only the Gateway's namespace,
+  # "Selector" = use namespaceSelector (not yet supported here)
+  allowedRouteNamespaces: "All"
+  # -- Enable HTTP listener with 301 redirect to HTTPS
+  httpRedirect: true
+  # -- Extra annotations on the Gateway resource
+  annotations: {}
+
+# Auth discovery (public endpoint for CLI auto-configuration)
+authDiscovery:
+  # -- OIDC issuer URL for CLI auth discovery (falls back to gateway issuer if empty)
+  issuer: ""
+  # -- OIDC client ID for CLI clients
+  cliClientId: "volundr-cli"
+  # -- OIDC scopes
+  scopes: "openid profile email"
+
+# Application configuration
+config:
+  # -- Log level (debug, info, warning, error)
+  logLevel: info
+  # -- Log format (json, text)
+  logFormat: json
+  # -- Host to bind to
+  host: "0.0.0.0"
+  # -- Number of uvicorn workers
+  workers: 4
+  # -- Session timeout in seconds
+  sessionTimeout: "3600"
+  # -- Maximum sessions per user
+  maxSessionsPerUser: "5"
+  # -- CORS allowed origins
+  corsOrigins: "*"
+  # -- CORS allow credentials
+  corsAllowCredentials: "true"
+  # -- Extra configuration values
+  extra: {}
+
+# Existing secrets (created via External Secrets)
+# These secrets must exist before installing the chart
+existingSecrets:
+  # -- Name of the secret containing Anthropic API credentials
+  # Expected keys: ANTHROPIC_API_KEY, optionally ANTHROPIC_BASE_URL
+  anthropic: volundr-anthropic-api
+
+# FarmSessionDefinition CRs to create
+# These define session types that Farm agents can use
+sessionDefinitions:
+  # Skuld-Claude session definition (Claude Code with code-server IDE)
+  skuldClaude:
+    # -- Enable skuld-claude session definition
+    enabled: true
+    # -- Labels for agent routing - only agents with matching labels will load this
+    labels:
+      - session
+    # -- Whether this session definition is active
+    active: true
+
+    # Helm chart configuration (references the shared skuld chart)
+    helm:
+      # -- Chart name
+      chart: skuld
+      # -- Helm repository URL (supports oci:// for OCI registries)
+      # Note: updated by CI/CD pipeline with actual version
+      repo: "oci://ghcr.io/niuulabs/charts"
+      # -- Name of HelmRepository or OCIRepository CR in cluster (for Flux)
+      repoName: ""
+      # -- Chart version constraint
+      version: "0.67.2"
+
+    # Default values for sessions (can be overridden by task_args at submission)
+    defaults:
+      session:
+        # -- Default Claude model
+        model: "claude-sonnet-4-20250514"
+
+      broker:
+        # -- AI CLI backend: "claude" (Claude Code)
+        cliType: claude
+        # -- CLI transport mode: "sdk" (WebSocket) or "subprocess" (legacy)
+        transport: sdk
+        # -- Skip tool permission prompts (--dangerously-skip-permissions)
+        skipPermissions: true
+        # -- Enable Claude Code experimental Agent Teams
+        agentTeams: false
+
+      # Note: repository and tag are updated by CI/CD pipeline
+      image:
+        # -- Session image repository
+        repository: ghcr.io/niuulabs/skuld
+        # -- Session image tag
+        tag: "latest"
+
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+
+      codeServer:
+        # -- Enable code-server sidecar
+        enabled: true
+        image:
+          repository: codercom/code-server
+          tag: "latest"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+      # -- Image pull secrets for session pods
+      imagePullSecrets:
+        - ghcr-pull-secret
+
+      ingress:
+        # -- Ingress class name for sessions (nginx, traefik, etc.)
+        className: ""
+        # -- Controller-specific annotations for WebSocket support
+        # Configure based on your ingress controller
+        annotations: {}
+        tls:
+          enabled: false
+          # -- TLS wildcard secret name for session ingress
+          secretName: "skuld-wildcard-tls"
+
+      # -- Git credential secret for session pods to clone repositories
+      git:
+        credentials:
+          # -- K8s secret name containing git credentials (mounted in session pod)
+          secretName: github-token
+
+      localServices:
+        terminal:
+          # -- Enable terminal debug UI in session pods
+          debug: false
+
+      persistence:
+        # -- Mount path for session data
+        mountPath: "/volundr/sessions"
+
+      homeVolume:
+        # -- Enable persistent home directory in session pods
+        enabled: true
+        # -- Mount path for the home PVC
+        mountPath: "/volundr/home"
+        credentialFiles:
+          # -- Pre-existing K8s secret containing Claude credential files
+          # Keys in the secret become files mounted at the secret mount path.
+          # These are symlinked into $HOME/<destDir>/ so they auto-update when
+          # the secret changes (~60s kubelet sync).
+          secretName: "claude-credentials"
+          # -- Subdirectory under mountPath where credential symlinks are placed
+          destDir: ".claude"
+          # -- Internal mount path for the credentials secret
+          secretMountPath: "/volundr/secrets/credential-files"
+
+      # Secrets injected as env vars into the skuld broker container.
+      envSecrets:
+        - envVar: ANTHROPIC_API_KEY
+          secretName: anthropic-api-key
+          secretKey: api-key
+
+      # Plain env vars injected into the skuld broker container.
+      envVars: []
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      # -- Runtime class name for session pods (e.g., "nvidia", "kata", "gvisor")
+      runtimeClassName: ""
+
+      # -- Volundr API URL for session pods to report token usage
+      # Overridden in the FarmSessionDefinition template with the in-cluster URL
+      volundr:
+        apiUrl: ""
+
+  # Skuld-Codex session definition (OpenAI Codex with code-server IDE)
+  # Uses the same skuld chart as skuld-claude, parameterised for Codex.
+  skuldCodex:
+    # -- Enable skuld-codex session definition (disabled by default)
+    enabled: false
+    # -- Labels for agent routing
+    labels:
+      - session
+    # -- Whether this session definition is active
+    active: true
+
+    # Helm chart configuration (same chart as skuld-claude)
+    helm:
+      chart: skuld
+      repo: "oci://ghcr.io/niuulabs/charts"
+      repoName: ""
+      version: "0.67.2"
+
+    defaults:
+      session:
+        # -- Default Codex model
+        model: "o4-mini"
+
+      broker:
+        # -- AI CLI backend: "codex" (OpenAI Codex)
+        cliType: codex
+        # -- Codex always uses subprocess transport
+        transport: subprocess
+        # -- Skip tool permission prompts (--full-auto for Codex)
+        skipPermissions: true
+        agentTeams: false
+
+      image:
+        repository: ghcr.io/niuulabs/skuld-codex
+        tag: "latest"
+
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+
+      codeServer:
+        enabled: true
+        image:
+          repository: codercom/code-server
+          tag: "latest"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+      imagePullSecrets:
+        - ghcr-pull-secret
+
+      ingress:
+        className: ""
+        annotations: {}
+        tls:
+          enabled: false
+          secretName: "skuld-wildcard-tls"
+
+      git:
+        credentials:
+          secretName: github-token
+
+      localServices:
+        terminal:
+          debug: false
+
+      persistence:
+        mountPath: "/volundr/sessions"
+
+      homeVolume:
+        enabled: true
+        mountPath: "/volundr/home"
+        credentialFiles:
+          # -- Pre-existing K8s secret containing Codex credential files
+          secretName: "codex-credentials"
+          # -- Codex stores config under .codex/
+          destDir: ".codex"
+          secretMountPath: "/volundr/secrets/credential-files"
+
+      # Secrets injected as env vars into the skuld broker container.
+      envSecrets:
+        - envVar: OPENAI_API_KEY
+          secretName: openai-api-key
+          secretKey: api-key
+
+      # Plain env vars injected into the skuld broker container.
+      envVars: []
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      runtimeClassName: ""
+
+      volundr:
+        apiUrl: ""
+
+# Web UI (optional standalone frontend)
+web:
+  # -- Enable the Volundr web UI component
+  enabled: false
+
+  # -- Number of web replicas
+  replicaCount: 1
+
+  image:
+    # -- Web UI image registry
+    registry: ghcr.io
+    # -- Web UI image repository
+    repository: niuulabs/volundr-web
+    # -- Web UI image tag (defaults to Chart.appVersion)
+    tag: ""
+    # -- Web UI image pull policy
+    pullPolicy: Always
+
+  service:
+    # -- Web UI service type
+    type: ClusterIP
+    # -- Web UI service port
+    port: 80
+
+  ingress:
+    # -- Enable web UI ingress
+    enabled: false
+    # -- Ingress class name
+    className: ""
+    # -- Ingress annotations
+    annotations: {}
+    # -- Ingress hosts
+    # Aligns with Volundr API ingress (same domain, different path)
+    hosts:
+      - host: volundr.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    # -- Ingress TLS
+    tls: []
+
+  # Runtime configuration injected via configmap
+  config:
+    # -- Backend API base URL (auto-wired to in-cluster service if empty)
+    apiBaseUrl: ""
+    # OIDC configuration (enables login flow in the web UI)
+    oidc:
+      # -- OIDC provider discovery URL (e.g., https://keycloak.example.com/realms/volundr)
+      # Leave empty to disable OIDC (allow-all / dev mode)
+      authority: ""
+      # -- OIDC client ID
+      clientId: ""
+      # -- Redirect URI after login (defaults to web UI origin)
+      redirectUri: ""
+      # -- Redirect URI after logout (defaults to web UI origin)
+      postLogoutRedirectUri: ""
+      # -- OIDC scopes
+      scope: "openid profile email"
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# Resource limits (API backend)
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Probes
+livenessProbe:
+  # -- Enable liveness probe
+  enabled: true
+  # -- Path for liveness probe
+  path: /health
+  # -- Scheme for liveness probe
+  scheme: HTTP
+  # -- Initial delay seconds
+  initialDelaySeconds: 10
+  # -- Period seconds
+  periodSeconds: 30
+  # -- Timeout seconds
+  timeoutSeconds: 10
+  # -- Success threshold
+  successThreshold: 1
+  # -- Failure threshold
+  failureThreshold: 3
+
+readinessProbe:
+  # -- Enable readiness probe
+  enabled: true
+  # -- Path for readiness probe
+  path: /health
+  # -- Scheme for readiness probe
+  scheme: HTTP
+  # -- Initial delay seconds
+  initialDelaySeconds: 5
+  # -- Period seconds
+  periodSeconds: 10
+  # -- Timeout seconds
+  timeoutSeconds: 5
+  # -- Success threshold
+  successThreshold: 1
+  # -- Failure threshold
+  failureThreshold: 3
+
+startupProbe:
+  # -- Enable startup probe
+  enabled: false
+  # -- Path for startup probe
+  path: /health
+  # -- Scheme for startup probe
+  scheme: HTTP
+  # -- Initial delay seconds
+  initialDelaySeconds: 5
+  # -- Period seconds
+  periodSeconds: 5
+  # -- Timeout seconds
+  timeoutSeconds: 5
+  # -- Success threshold
+  successThreshold: 1
+  # -- Failure threshold
+  failureThreshold: 30
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+
+# Autoscaling configuration
+autoscaling:
+  # -- Enable horizontal pod autoscaling
+  enabled: false
+  # -- Minimum replicas
+  minReplicas: 1
+  # -- Maximum replicas
+  maxReplicas: 10
+  # -- Target CPU utilization percentage
+  targetCPUUtilizationPercentage: 80
+  # -- Target memory utilization percentage
+  targetMemoryUtilizationPercentage: ""
+  # -- Custom metrics for autoscaling
+  customMetrics: []
+  # -- Scaling behavior configuration
+  behavior: {}
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  # -- Enable PodDisruptionBudget
+  enabled: false
+  # -- Minimum available pods
+  minAvailable: 1
+  # -- Maximum unavailable pods
+  maxUnavailable: ""
+  # -- Unhealthy pod eviction policy
+  unhealthyPodEvictionPolicy: ""
+
+# Network Policy
+networkPolicy:
+  # -- Enable NetworkPolicy
+  enabled: false
+  # -- Custom ingress from selectors
+  ingressFrom: []
+  # -- Database pod selector for egress
+  databasePodSelector: {}
+  # -- Farm pod selector for egress
+  farmPodSelector: {}
+  # -- Extra ingress rules
+  extraIngress: []
+  # -- Extra egress rules
+  extraEgress: []
+
+# Deployment strategy
+# Use Recreate to avoid PVC mount conflicts during upgrades (ReadWriteOnce volumes)
+strategy:
+  type: Recreate
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity rules
+affinity: {}
+
+# -- Topology spread constraints
+topologySpreadConstraints: []
+
+# -- Pod annotations
+podAnnotations: {}
+
+# -- Pod labels
+podLabels: {}
+
+# -- Deployment annotations
+deploymentAnnotations: {}
+
+# -- Priority class name
+priorityClassName: ""
+
+# -- Termination grace period in seconds
+terminationGracePeriodSeconds: 30
+
+# -- DNS configuration
+dnsConfig: {}
+
+# -- DNS policy
+dnsPolicy: ""
+
+# -- Extra environment variables
+extraEnv: []
+
+# -- Environment variables from secrets/configmaps
+envFrom: []
+
+# -- Extra volume mounts
+extraVolumeMounts: []
+
+# -- Extra volumes
+extraVolumes: []
+
+# -- Sidecar containers
+sidecars: []
+
+# Integration catalog (deployment-level configuration)
+# Defines which integrations are available for users to attach to sessions.
+# Users select from these pre-configured definitions in the session wizard;
+# they cannot create or modify definitions from the UI.
+#
+# Each definition specifies the adapter class, credential schema, and
+# optional MCP server that gets injected into the session pod.
+integrations:
+  definitions: []
+    # - slug: linear
+    #   name: Linear
+    #   description: "Linear issue tracker integration"
+    #   integration_type: issue_tracker
+    #   adapter: "volundr.adapters.outbound.integrations.linear.LinearAdapter"
+    #   icon: "linear"
+    #   credential_schema:
+    #     api_key:
+    #       type: string
+    #       required: true
+    #       description: "Linear API key"
+    #   config_schema: {}
+    #   mcp_server:
+    #     name: linear
+    #     command: mcp-server-linear
+    #     args: []
+    #     env_from_credentials:
+    #       LINEAR_API_KEY: api_key
+    #
+    # - slug: github
+    #   name: GitHub
+    #   description: "GitHub source control integration"
+    #   integration_type: source_control
+    #   adapter: "volundr.adapters.outbound.integrations.github.GitHubAdapter"
+    #   icon: "github"
+    #   credential_schema:
+    #     token:
+    #       type: string
+    #       required: true
+    #       description: "GitHub personal access token"
+    #   config_schema:
+    #     org:
+    #       type: string
+    #       required: false
+    #       description: "GitHub organization"
+    #   mcp_server:
+    #     name: github
+    #     command: mcp-server-github
+    #     args: []
+    #     env_from_credentials:
+    #       GITHUB_TOKEN: token
+
+# Database migrations configuration
+migrations:
+  # -- Enable database migrations via init container
+  enabled: true
+  image:
+    # -- Migration image repository
+    repository: migrate/migrate
+    # -- Migration image tag
+    tag: "v4.17.0"
+    # -- Migration image pull policy
+    pullPolicy: IfNotPresent
+  # -- Resources for migration init container
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# -- Init containers
+initContainers: []
+
+# -- Container lifecycle hooks
+lifecycle: {}

@@ -1,0 +1,59 @@
+# Running
+
+## API server
+
+```bash
+# Production (multi-worker)
+uv run volundr
+
+# Development (auto-reload)
+uv run uvicorn volundr.main:app --reload --port 8080
+```
+
+The server binds to `0.0.0.0:8080` by default. Override with environment variables:
+
+```bash
+HOST=127.0.0.1 PORT=9000 WORKERS=2 uv run volundr
+```
+
+Interactive API docs are available at `/docs` (Swagger UI) and `/redoc`.
+
+## Skuld broker
+
+Skuld runs as a separate process inside session pods. For local development:
+
+```bash
+uv run skuld
+```
+
+Skuld configuration uses its own settings class (`SkuldSettings`) and is typically configured through the Helm chart.
+
+## Web UI
+
+```bash
+cd web
+npm run dev
+```
+
+Serves at `http://localhost:5173` with hot reload. The UI expects the Volundr API at the URL configured in `web/src/config.ts`.
+
+## Docker
+
+```bash
+# Build the API image
+docker build -t volundr:latest .
+
+# Run with external PostgreSQL
+docker run -p 8080:8080 \
+  -e DATABASE__HOST=host.docker.internal \
+  -e DATABASE__PASSWORD=secret \
+  volundr:latest
+```
+
+## Health check
+
+```
+GET /health
+```
+
+Returns `{"status": "healthy"}` when the server is ready.

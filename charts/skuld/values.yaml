@@ -1,0 +1,403 @@
+# Skuld Helm Chart Values
+# Claude Code CLI session pod with WebSocket broker and code-server IDE
+
+# Global values (can be set by parent chart)
+global:
+  # -- Global image pull secrets (list of secret names)
+  imagePullSecrets: []
+  # - ghcr-pull-secret
+  image:
+    # -- Global image repository override
+    repository: ""
+    # -- Global image tag override
+    tag: ""
+
+# Session configuration (set by Farm ITaaS at deployment time)
+session:
+  # -- Session identifier (UUID, set by Volundr/Farm)
+  id: ""
+  # -- Human-readable session name
+  name: ""
+  # -- AI model to use for the session
+  model: "claude-sonnet-4-20250514"
+
+# Container image for the Skuld broker
+# Note: repository and tag are updated by CI/CD pipeline
+# Default values are for local development
+image:
+  # -- Skuld broker image repository
+  repository: ghcr.io/niuulabs/skuld
+  # -- Skuld broker image tag
+  tag: "latest"
+  # -- Image pull policy
+  pullPolicy: Always
+
+# Resource limits for the Skuld broker container
+resources:
+  requests:
+    # -- Broker CPU request
+    memory: "256Mi"
+    # -- Broker memory request
+    cpu: "100m"
+  limits:
+    # -- Broker memory limit
+    memory: "1Gi"
+    # -- Broker CPU limit
+    cpu: "500m"
+
+# Nginx entry point (routes all traffic internally)
+# All external traffic enters via nginx on port 8080 and is routed
+# to broker, code-server, devrunner, etc. based on URL path.
+nginx:
+  image:
+    # -- Nginx image repository
+    repository: nginx
+    # -- Nginx image tag
+    tag: "alpine"
+    # -- Nginx image pull policy
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      # -- Nginx memory request
+      memory: "32Mi"
+      # -- Nginx CPU request
+      cpu: "10m"
+    limits:
+      # -- Nginx memory limit
+      memory: "128Mi"
+      # -- Nginx CPU limit
+      cpu: "100m"
+
+# code-server sidecar configuration (VS Code in the browser)
+codeServer:
+  # -- Enable code-server sidecar container
+  enabled: true
+  image:
+    # -- code-server image repository
+    repository: codercom/code-server
+    # -- code-server image tag
+    tag: "latest"
+    # -- code-server image pull policy
+    pullPolicy: Always
+  resources:
+    requests:
+      # -- code-server memory request
+      memory: "256Mi"
+      # -- code-server CPU request
+      cpu: "100m"
+    limits:
+      # -- code-server memory limit
+      memory: "2Gi"
+      # -- code-server CPU limit
+      cpu: "1000m"
+  # -- Port for code-server (VS Code in browser)
+  port: 8443
+  # -- Password for code-server authentication (empty string disables password)
+  password: ""
+  # -- Extra VS Code extensions to install (comma-separated extension IDs)
+  extensions: ""
+  # -- VS Code editor settings (applied from ConfigMap on each container start)
+  settings:
+    workbench.colorTheme: "Default Dark Modern"
+
+# Local service testing (devrunner sidecar)
+localServices:
+  # -- Enable local service management
+  enabled: true
+  # -- Port range for dynamic services
+  portRange:
+    # -- Start of dynamic port range
+    start: 9001
+    # -- End of dynamic port range
+    end: 9020
+  # -- Terminal (shell over WebSocket)
+  terminal:
+    # -- Terminal WebSocket port
+    port: 7681
+    # -- Run the terminal in restricted-shell mode
+    restricted: false
+    # -- Override allowed commands in restricted mode (comma-separated, empty = use defaults)
+    allowedCommands: ""
+    # -- Enable debug UI at /debug/ (xterm.js test page)
+    debug: false
+  # -- Devrunner container configuration
+  devrunner:
+    image:
+      # -- Devrunner image repository
+      repository: ghcr.io/niuulabs/devrunner
+      # -- Devrunner image tag
+      tag: "latest"
+      # -- Devrunner image pull policy
+      pullPolicy: Always
+    resources:
+      requests:
+        # -- Devrunner memory request
+        memory: "512Mi"
+        # -- Devrunner CPU request
+        cpu: "100m"
+      limits:
+        # -- Devrunner memory limit
+        memory: "4Gi"
+        # -- Devrunner CPU limit
+        cpu: "2000m"
+
+# Service configuration
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Single entry point port (nginx)
+  port: 8080
+
+# Ingress configuration
+ingress:
+  # -- Enable ingress
+  enabled: true
+  # -- Ingress class name
+  className: traefik
+  # -- Ingress annotations (controller-specific)
+  # Traefik handles WebSocket and streaming automatically.
+  # For NGINX, add proxy-read-timeout, proxy-send-timeout, etc.
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    # nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    # nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  # -- Hostname for the session ingress (set by Farm ITaaS, e.g., session-uuid.niuu.world)
+  host: ""
+  # Path routing configuration (used by nginx internally)
+  paths:
+    # -- WebSocket path for Skuld broker
+    session: /session
+    # -- code-server IDE path (/ catch-all when codeServer.enabled)
+    ide: /
+  tls:
+    # -- Enable TLS
+    enabled: true
+    # -- TLS secret name (auto-generated from release name if empty)
+    secretName: ""
+
+# Shared storage for session workspace data
+persistence:
+  # -- Enable workspace persistence
+  enabled: true
+  # -- Name of an existing PVC to use
+  existingClaim: "volundr-sessions"
+  # -- Mount path for the sessions PVC
+  mountPath: "/volundr/sessions"
+
+# Persistent home directory (shared across all sessions for a user)
+# Stores CLI config dirs (.claude/, .codex/, etc.), VS Code config, shell config.
+# Credential files are mounted from a K8s Secret and symlinked into
+# $HOME/<destDir>/ so they auto-update when the secret changes (~60s).
+homeVolume:
+  # -- Enable persistent home volume
+  enabled: false
+  # -- Name of an existing PVC to use for the home directory
+  existingClaim: ""
+  # -- Mount path for the home PVC
+  mountPath: "/volundr/home"
+  credentialFiles:
+    # -- Pre-existing K8s secret containing CLI credential files
+    secretName: ""
+    # -- Subdirectory under mountPath where credential symlinks are placed
+    # e.g. ".claude" for Claude Code, ".codex" for OpenAI Codex
+    destDir: ".claude"
+    # -- Internal mount path for the credentials secret volume
+    secretMountPath: "/volundr/secrets/credential-files"
+
+# Git repository to clone (optional, cloned on session start)
+# Each session clones into its own workspace: /volundr/sessions/{session-id}/workspace
+# Multiple sessions with different repos coexist on the same PVC
+git:
+  # -- Git repository URL to clone (empty = no clone)
+  repoUrl: ""
+  # -- Branch to checkout (empty = default branch)
+  branch: ""
+  # Credentials for private repos (HTTPS token auth)
+  credentials:
+    # -- Name of a Kubernetes secret containing a git token
+    secretName: ""
+    # -- Key within the secret that holds the token
+    tokenKey: "token"
+    # -- Username for HTTPS auth (default works with GitHub PATs and deploy tokens)
+    username: "x-access-token"
+  image:
+    # -- Git init container image repository
+    repository: alpine/git
+    # -- Git init container image tag
+    tag: "latest"
+    # -- Git init container image pull policy
+    pullPolicy: IfNotPresent
+
+# Broker configuration (Skuld application settings)
+broker:
+  # -- AI CLI backend: "claude" (Claude Code, default) or "codex" (OpenAI Codex)
+  cliType: claude
+  # -- CLI transport mode for Claude: "sdk" (WebSocket, default) or "subprocess" (legacy)
+  # Ignored when cliType is "codex" (always uses subprocess)
+  transport: sdk
+  # -- Skip tool permission prompts (true = --dangerously-skip-permissions for Claude,
+  # --full-auto for Codex)
+  skipPermissions: true
+  # -- Enable Claude Code experimental Agent Teams (Claude only)
+  agentTeams: false
+
+# Volundr API (for token usage reporting back to the control plane)
+volundr:
+  # -- URL of the Volundr API service (set by FarmSessionDefinition).
+  # Use the -internal service to bypass Envoy JWT validation:
+  #   http://volundr-internal.volundr.svc.cluster.local
+  apiUrl: ""
+  # -- Service identity for internal API calls (x-auth-user-id header)
+  serviceUserId: "skuld-broker"
+  # -- Tenant ID for internal API calls (x-auth-tenant header)
+  serviceTenantId: "default"
+
+# -- Secrets injected as environment variables into the skuld broker container.
+# Each entry maps one key from a Kubernetes Secret to an env var.
+# Works for any provider -- no template changes needed for new CLIs.
+envSecrets:
+  - envVar: ANTHROPIC_API_KEY
+    secretName: anthropic-api-key
+    secretKey: api-key
+
+# -- Plain environment variables injected into the skuld broker container.
+# Use for non-secret configuration like proxy URLs or auth tokens.
+envVars: []
+# Example: Anthropic-compatible proxy endpoint (replaces api.baseUrl/authToken)
+# - name: ANTHROPIC_BASE_URL
+#   value: "https://proxy.example.com"
+# - name: ANTHROPIC_AUTH_TOKEN
+#   value: "bearer-token"
+
+# Envoy sidecar proxy (JWT validation, header extraction)
+envoy:
+  # -- Enable Envoy sidecar proxy
+  enabled: false
+  image:
+    # -- Envoy image repository
+    repository: envoyproxy/envoy
+    # -- Envoy image tag
+    tag: "v1.32-latest"
+    # -- Envoy image pull policy
+    pullPolicy: IfNotPresent
+  # -- Envoy listener port (becomes the service target when enabled)
+  port: 8444
+  # -- Envoy admin interface port (localhost only)
+  adminPort: 9901
+  # -- Upstream connect timeout
+  connectTimeout: "0.25s"
+  # -- Upstream request timeout (long for WebSocket sessions)
+  upstreamTimeout: "3600s"
+  # -- Resource limits for the Envoy sidecar
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  # -- Header names Envoy sets on upstream requests
+  headerNames:
+    userId: x-auth-user-id
+    email: x-auth-email
+    tenant: x-auth-tenant
+    roles: x-auth-roles
+  # JWT authentication (via Keycloak)
+  jwt:
+    # -- Enable JWT authentication filter
+    enabled: false
+    # -- JWT issuer URL (Keycloak realm)
+    # issuer: "https://keycloak.example.com/realms/volundr"
+    issuer: ""
+    # -- Allowed JWT audiences
+    # audiences:
+    #   - skuld
+    audiences: []
+    # -- JWKS URI for key retrieval
+    # jwksUri: "https://keycloak.example.com/realms/volundr/protocol/openid-connect/certs"
+    jwksUri: ""
+    # -- JWKS fetch timeout
+    jwksTimeout: "5s"
+    # -- JWKS cache duration in seconds
+    jwksCacheDurationSeconds: 300
+    # -- JWT claim containing tenant ID
+    tenantClaim: "tenant_id"
+    # -- JWT claim containing roles
+    rolesClaim: "resource_access.volundr.roles"
+    # -- Keycloak upstream host
+    # keycloakHost: "keycloak.default.svc.cluster.local"
+    keycloakHost: ""
+    # -- Keycloak upstream port
+    keycloakPort: 8080
+    # -- Enable TLS for Keycloak upstream
+    keycloakTls: false
+    # -- Additional JWT claim-to-header mappings
+    extraClaimHeaders: []
+  # -- Extra HTTP filters (inserted before the router filter)
+  extraHttpFilters: []
+  # -- Extra upstream clusters
+  extraClusters: []
+
+# Gateway API routing (managed by this chart, not Volundr)
+# When enabled, creates an HTTPRoute + optional SecurityPolicy per session.
+# Gateway config is passed from Volundr at session creation time.
+gateway:
+  # -- Enable Gateway API HTTPRoute for this session
+  enabled: false
+  # -- Name of the shared Gateway resource
+  name: "volundr-gateway"
+  # -- Namespace where the shared Gateway lives
+  namespace: "volundr-system"
+  # -- User ID label for the HTTPRoute (owner of the session)
+  userId: ""
+  # CORS configuration for cross-origin browser requests
+  cors:
+    # -- Allowed origins (e.g. ["https://volundr.example.com"])
+    allowOrigins:
+      - "*"
+    # -- Allowed HTTP methods
+    allowMethods:
+      - GET
+      - POST
+      - OPTIONS
+    # -- Allowed request headers
+    allowHeaders:
+      - Authorization
+      - Content-Type
+    # -- Allow credentials (cookies, auth headers)
+    allowCredentials: true
+  # JWT validation (Envoy SecurityPolicy)
+  jwt:
+    # -- Enable JWT SecurityPolicy for this session's HTTPRoute
+    enabled: false
+    # -- JWT issuer URL
+    issuer: ""
+    # -- Allowed JWT audiences
+    audiences: []
+    # -- JWKS URI for key retrieval
+    jwksUri: ""
+
+# Pod configuration
+# -- Extra labels applied to session pods (e.g. volundr/owner for PVC isolation)
+podLabels: {}
+# -- Node selector for scheduling
+nodeSelector: {}
+# -- Tolerations for scheduling
+tolerations: []
+# -- Affinity rules for scheduling
+affinity: {}
+
+# -- Runtime class name for the pod (e.g., "nvidia", "kata", "gvisor")
+runtimeClassName: ""
+
+# Security context for the pod
+securityContext:
+  # -- Run as non-root user
+  runAsNonRoot: true
+  # -- Run as user ID
+  runAsUser: 1000
+  # -- Filesystem group ID
+  fsGroup: 1000

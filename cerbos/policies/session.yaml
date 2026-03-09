@@ -1,0 +1,36 @@
+---
+apiVersion: "api.cerbos.dev/v1"
+resourcePolicy:
+  resource: session
+  version: default
+  importDerivedRoles:
+    - volundr_roles
+
+  rules:
+    # Tenant admins can do anything with sessions in their tenant
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - tenant_admin
+
+    # Owners can manage their own sessions
+    - actions: ["read", "update", "delete", "start", "stop", "list"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - owner
+
+    # Viewers can read sessions in their tenant
+    - actions: ["read", "list"]
+      effect: EFFECT_ALLOW
+      roles: ["volundr:viewer"]
+      condition:
+        match:
+          expr: >-
+            request.resource.attr.tenant_id == "" ||
+            request.resource.attr.tenant_id == request.principal.attr.tenant_id
+
+    # Developers can create sessions (no resource ownership yet)
+    - actions: ["create"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - tenant_member

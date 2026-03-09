@@ -1,0 +1,168 @@
+"""FastAPI REST adapter for MCP servers and Kubernetes secrets."""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
+
+from volundr.domain.models import MCPServerConfig, SecretInfo
+from volundr.domain.ports import (
+    MCPServerProvider,
+    SecretAlreadyExistsError,
+    SecretManager,
+    SecretValidationError,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# --- Response/Request models ---
+
+
+class MCPServerResponse(BaseModel):
+    """Response model for an available MCP server configuration."""
+
+    name: str
+    type: str
+    command: str | None = None
+    url: str | None = None
+    args: list[str] = Field(default_factory=list)
+    description: str = ""
+
+    @classmethod
+    def from_config(cls, cfg: MCPServerConfig) -> MCPServerResponse:
+        """Create response from domain model."""
+        return cls(
+            name=cfg.name,
+            type=cfg.type,
+            command=cfg.command,
+            url=cfg.url,
+            args=list(cfg.args),
+            description=cfg.description,
+        )
+
+
+class SecretResponse(BaseModel):
+    """Response model for a Kubernetes secret (metadata only, no values)."""
+
+    name: str
+    keys: list[str]
+
+    @classmethod
+    def from_info(cls, info: SecretInfo) -> SecretResponse:
+        """Create response from domain model."""
+        return cls(name=info.name, keys=list(info.keys))
+
+
+class SecretCreateRequest(BaseModel):
+    """Request model for creating a Kubernetes secret."""
+
+    name: str = Field(..., min_length=1, max_length=253)
+    data: dict[str, str] = Field(..., min_length=1)
+
+
+class ErrorResponse(BaseModel):
+    """Response model for errors."""
+
+    detail: str
+
+
+# --- Router factory ---
+
+
+def create_secrets_router(
+    mcp_provider: MCPServerProvider,
+    secret_manager: SecretManager,
+) -> APIRouter:
+    """Create FastAPI router for MCP server and secret endpoints."""
+    router = APIRouter(prefix="/api/v1/volundr")
+
+    # --- MCP server endpoints ---
+
+    @router.get(
+        "/mcp-servers",
+        response_model=list[MCPServerResponse],
+        tags=["MCP Servers"],
+    )
+    async def list_mcp_servers() -> list[MCPServerResponse]:
+        """List available MCP server configurations."""
+        servers = mcp_provider.list()
+        return [MCPServerResponse.from_config(s) for s in servers]
+
+    @router.get(
+        "/mcp-servers/{server_name}",
+        response_model=MCPServerResponse,
+        responses={404: {"model": ErrorResponse}},
+        tags=["MCP Servers"],
+    )
+    async def get_mcp_server(server_name: str) -> MCPServerResponse:
+        """Get an MCP server configuration by name."""
+        server = mcp_provider.get(server_name)
+        if server is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"MCP server not found: {server_name}",
+            )
+        return MCPServerResponse.from_config(server)
+
+    # --- Secret endpoints ---
+
+    @router.get(
+        "/secrets",
+        response_model=list[SecretResponse],
+        tags=["Secrets"],
+    )
+    async def list_secrets() -> list[SecretResponse]:
+        """List available Kubernetes secrets (metadata only, no values)."""
+        secrets = await secret_manager.list()
+        return [SecretResponse.from_info(s) for s in secrets]
+
+    @router.get(
+        "/secrets/{secret_name}",
+        response_model=SecretResponse,
+        responses={404: {"model": ErrorResponse}},
+        tags=["Secrets"],
+    )
+    async def get_secret(secret_name: str) -> SecretResponse:
+        """Get a Kubernetes secret's metadata by name."""
+        secret = await secret_manager.get(secret_name)
+        if secret is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Secret not found: {secret_name}",
+            )
+        return SecretResponse.from_info(secret)
+
+    @router.post(
+        "/secrets",
+        response_model=SecretResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            400: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+        },
+        tags=["Secrets"],
+    )
+    async def create_secret(req: SecretCreateRequest) -> SecretResponse:
+        """Create a new Kubernetes secret.
+
+        The secret is automatically labeled for discovery by the secrets list endpoint.
+        Secret values are never returned in responses.
+        """
+        try:
+            info = await secret_manager.create(req.name, req.data)
+            return SecretResponse.from_info(info)
+        except SecretValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            )
+        except SecretAlreadyExistsError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            )
+
+    return router

@@ -1,0 +1,52 @@
+"""Tests for CoreSessionContributor."""
+
+import pytest
+
+from volundr.adapters.outbound.contributors.core import CoreSessionContributor
+from volundr.domain.models import Session
+from volundr.domain.ports import SessionContext
+
+
+@pytest.fixture
+def session():
+    return Session(name="test-session", model="claude-sonnet-4-20250514", repo="", branch="main")
+
+
+class TestCoreSessionContributor:
+    async def test_name(self):
+        c = CoreSessionContributor(base_domain="example.com")
+        assert c.name == "core"
+
+    async def test_basic_values(self, session):
+        c = CoreSessionContributor(base_domain="example.com")
+        result = await c.contribute(session, SessionContext())
+        assert result.values["session"]["id"] == str(session.id)
+        assert result.values["session"]["name"] == "test-session"
+        assert result.values["session"]["model"] == "claude-sonnet-4-20250514"
+        assert result.values["ingress"]["host"] == "test-session.example.com"
+
+    async def test_terminal_restricted(self, session):
+        c = CoreSessionContributor(base_domain="example.com")
+        ctx = SessionContext(terminal_restricted=True)
+        result = await c.contribute(session, ctx)
+        assert result.values["localServices"]["terminal"]["restricted"] is True
+
+    async def test_terminal_not_restricted(self, session):
+        c = CoreSessionContributor(base_domain="example.com")
+        ctx = SessionContext(terminal_restricted=False)
+        result = await c.contribute(session, ctx)
+        assert "localServices" not in result.values
+
+    async def test_pod_spec_is_none(self, session):
+        c = CoreSessionContributor(base_domain="example.com")
+        result = await c.contribute(session, SessionContext())
+        assert result.pod_spec is None
+
+    async def test_extra_kwargs_ignored(self):
+        c = CoreSessionContributor(
+            base_domain="example.com",
+            gateway=None,
+            storage=None,
+            unknown_kwarg="ignored",
+        )
+        assert c.name == "core"

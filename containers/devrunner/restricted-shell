@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Restricted shell - only allows whitelisted commands."""
+
+import os
+import readline  # noqa: F401 - enables line editing in input()
+import shlex
+import subprocess
+import sys
+
+# Commands allowed to run. Each entry is a prefix match on argv[0].
+# Override via ALLOWED_COMMANDS env var (comma-separated).
+DEFAULT_ALLOWED = [
+    "svc",
+    "psql",
+    "pg_dump",
+    "pg_restore",
+    "createdb",
+    "dropdb",
+    "ls",
+    "cat",
+    "head",
+    "tail",
+    "pwd",
+    "cd",
+    "env",
+    "echo",
+    "curl",
+    "wget",
+    "git",
+    "python",
+    "python3",
+    "pip",
+    "node",
+    "npm",
+    "npx",
+    "claude",
+    "codex",
+]
+
+
+def load_allowed_commands() -> set[str]:
+    """Load the allowlist from env or defaults."""
+    env_val = os.environ.get("ALLOWED_COMMANDS", "")
+    if env_val:
+        return set(env_val.split(","))
+    return set(DEFAULT_ALLOWED)
+
+
+def is_allowed(argv: list[str], allowed: set[str]) -> bool:
+    """Check if a command is in the allowlist."""
+    if not argv:
+        return False
+    cmd = os.path.basename(argv[0])
+    return cmd in allowed
+
+
+def main() -> None:
+    allowed = load_allowed_commands()
+    workspace = os.environ.get("WORKSPACE_DIR", os.getcwd())
+    cwd = workspace
+
+    # Try to change to workspace dir
+    try:
+        os.chdir(cwd)
+    except (FileNotFoundError, PermissionError):
+        pass
+
+    hostname = os.environ.get("SESSION_ID", "devrunner")
+    print(f"Restricted shell - {len(allowed)} commands available")
+    print("Type 'help' for available commands\n")
+
+    while True:
+        try:
+            # Show relative path from workspace
+            try:
+                rel = os.path.relpath(os.getcwd(), workspace)
+                if rel == ".":
+                    display_path = "~"
+                else:
+                    display_path = f"~/{rel}"
+            except ValueError:
+                display_path = os.getcwd()
+
+            line = input(f"\033[1;32m{hostname}\033[0m:\033[1;34m{display_path}\033[0m$ ")
+            line = line.strip()
+
+            if not line:
+                continue
+
+            if line == "help":
+                print("Available commands:")
+                for cmd in sorted(allowed):
+                    print(f"  {cmd}")
+                print()
+                continue
+
+            if line == "exit" or line == "quit":
+                break
+
+            try:
+                argv = shlex.split(line)
+            except ValueError as e:
+                print(f"Parse error: {e}")
+                continue
+
+            if not argv:
+                continue
+
+            # Handle 'cd' as a builtin
+            if argv[0] == "cd":
+                target = argv[1] if len(argv) > 1 else workspace
+                if target == "~":
+                    target = workspace
+                try:
+                    os.chdir(target)
+                    cwd = os.getcwd()
+                except FileNotFoundError:
+                    print(f"cd: no such directory: {target}")
+                except PermissionError:
+                    print(f"cd: permission denied: {target}")
+                continue
+
+            if not is_allowed(argv, allowed):
+                print(f"Command not allowed: {argv[0]}")
+                print("Type 'help' for available commands")
+                continue
+
+            # Run the command
+            try:
+                result = subprocess.run(
+                    argv,
+                    cwd=os.getcwd(),
+                    env={**os.environ, "TERM": os.environ.get("TERM", "xterm-256color")},
+                )
+                # Propagate exit code silently (don't print unless non-zero)
+                if result.returncode != 0:
+                    print(f"Exit code: {result.returncode}")
+            except FileNotFoundError:
+                print(f"Command not found: {argv[0]}")
+            except PermissionError:
+                print(f"Permission denied: {argv[0]}")
+            except KeyboardInterrupt:
+                print()
+
+        except EOFError:
+            print()
+            break
+        except KeyboardInterrupt:
+            print()
+            continue
+
+
+if __name__ == "__main__":
+    main()

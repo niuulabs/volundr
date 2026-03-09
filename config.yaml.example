@@ -1,0 +1,184 @@
+# Volundr Configuration
+# =====================
+#
+# Copy this file to config.yaml and customize for your environment.
+#
+# Configuration precedence:
+# 1. Default values
+# 2. YAML config file (this file)
+# 3. Environment variables (override YAML values)
+#
+# Kubernetes deployment:
+# - Mount this as a ConfigMap at /etc/volundr/config.yaml
+# - Use Secrets -> env vars for sensitive values (tokens)
+#
+# Example ConfigMap:
+#   apiVersion: v1
+#   kind: ConfigMap
+#   metadata:
+#     name: volundr-config
+#   data:
+#     config.yaml: |
+#       database:
+#         host: postgres.default.svc.cluster.local
+#       git:
+#         github:
+#           instances:
+#             - name: GitHub
+#               base_url: https://api.github.com
+#               # Token comes from GITHUB_TOKEN env var (Secret)
+#
+# Example Secret -> env var:
+#   env:
+#     - name: GITHUB_TOKEN
+#       valueFrom:
+#         secretKeyRef:
+#           name: git-tokens
+#           key: github-token
+#     - name: GITLAB_TOKEN
+#       valueFrom:
+#         secretKeyRef:
+#           name: git-tokens
+#           key: gitlab-token
+
+database:
+  host: localhost
+  port: 5432
+  user: volundr
+  password: volundr
+  name: volundr
+  min_pool_size: 5
+  max_pool_size: 20
+
+pod_manager:
+  adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+  kwargs:
+    base_url: http://farm-tasks.default.svc.cluster.local
+    # token: your-farm-token  # Or use POD_MANAGER_TOKEN env var
+    timeout: 30.0
+    task_type: skuld
+    user: volundr
+    labels:
+      - volundr
+    base_domain: volundr.local
+    chat_scheme: wss
+    code_scheme: https
+    chat_path: /session
+    code_path: /
+
+# Forge profiles (argument templates for workload instantiation)
+# Profiles define the base set of values assembled into Farm task_args.
+profiles:
+  - name: standard
+    description: "Standard coding session"
+    workload_type: session
+    model: "claude-sonnet-4-20250514"
+    resource_config:
+      cpu: "500m"
+      memory: "1Gi"
+    is_default: true
+
+  # - name: gpu-heavy
+  #   description: "GPU-accelerated data science"
+  #   workload_type: session
+  #   model: "claude-sonnet-4-20250514"
+  #   resource_config:
+  #     cpu: "2"
+  #     memory: "8Gi"
+  #     gpu: "1"
+  #   mcp_servers:
+  #     - name: filesystem
+  #       command: mcp-fs
+  #   env_vars:
+  #     CUDA_VISIBLE_DEVICES: "0"
+  #   is_default: false
+
+# Workspace templates (unified session blueprints)
+# Each template is a complete session blueprint including workspace + runtime config.
+templates:
+  - name: default-session
+    description: "Default coding session"
+    workload_type: session
+    model: "claude-sonnet-4-20250514"
+    resource_config:
+      cpu: "500m"
+      memory: "1Gi"
+    is_default: true
+
+  # - name: data-science
+  #   description: "Data science workspace"
+  #   workload_type: session
+  #   model: "claude-sonnet-4-20250514"
+  #   resource_config:
+  #     cpu: "2"
+  #     memory: "8Gi"
+  #     gpu: "1"
+  #   mcp_servers:
+  #     - name: filesystem
+  #       command: mcp-fs
+  #   env_vars:
+  #     CUDA_VISIBLE_DEVICES: "0"
+  #   repos:
+  #     - url: "https://github.com/org/data-repo"
+  #       branch: main
+  #   setup_scripts:
+  #     - "pip install -r requirements.txt"
+  #   workspace_layout:
+  #     editor: vscode
+
+# Available MCP servers (shown in the launch wizard for users to select)
+mcp_servers:
+  - name: linear
+    type: stdio
+    command: npx
+    args: ["-y", "@anthropic-ai/linear-mcp-server"]
+    description: "Linear issue tracking"
+
+  # - name: filesystem
+  #   type: stdio
+  #   command: npx
+  #   args: ["-y", "@anthropic-ai/filesystem-mcp-server"]
+  #   description: "Local filesystem access"
+
+  # - name: postgres
+  #   type: stdio
+  #   command: npx
+  #   args: ["-y", "@anthropic-ai/postgres-mcp-server"]
+  #   description: "PostgreSQL database access"
+
+git:
+  validate_on_create: true
+
+  github:
+    # Multiple GitHub instances supported (GitHub.com + GitHub Enterprise)
+    instances:
+      - name: GitHub
+        base_url: https://api.github.com
+        # token: ghp_xxx  # Or use GITHUB_TOKEN env var from Secret
+        # orgs:            # Organizations to list repos from
+        #   - my-org
+
+      # Example: GitHub Enterprise
+      # - name: GitHub Enterprise
+      #   base_url: https://github.company.com/api/v3
+      #   token: ghp_enterprise_token
+      #   orgs:
+      #     - engineering
+      #     - platform
+
+  gitlab:
+    # Multiple GitLab instances supported
+    instances:
+      - name: GitLab.com
+        base_url: https://gitlab.com
+        # token: glpat_xxx  # Or use GITLAB_TOKEN env var from Secret
+        # orgs:             # Groups to list repos from
+        #   - my-group
+
+      # Example: Self-hosted GitLab
+      # - name: Internal GitLab
+      #   base_url: https://git.company.com
+      #   token: glpat_internal_token
+      #   orgs:
+      #     - platform
+      #     - infra

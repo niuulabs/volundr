@@ -1,0 +1,21 @@
+{{- if .Values.envoy.enabled }}
+# Internal service that bypasses the Envoy sidecar (no JWT validation).
+# Used by trusted in-cluster services (e.g. skuld broker) that send
+# x-auth-* headers directly for service-to-service authentication.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "volundr.fullname" . }}-internal
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api-internal
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "volundr.selectorLabels" . | nindent 4 }}
+{{- end }}

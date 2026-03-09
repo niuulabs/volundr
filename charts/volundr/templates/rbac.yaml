@@ -1,0 +1,117 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "volundr.fullname" . }}
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+rules:
+  {{- if contains "FarmPodManager" .Values.podManager.adapter }}
+  # Access to Farm session definitions (FarmPodManager only)
+  - apiGroups: ["farm.nvidia.com"]
+    resources: ["farmsessiondefinitions", "farmsessions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}
+  {{- if and (contains "FluxPodManager" .Values.podManager.adapter) (not .Values.rbac.clusterWide) }}
+  # Access to Flux HelmReleases (FluxPodManager only, same-namespace)
+  # NOTE: If sessions run in a different namespace, enable rbac.clusterWide
+  - apiGroups: ["helm.toolkit.fluxcd.io"]
+    resources: ["helmreleases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}
+  {{- if and (contains "K8sStorageAdapter" .Values.storageAdapter.adapter) (not .Values.rbac.clusterWide) }}
+  # Access to PVCs for dynamic per-user/session storage provisioning
+  # NOTE: If PVCs are in a different namespace, enable rbac.clusterWide
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  {{- end }}
+  # Access to pods for session management
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch"]
+  # Access to services for session endpoints
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  # Access to secrets for API keys
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  # Access to configmaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Access to events for monitoring
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create"]
+  {{- with .Values.rbac.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "volundr.fullname" . }}
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "volundr.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "volundr.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.rbac.clusterWide }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "volundr.fullname" . }}
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+rules:
+  {{- if contains "FarmPodManager" .Values.podManager.adapter }}
+  # Cluster-wide access to Farm CRDs (FarmPodManager only)
+  - apiGroups: ["farm.nvidia.com"]
+    resources: ["farmsessiondefinitions"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
+  {{- if contains "FluxPodManager" .Values.podManager.adapter }}
+  # Cluster-wide access to Flux HelmReleases (cross-namespace)
+  - apiGroups: ["helm.toolkit.fluxcd.io"]
+    resources: ["helmreleases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}
+  {{- if contains "K8sStorageAdapter" .Values.storageAdapter.adapter }}
+  # Cluster-wide access to PVCs (cross-namespace provisioning)
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  {{- end }}
+  # Namespace listing for multi-namespace deployments
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  {{- with .Values.rbac.extraClusterRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "volundr.fullname" . }}
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "volundr.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "volundr.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

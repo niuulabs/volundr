@@ -1,0 +1,739 @@
+"""Configuration settings for Völundr.
+
+Configuration is loaded from YAML, with environment variables overriding.
+
+Config file locations (first found wins):
+- ./config.yaml
+- /etc/volundr/config.yaml
+
+Environment variable override format:
+- Use double underscore for nested fields: DATABASE__HOST, GIT__VALIDATE_ON_CREATE
+- Or use the specific prefixes for backward compatibility: DATABASE_HOST, GITHUB_TOKEN
+
+All configuration MUST flow through the Settings class.
+"""
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
+
+# Config file search paths (in order of priority)
+CONFIG_PATHS = [
+    Path("./config.yaml"),
+    Path("/etc/volundr/config.yaml"),
+]
+
+
+class ProvisioningConfig(BaseModel):
+    """Configuration for the session provisioning readiness polling."""
+
+    timeout_seconds: float = Field(
+        default=300.0,
+        description="Maximum time to wait for infrastructure readiness in seconds.",
+    )
+    initial_delay_seconds: float = Field(
+        default=5.0,
+        description="Initial delay before starting readiness polls in seconds.",
+    )
+
+
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+
+    level: str = Field(default="info")
+    format: str = Field(default="text")
+
+
+class DatabaseConfig(BaseModel):
+    """PostgreSQL database configuration."""
+
+    host: str = Field(default="localhost")
+    port: int = Field(default=5432)
+    user: str = Field(default="volundr")
+    password: str = Field(default="volundr")
+    name: str = Field(default="volundr")
+    min_pool_size: int = Field(default=5)
+    max_pool_size: int = Field(default=20)
+
+    @property
+    def database(self) -> str:
+        """Alias for name to maintain compatibility."""
+        return self.name
+
+    @property
+    def dsn(self) -> str:
+        """Return PostgreSQL connection string."""
+        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+
+
+class PodManagerConfig(BaseModel):
+    """Dynamic pod manager adapter configuration.
+
+    The ``adapter`` field is a fully-qualified class path. All other
+    fields are forwarded as **kwargs to the adapter constructor.
+
+    Example YAML::
+
+        pod_manager:
+          adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+          base_url: "http://farm-tasks.default.svc.cluster.local"
+          timeout: 30
+          ...
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.farm.FarmPodManager",
+        description="Fully-qualified class path for the PodManager adapter.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
+@dataclass(frozen=True)
+class GitHubInstance:
+    """Configuration for a single GitHub instance."""
+
+    name: str
+    base_url: str
+    token: str | None = None
+    orgs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class GitLabInstance:
+    """Configuration for a single GitLab instance."""
+
+    name: str
+    base_url: str
+    token: str | None = None
+    orgs: tuple[str, ...] = ()
+
+
+class GitHubConfig(BaseModel):
+    """GitHub provider configuration."""
+
+    enabled: bool = Field(default=False)
+    token: str | None = Field(default=None)
+    base_url: str = Field(default="https://api.github.com")
+    instances: list[dict[str, Any]] = Field(default_factory=list)
+
+    def get_instances(self) -> list[GitHubInstance]:
+        """Get all configured GitHub instances.
+
+        Token resolution order per instance:
+        1. Explicit ``token`` field in the instance dict
+        2. Environment variable named by ``token_env`` (set by Helm from per-instance secrets)
+        3. Top-level ``self.token`` (from ``GIT__GITHUB__TOKEN`` env var)
+        """
+        result: list[GitHubInstance] = []
+
+        for item in self.instances:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name", "")
+            base_url = item.get("base_url", "")
+            if not name or not base_url:
+                continue
+            token = item.get("token")
+            if not token:
+                token_env = item.get("token_env")
+                if token_env:
+                    token = os.environ.get(token_env)
+            if not token:
+                token = self.token
+            orgs = tuple(item.get("orgs", []))
+            result.append(GitHubInstance(name, base_url, token, orgs))
+
+        if not result and (self.enabled or self.token):
+            result.append(GitHubInstance("GitHub", self.base_url, self.token))
+
+        return result
+
+
+class GitLabConfig(BaseModel):
+    """GitLab provider configuration."""
+
+    enabled: bool = Field(default=False)
+    token: str | None = Field(default=None)
+    base_url: str = Field(default="https://gitlab.com")
+    instances: list[dict[str, Any]] = Field(default_factory=list)
+
+    def get_instances(self) -> list[GitLabInstance]:
+        """Get all configured GitLab instances.
+
+        Token resolution order per instance:
+        1. Explicit ``token`` field in the instance dict
+        2. Environment variable named by ``token_env`` (set by Helm from per-instance secrets)
+        3. Top-level ``self.token`` (from ``GIT__GITLAB__TOKEN`` env var)
+        """
+        result: list[GitLabInstance] = []
+
+        for item in self.instances:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name", "")
+            base_url = item.get("base_url", "")
+            if not name or not base_url:
+                continue
+            token = item.get("token")
+            if not token:
+                token_env = item.get("token_env")
+                if token_env:
+                    token = os.environ.get(token_env)
+            if not token:
+                token = self.token
+            orgs = tuple(item.get("orgs", []))
+            result.append(GitLabInstance(name, base_url, token, orgs))
+
+        if not result and (self.enabled or self.token):
+            result.append(GitLabInstance("GitLab", self.base_url, self.token))
+
+        return result
+
+
+class MCPServerEntry(BaseModel):
+    """Configuration for an available MCP server."""
+
+    name: str
+    type: str = "stdio"
+    command: str | None = None
+    url: str | None = None
+    args: list[str] = Field(default_factory=list)
+    description: str = ""
+
+
+class ProfileConfig(BaseModel):
+    """Configuration for a single forge profile."""
+
+    name: str
+    description: str = ""
+    workload_type: str = "session"
+    model: str | None = None
+    system_prompt: str | None = None
+    resource_config: dict[str, Any] = Field(default_factory=dict)
+    mcp_servers: list[dict[str, Any]] = Field(default_factory=list)
+    env_vars: dict[str, str] = Field(default_factory=dict)
+    env_secret_refs: list[str] = Field(default_factory=list)
+    workload_config: dict[str, Any] = Field(default_factory=dict)
+    is_default: bool = False
+    session_definition: str | None = None
+
+
+class TemplateConfig(BaseModel):
+    """Configuration for a single workspace template (unified blueprint)."""
+
+    name: str
+    description: str = ""
+    # Workspace config
+    repos: list[dict[str, Any]] = Field(default_factory=list)
+    setup_scripts: list[str] = Field(default_factory=list)
+    workspace_layout: dict[str, Any] = Field(default_factory=dict)
+    is_default: bool = False
+    # Runtime config (merged from ProfileConfig)
+    workload_type: str = "session"
+    model: str | None = None
+    system_prompt: str | None = None
+    resource_config: dict[str, Any] = Field(default_factory=dict)
+    mcp_servers: list[dict[str, Any]] = Field(default_factory=list)
+    env_vars: dict[str, str] = Field(default_factory=dict)
+    env_secret_refs: list[str] = Field(default_factory=list)
+    workload_config: dict[str, Any] = Field(default_factory=dict)
+    session_definition: str | None = None
+    # Deprecated: kept for backward compatibility during migration
+    profile_name: str | None = None
+
+
+class ChronicleConfig(BaseModel):
+    """Chronicle feature configuration."""
+
+    auto_create_on_stop: bool = Field(default=True)
+    summary_model: str = Field(default="claude-haiku-4-5-20251001")
+    summary_max_tokens: int = Field(default=2000)
+    retention_days: int | None = Field(default=None)  # None = keep forever
+
+
+class GitWorkflowConfig(BaseModel):
+    """Git workflow configuration for PR-based development."""
+
+    auto_branch: bool = Field(default=True)
+    branch_prefix: str = Field(default="volundr/session")
+    protect_main: bool = Field(default=True)
+    default_merge_method: str = Field(default="squash")
+    auto_merge_threshold: float = Field(default=0.9)
+    notify_merge_threshold: float = Field(default=0.6)
+
+
+class RabbitMQConfig(BaseModel):
+    """RabbitMQ event sink configuration."""
+
+    enabled: bool = Field(default=False)
+    url: str = Field(default="amqp://guest:guest@localhost:5672/")
+    exchange_name: str = Field(default="volundr.events")
+    exchange_type: str = Field(default="topic")
+
+
+class OtelConfig(BaseModel):
+    """OpenTelemetry event sink configuration.
+
+    Follows OTel GenAI semantic conventions (v1.39+).
+    The exporter endpoint should point at an OTLP-compatible collector
+    (Tempo, Jaeger, Grafana Alloy, etc.).
+    """
+
+    enabled: bool = Field(default=False)
+    endpoint: str = Field(default="http://localhost:4317")
+    protocol: str = Field(default="grpc")
+    service_name: str = Field(default="volundr")
+    provider_name: str = Field(default="anthropic")
+    insecure: bool = Field(default=True)
+
+
+class EventPipelineConfig(BaseModel):
+    """Event pipeline configuration."""
+
+    postgres_buffer_size: int = Field(default=1, ge=1)
+    rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)
+    otel: OtelConfig = Field(default_factory=OtelConfig)
+
+
+class IdentityConfig(BaseModel):
+    """Dynamic identity adapter configuration.
+
+    The ``adapter`` key is a fully-qualified class path.  All other
+    fields in ``kwargs`` are forwarded to the constructor alongside
+    the ``user_repository`` that main.py injects at runtime.
+
+    Example YAML::
+
+        identity:
+          adapter: "volundr.adapters.outbound.identity.EnvoyHeaderIdentityAdapter"
+          kwargs:
+            user_id_header: "x-auth-user-id"
+            email_header: "x-auth-email"
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.identity.AllowAllIdentityAdapter",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+    role_mapping: dict[str, str] = Field(
+        default_factory=lambda: {
+            "admin": "volundr:admin",
+            "developer": "volundr:developer",
+            "viewer": "volundr:viewer",
+        }
+    )
+
+
+class AuthorizationConfig(BaseModel):
+    """Dynamic authorization adapter configuration.
+
+    Example YAML::
+
+        authorization:
+          adapter: "volundr.adapters.outbound.authorization.SimpleRoleAuthorizationAdapter"
+          kwargs: {}
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.authorization.AllowAllAuthorizationAdapter",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
+class CredentialStoreConfig(BaseModel):
+    """Dynamic credential store adapter configuration.
+
+    The ``adapter`` key is a fully-qualified class path.  All other
+    fields in ``kwargs`` are forwarded to the constructor.
+
+    Example YAML::
+
+        credential_store:
+          adapter: "volundr.adapters.outbound.vault_credential_store.VaultCredentialStore"
+          kwargs:
+            url: "http://vault:8200"
+            auth_method: "kubernetes"
+            mount_path: "secret"
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.memory_credential_store.MemoryCredentialStore",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
+class GatewayConfig(BaseModel):
+    """Dynamic gateway adapter configuration.
+
+    The ``adapter`` key is a fully-qualified class path. All other
+    fields in ``kwargs`` are forwarded to the constructor.
+
+    The gateway adapter provides configuration (gateway name, namespace,
+    JWT settings) that is passed through to the Skuld Helm chart so each
+    session can create its own HTTPRoute and SecurityPolicy resources.
+
+    Example YAML::
+
+        gateway:
+          adapter: "volundr.adapters.outbound.k8s_gateway.K8sGatewayAdapter"
+          kwargs:
+            namespace: "volundr-sessions"
+            gateway_name: "volundr-gateway"
+            gateway_namespace: "volundr-system"
+            gateway_domain: "sessions.example.com"
+            issuer_url: "https://idp.example.com"
+            audience: "volundr"
+            jwks_uri: "https://idp.example.com/.well-known/jwks"
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.k8s_gateway.InMemoryGatewayAdapter",
+        description="Fully-qualified class path for the GatewayPort adapter.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
+class SecretInjectionConfig(BaseModel):
+    """Dynamic secret injection adapter configuration.
+
+    The ``adapter`` key is a fully-qualified class path.  All other
+    fields in ``kwargs`` are forwarded to the constructor.
+
+    Example YAML::
+
+        secret_injection:
+          adapter: >-
+            volundr.adapters.outbound.infisical_secret_injection
+            .InfisicalCSISecretInjectionAdapter
+          kwargs:
+            infisical_url: "https://infisical.example.com"
+            client_id: "..."
+            client_secret: "..."
+            namespace: "volundr-sessions"
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.memory_secret_injection.InMemorySecretInjectionAdapter",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
+class StorageConfig(BaseModel):
+    """Dynamic storage adapter configuration.
+
+    The ``adapter`` key is a fully-qualified class path.  All other
+    fields in ``kwargs`` are forwarded to the constructor.
+
+    Example YAML::
+
+        storage:
+          adapter: "volundr.adapters.outbound.k8s_storage_adapter.K8sStorageAdapter"
+          kwargs:
+            namespace: "volundr-sessions"
+            home_storage_class: "volundr-home"
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.k8s_storage.InMemoryStorageAdapter",
+        description="Fully-qualified class path for the StoragePort adapter.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
+class SessionContributorConfig(BaseModel):
+    """Configuration for a single session contributor.
+
+    The ``adapter`` key is a fully-qualified class path.  All other
+    fields are forwarded as **kwargs to the constructor alongside
+    injected port instances.
+
+    Example YAML::
+
+        session_contributors:
+          - adapter: "volundr.adapters.outbound.contributors.CoreSessionContributor"
+            base_domain: "volundr.local"
+          - adapter: "volundr.adapters.outbound.contributors.TemplateContributor"
+    """
+
+    adapter: str
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
+class IntegrationDefinitionConfig(BaseModel):
+    """A single integration definition in the catalog."""
+
+    slug: str
+    name: str
+    description: str = ""
+    integration_type: str
+    adapter: str = ""  # fully-qualified class path (empty for env-only integrations)
+    icon: str = ""
+    credential_schema: dict[str, Any] = Field(default_factory=dict)
+    config_schema: dict[str, Any] = Field(default_factory=dict)
+    mcp_server: dict[str, Any] | None = None
+    env_from_credentials: dict[str, str] = Field(default_factory=dict)
+
+
+def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
+    """Return the built-in integration catalog entries."""
+    return [
+        IntegrationDefinitionConfig(
+            slug="github",
+            name="GitHub",
+            description="GitHub source control — repo browsing, clone, PRs, and MCP server",
+            integration_type="source_control",
+            adapter="volundr.adapters.outbound.github.GitHubProvider",
+            icon="github",
+            credential_schema={
+                "required": ["token"],
+                "properties": {
+                    "token": {"label": "Personal Access Token", "type": "password"},
+                },
+            },
+            config_schema={
+                "properties": {
+                    "name": {"label": "Display Name", "type": "string"},
+                    "base_url": {"label": "API URL", "type": "url", "default": "https://api.github.com"},
+                    "orgs": {"label": "Organizations", "type": "string[]"},
+                },
+            },
+            mcp_server={
+                "name": "github",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-github"],
+                "env_from_credentials": {"GITHUB_PERSONAL_ACCESS_TOKEN": "token"},
+            },
+        ),
+        IntegrationDefinitionConfig(
+            slug="gitlab",
+            name="GitLab",
+            description="GitLab source control — repo browsing, clone, MRs, and MCP server",
+            integration_type="source_control",
+            adapter="volundr.adapters.outbound.gitlab.GitLabProvider",
+            icon="gitlab",
+            credential_schema={
+                "required": ["token"],
+                "properties": {
+                    "token": {"label": "Personal Access Token", "type": "password"},
+                },
+            },
+            config_schema={
+                "properties": {
+                    "name": {"label": "Display Name", "type": "string"},
+                    "base_url": {"label": "Instance URL", "type": "url", "default": "https://gitlab.com"},
+                    "groups": {"label": "Groups", "type": "string[]"},
+                },
+            },
+            mcp_server={
+                "name": "gitlab",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-gitlab"],
+                "env_from_credentials": {"GITLAB_PERSONAL_ACCESS_TOKEN": "token"},
+            },
+        ),
+        IntegrationDefinitionConfig(
+            slug="linear",
+            name="Linear",
+            description="Linear issue tracker — issue browsing, status updates, and MCP server",
+            integration_type="issue_tracker",
+            adapter="volundr.adapters.outbound.linear.LinearAdapter",
+            icon="linear",
+            credential_schema={
+                "required": ["api_key"],
+                "properties": {"api_key": {"label": "API Key", "type": "password"}},
+            },
+            mcp_server={
+                "name": "linear",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-linear"],
+                "env_from_credentials": {"LINEAR_API_KEY": "api_key"},
+            },
+        ),
+        IntegrationDefinitionConfig(
+            slug="anthropic",
+            name="Anthropic (Claude API)",
+            description="Anthropic API key for Claude models",
+            integration_type="ai_provider",
+            icon="anthropic",
+            credential_schema={
+                "required": ["api_key"],
+                "properties": {"api_key": {"label": "API Key", "type": "password"}},
+            },
+            env_from_credentials={"ANTHROPIC_API_KEY": "api_key"},
+        ),
+        IntegrationDefinitionConfig(
+            slug="openai",
+            name="OpenAI",
+            description="OpenAI API key for GPT/Codex models",
+            integration_type="ai_provider",
+            icon="openai",
+            credential_schema={
+                "required": ["api_key"],
+                "properties": {"api_key": {"label": "API Key", "type": "password"}},
+            },
+            env_from_credentials={"OPENAI_API_KEY": "api_key"},
+        ),
+    ]
+
+
+class IntegrationsConfig(BaseModel):
+    """Integration catalog configuration."""
+
+    definitions: list[IntegrationDefinitionConfig] = Field(
+        default_factory=_default_integration_definitions,
+    )
+
+
+class AuthDiscoveryConfig(BaseModel):
+    """Public auth discovery configuration for CLI and external clients.
+
+    These values are exposed via the unauthenticated /auth/config endpoint
+    so CLI clients can auto-discover OIDC settings.
+
+    Example YAML::
+
+        auth_discovery:
+          issuer: "https://keycloak.niuu.world/realms/volundr"
+          cli_client_id: "volundr-cli"
+          scopes: "openid profile email"
+    """
+
+    issuer: str = Field(default="", description="OIDC issuer URL")
+    cli_client_id: str = Field(
+        default="volundr-cli", description="OIDC client ID for CLI clients"
+    )
+    scopes: str = Field(
+        default="openid profile email", description="OIDC scopes"
+    )
+
+
+class LinearConfig(BaseModel):
+    """Linear issue tracker configuration."""
+
+    enabled: bool = Field(default=False)
+    api_key: str | None = Field(default=None)
+
+
+class GitConfig(BaseModel):
+    """Git provider configuration."""
+
+    github: GitHubConfig = Field(default_factory=GitHubConfig)
+    gitlab: GitLabConfig = Field(default_factory=GitLabConfig)
+    validate_on_create: bool = Field(default=True)
+    workflow: GitWorkflowConfig = Field(default_factory=GitWorkflowConfig)
+
+
+class Settings(BaseSettings):
+    """Application settings.
+
+    Loads configuration from YAML file with environment variable overrides.
+
+    YAML file locations (first found wins):
+    - ./config.yaml
+    - /etc/volundr/config.yaml
+
+    Environment variable overrides use double underscore for nesting:
+    - DATABASE__HOST=myhost -> settings.database.host
+    - GIT__VALIDATE_ON_CREATE=false -> settings.git.validate_on_create
+    """
+
+    model_config = SettingsConfigDict(
+        yaml_file=CONFIG_PATHS,
+        yaml_file_encoding="utf-8",
+        env_nested_delimiter="__",
+    )
+
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    pod_manager: PodManagerConfig = Field(default_factory=PodManagerConfig)
+    git: GitConfig = Field(default_factory=GitConfig)
+    chronicle: ChronicleConfig = Field(default_factory=ChronicleConfig)
+    event_pipeline: EventPipelineConfig = Field(default_factory=EventPipelineConfig)
+    identity: IdentityConfig = Field(default_factory=IdentityConfig)
+    authorization: AuthorizationConfig = Field(default_factory=AuthorizationConfig)
+    credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
+    gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+    secret_injection: SecretInjectionConfig = Field(default_factory=SecretInjectionConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
+    linear: LinearConfig = Field(default_factory=LinearConfig)
+    auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
+    integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
+    provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
+    session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
+    profiles: list[ProfileConfig] = Field(default_factory=list)
+    templates: list[TemplateConfig] = Field(default_factory=list)
+    mcp_servers: list[MCPServerEntry] = Field(default_factory=list)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Customize settings sources.
+
+        Order (first wins):
+        1. init_settings - explicit constructor arguments
+        2. env_settings - environment variables
+        3. yaml - YAML config file
+        4. file_secret_settings - /run/secrets files
+        """
+        return (
+            init_settings,
+            env_settings,
+            YamlConfigSettingsSource(settings_cls),
+            file_secret_settings,
+        )
