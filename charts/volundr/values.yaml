@@ -191,7 +191,7 @@ database:
 #     kwargs:
 #       namespace: "default"
 #       chart_name: "skuld"
-#       chart_version: "0.67.2"
+#       chart_version: "0.1.0"
 #       source_ref_kind: "HelmRepository"
 #       source_ref_name: "skuld"
 #       source_ref_namespace: ""
@@ -725,7 +725,7 @@ sessionDefinitions:
       # -- Name of HelmRepository or OCIRepository CR in cluster (for Flux)
       repoName: ""
       # -- Chart version constraint
-      version: "0.67.2"
+      version: "0.1.0"
 
     # Default values for sessions (can be overridden by task_args at submission)
     defaults:
@@ -856,7 +856,7 @@ sessionDefinitions:
       chart: skuld
       repo: "oci://ghcr.io/niuulabs/charts"
       repoName: ""
-      version: "0.67.2"
+      version: "0.1.0"
 
     defaults:
       session:

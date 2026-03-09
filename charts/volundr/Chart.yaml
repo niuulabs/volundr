@@ -2,8 +2,8 @@ apiVersion: v2
 name: volundr
 description: A Helm chart for Volundr - Claude Code Session Manager
 type: application
-version: 0.67.2
-appVersion: "0.67.2"
+version: 0.1.0
+appVersion: "0.1.0"
 keywords:
   - claude
   - code

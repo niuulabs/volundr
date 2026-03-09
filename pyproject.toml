@@ -1,6 +1,6 @@
 [project]
 name = "volundr"
-version = "0.67.2"
+version = "0.1.0"
 description = "Self-hosted Claude Code session manager"
 readme = "README.md"
 requires-python = ">=3.11"
