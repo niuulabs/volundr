@@ -378,15 +378,13 @@ func (t TerminalPage) View() string {
 
 	// Terminal content from vt emulator
 	tab.mu.Lock()
-	content := tab.emulator.String()
+	content := tab.emulator.Render()
 	tab.mu.Unlock()
 
 	termW, termH := t.termDimensions()
 	termStyle := lipgloss.NewStyle().
 		Width(termW).
-		Height(termH).
-		Background(lipgloss.Color("#000000")).
-		Foreground(lipgloss.Color("#c0c0c0"))
+		Height(termH)
 
 	helpText := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
@@ -436,16 +434,14 @@ func (t TerminalPage) renderEmptyState() string {
 // renderFullScreen renders the terminal in full-screen mode.
 func (t TerminalPage) renderFullScreen(tab *terminalTab) string {
 	tab.mu.Lock()
-	content := tab.emulator.String()
+	content := tab.emulator.Render()
 	tab.mu.Unlock()
 
 	statusLine := t.renderStatusLine(tab)
 
 	termStyle := lipgloss.NewStyle().
 		Width(t.width).
-		Height(t.height - 1).
-		Background(lipgloss.Color("#000000")).
-		Foreground(lipgloss.Color("#c0c0c0"))
+		Height(t.height - 1)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		termStyle.Render(content),

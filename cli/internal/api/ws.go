@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -209,6 +210,11 @@ func (w *WSClient) readLoop() {
 			return
 		}
 
+		// Debug: write raw WS frames to file for troubleshooting
+		if debugWS {
+			debugLogWS(data)
+		}
+
 		// Handle NDJSON: a single WS frame may contain multiple newline-separated JSON events.
 		lines := strings.Split(string(data), "\n")
 		for _, line := range lines {
@@ -291,4 +297,17 @@ func (s WSState) String() string {
 		return "reconnecting"
 	}
 	return "unknown"
+}
+
+// debugWS enables writing raw WebSocket frames to /tmp/volundr-ws-debug.log.
+// Set VOLUNDR_WS_DEBUG=1 to enable.
+var debugWS = os.Getenv("VOLUNDR_WS_DEBUG") == "1"
+
+func debugLogWS(data []byte) {
+	f, err := os.OpenFile("/tmp/volundr-ws-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = fmt.Fprintf(f, "--- FRAME ---\n%s\n", data)
 }

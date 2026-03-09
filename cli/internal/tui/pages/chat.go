@@ -401,23 +401,26 @@ func (c ChatPage) renderModelBar() string {
 		connStatus = lipgloss.NewStyle().Foreground(theme.TextMuted).Render("○ No session")
 	}
 
-	// Thinking budget bar
-	budgetWidth := 20
-	filled := budgetWidth * c.thinking / 100
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", budgetWidth-filled)
-
 	modelName := c.model
 	if c.session != nil && c.session.Model != "" {
 		modelName = c.session.Model
 	}
 
-	return fmt.Sprintf("  %s%s  %s  %s %s %s",
+	// Streaming status indicator
+	var streamStatus string
+	if c.streamingIdx >= 0 {
+		if c.streamingIdx < len(c.messages) && c.messages[c.streamingIdx].Thinking {
+			streamStatus = thinkingStyle.Render("  ◐ Thinking...")
+		} else {
+			streamStatus = lipgloss.NewStyle().Foreground(theme.AccentEmerald).Render("  ▸ Streaming...")
+		}
+	}
+
+	return fmt.Sprintf("  %s%s  %s%s",
 		modelStyle.Render("◈ "+modelName),
 		sessionInfo,
 		connStatus,
-		thinkingStyle.Render("Thinking:"),
-		thinkingStyle.Render(bar),
-		lipgloss.NewStyle().Foreground(theme.TextMuted).Render(fmt.Sprintf("%d%%", c.thinking)),
+		streamStatus,
 	)
 }
 
