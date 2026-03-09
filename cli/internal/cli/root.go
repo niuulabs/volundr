@@ -54,6 +54,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgToken, "token", "", "Authentication token (default: from config)")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file path (default: ~/.config/volundr/config.yaml)")
 
+	// Output flags.
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output results as JSON for piping to jq")
+
 	// Existing local commands.
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(upCmd)
