@@ -119,12 +119,9 @@ func TestMaskToken(t *testing.T) {
 // =====================
 
 func TestNewTerminalPage(t *testing.T) {
-	page := NewTerminalPage("http://localhost:8000", "token", nil)
+	page := NewTerminalPage("http://localhost:8000", nil, nil)
 	if page.serverURL != "http://localhost:8000" {
 		t.Errorf("expected server URL, got %q", page.serverURL)
-	}
-	if page.token != "token" {
-		t.Errorf("expected token, got %q", page.token)
 	}
 	if len(page.tabs) != 0 {
 		t.Errorf("expected 0 tabs, got %d", len(page.tabs))
@@ -132,7 +129,7 @@ func TestNewTerminalPage(t *testing.T) {
 }
 
 func TestTerminalPage_SetSize(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.SetSize(120, 40)
 	if page.width != 120 {
 		t.Errorf("expected width 120, got %d", page.width)
@@ -143,7 +140,7 @@ func TestTerminalPage_SetSize(t *testing.T) {
 }
 
 func TestTerminalPage_termDimensions_Default(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	w, h := page.termDimensions()
 	if w != defaultTermWidth || h != defaultTermHeight {
 		t.Errorf("expected defaults %dx%d, got %dx%d", defaultTermWidth, defaultTermHeight, w, h)
@@ -151,7 +148,7 @@ func TestTerminalPage_termDimensions_Default(t *testing.T) {
 }
 
 func TestTerminalPage_termDimensions_Normal(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.width = 100
 	page.height = 40
 	w, h := page.termDimensions()
@@ -164,7 +161,7 @@ func TestTerminalPage_termDimensions_Normal(t *testing.T) {
 }
 
 func TestTerminalPage_termDimensions_FullScreen(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.width = 100
 	page.height = 40
 	page.fullScreen = true
@@ -178,7 +175,7 @@ func TestTerminalPage_termDimensions_FullScreen(t *testing.T) {
 }
 
 func TestTerminalPage_termDimensions_Clamped(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.width = 2
 	page.height = 2
 	w, h := page.termDimensions()
@@ -188,7 +185,7 @@ func TestTerminalPage_termDimensions_Clamped(t *testing.T) {
 }
 
 func TestTerminalPage_View_Empty(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.width = 80
 	page.height = 24
 	view := page.View()
@@ -198,7 +195,7 @@ func TestTerminalPage_View_Empty(t *testing.T) {
 }
 
 func TestTerminalPage_Close_NoTabs(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.Close() // should not panic
 	if len(page.tabs) != 0 {
 		t.Error("expected 0 tabs after close")
@@ -268,12 +265,9 @@ func TestKeyToBytes_FunctionKeys(t *testing.T) {
 // =====================
 
 func TestNewChatPage(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	if page.model != "claude-sonnet-4" {
 		t.Errorf("expected model %q, got %q", "claude-sonnet-4", page.model)
-	}
-	if page.thinking != 50 {
-		t.Errorf("expected thinking 50, got %d", page.thinking)
 	}
 	if !page.inputActive {
 		t.Error("expected input active by default")
@@ -281,7 +275,7 @@ func TestNewChatPage(t *testing.T) {
 }
 
 func TestChatPage_Update_Tab(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.inputActive = true
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
@@ -296,7 +290,7 @@ func TestChatPage_Update_Tab(t *testing.T) {
 }
 
 func TestChatPage_Update_EnterSendsMessage(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.inputActive = true
 	page.input = "hello"
 	before := len(page.messages)
@@ -311,7 +305,7 @@ func TestChatPage_Update_EnterSendsMessage(t *testing.T) {
 }
 
 func TestChatPage_Update_EnterEmptyNoop(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.inputActive = true
 	page.input = ""
 	before := len(page.messages)
@@ -323,7 +317,7 @@ func TestChatPage_Update_EnterEmptyNoop(t *testing.T) {
 }
 
 func TestChatPage_Update_Backspace(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.inputActive = true
 	page.input = "ab"
 
@@ -334,7 +328,7 @@ func TestChatPage_Update_Backspace(t *testing.T) {
 }
 
 func TestChatPage_Update_TypeChar(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.inputActive = true
 	page.input = ""
 
@@ -345,7 +339,7 @@ func TestChatPage_Update_TypeChar(t *testing.T) {
 }
 
 func TestChatPage_SetSize(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.SetSize(100, 40)
 	if page.width != 100 || page.height != 40 {
 		t.Errorf("expected 100x40, got %dx%d", page.width, page.height)
@@ -353,7 +347,7 @@ func TestChatPage_SetSize(t *testing.T) {
 }
 
 func TestChatPage_View(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.width = 80
 	page.height = 40
 	view := page.View()
@@ -508,7 +502,7 @@ func TestEventTypeStyle(t *testing.T) {
 // =====================
 
 func TestNewDiffsPage(t *testing.T) {
-	page := NewDiffsPage("")
+	page := NewDiffsPage(nil)
 	// NewDiffsPage starts empty (no files until a session is selected).
 	if len(page.files) != 0 {
 		t.Errorf("expected 0 files, got %d", len(page.files))
@@ -516,14 +510,14 @@ func TestNewDiffsPage(t *testing.T) {
 }
 
 func TestDiffsPage_Init(t *testing.T) {
-	page := NewDiffsPage("")
+	page := NewDiffsPage(nil)
 	if page.Init() != nil {
 		t.Error("expected nil cmd")
 	}
 }
 
 func TestDiffsPage_Update_Scroll(t *testing.T) {
-	page := NewDiffsPage("")
+	page := NewDiffsPage(nil)
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: 'J'})
 	if page.scrollPos != 1 {
@@ -537,7 +531,7 @@ func TestDiffsPage_Update_Scroll(t *testing.T) {
 }
 
 func TestDiffsPage_SetSize(t *testing.T) {
-	page := NewDiffsPage("")
+	page := NewDiffsPage(nil)
 	page.SetSize(120, 40)
 	if page.width != 120 || page.height != 40 {
 		t.Error("expected dimensions set")
@@ -545,7 +539,7 @@ func TestDiffsPage_SetSize(t *testing.T) {
 }
 
 func TestDiffsPage_View(t *testing.T) {
-	page := NewDiffsPage("")
+	page := NewDiffsPage(nil)
 	page.width = 120
 	page.height = 40
 	view := page.View()
@@ -907,7 +901,7 @@ func makeKeyMsg(key string) tea.KeyPressMsg {
 // --- Terminal Init, Update, handleKey ---
 
 func TestTerminalPage_Init(t *testing.T) {
-	page := NewTerminalPage("http://localhost", "tok", nil)
+	page := NewTerminalPage("http://localhost", nil, nil)
 	cmd := page.Init()
 	if cmd == nil {
 		t.Error("expected non-nil init cmd (batch of waitForOutput+waitForConn)")
@@ -915,7 +909,7 @@ func TestTerminalPage_Init(t *testing.T) {
 }
 
 func TestTerminalPage_Update_NoTabs(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.width = 80
 	page.height = 24
 
@@ -927,7 +921,7 @@ func TestTerminalPage_Update_NoTabs(t *testing.T) {
 }
 
 func TestTerminalPage_Update_WindowSize(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page, _ = page.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	if page.width != 120 || page.height != 40 {
 		t.Errorf("expected 120x40, got %dx%d", page.width, page.height)
@@ -935,7 +929,7 @@ func TestTerminalPage_Update_WindowSize(t *testing.T) {
 }
 
 func TestTerminalPage_HandleKey_FullScreenToggle(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page.width = 80
 	page.height = 24
 
@@ -951,7 +945,7 @@ func TestTerminalPage_HandleKey_FullScreenToggle(t *testing.T) {
 }
 
 func TestTerminalPage_HandleKey_CtrlT(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page, cmd := page.handleKey(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
 	if cmd != nil {
 		t.Error("expected nil cmd for ctrl+t without session")
@@ -960,7 +954,7 @@ func TestTerminalPage_HandleKey_CtrlT(t *testing.T) {
 }
 
 func TestTerminalPage_HandleKey_NoTabs(t *testing.T) {
-	page := NewTerminalPage("", "", nil)
+	page := NewTerminalPage("", nil, nil)
 	page, _ = page.handleKey(tea.KeyPressMsg{Code: 'a'})
 	// Should not panic with 0 tabs.
 }
@@ -978,7 +972,7 @@ func TestChroniclesPage_SetSize(t *testing.T) {
 // --- Chat scroll ---
 
 func TestChatPage_Update_Scroll(t *testing.T) {
-	page := NewChatPage("")
+	page := NewChatPage(nil, nil)
 	page.inputActive = false
 	page.scrollPos = 1
 

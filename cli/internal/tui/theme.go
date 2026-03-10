@@ -68,7 +68,7 @@ var (
 	// SidebarActiveStyle highlights the currently selected sidebar item.
 	SidebarActiveStyle = lipgloss.NewStyle().
 				Background(DefaultTheme.BgTertiary).
-				Foreground(DefaultTheme.AccentCyan).
+				Foreground(DefaultTheme.AccentAmber).
 				Bold(true).
 				Padding(0, 2)
 
@@ -142,7 +142,7 @@ var (
 
 	// TabActiveStyle highlights the active tab.
 	TabActiveStyle = lipgloss.NewStyle().
-			Foreground(DefaultTheme.AccentCyan).
+			Foreground(DefaultTheme.AccentAmber).
 			Bold(true).
 			Underline(true).
 			Padding(0, 2)

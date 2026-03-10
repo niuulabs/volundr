@@ -46,13 +46,13 @@ type DiffsPage struct {
 	// Session pod client for fetching diffs.
 	podClient *api.SessionPodClient
 	session   *api.Session
-	token     string
+	client    *api.Client
 }
 
 // NewDiffsPage creates a new diffs page.
-func NewDiffsPage(token string) DiffsPage {
+func NewDiffsPage(client *api.Client) DiffsPage {
 	return DiffsPage{
-		token: token,
+		client: client,
 	}
 }
 
@@ -76,7 +76,11 @@ func (d *DiffsPage) SetSession(sess api.Session) tea.Cmd {
 		return nil
 	}
 
-	d.podClient = api.NewSessionPodClient(sess.CodeEndpoint, d.token)
+	token := ""
+	if d.client != nil {
+		token = d.client.Token()
+	}
+	d.podClient = api.NewSessionPodClient(sess.CodeEndpoint, token)
 	client := d.podClient
 	return func() tea.Msg {
 		files, err := client.GetDiffFiles("last-commit")
@@ -220,11 +224,13 @@ func (d DiffsPage) View() string {
 	}
 
 	// Split: file tree (left) and diff viewer (right)
+	// Reserve space: title(1) + margin(1) + stats(1) + blank(1) + content + blank(1) + hints(1) + padding(2)
 	treeWidth := 35
 	diffWidth := d.width - treeWidth - 8
+	paneHeight := d.height - 9
 
-	tree := d.renderFileTree(treeWidth, d.height-4)
-	diff := d.renderDiffView(diffWidth, d.height-4)
+	tree := d.renderFileTree(treeWidth, paneHeight)
+	diff := d.renderDiffView(diffWidth, paneHeight)
 	content := lipgloss.JoinHorizontal(lipgloss.Top, tree, "  ", diff)
 
 	// Stats summary
@@ -241,6 +247,20 @@ func (d DiffsPage) View() string {
 		lipgloss.NewStyle().Foreground(theme.TextMuted).Render(fmt.Sprintf("%d", len(d.files))),
 	)
 
+	// Navigation hints
+	hintStyle := lipgloss.NewStyle().Foreground(theme.TextMuted)
+	hints := hintStyle.Render("  ↑/↓ select file  J/K scroll diff  r refresh")
+
+	// Scroll position indicator
+	var scrollInfo string
+	if d.cursor >= 0 && d.cursor < len(d.files) {
+		file := d.files[d.cursor]
+		if file.Diff != "" {
+			totalLines := len(strings.Split(file.Diff, "\n"))
+			scrollInfo = hintStyle.Render(fmt.Sprintf("  line %d/%d", d.scrollPos+1, totalLines))
+		}
+	}
+
 	return lipgloss.NewStyle().
 		Width(d.width).
 		Height(d.height).
@@ -250,6 +270,8 @@ func (d DiffsPage) View() string {
 			stats,
 			"",
 			content,
+			"",
+			hints+scrollInfo,
 		))
 }
 

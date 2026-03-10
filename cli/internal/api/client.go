@@ -61,15 +61,15 @@ func NewClientWithContext(baseURL, token string, rctx *remote.Context, cfg *remo
 	}
 }
 
-// Token returns the current auth token. It ensures the token is valid first.
+// BaseURL returns the server base URL.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
+// Token returns the current access token, refreshing it first if needed.
 func (c *Client) Token() string {
 	c.ensureValidToken()
 	return c.token
-}
-
-// BaseURL returns the base URL of the client.
-func (c *Client) BaseURL() string {
-	return c.baseURL
 }
 
 // ensureValidToken checks whether the current token is expired and, if a

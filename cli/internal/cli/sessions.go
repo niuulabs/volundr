@@ -47,6 +47,10 @@ var sessionsListCmd = &cobra.Command{
 			return fmt.Errorf("listing sessions: %w", err)
 		}
 
+		if jsonOutput {
+			return printJSON(sessions)
+		}
+
 		if len(sessions) == 0 {
 			fmt.Println("No sessions found.")
 			return nil
@@ -84,6 +88,10 @@ var sessionsCreateCmd = &cobra.Command{
 		})
 		if err != nil {
 			return fmt.Errorf("creating session: %w", err)
+		}
+
+		if jsonOutput {
+			return printJSON(session)
 		}
 
 		fmt.Printf("Session created: %s (%s)\n", session.Name, session.ID)

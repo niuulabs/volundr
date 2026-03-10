@@ -40,6 +40,10 @@ var whoamiCmd = &cobra.Command{
 			return fmt.Errorf("fetching user info: %w", err)
 		}
 
+		if jsonOutput {
+			return printJSON(info)
+		}
+
 		name := info.Name
 		if name == "" {
 			name = info.PreferredUsername

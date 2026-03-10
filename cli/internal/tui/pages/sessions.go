@@ -11,6 +11,23 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
 
+// SessionsLoadedMsg carries fetched sessions from the API.
+type SessionsLoadedMsg struct {
+	Sessions []api.Session
+	Err      error
+}
+
+// SessionSelectedMsg is emitted when the user opens a session (Enter).
+type SessionSelectedMsg struct {
+	Session api.Session
+}
+
+// SessionActionDoneMsg is emitted after a session action completes.
+type SessionActionDoneMsg struct {
+	Action string // "start", "stop", "delete"
+	Err    error
+}
+
 // SessionsPage displays a list of sessions with search and filter.
 type SessionsPage struct {
 	pool          *tui.ClientPool
@@ -55,7 +72,7 @@ func NewSessionsPage(pool *tui.ClientPool) SessionsPage {
 	}
 }
 
-// Init initializes the sessions page.
+// Init fetches sessions from the API.
 func (s SessionsPage) Init() tea.Cmd {
 	if s.pool == nil {
 		return nil
@@ -73,6 +90,17 @@ func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 		s.applyFilter()
 		return s, nil
 
+	case SessionActionDoneMsg:
+		if msg.Err != nil {
+			if s.loadErrors == nil {
+				s.loadErrors = make(map[string]error)
+			}
+			s.loadErrors["action"] = msg.Err
+			return s, nil
+		}
+		// Refresh session list after action.
+		return s, s.Init()
+
 	case tea.KeyMsg:
 		if s.searching {
 			return s.handleSearchInput(msg)
@@ -87,9 +115,23 @@ func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 			if s.cursor < len(s.filtered)-1 {
 				s.cursor++
 			}
+		case "enter":
+			if sess := s.selectedSession(); sess != nil {
+				return s, func() tea.Msg { return SessionSelectedMsg{Session: *sess} }
+			}
+		case "s":
+			return s, s.doAction("start")
+		case "x":
+			return s, s.doAction("stop")
+		case "d":
+			return s, s.doAction("delete")
 		case "/":
 			s.searching = true
 			s.search = ""
+		case "tab":
+			s.cycleFilter(1)
+		case "shift+tab":
+			s.cycleFilter(-1)
 		case "r":
 			if s.pool != nil {
 				s.loading = true
@@ -97,18 +139,6 @@ func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 			}
 		case "c":
 			s.cycleContextFilter()
-		case "1":
-			s.filter = "all"
-			s.applyFilter()
-		case "2":
-			s.filter = "running"
-			s.applyFilter()
-		case "3":
-			s.filter = "stopped"
-			s.applyFilter()
-		case "4":
-			s.filter = "error"
-			s.applyFilter()
 		}
 	}
 	return s, nil
@@ -123,6 +153,8 @@ func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) 
 		if len(s.search) > 0 {
 			s.search = s.search[:len(s.search)-1]
 		}
+	case "space":
+		s.search += " "
 	default:
 		if len(msg.String()) == 1 {
 			s.search += msg.String()
@@ -163,6 +195,17 @@ func (s *SessionsPage) cycleContextFilter() {
 
 	// Key not found, reset.
 	s.contextFilter = ""
+	s.applyFilter()
+}
+
+// sessionFilters defines the filter cycle order.
+var sessionFilters = []string{"all", "running", "stopped", "error"}
+
+// cycleFilter moves to the next or previous filter.
+func (s *SessionsPage) cycleFilter(dir int) {
+	idx := filterIndex(s.filter)
+	idx = (idx + dir + len(sessionFilters)) % len(sessionFilters)
+	s.filter = sessionFilters[idx]
 	s.applyFilter()
 }
 
@@ -248,9 +291,10 @@ func (s SessionsPage) View() string {
 		}
 		totalTokens += sess.TokensUsed
 	}
+	_ = errored
 
 	cards := components.MetricRow([]components.MetricCard{
-		components.NewMetricCard("Total", fmt.Sprintf("%d", len(s.sessions)), "◉", theme.AccentCyan),
+		components.NewMetricCard("Total", fmt.Sprintf("%d", len(s.sessions)), "◉", theme.AccentAmber),
 		components.NewMetricCard("Running", fmt.Sprintf("%d", running), "▶", theme.AccentEmerald),
 		components.NewMetricCard("Stopped", fmt.Sprintf("%d", stopped), "■", theme.TextMuted),
 		components.NewMetricCard("Tokens", formatTokens(totalTokens), "◈", theme.AccentAmber),
@@ -258,7 +302,7 @@ func (s SessionsPage) View() string {
 
 	// Filter tabs
 	tabs := components.Tabs{
-		Items:     []string{"All (1)", "Running (2)", "Stopped (3)", "Error (4)"},
+		Items:     []string{"All", "Running", "Stopped", "Error"},
 		ActiveTab: filterIndex(s.filter),
 		Width:     s.width,
 	}
@@ -305,7 +349,7 @@ func (s SessionsPage) View() string {
 		rows = append(rows, s.renderSessionCard(sess, i == s.cursor))
 	}
 
-	if len(rows) == 0 {
+	if len(rows) == 0 && !s.loading {
 		rows = append(rows, lipgloss.NewStyle().
 			Foreground(theme.TextMuted).
 			Padding(2, 0).
@@ -460,18 +504,43 @@ func filterIndex(filter string) int {
 	return 0
 }
 
-// formatTokens formats a token count with K/M suffixes.
-func formatTokens(tokens int) string {
-	if tokens >= 1_000_000 {
-		return fmt.Sprintf("%.1fM", float64(tokens)/1_000_000)
+// selectedSession returns the session under the cursor, or nil.
+func (s SessionsPage) selectedSession() *api.Session {
+	if s.cursor < 0 || s.cursor >= len(s.filtered) {
+		return nil
 	}
-	if tokens >= 1_000 {
-		return fmt.Sprintf("%.1fK", float64(tokens)/1_000)
-	}
-	return fmt.Sprintf("%d", tokens)
+	sess := s.filtered[s.cursor]
+	return &sess.Session
 }
 
-// demoSessions returns realistic demo session data.
+// doAction performs a session action (start/stop/delete) asynchronously.
+// Uses the first connected client from the pool.
+func (s SessionsPage) doAction(action string) tea.Cmd {
+	sess := s.selectedSession()
+	if sess == nil || s.pool == nil {
+		return nil
+	}
+	connected := s.pool.ConnectedClients()
+	if len(connected) == 0 {
+		return nil
+	}
+	client := connected[0].Client
+	id := sess.ID
+	return func() tea.Msg {
+		var err error
+		switch action {
+		case "start":
+			err = client.StartSession(id)
+		case "stop":
+			err = client.StopSession(id)
+		case "delete":
+			err = client.DeleteSession(id)
+		}
+		return SessionActionDoneMsg{Action: action, Err: err}
+	}
+}
+
+// demoSessions returns placeholder sessions for when no clusters are configured.
 func demoSessions() []api.Session {
 	return []api.Session{
 		{
@@ -518,4 +587,15 @@ func demoSessions() []api.Session {
 			CreatedAt: "2026-03-05T14:30:00Z", LastActive: "2026-03-05T22:15:00Z",
 		},
 	}
+}
+
+// formatTokens formats a token count with K/M suffixes.
+func formatTokens(tokens int) string {
+	if tokens >= 1_000_000 {
+		return fmt.Sprintf("%.1fM", float64(tokens)/1_000_000)
+	}
+	if tokens >= 1_000 {
+		return fmt.Sprintf("%.1fK", float64(tokens)/1_000)
+	}
+	return fmt.Sprintf("%d", tokens)
 }

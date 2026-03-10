@@ -2,9 +2,22 @@ package components
 
 import (
 	"fmt"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
+)
+
+// HeaderState represents the server connection state shown in the header.
+type HeaderState int
+
+const (
+	// HeaderConnecting is the initial state before the ping completes.
+	HeaderConnecting HeaderState = iota
+	// HeaderConnected means the server ping succeeded.
+	HeaderConnected
+	// HeaderDisconnected means the server ping failed.
+	HeaderDisconnected
 )
 
 // Header renders the top application header bar.
@@ -12,7 +25,8 @@ type Header struct {
 	Width       int
 	Title       string
 	ServerURL   string
-	Connected   bool
+	Connected   bool        // kept for backward compat; use State instead
+	State       HeaderState
 	PoolSummary string
 }
 
@@ -49,7 +63,7 @@ func (h Header) View() string {
 	theme := tui.DefaultTheme
 
 	logoStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentCyan).
+		Foreground(theme.AccentAmber).
 		Bold(true)
 
 	titleStyle := lipgloss.NewStyle().
@@ -60,14 +74,19 @@ func (h Header) View() string {
 		Foreground(theme.TextMuted)
 
 	var statusDot string
-	if h.Connected {
+	switch h.State {
+	case HeaderConnected:
 		statusDot = lipgloss.NewStyle().
 			Foreground(theme.AccentEmerald).
 			Render("●")
-	} else {
+	case HeaderDisconnected:
 		statusDot = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
 			Render("●")
+	default: // HeaderConnecting
+		statusDot = lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Render("◌")
 	}
 
 	left := fmt.Sprintf("%s %s",
@@ -76,14 +95,18 @@ func (h Header) View() string {
 	)
 
 	// Right side: show pool summary if available, otherwise single server URL.
+	// Strip protocol for a cleaner display.
+	displayURL := strings.TrimPrefix(h.ServerURL, "https://")
+	displayURL = strings.TrimPrefix(displayURL, "http://")
+
 	var rightText string
 	if h.PoolSummary != "" {
 		rightText = h.PoolSummary
-		if h.ServerURL != "" {
-			rightText = h.ServerURL + "  " + rightText
+		if displayURL != "" {
+			rightText = displayURL + "  " + rightText
 		}
 	} else {
-		rightText = h.ServerURL
+		rightText = displayURL
 	}
 
 	right := fmt.Sprintf("%s %s",

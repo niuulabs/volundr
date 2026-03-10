@@ -41,10 +41,40 @@ type DiffFileEntry struct {
 	Deletions int    `json:"deletions"`
 }
 
-// DiffResponse represents the diff content for a single file.
+// DiffResponse represents the structured diff content from the session pod.
+// The backend returns {"filePath": "...", "hunks": [...]}.
 type DiffResponse struct {
-	Path string `json:"path"`
-	Diff string `json:"diff"`
+	FilePath string     `json:"filePath"`
+	Hunks    []DiffHunk `json:"hunks"`
+}
+
+// DiffHunk represents a single hunk in a unified diff.
+type DiffHunk struct {
+	OldStart int        `json:"oldStart"`
+	OldCount int        `json:"oldCount"`
+	NewStart int        `json:"newStart"`
+	NewCount int        `json:"newCount"`
+	Lines    []DiffLine `json:"lines"`
+}
+
+// DiffLine represents a single line within a diff hunk.
+type DiffLine struct {
+	Type    string `json:"type"` // "add", "remove", "context"
+	Content string `json:"content"`
+}
+
+// ConversationTurn represents a single turn from the conversation history API.
+type ConversationTurn struct {
+	ID        string         `json:"id"`
+	Role      string         `json:"role"` // "user", "assistant"
+	Content   string         `json:"content"`
+	CreatedAt string         `json:"created_at"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+}
+
+// ConversationHistoryResponse is the response from /api/conversation/history.
+type ConversationHistoryResponse struct {
+	Turns []ConversationTurn `json:"turns"`
 }
 
 // FileEntry represents a file in the workspace.
@@ -101,7 +131,8 @@ func (s *SessionPodClient) GetDiffFiles(base string) ([]DiffFileEntry, error) {
 	return result.Files, nil
 }
 
-// GetFileDiff returns the diff content for a single file.
+// GetFileDiff returns the unified diff content for a single file.
+// The backend returns structured hunks; this method reconstructs unified diff text.
 func (s *SessionPodClient) GetFileDiff(base, filePath string) (string, error) {
 	path := fmt.Sprintf("/api/diff?base=%s&file=%s", base, filePath)
 
@@ -120,7 +151,51 @@ func (s *SessionPodClient) GetFileDiff(base, filePath string) (string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("decoding diff: %w", err)
 	}
-	return result.Diff, nil
+	return hunksToUnifiedDiff(result), nil
+}
+
+// hunksToUnifiedDiff reconstructs a unified diff string from structured hunks.
+func hunksToUnifiedDiff(resp DiffResponse) string {
+	if len(resp.Hunks) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	for _, hunk := range resp.Hunks {
+		fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n",
+			hunk.OldStart, hunk.OldCount, hunk.NewStart, hunk.NewCount)
+		for _, line := range hunk.Lines {
+			switch line.Type {
+			case "add":
+				b.WriteString("+" + line.Content + "\n")
+			case "remove":
+				b.WriteString("-" + line.Content + "\n")
+			default: // context
+				b.WriteString(" " + line.Content + "\n")
+			}
+		}
+	}
+	return b.String()
+}
+
+// GetConversationHistory fetches the chat history from the session pod.
+func (s *SessionPodClient) GetConversationHistory() ([]ConversationTurn, error) {
+	resp, err := s.do("GET", "/api/conversation/history")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("session pod error (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result ConversationHistoryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding conversation history: %w", err)
+	}
+	return result.Turns, nil
 }
 
 // ListFiles returns files in the session workspace at the given path.

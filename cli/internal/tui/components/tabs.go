@@ -27,7 +27,7 @@ func (t Tabs) View() string {
 	theme := tui.DefaultTheme
 
 	activeStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentCyan).
+		Foreground(theme.AccentAmber).
 		Bold(true).
 		Underline(true).
 		Padding(0, 2)

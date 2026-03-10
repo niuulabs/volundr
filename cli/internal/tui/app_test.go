@@ -120,9 +120,7 @@ func TestApp_Update_PageNavigation(t *testing.T) {
 		{'4', PageDiffs},
 		{'5', PageChronicles},
 		{'6', PageSettings},
-		{'7', PageRealms},
-		{'8', PageCampaigns},
-		{'9', PageAdmin},
+		{'7', PageAdmin},
 	}
 
 	for _, tt := range tests {
@@ -194,9 +192,7 @@ func TestIsNavigationKey_Valid(t *testing.T) {
 		{'4', PageDiffs},
 		{'5', PageChronicles},
 		{'6', PageSettings},
-		{'7', PageRealms},
-		{'8', PageCampaigns},
-		{'9', PageAdmin},
+		{'7', PageAdmin},
 	}
 
 	for _, tt := range tests {

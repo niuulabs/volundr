@@ -416,7 +416,8 @@ func TestSessionsPage_Update_FilterKeys(t *testing.T) {
 	page := SessionsPage{sessions: sessions, filter: "all"}
 	page.applyFilter()
 
-	page, _ = page.Update(tea.KeyPressMsg{Code: '2'})
+	// Tab cycles forward through filters: all -> running -> stopped -> error -> all
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if page.filter != "running" {
 		t.Errorf("expected filter 'running', got %q", page.filter)
 	}
@@ -424,17 +425,17 @@ func TestSessionsPage_Update_FilterKeys(t *testing.T) {
 		t.Errorf("expected 1 running, got %d", len(page.filtered))
 	}
 
-	page, _ = page.Update(tea.KeyPressMsg{Code: '3'})
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if page.filter != "stopped" {
 		t.Errorf("expected filter 'stopped', got %q", page.filter)
 	}
 
-	page, _ = page.Update(tea.KeyPressMsg{Code: '4'})
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if page.filter != "error" {
 		t.Errorf("expected filter 'error', got %q", page.filter)
 	}
 
-	page, _ = page.Update(tea.KeyPressMsg{Code: '1'})
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if page.filter != "all" {
 		t.Errorf("expected filter 'all', got %q", page.filter)
 	}
