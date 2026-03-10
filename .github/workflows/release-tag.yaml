@@ -3,8 +3,8 @@
 # 2. Determines version from conventional commits and creates a v* tag (conditional)
 #
 # The v* tag triggers release.yaml which builds versioned artifacts.
-# Requires a PAT stored as RELEASE_TOKEN with permission to push tags
-# to protected branches.
+# Uses a GitHub App (Volundr Release Bot) to push tags to protected branches.
+# Required secrets: APP_ID, APP_PRIVATE_KEY
 name: Main
 
 on:
@@ -108,10 +108,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Determine version bump
         id: version
