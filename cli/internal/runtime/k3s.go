@@ -232,6 +232,12 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Println("ok")
 
+	// Ensure Kubernetes secrets are up to date.
+	namespace := r.namespace(cfg)
+	if err := r.ensureK8sSecrets(cfg, namespace); err != nil {
+		return fmt.Errorf("create k8s secrets: %w", err)
+	}
+
 	// Generate k3s-mode config for the Python API.
 	fmt.Print("  API config    ... ")
 	if _, err := r.generateK3sConfig(cfg); err != nil {
