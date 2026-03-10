@@ -29,6 +29,12 @@ type ChatDisconnectedMsg struct {
 	Err error
 }
 
+// ChatHistoryLoadedMsg carries conversation history from the session pod.
+type ChatHistoryLoadedMsg struct {
+	Turns []api.ConversationTurn
+	Err   error
+}
+
 // ChatMessage represents a single message in the chat view.
 type ChatMessage struct {
 	Role      string // "user", "assistant", "system"
@@ -120,6 +126,15 @@ func (c *ChatPage) SetSession(sess api.Session) {
 		sender.Send(ChatDisconnectedMsg{Err: err})
 	}
 
+	// Load conversation history from the session pod.
+	if sess.CodeEndpoint != "" {
+		podClient := api.NewSessionPodClient(sess.CodeEndpoint, token)
+		go func() {
+			turns, err := podClient.GetConversationHistory()
+			sender.Send(ChatHistoryLoadedMsg{Turns: turns, Err: err})
+		}()
+	}
+
 	// Connect directly to the session pod's chat WS endpoint.
 	chatEndpoint := sess.ChatEndpoint
 	go func() {
@@ -146,6 +161,33 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 		c.connected = false
 		c.connErr = msg.Err
 		c.finalizeStreaming()
+		return c, nil
+
+	case ChatHistoryLoadedMsg:
+		if msg.Err != nil {
+			c.messages = append(c.messages, ChatMessage{
+				Role:      "system",
+				Content:   "History: " + msg.Err.Error(),
+				Timestamp: time.Now(),
+				Status:    "complete",
+			})
+			return c, nil
+		}
+		if len(msg.Turns) > 0 {
+			// Prepend history before any live messages (system connect msg, etc.)
+			history := make([]ChatMessage, 0, len(msg.Turns))
+			for _, turn := range msg.Turns {
+				ts, _ := time.Parse(time.RFC3339Nano, turn.CreatedAt)
+				history = append(history, ChatMessage{
+					Role:      turn.Role,
+					Content:   turn.Content,
+					Timestamp: ts,
+					Status:    "complete",
+				})
+			}
+			c.messages = append(history, c.messages...)
+			c.scrollPos = 0
+		}
 		return c, nil
 
 	case tea.KeyMsg:
