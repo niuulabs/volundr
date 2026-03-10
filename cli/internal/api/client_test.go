@@ -58,7 +58,7 @@ func TestListSessions(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/sessions" {
+		if r.URL.Path != "/api/v1/volundr/sessions" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		if r.Method != "GET" {
@@ -106,7 +106,7 @@ func TestGetSession(t *testing.T) {
 	session := Session{ID: "abc", Name: "my-session", Status: "running", Model: "claude"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/sessions/abc" {
+		if r.URL.Path != "/api/v1/volundr/sessions/abc" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -132,7 +132,7 @@ func TestCreateSession(t *testing.T) {
 		if r.Method != "POST" {
 			t.Errorf("unexpected method %q", r.Method)
 		}
-		if r.URL.Path != "/api/sessions" {
+		if r.URL.Path != "/api/v1/volundr/sessions" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 
@@ -163,7 +163,7 @@ func TestStartSession(t *testing.T) {
 		if r.Method != "POST" {
 			t.Errorf("unexpected method %q", r.Method)
 		}
-		if r.URL.Path != "/api/sessions/s1/start" {
+		if r.URL.Path != "/api/v1/volundr/sessions/s1/start" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -179,7 +179,7 @@ func TestStartSession(t *testing.T) {
 
 func TestStopSession(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/sessions/s1/stop" {
+		if r.URL.Path != "/api/v1/volundr/sessions/s1/stop" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -198,7 +198,7 @@ func TestDeleteSession(t *testing.T) {
 		if r.Method != "DELETE" {
 			t.Errorf("unexpected method %q", r.Method)
 		}
-		if r.URL.Path != "/api/sessions/s1" {
+		if r.URL.Path != "/api/v1/volundr/sessions/s1" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -218,7 +218,7 @@ func TestListModels(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/models" {
+		if r.URL.Path != "/api/v1/volundr/models" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -243,7 +243,7 @@ func TestGetStats(t *testing.T) {
 	stats := StatsResponse{TotalSessions: 42, ActiveSessions: 5}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/stats" {
+		if r.URL.Path != "/api/v1/volundr/stats" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -504,7 +504,7 @@ func TestListChronicles(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/chronicles" {
+		if r.URL.Path != "/api/v1/volundr/chronicles" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -531,7 +531,7 @@ func TestGetTimeline(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/sessions/s1/timeline" {
+		if r.URL.Path != "/api/v1/volundr/sessions/s1/timeline" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")

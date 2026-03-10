@@ -250,7 +250,7 @@ func decodeResponse[T any](resp *http.Response) (T, error) {
 
 // ListSessions returns all sessions for the current user.
 func (c *Client) ListSessions() ([]Session, error) {
-	resp, err := c.do("GET", "/api/sessions", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func (c *Client) ListSessions() ([]Session, error) {
 
 // GetSession returns a single session by ID.
 func (c *Client) GetSession(id string) (*Session, error) {
-	resp, err := c.do("GET", "/api/sessions/"+id, nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (c *Client) GetSession(id string) (*Session, error) {
 
 // CreateSession creates a new session.
 func (c *Client) CreateSession(create SessionCreate) (*Session, error) {
-	resp, err := c.do("POST", "/api/sessions", create)
+	resp, err := c.do("POST", "/api/v1/volundr/sessions", create)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (c *Client) CreateSession(create SessionCreate) (*Session, error) {
 
 // StartSession starts a stopped session.
 func (c *Client) StartSession(id string) error {
-	resp, err := c.do("POST", "/api/sessions/"+id+"/start", nil)
+	resp, err := c.do("POST", "/api/v1/volundr/sessions/"+id+"/start", nil)
 	if err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func (c *Client) StartSession(id string) error {
 
 // StopSession stops a running session.
 func (c *Client) StopSession(id string) error {
-	resp, err := c.do("POST", "/api/sessions/"+id+"/stop", nil)
+	resp, err := c.do("POST", "/api/v1/volundr/sessions/"+id+"/stop", nil)
 	if err != nil {
 		return err
 	}
@@ -305,7 +305,7 @@ func (c *Client) StopSession(id string) error {
 
 // DeleteSession deletes a session by ID.
 func (c *Client) DeleteSession(id string) error {
-	resp, err := c.do("DELETE", "/api/sessions/"+id, nil)
+	resp, err := c.do("DELETE", "/api/v1/volundr/sessions/"+id, nil)
 	if err != nil {
 		return err
 	}
@@ -319,7 +319,7 @@ func (c *Client) DeleteSession(id string) error {
 
 // ListChronicles returns all chronicles.
 func (c *Client) ListChronicles() ([]Chronicle, error) {
-	resp, err := c.do("GET", "/api/chronicles", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/chronicles", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func (c *Client) ListChronicles() ([]Chronicle, error) {
 
 // GetTimeline returns timeline events for a session.
 func (c *Client) GetTimeline(sessionID string) ([]TimelineEvent, error) {
-	resp, err := c.do("GET", "/api/sessions/"+sessionID+"/timeline", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+sessionID+"/timeline", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +337,7 @@ func (c *Client) GetTimeline(sessionID string) ([]TimelineEvent, error) {
 
 // ListModels returns all available AI models.
 func (c *Client) ListModels() ([]ModelInfo, error) {
-	resp, err := c.do("GET", "/api/models", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/models", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +346,7 @@ func (c *Client) ListModels() ([]ModelInfo, error) {
 
 // GetStats returns aggregate statistics.
 func (c *Client) GetStats() (*StatsResponse, error) {
-	resp, err := c.do("GET", "/api/stats", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/stats", nil)
 	if err != nil {
 		return nil, err
 	}
