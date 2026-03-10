@@ -12,7 +12,7 @@ COPY web/ .
 RUN npm run build
 
 # Stage 2: Serve with nginx
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
 
 LABEL org.opencontainers.image.title="volundr-web"
 LABEL org.opencontainers.image.description="Volundr Web — AI-native development platform UI"
