@@ -32,12 +32,6 @@ func (s Sidebar) View() string {
 		return s.viewCollapsed()
 	}
 
-	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
-		Bold(true).
-		Padding(0, 1).
-		MarginBottom(1)
-
 	activeStyle := lipgloss.NewStyle().
 		Foreground(theme.AccentAmber).
 		Background(theme.BgTertiary).
@@ -55,8 +49,7 @@ func (s Sidebar) View() string {
 
 	var items []string
 
-	// Title
-	items = append(items, titleStyle.Render("⚒ VOLUNDR"))
+	// Skip title — the header bar already shows "⚒ Volundr"
 	items = append(items, "")
 
 	// Navigation items — number key aligned in a column on the right

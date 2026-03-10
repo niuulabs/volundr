@@ -10,9 +10,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/ansi"
 	"github.com/niuulabs/volundr/cli/internal/api"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
-	"github.com/niuulabs/volundr/cli/internal/tui/components"
+
 )
 
 // ChatStreamEventMsg carries an incoming stream event from the WS.
@@ -42,7 +43,6 @@ type ChatPage struct {
 	messages    []ChatMessage
 	input       string
 	model       string
-	thinking    int // thinking budget percentage
 	scrollPos   int
 	inputActive bool
 	width       int
@@ -51,11 +51,10 @@ type ChatPage struct {
 	// Session & connection state
 	session   *api.Session
 	ws        *api.WSClient
-	token     string
+	client    *api.Client
 	connected bool
 	connErr   error
-	eventCh   chan ChatStreamEventMsg
-	connCh    chan tea.Msg
+	sender    *tui.ProgramSender
 
 	// Streaming state: tracks the in-flight assistant message
 	streamingIdx  int    // index into messages, -1 when not streaming
@@ -63,40 +62,19 @@ type ChatPage struct {
 }
 
 // NewChatPage creates a new chat page.
-func NewChatPage(token string) ChatPage {
+func NewChatPage(client *api.Client, sender *tui.ProgramSender) ChatPage {
 	return ChatPage{
 		model:        "claude-sonnet-4",
-		thinking:     50,
 		inputActive:  true,
-		token:        token,
-		eventCh:      make(chan ChatStreamEventMsg, 256),
-		connCh:       make(chan tea.Msg, 16),
+		client:       client,
+		sender:       sender,
 		streamingIdx: -1,
 	}
 }
 
-// Init starts listening for async messages.
+// Init — no cmds needed; WS callbacks use ProgramSender.Send() directly.
 func (c ChatPage) Init() tea.Cmd {
-	return tea.Batch(
-		c.waitForEvent(),
-		c.waitForConn(),
-	)
-}
-
-// waitForEvent returns a command that waits for incoming stream events.
-func (c ChatPage) waitForEvent() tea.Cmd {
-	ch := c.eventCh
-	return func() tea.Msg {
-		return <-ch
-	}
-}
-
-// waitForConn returns a command that waits for connection state changes.
-func (c ChatPage) waitForConn() tea.Cmd {
-	ch := c.connCh
-	return func() tea.Msg {
-		return <-ch
-	}
+	return nil
 }
 
 // SetSession connects to a session's chat WebSocket.
@@ -119,49 +97,34 @@ func (c *ChatPage) SetSession(sess api.Session) {
 		return
 	}
 
-	c.ws = api.NewWSClient("", c.token)
+	// Get a fresh token (auto-refreshes if expired).
+	token := c.client.Token()
+	c.ws = api.NewWSClient("", token)
 
-	eventCh := c.eventCh
-	connCh := c.connCh
+	sender := c.sender
 
 	c.ws.OnMessage = func(event api.StreamEvent) {
-		select {
-		case eventCh <- ChatStreamEventMsg{Event: event}:
-		default:
-		}
+		sender.Send(ChatStreamEventMsg{Event: event})
 	}
 
 	c.ws.OnStateChange = func(state api.WSState) {
 		switch state {
 		case api.WSConnected:
-			select {
-			case connCh <- ChatConnectedMsg{}:
-			default:
-			}
+			sender.Send(ChatConnectedMsg{})
 		case api.WSDisconnected:
-			select {
-			case connCh <- ChatDisconnectedMsg{}:
-			default:
-			}
+			sender.Send(ChatDisconnectedMsg{})
 		}
 	}
 
 	c.ws.OnError = func(err error) {
-		select {
-		case connCh <- ChatDisconnectedMsg{Err: err}:
-		default:
-		}
+		sender.Send(ChatDisconnectedMsg{Err: err})
 	}
 
 	// Connect directly to the session pod's chat WS endpoint.
-	// WSClient.Connect handles token injection for full wss:// URLs.
 	chatEndpoint := sess.ChatEndpoint
 	go func() {
 		if err := c.ws.Connect(chatEndpoint); err != nil {
-			select {
-			case connCh <- ChatDisconnectedMsg{Err: err}:
-			default:
-			}
+			sender.Send(ChatDisconnectedMsg{Err: err})
 		}
 	}()
 }
@@ -171,85 +134,88 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ChatStreamEventMsg:
 		c.handleStreamEvent(msg.Event)
-		// Auto-scroll to bottom on new content.
 		c.scrollPos = 0
-		return c, c.waitForEvent()
+		return c, nil
 
 	case ChatConnectedMsg:
 		c.connected = true
 		c.connErr = nil
-		return c, c.waitForConn()
+		return c, nil
 
 	case ChatDisconnectedMsg:
 		c.connected = false
 		c.connErr = msg.Err
-		// Finalize any in-flight streaming message.
 		c.finalizeStreaming()
-		return c, c.waitForConn()
+		return c, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := msg.String()
+
+		// Tab toggles focus between input and scroll mode.
+		if key == "tab" {
+			c.inputActive = !c.inputActive
+			break
+		}
+
+		// Esc always deactivates input (switches to scroll mode).
+		if key == "esc" {
+			c.inputActive = false
+			break
+		}
+
+		// When input is active, route keys to the text field.
+		if c.inputActive {
+			switch key {
+			case "enter":
+				if c.input != "" {
+					userMsg := ChatMessage{
+						Role:      "user",
+						Content:   c.input,
+						Timestamp: time.Now(),
+						Status:    "complete",
+					}
+					c.messages = append(c.messages, userMsg)
+
+					// Send over WS if connected.
+					if c.ws != nil && c.connected {
+						_ = c.ws.SendText(c.input)
+					}
+					c.input = ""
+				}
+			case "backspace":
+				if len(c.input) > 0 {
+					c.input = c.input[:len(c.input)-1]
+				}
+			case "space":
+				c.input += " "
+			default:
+				if len(key) == 1 {
+					c.input += key
+				}
+			}
+			break
+		}
+
+		// Scroll mode: input is not active.
+		switch key {
 		case "up", "k":
-			if !c.inputActive {
-				c.scrollPos++
-			}
+			c.scrollPos++
 		case "down", "j":
-			if !c.inputActive {
-				if c.scrollPos > 0 {
-					c.scrollPos--
-				}
-			}
-		case "pgup":
-			if !c.inputActive {
-				c.scrollPos += 10
-			}
-		case "pgdown":
-			if !c.inputActive {
-				c.scrollPos -= 10
-				if c.scrollPos < 0 {
-					c.scrollPos = 0
-				}
-			}
-		case "G":
-			// Jump to bottom (latest messages)
-			if !c.inputActive {
+			c.scrollPos--
+			if c.scrollPos < 0 {
 				c.scrollPos = 0
 			}
+		case "pgup":
+			c.scrollPos += c.height / 2
+		case "pgdown":
+			c.scrollPos -= c.height / 2
+			if c.scrollPos < 0 {
+				c.scrollPos = 0
+			}
+		case "G":
+			c.scrollPos = 0
 		case "g":
-			// Jump to top
-			if !c.inputActive {
-				c.scrollPos = 999999
-			}
-		case "tab":
-			c.inputActive = !c.inputActive
-		case "enter":
-			if c.inputActive && c.input != "" {
-				userMsg := ChatMessage{
-					Role:      "user",
-					Content:   c.input,
-					Timestamp: time.Now(),
-					Status:    "complete",
-				}
-				c.messages = append(c.messages, userMsg)
-
-				// Send over WS if connected.
-				if c.ws != nil && c.connected {
-					_ = c.ws.SendText(c.input)
-				}
-				c.input = ""
-			}
-		case "backspace":
-			if c.inputActive && len(c.input) > 0 {
-				c.input = c.input[:len(c.input)-1]
-			}
-		case "space":
-			if c.inputActive {
-				c.input += " "
-			}
-		default:
-			if c.inputActive && len(msg.String()) == 1 {
-				c.input += msg.String()
-			}
+			c.scrollPos = 999999
 		}
 	}
 	return c, nil
@@ -399,8 +365,12 @@ func (c ChatPage) View() string {
 	// Model indicator bar
 	modelBar := c.renderModelBar()
 
-	// Chat messages viewport
-	viewportHeight := c.height - 8
+	// Chat messages viewport: total height minus all fixed elements.
+	// Outer padding(2) + modelBar(1) + gap(1) + msgBorder(2) + gap(1) + input(3) + help(1) = 11
+	viewportHeight := c.height - 11
+	if viewportHeight < 3 {
+		viewportHeight = 3
+	}
 	messages := c.renderMessages(viewportHeight)
 
 	// Input area
@@ -424,19 +394,20 @@ func (c ChatPage) View() string {
 func (c ChatPage) renderModelBar() string {
 	theme := tui.DefaultTheme
 
-	modelStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentPurple).
+	sessionStyle := lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).
 		Bold(true)
 
-	thinkingStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber)
+	modelStyle := lipgloss.NewStyle().
+		Foreground(theme.TextMuted)
 
-	// Session info
-	var sessionInfo string
+	thinkingStyle := lipgloss.NewStyle().
+		Foreground(theme.TextSecondary)
+
+	// Session name — prominent
+	var sessionName string
 	if c.session != nil {
-		sessionInfo = lipgloss.NewStyle().
-			Foreground(theme.TextMuted).
-			Render(fmt.Sprintf("  %s", c.session.Name))
+		sessionName = sessionStyle.Render(c.session.Name)
 	}
 
 	// Connection status
@@ -446,7 +417,7 @@ func (c ChatPage) renderModelBar() string {
 	} else if c.connErr != nil {
 		connStatus = lipgloss.NewStyle().Foreground(theme.AccentRed).Render("○ " + friendlyConnError(c.connErr))
 	} else if c.session != nil {
-		connStatus = lipgloss.NewStyle().Foreground(theme.AccentAmber).Render("◌ Connecting...")
+		connStatus = lipgloss.NewStyle().Foreground(theme.TextSecondary).Render("◌ Connecting...")
 	} else {
 		connStatus = lipgloss.NewStyle().Foreground(theme.TextMuted).Render("○ No session")
 	}
@@ -466,11 +437,11 @@ func (c ChatPage) renderModelBar() string {
 		}
 	}
 
-	return fmt.Sprintf("  %s%s  %s%s",
-		modelStyle.Render("◈ "+modelName),
-		sessionInfo,
+	return fmt.Sprintf("  %s  %s%s  %s",
+		sessionName,
 		connStatus,
 		streamStatus,
+		modelStyle.Render(modelName),
 	)
 }
 
@@ -504,38 +475,38 @@ func (c ChatPage) renderMessages(maxHeight int) string {
 
 	// Scroll viewport: scrollPos=0 means bottom (latest), higher means further back.
 	contentLines := strings.Split(content, "\n")
-	if len(contentLines) > maxHeight {
-		// Default: show the last maxHeight lines (bottom-anchored).
-		end := len(contentLines)
+	totalLines := len(contentLines)
+
+	// Clamp scrollPos to valid range.
+	maxScroll := totalLines - maxHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if c.scrollPos > maxScroll {
+		c.scrollPos = maxScroll
+	}
+
+	if totalLines > maxHeight {
+		// end is the last visible line (exclusive), start is first visible line.
+		end := totalLines - c.scrollPos
 		start := end - maxHeight
-
-		// Apply scroll offset (scroll up from bottom).
-		if c.scrollPos > 0 {
-			end -= c.scrollPos
-			start = end - maxHeight
-		}
-
-		// Clamp bounds.
 		if start < 0 {
 			start = 0
+			end = maxHeight
 		}
-		if end < maxHeight {
-			end = min(maxHeight, len(contentLines))
-			start = 0
-		}
-		if end > len(contentLines) {
-			end = len(contentLines)
+		if end > totalLines {
+			end = totalLines
 		}
 		contentLines = contentLines[start:end]
 	}
 
 	// Scroll position indicator
 	scrollHint := ""
-	totalLines := len(strings.Split(content, "\n"))
 	if totalLines > maxHeight && c.scrollPos > 0 {
+		linesBelow := c.scrollPos
 		scrollHint = lipgloss.NewStyle().
 			Foreground(theme.TextMuted).
-			Render(fmt.Sprintf(" ↑ %d lines above", c.scrollPos))
+			Render(fmt.Sprintf(" ↑ scrolled up %d lines (↓/G to return)", linesBelow))
 	}
 
 	rendered := strings.Join(contentLines, "\n")
@@ -563,10 +534,10 @@ func (c ChatPage) renderMessage(msg ChatMessage) string {
 
 	switch msg.Role {
 	case "user":
-		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentAmber).Bold(true)
+		roleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#d97706")).Bold(true)
 		roleIcon = "▸ You"
 	case "assistant":
-		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentPurple).Bold(true)
+		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentCyan).Bold(true)
 		roleIcon = "◈ Assistant"
 		if msg.Thinking {
 			roleIcon = "◈ Assistant (thinking...)"
@@ -575,7 +546,7 @@ func (c ChatPage) renderMessage(msg ChatMessage) string {
 			roleIcon = "◈ Assistant ▍"
 		}
 	case "system":
-		roleStyle = lipgloss.NewStyle().Foreground(theme.AccentAmber).Bold(true)
+		roleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#d97706")).Bold(true)
 		roleIcon = "⚙ System"
 	}
 
@@ -606,49 +577,202 @@ func (c ChatPage) renderInput() string {
 
 	var borderColor color.Color
 	if c.inputActive {
-		borderColor = theme.AccentAmber
+		borderColor = lipgloss.Color("#d97706")
 	} else {
 		borderColor = theme.BorderSubtle
 	}
 
 	prompt := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
+		Foreground(lipgloss.Color("#d97706")).
 		Bold(true).
 		Render("▸ ")
 
 	cursor := ""
 	if c.inputActive {
 		cursor = lipgloss.NewStyle().
-			Foreground(theme.AccentAmber).
+			Foreground(lipgloss.Color("#d97706")).
 			Render("█")
 	}
 
 	inputContent := prompt + c.input + cursor
-
-	// Show connection badge
-	var badge string
-	if c.connected {
-		badge = components.NewStatusBadge("running").View()
-	} else {
-		badge = components.NewStatusBadge("stopped").View()
-	}
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Width(c.width - 6).
 		Padding(0, 1).
-		Render(inputContent + "  " + badge)
+		Render(inputContent)
 }
+
+// chatStyleConfig is a clean, subdued dark style for rendering chat markdown.
+// Based on glamour's DarkStyleConfig but with proper headings (no raw ## prefixes)
+// and toned-down colors that fit a dark TUI.
+var chatStyleConfig = ansi.StyleConfig{
+	Document: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			BlockPrefix: "\n",
+			BlockSuffix: "\n",
+		},
+		Margin: uintPtr(2),
+	},
+	BlockQuote: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color: stringPtr("245"),
+		},
+		Indent:      uintPtr(1),
+		IndentToken: stringPtr("│ "),
+	},
+	List: ansi.StyleList{
+		LevelIndent: 2,
+	},
+	Heading: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			BlockSuffix: "\n",
+			Bold:        boolPtr(true),
+		},
+	},
+	H1: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color:  stringPtr("255"),
+			Bold:   boolPtr(true),
+			Prefix: "━━ ",
+		},
+	},
+	H2: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color:  stringPtr("255"),
+			Bold:   boolPtr(true),
+			Prefix: "── ",
+		},
+	},
+	H3: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color: stringPtr("252"),
+			Bold:  boolPtr(true),
+		},
+	},
+	H4: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color: stringPtr("250"),
+			Bold:  boolPtr(true),
+		},
+	},
+	H5: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color: stringPtr("248"),
+			Bold:  boolPtr(true),
+		},
+	},
+	H6: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color: stringPtr("245"),
+			Bold:  boolPtr(false),
+		},
+	},
+	Strikethrough: ansi.StylePrimitive{
+		CrossedOut: boolPtr(true),
+	},
+	Emph: ansi.StylePrimitive{
+		Italic: boolPtr(true),
+	},
+	Strong: ansi.StylePrimitive{
+		Bold: boolPtr(true),
+	},
+	HorizontalRule: ansi.StylePrimitive{
+		Color:  stringPtr("240"),
+		Format: "\n────────\n",
+	},
+	Item: ansi.StylePrimitive{
+		BlockPrefix: "• ",
+	},
+	Enumeration: ansi.StylePrimitive{
+		BlockPrefix: ". ",
+	},
+	Task: ansi.StyleTask{
+		StylePrimitive: ansi.StylePrimitive{},
+		Ticked:         "[✓] ",
+		Unticked:       "[ ] ",
+	},
+	Link: ansi.StylePrimitive{
+		Color:     stringPtr("244"),
+		Underline: boolPtr(true),
+	},
+	LinkText: ansi.StylePrimitive{
+		Bold: boolPtr(true),
+	},
+	Image: ansi.StylePrimitive{
+		Color:     stringPtr("244"),
+		Underline: boolPtr(true),
+	},
+	ImageText: ansi.StylePrimitive{
+		Color:  stringPtr("243"),
+		Format: "Image: {{.text}} →",
+	},
+	Code: ansi.StyleBlock{
+		StylePrimitive: ansi.StylePrimitive{
+			Color:           stringPtr("203"),
+			BackgroundColor: stringPtr("236"),
+			Prefix:          " ",
+			Suffix:          " ",
+		},
+	},
+	CodeBlock: ansi.StyleCodeBlock{
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: stringPtr("249"),
+			},
+			Margin: uintPtr(2),
+		},
+		Chroma: &ansi.Chroma{
+			Text:    ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
+			Error:   ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
+			Comment: ansi.StylePrimitive{Color: stringPtr("#6A6A6A")},
+			CommentPreproc: ansi.StylePrimitive{Color: stringPtr("#D7875F")},
+			Keyword:         ansi.StylePrimitive{Color: stringPtr("#5F87D7")},
+			KeywordReserved: ansi.StylePrimitive{Color: stringPtr("#D75FAF")},
+			KeywordNamespace: ansi.StylePrimitive{Color: stringPtr("#D7875F")},
+			KeywordType:     ansi.StylePrimitive{Color: stringPtr("#5F87AF")},
+			Operator:        ansi.StylePrimitive{Color: stringPtr("#AFAFAF")},
+			Punctuation:     ansi.StylePrimitive{Color: stringPtr("#AFAFAF")},
+			Name:            ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
+			NameBuiltin:     ansi.StylePrimitive{Color: stringPtr("#D7AF87")},
+			NameTag:         ansi.StylePrimitive{Color: stringPtr("#5F87D7")},
+			NameAttribute:   ansi.StylePrimitive{Color: stringPtr("#87AFD7")},
+			NameClass:       ansi.StylePrimitive{Color: stringPtr("#D7D787"), Bold: boolPtr(true)},
+			NameDecorator:   ansi.StylePrimitive{Color: stringPtr("#D7D787")},
+			NameFunction:    ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
+			LiteralNumber:   ansi.StylePrimitive{Color: stringPtr("#87D7D7")},
+			LiteralString:   ansi.StylePrimitive{Color: stringPtr("#D7AF87")},
+			LiteralStringEscape: ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
+			GenericDeleted:  ansi.StylePrimitive{Color: stringPtr("#D75F5F")},
+			GenericEmph:     ansi.StylePrimitive{Italic: boolPtr(true)},
+			GenericInserted: ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
+			GenericStrong:   ansi.StylePrimitive{Bold: boolPtr(true)},
+			GenericSubheading: ansi.StylePrimitive{Color: stringPtr("#6A6A6A")},
+			Background:      ansi.StylePrimitive{BackgroundColor: stringPtr("#303030")},
+		},
+	},
+	Table: ansi.StyleTable{
+		StyleBlock: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+		},
+	},
+	DefinitionDescription: ansi.StylePrimitive{
+		BlockPrefix: "\n→ ",
+	},
+}
+
+func boolPtr(b bool) *bool     { return &b }
+func stringPtr(s string) *string { return &s }
+func uintPtr(u uint) *uint     { return &u }
 
 // renderMarkdown renders markdown content for terminal display using glamour.
 func renderMarkdown(content string, width int) string {
 	r, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStyles(chatStyleConfig),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
-		// Fallback to plain text.
 		return "  " + content
 	}
 
@@ -657,8 +781,43 @@ func renderMarkdown(content string, width int) string {
 		return "  " + content
 	}
 
-	// Glamour adds trailing newlines; trim them.
+	// Strip OSC sequences (hyperlinks, etc.) that cause terminal response
+	// sequences which Bubble Tea misinterprets as phantom keypresses.
+	rendered = stripOSC(rendered)
+
 	return strings.TrimRight(rendered, "\n")
+}
+
+// stripOSC removes OSC (Operating System Command) escape sequences from text.
+// These sequences (ESC ] ... ST) can cause terminals to send response sequences
+// that Bubble Tea misinterprets as key input.
+func stripOSC(s string) string {
+	var result strings.Builder
+	result.Grow(len(s))
+	i := 0
+	for i < len(s) {
+		// Check for ESC ] (OSC start)
+		if i+1 < len(s) && s[i] == '\x1b' && s[i+1] == ']' {
+			// Skip until ST (ESC \ or BEL)
+			j := i + 2
+			for j < len(s) {
+				if s[j] == '\x07' { // BEL
+					j++
+					break
+				}
+				if j+1 < len(s) && s[j] == '\x1b' && s[j+1] == '\\' { // ESC \
+					j += 2
+					break
+				}
+				j++
+			}
+			i = j
+			continue
+		}
+		result.WriteByte(s[i])
+		i++
+	}
+	return result.String()
 }
 
 // friendlyConnError converts a raw WebSocket/connection error into a user-friendly message.

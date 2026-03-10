@@ -61,10 +61,19 @@ func (t *TerminalWSClient) Connect(pathOrURL string) error {
 		}
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	conn, resp, err := websocket.DefaultDialer.Dial(url, header)
 	if err != nil {
 		t.setState(WSDisconnected)
-		return fmt.Errorf("terminal WebSocket dial failed: %w", err)
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		// Include URL (without token), status, and token length for debugging.
+		cleanURL := url
+		if idx := strings.Index(cleanURL, "access_token="); idx > 0 {
+			cleanURL = cleanURL[:idx] + "access_token=***"
+		}
+		return fmt.Errorf("terminal WebSocket dial %s (HTTP %d, token_len=%d): %w", cleanURL, status, len(t.token), err)
 	}
 
 	t.conn = conn

@@ -44,6 +44,17 @@ func NewClientWithConfig(baseURL, token string, cfg *remote.Config) *Client {
 	}
 }
 
+// BaseURL returns the server base URL.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
+// Token returns the current access token, refreshing it first if needed.
+func (c *Client) Token() string {
+	c.ensureValidToken()
+	return c.token
+}
+
 // ensureValidToken checks whether the current token is expired and, if a
 // refresh token is available, transparently refreshes it.
 func (c *Client) ensureValidToken() {

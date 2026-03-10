@@ -46,13 +46,13 @@ type DiffsPage struct {
 	// Session pod client for fetching diffs.
 	podClient *api.SessionPodClient
 	session   *api.Session
-	token     string
+	client    *api.Client
 }
 
 // NewDiffsPage creates a new diffs page.
-func NewDiffsPage(token string) DiffsPage {
+func NewDiffsPage(client *api.Client) DiffsPage {
 	return DiffsPage{
-		token: token,
+		client: client,
 	}
 }
 
@@ -76,7 +76,7 @@ func (d *DiffsPage) SetSession(sess api.Session) tea.Cmd {
 		return nil
 	}
 
-	d.podClient = api.NewSessionPodClient(sess.CodeEndpoint, d.token)
+	d.podClient = api.NewSessionPodClient(sess.CodeEndpoint, d.client.Token())
 	client := d.podClient
 	return func() tea.Msg {
 		files, err := client.GetDiffFiles("last-commit")
