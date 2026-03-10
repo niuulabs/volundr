@@ -1,6 +1,9 @@
 {
   "name": "@niuulabs/volundr-ui",
   "version": "0.1.0",
+  "description": "Volundr Web — AI-native development platform UI",
+  "license": "Apache-2.0",
+  "keywords": ["volundr", "ai", "development-platform", "react"],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },

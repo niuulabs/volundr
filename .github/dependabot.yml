@@ -1,0 +1,50 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /cli
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /containers/volundr
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /containers/skuld
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /containers/skuld-codex
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /containers/devrunner
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /containers/volundr-web
+    schedule:
+      interval: weekly

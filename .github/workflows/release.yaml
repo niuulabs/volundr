@@ -2,175 +2,43 @@ name: Release
 
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
+
+permissions: read-all
 
 env:
   REGISTRY: ghcr.io
   CHART_REPO: oci://ghcr.io/${{ github.repository_owner }}/charts
 
 jobs:
-  # Determine if this is a release commit and calculate version
+  # Extract version from the tag — single source of truth
   version:
-    name: Determine Version
+    name: Extract Version
     runs-on: ubuntu-latest
     outputs:
-      should_release: ${{ steps.version.outputs.should_release }}
-      new_version: ${{ steps.version.outputs.new_version }}
-      version_type: ${{ steps.version.outputs.version_type }}
+      version: ${{ steps.extract.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Determine version bump
-        id: version
+      - name: Extract version from tag
+        id: extract
         run: |
-          # Get the last release tag or use 0.0.0 if none exists
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          LAST_VERSION=${LAST_TAG#v}
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
 
-          # Get all commit messages since last tag (or all if no tag)
-          # This handles both merge commits and squash merges
-          if [ "$LAST_TAG" = "v0.0.0" ]; then
-            # No previous tag, get all commits on main
-            COMMIT_MSGS=$(git log --pretty=%B HEAD)
-          else
-            # Get commits since last tag
-            COMMIT_MSGS=$(git log --pretty=%B ${LAST_TAG}..HEAD)
-          fi
-
-          echo "Last version: $LAST_VERSION"
-          echo "Commit messages since last release:"
-          echo "$COMMIT_MSGS"
-          echo "---"
-
-          # Determine version bump type from conventional commits
-          # Check all commits since last release for the highest priority bump
-          VERSION_TYPE="none"
-          if echo "$COMMIT_MSGS" | grep -qiE "^feat(\(.+\))?!:|^BREAKING CHANGE:"; then
-            VERSION_TYPE="major"
-          elif echo "$COMMIT_MSGS" | grep -qiE "^(feat|refactor)(\(.+\))?:"; then
-            VERSION_TYPE="minor"
-          elif echo "$COMMIT_MSGS" | grep -qiE "^(fix|style)(\(.+\))?:"; then
-            VERSION_TYPE="patch"
-          fi
-
-          echo "Version bump type: $VERSION_TYPE"
-
-          if [ "$VERSION_TYPE" = "none" ]; then
-            echo "should_release=false" >> $GITHUB_OUTPUT
-            echo "new_version=$LAST_VERSION" >> $GITHUB_OUTPUT
-            echo "version_type=none" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Calculate new version
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
-          case $VERSION_TYPE in
-            major)
-              NEW_VERSION="$((MAJOR + 1)).0.0"
-              ;;
-            minor)
-              NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
-              ;;
-            patch)
-              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
-              ;;
-          esac
-
-          echo "New version: $NEW_VERSION"
-          echo "should_release=true" >> $GITHUB_OUTPUT
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "version_type=$VERSION_TYPE" >> $GITHUB_OUTPUT
-
-  # Run tests before release
-  test:
-    name: Test
-    needs: version
-    if: needs.version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Run linting
-        run: uv run ruff check src/ tests/
-
-      - name: Run tests
-        run: uv run pytest --cov=src/volundr --cov-report=xml --cov-fail-under=85
-
-  # Build and publish the @niuulabs/volundr-ui npm package
-  publish-web-package:
-    name: Publish Web Package
-    needs: [version, test]
-    if: needs.version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://npm.pkg.github.com
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm run test:coverage
-
-      - name: Update package version
-        run: npm version ${{ needs.version.outputs.new_version }} --no-git-tag-version
-
-      - name: Build library
-        run: npm run build:lib
-
-      - name: Publish to GitHub Packages
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Build and push container images
-  build-containers:
-    name: Build ${{ matrix.container }} Container
-    needs: [version, test]
-    if: needs.version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
+  # ---------------------------------------------------------------------------
+  # Containers — build per platform natively, then merge manifests
+  # ---------------------------------------------------------------------------
+  build-container-image:
+    name: "Build ${{ matrix.container }} (${{ matrix.platform }})"
+    needs: [version]
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
     strategy:
       matrix:
-        include:
-          - container: volundr
-            platforms: linux/amd64
-          - container: skuld
-            platforms: linux/amd64
-          - container: skuld-codex
-            platforms: linux/amd64
-          - container: devrunner
-            platforms: linux/amd64
-          - container: volundr-web
-            platforms: linux/amd64
+        platform: [amd64, arm64]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
     steps:
       - uses: actions/checkout@v4
 
@@ -184,33 +52,114 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}
-          tags: |
-            type=raw,value=${{ needs.version.outputs.new_version }}
-            type=raw,value=latest
-
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./containers/${{ matrix.container }}/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: ${{ matrix.platforms }}
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}-${{ matrix.platform }}
+          labels: |
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.vendor=Niuu Labs
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
+          provenance: false
 
-  # Build CLI binaries for all platforms
-  build-cli:
-    name: Build CLI Binaries
-    needs: [version, test]
-    if: needs.version.outputs.should_release == 'true'
+  merge-container-manifests:
+    name: "Manifest ${{ matrix.container }}"
+    needs: [version, build-container-image]
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+    strategy:
+      matrix:
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifests
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}"
+          VERSION="${{ needs.version.outputs.version }}"
+
+          # versioned tag
+          docker manifest create "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+          docker manifest push "${IMAGE}:${VERSION}"
+
+          # latest
+          docker manifest create "${IMAGE}:latest" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+          docker manifest push "${IMAGE}:latest"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign container image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}"
+          VERSION="${{ needs.version.outputs.version }}"
+          DIGEST=$(docker manifest inspect "${IMAGE}:${VERSION}" -v | jq -r '.Ref' 2>/dev/null || \
+                   docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{.Manifest.Digest}}')
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+
+  # Scan and generate SBOMs after manifests are published
+  scan-containers:
+    name: "Scan ${{ matrix.container }}"
+    needs: [version, merge-container-manifests]
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    strategy:
+      matrix:
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}
+          artifact-name: sbom-${{ matrix.container }}.spdx.json
+          output-file: sbom-${{ matrix.container }}.spdx.json
+
+      - name: Scan container with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}
+          format: sarif
+          output: trivy-${{ matrix.container }}.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.container }}.sarif
+          category: trivy-${{ matrix.container }}
+
+  # ---------------------------------------------------------------------------
+  # CLI binaries
+  # ---------------------------------------------------------------------------
+  build-cli:
+    name: Build CLI (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: [version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       matrix:
         include:
@@ -252,7 +201,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          VERSION="${{ needs.version.outputs.new_version }}"
+          VERSION="${{ needs.version.outputs.version }}"
           BINARY="volundr-${{ matrix.goos }}-${{ matrix.goarch }}"
           go build -tags embed_web \
             -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=${VERSION}" \
@@ -264,11 +213,12 @@ jobs:
           name: volundr-${{ matrix.goos }}-${{ matrix.goarch }}
           path: cli/dist/volundr-${{ matrix.goos }}-${{ matrix.goarch }}
 
-  # Package and push Helm charts
+  # ---------------------------------------------------------------------------
+  # Helm charts
+  # ---------------------------------------------------------------------------
   build-charts:
     name: Build Helm Charts
-    needs: [version, test]
-    if: needs.version.outputs.should_release == 'true'
+    needs: [version]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -283,7 +233,7 @@ jobs:
 
       - name: Update chart versions
         run: |
-          VERSION="${{ needs.version.outputs.new_version }}"
+          VERSION="${{ needs.version.outputs.version }}"
 
           # Update skuld chart
           sed -i "s/^version:.*/version: $VERSION/" charts/skuld/Chart.yaml
@@ -313,61 +263,56 @@ jobs:
           helm push .helm-packages/skuld-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
 
-  # Create GitHub release and update version files
-  release:
-    name: Create Release
-    needs: [version, build-containers, build-charts, build-cli, publish-web-package]
+  # ---------------------------------------------------------------------------
+  # npm package
+  # ---------------------------------------------------------------------------
+  publish-web-package:
+    name: Publish Web Package
+    needs: [version]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update version in files
-        run: |
-          VERSION="${{ needs.version.outputs.new_version }}"
-
-          # Update pyproject.toml
-          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
-
-          # Update skuld chart
-          sed -i "s/^version:.*/version: $VERSION/" charts/skuld/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/skuld/Chart.yaml
-
-          # Update volundr chart
-          sed -i "s/^version:.*/version: $VERSION/" charts/volundr/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/volundr/Chart.yaml
-
-          # Update version references in volundr values.yaml
-          sed -i 's/chartVersion: "[0-9]*\.[0-9]*\.[0-9]*[^"]*"/chartVersion: "'"$VERSION"'"/' charts/volundr/values.yaml
-          sed -i 's/version: "[0-9]*\.[0-9]*\.[0-9]*[^"]*"/version: "'"$VERSION"'"/' charts/volundr/values.yaml
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          registry-url: https://npm.pkg.github.com
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-      - name: Update web package version
-        run: |
-          VERSION="${{ needs.version.outputs.new_version }}"
-          cd web && npm version "$VERSION" --no-git-tag-version
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Commit version bump
-        run: |
-          VERSION="${{ needs.version.outputs.new_version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml charts/*/Chart.yaml charts/volundr/values.yaml web/package.json web/package-lock.json
-          git commit -m "chore: bump version to $VERSION [skip ci]" || echo "No changes to commit"
-          git push
+      - name: Update package version
+        run: npm version ${{ needs.version.outputs.version }} --no-git-tag-version
 
-      - name: Create Git tag
-        run: |
-          VERSION="${{ needs.version.outputs.new_version }}"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+      - name: Build library
+        run: npm run build:lib
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # GitHub Release
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create Release
+    needs: [version, merge-container-manifests, scan-containers, build-charts, build-cli, publish-web-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Download CLI artifacts
         uses: actions/download-artifact@v4
@@ -386,11 +331,16 @@ jobs:
           cd release-assets && sha256sum volundr-* > checksums.txt
           ls -lh
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release-assets/volundr-*
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.version.outputs.new_version }}
-          name: Release v${{ needs.version.outputs.new_version }}
+          tag_name: v${{ needs.version.outputs.version }}
+          name: Release v${{ needs.version.outputs.version }}
           generate_release_notes: true
           files: |
             release-assets/volundr-*

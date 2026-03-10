@@ -1,6 +1,6 @@
 apiVersion: v2
 name: skuld
-description: Claude Code CLI session pod with WebSocket broker and code-server IDE
+description: "Skuld — remote AI coding session broker with WebSocket transport and code-server IDE"
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
@@ -12,5 +12,9 @@ keywords:
   - code-server
   - vscode
   - ide
+home: https://github.com/niuulabs/volundr
+sources:
+  - https://github.com/niuulabs/volundr
 maintainers:
-  - name: Volundr Team
+  - name: Niuu Labs
+    url: https://github.com/niuulabs
