@@ -340,6 +340,30 @@ class DirectK8sPodManager(PodManager):
             },
         }
 
+    def _get_api_exception(self) -> type:
+        """Get the ApiException class from kubernetes_asyncio."""
+        from kubernetes_asyncio.client import rest
+
+        return rest.ApiException
+
+    def _get_api(self, api_class: str) -> Any:
+        """Get a kubernetes API instance by class name."""
+        from kubernetes_asyncio.client import (
+            AppsV1Api,
+            CoreV1Api,
+            CustomObjectsApi,
+            NetworkingV1Api,
+        )
+
+        api_map: dict[str, type] = {
+            "AppsV1Api": AppsV1Api,
+            "CoreV1Api": CoreV1Api,
+            "NetworkingV1Api": NetworkingV1Api,
+            "CustomObjectsApi": CustomObjectsApi,
+        }
+        cls = api_map[api_class]
+        return cls(self._api_client)
+
     async def _apply_resource(
         self,
         api_method_create: str,
@@ -349,19 +373,19 @@ class DirectK8sPodManager(PodManager):
         manifest: dict[str, Any],
     ) -> None:
         """Create or patch a Kubernetes resource via the async API."""
-        from kubernetes_asyncio import client
-
-        api_cls = getattr(client, api_class)
-        api = api_cls(self._api_client)
+        api = self._get_api(api_class)
+        api_exception = self._get_api_exception()
 
         create_fn = getattr(api, api_method_create)
         patch_fn = getattr(api, api_method_patch)
 
         try:
             await create_fn(namespace=self._namespace, body=manifest)
-        except client.exceptions.ApiException as exc:
+        except api_exception as exc:
             if exc.status == 409:
-                logger.info("%s %s already exists, patching", api_class, name)
+                logger.info(
+                    "%s %s already exists, patching", api_class, name,
+                )
                 await patch_fn(
                     name=name,
                     namespace=self._namespace,
@@ -370,11 +394,13 @@ class DirectK8sPodManager(PodManager):
             else:
                 raise
 
-    async def _apply_custom_resource(self, manifest: dict[str, Any]) -> None:
+    async def _apply_custom_resource(
+        self, manifest: dict[str, Any],
+    ) -> None:
         """Apply a custom resource (create or update)."""
-        from kubernetes_asyncio import client
+        api = self._get_api("CustomObjectsApi")
+        api_exception = self._get_api_exception()
 
-        api = client.CustomObjectsApi(self._api_client)
         api_version = manifest["apiVersion"]
         parts = api_version.split("/")
         group = parts[0]
@@ -382,7 +408,9 @@ class DirectK8sPodManager(PodManager):
         kind = manifest["kind"]
         plural = kind.lower() + "s"
         name = manifest["metadata"]["name"]
-        namespace = manifest["metadata"].get("namespace", self._namespace)
+        namespace = manifest["metadata"].get(
+            "namespace", self._namespace,
+        )
 
         try:
             await api.create_namespaced_custom_object(
@@ -392,7 +420,7 @@ class DirectK8sPodManager(PodManager):
                 plural=plural,
                 body=manifest,
             )
-        except client.exceptions.ApiException as exc:
+        except api_exception as exc:
             if exc.status == 409:
                 await api.patch_namespaced_custom_object(
                     group=group,
@@ -403,7 +431,9 @@ class DirectK8sPodManager(PodManager):
                     body=manifest,
                 )
             else:
-                logger.warning("Failed to apply %s %s: %s", kind, name, exc)
+                logger.warning(
+                    "Failed to apply %s %s: %s", kind, name, exc,
+                )
                 raise
 
     async def _delete_custom_resource(
@@ -414,9 +444,8 @@ class DirectK8sPodManager(PodManager):
         name: str,
     ) -> None:
         """Delete a custom resource, ignoring not-found errors."""
-        from kubernetes_asyncio import client
-
-        api = client.CustomObjectsApi(self._api_client)
+        api = self._get_api("CustomObjectsApi")
+        api_exception = self._get_api_exception()
 
         try:
             await api.delete_namespaced_custom_object(
@@ -426,9 +455,46 @@ class DirectK8sPodManager(PodManager):
                 plural=plural,
                 name=name,
             )
-        except client.exceptions.ApiException as exc:
+        except api_exception as exc:
             if exc.status != 404:
-                logger.warning("Failed to delete %s/%s: %s", plural, name, exc)
+                logger.warning(
+                    "Failed to delete %s/%s: %s", plural, name, exc,
+                )
+
+    async def _delete_resource(
+        self,
+        api_class: str,
+        api_method: str,
+        name: str,
+    ) -> bool:
+        """Delete a Kubernetes resource, returning True if deleted."""
+        api = self._get_api(api_class)
+        api_exception = self._get_api_exception()
+
+        try:
+            fn = getattr(api, api_method)
+            await fn(name=name, namespace=self._namespace)
+            return True
+        except api_exception as exc:
+            if exc.status != 404:
+                logger.error(
+                    "Failed to delete %s %s: %s", api_class, name, exc,
+                )
+            return False
+
+    async def _read_deployment(self, name: str) -> Any:
+        """Read a Deployment, returning None if not found."""
+        api = self._get_api("AppsV1Api")
+        api_exception = self._get_api_exception()
+
+        try:
+            return await api.read_namespaced_deployment(
+                name=name, namespace=self._namespace,
+            )
+        except api_exception as exc:
+            if exc.status == 404:
+                return None
+            raise
 
     async def start(
         self,
@@ -490,48 +556,24 @@ class DirectK8sPodManager(PodManager):
         """Delete Deployment, Service, Ingress, and Middleware."""
         await self._ensure_client()
 
-        from kubernetes_asyncio import client
-
         release_name = self._release_name(session)
-        deleted = False
 
-        # Delete Deployment.
-        try:
-            apps_api = client.AppsV1Api(self._api_client)
-            await apps_api.delete_namespaced_deployment(
-                name=release_name,
-                namespace=self._namespace,
-            )
-            deleted = True
-        except client.exceptions.ApiException as exc:
-            if exc.status != 404:
-                logger.error("Failed to delete deployment %s: %s", release_name, exc)
+        d1 = await self._delete_resource(
+            "AppsV1Api",
+            "delete_namespaced_deployment",
+            release_name,
+        )
+        d2 = await self._delete_resource(
+            "CoreV1Api",
+            "delete_namespaced_service",
+            release_name,
+        )
+        d3 = await self._delete_resource(
+            "NetworkingV1Api",
+            "delete_namespaced_ingress",
+            release_name,
+        )
 
-        # Delete Service.
-        try:
-            core_api = client.CoreV1Api(self._api_client)
-            await core_api.delete_namespaced_service(
-                name=release_name,
-                namespace=self._namespace,
-            )
-            deleted = True
-        except client.exceptions.ApiException as exc:
-            if exc.status != 404:
-                logger.error("Failed to delete service %s: %s", release_name, exc)
-
-        # Delete Ingress.
-        try:
-            networking_api = client.NetworkingV1Api(self._api_client)
-            await networking_api.delete_namespaced_ingress(
-                name=release_name,
-                namespace=self._namespace,
-            )
-            deleted = True
-        except client.exceptions.ApiException as exc:
-            if exc.status != 404:
-                logger.error("Failed to delete ingress %s: %s", release_name, exc)
-
-        # Delete Traefik middleware CR.
         await self._delete_custom_resource(
             group="traefik.io",
             version="v1alpha1",
@@ -539,8 +581,10 @@ class DirectK8sPodManager(PodManager):
             name=f"{release_name}-strip",
         )
 
-        if deleted:
-            logger.info("Deleted K8s resources for session %s", session.id)
+        if d1 or d2 or d3:
+            logger.info(
+                "Deleted K8s resources for session %s", session.id,
+            )
 
         return True
 
@@ -548,20 +592,11 @@ class DirectK8sPodManager(PodManager):
         """Get the current status of the session's pods."""
         await self._ensure_client()
 
-        from kubernetes_asyncio import client
-
         release_name = self._release_name(session)
-        apps_api = client.AppsV1Api(self._api_client)
+        deployment = await self._read_deployment(release_name)
 
-        try:
-            deployment = await apps_api.read_namespaced_deployment(
-                name=release_name,
-                namespace=self._namespace,
-            )
-        except client.exceptions.ApiException as exc:
-            if exc.status == 404:
-                return SessionStatus.STOPPED
-            raise
+        if deployment is None:
+            return SessionStatus.STOPPED
 
         return self._map_deployment_status(deployment)
 

@@ -350,26 +350,28 @@ class TestStart:
         pod_manager: DirectK8sPodManager,
         sample_session: Session,
     ) -> None:
-        # Set up a fake api_client so _ensure_client is skipped.
         pod_manager._api_client = MagicMock()
-
         spec = make_spec()
 
-        with patch.object(pod_manager, "_apply_custom_resource", new_callable=AsyncMock) as mock_cr, \
-             patch.object(pod_manager, "_apply_resource", new_callable=AsyncMock) as mock_apply:
+        mock_cr = AsyncMock()
+        mock_apply = AsyncMock()
+        with patch.object(
+            pod_manager, "_apply_custom_resource", mock_cr,
+        ), patch.object(
+            pod_manager, "_apply_resource", mock_apply,
+        ):
             result = await pod_manager.start(sample_session, spec)
 
-        # Verify custom resource (middleware) was created.
         mock_cr.assert_called_once()
 
-        # Verify Deployment, Service, Ingress were created (3 calls).
         assert mock_apply.call_count == 3
-        call_args_list = [c.kwargs["api_class"] for c in mock_apply.call_args_list]
-        assert "AppsV1Api" in call_args_list
-        assert "CoreV1Api" in call_args_list
-        assert "NetworkingV1Api" in call_args_list
+        call_classes = [
+            c.kwargs["api_class"] for c in mock_apply.call_args_list
+        ]
+        assert "AppsV1Api" in call_classes
+        assert "CoreV1Api" in call_classes
+        assert "NetworkingV1Api" in call_classes
 
-        # Verify result.
         assert result.chat_endpoint == f"/s/{sample_session.id}/session"
         assert result.code_endpoint == f"/s/{sample_session.id}/"
         assert result.pod_name == f"skuld-{sample_session.id}"
@@ -384,24 +386,25 @@ class TestStop:
         pod_manager: DirectK8sPodManager,
         sample_session: Session,
     ) -> None:
-        from kubernetes_asyncio import client
-
-        mock_apps_api = AsyncMock()
-        mock_core_api = AsyncMock()
-        mock_networking_api = AsyncMock()
-
         pod_manager._api_client = MagicMock()
 
-        with patch.object(client, "AppsV1Api", return_value=mock_apps_api), \
-             patch.object(client, "CoreV1Api", return_value=mock_core_api), \
-             patch.object(client, "NetworkingV1Api", return_value=mock_networking_api), \
-             patch.object(pod_manager, "_delete_custom_resource", new_callable=AsyncMock) as mock_delete_cr:
+        mock_delete = AsyncMock(return_value=True)
+        mock_delete_cr = AsyncMock()
+        with patch.object(
+            pod_manager, "_delete_resource", mock_delete,
+        ), patch.object(
+            pod_manager, "_delete_custom_resource", mock_delete_cr,
+        ):
             result = await pod_manager.stop(sample_session)
 
         assert result is True
-        mock_apps_api.delete_namespaced_deployment.assert_called_once()
-        mock_core_api.delete_namespaced_service.assert_called_once()
-        mock_networking_api.delete_namespaced_ingress.assert_called_once()
+        assert mock_delete.call_count == 3
+        call_classes = [
+            c.args[0] for c in mock_delete.call_args_list
+        ]
+        assert "AppsV1Api" in call_classes
+        assert "CoreV1Api" in call_classes
+        assert "NetworkingV1Api" in call_classes
         mock_delete_cr.assert_called_once()
 
 
@@ -414,19 +417,18 @@ class TestStatus:
         pod_manager: DirectK8sPodManager,
         sample_session: Session,
     ) -> None:
-        from kubernetes_asyncio import client
-
         deployment = MagicMock()
         deployment.spec.replicas = 1
         deployment.status.ready_replicas = 1
         deployment.status.conditions = []
 
-        mock_apps_api = AsyncMock()
-        mock_apps_api.read_namespaced_deployment.return_value = deployment
-
         pod_manager._api_client = MagicMock()
 
-        with patch.object(client, "AppsV1Api", return_value=mock_apps_api):
+        with patch.object(
+            pod_manager, "_read_deployment",
+            new_callable=AsyncMock,
+            return_value=deployment,
+        ):
             status = await pod_manager.status(sample_session)
 
         assert status == SessionStatus.RUNNING
@@ -437,17 +439,13 @@ class TestStatus:
         pod_manager: DirectK8sPodManager,
         sample_session: Session,
     ) -> None:
-        from kubernetes_asyncio import client
-        from kubernetes_asyncio.client.exceptions import ApiException
-
-        mock_apps_api = AsyncMock()
-        mock_apps_api.read_namespaced_deployment.side_effect = ApiException(
-            status=404, reason="Not Found"
-        )
-
         pod_manager._api_client = MagicMock()
 
-        with patch.object(client, "AppsV1Api", return_value=mock_apps_api):
+        with patch.object(
+            pod_manager, "_read_deployment",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
             status = await pod_manager.status(sample_session)
 
         assert status == SessionStatus.STOPPED
