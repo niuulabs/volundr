@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -104,16 +105,21 @@ func (r *K3sRuntime) Init(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 	default:
-		return r.guideInstallation()
+		if err := r.offerInstallation(ctx); err != nil {
+			return err
+		}
 	}
 
-	// Verify helm is available.
+	// Verify helm is available, offer to install if not.
 	fmt.Print("  Helm            ... ")
-	if out, err := exec.Command("helm", "version", "--short").CombinedOutput(); err != nil {
+	if _, err := exec.Command("helm", "version", "--short").CombinedOutput(); err != nil {
 		fmt.Println("not found")
-		return fmt.Errorf("helm is required but not found. Install: https://helm.sh/docs/intro/install/\n%s", out)
+		if err := r.offerInstallHelm(); err != nil {
+			return err
+		}
+	} else {
+		fmt.Println("ok")
 	}
-	fmt.Println("ok")
 
 	// Create the volundr namespace.
 	namespace := r.namespace(cfg)
@@ -469,28 +475,164 @@ func (r *K3sRuntime) initNativeK3s() error {
 	return nil
 }
 
-// guideInstallation prints installation instructions.
-func (r *K3sRuntime) guideInstallation() error {
+// promptYesNo asks the user a yes/no question and returns true for yes.
+func promptYesNo(prompt string) bool {
+	fmt.Printf("%s [y/N]: ", prompt)
+	reader := bufio.NewReader(os.Stdin)
+	answer, _ := reader.ReadString('\n')
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	return answer == "y" || answer == "yes"
+}
+
+// offerInstallation offers to install k3d (and k3s on Linux) interactively.
+func (r *K3sRuntime) offerInstallation(ctx context.Context) error {
+	fmt.Println("  No k3s provider found.")
+	fmt.Println()
+
 	switch runtime.GOOS {
 	case "darwin":
-		return fmt.Errorf(
-			"no k3s provider found. Install k3d:\n" +
-				"  brew install k3d\n" +
-				"Then run 'volundr init' again",
-		)
+		return r.offerInstallK3dDarwin(ctx)
 	case "linux":
-		return fmt.Errorf(
-			"no k3s provider found. Install one of:\n" +
-				"  k3d:    curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash\n" +
-				"  k3s:    curl -sfL https://get.k3s.io | sh -\n" +
-				"Then run 'volundr init' again",
-		)
+		return r.offerInstallLinux(ctx)
 	default:
 		return fmt.Errorf(
-			"no k3s provider found. Install k3d: https://k3d.io\n" +
-				"Then run 'volundr init' again",
+			"unsupported platform %q for k3s runtime. Install k3d manually: https://k3d.io",
+			runtime.GOOS,
 		)
 	}
+}
+
+// offerInstallK3dDarwin offers to install k3d via Homebrew on macOS.
+func (r *K3sRuntime) offerInstallK3dDarwin(ctx context.Context) error {
+	// Check if Homebrew is available.
+	if _, err := exec.Command("brew", "--version").CombinedOutput(); err != nil {
+		fmt.Println("  Homebrew is not installed. Install k3d manually:")
+		fmt.Println("    curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash")
+		if !promptYesNo("  Run the install script now?") {
+			return fmt.Errorf("k3d is required. Install it and run 'volundr init' again")
+		}
+		return r.installK3dScript(ctx)
+	}
+
+	if !promptYesNo("  Install k3d via Homebrew? (brew install k3d)") {
+		return fmt.Errorf("k3d is required. Install it and run 'volundr init' again")
+	}
+
+	fmt.Print("  Installing k3d  ... ")
+	out, err := exec.CommandContext(ctx, "brew", "install", "k3d").CombinedOutput()
+	if err != nil {
+		fmt.Println("failed")
+		return fmt.Errorf("brew install k3d: %w\n%s", err, out)
+	}
+	fmt.Println("ok")
+
+	// Now init the k3d cluster.
+	return r.initK3d(ctx)
+}
+
+// offerInstallLinux offers k3d or native k3s installation on Linux.
+func (r *K3sRuntime) offerInstallLinux(ctx context.Context) error {
+	fmt.Println("  Available options:")
+	fmt.Println("    1) k3d  - k3s in Docker (recommended if Docker is available)")
+	fmt.Println("    2) k3s  - native k3s (requires root, full GPU support)")
+	fmt.Println()
+	fmt.Print("  Choose [1/2]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	switch choice {
+	case "1", "k3d", "":
+		return r.offerInstallK3dLinux(ctx)
+	case "2", "k3s":
+		return r.offerInstallNativeK3s(ctx)
+	default:
+		return fmt.Errorf("invalid choice. Run 'volundr init' again")
+	}
+}
+
+// offerInstallK3dLinux installs k3d via the install script on Linux.
+func (r *K3sRuntime) offerInstallK3dLinux(ctx context.Context) error {
+	if !promptYesNo("  Install k3d? (curl install script)") {
+		return fmt.Errorf("k3d is required. Install it and run 'volundr init' again")
+	}
+	if err := r.installK3dScript(ctx); err != nil {
+		return err
+	}
+	return r.initK3d(ctx)
+}
+
+// installK3dScript installs k3d using the official install script.
+func (r *K3sRuntime) installK3dScript(ctx context.Context) error {
+	fmt.Print("  Installing k3d  ... ")
+	cmd := exec.CommandContext(ctx, "bash", "-c",
+		"curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("failed")
+		return fmt.Errorf("install k3d: %w\n%s", err, out)
+	}
+	fmt.Println("ok")
+	return nil
+}
+
+// offerInstallNativeK3s installs k3s using the official install script.
+func (r *K3sRuntime) offerInstallNativeK3s(ctx context.Context) error {
+	if !promptYesNo("  Install k3s? (requires sudo, curl install script)") {
+		return fmt.Errorf("k3s is required. Install it and run 'volundr init' again")
+	}
+
+	fmt.Print("  Installing k3s  ... ")
+	cmd := exec.CommandContext(ctx, "bash", "-c",
+		"curl -sfL https://get.k3s.io | sh -",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("failed")
+		return fmt.Errorf("install k3s: %w\n%s", err, out)
+	}
+	fmt.Println("ok")
+
+	return r.initNativeK3s()
+}
+
+// offerInstallHelm offers to install Helm interactively.
+func (r *K3sRuntime) offerInstallHelm() error {
+	switch runtime.GOOS {
+	case "darwin":
+		if _, err := exec.Command("brew", "--version").CombinedOutput(); err == nil {
+			if !promptYesNo("  Install Helm via Homebrew? (brew install helm)") {
+				return fmt.Errorf("helm is required. Install: https://helm.sh/docs/intro/install/")
+			}
+			fmt.Print("  Installing Helm ... ")
+			out, err := exec.Command("brew", "install", "helm").CombinedOutput()
+			if err != nil {
+				fmt.Println("failed")
+				return fmt.Errorf("brew install helm: %w\n%s", err, out)
+			}
+			fmt.Println("ok")
+			return nil
+		}
+	}
+
+	// Fallback: use the official install script.
+	if !promptYesNo("  Install Helm? (official install script)") {
+		return fmt.Errorf("helm is required. Install: https://helm.sh/docs/intro/install/")
+	}
+
+	fmt.Print("  Installing Helm ... ")
+	cmd := exec.Command("bash", "-c",
+		"curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("failed")
+		return fmt.Errorf("install helm: %w\n%s", err, out)
+	}
+	fmt.Println("ok")
+	return nil
 }
 
 // ensureNamespace creates the Kubernetes namespace if it doesn't exist.
