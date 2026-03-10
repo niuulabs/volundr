@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/niuulabs/volundr/cli/internal/auth"
@@ -227,6 +228,17 @@ func decodeResponse[T any](resp *http.Response) (T, error) {
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return result, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Check Content-Type to catch HTML responses (e.g. auth redirects).
+	ct := resp.Header.Get("Content-Type")
+	if ct != "" && !strings.Contains(ct, "json") {
+		body, _ := io.ReadAll(resp.Body)
+		preview := string(body)
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return result, fmt.Errorf("unexpected response (Content-Type: %s): %s", ct, preview)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

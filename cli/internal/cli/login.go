@@ -175,10 +175,10 @@ func loginAllContexts(cfg *remote.Config) error {
 		}
 
 		// Resolve auth config for this context.
+		// In multi-login mode, contexts without auth are skipped (not errored).
 		issuer, clientID, err := resolveAuthConfig(rctx)
 		if err != nil {
-			fmt.Printf("   %s %s\n\n", failMark, err)
-			errors = append(errors, fmt.Sprintf("%s: %v", key, err))
+			fmt.Printf("   %s No auth configured, skipping\n\n", skipMark)
 			continue
 		}
 
@@ -328,7 +328,7 @@ func resolveAuthConfig(rctx *remote.Context) (issuer, clientID string, err error
 // tryAuthDiscovery attempts to fetch OIDC config from the Volundr server.
 // Returns nil if discovery fails (server not configured, endpoint missing, etc.).
 func tryAuthDiscovery(rctx *remote.Context) *api.AuthDiscoveryResponse {
-	if rctx.Server == "" || rctx.Server == "http://localhost:8000" {
+	if rctx.Server == "" {
 		return nil
 	}
 
