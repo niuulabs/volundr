@@ -13,9 +13,10 @@ var (
 	homeFlag string
 
 	// Global flags for remote/TUI mode.
-	cfgServer string
-	cfgToken  string
-	cfgFile   string
+	cfgServer  string
+	cfgToken   string
+	cfgFile    string
+	cfgContext string
 )
 
 var rootCmd = &cobra.Command{
@@ -53,6 +54,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgServer, "server", "", "Volundr API server URL (default: from config)")
 	rootCmd.PersistentFlags().StringVar(&cfgToken, "token", "", "Authentication token (default: from config)")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file path (default: ~/.config/volundr/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgContext, "context", "", "Context name to use (default: auto-select if only one exists)")
 
 	// Output flags.
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output results as JSON for piping to jq")
@@ -71,6 +73,7 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(whoamiCmd)
+	rootCmd.AddCommand(contextCmd)
 }
 
 // Execute runs the root command.

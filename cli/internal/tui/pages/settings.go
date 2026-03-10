@@ -34,6 +34,8 @@ type SettingsLoadedMsg struct {
 type SettingsPage struct {
 	client  *api.Client
 	cfg     *remote.Config
+	rctx    *remote.Context // resolved context for display
+	ctxKey  string          // resolved context key
 	section SettingsSection
 	cursor  int
 	width   int
@@ -51,9 +53,21 @@ type SettingsPage struct {
 
 // NewSettingsPage creates a new settings page.
 func NewSettingsPage(client *api.Client, cfg *remote.Config) SettingsPage {
+	// Resolve the first available context for display.
+	var rctx *remote.Context
+	var ctxKey string
+	if cfg != nil {
+		for k, c := range cfg.Contexts {
+			rctx = c
+			ctxKey = k
+			break
+		}
+	}
 	return SettingsPage{
 		client:  client,
 		cfg:     cfg,
+		rctx:    rctx,
+		ctxKey:  ctxKey,
 		loading: true,
 	}
 }
@@ -127,9 +141,9 @@ func (s SettingsPage) Update(msg tea.Msg) (SettingsPage, tea.Cmd) {
 
 // startEditing enters edit mode for the currently selected setting.
 func (s *SettingsPage) startEditing() {
-	if s.section == SectionConnection && s.cursor == 0 && s.cfg != nil {
+	if s.section == SectionConnection && s.cursor == 0 && s.rctx != nil {
 		s.editing = true
-		s.editBuf = s.cfg.Server
+		s.editBuf = s.rctx.Server
 	}
 }
 
@@ -156,9 +170,11 @@ func (s *SettingsPage) handleEditInput(msg tea.KeyMsg) {
 
 // applyEdit saves the edit buffer to the appropriate setting.
 func (s *SettingsPage) applyEdit() {
-	if s.cfg != nil {
-		s.cfg.Server = s.editBuf
-		_ = s.cfg.Save()
+	if s.rctx != nil {
+		s.rctx.Server = s.editBuf
+		if s.cfg != nil {
+			_ = s.cfg.Save()
+		}
 	}
 }
 
@@ -232,16 +248,16 @@ func (s SettingsPage) renderConnection() string {
 	theme := tui.DefaultTheme
 
 	serverURL := "(not set)"
-	if s.cfg != nil {
-		serverURL = s.cfg.Server
+	if s.rctx != nil && s.rctx.Server != "" {
+		serverURL = s.rctx.Server
 	}
 	if s.editing && s.cursor == 0 {
 		serverURL = s.editBuf + "█"
 	}
 
 	tokenDisplay := "(not set)"
-	if s.cfg != nil && s.cfg.Token != "" {
-		tokenDisplay = maskToken(s.cfg.Token)
+	if s.rctx != nil && s.rctx.Token != "" {
+		tokenDisplay = maskToken(s.rctx.Token)
 	}
 
 	rows := []settingRow{

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -265,7 +266,7 @@ func appendAccessToken(rawURL, token string) string {
 	if strings.Contains(rawURL, "?") {
 		sep = "&"
 	}
-	return rawURL + sep + "access_token=" + token
+	return rawURL + sep + "access_token=" + url.QueryEscape(token)
 }
 
 // SessionWSURL builds a full WebSocket URL for a session pod endpoint.
@@ -284,9 +285,9 @@ func TerminalWSURLFromChat(chatEndpoint string) string {
 	wsURL := strings.Replace(chatEndpoint, "https://", "wss://", 1)
 	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
 
-	// Strip /session or /api/session suffix
-	wsURL = strings.TrimSuffix(wsURL, "/session")
+	// Strip /api/session or /session suffix (check longer suffix first).
 	wsURL = strings.TrimSuffix(wsURL, "/api/session")
+	wsURL = strings.TrimSuffix(wsURL, "/session")
 
 	return wsURL + "/terminal/ws"
 }

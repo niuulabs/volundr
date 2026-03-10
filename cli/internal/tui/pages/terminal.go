@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -54,7 +55,8 @@ type TerminalPage struct {
 	activeTab  int
 	fullScreen bool
 	serverURL  string
-	token      string
+	client     *api.Client
+	pool       *tui.ClientPool
 	outputCh   chan TerminalOutputMsg
 	connCh     chan tea.Msg
 }
@@ -67,7 +69,7 @@ const (
 )
 
 // NewTerminalPage creates a new terminal page.
-func NewTerminalPage(serverURL, token string) TerminalPage {
+func NewTerminalPage(serverURL string, client *api.Client, pool *tui.ClientPool) TerminalPage {
 	outputCh := make(chan TerminalOutputMsg, 256)
 	connCh := make(chan tea.Msg, 16)
 
@@ -75,7 +77,8 @@ func NewTerminalPage(serverURL, token string) TerminalPage {
 		tabs:      nil,
 		activeTab: 0,
 		serverURL: serverURL,
-		token:     token,
+		client:    client,
+		pool:      pool,
 		outputCh:  outputCh,
 		connCh:    connCh,
 	}
@@ -199,17 +202,44 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
 	return t, nil
 }
 
+// ConnectSessionOnCluster creates a new terminal tab using the specified cluster's
+// server and token. This is used when launching a terminal from a multi-cluster
+// session selection.
+func (t *TerminalPage) ConnectSessionOnCluster(sess api.Session, contextKey string) {
+	if t.pool == nil {
+		t.ConnectSession(sess)
+		return
+	}
+
+	entry := t.pool.GetEntry(contextKey)
+	if entry == nil {
+		t.ConnectSession(sess)
+		return
+	}
+
+	t.connectSessionWith(sess, entry.Server, entry.Client.Token())
+}
+
 // ConnectSession creates a new terminal tab and connects to the given session.
 // It uses the session's CodeEndpoint to connect directly to the session pod.
 // If CodeEndpoint is empty, it falls back to the control-plane proxy.
 func (t *TerminalPage) ConnectSession(sess api.Session) {
+	token := ""
+	if t.client != nil {
+		token = t.client.Token()
+	}
+	t.connectSessionWith(sess, t.serverURL, token)
+}
+
+// connectSessionWith creates a new terminal tab with the given server and token.
+func (t *TerminalPage) connectSessionWith(sess api.Session, serverURL, token string) {
 	w, h := t.termDimensions()
 
 	tab := &terminalTab{
 		label:     fmt.Sprintf("term-%d", len(t.tabs)+1),
 		sessionID: sess.ID,
 		emulator:  vt.NewEmulator(w, h),
-		ws:        api.NewTerminalWSClient(t.serverURL, t.token),
+		ws:        api.NewTerminalWSClient(serverURL, token),
 		connState: connStatusConnecting,
 	}
 
@@ -217,19 +247,29 @@ func (t *TerminalPage) ConnectSession(sess api.Session) {
 	t.tabs = append(t.tabs, tab)
 	t.activeTab = tabIndex
 
-	// Wire up WebSocket callbacks to push messages through channels.
 	outputCh := t.outputCh
 	connCh := t.connCh
 
+	// Derive terminal WS URL from chat endpoint (matches web UI pattern).
+	// Fallback to control-plane proxy if no endpoint is available.
+	var wsURL string
+	if sess.ChatEndpoint != "" {
+		wsURL = api.TerminalWSURLFromChat(sess.ChatEndpoint)
+	} else if sess.CodeEndpoint != "" {
+		wsURL = api.SessionWSURL(sess.CodeEndpoint, "/terminal/ws")
+	} else {
+		wsURL = fmt.Sprintf("/api/v1/volundr/sessions/%s/terminal", sess.ID)
+	}
+
+	// Wire up WebSocket callbacks BEFORE Connect() so the readLoop goroutine
+	// (started inside Connect) can immediately deliver data and state changes.
 	tab.ws.OnData = func(data []byte) {
 		tab.mu.Lock()
 		_, _ = tab.emulator.Write(data)
 		tab.mu.Unlock()
-
 		select {
 		case outputCh <- TerminalOutputMsg{TabIndex: tabIndex}:
 		default:
-			// Channel full; drop the notification (view will catch up).
 		}
 	}
 
@@ -255,27 +295,41 @@ func (t *TerminalPage) ConnectSession(sess api.Session) {
 		}
 	}
 
-	// Derive terminal WS URL from chat endpoint (matches web UI pattern).
-	// Fallback to control-plane proxy if no endpoint is available.
-	var wsURL string
-	if sess.ChatEndpoint != "" {
-		wsURL = api.TerminalWSURLFromChat(sess.ChatEndpoint)
-	} else if sess.CodeEndpoint != "" {
-		wsURL = api.SessionWSURL(sess.CodeEndpoint, "/terminal/ws")
-	} else {
-		wsURL = fmt.Sprintf("/api/v1/volundr/sessions/%s/terminal", sess.ID)
-	}
-
+	// Read terminal responses from the vt emulator and send them back to the
+	// remote PTY. The emulator writes responses (CPR, color queries, device
+	// attributes, etc.) to its internal pipe when the remote application sends
+	// terminal queries. Without this reader the pipe blocks, deadlocking
+	// emulator.Write() and freezing the WebSocket reader goroutine.
 	go func() {
-		if err := tab.ws.Connect(wsURL); err != nil {
-			select {
-			case connCh <- TerminalDisconnectedMsg{TabIndex: tabIndex, Err: err}:
-			default:
+		buf := make([]byte, 4096)
+		for {
+			n, err := tab.emulator.Read(buf)
+			if err != nil {
+				return // emulator closed
 			}
-			return
+			if n > 0 && tab.ws != nil {
+				_ = tab.ws.SendRaw(buf[:n])
+			}
 		}
-		// Send initial resize after connecting.
-		_ = tab.ws.SendResize(w, h)
+	}()
+
+	// Connect in the background with retries.
+	go func() {
+		var err error
+		for attempt := 0; attempt < 5; attempt++ {
+			if attempt > 0 {
+				time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			}
+			err = tab.ws.Connect(wsURL)
+			if err == nil {
+				_ = tab.ws.SendResize(w, h)
+				return
+			}
+		}
+		select {
+		case connCh <- TerminalDisconnectedMsg{TabIndex: tabIndex, Err: err}:
+		default:
+		}
 	}()
 }
 

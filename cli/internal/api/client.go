@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/niuulabs/volundr/cli/internal/auth"
@@ -17,6 +18,7 @@ import (
 type Client struct {
 	baseURL    string
 	token      string
+	ctx        *remote.Context
 	cfg        *remote.Config
 	httpClient *http.Client
 }
@@ -33,6 +35,7 @@ func NewClient(baseURL, token string) *Client {
 }
 
 // NewClientWithConfig creates an API client that can auto-refresh expired tokens.
+// Deprecated: Use NewClientWithContext for multi-context support.
 func NewClientWithConfig(baseURL, token string, cfg *remote.Config) *Client {
 	return &Client{
 		baseURL: baseURL,
@@ -44,44 +47,68 @@ func NewClientWithConfig(baseURL, token string, cfg *remote.Config) *Client {
 	}
 }
 
+// NewClientWithContext creates an API client that can auto-refresh expired tokens
+// using the given context for OIDC credentials and the config for saving.
+func NewClientWithContext(baseURL, token string, rctx *remote.Context, cfg *remote.Config) *Client {
+	return &Client{
+		baseURL: baseURL,
+		token:   token,
+		ctx:     rctx,
+		cfg:     cfg,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+// BaseURL returns the server base URL.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
+// Token returns the current access token, refreshing it first if needed.
+func (c *Client) Token() string {
+	c.ensureValidToken()
+	return c.token
+}
+
 // ensureValidToken checks whether the current token is expired and, if a
 // refresh token is available, transparently refreshes it.
 func (c *Client) ensureValidToken() {
-	if c.cfg == nil || c.cfg.RefreshToken == "" || c.cfg.TokenExpiry == "" {
+	if c.ctx == nil || c.ctx.RefreshToken == "" || c.ctx.TokenExpiry == "" {
 		return
 	}
-
-	expiry, err := time.Parse(time.RFC3339, c.cfg.TokenExpiry)
+	expiry, err := time.Parse(time.RFC3339, c.ctx.TokenExpiry)
 	if err != nil {
 		return
 	}
 
-	// Refresh if the token expires within the next 30 seconds.
 	if time.Until(expiry) > 30*time.Second {
 		return
 	}
 
-	if c.cfg.Issuer == "" || c.cfg.ClientID == "" {
+	if c.ctx.Issuer == "" || c.ctx.ClientID == "" {
 		return
 	}
 
-	oidc := auth.NewOIDCClient(c.cfg.Issuer)
-	token, err := oidc.RefreshToken(c.cfg.ClientID, c.cfg.RefreshToken)
+	oidc := auth.NewOIDCClient(c.ctx.Issuer)
+	token, err := oidc.RefreshToken(c.ctx.ClientID, c.ctx.RefreshToken)
 	if err != nil {
 		return
 	}
 
 	c.token = token.AccessToken
-	c.cfg.Token = token.AccessToken
+	c.ctx.Token = token.AccessToken
 	if token.RefreshToken != "" {
-		c.cfg.RefreshToken = token.RefreshToken
+		c.ctx.RefreshToken = token.RefreshToken
 	}
 	if token.ExpiresIn > 0 {
-		c.cfg.TokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
+		c.ctx.TokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
 	}
 
-	// Best-effort save; ignore errors.
-	_ = c.cfg.Save()
+	if c.cfg != nil {
+		_ = c.cfg.Save()
+	}
 }
 
 // Session represents a Volundr coding session.
@@ -297,6 +324,17 @@ func decodeResponse[T any](resp *http.Response) (T, error) {
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return result, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Check Content-Type to catch HTML responses (e.g. auth redirects).
+	ct := resp.Header.Get("Content-Type")
+	if ct != "" && !strings.Contains(ct, "json") {
+		body, _ := io.ReadAll(resp.Body)
+		preview := string(body)
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return result, fmt.Errorf("unexpected response (Content-Type: %s): %s", ct, preview)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

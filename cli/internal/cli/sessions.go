@@ -157,14 +157,25 @@ var sessionsDeleteCmd = &cobra.Command{
 }
 
 // newAPIClient creates an API client from config and CLI flags, with auto-refresh support.
+// It uses the --context flag (or the sole context if only one exists).
 func newAPIClient() (*api.Client, error) {
 	cfg, err := remote.Load()
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 
-	server := cfg.Server
-	token := cfg.Token
+	// CLI flags override: if --server and --token are both set, use them directly.
+	if cfgServer != "" && cfgToken != "" {
+		return api.NewClient(cfgServer, cfgToken), nil
+	}
+
+	ctx, _, err := cfg.ResolveContext(cfgContext)
+	if err != nil {
+		return nil, err
+	}
+
+	server := ctx.Server
+	token := ctx.Token
 
 	if cfgServer != "" {
 		server = cfgServer
@@ -173,5 +184,5 @@ func newAPIClient() (*api.Client, error) {
 		token = cfgToken
 	}
 
-	return api.NewClientWithConfig(server, token, cfg), nil
+	return api.NewClientWithContext(server, token, ctx, cfg), nil
 }
