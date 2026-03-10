@@ -19,9 +19,6 @@ func TestNewK3sRuntime(t *testing.T) {
 	if r.pg != nil {
 		t.Error("expected pg to be nil on new K3sRuntime")
 	}
-	if r.apiCmd != nil {
-		t.Error("expected apiCmd to be nil on new K3sRuntime")
-	}
 	if r.proxyRtr != nil {
 		t.Error("expected proxyRtr to be nil on new K3sRuntime")
 	}
@@ -185,8 +182,8 @@ func TestGenerateK3sConfig(t *testing.T) {
 	}
 
 	// Verify database settings.
-	if parsed.Database["host"] != "127.0.0.1" {
-		t.Errorf("expected database host 127.0.0.1, got %v", parsed.Database["host"])
+	if parsed.Database["host"] != "host.docker.internal" {
+		t.Errorf("expected database host host.docker.internal, got %v", parsed.Database["host"])
 	}
 	if parsed.Database["port"] != 5433 {
 		t.Errorf("expected database port 5433, got %v", parsed.Database["port"])

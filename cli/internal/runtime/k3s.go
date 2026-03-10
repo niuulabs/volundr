@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,10 +11,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
-	"syscall"
-	"time"
+	"text/template"
+
 
 	"github.com/niuulabs/volundr/cli/internal/config"
 	"github.com/niuulabs/volundr/cli/internal/postgres"
@@ -38,13 +38,60 @@ const (
 	k3sHelmChart = "oci://ghcr.io/niuulabs/charts/skuld"
 	// k3sAPIInternalPort is the host port the API listens on in k3s mode.
 	k3sAPIInternalPort = 18080
-	// k3sAPIStartTimeout is the maximum time to wait for the API to start.
-	k3sAPIStartTimeout = 30 * time.Second
-	// k3sAPIHealthCheckInterval is the interval between API health checks.
-	k3sAPIHealthCheckInterval = 500 * time.Millisecond
-	// k3sProcessShutdownTimeout is the time to wait for graceful process shutdown.
-	k3sProcessShutdownTimeout = 5 * time.Second
 )
+
+// k3sComposeFileName is the generated compose file name for k3s mode.
+const k3sComposeFileName = "docker-compose.k3s.yaml"
+
+// k3sContainerName is the API container name in k3s mode.
+const k3sContainerName = "volundr-k3s-api"
+
+// k3sComposeTemplate is the Docker Compose template for the API in k3s mode.
+// It mounts the kubeconfig so the API can talk to the k3d cluster.
+var k3sComposeTemplate = template.Must(template.New("k3s-compose").Parse(`services:
+  api:
+    image: {{.APIImage}}
+    container_name: {{.ContainerName}}
+    ports:
+      - "127.0.0.1:{{.APIPort}}:8080"
+    environment:
+      DATABASE__HOST: "{{.DBHost}}"
+      DATABASE__PORT: "{{.DBPort}}"
+      DATABASE__USER: "{{.DBUser}}"
+      DATABASE__PASSWORD: "{{.DBPassword}}"
+      DATABASE__NAME: "{{.DBName}}"
+{{- if .AnthropicAPIKey}}
+      ANTHROPIC_API_KEY: "{{.AnthropicAPIKey}}"
+{{- end}}
+      KUBECONFIG: "/etc/volundr/kubeconfig"
+    volumes:
+      - "{{.ConfigPath}}:/etc/volundr/config.yaml:ro"
+      - "{{.KubeconfigPath}}:/etc/volundr/kubeconfig:ro"
+      - "{{.StorageDir}}:/volundr-storage"
+    networks:
+      - k3d-{{.ClusterName}}
+
+networks:
+  k3d-{{.ClusterName}}:
+    external: true
+`))
+
+// k3sComposeData holds the template data for the k3s compose file.
+type k3sComposeData struct {
+	APIImage        string
+	ContainerName   string
+	APIPort         int
+	DBHost          string
+	DBPort          int
+	DBUser          string
+	DBPassword      string
+	DBName          string
+	AnthropicAPIKey string
+	ConfigPath      string
+	KubeconfigPath  string
+	StorageDir      string
+	ClusterName     string
+}
 
 // k3sAPIConfig represents the Python API config file structure for k3s mode.
 type k3sAPIConfig struct {
@@ -59,10 +106,9 @@ type k3sAPIConfig struct {
 }
 
 // K3sRuntime manages the Volundr stack using k3s/k3d for Kubernetes
-// workloads with host-side services for PostgreSQL and the API.
+// workloads with a Docker container for the API and embedded PostgreSQL.
 type K3sRuntime struct {
 	pg       *postgres.EmbeddedPostgres
-	apiCmd   *exec.Cmd
 	proxyRtr *proxy.Router
 }
 
@@ -193,14 +239,13 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Println("ok")
 
-	// Start the Python API on the host.
+	// Start the API in a Docker container connected to the k3d network.
 	fmt.Print("  Volundr API   ... ")
-	apiPort := cfg.Listen.Port + 1
-	if err := r.startAPI(ctx, cfg, apiPort); err != nil {
+	if err := r.startAPIContainer(ctx, cfg); err != nil {
 		fmt.Println("failed")
-		return fmt.Errorf("start API: %w", err)
+		return fmt.Errorf("start API container: %w", err)
 	}
-	fmt.Printf("started (port %d)\n", apiPort)
+	fmt.Printf("started (port %d)\n", k3sAPIInternalPort)
 
 	// Install/upgrade the skuld base Helm chart.
 	fmt.Print("  Skuld chart   ... ")
@@ -212,7 +257,7 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 
 	// Start the reverse proxy.
 	fmt.Print("  Proxy         ... ")
-	apiURL := fmt.Sprintf("http://127.0.0.1:%d", apiPort)
+	apiURL := fmt.Sprintf("http://127.0.0.1:%d", k3sAPIInternalPort)
 	rtr, err := proxy.NewRouter(apiURL)
 	if err != nil {
 		fmt.Println("failed")
@@ -276,17 +321,19 @@ func (r *K3sRuntime) Down(_ context.Context) error {
 		}
 	}
 
-	// Stop API process.
-	if r.apiCmd != nil && r.apiCmd.Process != nil {
-		if err := r.apiCmd.Process.Signal(syscall.SIGTERM); err != nil {
-			errs = append(errs, fmt.Sprintf("stop API: %v", err))
-		}
-		done := make(chan error, 1)
-		go func() { done <- r.apiCmd.Wait() }()
-		select {
-		case <-done:
-		case <-time.After(k3sProcessShutdownTimeout):
-			_ = r.apiCmd.Process.Kill()
+	// Stop API container via docker compose.
+	if cfgDir, dirErr := config.ConfigDir(); dirErr == nil {
+		composePath := filepath.Join(cfgDir, k3sComposeFileName)
+		if _, statErr := os.Stat(composePath); statErr == nil {
+			if out, composeErr := exec.Command(
+				"docker", "compose",
+				"-f", composePath,
+				"-p", "volundr-k3s",
+				"down",
+			).CombinedOutput(); composeErr != nil {
+				errs = append(errs, fmt.Sprintf("docker compose down: %v\n%s", composeErr, out))
+			}
+			_ = os.Remove(composePath)
 		}
 	}
 
@@ -701,9 +748,14 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	namespace := r.namespace(cfg)
 	kubeconfig := r.resolveKubeconfig(cfg)
 
+	dbHost := cfg.Database.Host
+	if cfg.Database.Mode == "embedded" {
+		dbHost = "host.docker.internal"
+	}
+
 	apiCfg := k3sAPIConfig{
 		Database: map[string]interface{}{
-			"host":     "127.0.0.1",
+			"host":     dbHost,
 			"port":     cfg.Database.Port,
 			"user":     cfg.Database.User,
 			"password": cfg.Database.Password,
@@ -762,56 +814,107 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	return configPath, nil
 }
 
-// startAPI starts the Python API process on the host.
-func (r *K3sRuntime) startAPI(ctx context.Context, cfg *config.Config, port int) error {
+// startAPIContainer starts the Python API in a Docker container
+// connected to the k3d network so it can reach the cluster.
+func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) error {
 	cfgDir, err := config.ConfigDir()
 	if err != nil {
 		return fmt.Errorf("get config dir: %w", err)
 	}
 
-	logFile, err := os.OpenFile(
-		filepath.Join(cfgDir, "logs", "api.log"),
-		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
-		0o644,
-	)
+	// Resolve kubeconfig — for k3d we need the internal k3d kubeconfig
+	// that uses the Docker network DNS name instead of localhost.
+	kubeconfigPath, err := r.writeK3dKubeconfig(cfgDir)
 	if err != nil {
-		return fmt.Errorf("open API log file: %w", err)
+		return fmt.Errorf("write k3d kubeconfig: %w", err)
 	}
 
-	configPath := filepath.Join(cfgDir, k3sConfigFileName)
-
-	r.apiCmd = exec.CommandContext(ctx,
-		"python3", "-m", "uvicorn",
-		"volundr.main:app",
-		"--host", "127.0.0.1",
-		"--port", strconv.Itoa(port),
-	)
-
-	r.apiCmd.Stdout = logFile
-	r.apiCmd.Stderr = logFile
-
-	// Set environment variables.
-	r.apiCmd.Env = append(os.Environ(),
-		fmt.Sprintf("DATABASE__HOST=127.0.0.1"),
-		fmt.Sprintf("DATABASE__PORT=%d", cfg.Database.Port),
-		fmt.Sprintf("DATABASE__USER=%s", cfg.Database.User),
-		fmt.Sprintf("DATABASE__PASSWORD=%s", cfg.Database.Password),
-		fmt.Sprintf("DATABASE__NAME=%s", cfg.Database.Name),
-		fmt.Sprintf("VOLUNDR_CONFIG=%s", configPath),
-	)
-
-	if cfg.Anthropic.APIKey != "" {
-		r.apiCmd.Env = append(r.apiCmd.Env,
-			fmt.Sprintf("ANTHROPIC_API_KEY=%s", cfg.Anthropic.APIKey),
-		)
+	dbHost := cfg.Database.Host
+	if cfg.Database.Mode == "embedded" {
+		dbHost = "host.docker.internal"
 	}
 
-	if err := r.apiCmd.Start(); err != nil {
-		logFile.Close()
-		return fmt.Errorf("start uvicorn: %w", err)
+	data := k3sComposeData{
+		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuu/volundr-api:latest"),
+		ContainerName:   k3sContainerName,
+		APIPort:         k3sAPIInternalPort,
+		DBHost:          dbHost,
+		DBPort:          cfg.Database.Port,
+		DBUser:          cfg.Database.User,
+		DBPassword:      cfg.Database.Password,
+		DBName:          cfg.Database.Name,
+		AnthropicAPIKey: cfg.Anthropic.APIKey,
+		ConfigPath:      filepath.Join(cfgDir, k3sConfigFileName),
+		KubeconfigPath:  kubeconfigPath,
+		StorageDir:      cfgDir,
+		ClusterName:     k3sClusterName,
+	}
+
+	var buf bytes.Buffer
+	if err := k3sComposeTemplate.Execute(&buf, data); err != nil {
+		return fmt.Errorf("render compose template: %w", err)
+	}
+
+	composePath := filepath.Join(cfgDir, k3sComposeFileName)
+	if err := os.WriteFile(composePath, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write compose file: %w", err)
+	}
+
+	// Start the container.
+	out, err := exec.Command(
+		"docker", "compose",
+		"-f", composePath,
+		"-p", "volundr-k3s",
+		"up", "-d",
+	).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker compose up: %w\n%s", err, out)
 	}
 
 	return nil
+}
+
+// writeK3dKubeconfig writes a kubeconfig suitable for use inside a Docker
+// container on the k3d network. The API server address is rewritten to
+// use the k3d server container name instead of localhost.
+func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
+	// Get the k3d kubeconfig with internal server address.
+	out, err := exec.Command(
+		"k3d", "kubeconfig", "get", k3sClusterName,
+	).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("get k3d kubeconfig: %w\n%s", err, out)
+	}
+
+	// The k3d kubeconfig points to localhost:<random-port>.
+	// Replace with the k3d server container's Docker DNS name
+	// so it works from inside the k3d Docker network.
+	kubeconfig := string(out)
+	// k3d server container is named k3d-<cluster>-server-0
+	// and listens on port 6443 internally.
+	serverDNS := fmt.Sprintf("https://k3d-%s-server-0:6443", k3sClusterName)
+	// Replace any https://0.0.0.0:<port> or https://127.0.0.1:<port>
+	// or https://localhost:<port> references.
+	for _, prefix := range []string{
+		"https://0.0.0.0:", "https://127.0.0.1:", "https://localhost:",
+	} {
+		if idx := strings.Index(kubeconfig, prefix); idx >= 0 {
+			end := strings.Index(kubeconfig[idx+len(prefix):], "\n")
+			if end < 0 {
+				end = len(kubeconfig[idx+len(prefix):])
+			}
+			old := kubeconfig[idx : idx+len(prefix)+end]
+			kubeconfig = strings.Replace(kubeconfig, old, serverDNS, 1)
+			break
+		}
+	}
+
+	kubeconfigPath := filepath.Join(cfgDir, "k3d-kubeconfig.yaml")
+	if err := os.WriteFile(kubeconfigPath, []byte(kubeconfig), 0o600); err != nil {
+		return "", fmt.Errorf("write kubeconfig: %w", err)
+	}
+
+	return kubeconfigPath, nil
 }
 
 // installSkuldChart installs or upgrades the skuld Helm chart.
@@ -838,15 +941,7 @@ func (r *K3sRuntime) installSkuldChart(cfg *config.Config) error {
 func (r *K3sRuntime) writeStateFile(cfg *config.Config) error {
 	services := []ServiceStatus{
 		{Name: "proxy", State: StateRunning, Port: cfg.Listen.Port},
-	}
-
-	if r.apiCmd != nil && r.apiCmd.Process != nil {
-		services = append(services, ServiceStatus{
-			Name:  "api",
-			State: StateRunning,
-			PID:   r.apiCmd.Process.Pid,
-			Port:  cfg.Listen.Port + 1,
-		})
+		{Name: "api", State: StateRunning, Port: k3sAPIInternalPort},
 	}
 
 	if cfg.Database.Mode == "embedded" {
