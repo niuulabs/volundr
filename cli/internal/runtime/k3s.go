@@ -32,10 +32,6 @@ const (
 	k3sLoadBalancerHTTPPort = "80:80@loadbalancer"
 	// k3sLoadBalancerHTTPSPort is the HTTPS port exposed by the k3d load balancer.
 	k3sLoadBalancerHTTPSPort = "443:443@loadbalancer"
-	// k3sHelmReleaseName is the Helm release name for the base Skuld chart.
-	k3sHelmReleaseName = "skuld-base"
-	// k3sHelmChart is the OCI chart reference for Skuld.
-	k3sHelmChart = "oci://ghcr.io/niuulabs/charts/skuld"
 	// k3sAPIInternalPort is the host port the API listens on in k3s mode.
 	k3sAPIInternalPort = 18080
 )
@@ -247,14 +243,6 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Printf("started (port %d)\n", k3sAPIInternalPort)
 
-	// Install/upgrade the skuld base Helm chart.
-	fmt.Print("  Skuld chart   ... ")
-	if err := r.installSkuldChart(cfg); err != nil {
-		fmt.Println("failed")
-		return fmt.Errorf("install skuld chart: %w", err)
-	}
-	fmt.Println("ok")
-
 	// Start the reverse proxy.
 	fmt.Print("  Proxy         ... ")
 	apiURL := fmt.Sprintf("http://127.0.0.1:%d", k3sAPIInternalPort)
@@ -296,17 +284,6 @@ func (r *K3sRuntime) Down(_ context.Context) error {
 	loadedCfg, loadErr := config.Load()
 	if loadErr == nil {
 		namespace = resolveNamespace(loadedCfg)
-	}
-
-	// Uninstall skuld Helm release.
-	if out, err := exec.Command(
-		"helm", "uninstall", k3sHelmReleaseName,
-		"--namespace", namespace,
-	).CombinedOutput(); err != nil {
-		outStr := string(out)
-		if !strings.Contains(outStr, "not found") {
-			errs = append(errs, fmt.Sprintf("helm uninstall: %v\n%s", err, outStr))
-		}
 	}
 
 	// Delete session pods/resources in the namespace (by label).
@@ -915,26 +892,6 @@ func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
 	}
 
 	return kubeconfigPath, nil
-}
-
-// installSkuldChart installs or upgrades the skuld Helm chart.
-func (r *K3sRuntime) installSkuldChart(cfg *config.Config) error {
-	namespace := r.namespace(cfg)
-
-	out, err := exec.Command(
-		"helm", "upgrade", "--install", k3sHelmReleaseName,
-		k3sHelmChart,
-		"--namespace", namespace,
-		"--set", "gateway.enabled=false",
-		"--set", "ingress.mode=path",
-		"--set", "ingress.enabled=false",
-		"--create-namespace",
-	).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("helm upgrade --install: %w\n%s", err, out)
-	}
-
-	return nil
 }
 
 // writeStateFile writes the service status to the state file.
