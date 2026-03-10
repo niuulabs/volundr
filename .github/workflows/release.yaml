@@ -114,8 +114,7 @@ jobs:
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}"
           VERSION="${{ needs.version.outputs.version }}"
-          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{.Manifest.Digest}}')
-          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign sign --yes "${IMAGE}:${VERSION}"
 
   # Scan and generate SBOMs after manifests are published
   scan-containers:
