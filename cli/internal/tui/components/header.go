@@ -29,7 +29,7 @@ func (h Header) View() string {
 	theme := tui.DefaultTheme
 
 	logoStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentCyan).
+		Foreground(theme.AccentAmber).
 		Bold(true)
 
 	titleStyle := lipgloss.NewStyle().

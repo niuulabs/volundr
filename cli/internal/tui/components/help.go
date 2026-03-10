@@ -23,7 +23,7 @@ type HelpOverlay struct {
 // DefaultBindings returns the global keybindings.
 func DefaultBindings() []HelpBinding {
 	return []HelpBinding{
-		{Key: "1-9", Desc: "Switch page"},
+		{Key: "1-7", Desc: "Switch page"},
 		{Key: "?", Desc: "Toggle help"},
 		{Key: "/", Desc: "Search"},
 		{Key: "Tab", Desc: "Next focus"},
@@ -61,7 +61,7 @@ func (h HelpOverlay) View(termWidth, termHeight int) string {
 	theme := tui.DefaultTheme
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentCyan).
+		Foreground(theme.AccentAmber).
 		Bold(true)
 
 	keyStyle := lipgloss.NewStyle().
@@ -110,7 +110,7 @@ func (h HelpOverlay) View(termWidth, termHeight int) string {
 	modal := lipgloss.NewStyle().
 		Background(theme.BgSecondary).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.AccentCyan).
+		BorderForeground(theme.AccentAmber).
 		Padding(1, 3).
 		Width(50).
 		Render(content)

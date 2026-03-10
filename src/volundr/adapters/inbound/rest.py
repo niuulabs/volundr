@@ -226,7 +226,7 @@ class ChronicleResponse(BaseModel):
     """Response model for a chronicle."""
 
     id: UUID
-    session_id: UUID
+    session_id: UUID | None
     status: ChronicleStatus
     project: str
     repo: str

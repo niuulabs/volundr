@@ -200,12 +200,14 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
 }
 
 // ConnectSession creates a new terminal tab and connects to the given session.
-func (t *TerminalPage) ConnectSession(sessionID string) {
+// It uses the session's CodeEndpoint to connect directly to the session pod.
+// If CodeEndpoint is empty, it falls back to the control-plane proxy.
+func (t *TerminalPage) ConnectSession(sess api.Session) {
 	w, h := t.termDimensions()
 
 	tab := &terminalTab{
 		label:     fmt.Sprintf("term-%d", len(t.tabs)+1),
-		sessionID: sessionID,
+		sessionID: sess.ID,
 		emulator:  vt.NewEmulator(w, h),
 		ws:        api.NewTerminalWSClient(t.serverURL, t.token),
 		connState: connStatusConnecting,
@@ -253,9 +255,19 @@ func (t *TerminalPage) ConnectSession(sessionID string) {
 		}
 	}
 
-	path := fmt.Sprintf("/api/v1/sessions/%s/terminal", sessionID)
+	// Derive terminal WS URL from chat endpoint (matches web UI pattern).
+	// Fallback to control-plane proxy if no endpoint is available.
+	var wsURL string
+	if sess.ChatEndpoint != "" {
+		wsURL = api.TerminalWSURLFromChat(sess.ChatEndpoint)
+	} else if sess.CodeEndpoint != "" {
+		wsURL = api.SessionWSURL(sess.CodeEndpoint, "/terminal/ws")
+	} else {
+		wsURL = fmt.Sprintf("/api/v1/volundr/sessions/%s/terminal", sess.ID)
+	}
+
 	go func() {
-		if err := tab.ws.Connect(path); err != nil {
+		if err := tab.ws.Connect(wsURL); err != nil {
 			select {
 			case connCh <- TerminalDisconnectedMsg{TabIndex: tabIndex, Err: err}:
 			default:
@@ -366,15 +378,13 @@ func (t TerminalPage) View() string {
 
 	// Terminal content from vt emulator
 	tab.mu.Lock()
-	content := tab.emulator.String()
+	content := tab.emulator.Render()
 	tab.mu.Unlock()
 
 	termW, termH := t.termDimensions()
 	termStyle := lipgloss.NewStyle().
 		Width(termW).
-		Height(termH).
-		Background(lipgloss.Color("#000000")).
-		Foreground(lipgloss.Color("#c0c0c0"))
+		Height(termH)
 
 	helpText := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
@@ -424,16 +434,14 @@ func (t TerminalPage) renderEmptyState() string {
 // renderFullScreen renders the terminal in full-screen mode.
 func (t TerminalPage) renderFullScreen(tab *terminalTab) string {
 	tab.mu.Lock()
-	content := tab.emulator.String()
+	content := tab.emulator.Render()
 	tab.mu.Unlock()
 
 	statusLine := t.renderStatusLine(tab)
 
 	termStyle := lipgloss.NewStyle().
 		Width(t.width).
-		Height(t.height - 1).
-		Background(lipgloss.Color("#000000")).
-		Foreground(lipgloss.Color("#c0c0c0"))
+		Height(t.height - 1)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		termStyle.Render(content),
@@ -455,7 +463,7 @@ func (t TerminalPage) renderTabBar() string {
 		var style lipgloss.Style
 		if i == t.activeTab {
 			style = lipgloss.NewStyle().
-				Foreground(theme.AccentCyan).
+				Foreground(theme.AccentAmber).
 				Bold(true).
 				Underline(true).
 				Padding(0, 1)
