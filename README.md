@@ -1,7 +1,9 @@
 # Volundr
 
 [![CI](https://github.com/niuulabs/volundr/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/niuulabs/volundr/actions/workflows/ci.yaml)
+[![Release](https://github.com/niuulabs/volundr/actions/workflows/release.yaml/badge.svg)](https://github.com/niuulabs/volundr/actions/workflows/release.yaml)
 [![Secret Scan](https://github.com/niuulabs/volundr/actions/workflows/secrets.yaml/badge.svg?branch=main)](https://github.com/niuulabs/volundr/actions/workflows/secrets.yaml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/niuulabs/volundr/badge)](https://scorecard.dev/viewer/?uri=github.com/niuulabs/volundr)
 [![Coverage](https://codecov.io/gh/niuulabs/volundr/branch/main/graph/badge.svg)](https://codecov.io/gh/niuulabs/volundr)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 

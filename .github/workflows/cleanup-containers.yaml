@@ -1,0 +1,58 @@
+# Garbage-collects dev container images (pr-* tags) older than 7 days.
+# Runs daily at 03:00 UTC.
+name: Cleanup Dev Containers
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+
+permissions: read-all
+
+jobs:
+  cleanup:
+    name: Clean stale dev images
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        container:
+          - volundr
+          - skuld
+          - skuld-codex
+          - devrunner
+          - volundr-web
+    steps:
+      - name: Delete stale dev container versions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const container = '${{ matrix.container }}';
+            const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+            const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+              package_type: 'container',
+              package_name: container,
+              org: owner,
+              per_page: 100,
+            }).catch(() => ({ data: [] }));
+
+            let deleted = 0;
+            for (const version of versions.data) {
+              const tags = version.metadata?.container?.tags || [];
+              const isPr = tags.some(t => t.startsWith('pr-'));
+              const isOld = new Date(version.updated_at) < cutoff;
+
+              if (isPr && isOld) {
+                console.log(`Deleting ${container}@${version.id} (tags: ${tags.join(', ')}, updated: ${version.updated_at})`);
+                await github.rest.packages.deletePackageVersionForOrg({
+                  package_type: 'container',
+                  package_name: container,
+                  org: owner,
+                  package_version_id: version.id,
+                }).catch(e => console.log(`  Failed: ${e.message}`));
+                deleted++;
+              }
+            }
+            console.log(`Deleted ${deleted} stale versions of ${container}`);

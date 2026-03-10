@@ -1,8 +1,10 @@
 [project]
 name = "volundr"
 version = "0.1.0"
-description = "Self-hosted Claude Code session manager"
+description = "Volundr — self-hosted AI-native development platform"
 readme = "README.md"
+license = {text = "Apache-2.0"}
+keywords = ["development-platform", "remote-coding", "ai", "kubernetes", "self-hosted"]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0",
@@ -47,6 +49,12 @@ dev = [
 volundr = "volundr.main:main"
 skuld = "volundr.skuld.broker:main"
 bifrost = "volundr.bifrost.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/niuulabs/volundr"
+Documentation = "https://github.com/niuulabs/volundr"
+Repository = "https://github.com/niuulabs/volundr"
+Issues = "https://github.com/niuulabs/volundr/issues"
 
 [build-system]
 requires = ["hatchling"]

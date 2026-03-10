@@ -14,6 +14,12 @@ RUN npm run build
 # Stage 2: Serve with nginx
 FROM nginx:1.27-alpine
 
+LABEL org.opencontainers.image.title="volundr-web"
+LABEL org.opencontainers.image.description="Volundr Web — AI-native development platform UI"
+LABEL org.opencontainers.image.vendor="Niuu Labs"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
+
 # Create non-root user
 RUN addgroup -g 1001 -S volundr && \
     adduser -u 1001 -S volundr -G volundr && \

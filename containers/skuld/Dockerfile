@@ -1,7 +1,10 @@
 FROM ubuntu:24.04
 
-LABEL maintainer="Volundr Team"
-LABEL description="Skuld - AI coding CLI broker (Claude Code)"
+LABEL org.opencontainers.image.title="skuld"
+LABEL org.opencontainers.image.description="Skuld — remote AI coding session broker (Claude Code)"
+LABEL org.opencontainers.image.vendor="Niuu Labs"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive

@@ -1,7 +1,10 @@
 FROM python:3.12-slim
 
-LABEL maintainer="Volundr Team"
-LABEL description="Devrunner - minimal runtime for local service testing"
+LABEL org.opencontainers.image.title="devrunner"
+LABEL org.opencontainers.image.description="Devrunner — sandboxed development runtime"
+LABEL org.opencontainers.image.vendor="Niuu Labs"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive

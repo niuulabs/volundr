@@ -1,0 +1,184 @@
+# Runs on every push to main:
+# 1. Builds all container images with "latest" + SHA tags (always)
+# 2. Determines version from conventional commits and creates a v* tag (conditional)
+#
+# The v* tag triggers release.yaml which builds versioned artifacts.
+# Uses a GitHub App (Volundr Release Bot) to push tags to protected branches.
+# Required secrets: APP_ID, APP_PRIVATE_KEY
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+permissions: read-all
+
+env:
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: main-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Containers — build per platform natively, then merge manifests
+  # ---------------------------------------------------------------------------
+  build-container-image:
+    name: "Build ${{ matrix.container }} (${{ matrix.platform }})"
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./containers/${{ matrix.container }}/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ github.sha }}-${{ matrix.platform }}
+          labels: |
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.vendor=Niuu Labs
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
+          provenance: false
+
+  merge-container-manifests:
+    name: "Manifest ${{ matrix.container }}"
+    needs: build-container-image
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifests
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          # latest
+          docker manifest create "${IMAGE}:latest" \
+            "${IMAGE}:${SHA}-amd64" \
+            "${IMAGE}:${SHA}-arm64"
+          docker manifest push "${IMAGE}:latest"
+
+          # short sha
+          docker manifest create "${IMAGE}:${SHORT_SHA}" \
+            "${IMAGE}:${SHA}-amd64" \
+            "${IMAGE}:${SHA}-arm64"
+          docker manifest push "${IMAGE}:${SHORT_SHA}"
+
+  # ---------------------------------------------------------------------------
+  # Version tagging
+  # ---------------------------------------------------------------------------
+  tag:
+    name: Determine Version & Tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Determine version bump
+        id: version
+        run: |
+          # Get the last release tag or use 0.0.0 if none exists
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LAST_VERSION=${LAST_TAG#v}
+
+          # Get all commit messages since last tag (or all if no tag)
+          if [ "$LAST_TAG" = "v0.0.0" ]; then
+            COMMIT_MSGS=$(git log --pretty=%B HEAD)
+          else
+            COMMIT_MSGS=$(git log --pretty=%B ${LAST_TAG}..HEAD)
+          fi
+
+          echo "Last version: $LAST_VERSION"
+          echo "Commit messages since last release:"
+          echo "$COMMIT_MSGS"
+          echo "---"
+
+          # Determine version bump type from conventional commits
+          VERSION_TYPE="none"
+          if echo "$COMMIT_MSGS" | grep -qiE "^feat(\(.+\))?!:|^BREAKING CHANGE:"; then
+            VERSION_TYPE="major"
+          elif echo "$COMMIT_MSGS" | grep -qiE "^(feat|refactor)(\(.+\))?:"; then
+            VERSION_TYPE="minor"
+          elif echo "$COMMIT_MSGS" | grep -qiE "^(fix|style)(\(.+\))?:"; then
+            VERSION_TYPE="patch"
+          fi
+
+          echo "Version bump type: $VERSION_TYPE"
+
+          if [ "$VERSION_TYPE" = "none" ]; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Calculate new version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LAST_VERSION"
+          case $VERSION_TYPE in
+            major)
+              NEW_VERSION="$((MAJOR + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+              ;;
+          esac
+
+          echo "New version: $NEW_VERSION"
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: volundr
-description: A Helm chart for Volundr - Claude Code Session Manager
+description: "Volundr — self-hosted AI-native development platform"
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
@@ -12,7 +12,8 @@ keywords:
   - ai
   - kubernetes
 maintainers:
-  - name: Volundr Team
+  - name: Niuu Labs
+    url: https://github.com/niuulabs
 home: https://github.com/niuulabs/volundr
 sources:
   - https://github.com/niuulabs/volundr

@@ -3,16 +3,99 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+
+permissions: read-all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint
+  # ---------------------------------------------------------------------------
+  # Change detection — only run what's affected
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      python: ${{ steps.override.outputs.python }}
+      web: ${{ steps.override.outputs.web }}
+      go: ${{ steps.override.outputs.go }}
+      helm: ${{ steps.override.outputs.helm }}
+      container-names: ${{ steps.override.outputs.names }}
+      has_containers: ${{ steps.override.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # TODO: restore path-based filtering after pipelines are validated
+      # - name: Detect path changes
+      #   uses: dorny/paths-filter@v3
+      #   id: filter
+      #   with:
+      #     filters: |
+      #       python:
+      #         - 'src/**'
+      #         - 'tests/**'
+      #         - 'pyproject.toml'
+      #         - 'uv.lock'
+      #       web:
+      #         - 'web/**'
+      #       go:
+      #         - 'cli/**'
+      #       helm:
+      #         - 'charts/**'
+      #       container-python:
+      #         - 'src/**'
+      #         - 'pyproject.toml'
+      #         - 'containers/volundr/**'
+      #         - 'containers/skuld/**'
+      #         - 'containers/skuld-codex/**'
+      #       container-web:
+      #         - 'web/**'
+      #         - 'containers/volundr-web/**'
+      #       container-devrunner:
+      #         - 'containers/devrunner/**'
+
+      # TODO: restore dynamic container list after pipelines are validated
+      # - name: Build container list
+      #   id: containers
+      #   run: |
+      #     NAMES="[]"
+      #     if [ "${{ steps.filter.outputs.container-python }}" = "true" ]; then
+      #       NAMES=$(echo "$NAMES" | jq -c '. + ["volundr","skuld","skuld-codex"]')
+      #     fi
+      #     if [ "${{ steps.filter.outputs.container-web }}" = "true" ]; then
+      #       NAMES=$(echo "$NAMES" | jq -c '. + ["volundr-web"]')
+      #     fi
+      #     if [ "${{ steps.filter.outputs.container-devrunner }}" = "true" ]; then
+      #       NAMES=$(echo "$NAMES" | jq -c '. + ["devrunner"]')
+      #     fi
+      #     echo "names=$NAMES" >> $GITHUB_OUTPUT
+      #     if [ "$NAMES" = "[]" ]; then
+      #       echo "any=false" >> $GITHUB_OUTPUT
+      #     else
+      #       echo "any=true" >> $GITHUB_OUTPUT
+      #     fi
+
+      - name: Hardcode all changes to true for testing
+        id: override
+        run: |
+          echo "python=true" >> $GITHUB_OUTPUT
+          echo "web=true" >> $GITHUB_OUTPUT
+          echo "go=true" >> $GITHUB_OUTPUT
+          echo "helm=true" >> $GITHUB_OUTPUT
+          echo 'names=["volundr","skuld","skuld-codex","devrunner","volundr-web"]' >> $GITHUB_OUTPUT
+          echo "any=true" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  # Python
+  # ---------------------------------------------------------------------------
+  python-lint:
+    name: "Python: Lint"
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,8 +118,10 @@ jobs:
         run: uv run ruff format --check src/ tests/ || echo "::warning::Formatting issues found - consider running 'ruff format src/ tests/'"
         continue-on-error: true
 
-  test:
-    name: Test
+  python-test:
+    name: "Python: Test"
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,8 +152,13 @@ jobs:
           flags: backend
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # ---------------------------------------------------------------------------
+  # Web
+  # ---------------------------------------------------------------------------
   web-lint:
-    name: Web Lint
+    name: "Web: Lint"
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -96,7 +186,9 @@ jobs:
         run: npm run typecheck
 
   web-test:
-    name: Web Test
+    name: "Web: Test"
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -124,8 +216,13 @@ jobs:
           flags: web
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  cli-lint:
-    name: CLI Lint
+  # ---------------------------------------------------------------------------
+  # Go CLI
+  # ---------------------------------------------------------------------------
+  go-lint:
+    name: "Go: Lint"
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -142,8 +239,10 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-  cli-test:
-    name: CLI Test
+  go-test:
+    name: "Go: Test"
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -157,11 +256,20 @@ jobs:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
 
-      - name: Run tests
-        run: go test ./... -v -count=1
+      - name: Run tests with coverage
+        run: go test ./... -v -count=1 -coverprofile=coverage.out
 
-  cli-build:
-    name: CLI Build
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: cli/coverage.out
+          flags: cli
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  go-build:
+    name: "Go: Build"
+    needs: changes
+    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -183,8 +291,13 @@ jobs:
         working-directory: cli
         run: make build
 
+  # ---------------------------------------------------------------------------
+  # Helm
+  # ---------------------------------------------------------------------------
   helm-lint:
-    name: Helm Lint
+    name: "Helm: Lint"
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -199,3 +312,92 @@ jobs:
 
       - name: Lint volundr chart
         run: helm lint charts/volundr/
+
+  # ---------------------------------------------------------------------------
+  # Containers — build per platform natively, then merge manifests
+  # ---------------------------------------------------------------------------
+  build-container-image:
+    name: "Container: ${{ matrix.container }} (${{ matrix.platform }})"
+    needs: changes
+    if: needs.changes.outputs.has_containers == 'true'
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+        container: ${{ fromJson(needs.changes.outputs.container-names) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./containers/${{ matrix.container }}/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}-${{ matrix.platform }}
+          labels: |
+            dev.volundr.pr=${{ github.event.number }}
+            dev.volundr.ephemeral=true
+          cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
+          provenance: false
+
+  merge-container-manifests:
+    name: "Container: ${{ matrix.container }} (manifest)"
+    needs: [changes, build-container-image]
+    if: needs.changes.outputs.has_containers == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        container: ${{ fromJson(needs.changes.outputs.container-names) }}
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifest
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}"
+          SHA_TAG="pr-${{ github.event.number }}-${{ github.sha }}"
+          PR_TAG="pr-${{ github.event.number }}"
+
+          docker manifest create "${IMAGE}:${SHA_TAG}" \
+            "${IMAGE}:pr-${{ github.event.number }}-amd64" \
+            "${IMAGE}:pr-${{ github.event.number }}-arm64"
+          docker manifest push "${IMAGE}:${SHA_TAG}"
+
+          docker manifest create "${IMAGE}:${PR_TAG}" \
+            "${IMAGE}:pr-${{ github.event.number }}-amd64" \
+            "${IMAGE}:pr-${{ github.event.number }}-arm64"
+          docker manifest push "${IMAGE}:${PR_TAG}"
+
+  # ---------------------------------------------------------------------------
+  # Security (always runs)
+  # ---------------------------------------------------------------------------
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
