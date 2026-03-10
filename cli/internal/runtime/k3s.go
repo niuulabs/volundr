@@ -172,6 +172,11 @@ func (r *K3sRuntime) Init(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Println("ok")
 
+	// Create Kubernetes secrets for session pods.
+	if err := r.ensureK8sSecrets(cfg, namespace); err != nil {
+		return fmt.Errorf("create k8s secrets: %w", err)
+	}
+
 	// Test embedded postgres if in embedded mode.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Println("  Downloading PostgreSQL binary...")
@@ -673,6 +678,70 @@ func (r *K3sRuntime) ensureNamespace(namespace string) error {
 			return nil
 		}
 		return fmt.Errorf("create namespace %s: %w\n%s", namespace, err, out)
+	}
+
+	return nil
+}
+
+// ensureK8sSecrets creates or updates the required Kubernetes secrets
+// in the session namespace (anthropic-api-key, github-token).
+func (r *K3sRuntime) ensureK8sSecrets(cfg *config.Config, namespace string) error {
+	kcPath := r.resolveKubeconfig(cfg)
+
+	// Create anthropic-api-key secret if API key is configured.
+	if cfg.Anthropic.APIKey != "" {
+		fmt.Print("  Secret: anthropic-api-key ... ")
+		if err := r.upsertSecret(kcPath, namespace, "anthropic-api-key",
+			map[string]string{"api-key": cfg.Anthropic.APIKey},
+		); err != nil {
+			fmt.Println("failed")
+			return fmt.Errorf("create anthropic-api-key secret: %w", err)
+		}
+		fmt.Println("ok")
+	}
+
+	// Create github-token secret if a clone token is configured.
+	cloneToken := cfg.Git.GitHub.CloneToken
+	if cloneToken == "" && len(cfg.Git.GitHub.Instances) > 0 {
+		// Fall back to the first instance's token.
+		cloneToken = cfg.Git.GitHub.Instances[0].Token
+	}
+	if cloneToken != "" {
+		fmt.Print("  Secret: github-token      ... ")
+		if err := r.upsertSecret(kcPath, namespace, "github-token",
+			map[string]string{"token": cloneToken},
+		); err != nil {
+			fmt.Println("failed")
+			return fmt.Errorf("create github-token secret: %w", err)
+		}
+		fmt.Println("ok")
+	}
+
+	return nil
+}
+
+// upsertSecret creates or replaces a Kubernetes Opaque secret.
+func (r *K3sRuntime) upsertSecret(kubeconfig, namespace, name string, data map[string]string) error {
+	// Delete existing secret (ignore errors if it doesn't exist).
+	_ = exec.Command(
+		"kubectl", "delete", "secret", name,
+		"--namespace", namespace,
+		"--kubeconfig", kubeconfig,
+		"--ignore-not-found",
+	).Run()
+
+	args := []string{
+		"create", "secret", "generic", name,
+		"--namespace", namespace,
+		"--kubeconfig", kubeconfig,
+	}
+	for k, v := range data {
+		args = append(args, fmt.Sprintf("--from-literal=%s=%s", k, v))
+	}
+
+	out, err := exec.Command("kubectl", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("kubectl create secret: %w\n%s", err, out)
 	}
 
 	return nil

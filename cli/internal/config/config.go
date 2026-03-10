@@ -46,6 +46,27 @@ type K3sConfig struct {
 	Provider   string `yaml:"provider"`   // "auto", "k3d", "native" (default: auto)
 }
 
+// GitHubInstanceConfig holds settings for a single GitHub instance.
+type GitHubInstanceConfig struct {
+	Name     string   `yaml:"name"`
+	BaseURL  string   `yaml:"base_url"`
+	Token    string   `yaml:"token,omitempty"`
+	TokenEnv string   `yaml:"token_env,omitempty"`
+	Orgs     []string `yaml:"orgs,omitempty"`
+}
+
+// GitConfig holds git provider settings.
+type GitConfig struct {
+	GitHub GitHubConfig `yaml:"github,omitempty"`
+}
+
+// GitHubConfig holds GitHub-specific settings.
+type GitHubConfig struct {
+	Enabled    bool                   `yaml:"enabled"`
+	Instances  []GitHubInstanceConfig `yaml:"instances,omitempty"`
+	CloneToken string                 `yaml:"clone_token,omitempty"`
+}
+
 // Config represents the full volundr configuration.
 type Config struct {
 	Runtime   string          `yaml:"runtime"`
@@ -53,6 +74,7 @@ type Config struct {
 	TLS       TLSConfig       `yaml:"tls"`
 	Database  DatabaseConfig  `yaml:"database"`
 	Anthropic AnthropicConfig `yaml:"anthropic"`
+	Git       GitConfig       `yaml:"git,omitempty"`
 	Docker    DockerConfig    `yaml:"docker,omitempty"`
 	K3s       K3sConfig       `yaml:"k3s,omitempty"`
 }

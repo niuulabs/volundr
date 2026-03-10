@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -110,6 +111,73 @@ func runInit(_ *cobra.Command, _ []string) error {
 		cfg.Database.Name = strings.TrimSpace(name)
 	}
 
+	// Prompt for GitHub configuration.
+	fmt.Println()
+	fmt.Print("Configure GitHub access? [y/N]: ")
+	ghAnswer, _ := reader.ReadString('\n')
+	ghAnswer = strings.TrimSpace(strings.ToLower(ghAnswer))
+	if ghAnswer == "y" || ghAnswer == "yes" {
+		cfg.Git.GitHub.Enabled = true
+
+		fmt.Print("GitHub token (or env var name like GITHUB_TOKEN): ")
+		token, _ := reader.ReadString('\n')
+		token = strings.TrimSpace(token)
+
+		fmt.Print("GitHub organizations (comma-separated, optional): ")
+		orgsStr, _ := reader.ReadString('\n')
+		orgsStr = strings.TrimSpace(orgsStr)
+
+		fmt.Print("GitHub API URL (default: https://api.github.com): ")
+		baseURL, _ := reader.ReadString('\n')
+		baseURL = strings.TrimSpace(baseURL)
+		if baseURL == "" {
+			baseURL = "https://api.github.com"
+		}
+
+		instance := config.GitHubInstanceConfig{
+			Name:    "GitHub",
+			BaseURL: baseURL,
+		}
+
+		// If the token looks like an env var name (all caps, underscores),
+		// store it as token_env; otherwise store as token.
+		if token != "" {
+			if isEnvVarName(token) {
+				instance.TokenEnv = token
+			} else {
+				instance.Token = token
+			}
+		}
+
+		if orgsStr != "" {
+			for _, org := range strings.Split(orgsStr, ",") {
+				org = strings.TrimSpace(org)
+				if org != "" {
+					instance.Orgs = append(instance.Orgs, org)
+				}
+			}
+		}
+
+		cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{instance}
+
+		// Ask for the session clone token (used by skuld pods).
+		// Default to the same token as the API.
+		apiToken := instance.Token
+		if apiToken != "" {
+			fmt.Printf("GitHub token for session repo cloning (default: same as above): ")
+		} else {
+			fmt.Print("GitHub token for session repo cloning: ")
+		}
+		cloneToken, _ := reader.ReadString('\n')
+		cloneToken = strings.TrimSpace(cloneToken)
+		if cloneToken == "" {
+			cloneToken = apiToken
+		}
+		if cloneToken != "" {
+			cfg.Git.GitHub.CloneToken = cloneToken
+		}
+	}
+
 	// Validate.
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
@@ -151,6 +219,20 @@ func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Println("Run 'volundr up' to start.")
 
 	return nil
+}
+
+// isEnvVarName returns true if the string looks like an environment variable name
+// (all uppercase letters, digits, and underscores).
+func isEnvVarName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.IsUpper(r) && !unicode.IsDigit(r) && r != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // machinePassphrase generates a deterministic passphrase from machine identity.
