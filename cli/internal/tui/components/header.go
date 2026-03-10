@@ -9,10 +9,11 @@ import (
 
 // Header renders the top application header bar.
 type Header struct {
-	Width      int
-	Title      string
-	ServerURL  string
-	Connected  bool
+	Width       int
+	Title       string
+	ServerURL   string
+	Connected   bool
+	PoolSummary string
 }
 
 // NewHeader creates a new Header component.
@@ -24,12 +25,31 @@ func NewHeader(serverURL string) Header {
 	}
 }
 
+// NewHeaderWithPool creates a new Header component showing multi-cluster status.
+func NewHeaderWithPool(pool *tui.ClientPool) Header {
+	server := ""
+	if len(pool.Entries) == 1 {
+		for _, entry := range pool.Entries {
+			server = entry.Server
+		}
+	}
+
+	connected := len(pool.ConnectedClients()) > 0
+
+	return Header{
+		Title:       "Volundr",
+		ServerURL:   server,
+		Connected:   connected,
+		PoolSummary: pool.Summary(),
+	}
+}
+
 // View renders the header bar.
 func (h Header) View() string {
 	theme := tui.DefaultTheme
 
 	logoStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
+		Foreground(theme.AccentCyan).
 		Bold(true)
 
 	titleStyle := lipgloss.NewStyle().
@@ -55,9 +75,20 @@ func (h Header) View() string {
 		titleStyle.Render(h.Title),
 	)
 
+	// Right side: show pool summary if available, otherwise single server URL.
+	var rightText string
+	if h.PoolSummary != "" {
+		rightText = h.PoolSummary
+		if h.ServerURL != "" {
+			rightText = h.ServerURL + "  " + rightText
+		}
+	} else {
+		rightText = h.ServerURL
+	}
+
 	right := fmt.Sprintf("%s %s",
 		statusDot,
-		serverStyle.Render(h.ServerURL),
+		serverStyle.Render(rightText),
 	)
 
 	// Calculate gap to right-align the server info

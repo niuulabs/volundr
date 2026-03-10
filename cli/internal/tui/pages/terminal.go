@@ -55,6 +55,7 @@ type TerminalPage struct {
 	fullScreen bool
 	serverURL  string
 	token      string
+	pool       *tui.ClientPool
 	outputCh   chan TerminalOutputMsg
 	connCh     chan tea.Msg
 }
@@ -67,7 +68,7 @@ const (
 )
 
 // NewTerminalPage creates a new terminal page.
-func NewTerminalPage(serverURL, token string) TerminalPage {
+func NewTerminalPage(serverURL, token string, pool *tui.ClientPool) TerminalPage {
 	outputCh := make(chan TerminalOutputMsg, 256)
 	connCh := make(chan tea.Msg, 16)
 
@@ -76,6 +77,7 @@ func NewTerminalPage(serverURL, token string) TerminalPage {
 		activeTab: 0,
 		serverURL: serverURL,
 		token:     token,
+		pool:      pool,
 		outputCh:  outputCh,
 		connCh:    connCh,
 	}
@@ -199,17 +201,39 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
 	return t, nil
 }
 
+// ConnectSessionOnCluster creates a new terminal tab using the specified cluster's
+// server and token. This is used when launching a terminal from a multi-cluster
+// session selection.
+func (t *TerminalPage) ConnectSessionOnCluster(sessionID, contextKey string) {
+	if t.pool == nil {
+		t.ConnectSession(sessionID)
+		return
+	}
+
+	entry := t.pool.GetEntry(contextKey)
+	if entry == nil {
+		t.ConnectSession(sessionID)
+		return
+	}
+
+	t.connectSessionWith(sessionID, entry.Server, entry.Client.Token())
+}
+
 // ConnectSession creates a new terminal tab and connects to the given session.
-// It uses the session's CodeEndpoint to connect directly to the session pod.
-// If CodeEndpoint is empty, it falls back to the control-plane proxy.
-func (t *TerminalPage) ConnectSession(sess api.Session) {
+// It uses the page-level serverURL and token (legacy single-cluster path).
+func (t *TerminalPage) ConnectSession(sessionID string) {
+	t.connectSessionWith(sessionID, t.serverURL, t.token)
+}
+
+// connectSessionWith creates a new terminal tab with the given server and token.
+func (t *TerminalPage) connectSessionWith(sessionID, serverURL, token string) {
 	w, h := t.termDimensions()
 
 	tab := &terminalTab{
 		label:     fmt.Sprintf("term-%d", len(t.tabs)+1),
-		sessionID: sess.ID,
+		sessionID: sessionID,
 		emulator:  vt.NewEmulator(w, h),
-		ws:        api.NewTerminalWSClient(t.serverURL, t.token),
+		ws:        api.NewTerminalWSClient(serverURL, token),
 		connState: connStatusConnecting,
 	}
 
@@ -255,19 +279,9 @@ func (t *TerminalPage) ConnectSession(sess api.Session) {
 		}
 	}
 
-	// Derive terminal WS URL from chat endpoint (matches web UI pattern).
-	// Fallback to control-plane proxy if no endpoint is available.
-	var wsURL string
-	if sess.ChatEndpoint != "" {
-		wsURL = api.TerminalWSURLFromChat(sess.ChatEndpoint)
-	} else if sess.CodeEndpoint != "" {
-		wsURL = api.SessionWSURL(sess.CodeEndpoint, "/terminal/ws")
-	} else {
-		wsURL = fmt.Sprintf("/api/v1/volundr/sessions/%s/terminal", sess.ID)
-	}
-
+	path := fmt.Sprintf("/api/v1/sessions/%s/terminal", sessionID)
 	go func() {
-		if err := tab.ws.Connect(wsURL); err != nil {
+		if err := tab.ws.Connect(path); err != nil {
 			select {
 			case connCh <- TerminalDisconnectedMsg{TabIndex: tabIndex, Err: err}:
 			default:
@@ -378,13 +392,15 @@ func (t TerminalPage) View() string {
 
 	// Terminal content from vt emulator
 	tab.mu.Lock()
-	content := tab.emulator.Render()
+	content := tab.emulator.String()
 	tab.mu.Unlock()
 
 	termW, termH := t.termDimensions()
 	termStyle := lipgloss.NewStyle().
 		Width(termW).
-		Height(termH)
+		Height(termH).
+		Background(lipgloss.Color("#000000")).
+		Foreground(lipgloss.Color("#c0c0c0"))
 
 	helpText := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
@@ -434,14 +450,16 @@ func (t TerminalPage) renderEmptyState() string {
 // renderFullScreen renders the terminal in full-screen mode.
 func (t TerminalPage) renderFullScreen(tab *terminalTab) string {
 	tab.mu.Lock()
-	content := tab.emulator.Render()
+	content := tab.emulator.String()
 	tab.mu.Unlock()
 
 	statusLine := t.renderStatusLine(tab)
 
 	termStyle := lipgloss.NewStyle().
 		Width(t.width).
-		Height(t.height - 1)
+		Height(t.height - 1).
+		Background(lipgloss.Color("#000000")).
+		Foreground(lipgloss.Color("#c0c0c0"))
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		termStyle.Render(content),
@@ -463,7 +481,7 @@ func (t TerminalPage) renderTabBar() string {
 		var style lipgloss.Style
 		if i == t.activeTab {
 			style = lipgloss.NewStyle().
-				Foreground(theme.AccentAmber).
+				Foreground(theme.AccentCyan).
 				Bold(true).
 				Underline(true).
 				Padding(0, 1)

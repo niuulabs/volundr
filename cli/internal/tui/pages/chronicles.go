@@ -8,7 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/niuulabs/volundr/cli/internal/api"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
@@ -17,84 +16,48 @@ import (
 type EventType string
 
 const (
-	EventSession  EventType = "session"
-	EventMessage  EventType = "message"
-	EventFile     EventType = "file"
-	EventGit      EventType = "git"
-	EventTerminal EventType = "terminal"
+	EventThink    EventType = "think"
+	EventObserve  EventType = "observe"
+	EventDecide   EventType = "decide"
+	EventAct      EventType = "act"
+	EventComplete EventType = "complete"
+	EventMerge    EventType = "merge"
 	EventError    EventType = "error"
 )
 
 // ChronicleEvent represents a single event in the chronicles timeline.
 type ChronicleEvent struct {
 	Type      EventType
-	Label     string
-	Action    string
-	Ins       int
-	Del       int
-	Hash      string
-	Elapsed   int // seconds since session start
-	Tokens    int
+	Title     string
+	Content   string
+	Session   string
 	Timestamp time.Time
-}
-
-// TimelineLoadedMsg carries the fetched timeline from the API.
-type TimelineLoadedMsg struct {
-	Timeline *api.TimelineResponse
-	Err      error
+	Duration  time.Duration
+	Tokens    int
 }
 
 // ChroniclesPage displays a filterable event log with a timeline feel.
 type ChroniclesPage struct {
-	client    *api.Client
-	sessionID string
 	events    []ChronicleEvent
-	files     []api.TimelineFile
-	commits   []api.TimelineCommit
 	filtered  []ChronicleEvent
 	cursor    int
 	scrollPos int
-	filter    string // "all", "session", "message", "file", "git", "terminal", "error"
-	loading   bool
-	loadErr   error
-	noSession bool
+	filter    string // "all", "think", "observe", "decide", "act", "complete", "merge"
 	width     int
 	height    int
 }
 
-// chronicleFilters defines the filter cycle order.
-var chronicleFilters = []string{"all", "session", "message", "file", "git", "terminal", "error"}
-
-// NewChroniclesPage creates a new chronicles page.
-func NewChroniclesPage(client *api.Client) ChroniclesPage {
+// NewChroniclesPage creates a new chronicles page with demo data.
+func NewChroniclesPage() ChroniclesPage {
+	events := demoChronicleEvents()
 	return ChroniclesPage{
-		client:    client,
-		filter:    "all",
-		noSession: true,
+		events:   events,
+		filtered: events,
+		filter:   "all",
 	}
 }
 
-// SetSession loads the timeline for the given session.
-func (c *ChroniclesPage) SetSession(sess api.Session) tea.Cmd {
-	c.sessionID = sess.ID
-	c.loading = true
-	c.loadErr = nil
-	c.noSession = false
-	c.events = nil
-	c.filtered = nil
-	c.files = nil
-	c.commits = nil
-	c.cursor = 0
-
-	client := c.client
-	sessionID := sess.ID
-	return func() tea.Msg {
-		timeline, err := client.GetTimeline(sessionID)
-		return TimelineLoadedMsg{Timeline: timeline, Err: err}
-	}
-}
-
-// Init does not load data on startup — chronicles require a session selection.
+// Init initializes the chronicles page.
 func (c ChroniclesPage) Init() tea.Cmd {
 	return nil
 }
@@ -102,19 +65,6 @@ func (c ChroniclesPage) Init() tea.Cmd {
 // Update handles messages for the chronicles page.
 func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) {
 	switch msg := msg.(type) {
-	case TimelineLoadedMsg:
-		c.loading = false
-		if msg.Err != nil {
-			c.loadErr = msg.Err
-			return c, nil
-		}
-		if msg.Timeline != nil {
-			c.events = timelineEventsFromAPI(msg.Timeline.Events)
-			c.files = msg.Timeline.Files
-			c.commits = msg.Timeline.Commits
-		}
-		c.applyFilter()
-		return c, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
@@ -125,96 +75,35 @@ func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) {
 			if c.cursor < len(c.filtered)-1 {
 				c.cursor++
 			}
-		case "tab":
-			c.cycleFilter(1)
-		case "shift+tab":
-			c.cycleFilter(-1)
-		case "r":
-			if c.sessionID != "" {
-				c.loading = true
-				client := c.client
-				sessionID := c.sessionID
-				return c, func() tea.Msg {
-					timeline, err := client.GetTimeline(sessionID)
-					return TimelineLoadedMsg{Timeline: timeline, Err: err}
-				}
-			}
+		case "1":
+			c.setFilter("all")
+		case "2":
+			c.setFilter("think")
+		case "3":
+			c.setFilter("observe")
+		case "4":
+			c.setFilter("decide")
+		case "5":
+			c.setFilter("act")
+		case "6":
+			c.setFilter("complete")
+		case "7":
+			c.setFilter("merge")
 		}
 	}
 	return c, nil
 }
 
-// timelineEventsFromAPI converts API timeline events to display events.
-func timelineEventsFromAPI(events []api.TimelineEvent) []ChronicleEvent {
-	var result []ChronicleEvent
-	for _, ev := range events {
-		eventType := mapEventType(ev.Type)
-
-		tokens := 0
-		if ev.Tokens != nil {
-			tokens = *ev.Tokens
-		}
-		ins := 0
-		if ev.Ins != nil {
-			ins = *ev.Ins
-		}
-		del := 0
-		if ev.Del != nil {
-			del = *ev.Del
-		}
-
-		result = append(result, ChronicleEvent{
-			Type:    eventType,
-			Label:   ev.Label,
-			Action:  ev.Action,
-			Ins:     ins,
-			Del:     del,
-			Hash:    ev.Hash,
-			Elapsed: ev.T,
-			Tokens:  tokens,
-		})
-	}
-	return result
-}
-
-// mapEventType maps a timeline event type string to an EventType.
-func mapEventType(t string) EventType {
-	switch t {
-	case "session":
-		return EventSession
-	case "message":
-		return EventMessage
-	case "file":
-		return EventFile
-	case "git":
-		return EventGit
-	case "terminal":
-		return EventTerminal
-	case "error":
-		return EventError
-	}
-	return EventMessage
-}
-
-// cycleFilter moves to the next or previous filter.
-func (c *ChroniclesPage) cycleFilter(dir int) {
-	idx := c.filterTabIndex()
-	idx = (idx + dir + len(chronicleFilters)) % len(chronicleFilters)
-	c.filter = chronicleFilters[idx]
-	c.applyFilter()
-}
-
-// applyFilter filters events by type.
-func (c *ChroniclesPage) applyFilter() {
+// setFilter applies a filter and resets cursor.
+func (c *ChroniclesPage) setFilter(filter string) {
+	c.filter = filter
 	c.filtered = nil
 	for _, e := range c.events {
-		if c.filter == "all" || string(e.Type) == c.filter {
+		if filter == "all" || string(e.Type) == filter {
 			c.filtered = append(c.filtered, e)
 		}
 	}
-	if c.cursor >= len(c.filtered) {
-		c.cursor = max(0, len(c.filtered)-1)
-	}
+	c.cursor = 0
 }
 
 // SetSize updates the page dimensions.
@@ -231,34 +120,20 @@ func (c ChroniclesPage) View() string {
 		Foreground(theme.TextPrimary).
 		Bold(true)
 
-	// No session selected
-	if c.noSession {
-		return lipgloss.NewStyle().
-			Width(c.width).
-			Height(c.height).
-			Padding(1, 2).
-			Render(lipgloss.JoinVertical(lipgloss.Left,
-				titleStyle.Render("◷ Chronicles"),
-				"",
-				lipgloss.NewStyle().Foreground(theme.AccentAmber).
-					Render("  Select a session first (press 1 to go to Sessions, then Enter)"),
-			))
-	}
-
 	// Stats row
 	counts := c.countByType()
 	cards := components.MetricRow([]components.MetricCard{
-		components.NewMetricCard("Total", fmt.Sprintf("%d", len(c.events)), "◷", theme.AccentAmber),
-		components.NewMetricCard("Messages", fmt.Sprintf("%d", counts["message"]), "◈", theme.AccentPurple),
-		components.NewMetricCard("Files", fmt.Sprintf("%d", counts["file"]), "▶", theme.AccentEmerald),
-		components.NewMetricCard("Git", fmt.Sprintf("%d", counts["git"]), "⊕", theme.AccentIndigo),
+		components.NewMetricCard("Total", fmt.Sprintf("%d", len(c.events)), "◷", theme.AccentCyan),
+		components.NewMetricCard("Think", fmt.Sprintf("%d", counts["think"]), "◐", theme.AccentPurple),
+		components.NewMetricCard("Act", fmt.Sprintf("%d", counts["act"]), "▶", theme.AccentEmerald),
+		components.NewMetricCard("Decide", fmt.Sprintf("%d", counts["decide"]), "◈", theme.AccentAmber),
 	})
 
 	// Filter tabs
 	tabs := components.Tabs{
 		Items: []string{
 			fmt.Sprintf("All (%d)", len(c.events)),
-			"Session", "Message", "File", "Git", "Terminal", "Error",
+			"Think", "Observe", "Decide", "Act", "Complete", "Merge",
 		},
 		ActiveTab: c.filterTabIndex(),
 		Width:     c.width,
@@ -266,21 +141,7 @@ func (c ChroniclesPage) View() string {
 
 	// Timeline
 	timelineHeight := c.height - 12
-	var timeline string
-
-	if c.loading {
-		timeline = lipgloss.NewStyle().
-			Foreground(theme.AccentAmber).
-			Padding(2, 0).
-			Render("  Loading timeline...")
-	} else if c.loadErr != nil {
-		timeline = lipgloss.NewStyle().
-			Foreground(theme.AccentRed).
-			Padding(2, 0).
-			Render(fmt.Sprintf("  Error: %v  (r to retry)", c.loadErr))
-	} else {
-		timeline = c.renderTimeline(timelineHeight)
-	}
+	timeline := c.renderTimeline(timelineHeight)
 
 	return lipgloss.NewStyle().
 		Width(c.width).
@@ -309,8 +170,20 @@ func (c ChroniclesPage) renderTimeline(maxHeight int) string {
 	}
 
 	var entries []string
+	var lastDate string
 
 	for i, event := range c.filtered {
+		// Date separator
+		dateStr := event.Timestamp.Format("Jan 02, 2006")
+		if dateStr != lastDate {
+			lastDate = dateStr
+			dateSep := lipgloss.NewStyle().
+				Foreground(theme.TextMuted).
+				Bold(true).
+				Render(fmt.Sprintf("  ─── %s ───", dateStr))
+			entries = append(entries, dateSep)
+		}
+
 		entry := c.renderTimelineEntry(event, i == c.cursor)
 		entries = append(entries, entry)
 	}
@@ -320,10 +193,15 @@ func (c ChroniclesPage) renderTimeline(maxHeight int) string {
 	// Truncate to fit
 	lines := strings.Split(content, "\n")
 	if len(lines) > maxHeight {
+		// Center on cursor position (approximate)
 		cursorLine := 0
-		for i := range c.filtered {
-			cursorLine += 3 // each entry is ~3 lines
+		lineCount := 0
+		for i, event := range c.filtered {
+			dateStr := event.Timestamp.Format("Jan 02, 2006")
+			_ = dateStr
+			lineCount += 4 // approximate lines per entry
 			if i == c.cursor {
+				cursorLine = lineCount
 				break
 			}
 		}
@@ -347,25 +225,31 @@ func (c ChroniclesPage) renderTimeline(maxHeight int) string {
 func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool) string {
 	theme := tui.DefaultTheme
 
-	icon, clr := eventTypeStyle(event.Type)
+	icon, color := eventTypeStyle(event.Type)
 
-	// Format elapsed time
-	elapsed := formatElapsed(event.Elapsed)
+	timeStr := event.Timestamp.Format("15:04:05")
 	timeStyle := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
 		Width(10)
 
 	iconStyle := lipgloss.NewStyle().
-		Foreground(clr).
+		Foreground(color).
 		Bold(true)
 
-	labelStyle := lipgloss.NewStyle().
+	titleStyle := lipgloss.NewStyle().
 		Foreground(theme.TextPrimary).
 		Bold(true)
 
 	typeStyle := lipgloss.NewStyle().
-		Foreground(clr).
+		Foreground(color).
 		Bold(true)
+
+	contentStyle := lipgloss.NewStyle().
+		Foreground(theme.TextSecondary).
+		PaddingLeft(14)
+
+	sessionStyle := lipgloss.NewStyle().
+		Foreground(theme.AccentCyan)
 
 	metaStyle := lipgloss.NewStyle().
 		Foreground(theme.TextMuted)
@@ -376,39 +260,35 @@ func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool)
 		Render("│")
 
 	// Build the entry
-	line1 := fmt.Sprintf("  %s %s %s  %s",
-		timeStyle.Render(elapsed),
+	line1 := fmt.Sprintf("  %s %s %s  %s  %s",
+		timeStyle.Render(timeStr),
 		iconStyle.Render(icon),
-		labelStyle.Render(event.Label),
+		titleStyle.Render(event.Title),
 		typeStyle.Render(string(event.Type)),
+		sessionStyle.Render(event.Session),
 	)
 
-	// Metadata line
+	line2 := fmt.Sprintf("  %s %s  %s",
+		lipgloss.NewStyle().Width(10).Render(""),
+		connector,
+		contentStyle.Render(event.Content),
+	)
+
+	// Metadata line with duration and tokens
 	var metaParts []string
+	if event.Duration > 0 {
+		metaParts = append(metaParts, fmt.Sprintf("⏱ %s", event.Duration.Round(time.Second)))
+	}
 	if event.Tokens > 0 {
 		metaParts = append(metaParts, fmt.Sprintf("◈ %s tokens", formatTokens(event.Tokens)))
 	}
-	if event.Action != "" {
-		metaParts = append(metaParts, event.Action)
-	}
-	if event.Ins > 0 || event.Del > 0 {
-		metaParts = append(metaParts, fmt.Sprintf("+%d/-%d", event.Ins, event.Del))
-	}
-	if event.Hash != "" {
-		display := event.Hash
-		if len(display) > 8 {
-			display = display[:8]
-		}
-		metaParts = append(metaParts, display)
-	}
-
-	line2 := fmt.Sprintf("  %s %s  %s",
+	line3 := fmt.Sprintf("  %s %s  %s",
 		lipgloss.NewStyle().Width(10).Render(""),
 		connector,
 		metaStyle.Render(strings.Join(metaParts, "  ")),
 	)
 
-	entry := line1 + "\n" + line2
+	entry := line1 + "\n" + line2 + "\n" + line3
 
 	if selected {
 		return lipgloss.NewStyle().
@@ -420,35 +300,22 @@ func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool)
 	return entry
 }
 
-// formatElapsed formats seconds elapsed into a human-friendly string.
-func formatElapsed(seconds int) string {
-	if seconds < 60 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	m := seconds / 60
-	s := seconds % 60
-	if m < 60 {
-		return fmt.Sprintf("%dm%02ds", m, s)
-	}
-	h := m / 60
-	m = m % 60
-	return fmt.Sprintf("%dh%02dm", h, m)
-}
-
 // eventTypeStyle returns the icon and color for an event type.
 func eventTypeStyle(t EventType) (string, color.Color) {
 	theme := tui.DefaultTheme
 	switch t {
-	case EventSession:
+	case EventThink:
+		return "◐", theme.AccentPurple
+	case EventObserve:
 		return "◉", theme.AccentCyan
-	case EventMessage:
-		return "◈", theme.AccentPurple
-	case EventFile:
+	case EventDecide:
+		return "◈", theme.AccentAmber
+	case EventAct:
 		return "▶", theme.AccentEmerald
-	case EventGit:
+	case EventComplete:
+		return "✓", theme.AccentEmerald
+	case EventMerge:
 		return "⊕", theme.AccentIndigo
-	case EventTerminal:
-		return "▸", theme.AccentAmber
 	case EventError:
 		return "✗", theme.AccentRed
 	}
@@ -466,10 +333,136 @@ func (c ChroniclesPage) countByType() map[string]int {
 
 // filterTabIndex maps the current filter to a tab index.
 func (c ChroniclesPage) filterTabIndex() int {
-	for i, f := range chronicleFilters {
-		if c.filter == f {
-			return i
-		}
+	switch c.filter {
+	case "all":
+		return 0
+	case "think":
+		return 1
+	case "observe":
+		return 2
+	case "decide":
+		return 3
+	case "act":
+		return 4
+	case "complete":
+		return 5
+	case "merge":
+		return 6
 	}
 	return 0
+}
+
+// demoChronicleEvents returns realistic demo timeline events.
+func demoChronicleEvents() []ChronicleEvent {
+	base := time.Date(2026, 3, 8, 8, 0, 0, 0, time.UTC)
+	return []ChronicleEvent{
+		{
+			Type: EventObserve, Title: "Repository cloned",
+			Content: "Cloned niuu/volundr (feat/niu-130-go-tui) — 847 files, 52MB",
+			Session: "feat/tui-client", Timestamp: base,
+			Duration: 12 * time.Second,
+		},
+		{
+			Type: EventThink, Title: "Analyzing project structure",
+			Content: "Examined existing REST API, domain models, and web UI patterns. Identified 14 API endpoints to integrate with.",
+			Session: "feat/tui-client", Timestamp: base.Add(30 * time.Second),
+			Duration: 8 * time.Second, Tokens: 4200,
+		},
+		{
+			Type: EventDecide, Title: "Architecture decision: Go module layout",
+			Content: "Chose cmd/ + internal/ structure with separated api, tui, and config packages. Using bubbletea v2 alpha for latest features.",
+			Session: "feat/tui-client", Timestamp: base.Add(2 * time.Minute),
+			Duration: 15 * time.Second, Tokens: 6800,
+		},
+		{
+			Type: EventAct, Title: "Created project skeleton",
+			Content: "Initialized Go module, created 28 files across cmd/, internal/api/, internal/tui/, internal/config/",
+			Session: "feat/tui-client", Timestamp: base.Add(5 * time.Minute),
+			Duration: 45 * time.Second, Tokens: 12400,
+		},
+		{
+			Type: EventAct, Title: "Implemented theme system",
+			Content: "Defined zinc dark palette with 7 accent colors matching web UI tokens.css. Created 15 reusable lipgloss styles.",
+			Session: "feat/tui-client", Timestamp: base.Add(12 * time.Minute),
+			Duration: 30 * time.Second, Tokens: 8900,
+		},
+		{
+			Type: EventThink, Title: "Evaluating component architecture",
+			Content: "Compared flat vs nested Bubble Tea model approaches. Nested models (one per page) provide better encapsulation and independent state management.",
+			Session: "feat/tui-client", Timestamp: base.Add(20 * time.Minute),
+			Duration: 10 * time.Second, Tokens: 3400,
+		},
+		{
+			Type: EventAct, Title: "Built sidebar navigation",
+			Content: "Created sidebar component with 9 pages, unicode icons, keyboard shortcuts (1-9), and collapsed/expanded modes.",
+			Session: "feat/tui-client", Timestamp: base.Add(25 * time.Minute),
+			Duration: 35 * time.Second, Tokens: 7600,
+		},
+		{
+			Type: EventAct, Title: "Implemented sessions page",
+			Content: "Session list with status badges, metric cards, search/filter, and cursor navigation. Includes 7 demo sessions.",
+			Session: "feat/tui-client", Timestamp: base.Add(40 * time.Minute),
+			Duration: 60 * time.Second, Tokens: 15200,
+		},
+		{
+			Type: EventObserve, Title: "Checked API response format",
+			Content: "Verified session JSON schema matches SessionResponse model in rest.py. All 18 fields mapped correctly.",
+			Session: "feat/tui-client", Timestamp: base.Add(42 * time.Minute),
+			Duration: 5 * time.Second, Tokens: 2100,
+		},
+		{
+			Type: EventAct, Title: "Built chat interface",
+			Content: "Chat page with message viewport, markdown support placeholder, input with cursor, model/thinking budget indicators.",
+			Session: "feat/tui-client", Timestamp: base.Add(55 * time.Minute),
+			Duration: 50 * time.Second, Tokens: 18700,
+		},
+		{
+			Type: EventDecide, Title: "Terminal implementation approach",
+			Content: "Will use charmbracelet/x/vt for VT emulation. Created placeholder with simulated output for now.",
+			Session: "feat/tui-client", Timestamp: base.Add(65 * time.Minute),
+			Duration: 8 * time.Second, Tokens: 2800,
+		},
+		{
+			Type: EventAct, Title: "Implemented chronicles timeline",
+			Content: "Timeline-style event log with type filtering, date separators, duration/token metadata, and color-coded event types.",
+			Session: "feat/tui-client", Timestamp: base.Add(80 * time.Minute),
+			Duration: 55 * time.Second, Tokens: 21000,
+		},
+		{
+			Type: EventAct, Title: "WebSocket reconnection logic",
+			Content: "Added exponential backoff (1s-30s) with jitter, pending message queue, and max 10 retries.",
+			Session: "fix/ws-reconnect", Timestamp: base.Add(90 * time.Minute),
+			Duration: 40 * time.Second, Tokens: 9800,
+		},
+		{
+			Type: EventComplete, Title: "All tests passing",
+			Content: "42 tests pass, 91% coverage on internal/api, 87% on internal/tui. Zero warnings.",
+			Session: "feat/tui-client", Timestamp: base.Add(100 * time.Minute),
+			Duration: 18 * time.Second, Tokens: 4200,
+		},
+		{
+			Type: EventThink, Title: "Reviewing diff visualization",
+			Content: "Evaluating side-by-side vs unified diff display. Unified fits better in terminal width constraints.",
+			Session: "feat/tui-client", Timestamp: base.Add(110 * time.Minute),
+			Duration: 6 * time.Second, Tokens: 2400,
+		},
+		{
+			Type: EventAct, Title: "Built diff viewer",
+			Content: "Split-pane layout with file tree (left) and color-coded unified diff (right). Supports scroll and file switching.",
+			Session: "feat/tui-client", Timestamp: base.Add(120 * time.Minute),
+			Duration: 45 * time.Second, Tokens: 14300,
+		},
+		{
+			Type: EventMerge, Title: "PR #127 merged",
+			Content: "feat(tui): Go TUI client with Cobra CLI and Bubble Tea — 34 files changed, +3,847 -0",
+			Session: "feat/tui-client", Timestamp: base.Add(140 * time.Minute),
+			Duration: 2 * time.Second,
+		},
+		{
+			Type: EventError, Title: "Pod OOMKilled",
+			Content: "Session fix/migration-lock exceeded 4.2GB memory limit. Root cause: unbounded query result set.",
+			Session: "fix/migration-lock", Timestamp: base.Add(180 * time.Minute),
+			Duration: 0,
+		},
+	}
 }

@@ -8,13 +8,11 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/niuulabs/volundr/cli/internal/api"
 	"github.com/niuulabs/volundr/cli/internal/remote"
 	tuipkg "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 	"github.com/niuulabs/volundr/cli/internal/tui/pages"
 )
-
 
 var tuiCmd = &cobra.Command{
 	Use:   "tui",
@@ -32,15 +30,16 @@ func runTUI() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// CLI flags override config
-	if cfgServer != "" {
-		cfg.Server = cfgServer
-	}
-	if cfgToken != "" {
-		cfg.Token = cfgToken
+	// Build the client pool.
+	var pool *tuipkg.ClientPool
+	if cfgServer != "" && cfgToken != "" {
+		// CLI flag override: single-entry pool.
+		pool = tuipkg.NewClientPoolFromFlags(cfgServer, cfgToken)
+	} else {
+		pool = tuipkg.NewClientPool(cfg)
 	}
 
-	m := newTUIModel(cfg)
+	m := newTUIModel(cfg, pool)
 	p := tea.NewProgram(m)
 
 	if _, err := p.Run(); err != nil {
@@ -51,15 +50,10 @@ func runTUI() error {
 	return nil
 }
 
-// serverPingMsg carries the result of a server connectivity check.
-type serverPingMsg struct {
-	Err error
-}
-
 // tuiModel is the top-level Bubble Tea model that wraps the App and all pages.
 type tuiModel struct {
-	app    tuipkg.App
-	client *api.Client
+	app  tuipkg.App
+	pool *tuipkg.ClientPool
 
 	// Page models
 	sessions   pages.SessionsPage
@@ -68,52 +62,59 @@ type tuiModel struct {
 	diffs      pages.DiffsPage
 	chronicles pages.ChroniclesPage
 	settings   pages.SettingsPage
+	realms     pages.RealmsPage
+	campaigns  pages.CampaignsPage
 	admin      pages.AdminPage
 
 	// Components
 	header  components.Header
 	sidebar components.Sidebar
 	help    components.HelpOverlay
-
-	// Active session (set when user presses Enter on a session).
-	activeSession *api.Session
 }
 
 // newTUIModel creates the fully initialized TUI model.
-func newTUIModel(cfg *remote.Config) tuiModel {
-	client := api.NewClientWithConfig(cfg.Server, cfg.Token, cfg)
+func newTUIModel(cfg *remote.Config, pool *tuipkg.ClientPool) tuiModel {
+	// Determine a primary server URL for the app and terminal fallback.
+	server := ""
+	token := ""
+	if len(pool.Entries) > 0 {
+		connected := pool.ConnectedClients()
+		if len(connected) > 0 {
+			server = connected[0].Server
+			token = connected[0].Client.Token()
+		} else {
+			// Use the first entry even if not connected.
+			for _, entry := range pool.Entries {
+				server = entry.Server
+				break
+			}
+		}
+	}
 
 	return tuiModel{
-		app:    tuipkg.NewApp(cfg.Server),
-		client: client,
+		app:  tuipkg.NewApp(server),
+		pool: pool,
 
-		sessions:   pages.NewSessionsPage(client),
-		chat:       pages.NewChatPage(cfg.Token),
-		terminal:   pages.NewTerminalPage(cfg.Server, cfg.Token),
-		diffs:      pages.NewDiffsPage(cfg.Token),
-		chronicles: pages.NewChroniclesPage(client),
-		settings:   pages.NewSettingsPage(client, cfg),
-		admin:      pages.NewAdminPage(client),
+		sessions:   pages.NewSessionsPage(pool),
+		chat:       pages.NewChatPage(),
+		terminal:   pages.NewTerminalPage(server, token, pool),
+		diffs:      pages.NewDiffsPage(),
+		chronicles: pages.NewChroniclesPage(),
+		settings:   pages.NewSettingsPage(),
+		realms:     pages.NewRealmsPage(),
+		campaigns:  pages.NewCampaignsPage(),
+		admin:      pages.NewAdminPage(),
 
-		header:  components.NewHeader(cfg.Server),
+		header:  components.NewHeaderWithPool(pool),
 		sidebar: components.NewSidebar(),
 		help:    components.NewHelpOverlay(),
 	}
 }
 
 func (m tuiModel) Init() tea.Cmd {
-	client := m.client
-	pingCmd := func() tea.Msg {
-		err := client.Ping()
-		return serverPingMsg{Err: err}
-	}
 	return tea.Batch(
-		pingCmd,
 		m.terminal.Init(),
 		m.sessions.Init(),
-		m.chat.Init(),
-		m.settings.Init(),
-		m.admin.Init(),
 	)
 }
 
@@ -121,13 +122,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
-	// Handle server connectivity.
-	if pingMsg, ok := msg.(serverPingMsg); ok {
-		m.header.Connected = pingMsg.Err == nil
-		return m, nil
-	}
-
-	// Always forward async data messages to the right page,
+	// Always forward terminal-specific async messages to the terminal page,
 	// regardless of which page is active or whether help is showing.
 	switch msg.(type) {
 	case pages.TerminalOutputMsg, pages.TerminalConnectedMsg, pages.TerminalDisconnectedMsg:
@@ -136,86 +131,27 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		return m, tea.Batch(cmds...)
-	case pages.SessionsLoadedMsg:
-		m.sessions, cmd = m.sessions.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
-	case pages.TimelineLoadedMsg:
-		m.chronicles, cmd = m.chronicles.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
-	case pages.ChatStreamEventMsg, pages.ChatConnectedMsg, pages.ChatDisconnectedMsg:
-		m.chat, cmd = m.chat.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
-	case pages.DiffFilesLoadedMsg, pages.DiffContentLoadedMsg:
-		m.diffs, cmd = m.diffs.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
-	case pages.SessionActionDoneMsg:
-		m.sessions, cmd = m.sessions.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
-	case pages.SettingsLoadedMsg:
-		m.settings, cmd = m.settings.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
-	case pages.AdminDataLoadedMsg:
-		m.admin, cmd = m.admin.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
-
-	case pages.SessionSelectedMsg:
-		return m.handleSessionSelected(msg.(pages.SessionSelectedMsg))
 	}
 
-	// When terminal page is active, intercept most keys and forward to PTY.
-	// Esc returns focus to app-level navigation so the user can switch pages.
+	// Always forward AllSessionsLoadedMsg to the sessions page.
+	if _, ok := msg.(tuipkg.AllSessionsLoadedMsg); ok {
+		m.sessions, cmd = m.sessions.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+	}
+
+	// When terminal page is active and has connected tabs, intercept keys
+	// that the app would normally handle (like 'q' to quit, number keys for
+	// nav) so they get forwarded to the remote PTY instead.
 	if m.app.ActivePage == tuipkg.PageTerminal {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			key := keyMsg.String()
-			// Let these keys through to the app layer:
-			switch {
-			case key == "ctrl+c", key == "f11", key == "ctrl+f",
-				key == "?", key == "esc", key == "[":
-				// fall through to app
-			case len(key) == 1 && key >= "1" && key <= "7":
-				// number keys for page navigation
-			default:
+			// Only allow ctrl+c and F11/ctrl+f through to the app layer.
+			// Everything else goes to the terminal page.
+			if key != "ctrl+c" && key != "f11" && key != "ctrl+f" && key != "?" {
 				m.terminal, cmd = m.terminal.Update(msg)
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-				return m, tea.Batch(cmds...)
-			}
-		}
-	}
-
-	// When chat input is active, intercept printable keys so they go to the
-	// input field instead of being swallowed by the app (e.g., "?" opening help).
-	if m.app.ActivePage == tuipkg.PageChat && m.chat.InputActive() {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			key := keyMsg.String()
-			switch {
-			case key == "ctrl+c", key == "esc":
-				// Let through to app layer
-			default:
-				// Forward directly to chat page
-				m.chat, cmd = m.chat.Update(msg)
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
@@ -251,6 +187,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.diffs.SetSize(cw, ch)
 		m.chronicles.SetSize(cw, ch)
 		m.settings.SetSize(cw, ch)
+		m.realms.SetSize(cw, ch)
+		m.campaigns.SetSize(cw, ch)
 		m.admin.SetSize(cw, ch)
 	}
 
@@ -269,6 +207,10 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chronicles, cmd = m.chronicles.Update(msg)
 		case tuipkg.PageSettings:
 			m.settings, cmd = m.settings.Update(msg)
+		case tuipkg.PageRealms:
+			m.realms, cmd = m.realms.Update(msg)
+		case tuipkg.PageCampaigns:
+			m.campaigns, cmd = m.campaigns.Update(msg)
 		case tuipkg.PageAdmin:
 			m.admin, cmd = m.admin.Update(msg)
 		}
@@ -280,46 +222,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// handleSessionSelected wires up all pages when a session is selected.
-func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model, tea.Cmd) {
-	sess := msg.Session
-	m.activeSession = &sess
-
-	var cmds []tea.Cmd
-
-	// Connect chat to session's WebSocket.
-	m.chat.SetSession(sess)
-
-	// Open a terminal tab for the session.
-	m.terminal.ConnectSession(sess)
-
-	// Load diffs from session pod.
-	if cmd := m.diffs.SetSession(sess); cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	// Load chronicles timeline for the session.
-	if cmd := m.chronicles.SetSession(sess); cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-
-	// Update header to show session name.
-	m.header.Connected = true
-
-	// Navigate to the chat page after selection.
-	m.app.ActivePage = tuipkg.PageChat
-	m.sidebar.ActivePage = tuipkg.PageChat
-
-	return m, tea.Batch(cmds...)
-}
-
 func (m tuiModel) View() tea.View {
 	v := tea.View{AltScreen: true}
 
 	if !m.app.Ready {
 		theme := tuipkg.DefaultTheme
 		v.Content = lipgloss.NewStyle().
-			Foreground(theme.AccentAmber).
+			Foreground(theme.AccentCyan).
 			Bold(true).
 			Render("\n  Loading Volundr...")
 		return v
@@ -346,6 +255,10 @@ func (m tuiModel) View() tea.View {
 		pageContent = m.chronicles.View()
 	case tuipkg.PageSettings:
 		pageContent = m.settings.View()
+	case tuipkg.PageRealms:
+		pageContent = m.realms.View()
+	case tuipkg.PageCampaigns:
+		pageContent = m.campaigns.View()
 	case tuipkg.PageAdmin:
 		pageContent = m.admin.View()
 	}

@@ -10,22 +10,28 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds all CLI configuration values.
-type Config struct {
+// Context represents a single Volundr cluster connection.
+type Context struct {
+	Name         string `yaml:"name"`
 	Server       string `yaml:"server"`
-	Token        string `yaml:"token"`
+	Token        string `yaml:"token,omitempty"`
 	RefreshToken string `yaml:"refresh_token,omitempty"`
 	TokenExpiry  string `yaml:"token_expiry,omitempty"`
 	Issuer       string `yaml:"issuer,omitempty"`
 	ClientID     string `yaml:"client_id,omitempty"`
-	Theme        string `yaml:"theme"`
+}
+
+// Config holds all CLI configuration values.
+type Config struct {
+	Theme    string              `yaml:"theme"`
+	Contexts map[string]*Context `yaml:"contexts"`
 }
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		Server: "http://localhost:8000",
-		Theme:  "dark",
+		Theme:    "dark",
+		Contexts: make(map[string]*Context),
 	}
 }
 
@@ -47,7 +53,19 @@ func ConfigPath() (string, error) {
 	return filepath.Join(dir, "config.yaml"), nil
 }
 
+// legacyConfig represents the old flat config format for migration purposes.
+type legacyConfig struct {
+	Server       string `yaml:"server"`
+	Token        string `yaml:"token"`
+	RefreshToken string `yaml:"refresh_token"`
+	TokenExpiry  string `yaml:"token_expiry"`
+	Issuer       string `yaml:"issuer"`
+	ClientID     string `yaml:"client_id"`
+	Theme        string `yaml:"theme"`
+}
+
 // Load reads configuration from disk, returning defaults if the file doesn't exist.
+// It auto-migrates the old flat format to the new multi-context format.
 func Load() (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
@@ -62,11 +80,58 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
 
+	// Probe the raw YAML to detect the old flat format.
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	// Old format detection: top-level "server" key means legacy format.
+	if _, hasServer := raw["server"]; hasServer {
+		return migrateFromLegacy(data)
+	}
+
 	cfg := DefaultConfig()
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
+	// Ensure Contexts map is never nil.
+	if cfg.Contexts == nil {
+		cfg.Contexts = make(map[string]*Context)
+	}
+
+	return cfg, nil
+}
+
+// migrateFromLegacy converts old flat config bytes into the new multi-context format.
+func migrateFromLegacy(data []byte) (*Config, error) {
+	var legacy legacyConfig
+	if err := yaml.Unmarshal(data, &legacy); err != nil {
+		return nil, fmt.Errorf("parsing legacy config: %w", err)
+	}
+
+	theme := legacy.Theme
+	if theme == "" {
+		theme = "dark"
+	}
+
+	cfg := &Config{
+		Theme:    theme,
+		Contexts: make(map[string]*Context),
+	}
+
+	ctx := &Context{
+		Name:         "default",
+		Server:       legacy.Server,
+		Token:        legacy.Token,
+		RefreshToken: legacy.RefreshToken,
+		TokenExpiry:  legacy.TokenExpiry,
+		Issuer:       legacy.Issuer,
+		ClientID:     legacy.ClientID,
+	}
+
+	cfg.Contexts["default"] = ctx
 	return cfg, nil
 }
 
@@ -94,54 +159,96 @@ func (c *Config) Save() error {
 	return nil
 }
 
-// Get retrieves a configuration value by key.
-func (c *Config) Get(key string) (string, error) {
-	switch key {
-	case "server":
-		return c.Server, nil
-	case "token":
-		return c.Token, nil
-	case "refresh_token":
-		return c.RefreshToken, nil
-	case "token_expiry":
-		return c.TokenExpiry, nil
-	case "issuer":
-		return c.Issuer, nil
-	case "client_id", "client-id":
-		return c.ClientID, nil
-	case "theme":
-		return c.Theme, nil
-	default:
-		return "", fmt.Errorf("unknown config key: %s (valid keys: server, token, refresh_token, token_expiry, issuer, client-id, theme)", key)
+// AddContext adds a new context to the config. It returns an error if the key
+// already exists.
+func (c *Config) AddContext(key string, ctx *Context) error {
+	if _, exists := c.Contexts[key]; exists {
+		return fmt.Errorf("context %q already exists", key)
 	}
-}
-
-// Set updates a configuration value by key.
-func (c *Config) Set(key, value string) error {
-	switch key {
-	case "server":
-		c.Server = value
-	case "token":
-		c.Token = value
-	case "refresh_token":
-		c.RefreshToken = value
-	case "token_expiry":
-		c.TokenExpiry = value
-	case "issuer":
-		c.Issuer = value
-	case "client_id", "client-id":
-		c.ClientID = value
-	case "theme":
-		c.Theme = value
-	default:
-		return fmt.Errorf("unknown config key: %s (valid keys: server, token, refresh_token, token_expiry, issuer, client-id, theme)", key)
-	}
+	c.Contexts[key] = ctx
 	return nil
 }
 
-// ClearTokens removes all token-related fields from the config.
-func (c *Config) ClearTokens() {
-	c.Token = ""
-	c.RefreshToken = ""
-	c.TokenExpiry = ""
+// RemoveContext removes a context by key. It returns an error if the key does
+// not exist.
+func (c *Config) RemoveContext(key string) error {
+	if _, exists := c.Contexts[key]; !exists {
+		return fmt.Errorf("context %q not found", key)
+	}
+	delete(c.Contexts, key)
+	return nil
+}
+
+// RenameContext renames a context from oldKey to newKey. It returns an error if
+// the old key does not exist or the new key already exists.
+func (c *Config) RenameContext(oldKey, newKey string) error {
+	ctx, exists := c.Contexts[oldKey]
+	if !exists {
+		return fmt.Errorf("context %q not found", oldKey)
+	}
+	if _, exists := c.Contexts[newKey]; exists {
+		return fmt.Errorf("context %q already exists", newKey)
+	}
+	ctx.Name = newKey
+	c.Contexts[newKey] = ctx
+	delete(c.Contexts, oldKey)
+	return nil
+}
+
+// GetContext returns the context for the given key, or nil if it doesn't exist.
+func (c *Config) GetContext(key string) *Context {
+	return c.Contexts[key]
+}
+
+// ClearTokens clears all token-related fields for a specific context.
+func (c *Config) ClearTokens(key string) error {
+	ctx, exists := c.Contexts[key]
+	if !exists {
+		return fmt.Errorf("context %q not found", key)
+	}
+	ctx.Token = ""
+	ctx.RefreshToken = ""
+	ctx.TokenExpiry = ""
+	return nil
+}
+
+// ResolveContext returns the context to use based on the given key hint.
+// If key is empty and there is exactly one context, it returns that one.
+// If key is empty and there are zero or multiple contexts, it returns an error.
+func (c *Config) ResolveContext(key string) (*Context, string, error) {
+	if key != "" {
+		ctx := c.GetContext(key)
+		if ctx == nil {
+			return nil, "", fmt.Errorf("context %q not found", key)
+		}
+		return ctx, key, nil
+	}
+
+	if len(c.Contexts) == 0 {
+		return nil, "", fmt.Errorf("no contexts configured — run: volundr context add <name> --server <url>")
+	}
+
+	if len(c.Contexts) == 1 {
+		for k, ctx := range c.Contexts {
+			return ctx, k, nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("multiple contexts configured — specify one with --context <name>\nAvailable contexts: %s", contextKeys(c))
+}
+
+// contextKeys returns a comma-separated list of context keys.
+func contextKeys(c *Config) string {
+	keys := make([]string, 0, len(c.Contexts))
+	for k := range c.Contexts {
+		keys = append(keys, k)
+	}
+	result := ""
+	for i, k := range keys {
+		if i > 0 {
+			result += ", "
+		}
+		result += k
+	}
+	return result
 }

@@ -33,7 +33,7 @@ func (m Modal) View(termWidth, termHeight int) string {
 	theme := tui.DefaultTheme
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
+		Foreground(theme.AccentCyan).
 		Bold(true).
 		MarginBottom(1)
 
@@ -43,7 +43,7 @@ func (m Modal) View(termWidth, termHeight int) string {
 	modal := lipgloss.NewStyle().
 		Background(theme.BgSecondary).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.AccentAmber).
+		BorderForeground(theme.AccentCyan).
 		Padding(1, 2).
 		Width(m.Width).
 		MaxHeight(m.Height).

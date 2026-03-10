@@ -33,13 +33,13 @@ func (s Sidebar) View() string {
 	}
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
+		Foreground(theme.AccentCyan).
 		Bold(true).
 		Padding(0, 1).
 		MarginBottom(1)
 
 	activeStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
+		Foreground(theme.AccentCyan).
 		Background(theme.BgTertiary).
 		Bold(true).
 		Width(s.Width - 4).
@@ -59,18 +59,12 @@ func (s Sidebar) View() string {
 	items = append(items, titleStyle.Render("⚒ VOLUNDR"))
 	items = append(items, "")
 
-	// Navigation items — number key aligned in a column on the right
-	nameWidth := 12 // fixed width for name column
+	// Navigation items
 	for _, page := range tui.PageOrder {
 		info := tui.Pages[page]
+		keyHint := dimKeyStyle.Render(info.Key)
 
-		// Pad name to fixed width so numbers align
-		name := info.Name
-		if len(name) < nameWidth {
-			name += strings.Repeat(" ", nameWidth-len(name))
-		}
-
-		label := fmt.Sprintf("%s %s%s", info.Icon, name, dimKeyStyle.Render(info.Key))
+		label := fmt.Sprintf("%s %s %s", info.Icon, info.Name, keyHint)
 
 		if page == s.ActivePage {
 			items = append(items, activeStyle.Render(label))
@@ -109,7 +103,7 @@ func (s Sidebar) viewCollapsed() string {
 	collapsedWidth := 5
 
 	activeStyle := lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
+		Foreground(theme.AccentCyan).
 		Background(theme.BgTertiary).
 		Bold(true).
 		Width(collapsedWidth - 2).
@@ -122,7 +116,7 @@ func (s Sidebar) viewCollapsed() string {
 
 	var items []string
 	items = append(items, lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
+		Foreground(theme.AccentCyan).
 		Bold(true).
 		Width(collapsedWidth - 2).
 		Align(lipgloss.Center).

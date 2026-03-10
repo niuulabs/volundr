@@ -22,10 +22,6 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("get status: %w", err)
 	}
 
-	if jsonOutput {
-		return printJSON(status)
-	}
-
 	fmt.Printf("Runtime: %s\n\n", status.Runtime)
 	fmt.Printf("%-15s %-10s %-8s %-6s %s\n", "SERVICE", "STATE", "PID", "PORT", "ERROR")
 	fmt.Printf("%-15s %-10s %-8s %-6s %s\n", "-------", "-----", "---", "----", "-----")

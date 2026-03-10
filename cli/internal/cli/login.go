@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"sort"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -20,12 +21,14 @@ var (
 	loginIssuer   string
 	loginClientID string
 	loginDevice   bool
+	loginForce    bool
 )
 
 func init() {
 	loginCmd.Flags().StringVar(&loginIssuer, "issuer", "", "OIDC issuer URL (saved to config for future use)")
 	loginCmd.Flags().StringVar(&loginClientID, "client-id", "", "OIDC client ID (saved to config)")
 	loginCmd.Flags().BoolVar(&loginDevice, "device", false, "Use device code flow instead of browser")
+	loginCmd.Flags().BoolVar(&loginForce, "force", false, "Re-authenticate even if tokens are still valid")
 }
 
 // CLI styles using the theme.
@@ -55,39 +58,152 @@ Use --device for environments without a browser (e.g. remote servers).`,
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		// Resolve issuer and client ID: flags > server discovery > saved config.
-		issuer, clientID, err := resolveAuthConfig(cfg)
+		// When no --context flag and multiple contexts exist, login all.
+		if cfgContext == "" && len(cfg.Contexts) > 1 {
+			return loginAllContexts(cfg)
+		}
+
+		ctx, ctxKey, err := cfg.ResolveContext(cfgContext)
 		if err != nil {
 			return err
 		}
 
-		// Save issuer and client ID to config for future use.
-		cfg.Issuer = issuer
-		cfg.ClientID = clientID
+		return loginSingleContext(cfg, ctx, ctxKey)
+	},
+}
+
+// tokenStillValid returns true if the context has a token whose expiry is more
+// than 30 seconds in the future.
+func tokenStillValid(rctx *remote.Context) bool {
+	if rctx.Token == "" || rctx.TokenExpiry == "" {
+		return false
+	}
+	expiry, err := time.Parse(time.RFC3339, rctx.TokenExpiry)
+	if err != nil {
+		return false
+	}
+	return time.Until(expiry) > 30*time.Second
+}
+
+// loginSingleContext performs login for a single context and saves the config.
+func loginSingleContext(cfg *remote.Config, rctx *remote.Context, ctxKey string) error {
+	// Resolve issuer and client ID: flags > server discovery > saved config.
+	issuer, clientID, err := resolveAuthConfig(rctx)
+	if err != nil {
+		return err
+	}
+
+	// Save issuer and client ID to context for future use.
+	rctx.Issuer = issuer
+	rctx.ClientID = clientID
+
+	client := auth.NewOIDCClient(issuer)
+	bgCtx := context.Background()
+
+	var token *auth.TokenResponse
+
+	if loginDevice {
+		token, err = runDeviceCodeFlow(bgCtx, client, clientID)
+	} else {
+		token, err = runAuthCodeFlow(bgCtx, client, clientID)
+	}
+	if err != nil {
+		return err
+	}
+
+	// Store tokens in context.
+	rctx.Token = token.AccessToken
+	rctx.RefreshToken = token.RefreshToken
+	if token.ExpiresIn > 0 {
+		rctx.TokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
+	}
+
+	cfg.Contexts[ctxKey] = rctx
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	// Fetch user info for the success message.
+	email := ""
+	info, infoErr := client.Userinfo(token.AccessToken)
+	if infoErr == nil && info.Email != "" {
+		email = info.Email
+	}
+
+	configPath, _ := remote.ConfigPath()
+
+	if email != "" {
+		fmt.Printf("\n%s Logged in as %s\n", successMark, cyanValue(email))
+	} else {
+		fmt.Printf("\n%s Logged in successfully\n", successMark)
+	}
+	if rctx.TokenExpiry != "" {
+		fmt.Printf("  Token expires: %s\n", cyanValue(rctx.TokenExpiry))
+	}
+	fmt.Printf("  Context: %s\n", cyanValue(ctxKey))
+	fmt.Printf("  Config saved to %s\n", mutedText(configPath))
+
+	return nil
+}
+
+// loginAllContexts iterates all configured contexts in sorted order and
+// authenticates each one. It skips contexts with valid tokens unless --force
+// is set. Config is saved once at the end.
+func loginAllContexts(cfg *remote.Config) error {
+	keys := sortedContextKeys(cfg)
+	fmt.Printf("Logging in to %d contexts...\n\n", len(keys))
+
+	failMark := lipgloss.NewStyle().Foreground(tui.DefaultTheme.AccentRed).Render("✗")
+	skipMark := lipgloss.NewStyle().Foreground(tui.DefaultTheme.AccentCyan).Render("–")
+
+	var errors []string
+
+	for _, key := range keys {
+		rctx := cfg.Contexts[key]
+		fmt.Printf("── %s (%s)\n", cyanValue(key), mutedText(rctx.Server))
+
+		// Skip contexts without a server configured.
+		if rctx.Server == "" {
+			fmt.Printf("   %s Skipped (no server configured)\n\n", skipMark)
+			continue
+		}
+
+		// Skip if token is still valid and --force not set.
+		if !loginForce && tokenStillValid(rctx) {
+			fmt.Printf("   %s Token still valid (expires %s)\n\n", skipMark, rctx.TokenExpiry)
+			continue
+		}
+
+		// Resolve auth config for this context.
+		issuer, clientID, err := resolveAuthConfig(rctx)
+		if err != nil {
+			fmt.Printf("   %s %s\n\n", failMark, err)
+			errors = append(errors, fmt.Sprintf("%s: %v", key, err))
+			continue
+		}
+
+		rctx.Issuer = issuer
+		rctx.ClientID = clientID
 
 		client := auth.NewOIDCClient(issuer)
-		ctx := context.Background()
+		bgCtx := context.Background()
 
 		var token *auth.TokenResponse
-
 		if loginDevice {
-			token, err = runDeviceCodeFlow(ctx, client, clientID)
+			token, err = runDeviceCodeFlow(bgCtx, client, clientID)
 		} else {
-			token, err = runAuthCodeFlow(ctx, client, clientID)
+			token, err = runAuthCodeFlow(bgCtx, client, clientID)
 		}
 		if err != nil {
-			return err
+			fmt.Printf("   %s %s\n\n", failMark, err)
+			errors = append(errors, fmt.Sprintf("%s: %v", key, err))
+			continue
 		}
 
-		// Store tokens in config.
-		cfg.Token = token.AccessToken
-		cfg.RefreshToken = token.RefreshToken
+		rctx.Token = token.AccessToken
+		rctx.RefreshToken = token.RefreshToken
 		if token.ExpiresIn > 0 {
-			cfg.TokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
-		}
-
-		if err := cfg.Save(); err != nil {
-			return fmt.Errorf("saving config: %w", err)
+			rctx.TokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
 		}
 
 		// Fetch user info for the success message.
@@ -97,20 +213,36 @@ Use --device for environments without a browser (e.g. remote servers).`,
 			email = info.Email
 		}
 
-		configPath, _ := remote.ConfigPath()
-
 		if email != "" {
-			fmt.Printf("\n%s Logged in as %s\n", successMark, cyanValue(email))
+			fmt.Printf("   %s Logged in as %s\n\n", successMark, cyanValue(email))
 		} else {
-			fmt.Printf("\n%s Logged in successfully\n", successMark)
+			fmt.Printf("   %s Logged in successfully\n\n", successMark)
 		}
-		if cfg.TokenExpiry != "" {
-			fmt.Printf("  Token expires: %s\n", cyanValue(cfg.TokenExpiry))
-		}
-		fmt.Printf("  Config saved to %s\n", mutedText(configPath))
+	}
 
-		return nil
-	},
+	// Save config once at the end.
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	configPath, _ := remote.ConfigPath()
+	fmt.Printf("Config saved to %s\n", mutedText(configPath))
+
+	if len(errors) > 0 {
+		return fmt.Errorf("login failed for %d context(s)", len(errors))
+	}
+
+	return nil
+}
+
+// sortedContextKeys returns context keys in sorted order.
+func sortedContextKeys(cfg *remote.Config) []string {
+	keys := make([]string, 0, len(cfg.Contexts))
+	for k := range cfg.Contexts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func runAuthCodeFlow(ctx context.Context, client *auth.OIDCClient, clientID string) (*auth.TokenResponse, error) {
@@ -146,8 +278,8 @@ func runDeviceCodeFlow(ctx context.Context, client *auth.OIDCClient, clientID st
 }
 
 // resolveAuthConfig determines the OIDC issuer and client ID to use.
-// Priority: CLI flags > server auto-discovery > saved config.
-func resolveAuthConfig(cfg *remote.Config) (issuer, clientID string, err error) {
+// Priority: CLI flags > server auto-discovery > saved context config.
+func resolveAuthConfig(rctx *remote.Context) (issuer, clientID string, err error) {
 	// If both flags are provided, use them directly.
 	if loginIssuer != "" && loginClientID != "" {
 		return loginIssuer, loginClientID, nil
@@ -155,7 +287,7 @@ func resolveAuthConfig(cfg *remote.Config) (issuer, clientID string, err error) 
 
 	// Try auto-discovery from the Volundr server.
 	if loginIssuer == "" || loginClientID == "" {
-		discovered := tryAuthDiscovery(cfg)
+		discovered := tryAuthDiscovery(rctx)
 		if discovered != nil {
 			if loginIssuer == "" {
 				issuer = discovered.Issuer
@@ -174,18 +306,18 @@ func resolveAuthConfig(cfg *remote.Config) (issuer, clientID string, err error) 
 		clientID = loginClientID
 	}
 
-	// Fall back to saved config.
+	// Fall back to saved context config.
 	if issuer == "" {
-		issuer = cfg.Issuer
+		issuer = rctx.Issuer
 	}
 	if clientID == "" {
-		clientID = cfg.ClientID
+		clientID = rctx.ClientID
 	}
 
 	if issuer == "" || clientID == "" {
 		return "", "", fmt.Errorf("could not determine auth configuration\n\n" +
 			"Either configure a server and let it be discovered automatically:\n" +
-			"  volundr config set server <url>\n\n" +
+			"  volundr context add <name> --server <url>\n\n" +
 			"Or provide flags explicitly:\n" +
 			"  volundr login --issuer <url> --client-id <id>")
 	}
@@ -195,17 +327,17 @@ func resolveAuthConfig(cfg *remote.Config) (issuer, clientID string, err error) 
 
 // tryAuthDiscovery attempts to fetch OIDC config from the Volundr server.
 // Returns nil if discovery fails (server not configured, endpoint missing, etc.).
-func tryAuthDiscovery(cfg *remote.Config) *api.AuthDiscoveryResponse {
-	if cfg.Server == "" || cfg.Server == "http://localhost:8000" {
+func tryAuthDiscovery(rctx *remote.Context) *api.AuthDiscoveryResponse {
+	if rctx.Server == "" || rctx.Server == "http://localhost:8000" {
 		return nil
 	}
 
-	fmt.Printf("Discovering auth configuration from %s...\n", cyanValue(cfg.Server))
+	fmt.Printf("Discovering auth configuration from %s...\n", cyanValue(rctx.Server))
 
-	client := api.NewClient(cfg.Server, "")
+	client := api.NewClient(rctx.Server, "")
 	resp, err := client.GetAuthConfig()
 	if err != nil {
-		fmt.Printf("  %s\n\n", mutedText(fmt.Sprintf("Server does not have auth configured (dev mode). Use --issuer and --client-id flags.")))
+		fmt.Printf("  %s\n\n", mutedText("Server does not have auth configured (dev mode). Use --issuer and --client-id flags."))
 		return nil
 	}
 

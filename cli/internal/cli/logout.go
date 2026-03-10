@@ -8,8 +8,6 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/remote"
 )
 
-
-
 var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Clear stored authentication tokens",
@@ -20,13 +18,20 @@ var logoutCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		cfg.ClearTokens()
+		_, ctxKey, err := cfg.ResolveContext(cfgContext)
+		if err != nil {
+			return err
+		}
+
+		if err := cfg.ClearTokens(ctxKey); err != nil {
+			return err
+		}
 
 		if err := cfg.Save(); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
 
-		fmt.Printf("%s Logged out. Tokens cleared.\n", successMark)
+		fmt.Printf("%s Logged out from context %q. Tokens cleared.\n", successMark, ctxKey)
 		return nil
 	},
 }

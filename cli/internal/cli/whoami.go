@@ -11,8 +11,6 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/remote"
 )
 
-
-
 var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Display information about the current user",
@@ -23,22 +21,23 @@ var whoamiCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		if cfg.Token == "" {
-			return fmt.Errorf("not logged in — run: volundr login")
+		ctx, ctxKey, err := cfg.ResolveContext(cfgContext)
+		if err != nil {
+			return err
 		}
 
-		if cfg.Issuer == "" {
-			return fmt.Errorf("no issuer configured — run: volundr login --issuer <url>")
+		if ctx.Token == "" {
+			return fmt.Errorf("not logged in on context %q — run: volundr login --context %s", ctxKey, ctxKey)
 		}
 
-		client := auth.NewOIDCClient(cfg.Issuer)
-		info, err := client.Userinfo(cfg.Token)
+		if ctx.Issuer == "" {
+			return fmt.Errorf("no issuer configured on context %q — run: volundr login --context %s --issuer <url>", ctxKey, ctxKey)
+		}
+
+		client := auth.NewOIDCClient(ctx.Issuer)
+		info, err := client.Userinfo(ctx.Token)
 		if err != nil {
 			return fmt.Errorf("fetching user info: %w", err)
-		}
-
-		if jsonOutput {
-			return printJSON(info)
 		}
 
 		name := info.Name
@@ -49,20 +48,21 @@ var whoamiCmd = &cobra.Command{
 			name = info.Sub
 		}
 
+		fmt.Printf("  Context: %s\n", cyanValue(ctxKey))
 		fmt.Printf("  User:    %s\n", cyanValue(name))
 		if info.Email != "" {
 			fmt.Printf("  Email:   %s\n", cyanValue(info.Email))
 		}
-		fmt.Printf("  Issuer:  %s\n", cyanValue(cfg.Issuer))
+		fmt.Printf("  Issuer:  %s\n", cyanValue(ctx.Issuer))
 
-		if cfg.TokenExpiry != "" {
-			expiry, parseErr := time.Parse(time.RFC3339, cfg.TokenExpiry)
+		if ctx.TokenExpiry != "" {
+			expiry, parseErr := time.Parse(time.RFC3339, ctx.TokenExpiry)
 			if parseErr == nil {
 				remaining := time.Until(expiry)
-				expiryStr := fmt.Sprintf("%s (%s)", cfg.TokenExpiry, formatDuration(remaining))
+				expiryStr := fmt.Sprintf("%s (%s)", ctx.TokenExpiry, formatDuration(remaining))
 				fmt.Printf("  Expires: %s\n", cyanValue(expiryStr))
 			} else {
-				fmt.Printf("  Expires: %s\n", cyanValue(cfg.TokenExpiry))
+				fmt.Printf("  Expires: %s\n", cyanValue(ctx.TokenExpiry))
 			}
 		}
 

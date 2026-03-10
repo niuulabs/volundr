@@ -20,18 +20,7 @@ var (
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version information",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if jsonOutput {
-			return printJSON(map[string]string{
-				"version": version,
-				"commit":  commit,
-				"built":   date,
-				"go":      runtime.Version(),
-				"os":      runtime.GOOS,
-				"arch":    runtime.GOARCH,
-			})
-		}
-
+	Run: func(cmd *cobra.Command, args []string) {
 		theme := tuipkg.DefaultTheme
 
 		hammerStyle := lipgloss.NewStyle().
@@ -57,6 +46,5 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("  built:   %s\n", date)
 		fmt.Printf("  go:      %s\n", runtime.Version())
 		fmt.Printf("  os/arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
-		return nil
 	},
 }

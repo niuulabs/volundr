@@ -11,77 +11,68 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
 
-// SessionsLoadedMsg carries fetched sessions from the API.
-type SessionsLoadedMsg struct {
-	Sessions []api.Session
-	Err      error
-}
-
-// SessionSelectedMsg is emitted when the user opens a session (Enter).
-type SessionSelectedMsg struct {
-	Session api.Session
-}
-
-// SessionActionDoneMsg is emitted after a session action completes.
-type SessionActionDoneMsg struct {
-	Action string // "start", "stop", "delete"
-	Err    error
-}
-
 // SessionsPage displays a list of sessions with search and filter.
 type SessionsPage struct {
-	client    *api.Client
-	sessions  []api.Session
-	filtered  []api.Session
-	cursor    int
-	filter    string // "all", "running", "stopped", "error"
-	search    string
-	searching bool
-	loading   bool
-	loadErr   error
-	width     int
-	height    int
+	pool          *tui.ClientPool
+	sessions      []tui.ClusterSession
+	filtered      []tui.ClusterSession
+	cursor        int
+	filter        string // "all", "running", "stopped", "error"
+	contextFilter string // "" means all contexts
+	search        string
+	searching     bool
+	loading       bool
+	loadErrors    map[string]error
+	width         int
+	height        int
 }
 
 // NewSessionsPage creates a new sessions page.
-func NewSessionsPage(client *api.Client) SessionsPage {
+// If pool is nil, demo data is used as a fallback.
+func NewSessionsPage(pool *tui.ClientPool) SessionsPage {
+	if pool == nil || len(pool.Entries) == 0 {
+		// Fall back to demo data for when no contexts are configured.
+		demos := demoSessions()
+		clusterSessions := make([]tui.ClusterSession, len(demos))
+		for i, s := range demos {
+			clusterSessions[i] = tui.ClusterSession{
+				Session:     s,
+				ContextKey:  "demo",
+				ContextName: "demo",
+			}
+		}
+		return SessionsPage{
+			sessions: clusterSessions,
+			filtered: clusterSessions,
+			filter:   "all",
+		}
+	}
+
 	return SessionsPage{
-		client: client,
-		filter: "all",
+		pool:    pool,
+		filter:  "all",
+		loading: true,
 	}
 }
 
-// Init fetches sessions from the API.
+// Init initializes the sessions page.
 func (s SessionsPage) Init() tea.Cmd {
-	if s.client == nil {
+	if s.pool == nil {
 		return nil
 	}
-	client := s.client
-	return func() tea.Msg {
-		sessions, err := client.ListSessions()
-		return SessionsLoadedMsg{Sessions: sessions, Err: err}
-	}
+	return fetchAllSessions(s.pool)
 }
 
 // Update handles messages for the sessions page.
 func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 	switch msg := msg.(type) {
-	case SessionsLoadedMsg:
-		s.loading = false
-		if msg.Err != nil {
-			s.loadErr = msg.Err
-			return s, nil
-		}
+	case tui.AllSessionsLoadedMsg:
 		s.sessions = msg.Sessions
+		s.loadErrors = msg.Errors
+		s.loading = false
 		s.applyFilter()
 		return s, nil
-	case SessionActionDoneMsg:
-		if msg.Err != nil {
-			s.loadErr = msg.Err
-			return s, nil
-		}
-		// Refresh session list after action.
-		return s, s.Init()
+
 	case tea.KeyMsg:
 		if s.searching {
 			return s.handleSearchInput(msg)
@@ -96,25 +87,28 @@ func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 			if s.cursor < len(s.filtered)-1 {
 				s.cursor++
 			}
-		case "enter":
-			if sess := s.selectedSession(); sess != nil {
-				return s, func() tea.Msg { return SessionSelectedMsg{Session: *sess} }
-			}
-		case "s":
-			return s, s.doAction("start")
-		case "x":
-			return s, s.doAction("stop")
-		case "d":
-			return s, s.doAction("delete")
 		case "/":
 			s.searching = true
 			s.search = ""
-		case "tab":
-			s.cycleFilter(1)
-		case "shift+tab":
-			s.cycleFilter(-1)
 		case "r":
-			return s, s.Init()
+			if s.pool != nil {
+				s.loading = true
+				return s, fetchAllSessions(s.pool)
+			}
+		case "c":
+			s.cycleContextFilter()
+		case "1":
+			s.filter = "all"
+			s.applyFilter()
+		case "2":
+			s.filter = "running"
+			s.applyFilter()
+		case "3":
+			s.filter = "stopped"
+			s.applyFilter()
+		case "4":
+			s.filter = "error"
+			s.applyFilter()
 		}
 	}
 	return s, nil
@@ -129,8 +123,6 @@ func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) 
 		if len(s.search) > 0 {
 			s.search = s.search[:len(s.search)-1]
 		}
-	case "space":
-		s.search += " "
 	default:
 		if len(msg.String()) == 1 {
 			s.search += msg.String()
@@ -140,29 +132,56 @@ func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) 
 	return s, nil
 }
 
-// sessionFilters defines the filter cycle order.
-var sessionFilters = []string{"all", "running", "stopped", "error"}
+// cycleContextFilter cycles through available context filters.
+func (s *SessionsPage) cycleContextFilter() {
+	if s.pool == nil {
+		return
+	}
 
-// cycleFilter moves to the next or previous filter.
-func (s *SessionsPage) cycleFilter(dir int) {
-	idx := filterIndex(s.filter)
-	idx = (idx + dir + len(sessionFilters)) % len(sessionFilters)
-	s.filter = sessionFilters[idx]
+	keys := s.pool.OrderedKeys()
+	if len(keys) <= 1 {
+		return
+	}
+
+	if s.contextFilter == "" {
+		s.contextFilter = keys[0]
+		s.applyFilter()
+		return
+	}
+
+	for i, k := range keys {
+		if k == s.contextFilter {
+			if i+1 < len(keys) {
+				s.contextFilter = keys[i+1]
+			} else {
+				s.contextFilter = "" // wrap to "all"
+			}
+			s.applyFilter()
+			return
+		}
+	}
+
+	// Key not found, reset.
+	s.contextFilter = ""
 	s.applyFilter()
 }
 
-// applyFilter filters sessions by status and search term.
+// applyFilter filters sessions by status, context, and search term.
 func (s *SessionsPage) applyFilter() {
 	s.filtered = nil
 	for _, sess := range s.sessions {
 		if s.filter != "all" && sess.Status != s.filter {
 			continue
 		}
+		if s.contextFilter != "" && sess.ContextKey != s.contextFilter {
+			continue
+		}
 		if s.search != "" {
 			lower := strings.ToLower(s.search)
 			if !strings.Contains(strings.ToLower(sess.Name), lower) &&
 				!strings.Contains(strings.ToLower(sess.Repo), lower) &&
-				!strings.Contains(strings.ToLower(sess.Model), lower) {
+				!strings.Contains(strings.ToLower(sess.Model), lower) &&
+				!strings.Contains(strings.ToLower(sess.ContextName), lower) {
 				continue
 			}
 		}
@@ -171,6 +190,18 @@ func (s *SessionsPage) applyFilter() {
 	if s.cursor >= len(s.filtered) {
 		s.cursor = max(0, len(s.filtered)-1)
 	}
+}
+
+// SelectedSession returns the currently selected session, or nil if none.
+func (s SessionsPage) SelectedSession() *tui.ClusterSession {
+	if len(s.filtered) == 0 {
+		return nil
+	}
+	if s.cursor < 0 || s.cursor >= len(s.filtered) {
+		return nil
+	}
+	sess := s.filtered[s.cursor]
+	return &sess
 }
 
 // SetSize updates the page dimensions.
@@ -188,6 +219,19 @@ func (s SessionsPage) View() string {
 		Bold(true).
 		MarginBottom(1)
 
+	// Loading state
+	if s.loading {
+		return lipgloss.NewStyle().
+			Padding(1, 2).
+			Width(s.width).
+			Height(s.height).
+			Render(lipgloss.JoinVertical(lipgloss.Left,
+				titleStyle.Render("◉ Sessions"),
+				"",
+				lipgloss.NewStyle().Foreground(theme.AccentAmber).Render("  Loading sessions from all clusters..."),
+			))
+	}
+
 	// Metric cards
 	running := 0
 	stopped := 0
@@ -204,10 +248,9 @@ func (s SessionsPage) View() string {
 		}
 		totalTokens += sess.TokensUsed
 	}
-	_ = errored
 
 	cards := components.MetricRow([]components.MetricCard{
-		components.NewMetricCard("Total", fmt.Sprintf("%d", len(s.sessions)), "◉", theme.AccentAmber),
+		components.NewMetricCard("Total", fmt.Sprintf("%d", len(s.sessions)), "◉", theme.AccentCyan),
 		components.NewMetricCard("Running", fmt.Sprintf("%d", running), "▶", theme.AccentEmerald),
 		components.NewMetricCard("Stopped", fmt.Sprintf("%d", stopped), "■", theme.TextMuted),
 		components.NewMetricCard("Tokens", formatTokens(totalTokens), "◈", theme.AccentAmber),
@@ -215,9 +258,25 @@ func (s SessionsPage) View() string {
 
 	// Filter tabs
 	tabs := components.Tabs{
-		Items:     []string{"All", "Running", "Stopped", "Error"},
+		Items:     []string{"All (1)", "Running (2)", "Stopped (3)", "Error (4)"},
 		ActiveTab: filterIndex(s.filter),
 		Width:     s.width,
+	}
+
+	// Context filter indicator
+	var contextLine string
+	if s.pool != nil && len(s.pool.Entries) > 1 {
+		if s.contextFilter == "" {
+			contextLine = lipgloss.NewStyle().
+				Foreground(theme.TextMuted).
+				Render("  Context: all  (c to filter)")
+		} else {
+			ctxColor := s.pool.ColorForContext(s.contextFilter)
+			contextLine = fmt.Sprintf("  Context: %s  %s",
+				lipgloss.NewStyle().Foreground(ctxColor).Bold(true).Render(s.contextFilter),
+				lipgloss.NewStyle().Foreground(theme.TextMuted).Render("(c to cycle)"),
+			)
+		}
 	}
 
 	// Search bar
@@ -232,23 +291,21 @@ func (s SessionsPage) View() string {
 			Render("Filter: " + s.search + "  (/ to edit)")
 	}
 
+	// Error notifications from clusters
+	var errorLines []string
+	for key, err := range s.loadErrors {
+		errorLines = append(errorLines, lipgloss.NewStyle().
+			Foreground(theme.AccentRed).
+			Render(fmt.Sprintf("  ✗ %s: %v", key, err)))
+	}
+
 	// Session list
 	var rows []string
 	for i, sess := range s.filtered {
 		rows = append(rows, s.renderSessionCard(sess, i == s.cursor))
 	}
 
-	if s.loading {
-		rows = append(rows, lipgloss.NewStyle().
-			Foreground(theme.AccentAmber).
-			Padding(2, 0).
-			Render("  Loading sessions..."))
-	} else if s.loadErr != nil {
-		rows = append(rows, lipgloss.NewStyle().
-			Foreground(theme.AccentRed).
-			Padding(2, 0).
-			Render(fmt.Sprintf("  Error: %v  (r to retry)", s.loadErr)))
-	} else if len(rows) == 0 {
+	if len(rows) == 0 {
 		rows = append(rows, lipgloss.NewStyle().
 			Foreground(theme.TextMuted).
 			Padding(2, 0).
@@ -263,8 +320,14 @@ func (s SessionsPage) View() string {
 	parts = append(parts, cards)
 	parts = append(parts, "")
 	parts = append(parts, tabs.View())
+	if contextLine != "" {
+		parts = append(parts, contextLine)
+	}
 	if searchBar != "" {
 		parts = append(parts, searchBar)
+	}
+	for _, el := range errorLines {
+		parts = append(parts, el)
 	}
 	parts = append(parts, "")
 	parts = append(parts, sessionList)
@@ -277,7 +340,7 @@ func (s SessionsPage) View() string {
 }
 
 // renderSessionCard renders a single session as a card row.
-func (s SessionsPage) renderSessionCard(sess api.Session, selected bool) string {
+func (s SessionsPage) renderSessionCard(sess tui.ClusterSession, selected bool) string {
 	theme := tui.DefaultTheme
 
 	badge := components.NewStatusBadge(sess.Status)
@@ -295,8 +358,19 @@ func (s SessionsPage) renderSessionCard(sess api.Session, selected bool) string 
 	mutedStyle := lipgloss.NewStyle().
 		Foreground(theme.TextMuted)
 
-	line1 := fmt.Sprintf("  %s  %s  %s",
+	// Context badge with color
+	var contextBadge string
+	if s.pool != nil && len(s.pool.Entries) > 1 {
+		ctxColor := s.pool.ColorForContext(sess.ContextKey)
+		contextBadge = lipgloss.NewStyle().
+			Foreground(ctxColor).
+			Bold(true).
+			Render("["+sess.ContextKey+"]") + " "
+	}
+
+	line1 := fmt.Sprintf("  %s  %s%s  %s",
 		badge.View(),
+		contextBadge,
 		nameStyle.Render(sess.Name),
 		modelStyle.Render(sess.Model),
 	)
@@ -323,6 +397,54 @@ func (s SessionsPage) renderSessionCard(sess api.Session, selected bool) string 
 		Render(content)
 }
 
+// fetchAllSessions returns a tea.Cmd that fetches sessions from all connected
+// clusters concurrently and returns a single AllSessionsLoadedMsg.
+func fetchAllSessions(pool *tui.ClientPool) tea.Cmd {
+	return func() tea.Msg {
+		type result struct {
+			key      string
+			name     string
+			sessions []api.Session
+			err      error
+		}
+
+		connected := pool.ConnectedClients()
+		if len(connected) == 0 {
+			return tui.AllSessionsLoadedMsg{
+				Errors: map[string]error{"": fmt.Errorf("no connected clusters")},
+			}
+		}
+
+		ch := make(chan result, len(connected))
+		for _, entry := range connected {
+			go func(e *tui.ClusterEntry) {
+				sessions, err := e.Client.ListSessions()
+				ch <- result{key: e.Key, name: e.Name, sessions: sessions, err: err}
+			}(entry)
+		}
+
+		var allSessions []tui.ClusterSession
+		errors := make(map[string]error)
+
+		for range connected {
+			r := <-ch
+			if r.err != nil {
+				errors[r.key] = r.err
+				continue
+			}
+			for _, s := range r.sessions {
+				allSessions = append(allSessions, tui.ClusterSession{
+					Session:     s,
+					ContextKey:  r.key,
+					ContextName: r.name,
+				})
+			}
+		}
+
+		return tui.AllSessionsLoadedMsg{Sessions: allSessions, Errors: errors}
+	}
+}
+
 // filterIndex maps filter name to tab index.
 func filterIndex(filter string) int {
 	switch filter {
@@ -338,37 +460,6 @@ func filterIndex(filter string) int {
 	return 0
 }
 
-// selectedSession returns the session under the cursor, or nil.
-func (s SessionsPage) selectedSession() *api.Session {
-	if s.cursor < 0 || s.cursor >= len(s.filtered) {
-		return nil
-	}
-	sess := s.filtered[s.cursor]
-	return &sess
-}
-
-// doAction performs a session action (start/stop/delete) asynchronously.
-func (s SessionsPage) doAction(action string) tea.Cmd {
-	sess := s.selectedSession()
-	if sess == nil || s.client == nil {
-		return nil
-	}
-	client := s.client
-	id := sess.ID
-	return func() tea.Msg {
-		var err error
-		switch action {
-		case "start":
-			err = client.StartSession(id)
-		case "stop":
-			err = client.StopSession(id)
-		case "delete":
-			err = client.DeleteSession(id)
-		}
-		return SessionActionDoneMsg{Action: action, Err: err}
-	}
-}
-
 // formatTokens formats a token count with K/M suffixes.
 func formatTokens(tokens int) string {
 	if tokens >= 1_000_000 {
@@ -378,4 +469,53 @@ func formatTokens(tokens int) string {
 		return fmt.Sprintf("%.1fK", float64(tokens)/1_000)
 	}
 	return fmt.Sprintf("%d", tokens)
+}
+
+// demoSessions returns realistic demo session data.
+func demoSessions() []api.Session {
+	return []api.Session{
+		{
+			ID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", Name: "feat/auth-flow",
+			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "feat/auth-flow",
+			Status: "running", MessageCount: 42, TokensUsed: 128450,
+			CreatedAt: "2026-03-08T10:30:00Z", LastActive: "2026-03-08T14:22:00Z",
+		},
+		{
+			ID: "b2c3d4e5-f6a7-8901-bcde-f12345678901", Name: "fix/ws-reconnect",
+			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "fix/ws-reconnect",
+			Status: "running", MessageCount: 18, TokensUsed: 67200,
+			CreatedAt: "2026-03-08T09:15:00Z", LastActive: "2026-03-08T14:18:00Z",
+		},
+		{
+			ID: "c3d4e5f6-a7b8-9012-cdef-123456789012", Name: "refactor/api-client",
+			Model: "claude-opus-4", Repo: "niuu/hlidskjalf", Branch: "refactor/api",
+			Status: "stopped", MessageCount: 95, TokensUsed: 342100,
+			CreatedAt: "2026-03-07T16:00:00Z", LastActive: "2026-03-07T23:45:00Z",
+		},
+		{
+			ID: "d4e5f6a7-b8c9-0123-defa-234567890123", Name: "feat/tui-client",
+			Model: "claude-opus-4", Repo: "niuu/volundr", Branch: "feat/niu-130-go-tui",
+			Status: "running", MessageCount: 156, TokensUsed: 891200,
+			CreatedAt: "2026-03-08T08:00:00Z", LastActive: "2026-03-08T14:25:00Z",
+		},
+		{
+			ID: "e5f6a7b8-c9d0-1234-efab-345678901234", Name: "docs/api-reference",
+			Model: "claude-haiku-3.5", Repo: "niuu/docs", Branch: "docs/api",
+			Status: "completed", MessageCount: 12, TokensUsed: 15800,
+			CreatedAt: "2026-03-06T11:00:00Z", LastActive: "2026-03-06T11:45:00Z",
+		},
+		{
+			ID: "f6a7b8c9-d0e1-2345-fabc-456789012345", Name: "fix/migration-lock",
+			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "fix/migration",
+			Status: "error", MessageCount: 7, TokensUsed: 23400,
+			Error: "Pod OOMKilled after 4.2GB memory usage",
+			CreatedAt: "2026-03-08T13:00:00Z", LastActive: "2026-03-08T13:12:00Z",
+		},
+		{
+			ID: "a7b8c9d0-e1f2-3456-abcd-567890123456", Name: "feat/campaign-tracker",
+			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "feat/campaigns",
+			Status: "stopped", MessageCount: 67, TokensUsed: 198500,
+			CreatedAt: "2026-03-05T14:30:00Z", LastActive: "2026-03-05T22:15:00Z",
+		},
+	}
 }
