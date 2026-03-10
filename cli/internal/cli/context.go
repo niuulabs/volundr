@@ -41,9 +41,14 @@ var contextCmd = &cobra.Command{
 }
 
 var contextAddCmd = &cobra.Command{
-	Use:   "add <key>",
+	Use:   "add <key> --server <url>",
 	Short: "Add a new cluster context",
-	Args:  cobra.ExactArgs(1),
+	Long: `Add a new cluster context with the given key and server URL.
+
+Example:
+  volundr context add prod --server https://volundr.prod.example.com --name "Production"
+  volundr context add local --server http://127.0.0.1:8080`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
