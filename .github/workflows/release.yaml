@@ -137,7 +137,7 @@ jobs:
           output-file: sbom-${{ matrix.container }}.spdx.json
 
       - name: Scan container with Trivy
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}
           format: sarif
@@ -145,8 +145,8 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.container)) != ''
         with:
           sarif_file: trivy-${{ matrix.container }}.sarif
           category: trivy-${{ matrix.container }}
