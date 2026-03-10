@@ -123,11 +123,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       security-events: write
+      packages: read
     strategy:
       matrix:
         container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -137,7 +145,7 @@ jobs:
           output-file: sbom-${{ matrix.container }}.spdx.json
 
       - name: Scan container with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}
           format: sarif
