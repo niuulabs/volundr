@@ -152,6 +152,8 @@ service:
 ingress:
   # -- Enable ingress
   enabled: true
+  # -- Ingress routing mode: "host" (hostname-based, default) or "path" (path-prefix, for IP-only access)
+  mode: host
   # -- Ingress class name
   className: traefik
   # -- Ingress annotations (controller-specific)

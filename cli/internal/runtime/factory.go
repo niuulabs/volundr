@@ -7,8 +7,7 @@ func NewRuntime(runtimeType string) Runtime {
 	case "docker":
 		return NewDockerRuntime()
 	case "k3s":
-		// k3s not yet implemented
-		return NewLocalRuntime() // fallback for now
+		return NewK3sRuntime()
 	default:
 		return NewLocalRuntime()
 	}
