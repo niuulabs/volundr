@@ -21,10 +21,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI
-RUN curl -fsSL https://claude.ai/install.sh -o /tmp/install-claude.sh \
-    && bash /tmp/install-claude.sh \
-    && rm /tmp/install-claude.sh
+# Install Claude Code CLI globally via npm (same method as skuld pod)
+RUN npm install -g @anthropic-ai/claude-code
 
 # Create app user
 RUN useradd -m -s /bin/bash volundr
