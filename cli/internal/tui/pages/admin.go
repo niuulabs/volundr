@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/niuulabs/volundr/cli/internal/api"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
@@ -16,56 +17,80 @@ type AdminTab int
 const (
 	AdminUsers    AdminTab = iota
 	AdminTenants
-	AdminStorage
+	AdminStats
 )
 
-// AdminUser represents a user in the admin panel.
-type AdminUser struct {
-	Name     string
-	Email    string
-	Role     string
-	Status   string
-	Sessions int
-	LastSeen string
+// AdminDataLoadedMsg carries data fetched for the admin page.
+type AdminDataLoadedMsg struct {
+	Users   []api.UserInfo
+	Tenants []api.Tenant
+	Stats   *api.StatsResponse
+	Err     error
 }
 
-// AdminTenant represents a tenant/organization.
-type AdminTenant struct {
-	Name     string
-	Plan     string
-	Users    int
-	Sessions int
-	Storage  string
-	Status   string
-}
-
-// AdminPage displays admin tables for users, tenants, and storage.
+// AdminPage displays admin tables for users, tenants, and stats.
 type AdminPage struct {
-	tab    AdminTab
-	cursor int
-	width  int
-	height int
+	client  *api.Client
+	tab     AdminTab
+	cursor  int
+	width   int
+	height  int
+	loading bool
+	loadErr error
 
-	users   []AdminUser
-	tenants []AdminTenant
+	users   []api.UserInfo
+	tenants []api.Tenant
+	stats   *api.StatsResponse
 }
 
-// NewAdminPage creates a new admin page with demo data.
-func NewAdminPage() AdminPage {
+// NewAdminPage creates a new admin page.
+func NewAdminPage(client *api.Client) AdminPage {
 	return AdminPage{
-		users:   demoAdminUsers(),
-		tenants: demoAdminTenants(),
+		client:  client,
+		loading: true,
 	}
 }
 
-// Init initializes the admin page.
+// Init fetches admin data from the API.
 func (a AdminPage) Init() tea.Cmd {
-	return nil
+	if a.client == nil {
+		return nil
+	}
+	client := a.client
+	return func() tea.Msg {
+		var result AdminDataLoadedMsg
+
+		users, err := client.ListUsers()
+		if err != nil {
+			// Non-admin users may get a 403; that's OK.
+			result.Err = err
+		}
+		result.Users = users
+
+		tenants, _ := client.ListTenants()
+		result.Tenants = tenants
+
+		stats, _ := client.GetStats()
+		result.Stats = stats
+
+		return result
+	}
 }
 
 // Update handles messages for the admin page.
 func (a AdminPage) Update(msg tea.Msg) (AdminPage, tea.Cmd) {
 	switch msg := msg.(type) {
+	case AdminDataLoadedMsg:
+		a.loading = false
+		if msg.Err != nil && len(msg.Users) == 0 && len(msg.Tenants) == 0 && msg.Stats == nil {
+			a.loadErr = msg.Err
+			return a, nil
+		}
+		a.loadErr = nil
+		a.users = msg.Users
+		a.tenants = msg.Tenants
+		a.stats = msg.Stats
+		return a, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "tab":
@@ -80,6 +105,9 @@ func (a AdminPage) Update(msg tea.Msg) (AdminPage, tea.Cmd) {
 			}
 		case "down", "j":
 			a.cursor++
+		case "r":
+			a.loading = true
+			return a, a.Init()
 		}
 	}
 	return a, nil
@@ -100,19 +128,29 @@ func (a AdminPage) View() string {
 		Bold(true)
 
 	tabs := components.Tabs{
-		Items:     []string{"Users", "Tenants", "Storage"},
+		Items:     []string{"Users", "Tenants", "Stats"},
 		ActiveTab: int(a.tab),
 		Width:     a.width,
 	}
 
 	var content string
-	switch a.tab {
-	case AdminUsers:
-		content = a.renderUsers()
-	case AdminTenants:
-		content = a.renderTenants()
-	case AdminStorage:
-		content = a.renderStorage()
+	if a.loading {
+		content = lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Render("  Loading admin data...")
+	} else if a.loadErr != nil {
+		content = lipgloss.NewStyle().
+			Foreground(theme.AccentRed).
+			Render(fmt.Sprintf("  Error: %v  (r to retry)", a.loadErr))
+	} else {
+		switch a.tab {
+		case AdminUsers:
+			content = a.renderUsers()
+		case AdminTenants:
+			content = a.renderTenants()
+		case AdminStats:
+			content = a.renderStats()
+		}
 	}
 
 	return lipgloss.NewStyle().
@@ -132,18 +170,21 @@ func (a AdminPage) View() string {
 func (a AdminPage) renderUsers() string {
 	theme := tui.DefaultTheme
 
-	// Table header
+	if len(a.users) == 0 {
+		return lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render("  No users found (admin role required)")
+	}
+
 	headerStyle := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
 		Bold(true)
 
-	header := fmt.Sprintf("  %-20s %-28s %-10s %-12s %-8s %s",
+	header := fmt.Sprintf("  %-24s %-30s %-12s %s",
 		headerStyle.Render("Name"),
 		headerStyle.Render("Email"),
-		headerStyle.Render("Role"),
 		headerStyle.Render("Status"),
-		headerStyle.Render("Sessions"),
-		headerStyle.Render("Last Seen"),
+		headerStyle.Render("Created"),
 	)
 
 	separator := lipgloss.NewStyle().
@@ -157,16 +198,13 @@ func (a AdminPage) renderUsers() string {
 	for i, user := range a.users {
 		nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true)
 		emailStyle := lipgloss.NewStyle().Foreground(theme.TextSecondary)
-		roleStyle := lipgloss.NewStyle().Foreground(theme.AccentPurple)
 		badge := components.NewStatusBadge(user.Status)
 
-		row := fmt.Sprintf("  %-20s %-28s %-10s %-12s %-8d %s",
-			nameStyle.Render(user.Name),
+		row := fmt.Sprintf("  %-24s %-30s %-12s %s",
+			nameStyle.Render(user.DisplayName),
 			emailStyle.Render(user.Email),
-			roleStyle.Render(user.Role),
 			badge.View(),
-			user.Sessions,
-			lipgloss.NewStyle().Foreground(theme.TextMuted).Render(user.LastSeen),
+			lipgloss.NewStyle().Foreground(theme.TextMuted).Render(user.CreatedAt),
 		)
 
 		if i == a.cursor {
@@ -186,17 +224,20 @@ func (a AdminPage) renderUsers() string {
 func (a AdminPage) renderTenants() string {
 	theme := tui.DefaultTheme
 
+	if len(a.tenants) == 0 {
+		return lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render("  No tenants found")
+	}
+
 	headerStyle := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
 		Bold(true)
 
-	header := fmt.Sprintf("  %-20s %-12s %-8s %-10s %-10s %s",
+	header := fmt.Sprintf("  %-24s %-38s %s",
 		headerStyle.Render("Name"),
-		headerStyle.Render("Plan"),
-		headerStyle.Render("Users"),
-		headerStyle.Render("Sessions"),
-		headerStyle.Render("Storage"),
-		headerStyle.Render("Status"),
+		headerStyle.Render("ID"),
+		headerStyle.Render("Created"),
 	)
 
 	separator := lipgloss.NewStyle().
@@ -209,16 +250,12 @@ func (a AdminPage) renderTenants() string {
 
 	for i, tenant := range a.tenants {
 		nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true)
-		planStyle := lipgloss.NewStyle().Foreground(theme.AccentAmber)
-		badge := components.NewStatusBadge(tenant.Status)
+		idStyle := lipgloss.NewStyle().Foreground(theme.TextSecondary)
 
-		row := fmt.Sprintf("  %-20s %-12s %-8d %-10d %-10s %s",
+		row := fmt.Sprintf("  %-24s %-38s %s",
 			nameStyle.Render(tenant.Name),
-			planStyle.Render(tenant.Plan),
-			tenant.Users,
-			tenant.Sessions,
-			tenant.Storage,
-			badge.View(),
+			idStyle.Render(tenant.ID),
+			lipgloss.NewStyle().Foreground(theme.TextMuted).Render(tenant.CreatedAt),
 		)
 
 		if i == a.cursor {
@@ -234,75 +271,57 @@ func (a AdminPage) renderTenants() string {
 	return strings.Join(rows, "\n")
 }
 
-// renderStorage renders the storage usage view.
-func (a AdminPage) renderStorage() string {
+// renderStats renders the stats/dashboard view.
+func (a AdminPage) renderStats() string {
 	theme := tui.DefaultTheme
 
-	type storageEntry struct {
-		Name  string
-		Used  string
-		Quota string
-		Pct   int
+	if a.stats == nil {
+		return lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render("  No stats available")
 	}
 
-	entries := []storageEntry{
-		{Name: "Workspaces (PVCs)", Used: "124 GB", Quota: "500 GB", Pct: 25},
-		{Name: "Container Images", Used: "89 GB", Quota: "200 GB", Pct: 45},
-		{Name: "Database (PostgreSQL)", Used: "12 GB", Quota: "50 GB", Pct: 24},
-		{Name: "Object Storage (S3)", Used: "340 GB", Quota: "1 TB", Pct: 33},
-		{Name: "Logs & Metrics", Used: "67 GB", Quota: "100 GB", Pct: 67},
+	s := a.stats
+	cards := components.MetricRow([]components.MetricCard{
+		components.NewMetricCard("Active", fmt.Sprintf("%d", s.ActiveSessions), "▶", theme.AccentEmerald),
+		components.NewMetricCard("Total", fmt.Sprintf("%d", s.TotalSessions), "◉", theme.AccentAmber),
+		components.NewMetricCard("Tokens Today", formatTokens(s.TokensToday), "◈", theme.AccentPurple),
+		components.NewMetricCard("Cost Today", fmt.Sprintf("$%.2f", s.CostToday), "$", theme.AccentAmber),
+	})
+
+	// Token breakdown
+	var breakdown []string
+	breakdown = append(breakdown, "")
+	breakdown = append(breakdown, lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).Bold(true).Render("  Token Breakdown"))
+	breakdown = append(breakdown, "")
+
+	localPct := 0
+	if s.TokensToday > 0 {
+		localPct = s.LocalTokens * 100 / s.TokensToday
 	}
 
-	var rows []string
-	for i, entry := range entries {
-		nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Width(25)
-		usedStyle := lipgloss.NewStyle().Foreground(theme.AccentCyan).Width(10)
-		quotaStyle := lipgloss.NewStyle().Foreground(theme.TextMuted).Width(10)
+	breakdown = append(breakdown, fmt.Sprintf("  %s  %s  %s",
+		lipgloss.NewStyle().Foreground(theme.TextSecondary).Width(16).Render("Local Tokens:"),
+		lipgloss.NewStyle().Foreground(theme.AccentEmerald).Bold(true).Render(formatTokens(s.LocalTokens)),
+		renderBar(localPct, 100, 25, theme.AccentEmerald, theme.BgTertiary),
+	))
 
-		barColor := theme.AccentEmerald
-		if entry.Pct > 80 {
-			barColor = theme.AccentRed
-		} else if entry.Pct > 60 {
-			barColor = theme.AccentAmber
-		}
-
-		bar := renderBar(entry.Pct, 100, 25, barColor, theme.BgTertiary)
-
-		row := fmt.Sprintf("  %s %s / %s  %s  %d%%",
-			nameStyle.Render(entry.Name),
-			usedStyle.Render(entry.Used),
-			quotaStyle.Render(entry.Quota),
-			bar,
-			entry.Pct,
-		)
-
-		if i == a.cursor {
-			rows = append(rows, lipgloss.NewStyle().
-				Background(theme.BgTertiary).
-				Width(a.width - 6).
-				Render(row))
-		} else {
-			rows = append(rows, row)
-		}
+	cloudPct := 0
+	if s.TokensToday > 0 {
+		cloudPct = s.CloudTokens * 100 / s.TokensToday
 	}
 
-	return strings.Join(rows, "\n")
+	breakdown = append(breakdown, fmt.Sprintf("  %s  %s  %s",
+		lipgloss.NewStyle().Foreground(theme.TextSecondary).Width(16).Render("Cloud Tokens:"),
+		lipgloss.NewStyle().Foreground(theme.AccentCyan).Bold(true).Render(formatTokens(s.CloudTokens)),
+		renderBar(cloudPct, 100, 25, theme.AccentCyan, theme.BgTertiary),
+	))
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		cards,
+		strings.Join(breakdown, "\n"),
+	)
 }
 
-func demoAdminUsers() []AdminUser {
-	return []AdminUser{
-		{Name: "Jozef Van Eenbergen", Email: "jozef@niuu.dev", Role: "admin", Status: "running", Sessions: 42, LastSeen: "2 min ago"},
-		{Name: "Sigrid Odinsdottir", Email: "sigrid@niuu.dev", Role: "developer", Status: "running", Sessions: 28, LastSeen: "15 min ago"},
-		{Name: "Erik Thorsen", Email: "erik@niuu.dev", Role: "developer", Status: "running", Sessions: 19, LastSeen: "1 hr ago"},
-		{Name: "Astrid Bjornsen", Email: "astrid@niuu.dev", Role: "viewer", Status: "stopped", Sessions: 5, LastSeen: "2 days ago"},
-		{Name: "Leif Ragnarsson", Email: "leif@niuu.dev", Role: "developer", Status: "stopped", Sessions: 34, LastSeen: "1 week ago"},
-	}
-}
-
-func demoAdminTenants() []AdminTenant {
-	return []AdminTenant{
-		{Name: "Niuu", Plan: "Enterprise", Users: 12, Sessions: 156, Storage: "124 GB", Status: "running"},
-		{Name: "Asgard Labs", Plan: "Team", Users: 5, Sessions: 42, Storage: "34 GB", Status: "running"},
-		{Name: "Midgard Inc", Plan: "Starter", Users: 2, Sessions: 8, Storage: "4 GB", Status: "running"},
-	}
-}
+// renderBar is defined in realms.go.

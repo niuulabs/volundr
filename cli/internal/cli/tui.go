@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
+	"github.com/niuulabs/volundr/cli/internal/api"
 	"github.com/niuulabs/volundr/cli/internal/remote"
 	tuipkg "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/tui/components"
@@ -74,14 +75,16 @@ type tuiModel struct {
 
 // newTUIModel creates the fully initialized TUI model.
 func newTUIModel(cfg *remote.Config, pool *tuipkg.ClientPool) tuiModel {
-	// Determine a primary server URL for the app and terminal fallback.
+	// Determine a primary server URL and client for the app.
 	server := ""
 	token := ""
+	var primaryClient *api.Client
 	if len(pool.Entries) > 0 {
 		connected := pool.ConnectedClients()
 		if len(connected) > 0 {
 			server = connected[0].Server
 			token = connected[0].Client.Token()
+			primaryClient = connected[0].Client
 		} else {
 			// Use the first entry even if not connected.
 			for _, entry := range pool.Entries {
@@ -96,14 +99,14 @@ func newTUIModel(cfg *remote.Config, pool *tuipkg.ClientPool) tuiModel {
 		pool: pool,
 
 		sessions:   pages.NewSessionsPage(pool),
-		chat:       pages.NewChatPage(),
+		chat:       pages.NewChatPage(token),
 		terminal:   pages.NewTerminalPage(server, token, pool),
-		diffs:      pages.NewDiffsPage(),
-		chronicles: pages.NewChroniclesPage(),
-		settings:   pages.NewSettingsPage(),
+		diffs:      pages.NewDiffsPage(token),
+		chronicles: pages.NewChroniclesPage(primaryClient),
+		settings:   pages.NewSettingsPage(primaryClient, cfg),
 		realms:     pages.NewRealmsPage(),
 		campaigns:  pages.NewCampaignsPage(),
-		admin:      pages.NewAdminPage(),
+		admin:      pages.NewAdminPage(primaryClient),
 
 		header:  components.NewHeaderWithPool(pool),
 		sidebar: components.NewSidebar(),

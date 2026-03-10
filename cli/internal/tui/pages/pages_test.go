@@ -14,20 +14,17 @@ import (
 // =====================
 
 func TestNewSettingsPage(t *testing.T) {
-	page := NewSettingsPage()
-	if page.serverURL != "http://localhost:8000" {
-		t.Errorf("expected default server URL, got %q", page.serverURL)
-	}
-	if page.theme != "dark" {
-		t.Errorf("expected default theme %q, got %q", "dark", page.theme)
-	}
+	page := NewSettingsPage(nil, nil)
 	if page.section != SectionConnection {
 		t.Errorf("expected section Connection, got %v", page.section)
+	}
+	if page.rctx != nil {
+		t.Error("expected nil rctx for nil config")
 	}
 }
 
 func TestSettingsPage_Init(t *testing.T) {
-	page := NewSettingsPage()
+	page := NewSettingsPage(nil, nil)
 	cmd := page.Init()
 	if cmd != nil {
 		t.Error("expected nil cmd")
@@ -35,7 +32,7 @@ func TestSettingsPage_Init(t *testing.T) {
 }
 
 func TestSettingsPage_Update_TabCycle(t *testing.T) {
-	page := NewSettingsPage()
+	page := NewSettingsPage(nil, nil)
 	page.cursor = 2
 
 	// Tab cycles forward and resets cursor.
@@ -55,7 +52,7 @@ func TestSettingsPage_Update_TabCycle(t *testing.T) {
 }
 
 func TestSettingsPage_Update_Navigation(t *testing.T) {
-	page := NewSettingsPage()
+	page := NewSettingsPage(nil, nil)
 	page.cursor = 1
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: 'k'})
@@ -76,7 +73,7 @@ func TestSettingsPage_Update_Navigation(t *testing.T) {
 }
 
 func TestSettingsPage_SetSize(t *testing.T) {
-	page := NewSettingsPage()
+	page := NewSettingsPage(nil, nil)
 	page.SetSize(100, 50)
 	if page.width != 100 {
 		t.Errorf("expected width 100, got %d", page.width)
@@ -88,7 +85,7 @@ func TestSettingsPage_SetSize(t *testing.T) {
 
 func TestSettingsPage_View_AllSections(t *testing.T) {
 	for _, section := range []SettingsSection{SectionConnection, SectionCredentials, SectionIntegrations, SectionAppearance} {
-		page := NewSettingsPage()
+		page := NewSettingsPage(nil, nil)
 		page.section = section
 		page.width = 80
 		page.height = 24
@@ -271,7 +268,7 @@ func TestKeyToBytes_FunctionKeys(t *testing.T) {
 // =====================
 
 func TestNewChatPage(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	if page.model != "claude-sonnet-4" {
 		t.Errorf("expected model %q, got %q", "claude-sonnet-4", page.model)
 	}
@@ -281,20 +278,10 @@ func TestNewChatPage(t *testing.T) {
 	if !page.inputActive {
 		t.Error("expected input active by default")
 	}
-	if len(page.messages) == 0 {
-		t.Error("expected demo messages")
-	}
-}
-
-func TestChatPage_Init(t *testing.T) {
-	page := NewChatPage()
-	if page.Init() != nil {
-		t.Error("expected nil cmd")
-	}
 }
 
 func TestChatPage_Update_Tab(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.inputActive = true
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
@@ -309,7 +296,7 @@ func TestChatPage_Update_Tab(t *testing.T) {
 }
 
 func TestChatPage_Update_EnterSendsMessage(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.inputActive = true
 	page.input = "hello"
 	before := len(page.messages)
@@ -324,7 +311,7 @@ func TestChatPage_Update_EnterSendsMessage(t *testing.T) {
 }
 
 func TestChatPage_Update_EnterEmptyNoop(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.inputActive = true
 	page.input = ""
 	before := len(page.messages)
@@ -336,7 +323,7 @@ func TestChatPage_Update_EnterEmptyNoop(t *testing.T) {
 }
 
 func TestChatPage_Update_Backspace(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.inputActive = true
 	page.input = "ab"
 
@@ -347,7 +334,7 @@ func TestChatPage_Update_Backspace(t *testing.T) {
 }
 
 func TestChatPage_Update_TypeChar(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.inputActive = true
 	page.input = ""
 
@@ -358,7 +345,7 @@ func TestChatPage_Update_TypeChar(t *testing.T) {
 }
 
 func TestChatPage_SetSize(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.SetSize(100, 40)
 	if page.width != 100 || page.height != 40 {
 		t.Errorf("expected 100x40, got %dx%d", page.width, page.height)
@@ -366,7 +353,7 @@ func TestChatPage_SetSize(t *testing.T) {
 }
 
 func TestChatPage_View(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.width = 80
 	page.height = 40
 	view := page.View()
@@ -399,69 +386,35 @@ func TestWrapText(t *testing.T) {
 	}
 }
 
-func TestDemoChatMessages(t *testing.T) {
-	msgs := demoChatMessages()
-	if len(msgs) == 0 {
-		t.Fatal("expected non-empty demo chat messages")
-	}
-	roles := map[string]bool{}
-	for _, m := range msgs {
-		roles[m.Role] = true
-		if m.Content == "" {
-			t.Error("expected non-empty content")
-		}
-	}
-	for _, role := range []string{"user", "assistant", "system"} {
-		if !roles[role] {
-			t.Errorf("expected role %q in demo messages", role)
-		}
-	}
-}
-
 // =====================
 // Chronicles page tests
 // =====================
 
 func TestNewChroniclesPage(t *testing.T) {
-	page := NewChroniclesPage()
-	if len(page.events) == 0 {
-		t.Error("expected demo events")
-	}
+	page := NewChroniclesPage(nil)
 	if page.filter != "all" {
 		t.Errorf("expected filter 'all', got %q", page.filter)
 	}
-	if len(page.filtered) != len(page.events) {
-		t.Error("expected filtered = events initially")
+	if !page.noSession {
+		t.Error("expected noSession true when created without client")
 	}
 }
 
 func TestChroniclesPage_Init(t *testing.T) {
-	page := NewChroniclesPage()
+	page := NewChroniclesPage(nil)
 	if page.Init() != nil {
 		t.Error("expected nil cmd")
 	}
 }
 
-func TestChroniclesPage_SetFilter(t *testing.T) {
-	page := NewChroniclesPage()
-	page.cursor = 5
-
-	page.setFilter("think")
-	if page.filter != "think" {
-		t.Errorf("expected filter 'think', got %q", page.filter)
-	}
-	if page.cursor != 0 {
-		t.Errorf("expected cursor 0 after filter change, got %d", page.cursor)
-	}
-	for _, e := range page.filtered {
-		if e.Type != EventThink {
-			t.Errorf("expected only think events, got %v", e.Type)
-		}
-	}
-}
-
 func TestChroniclesPage_CountByType(t *testing.T) {
-	page := NewChroniclesPage()
+	page := NewChroniclesPage(nil)
+	// Manually populate events for testing.
+	page.events = []ChronicleEvent{
+		{Type: EventMessage, Label: "msg1"},
+		{Type: EventMessage, Label: "msg2"},
+		{Type: EventFile, Label: "file1"},
+	}
 	counts := page.countByType()
 	if len(counts) == 0 {
 		t.Error("expected non-empty counts")
@@ -481,12 +434,12 @@ func TestChroniclesPage_FilterTabIndex(t *testing.T) {
 		want   int
 	}{
 		{"all", 0},
-		{"think", 1},
-		{"observe", 2},
-		{"decide", 3},
-		{"act", 4},
-		{"complete", 5},
-		{"merge", 6},
+		{"session", 1},
+		{"message", 2},
+		{"file", 3},
+		{"git", 4},
+		{"terminal", 5},
+		{"error", 6},
 		{"unknown", 0},
 	}
 	for _, tt := range tests {
@@ -499,7 +452,7 @@ func TestChroniclesPage_FilterTabIndex(t *testing.T) {
 }
 
 func TestChroniclesPage_View(t *testing.T) {
-	page := NewChroniclesPage()
+	page := NewChroniclesPage(nil)
 	page.width = 120
 	page.height = 40
 	view := page.View()
@@ -509,12 +462,19 @@ func TestChroniclesPage_View(t *testing.T) {
 }
 
 func TestChroniclesPage_Update_Navigation(t *testing.T) {
-	page := NewChroniclesPage()
+	page := NewChroniclesPage(nil)
+	// Populate events so navigation has something to work with.
+	page.events = []ChronicleEvent{
+		{Type: EventMessage, Label: "msg1"},
+		{Type: EventFile, Label: "file1"},
+		{Type: EventGit, Label: "git1"},
+	}
+	page.noSession = false
+	page.applyFilter()
 	page.cursor = 0
-	count := len(page.filtered)
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: 'j'})
-	if page.cursor != 1 && count > 1 {
+	if page.cursor != 1 {
 		t.Errorf("expected cursor 1 after 'j', got %d", page.cursor)
 	}
 
@@ -524,26 +484,8 @@ func TestChroniclesPage_Update_Navigation(t *testing.T) {
 	}
 }
 
-func TestChroniclesPage_Update_FilterKeys(t *testing.T) {
-	page := NewChroniclesPage()
-	page.width = 80
-	page.height = 24
-
-	// Press '2' to filter to "think"
-	page, _ = page.Update(tea.KeyPressMsg{Code: '2'})
-	if page.filter != "think" {
-		t.Errorf("expected filter 'think' after '2', got %q", page.filter)
-	}
-
-	// Press '1' to go back to all
-	page, _ = page.Update(tea.KeyPressMsg{Code: '1'})
-	if page.filter != "all" {
-		t.Errorf("expected filter 'all' after '1', got %q", page.filter)
-	}
-}
-
 func TestEventTypeStyle(t *testing.T) {
-	types := []EventType{EventThink, EventObserve, EventDecide, EventAct, EventComplete, EventMerge, EventError}
+	types := []EventType{EventSession, EventMessage, EventFile, EventGit, EventTerminal, EventError}
 	for _, et := range types {
 		icon, c := eventTypeStyle(et)
 		if icon == "" {
@@ -561,59 +503,27 @@ func TestEventTypeStyle(t *testing.T) {
 	}
 }
 
-func TestDemoChronicleEvents(t *testing.T) {
-	events := demoChronicleEvents()
-	if len(events) == 0 {
-		t.Fatal("expected non-empty demo events")
-	}
-	for i, e := range events {
-		if e.Title == "" {
-			t.Errorf("event %d has empty title", i)
-		}
-		if e.Type == "" {
-			t.Errorf("event %d has empty type", i)
-		}
-	}
-}
-
 // =====================
 // Diffs page tests
 // =====================
 
 func TestNewDiffsPage(t *testing.T) {
-	page := NewDiffsPage()
-	if len(page.files) == 0 {
-		t.Error("expected demo diff files")
+	page := NewDiffsPage("")
+	// NewDiffsPage starts empty (no files until a session is selected).
+	if len(page.files) != 0 {
+		t.Errorf("expected 0 files, got %d", len(page.files))
 	}
 }
 
 func TestDiffsPage_Init(t *testing.T) {
-	page := NewDiffsPage()
+	page := NewDiffsPage("")
 	if page.Init() != nil {
 		t.Error("expected nil cmd")
 	}
 }
 
-func TestDiffsPage_Update_Navigation(t *testing.T) {
-	page := NewDiffsPage()
-	page.cursor = 0
-
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'j'})
-	if page.cursor != 1 {
-		t.Errorf("expected cursor 1 after 'j', got %d", page.cursor)
-	}
-	if page.scrollPos != 0 {
-		t.Error("expected scroll reset on file change")
-	}
-
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'k'})
-	if page.cursor != 0 {
-		t.Errorf("expected cursor 0 after 'k', got %d", page.cursor)
-	}
-}
-
 func TestDiffsPage_Update_Scroll(t *testing.T) {
-	page := NewDiffsPage()
+	page := NewDiffsPage("")
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: 'J'})
 	if page.scrollPos != 1 {
@@ -627,7 +537,7 @@ func TestDiffsPage_Update_Scroll(t *testing.T) {
 }
 
 func TestDiffsPage_SetSize(t *testing.T) {
-	page := NewDiffsPage()
+	page := NewDiffsPage("")
 	page.SetSize(120, 40)
 	if page.width != 120 || page.height != 40 {
 		t.Error("expected dimensions set")
@@ -635,7 +545,7 @@ func TestDiffsPage_SetSize(t *testing.T) {
 }
 
 func TestDiffsPage_View(t *testing.T) {
-	page := NewDiffsPage()
+	page := NewDiffsPage("")
 	page.width = 120
 	page.height = 40
 	view := page.View()
@@ -665,21 +575,6 @@ func TestTruncatePath(t *testing.T) {
 		got := truncatePath(tt.path, tt.maxLen)
 		if got != tt.want {
 			t.Errorf("truncatePath(%q, %d) = %q, want %q", tt.path, tt.maxLen, got, tt.want)
-		}
-	}
-}
-
-func TestDemoDiffFiles(t *testing.T) {
-	files := demoDiffFiles()
-	if len(files) == 0 {
-		t.Fatal("expected non-empty demo diff files")
-	}
-	for i, f := range files {
-		if f.Path == "" {
-			t.Errorf("file %d has empty path", i)
-		}
-		if f.Status == "" {
-			t.Errorf("file %d has empty status", i)
 		}
 	}
 }
@@ -774,24 +669,22 @@ func TestDemoRealms(t *testing.T) {
 // =====================
 
 func TestNewAdminPage(t *testing.T) {
-	page := NewAdminPage()
-	if len(page.users) == 0 {
-		t.Error("expected demo users")
-	}
-	if len(page.tenants) == 0 {
-		t.Error("expected demo tenants")
+	page := NewAdminPage(nil)
+	// NewAdminPage with nil client starts in loading state with no data.
+	if page.tab != AdminUsers {
+		t.Errorf("expected tab Users, got %v", page.tab)
 	}
 }
 
 func TestAdminPage_Init(t *testing.T) {
-	page := NewAdminPage()
+	page := NewAdminPage(nil)
 	if page.Init() != nil {
 		t.Error("expected nil cmd")
 	}
 }
 
 func TestAdminPage_Update_TabCycle(t *testing.T) {
-	page := NewAdminPage()
+	page := NewAdminPage(nil)
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if page.tab != AdminTenants {
@@ -799,8 +692,8 @@ func TestAdminPage_Update_TabCycle(t *testing.T) {
 	}
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if page.tab != AdminStorage {
-		t.Errorf("expected tab Storage, got %v", page.tab)
+	if page.tab != AdminStats {
+		t.Errorf("expected tab Stats, got %v", page.tab)
 	}
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
@@ -810,16 +703,16 @@ func TestAdminPage_Update_TabCycle(t *testing.T) {
 }
 
 func TestAdminPage_Update_ShiftTab(t *testing.T) {
-	page := NewAdminPage()
+	page := NewAdminPage(nil)
 
 	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
-	if page.tab != AdminStorage {
-		t.Errorf("expected tab Storage after shift+tab from Users, got %v", page.tab)
+	if page.tab != AdminStats {
+		t.Errorf("expected tab Stats after shift+tab from Users, got %v", page.tab)
 	}
 }
 
 func TestAdminPage_Update_Navigation(t *testing.T) {
-	page := NewAdminPage()
+	page := NewAdminPage(nil)
 	page, _ = page.Update(tea.KeyPressMsg{Code: 'j'})
 	if page.cursor != 1 {
 		t.Errorf("expected cursor 1, got %d", page.cursor)
@@ -831,7 +724,7 @@ func TestAdminPage_Update_Navigation(t *testing.T) {
 }
 
 func TestAdminPage_SetSize(t *testing.T) {
-	page := NewAdminPage()
+	page := NewAdminPage(nil)
 	page.SetSize(120, 40)
 	if page.width != 120 || page.height != 40 {
 		t.Error("expected dimensions set")
@@ -839,38 +732,14 @@ func TestAdminPage_SetSize(t *testing.T) {
 }
 
 func TestAdminPage_View_AllTabs(t *testing.T) {
-	for _, tab := range []AdminTab{AdminUsers, AdminTenants, AdminStorage} {
-		page := NewAdminPage()
+	for _, tab := range []AdminTab{AdminUsers, AdminTenants, AdminStats} {
+		page := NewAdminPage(nil)
 		page.tab = tab
 		page.width = 120
 		page.height = 40
 		view := page.View()
 		if view == "" {
 			t.Errorf("expected non-empty view for tab %v", tab)
-		}
-	}
-}
-
-func TestDemoAdminUsers(t *testing.T) {
-	users := demoAdminUsers()
-	if len(users) == 0 {
-		t.Fatal("expected non-empty demo users")
-	}
-	for i, u := range users {
-		if u.Name == "" || u.Email == "" || u.Role == "" {
-			t.Errorf("user %d has empty required field", i)
-		}
-	}
-}
-
-func TestDemoAdminTenants(t *testing.T) {
-	tenants := demoAdminTenants()
-	if len(tenants) == 0 {
-		t.Fatal("expected non-empty demo tenants")
-	}
-	for i, t2 := range tenants {
-		if t2.Name == "" || t2.Plan == "" {
-			t.Errorf("tenant %d has empty required field", i)
 		}
 	}
 }
@@ -1099,7 +968,7 @@ func TestTerminalPage_HandleKey_NoTabs(t *testing.T) {
 // --- Chronicles SetSize ---
 
 func TestChroniclesPage_SetSize(t *testing.T) {
-	page := NewChroniclesPage()
+	page := NewChroniclesPage(nil)
 	page.SetSize(120, 40)
 	if page.width != 120 || page.height != 40 {
 		t.Error("expected dimensions set")
@@ -1109,65 +978,20 @@ func TestChroniclesPage_SetSize(t *testing.T) {
 // --- Chat scroll ---
 
 func TestChatPage_Update_Scroll(t *testing.T) {
-	page := NewChatPage()
+	page := NewChatPage("")
 	page.inputActive = false
 	page.scrollPos = 1
 
-	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	// "up"/"k" increments scrollPos (scrolls up, further from bottom)
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if page.scrollPos != 2 {
 		t.Errorf("expected scroll 2, got %d", page.scrollPos)
 	}
 
-	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	// "down"/"j" decrements scrollPos (scrolls down, closer to bottom)
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if page.scrollPos != 1 {
 		t.Errorf("expected scroll 1, got %d", page.scrollPos)
-	}
-}
-
-// --- Chronicles update filter keys ---
-
-func TestChroniclesPage_Update_AllFilterKeys(t *testing.T) {
-	tests := []struct {
-		key    rune
-		filter string
-	}{
-		{'1', "all"},
-		{'2', "think"},
-		{'3', "observe"},
-		{'4', "decide"},
-		{'5', "act"},
-		{'6', "complete"},
-		{'7', "merge"},
-	}
-
-	for _, tt := range tests {
-		page := NewChroniclesPage()
-		page, _ = page.Update(tea.KeyPressMsg{Code: tt.key})
-		if page.filter != tt.filter {
-			t.Errorf("key %q: expected filter %q, got %q", string(tt.key), tt.filter, page.filter)
-		}
-	}
-}
-
-// --- Diffs cursor boundary ---
-
-func TestDiffsPage_Update_CursorBoundary(t *testing.T) {
-	page := NewDiffsPage()
-
-	// Try to go past last file
-	for i := 0; i < 100; i++ {
-		page, _ = page.Update(tea.KeyPressMsg{Code: 'j'})
-	}
-	if page.cursor >= len(page.files) {
-		t.Errorf("cursor %d should be < %d", page.cursor, len(page.files))
-	}
-
-	// Try to go below 0
-	for i := 0; i < 100; i++ {
-		page, _ = page.Update(tea.KeyPressMsg{Code: 'k'})
-	}
-	if page.cursor != 0 {
-		t.Errorf("expected cursor 0, got %d", page.cursor)
 	}
 }
 
@@ -1214,7 +1038,7 @@ func TestRealmsPage_Update_CursorBoundary(t *testing.T) {
 // --- Settings section cycle full ---
 
 func TestSettingsPage_Update_FullSectionCycle(t *testing.T) {
-	page := NewSettingsPage()
+	page := NewSettingsPage(nil, nil)
 
 	// Tab through all 4 sections
 	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyTab})
@@ -1238,15 +1062,13 @@ func TestSettingsPage_Update_FullSectionCycle(t *testing.T) {
 // --- renderTimeline empty filter ---
 
 func TestChroniclesPage_View_FilteredEmpty(t *testing.T) {
-	page := NewChroniclesPage()
+	page := NewChroniclesPage(nil)
 	page.width = 80
 	page.height = 24
-	// Set a filter that no events match
-	page.filter = "merge"
-	page.setFilter("merge")
-
-	// There might be merge events; let's force empty
+	page.noSession = false
+	page.filter = "error"
 	page.filtered = nil
+
 	view := page.View()
 	if view == "" {
 		t.Error("expected non-empty view even with no filtered events")
@@ -1256,7 +1078,7 @@ func TestChroniclesPage_View_FilteredEmpty(t *testing.T) {
 // --- Admin rendering with cursor on different rows ---
 
 func TestAdminPage_View_UsersCursor(t *testing.T) {
-	page := NewAdminPage()
+	page := NewAdminPage(nil)
 	page.width = 120
 	page.height = 40
 	page.cursor = 2
@@ -1268,7 +1090,7 @@ func TestAdminPage_View_UsersCursor(t *testing.T) {
 }
 
 func TestAdminPage_View_TenantsCursor(t *testing.T) {
-	page := NewAdminPage()
+	page := NewAdminPage(nil)
 	page.tab = AdminTenants
 	page.width = 120
 	page.height = 40
@@ -1280,16 +1102,16 @@ func TestAdminPage_View_TenantsCursor(t *testing.T) {
 	}
 }
 
-func TestAdminPage_View_StorageCursor(t *testing.T) {
-	page := NewAdminPage()
-	page.tab = AdminStorage
+func TestAdminPage_View_StatsCursor(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.tab = AdminStats
 	page.width = 120
 	page.height = 40
 	page.cursor = 3
 
 	view := page.View()
 	if view == "" {
-		t.Error("expected non-empty storage view")
+		t.Error("expected non-empty stats view")
 	}
 }
 

@@ -41,18 +41,26 @@ func NewTerminalWSClient(baseURL, token string) *TerminalWSClient {
 }
 
 // Connect establishes a WebSocket connection to the terminal endpoint.
-func (t *TerminalWSClient) Connect(path string) error {
+// pathOrURL can be a relative path (appended to baseURL with Bearer auth)
+// or a full ws(s):// URL (used as-is with access_token query param).
+func (t *TerminalWSClient) Connect(pathOrURL string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	t.setState(WSConnecting)
 
+	var url string
 	header := http.Header{}
-	if t.token != "" {
-		header.Set("Authorization", "Bearer "+t.token)
+
+	if strings.HasPrefix(pathOrURL, "ws://") || strings.HasPrefix(pathOrURL, "wss://") {
+		url = appendAccessToken(pathOrURL, t.token)
+	} else {
+		url = t.baseURL + pathOrURL
+		if t.token != "" {
+			header.Set("Authorization", "Bearer "+t.token)
+		}
 	}
 
-	url := t.baseURL + path
 	conn, _, err := websocket.DefaultDialer.Dial(url, header)
 	if err != nil {
 		t.setState(WSDisconnected)
@@ -67,7 +75,8 @@ func (t *TerminalWSClient) Connect(path string) error {
 	return nil
 }
 
-// SendRaw sends raw keyboard input bytes over the WebSocket.
+// SendRaw sends keyboard input over the WebSocket as a JSON input message.
+// The session pod expects {"type":"input","data":"..."} for keyboard input.
 func (t *TerminalWSClient) SendRaw(data []byte) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -76,7 +85,20 @@ func (t *TerminalWSClient) SendRaw(data []byte) error {
 		return fmt.Errorf("not connected")
 	}
 
-	return t.conn.WriteMessage(websocket.BinaryMessage, data)
+	msg := struct {
+		Type string `json:"type"`
+		Data string `json:"data"`
+	}{
+		Type: "input",
+		Data: string(data),
+	}
+
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshaling input message: %w", err)
+	}
+
+	return t.conn.WriteMessage(websocket.TextMessage, payload)
 }
 
 // SendResize sends a resize control message over the WebSocket.
@@ -128,10 +150,18 @@ func (t *TerminalWSClient) State() WSState {
 	return t.state
 }
 
-// readLoop continuously reads raw bytes from the WebSocket.
+// terminalMsg represents a JSON-wrapped terminal message from the session pod.
+type terminalMsg struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
+}
+
+// readLoop continuously reads messages from the WebSocket.
+// The session pod sends JSON-wrapped PTY output: {"type":"output","data":"<escaped PTY data>"}.
+// We parse the JSON and extract the raw PTY bytes for the vt emulator.
 func (t *TerminalWSClient) readLoop() {
 	for {
-		_, data, err := t.conn.ReadMessage()
+		msgType, data, err := t.conn.ReadMessage()
 		if err != nil {
 			if t.OnError != nil {
 				t.OnError(err)
@@ -143,8 +173,30 @@ func (t *TerminalWSClient) readLoop() {
 			return
 		}
 
-		if t.OnData != nil {
+		if t.OnData == nil {
+			continue
+		}
+
+		// Binary messages are raw PTY data — pass through directly.
+		if msgType == websocket.BinaryMessage {
 			t.OnData(data)
+			continue
+		}
+
+		// Text messages may be JSON-wrapped PTY output.
+		var msg terminalMsg
+		if err := json.Unmarshal(data, &msg); err != nil {
+			// Not valid JSON — treat as raw PTY data.
+			t.OnData(data)
+			continue
+		}
+
+		switch msg.Type {
+		case "output":
+			// PTY output — the data field contains the terminal bytes.
+			t.OnData([]byte(msg.Data))
+		default:
+			// Unknown message type — ignore (e.g., ack, resize echo).
 		}
 	}
 }

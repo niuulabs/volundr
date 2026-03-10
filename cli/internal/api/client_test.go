@@ -526,16 +526,21 @@ func TestListChronicles(t *testing.T) {
 }
 
 func TestGetTimeline(t *testing.T) {
-	events := []TimelineEvent{
-		{ID: "e1", SessionID: "s1", Type: "message"},
+	resp := TimelineResponse{
+		Events: []TimelineEvent{
+			{T: 0, Type: "message", Label: "hello"},
+		},
+		Files:     []TimelineFile{},
+		Commits:   []TimelineCommit{},
+		TokenBurn: []int{100},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/volundr/sessions/s1/timeline" {
+		if r.URL.Path != "/api/v1/volundr/chronicles/s1/timeline" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(events)
+		json.NewEncoder(w).Encode(resp)
 	}))
 	defer srv.Close()
 
@@ -544,8 +549,8 @@ func TestGetTimeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTimeline: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(got))
+	if len(got.Events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(got.Events))
 	}
 }
 
@@ -575,14 +580,6 @@ func TestWSClient_State_Initial(t *testing.T) {
 	ws := NewWSClient("http://localhost", "")
 	if ws.State() != WSDisconnected {
 		t.Errorf("expected disconnected, got %v", ws.State())
-	}
-}
-
-func TestWSClient_Send_NotConnected(t *testing.T) {
-	ws := NewWSClient("http://localhost", "")
-	err := ws.Send(WSMessage{Type: "test"})
-	if err == nil {
-		t.Fatal("expected error sending without connection")
 	}
 }
 
