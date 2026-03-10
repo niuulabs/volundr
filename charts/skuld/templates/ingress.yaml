@@ -5,14 +5,36 @@ metadata:
   name: {{ include "skuld.fullname" . }}
   labels:
     {{- include "skuld.labels" . | nindent 4 }}
+  {{- if eq (default "host" .Values.ingress.mode) "path" }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-{{ include "skuld.fullname" . }}-strip@kubernetescrd
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- else }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
+  {{- end }}
   {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
   {{- end }}
+  {{- if eq (default "host" .Values.ingress.mode) "path" }}
+  {{/* Path-based routing: no host field, uses /s/{session-id} prefix */}}
+  rules:
+    - http:
+        paths:
+          - path: /s/{{ .Values.session.id }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "skuld.fullname" . }}
+                port:
+                  name: http
+  {{- else }}
+  {{/* Host-based routing (default): hostname-based with optional TLS */}}
   {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
@@ -31,4 +53,5 @@ spec:
                 name: {{ include "skuld.fullname" . }}
                 port:
                   name: http
+  {{- end }}
 {{- end }}

@@ -39,6 +39,13 @@ type DockerConfig struct {
 	Network         string `yaml:"network"`
 }
 
+// K3sConfig holds k3s/k3d runtime settings.
+type K3sConfig struct {
+	Kubeconfig string `yaml:"kubeconfig"` // default: auto-detect
+	Namespace  string `yaml:"namespace"`  // default: volundr
+	Provider   string `yaml:"provider"`   // "auto", "k3d", "native" (default: auto)
+}
+
 // Config represents the full volundr configuration.
 type Config struct {
 	Runtime   string          `yaml:"runtime"`
@@ -47,6 +54,7 @@ type Config struct {
 	Database  DatabaseConfig  `yaml:"database"`
 	Anthropic AnthropicConfig `yaml:"anthropic"`
 	Docker    DockerConfig    `yaml:"docker,omitempty"`
+	K3s       K3sConfig       `yaml:"k3s,omitempty"`
 }
 
 // ListenConfig holds the listener settings.
@@ -136,6 +144,11 @@ func DefaultConfig() (*Config, error) {
 			CodeServerImage: "ghcr.io/niuu/code-server:latest",
 			TtydImage:       "ghcr.io/niuu/ttyd:latest",
 			Network:         "volundr-net",
+		},
+		K3s: K3sConfig{
+			Kubeconfig: "",
+			Namespace:  "volundr",
+			Provider:   "auto",
 		},
 	}, nil
 }
