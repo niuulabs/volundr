@@ -85,9 +85,15 @@ func (c ChatPage) Init() tea.Cmd {
 
 // SetSession connects to a session's chat WebSocket.
 func (c *ChatPage) SetSession(sess api.Session) {
-	// Close any existing connection.
+	// Detach callbacks and close asynchronously so the old WS's
+	// state-change callback can't block on p.Send() while we're
+	// inside the Bubble Tea Update() call.
 	if c.ws != nil {
-		_ = c.ws.Close()
+		oldWS := c.ws
+		oldWS.OnMessage = nil
+		oldWS.OnStateChange = nil
+		oldWS.OnError = nil
+		go func() { _ = oldWS.Close() }()
 	}
 
 	c.session = &sess

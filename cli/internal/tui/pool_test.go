@@ -94,7 +94,7 @@ func TestNewClientPool_MultipleContexts(t *testing.T) {
 	}
 
 	staging := pool.GetEntry("staging")
-	if staging.Status != ClusterNoAuth {
+	if staging.Status != ClusterConnected {
 		t.Errorf("staging: expected NoAuth, got %v", staging.Status)
 	}
 
@@ -117,7 +117,7 @@ func TestNewClientPool_NoAuthContext(t *testing.T) {
 	if entry == nil {
 		t.Fatal("expected entry to exist")
 	}
-	if entry.Status != ClusterNoAuth {
+	if entry.Status != ClusterConnected {
 		t.Errorf("expected NoAuth, got %v", entry.Status)
 	}
 }
@@ -146,16 +146,19 @@ func TestClientPool_ConnectedClients(t *testing.T) {
 	pool := NewClientPool(cfg)
 	connected := pool.ConnectedClients()
 
-	if len(connected) != 2 {
-		t.Fatalf("expected 2 connected, got %d", len(connected))
+	if len(connected) != 3 {
+		t.Fatalf("expected 3 connected, got %d", len(connected))
 	}
 
 	// Should be in sorted order.
 	if connected[0].Key != "a" {
 		t.Errorf("expected first connected key %q, got %q", "a", connected[0].Key)
 	}
-	if connected[1].Key != "c" {
-		t.Errorf("expected second connected key %q, got %q", "c", connected[1].Key)
+	if connected[1].Key != "b" {
+		t.Errorf("expected second connected key %q, got %q", "b", connected[1].Key)
+	}
+	if connected[2].Key != "c" {
+		t.Errorf("expected third connected key %q, got %q", "c", connected[2].Key)
 	}
 }
 
@@ -200,15 +203,16 @@ func TestClientPool_Summary_Single(t *testing.T) {
 	}
 }
 
-func TestClientPool_Summary_SingleNoAuth(t *testing.T) {
+func TestClientPool_Summary_SingleNoToken(t *testing.T) {
 	cfg := remote.DefaultConfig()
 	cfg.Contexts["noauth"] = &remote.Context{Name: "noauth", Server: "https://noauth.com"}
 
 	pool := NewClientPool(cfg)
 	summary := pool.Summary()
 
-	if summary != "1 cluster (no auth)" {
-		t.Errorf("expected %q, got %q", "1 cluster (no auth)", summary)
+	// All contexts with a server are treated as connected.
+	if summary != "1 cluster (connected)" {
+		t.Errorf("expected %q, got %q", "1 cluster (connected)", summary)
 	}
 }
 
@@ -224,11 +228,8 @@ func TestClientPool_Summary_Multiple(t *testing.T) {
 	if !strings.Contains(summary, "3 clusters") {
 		t.Errorf("expected summary to contain '3 clusters', got %q", summary)
 	}
-	if !strings.Contains(summary, "2 connected") {
-		t.Errorf("expected summary to contain '2 connected', got %q", summary)
-	}
-	if !strings.Contains(summary, "1 no auth") {
-		t.Errorf("expected summary to contain '1 no auth', got %q", summary)
+	if !strings.Contains(summary, "3 connected") {
+		t.Errorf("expected summary to contain '3 connected', got %q", summary)
 	}
 }
 
@@ -261,7 +262,7 @@ func TestNewClientPoolFromFlags_NoToken(t *testing.T) {
 	if entry == nil {
 		t.Fatal("expected cli-override entry")
 	}
-	if entry.Status != ClusterNoAuth {
+	if entry.Status != ClusterConnected {
 		t.Errorf("expected NoAuth, got %v", entry.Status)
 	}
 }

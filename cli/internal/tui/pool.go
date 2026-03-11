@@ -74,10 +74,9 @@ func NewClientPool(cfg *remote.Config) *ClientPool {
 			continue
 		}
 
-		status := ClusterNoAuth
-		if ctx.Token != "" {
-			status = ClusterConnected
-		}
+		// Treat all contexts with a server as connected. Local/dev setups
+		// (AllowAll identity adapter) work without a token.
+		status := ClusterConnected
 
 		entry := &ClusterEntry{
 			Key:    key,
@@ -101,17 +100,12 @@ func NewClientPoolFromFlags(server, token string) *ClientPool {
 		orderedKeys: []string{"cli-override"},
 	}
 
-	status := ClusterNoAuth
-	if token != "" {
-		status = ClusterConnected
-	}
-
 	pool.Entries["cli-override"] = &ClusterEntry{
 		Key:    "cli-override",
 		Name:   "CLI Override",
 		Server: server,
 		Client: api.NewClient(server, token),
-		Status: status,
+		Status: ClusterConnected,
 	}
 
 	return pool

@@ -46,10 +46,16 @@ interface UseMentionMenuReturn {
  */
 function buildApiBase(chatEndpoint: string | null, sessionHost: string | null): string | null {
   if (chatEndpoint) {
-    const parsed = new URL(chatEndpoint);
-    const protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
-    const basePath = parsed.pathname.replace(/\/(api\/)?session$/, '');
-    return `${protocol}//${parsed.host}${basePath}`;
+    try {
+      const parsed = new URL(chatEndpoint);
+      const protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+      const basePath = parsed.pathname.replace(/\/(api\/)?session$/, '');
+      return `${protocol}//${parsed.host}${basePath}`;
+    } catch {
+      // Relative path (e.g. /s/{id}/session) — resolve against current origin.
+      const basePath = chatEndpoint.replace(/\/(api\/)?session$/, '');
+      return `${window.location.origin}${basePath}`;
+    }
   }
   if (sessionHost) {
     return `https://${sessionHost}`;

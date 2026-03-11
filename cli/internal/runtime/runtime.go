@@ -38,6 +38,43 @@ type StackStatus struct {
 	Services []ServiceStatus `json:"services"`
 }
 
+// buildGitConfig converts the CLI git config into the map structure
+// expected by the Python API's config YAML.
+func buildGitConfig(cfg *config.Config) map[string]interface{} {
+	git := map[string]interface{}{}
+
+	if cfg.Git.GitHub.Enabled {
+		gh := map[string]interface{}{
+			"enabled": true,
+		}
+
+		if len(cfg.Git.GitHub.Instances) > 0 {
+			var instances []map[string]interface{}
+			for _, inst := range cfg.Git.GitHub.Instances {
+				m := map[string]interface{}{
+					"name":     inst.Name,
+					"base_url": inst.BaseURL,
+				}
+				if inst.Token != "" {
+					m["token"] = inst.Token
+				}
+				if inst.TokenEnv != "" {
+					m["token_env"] = inst.TokenEnv
+				}
+				if len(inst.Orgs) > 0 {
+					m["orgs"] = inst.Orgs
+				}
+				instances = append(instances, m)
+			}
+			gh["instances"] = instances
+		}
+
+		git["github"] = gh
+	}
+
+	return git
+}
+
 // Runtime manages the Volundr stack lifecycle.
 type Runtime interface {
 	// Init performs first-time setup (create dirs, download binaries, etc.).

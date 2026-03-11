@@ -102,7 +102,8 @@ export function VolundrPopout() {
   const probeWsUrl = useMemo(() => {
     if (sessionChatEndpoint) return sessionChatEndpoint;
     if (!sessionHost) return null;
-    return `wss://${sessionHost}/session`;
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${sessionHost}/session`;
   }, [sessionChatEndpoint, sessionHost]);
 
   const handleSessionReady = useCallback(() => {
@@ -118,16 +119,17 @@ export function VolundrPopout() {
     if (!sessionHost || !isSessionReady) {
       return null;
     }
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     if (sessionChatEndpoint) {
       try {
         const parsed = new URL(sessionChatEndpoint);
         const prefix = parsed.pathname.replace(/\/(api\/)?session$/, '');
-        return `wss://${parsed.host}${prefix}/terminal/ws`;
+        return `${wsProto}//${parsed.host}${prefix}/terminal/ws`;
       } catch {
         /* fall through */
       }
     }
-    return `wss://${sessionHost}/terminal/ws`;
+    return `${wsProto}//${sessionHost}/terminal/ws`;
   }, [sessionHost, sessionChatEndpoint, isSessionReady]);
 
   const chatWsUrl = useMemo(() => {
@@ -135,7 +137,8 @@ export function VolundrPopout() {
       return null;
     }
     if (sessionChatEndpoint) return sessionChatEndpoint;
-    return `wss://${sessionHost}/session`;
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${sessionHost}/session`;
   }, [sessionHost, sessionChatEndpoint, isSessionReady]);
 
   // Update window title

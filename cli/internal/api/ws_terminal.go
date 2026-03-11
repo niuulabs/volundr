@@ -140,14 +140,18 @@ func (t *TerminalWSClient) SendResize(cols, rows int) error {
 // Close closes the WebSocket connection.
 func (t *TerminalWSClient) Close() error {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 
 	if t.conn == nil {
+		t.mu.Unlock()
 		return nil
 	}
 
 	err := t.conn.Close()
 	t.conn = nil
+	t.mu.Unlock()
+
+	// Update state and fire callback outside the lock to avoid deadlock
+	// when the callback blocks on the Bubble Tea channel.
 	t.setState(WSDisconnected)
 	return err
 }

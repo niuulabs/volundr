@@ -59,7 +59,7 @@ class Devrunner:
         self._postgres: asyncio.subprocess.Process | None = None
         self._shutting_down = False
         self._monitor_task: asyncio.Task | None = None
-        self._terminal: "TerminalServer | None" = None
+        self._terminal = None  # TerminalServer instance, lazily imported
 
     async def run(self) -> None:
         """Main entry point - start postgres, watch config, reconcile services."""
@@ -348,7 +348,9 @@ class Devrunner:
                     continue
 
                 if state.restart_count >= state.spec.max_restarts:
-                    logger.error(f"Service {name} exceeded max restarts ({state.spec.max_restarts})")
+                    logger.error(
+                        f"Service {name} exceeded max restarts ({state.spec.max_restarts})"
+                    )
                     self._write_status(name, {
                         "status": "failed",
                         "exit_code": exit_code,
@@ -428,19 +430,19 @@ class Devrunner:
             if not path.startswith("/svc/"):
                 path = f"/svc/{path.lstrip('/')}"
 
-            lines.append(f"")
+            lines.append("")
             lines.append(f"# Service: {name}")
             lines.append(f"location {path}/ {{")
             lines.append(f"    proxy_pass http://127.0.0.1:{port}/;")
-            lines.append(f"    proxy_http_version 1.1;")
-            lines.append(f"    proxy_set_header Upgrade $http_upgrade;")
-            lines.append(f"    proxy_set_header Connection \"upgrade\";")
-            lines.append(f"    proxy_set_header Host $host;")
-            lines.append(f"    proxy_set_header X-Real-IP $remote_addr;")
-            lines.append(f"    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
-            lines.append(f"    proxy_read_timeout 3600s;")
-            lines.append(f"    proxy_send_timeout 3600s;")
-            lines.append(f"}}")
+            lines.append("    proxy_http_version 1.1;")
+            lines.append("    proxy_set_header Upgrade $http_upgrade;")
+            lines.append("    proxy_set_header Connection \"upgrade\";")
+            lines.append("    proxy_set_header Host $host;")
+            lines.append("    proxy_set_header X-Real-IP $remote_addr;")
+            lines.append("    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
+            lines.append("    proxy_read_timeout 3600s;")
+            lines.append("    proxy_send_timeout 3600s;")
+            lines.append("}")
 
         content = "\n".join(lines) + "\n"
         self.nginx_conf_path.write_text(content)
