@@ -79,7 +79,6 @@ export type { RealmDetailModalProps } from './organisms/RealmDetailModal';
 // Session components
 export { SessionTerminal } from './SessionTerminal';
 export { SessionChat } from './SessionChat';
-
 // Terminal sub-components
 export { TerminalTabBar } from './TerminalTabBar';
 export type { TerminalTabBarProps } from './TerminalTabBar';

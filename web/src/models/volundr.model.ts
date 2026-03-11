@@ -367,6 +367,7 @@ export interface TerminalTab {
   id: string;
   label: string;
   restricted: boolean;
+  cliType?: string;
 }
 
 export interface SkillConfig {

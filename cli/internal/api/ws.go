@@ -273,28 +273,6 @@ func appendAccessToken(rawURL, token string) string {
 	return rawURL + sep + "access_token=" + url.QueryEscape(token)
 }
 
-// SessionWSURL builds a full WebSocket URL for a session pod endpoint.
-// codeEndpoint is the session's HTTPS code_endpoint, path is the WS path to append.
-func SessionWSURL(codeEndpoint, path string) string {
-	base := strings.TrimRight(codeEndpoint, "/")
-	base = strings.Replace(base, "https://", "wss://", 1)
-	base = strings.Replace(base, "http://", "ws://", 1)
-	return base + path
-}
-
-// TerminalWSURLFromChat derives the terminal WebSocket URL from the chat endpoint.
-// This matches the web UI pattern: strip /session or /api/session, append /terminal/ws.
-func TerminalWSURLFromChat(chatEndpoint string) string {
-	// Convert wss to wss (already ws), or https to wss
-	wsURL := strings.Replace(chatEndpoint, "https://", "wss://", 1)
-	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
-
-	// Strip /api/session or /session suffix (check longer suffix first).
-	wsURL = strings.TrimSuffix(wsURL, "/api/session")
-	wsURL = strings.TrimSuffix(wsURL, "/session")
-
-	return wsURL + "/terminal/ws"
-}
 
 // String returns a human-readable representation of the connection state.
 func (s WSState) String() string {

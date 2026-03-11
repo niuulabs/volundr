@@ -36,10 +36,23 @@ type TerminalDisconnectedMsg struct {
 	Err      error
 }
 
+// TerminalSessionsLoadedMsg carries discovered/spawned sessions from a goroutine
+// back into the Update loop so tabs can be created synchronously.
+type TerminalSessionsLoadedMsg struct {
+	Sessions []api.CliSession
+}
+
+// TerminalSpawnedMsg carries a single newly spawned session into the Update loop.
+type TerminalSpawnedMsg struct {
+	Session api.CliSession
+}
+
 // terminalTab represents a single terminal tab with its own vt emulator and WS connection.
 type terminalTab struct {
-	label     string
-	sessionID string
+	label      string
+	terminalID string // server-side tmux session ID (for kill calls)
+	sessionID  string
+	wsURL     string // WebSocket URL for reconnecting on tab switch
 	emulator  *vt.Emulator
 	ws        *api.TerminalWSClient
 	connState string
@@ -59,6 +72,10 @@ type TerminalPage struct {
 	pool       *tui.ClientPool
 	outputCh   chan TerminalOutputMsg
 	connCh     chan tea.Msg
+
+	// activeSession is stored so new tabs can be spawned from ctrl+t.
+	activeSession *api.Session
+	activeToken   string
 }
 
 // defaultTermWidth and defaultTermHeight are initial vt emulator dimensions
@@ -135,10 +152,20 @@ func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) {
 		}
 		return t, t.waitForConn()
 
+	case TerminalSessionsLoadedMsg:
+		// Sessions discovered by the background goroutine — create tabs.
+		t.handleSessionsLoaded(msg.Sessions)
+		return t, t.waitForConn()
+
+	case TerminalSpawnedMsg:
+		// A single new session was spawned — create a tab and switch to it.
+		t.handleSpawned(msg.Session)
+		return t, t.waitForConn()
+
 	case tea.WindowSizeMsg:
 		t.width = msg.Width
 		t.height = msg.Height
-		t.resizeActiveEmulator()
+		t.resizeAllEmulators()
 		return t, nil
 
 	case tea.KeyMsg:
@@ -150,27 +177,34 @@ func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) {
 
 // handleKey processes keyboard input.
 func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
-	key := msg.String()
+	// Use Keystroke() for matching — unlike String(), it always returns the
+	// canonical "ctrl+n" format regardless of whether the terminal sends
+	// the raw control character or enhanced key data.
+	key := msg.Key().Keystroke()
 
 	// Full-screen toggle: F11 or ctrl+f
 	if key == "f11" || key == "ctrl+f" {
 		t.fullScreen = !t.fullScreen
-		t.resizeActiveEmulator()
+		t.resizeAllEmulators()
 		return t, nil
 	}
 
 	// Tab management: ctrl+t to create new tab
 	if key == "ctrl+t" {
-		return t, nil // No-op without session; caller should set session first.
-	}
-
-	// Tab switching: ctrl+] for next, ctrl+[ for previous
-	if key == "ctrl+]" && len(t.tabs) > 1 {
-		t.activeTab = (t.activeTab + 1) % len(t.tabs)
+		t.spawnNewTab()
 		return t, nil
 	}
-	if key == "ctrl+\\" && len(t.tabs) > 1 {
+
+	// Tab switching: ctrl+n for next, ctrl+p for previous.
+	// Reconnects WebSocket since the server only supports one active connection.
+	if key == "ctrl+n" && len(t.tabs) > 1 {
+		t.activeTab = (t.activeTab + 1) % len(t.tabs)
+		t.connectTab(t.activeTab)
+		return t, nil
+	}
+	if key == "ctrl+p" && len(t.tabs) > 1 {
 		t.activeTab = (t.activeTab - 1 + len(t.tabs)) % len(t.tabs)
+		t.connectTab(t.activeTab)
 		return t, nil
 	}
 
@@ -186,6 +220,10 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
 	}
 
 	tab := t.tabs[t.activeTab]
+	if tab.ws == nil {
+		return t, nil
+	}
+
 	tab.mu.Lock()
 	connected := tab.connState == connStatusConnected
 	tab.mu.Unlock()
@@ -229,15 +267,15 @@ func (t *TerminalPage) ConnectSession(sess api.Session) {
 	// Close() fires OnStateChange which calls p.Send() and blocks
 	// when called from inside Update().
 	for _, tab := range t.tabs {
-		tab.ws.OnData = nil
-		tab.ws.OnStateChange = nil
-		tab.ws.OnError = nil
-		oldWS := tab.ws
+		if tab.ws != nil {
+			tab.ws.OnData = nil
+			tab.ws.OnStateChange = nil
+			tab.ws.OnError = nil
+			oldWS := tab.ws
+			go func() { _ = oldWS.Close() }()
+		}
 		oldEmu := tab.emulator
-		go func() {
-			_ = oldWS.Close()
-			_ = oldEmu.Close()
-		}()
+		go func() { _ = oldEmu.Close() }()
 	}
 	t.tabs = nil
 	t.activeTab = 0
@@ -248,44 +286,236 @@ func (t *TerminalPage) ConnectSession(sess api.Session) {
 	t.connectSessionWith(sess, t.serverURL, token)
 }
 
-// connectSessionWith creates a new terminal tab with the given server and token.
+// ConnectCliSession creates a new terminal tab connected to a persistent CLI session.
+// It derives the WebSocket URL from the Volundr session's chat or code endpoint
+// and connects to /terminal/ws/{terminalId} on the session pod via devrunner.
+func (t *TerminalPage) ConnectCliSession(sess api.Session, sessionName string) {
+	// Close existing tabs to prevent goroutine leaks.
+	for _, tab := range t.tabs {
+		if tab.ws != nil {
+			tab.ws.OnData = nil
+			tab.ws.OnStateChange = nil
+			tab.ws.OnError = nil
+			oldWS := tab.ws
+			go func() { _ = oldWS.Close() }()
+		}
+		oldEmu := tab.emulator
+		go func() { _ = oldEmu.Close() }()
+	}
+	t.tabs = nil
+	t.activeTab = 0
+
+	token := ""
+	if t.client != nil {
+		token = t.client.Token()
+	}
+
+	t.connectCliSessionWith(sess, t.serverURL, token, sessionName)
+}
+
+// ConnectCliSessionOnCluster creates a terminal tab for a CLI session using
+// the specified cluster's server and token.
+func (t *TerminalPage) ConnectCliSessionOnCluster(sess api.Session, contextKey, sessionName string) {
+	if t.pool == nil {
+		t.ConnectCliSession(sess, sessionName)
+		return
+	}
+
+	entry := t.pool.GetEntry(contextKey)
+	if entry == nil {
+		t.ConnectCliSession(sess, sessionName)
+		return
+	}
+
+	t.connectCliSessionWith(sess, entry.Server, entry.Client.Token(), sessionName)
+}
+
+// connectCliSessionWith creates a terminal tab connected to a CLI session WebSocket.
+func (t *TerminalPage) connectCliSessionWith(sess api.Session, serverURL, token, sessionName string) {
+	t.activeSession = &sess
+	t.activeToken = token
+
+	label := fmt.Sprintf("cli:%s", sessionName)
+	wsURL := api.CliSessionWSURL(sess.CodeEndpoint, sessionName)
+	t.createTab(sess.ID, label, sessionName, wsURL)
+	t.activeTab = len(t.tabs) - 1
+	t.connectTab(t.activeTab)
+}
+
+// connectSessionWith discovers existing terminal sessions (or spawns one) and
+// sends a message back to the Update loop to create tabs synchronously.
 func (t *TerminalPage) connectSessionWith(sess api.Session, serverURL, token string) {
+	// Store session context so ctrl+t can spawn additional tabs.
+	t.activeSession = &sess
+	t.activeToken = token
+
+	connCh := t.connCh
+
+	// Discover sessions in the background; Update will create the tabs.
+	go func() {
+		podClient := api.NewSessionPodClient(sess.CodeEndpoint, token)
+
+		var sessions []api.CliSession
+
+		// Try listing existing sessions first.
+		if list, err := podClient.ListCliSessions(); err == nil && len(list.Sessions) > 0 {
+			sessions = list.Sessions
+		} else {
+			// No existing sessions — spawn a fresh shell.
+			req := api.CreateCliSessionRequest{CliType: "shell"}
+			if created, err := podClient.CreateCliSession(req); err == nil {
+				sessions = []api.CliSession{*created}
+			}
+		}
+
+		if len(sessions) == 0 {
+			select {
+			case connCh <- TerminalDisconnectedMsg{TabIndex: 0, Err: fmt.Errorf("failed to resolve terminal sessions")}:
+			default:
+			}
+			return
+		}
+
+		select {
+		case connCh <- TerminalSessionsLoadedMsg{Sessions: sessions}:
+		default:
+		}
+	}()
+}
+
+// handleSessionsLoaded creates tabs for all discovered sessions.
+// Only the first tab's WebSocket is connected (server multiplexes all
+// connections to the active tmux window, so only one can be connected).
+// Called from Update so tab creation is synchronous with Bubble Tea.
+func (t *TerminalPage) handleSessionsLoaded(sessions []api.CliSession) {
+	if t.activeSession == nil || len(sessions) == 0 {
+		return
+	}
+
+	// Clear any stale tabs from a previous session.
+	for _, tab := range t.tabs {
+		if tab.ws != nil {
+			tab.ws.OnData = nil
+			tab.ws.OnStateChange = nil
+			tab.ws.OnError = nil
+			oldWS := tab.ws
+			go func() { _ = oldWS.Close() }()
+		}
+		_ = tab.emulator.Close()
+	}
+	t.tabs = nil
+	t.activeTab = 0
+
+	for _, s := range sessions {
+		label := s.Label
+		if label == "" {
+			label = s.TerminalID
+		}
+		wsURL := api.CliSessionWSURL(t.activeSession.CodeEndpoint, s.TerminalID)
+		t.createTab(t.activeSession.ID, label, s.TerminalID, wsURL)
+	}
+
+	// Connect only the first tab.
+	if len(t.tabs) > 0 {
+		t.connectTab(0)
+	}
+}
+
+// handleSpawned creates a tab for a newly spawned session and switches to it.
+// Called from Update so tab creation is synchronous with Bubble Tea.
+func (t *TerminalPage) handleSpawned(s api.CliSession) {
+	if t.activeSession == nil {
+		return
+	}
+
+	label := s.Label
+	if label == "" {
+		label = s.TerminalID
+	}
+	wsURL := api.CliSessionWSURL(t.activeSession.CodeEndpoint, s.TerminalID)
+	t.createTab(t.activeSession.ID, label, s.TerminalID, wsURL)
+	t.activeTab = len(t.tabs) - 1
+	t.connectTab(t.activeTab)
+}
+
+// createTab creates a terminal tab with an emulator but does NOT connect
+// the WebSocket. Call connectTab to start the WebSocket connection.
+// Must be called from the Update loop.
+func (t *TerminalPage) createTab(sessionID, label, terminalID, wsURL string) {
 	w, h := t.termDimensions()
 
 	tab := &terminalTab{
-		label:     fmt.Sprintf("term-%d", len(t.tabs)+1),
-		sessionID: sess.ID,
-		emulator:  vt.NewEmulator(w, h),
-		ws:        api.NewTerminalWSClient(serverURL, token),
-		connState: connStatusConnecting,
+		label:      label,
+		terminalID: terminalID,
+		sessionID:  sessionID,
+		wsURL:      wsURL,
+		emulator:   vt.NewEmulator(w, h),
+		connState:  connStatusDisconnected,
 	}
 
-	tabIndex := len(t.tabs)
 	t.tabs = append(t.tabs, tab)
-	t.activeTab = tabIndex
 
+	// Drain emulator responses to prevent pipe deadlock.
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := tab.emulator.Read(buf)
+			if err != nil {
+				return
+			}
+			// Forward terminal query responses back via WebSocket.
+			if n > 0 && tab.ws != nil && tab.ws.State() == api.WSConnected {
+				_ = tab.ws.SendRaw(buf[:n])
+			}
+		}
+	}()
+}
+
+// connectTab connects the WebSocket for the tab at the given index.
+// Any previously connected tab's WebSocket is disconnected first,
+// matching the web UI's single-connection-at-a-time approach
+// (the server multiplexes all connections to the active tmux window).
+func (t *TerminalPage) connectTab(index int) {
+	if index < 0 || index >= len(t.tabs) {
+		return
+	}
+
+	// Disconnect all other tabs' WebSockets.
+	for i, tab := range t.tabs {
+		if i == index {
+			continue
+		}
+		if tab.ws != nil && tab.ws.State() != api.WSDisconnected {
+			tab.ws.OnData = nil
+			tab.ws.OnStateChange = nil
+			tab.ws.OnError = nil
+			oldWS := tab.ws
+			tab.ws = nil
+			go func() { _ = oldWS.Close() }()
+			tab.mu.Lock()
+			tab.connState = connStatusDisconnected
+			tab.mu.Unlock()
+		}
+	}
+
+	tab := t.tabs[index]
 	outputCh := t.outputCh
 	connCh := t.connCh
+	wsURL := tab.wsURL
+	w, h := t.termDimensions()
 
-	// Derive terminal WS URL from chat endpoint (matches web UI pattern).
-	// Fallback to control-plane proxy if no endpoint is available.
-	var wsURL string
-	if sess.ChatEndpoint != "" {
-		wsURL = api.TerminalWSURLFromChat(sess.ChatEndpoint)
-	} else if sess.CodeEndpoint != "" {
-		wsURL = api.SessionWSURL(sess.CodeEndpoint, "/terminal/ws")
-	} else {
-		wsURL = fmt.Sprintf("/api/v1/volundr/sessions/%s/terminal", sess.ID)
-	}
+	// Create a fresh WebSocket client for this tab.
+	tab.ws = api.NewTerminalWSClient(t.serverURL, t.activeToken)
+	tab.mu.Lock()
+	tab.connState = connStatusConnecting
+	tab.mu.Unlock()
 
-	// Wire up WebSocket callbacks BEFORE Connect() so the readLoop goroutine
-	// (started inside Connect) can immediately deliver data and state changes.
 	tab.ws.OnData = func(data []byte) {
 		tab.mu.Lock()
 		_, _ = tab.emulator.Write(data)
 		tab.mu.Unlock()
 		select {
-		case outputCh <- TerminalOutputMsg{TabIndex: tabIndex}:
+		case outputCh <- TerminalOutputMsg{TabIndex: index}:
 		default:
 		}
 	}
@@ -294,12 +524,12 @@ func (t *TerminalPage) connectSessionWith(sess api.Session, serverURL, token str
 		switch state {
 		case api.WSConnected:
 			select {
-			case connCh <- TerminalConnectedMsg{TabIndex: tabIndex}:
+			case connCh <- TerminalConnectedMsg{TabIndex: index}:
 			default:
 			}
 		case api.WSDisconnected:
 			select {
-			case connCh <- TerminalDisconnectedMsg{TabIndex: tabIndex}:
+			case connCh <- TerminalDisconnectedMsg{TabIndex: index}:
 			default:
 			}
 		}
@@ -307,30 +537,12 @@ func (t *TerminalPage) connectSessionWith(sess api.Session, serverURL, token str
 
 	tab.ws.OnError = func(err error) {
 		select {
-		case connCh <- TerminalDisconnectedMsg{TabIndex: tabIndex, Err: err}:
+		case connCh <- TerminalDisconnectedMsg{TabIndex: index, Err: err}:
 		default:
 		}
 	}
 
-	// Read terminal responses from the vt emulator and send them back to the
-	// remote PTY. The emulator writes responses (CPR, color queries, device
-	// attributes, etc.) to its internal pipe when the remote application sends
-	// terminal queries. Without this reader the pipe blocks, deadlocking
-	// emulator.Write() and freezing the WebSocket reader goroutine.
-	go func() {
-		buf := make([]byte, 4096)
-		for {
-			n, err := tab.emulator.Read(buf)
-			if err != nil {
-				return // emulator closed
-			}
-			if n > 0 && tab.ws != nil {
-				_ = tab.ws.SendRaw(buf[:n])
-			}
-		}
-	}()
-
-	// Connect in the background with retries.
+	// Connect in the background.
 	go func() {
 		var err error
 		for attempt := 0; attempt < 5; attempt++ {
@@ -344,20 +556,64 @@ func (t *TerminalPage) connectSessionWith(sess api.Session, serverURL, token str
 			}
 		}
 		select {
-		case connCh <- TerminalDisconnectedMsg{TabIndex: tabIndex, Err: err}:
+		case connCh <- TerminalDisconnectedMsg{TabIndex: index, Err: err}:
 		default:
 		}
 	}()
 }
 
-// closeTab closes and removes the tab at the given index.
+// spawnNewTab spawns a new shell terminal tab via the REST API.
+func (t *TerminalPage) spawnNewTab() {
+	if t.activeSession == nil {
+		return
+	}
+	sess := *t.activeSession
+	token := t.activeToken
+	connCh := t.connCh
+
+	// Spawn in the background; Update will create the tab when the message arrives.
+	go func() {
+		podClient := api.NewSessionPodClient(sess.CodeEndpoint, token)
+		req := api.CreateCliSessionRequest{CliType: "shell"}
+		created, err := podClient.CreateCliSession(req)
+		if err != nil {
+			select {
+			case connCh <- TerminalDisconnectedMsg{TabIndex: 0, Err: fmt.Errorf("spawn failed: %w", err)}:
+			default:
+			}
+			return
+		}
+
+		select {
+		case connCh <- TerminalSpawnedMsg{Session: *created}:
+		default:
+		}
+	}()
+}
+
+// closeTab closes and removes the tab at the given index,
+// killing the server-side tmux session.
 func (t *TerminalPage) closeTab(index int) {
 	if index < 0 || index >= len(t.tabs) {
 		return
 	}
 
 	tab := t.tabs[index]
-	_ = tab.ws.Close()
+
+	// Kill server-side session in the background.
+	if tab.terminalID != "" && t.activeSession != nil {
+		sess := *t.activeSession
+		token := t.activeToken
+		termID := tab.terminalID
+		go func() {
+			podClient := api.NewSessionPodClient(sess.CodeEndpoint, token)
+			_ = podClient.KillCliSession(termID)
+		}()
+	}
+
+	if tab.ws != nil {
+		_ = tab.ws.Close()
+	}
 	_ = tab.emulator.Close()
 
 	t.tabs = append(t.tabs[:index], t.tabs[index+1:]...)
@@ -365,39 +621,50 @@ func (t *TerminalPage) closeTab(index int) {
 	if t.activeTab >= len(t.tabs) && t.activeTab > 0 {
 		t.activeTab = len(t.tabs) - 1
 	}
+
+	// Connect the new active tab if we closed the one that was connected.
+	if len(t.tabs) > 0 {
+		t.connectTab(t.activeTab)
+	}
 }
 
 // Close cleans up all terminal connections.
 func (t *TerminalPage) Close() {
 	for _, tab := range t.tabs {
-		_ = tab.ws.Close()
+		if tab.ws != nil {
+			_ = tab.ws.Close()
+		}
 		_ = tab.emulator.Close()
 	}
 	t.tabs = nil
 }
 
-// SetSize updates the page dimensions and resizes the active emulator.
+// SetSize updates the page dimensions and resizes all emulators.
 func (t *TerminalPage) SetSize(w, h int) {
 	t.width = w
 	t.height = h
-	t.resizeActiveEmulator()
+	t.resizeAllEmulators()
 }
 
-// resizeActiveEmulator updates the vt emulator size and sends a resize message.
-func (t *TerminalPage) resizeActiveEmulator() {
+// resizeAllEmulators updates all vt emulator sizes and notifies the
+// active tab's WebSocket so tmux redraws at the new size.
+func (t *TerminalPage) resizeAllEmulators() {
 	if len(t.tabs) == 0 {
 		return
 	}
 
 	w, h := t.termDimensions()
-	tab := t.tabs[t.activeTab]
 
-	tab.mu.Lock()
-	tab.emulator.Resize(w, h)
-	tab.mu.Unlock()
+	for _, tab := range t.tabs {
+		tab.mu.Lock()
+		tab.emulator.Resize(w, h)
+		tab.mu.Unlock()
+	}
 
-	if tab.connState == connStatusConnected {
-		_ = tab.ws.SendResize(w, h)
+	// Only the active tab has a WebSocket connection.
+	activeTab := t.tabs[t.activeTab]
+	if activeTab.ws != nil && activeTab.ws.State() == api.WSConnected {
+		_ = activeTab.ws.SendResize(w, h)
 	}
 }
 
@@ -444,9 +711,6 @@ func (t TerminalPage) View() string {
 	// Tab bar
 	tabBar := t.renderTabBar()
 
-	// Connection status line
-	statusLine := t.renderStatusLine(tab)
-
 	// Terminal content from vt emulator
 	tab.mu.Lock()
 	content := tab.emulator.Render()
@@ -459,7 +723,7 @@ func (t TerminalPage) View() string {
 
 	helpText := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
-		Render("  ctrl+t: new tab  ctrl+w: close  ctrl+]/\\: switch tabs  ctrl+f: fullscreen")
+		Render("  ctrl+t: new tab  ctrl+w: close  ctrl+n/p: switch tabs  ctrl+f: fullscreen")
 
 	return lipgloss.NewStyle().
 		Width(t.width).
@@ -467,7 +731,6 @@ func (t TerminalPage) View() string {
 		Padding(0, 1).
 		Render(lipgloss.JoinVertical(lipgloss.Left,
 			tabBar,
-			statusLine,
 			termStyle.Render(content),
 			helpText,
 		))
@@ -481,13 +744,22 @@ func (t TerminalPage) renderEmptyState() string {
 		Foreground(theme.TextPrimary).
 		Bold(true)
 
+	var statusText, instructionText string
+	if t.activeSession != nil {
+		statusText = "  Loading terminal sessions…"
+		instructionText = "  Connecting to session pod"
+	} else {
+		statusText = "  Select a running session to open a terminal"
+		instructionText = "  Press 1 to go to Sessions, select a session, then open terminal"
+	}
+
 	statusLine := lipgloss.NewStyle().
 		Foreground(theme.AccentAmber).
-		Render("  Select a running session to open a terminal")
+		Render(statusText)
 
 	instructions := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
-		Render("  Press 1 to go to Sessions, select a session, then open terminal")
+		Render(instructionText)
 
 	return lipgloss.NewStyle().
 		Width(t.width).
@@ -508,16 +780,11 @@ func (t TerminalPage) renderFullScreen(tab *terminalTab) string {
 	content := tab.emulator.Render()
 	tab.mu.Unlock()
 
-	statusLine := t.renderStatusLine(tab)
-
 	termStyle := lipgloss.NewStyle().
 		Width(t.width).
-		Height(t.height - 1)
+		Height(t.height)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		termStyle.Render(content),
-		statusLine,
-	)
+	return termStyle.Render(content)
 }
 
 // renderTabBar renders the tab strip at the top of the terminal.
@@ -526,10 +793,9 @@ func (t TerminalPage) renderTabBar() string {
 	var tabs []string
 
 	for i, tab := range t.tabs {
+		tab.mu.Lock()
 		label := tab.label
-		if tab.sessionID != "" && len(tab.sessionID) > 8 {
-			label = tab.sessionID[:8]
-		}
+		tab.mu.Unlock()
 
 		var style lipgloss.Style
 		if i == t.activeTab {
@@ -565,51 +831,17 @@ func (t TerminalPage) renderTabBar() string {
 	return "  " + strings.Join(tabs, "  │  ")
 }
 
-// renderStatusLine renders the connection status at the bottom.
-func (t TerminalPage) renderStatusLine(tab *terminalTab) string {
-	theme := tui.DefaultTheme
-
-	tab.mu.Lock()
-	state := tab.connState
-	connErr := tab.connErr
-	sessionID := tab.sessionID
-	tab.mu.Unlock()
-
-	var status string
-	switch state {
-	case connStatusConnected:
-		status = lipgloss.NewStyle().
-			Foreground(theme.AccentEmerald).
-			Render("● Connected")
-	case connStatusConnecting:
-		status = lipgloss.NewStyle().
-			Foreground(theme.AccentAmber).
-			Render("◌ Connecting...")
-	default:
-		errMsg := "Disconnected"
-		if connErr != nil {
-			errMsg = fmt.Sprintf("Disconnected: %v", connErr)
-		}
-		status = lipgloss.NewStyle().
-			Foreground(theme.AccentRed).
-			Render("○ " + errMsg)
-	}
-
-	sessionInfo := lipgloss.NewStyle().
-		Foreground(theme.TextMuted).
-		Render(fmt.Sprintf("session: %s", sessionID))
-
-	w, h := t.termDimensions()
-	dims := lipgloss.NewStyle().
-		Foreground(theme.TextMuted).
-		Render(fmt.Sprintf("%dx%d", w, h))
-
-	return fmt.Sprintf("  %s  %s  %s", status, sessionInfo, dims)
-}
 
 // keyToBytes converts a bubbletea KeyMsg to raw bytes for the PTY.
 func keyToBytes(msg tea.KeyMsg) []byte {
-	key := msg.String()
+	// Use Keystroke() for matching — String() may return raw control chars
+	// that don't match our "ctrl+n" style case labels.
+	key := msg.Key().Keystroke()
+
+	// If the key has printable text and no modifier, return it directly.
+	if text := msg.Key().Text; len(text) > 0 && msg.Key().Mod == 0 {
+		return []byte(text)
+	}
 
 	// Map special keys to their ANSI escape sequences.
 	switch key {

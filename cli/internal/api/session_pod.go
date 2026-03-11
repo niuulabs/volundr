@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -87,8 +88,23 @@ type FileEntry struct {
 
 // do executes an HTTP request to the session pod with token auth.
 func (s *SessionPodClient) do(method, path string) (*http.Response, error) {
+	return s.doWithBody(method, path, nil)
+}
+
+// doWithBody executes an HTTP request with an optional JSON body.
+func (s *SessionPodClient) doWithBody(method, path string, body any) (*http.Response, error) {
 	url := s.baseURL + path
-	req, err := http.NewRequest(method, url, nil)
+
+	var bodyReader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("marshaling request: %w", err)
+		}
+		bodyReader = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -221,6 +237,94 @@ func (s *SessionPodClient) ListFiles(dirPath string) ([]FileEntry, error) {
 		return nil, fmt.Errorf("decoding files: %w", err)
 	}
 	return result, nil
+}
+
+// CliSession represents a persistent tmux-backed terminal session on a session pod.
+// Maps to devrunner's terminal.py API response format.
+type CliSession struct {
+	TerminalID string `json:"terminalId"`
+	Label      string `json:"label"`
+	CliType    string `json:"cli_type"`
+	Status     string `json:"status"`
+	Persistent bool   `json:"persistent"`
+}
+
+// CliSessionList is the response from listing terminal sessions.
+type CliSessionList struct {
+	Sessions []CliSession `json:"sessions"`
+	Tmux     bool         `json:"tmux"`
+}
+
+// CreateCliSessionRequest holds parameters for spawning a terminal session.
+type CreateCliSessionRequest struct {
+	CliType string `json:"cli_type"`
+	Name    string `json:"name,omitempty"`
+	Label   string `json:"label,omitempty"`
+}
+
+// ListCliSessions returns all terminal sessions from the devrunner.
+func (s *SessionPodClient) ListCliSessions() (*CliSessionList, error) {
+	resp, err := s.do("GET", "/terminal/api/terminal/sessions")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("session pod error (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result CliSessionList
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding terminal sessions: %w", err)
+	}
+	return &result, nil
+}
+
+// CreateCliSession spawns a new persistent terminal session on the devrunner.
+func (s *SessionPodClient) CreateCliSession(req CreateCliSessionRequest) (*CliSession, error) {
+	resp, err := s.doWithBody("POST", "/terminal/api/terminal/spawn", req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("session pod error (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result CliSession
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding terminal session: %w", err)
+	}
+	return &result, nil
+}
+
+// KillCliSession kills a terminal session by ID.
+func (s *SessionPodClient) KillCliSession(terminalID string) error {
+	body := map[string]string{"terminalId": terminalID}
+	resp, err := s.doWithBody("POST", "/terminal/api/terminal/kill", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("session pod error (HTTP %d): %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// CliSessionWSURL builds the WebSocket URL for attaching to a terminal session.
+// codeEndpoint is the session's HTTPS code_endpoint.
+func CliSessionWSURL(codeEndpoint, terminalID string) string {
+	base := strings.TrimRight(codeEndpoint, "/")
+	base = strings.Replace(base, "https://", "wss://", 1)
+	base = strings.Replace(base, "http://", "ws://", 1)
+	return base + "/terminal/ws/" + terminalID
 }
 
 // ChatWSURL returns the full WebSocket URL for chat on this session.
