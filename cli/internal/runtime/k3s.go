@@ -42,6 +42,13 @@ const k3sComposeFileName = "docker-compose.k3s.yaml"
 // k3sContainerName is the API container name in k3s mode.
 const k3sContainerName = "volundr-k3s-api"
 
+// k3sHostKubeconfigFile is the kubeconfig file for host-side kubectl/helm.
+// Written to ~/.volundr/ so we never touch ~/.kube/config.
+const k3sHostKubeconfigFile = "kubeconfig.yaml"
+
+// k3sDockerKubeconfigFile is the kubeconfig rewritten for Docker network access.
+const k3sDockerKubeconfigFile = "k3d-kubeconfig.yaml"
+
 // k3sComposeTemplate is the Docker Compose template for the API in k3s mode.
 // It mounts the kubeconfig so the API can talk to the k3d cluster.
 var k3sComposeTemplate = template.Must(template.New("k3s-compose").Parse(`services:
@@ -299,10 +306,12 @@ func (r *K3sRuntime) Down(_ context.Context) error {
 	}
 
 	// Delete session pods/resources in the namespace (by label).
+	kcPath := hostKubeconfigPath()
 	if out, err := exec.Command(
 		"kubectl", "delete", "all",
 		"--selector", "app.kubernetes.io/managed-by=volundr",
 		"--namespace", namespace,
+		"--kubeconfig", kcPath,
 	).CombinedOutput(); err != nil {
 		outStr := string(out)
 		if !strings.Contains(outStr, "not found") && !strings.Contains(outStr, "No resources found") {
@@ -413,7 +422,7 @@ func (r *K3sRuntime) Logs(_ context.Context, service string, follow bool) (io.Re
 		namespace = resolveNamespace(loadedCfg)
 	}
 
-	args := []string{"logs", "--namespace", namespace}
+	args := []string{"logs", "--namespace", namespace, "--kubeconfig", hostKubeconfigPath()}
 	if follow {
 		args = append(args, "-f")
 	}
@@ -481,18 +490,24 @@ func (r *K3sRuntime) initK3d(ctx context.Context) error {
 		return nil
 	}
 
-	// Create the cluster.
+	// Create the cluster — do NOT update ~/.kube/config.
 	fmt.Print("creating ... ")
 	createOut, err := exec.CommandContext(ctx,
 		"k3d", "cluster", "create", k3sClusterName,
 		"-p", k3sLoadBalancerHTTPPort,
 		"-p", k3sLoadBalancerHTTPSPort,
+		"--kubeconfig-update-default=false",
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println("failed")
 		return fmt.Errorf("create k3d cluster: %w\n%s", err, createOut)
 	}
 	fmt.Println("ok")
+
+	// Write the kubeconfig to the volundr config directory.
+	if err := r.writeHostKubeconfig(); err != nil {
+		return fmt.Errorf("write kubeconfig: %w", err)
+	}
 
 	return nil
 }
@@ -501,7 +516,19 @@ func (r *K3sRuntime) initK3d(ctx context.Context) error {
 func (r *K3sRuntime) initNativeK3s() error {
 	fmt.Print("  k3s            ... ")
 
-	out, err := exec.Command("kubectl", "get", "nodes").CombinedOutput()
+	// For native k3s, copy the default kubeconfig to the volundr config dir.
+	defaultKC := "/etc/rancher/k3s/k3s.yaml"
+	if env := os.Getenv("KUBECONFIG"); env != "" {
+		defaultKC = env
+	}
+	kcPath := hostKubeconfigPath()
+	if data, err := os.ReadFile(defaultKC); err == nil {
+		if writeErr := os.WriteFile(kcPath, data, 0o600); writeErr != nil {
+			return fmt.Errorf("write kubeconfig: %w", writeErr)
+		}
+	}
+
+	out, err := exec.Command("kubectl", "get", "nodes", "--kubeconfig", kcPath).CombinedOutput()
 	if err != nil {
 		fmt.Println("not reachable")
 		return fmt.Errorf("k3s cluster not reachable. Ensure k3s is running: %w\n%s", err, out)
@@ -673,12 +700,14 @@ func (r *K3sRuntime) offerInstallHelm() error {
 
 // ensureNamespace creates the Kubernetes namespace if it doesn't exist.
 func (r *K3sRuntime) ensureNamespace(namespace string) error {
+	kcPath := hostKubeconfigPath()
+
 	// Check if namespace exists.
-	if err := exec.Command("kubectl", "get", "namespace", namespace).Run(); err == nil {
+	if err := exec.Command("kubectl", "get", "namespace", namespace, "--kubeconfig", kcPath).Run(); err == nil {
 		return nil
 	}
 
-	out, err := exec.Command("kubectl", "create", "namespace", namespace).CombinedOutput()
+	out, err := exec.Command("kubectl", "create", "namespace", namespace, "--kubeconfig", kcPath).CombinedOutput()
 	if err != nil {
 		// Ignore "already exists" errors.
 		if strings.Contains(string(out), "already exists") {
@@ -773,6 +802,10 @@ func (r *K3sRuntime) ensureClusterRunning(cfg *config.Config) error {
 			if err != nil {
 				return fmt.Errorf("start k3d cluster: %w\n%s", err, startOut)
 			}
+			// Refresh the host kubeconfig (port may change after restart).
+			if err := r.writeHostKubeconfig(); err != nil {
+				return fmt.Errorf("refresh kubeconfig: %w", err)
+			}
 			return nil
 		}
 
@@ -780,7 +813,7 @@ func (r *K3sRuntime) ensureClusterRunning(cfg *config.Config) error {
 
 	case "native":
 		// Check if nodes are ready.
-		out, err := exec.Command("kubectl", "get", "nodes").CombinedOutput()
+		out, err := exec.Command("kubectl", "get", "nodes", "--kubeconfig", hostKubeconfigPath()).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("k3s cluster not reachable: %w\n%s", err, out)
 		}
@@ -936,22 +969,48 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 	return nil
 }
 
-// writeK3dKubeconfig writes a kubeconfig suitable for use inside a Docker
-// container on the k3d network. The API server address is rewritten to
-// use the k3d server container name instead of localhost.
-func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
-	// Get the k3d kubeconfig with internal server address.
+// writeHostKubeconfig fetches the k3d kubeconfig and writes it to the
+// volundr config directory for use by kubectl/helm on the host.
+// This avoids touching ~/.kube/config.
+func (r *K3sRuntime) writeHostKubeconfig() error {
 	out, err := exec.Command(
 		"k3d", "kubeconfig", "get", k3sClusterName,
 	).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("get k3d kubeconfig: %w\n%s", err, out)
+		return fmt.Errorf("get k3d kubeconfig: %w\n%s", err, out)
+	}
+
+	kcPath := hostKubeconfigPath()
+	if err := os.WriteFile(kcPath, out, 0o600); err != nil {
+		return fmt.Errorf("write kubeconfig to %s: %w", kcPath, err)
+	}
+	fmt.Printf("  Kubeconfig     ... %s\n", kcPath)
+
+	return nil
+}
+
+// writeK3dKubeconfig writes a kubeconfig suitable for use inside a Docker
+// container on the k3d network. The API server address is rewritten to
+// use the k3d server container name instead of localhost.
+func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
+	// Read the host kubeconfig (already written during init or refreshed).
+	kcPath := hostKubeconfigPath()
+	data, err := os.ReadFile(kcPath)
+	if err != nil {
+		// Fall back to fetching from k3d directly.
+		out, fetchErr := exec.Command(
+			"k3d", "kubeconfig", "get", k3sClusterName,
+		).CombinedOutput()
+		if fetchErr != nil {
+			return "", fmt.Errorf("get k3d kubeconfig: %w\n%s", fetchErr, out)
+		}
+		data = out
 	}
 
 	// The k3d kubeconfig points to localhost:<random-port>.
 	// Replace with the k3d server container's Docker DNS name
 	// so it works from inside the k3d Docker network.
-	kubeconfig := string(out)
+	kubeconfig := string(data)
 	// k3d server container is named k3d-<cluster>-server-0
 	// and listens on port 6443 internally.
 	serverDNS := fmt.Sprintf("https://k3d-%s-server-0:6443", k3sClusterName)
@@ -971,9 +1030,9 @@ func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
 		}
 	}
 
-	kubeconfigPath := filepath.Join(cfgDir, "k3d-kubeconfig.yaml")
+	kubeconfigPath := filepath.Join(cfgDir, k3sDockerKubeconfigFile)
 	if err := os.WriteFile(kubeconfigPath, []byte(kubeconfig), 0o600); err != nil {
-		return "", fmt.Errorf("write kubeconfig: %w", err)
+		return "", fmt.Errorf("write docker kubeconfig: %w", err)
 	}
 
 	return kubeconfigPath, nil
@@ -1012,6 +1071,7 @@ func (r *K3sRuntime) queryK8sPodStates() []ServiceStatus {
 	out, err := exec.Command(
 		"kubectl", "get", "pods",
 		"--namespace", namespace,
+		"--kubeconfig", hostKubeconfigPath(),
 		"-o", "json",
 	).CombinedOutput()
 	if err != nil {
@@ -1078,21 +1138,24 @@ func resolveNamespace(cfg *config.Config) string {
 	return k3sDefaultNamespace
 }
 
-// resolveKubeconfig returns the kubeconfig path from config or auto-detects it.
+// hostKubeconfigPath returns the path to the volundr-managed kubeconfig
+// in the config directory. This is used for all kubectl/helm commands
+// so we never touch ~/.kube/config.
+func hostKubeconfigPath() string {
+	cfgDir, err := config.ConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cfgDir, k3sHostKubeconfigFile)
+}
+
+// resolveKubeconfig returns the kubeconfig path from config or the
+// volundr-managed kubeconfig in ~/.volundr/.
 func (r *K3sRuntime) resolveKubeconfig(cfg *config.Config) string {
 	if cfg.K3s.Kubeconfig != "" {
 		return cfg.K3s.Kubeconfig
 	}
 
-	// Try standard locations.
-	if env := os.Getenv("KUBECONFIG"); env != "" {
-		return env
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-
-	return filepath.Join(home, ".kube", "config")
+	// Default to the volundr-managed kubeconfig.
+	return hostKubeconfigPath()
 }

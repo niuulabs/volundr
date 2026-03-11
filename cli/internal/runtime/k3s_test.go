@@ -69,19 +69,11 @@ func TestK3sRuntime_ResolveKubeconfig(t *testing.T) {
 		t.Errorf("expected /custom/kubeconfig, got %q", kc)
 	}
 
-	// From KUBECONFIG env.
+	// Default: volundr-managed kubeconfig in config dir.
 	cfg.K3s.Kubeconfig = ""
-	t.Setenv("KUBECONFIG", "/env/kubeconfig")
 	kc = r.resolveKubeconfig(cfg)
-	if kc != "/env/kubeconfig" {
-		t.Errorf("expected /env/kubeconfig, got %q", kc)
-	}
-
-	// Default ~/.kube/config.
-	t.Setenv("KUBECONFIG", "")
-	kc = r.resolveKubeconfig(cfg)
-	if !strings.HasSuffix(kc, filepath.Join(".kube", "config")) {
-		t.Errorf("expected path ending with .kube/config, got %q", kc)
+	if !strings.HasSuffix(kc, k3sHostKubeconfigFile) {
+		t.Errorf("expected path ending with %s, got %q", k3sHostKubeconfigFile, kc)
 	}
 }
 
