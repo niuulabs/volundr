@@ -799,12 +799,16 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	}
 
 	namespace := r.namespace(cfg)
-	kubeconfig := r.resolveKubeconfig(cfg)
 
 	dbHost := cfg.Database.Host
 	if cfg.Database.Mode == "embedded" {
 		dbHost = "host.docker.internal"
 	}
+
+	// The API runs inside a Docker container where the kubeconfig is
+	// mounted at /etc/volundr/kubeconfig (see k3sComposeTemplate).
+	// Use the container path, not the host path.
+	const containerKubeconfigPath = "/etc/volundr/kubeconfig"
 
 	apiCfg := k3sAPIConfig{
 		Database: map[string]interface{}{
@@ -818,7 +822,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 			"adapter": "volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
 			"kwargs": map[string]interface{}{
 				"namespace":    namespace,
-				"kubeconfig":   kubeconfig,
+				"kubeconfig":   containerKubeconfigPath,
 				"base_path":    "/s",
 				"ingress_class": "traefik",
 				"db_host":      "host.k3d.internal",

@@ -205,8 +205,8 @@ func TestGenerateK3sConfig(t *testing.T) {
 	if pmKwargs["namespace"] != "test-ns" {
 		t.Errorf("expected namespace test-ns, got %v", pmKwargs["namespace"])
 	}
-	if pmKwargs["kubeconfig"] != "/test/kubeconfig" {
-		t.Errorf("expected kubeconfig /test/kubeconfig, got %v", pmKwargs["kubeconfig"])
+	if pmKwargs["kubeconfig"] != "/etc/volundr/kubeconfig" {
+		t.Errorf("expected kubeconfig /etc/volundr/kubeconfig, got %v", pmKwargs["kubeconfig"])
 	}
 	if pmKwargs["base_path"] != "/s" {
 		t.Errorf("expected base_path /s, got %v", pmKwargs["base_path"])
@@ -260,7 +260,7 @@ func TestGenerateK3sConfig_DefaultKubeconfig(t *testing.T) {
 		t.Fatalf("unmarshal config: %v", err)
 	}
 
-	// Verify default kubeconfig path ends with .kube/config.
+	// Verify kubeconfig uses the container-mounted path.
 	pmKwargs, ok := parsed.PodManager["kwargs"].(map[string]interface{})
 	if !ok {
 		t.Fatal("expected pod_manager kwargs to be a map")
@@ -269,8 +269,8 @@ func TestGenerateK3sConfig_DefaultKubeconfig(t *testing.T) {
 	if !ok {
 		t.Fatal("expected kubeconfig to be a string")
 	}
-	if !strings.HasSuffix(kc, filepath.Join(".kube", "config")) {
-		t.Errorf("expected kubeconfig to end with .kube/config, got %q", kc)
+	if kc != "/etc/volundr/kubeconfig" {
+		t.Errorf("expected kubeconfig /etc/volundr/kubeconfig, got %q", kc)
 	}
 }
 
