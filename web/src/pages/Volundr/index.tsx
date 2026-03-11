@@ -200,7 +200,8 @@ export function VolundrPage() {
   const probeWsUrl = useMemo(() => {
     if (chatEndpoint) return chatEndpoint;
     if (!sessionHost) return null;
-    return `wss://${sessionHost}/session`;
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${sessionHost}/session`;
   }, [chatEndpoint, sessionHost]);
 
   const handleSessionReady = useCallback(() => {
@@ -226,18 +227,19 @@ export function VolundrPage() {
     if (!sessionHost || !isSessionReady) {
       return null;
     }
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Gateway-routed: derive terminal path from chat endpoint base
-    // Chat endpoint: wss://host/s/{id}/session → terminal: wss://host/s/{id}/terminal/ws
+    // Chat endpoint: ws(s)://host/s/{id}/session → terminal: ws(s)://host/s/{id}/terminal/ws
     if (chatEndpoint) {
       try {
         const parsed = new URL(chatEndpoint);
         const prefix = parsed.pathname.replace(/\/(api\/)?session$/, '');
-        return `wss://${parsed.host}${prefix}/terminal/ws`;
+        return `${wsProto}//${parsed.host}${prefix}/terminal/ws`;
       } catch {
         /* fall through */
       }
     }
-    return `wss://${sessionHost}/terminal/ws`;
+    return `${wsProto}//${sessionHost}/terminal/ws`;
   }, [sessionHost, chatEndpoint, isSessionReady]);
 
   const chatWsUrl = useMemo(() => {
@@ -245,7 +247,8 @@ export function VolundrPage() {
       return null;
     }
     if (chatEndpoint) return chatEndpoint;
-    return `wss://${sessionHost}/session`;
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${sessionHost}/session`;
   }, [sessionHost, chatEndpoint, isSessionReady]);
 
   // Fetch logs from session host's /api/logs or fall back to Volundr API
