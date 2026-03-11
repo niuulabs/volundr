@@ -481,6 +481,10 @@ fi
                                 "image": self._skuld_image,
                                 "ports": [{"containerPort": 8081, "name": "broker"}],
                                 "env": env_vars,
+                                "securityContext": {
+                                    "runAsUser": 1000,
+                                    "allowPrivilegeEscalation": False,
+                                },
                                 "volumeMounts": [
                                     {"name": "workspace", "mountPath": "/volundr"},
                                 ],
@@ -500,6 +504,10 @@ fi
                                     "--disable-telemetry",
                                     f"/volundr/sessions/{session.id}/workspace",
                                 ],
+                                "securityContext": {
+                                    "runAsUser": 1000,
+                                    "allowPrivilegeEscalation": False,
+                                },
                                 "volumeMounts": [
                                     {"name": "workspace", "mountPath": "/volundr"},
                                 ],
@@ -515,6 +523,10 @@ fi
                                     {"name": "SESSION_ID", "value": str(session.id)},
                                     {"name": "TERMINAL_PORT", "value": "7681"},
                                 ],
+                                "securityContext": {
+                                    "runAsUser": 1000,
+                                    "allowPrivilegeEscalation": False,
+                                },
                                 "volumeMounts": [
                                     {"name": "workspace", "mountPath": "/volundr"},
                                 ],
