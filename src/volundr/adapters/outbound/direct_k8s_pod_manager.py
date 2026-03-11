@@ -305,7 +305,11 @@ class DirectK8sPodManager(PodManager):
 
         # Inject secrets from K8s secrets (matches Helm chart envSecrets pattern).
         env_secrets = [
-            {"envVar": "ANTHROPIC_API_KEY", "secretName": "anthropic-api-key", "secretKey": "api-key"},
+            {
+                "envVar": "ANTHROPIC_API_KEY",
+                "secretName": "anthropic-api-key",
+                "secretKey": "api-key",
+            },
             {"envVar": "GITHUB_TOKEN", "secretName": "github-token", "secretKey": "token"},
         ]
         for es in env_secrets:
@@ -448,7 +452,10 @@ fi
                         "initContainers": self._build_init_containers(session, spec),
                         "volumes": [
                             self._build_workspace_volume(session),
-                            {"name": "nginx-config", "configMap": {"name": f"{release_name}-nginx"}},
+                            {
+                                "name": "nginx-config",
+                                "configMap": {"name": f"{release_name}-nginx"},
+                            },
                         ],
                         "containers": [
                             {
@@ -456,7 +463,12 @@ fi
                                 "image": self._nginx_image,
                                 "ports": [{"containerPort": SESSION_SERVICE_PORT, "name": "http"}],
                                 "volumeMounts": [
-                                    {"name": "nginx-config", "mountPath": "/etc/nginx/nginx.conf", "subPath": "nginx.conf", "readOnly": True},
+                                    {
+                                        "name": "nginx-config",
+                                        "mountPath": "/etc/nginx/nginx.conf",
+                                        "subPath": "nginx.conf",
+                                        "readOnly": True,
+                                    },
                                     {"name": "workspace", "mountPath": "/volundr"},
                                 ],
                                 "resources": {
