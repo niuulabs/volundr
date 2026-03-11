@@ -60,9 +60,16 @@ spec:
 
       codeServer:
         enabled: {{ .Values.sessionDefinitions.skuldClaude.defaults.codeServer.enabled }}
+        backend: {{ .Values.sessionDefinitions.skuldClaude.defaults.codeServer.backend | default "openvscode" | quote }}
         image:
           repository: {{ .Values.sessionDefinitions.skuldClaude.defaults.codeServer.image.repository }}
           tag: {{ .Values.sessionDefinitions.skuldClaude.defaults.codeServer.image.tag | quote }}
+        {{- with .Values.sessionDefinitions.skuldClaude.defaults.codeServer.openvscode }}
+        openvscode:
+          image:
+            repository: {{ .image.repository }}
+            tag: {{ .image.tag | quote }}
+        {{- end }}
         resources:
           {{- toYaml .Values.sessionDefinitions.skuldClaude.defaults.codeServer.resources | nindent 10 }}
 

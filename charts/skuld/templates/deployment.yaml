@@ -244,7 +244,98 @@ spec:
             {{- end }}
             {{- end }}
         {{- if .Values.codeServer.enabled }}
-        # code-server - VS Code IDE in browser
+        {{- if eq (toString .Values.codeServer.backend) "openvscode" }}
+        # OpenVSCode Server - upstream VS Code Web workbench
+        - name: openvscode
+          image: "{{ .Values.codeServer.openvscode.image.repository }}:{{ .Values.codeServer.openvscode.image.tag }}"
+          imagePullPolicy: {{ .Values.codeServer.openvscode.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.securityContext.runAsUser }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          ports:
+            - name: ide
+              containerPort: {{ .Values.codeServer.port }}
+              protocol: TCP
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              SETTINGS_DIR="${HOME}/.openvscode-server/data/Machine"
+              mkdir -p "$SETTINGS_DIR"
+              {{- if .Values.homeVolume.enabled }}
+              # Use persistent VS Code settings from home PVC; seed from defaults on first run
+              if [ -f "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" ]; then
+                ln -sf "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" "$SETTINGS_DIR/settings.json"
+              else
+                cp /etc/vscode-defaults/settings.json "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json"
+                ln -sf "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" "$SETTINGS_DIR/settings.json"
+              fi
+              {{- else }}
+              cp /etc/vscode-defaults/settings.json "$SETTINGS_DIR/settings.json"
+              {{- end }}
+              exec ${OPENVSCODE_SERVER_ROOT}/bin/openvscode-server \
+                --host=0.0.0.0 \
+                --port={{ .Values.codeServer.port }} \
+                {{- if .Values.codeServer.openvscode.connectionToken }}
+                --connection-token={{ .Values.codeServer.openvscode.connectionToken | quote }} \
+                {{- else if .Values.codeServer.openvscode.connectionTokenFile }}
+                --connection-token-file={{ .Values.codeServer.openvscode.connectionTokenFile | quote }} \
+                {{- else }}
+                --without-connection-token \
+                {{- end }}
+                --disable-telemetry \
+                {{ include "skuld.workspacePath" . | quote }}
+          env:
+            - name: SESSION_ID
+              value: {{ .Values.session.id | quote }}
+            {{- if .Values.homeVolume.enabled }}
+            {{- if eq (toString .Values.broker.cliType) "codex" }}
+            - name: CODEX_HOME
+              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
+            {{- else }}
+            - name: CLAUDE_CONFIG_DIR
+              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
+            {{- end }}
+            {{- end }}
+            {{- if .Values.codeServer.extensions }}
+            - name: EXTENSIONS
+              value: {{ .Values.codeServer.extensions | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: ide
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ide
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.codeServer.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: sessions
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.homeVolume.enabled }}
+            - name: home
+              mountPath: {{ .Values.homeVolume.mountPath }}
+            {{- if .Values.homeVolume.credentialFiles.secretName }}
+            - name: credential-files
+              mountPath: {{ .Values.homeVolume.credentialFiles.secretMountPath }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            - name: vscode-settings
+              mountPath: /etc/vscode-defaults
+              readOnly: true
+        {{- else }}
+        # code-server - VS Code IDE in browser (Coder fork)
         - name: code-server
           image: "{{ .Values.codeServer.image.repository }}:{{ .Values.codeServer.image.tag }}"
           imagePullPolicy: {{ .Values.codeServer.image.pullPolicy }}
@@ -332,6 +423,7 @@ spec:
             - name: vscode-settings
               mountPath: /etc/vscode-defaults
               readOnly: true
+        {{- end }}
         {{- end }}
         {{- if .Values.localServices.enabled }}
         # Devrunner - minimal runtime for local service testing

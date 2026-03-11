@@ -761,9 +761,15 @@ sessionDefinitions:
       codeServer:
         # -- Enable code-server sidecar
         enabled: true
+        # -- IDE backend: "code-server" or "openvscode"
+        backend: "openvscode"
         image:
           repository: codercom/code-server
           tag: "latest"
+        openvscode:
+          image:
+            repository: gitpod/openvscode-server
+            tag: "latest"
         resources:
           requests:
             memory: "256Mi"
@@ -886,9 +892,14 @@ sessionDefinitions:
 
       codeServer:
         enabled: true
+        backend: "openvscode"
         image:
           repository: codercom/code-server
           tag: "latest"
+        openvscode:
+          image:
+            repository: gitpod/openvscode-server
+            tag: "latest"
         resources:
           requests:
             memory: "256Mi"

@@ -72,6 +72,8 @@ nginx:
 codeServer:
   # -- Enable code-server sidecar container
   enabled: true
+  # -- IDE backend: "code-server" (Coder) or "openvscode" (Gitpod OpenVSCode Server)
+  backend: "openvscode"
   image:
     # -- code-server image repository
     repository: codercom/code-server
@@ -79,6 +81,20 @@ codeServer:
     tag: "latest"
     # -- code-server image pull policy
     pullPolicy: Always
+  # OpenVSCode Server image (used when backend=openvscode)
+  openvscode:
+    image:
+      # -- OpenVSCode Server image repository
+      repository: gitpod/openvscode-server
+      # -- OpenVSCode Server image tag
+      tag: "latest"
+      # -- OpenVSCode Server image pull policy
+      pullPolicy: Always
+    # -- Connection token for WebSocket subprotocol auth (empty = disabled)
+    # When set, VS Code Web authenticates via Sec-WebSocket-Protocol: vscode-tkn-<token>
+    connectionToken: ""
+    # -- Path to a file containing the connection token (alternative to connectionToken)
+    connectionTokenFile: ""
   resources:
     requests:
       # -- code-server memory request
@@ -92,7 +108,7 @@ codeServer:
       cpu: "1000m"
   # -- Port for code-server (VS Code in browser)
   port: 8443
-  # -- Password for code-server authentication (empty string disables password)
+  # -- Password for code-server authentication (empty string disables password, code-server only)
   password: ""
   # -- Extra VS Code extensions to install (comma-separated extension IDs)
   extensions: ""
