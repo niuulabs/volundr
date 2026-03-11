@@ -76,7 +76,7 @@ class TestTerminalServerInit:
         assert server.port == 7681
         assert server.shell_path == DEFAULT_SHELL_PATH
         assert server.workspace_dir == ""
-        assert server._restricted is True
+        assert server._restricted is False
         assert server._sessions == {}
 
     def test_custom_values(self) -> None:
@@ -254,7 +254,7 @@ class TestHandleSpawn:
         body = json.loads(response.text)
 
         assert "terminalId" in body
-        assert body["restricted"] is True
+        assert body["restricted"] is False
         assert body["terminalId"] in server._sessions
 
 
@@ -297,18 +297,18 @@ class TestHandleMode:
     """Test the mode toggle endpoint."""
 
     @pytest.mark.asyncio
-    async def test_set_unrestricted(self) -> None:
+    async def test_set_restricted(self) -> None:
         server = TerminalServer()
-        assert server._restricted is True
+        assert server._restricted is False
 
         request = MagicMock()
-        request.json = AsyncMock(return_value={"restricted": False})
+        request.json = AsyncMock(return_value={"restricted": True})
 
         response = await server._handle_mode(request)
         body = json.loads(response.text)
 
-        assert body["restricted"] is False
-        assert server._restricted is False
+        assert body["restricted"] is True
+        assert server._restricted is True
 
     @pytest.mark.asyncio
     async def test_get_mode(self) -> None:
@@ -318,7 +318,7 @@ class TestHandleMode:
         response = await server._handle_get_mode(request)
         body = json.loads(response.text)
 
-        assert body["restricted"] is True
+        assert body["restricted"] is False
 
 
 class TestStop:

@@ -110,7 +110,7 @@ class TestResourceNames:
         sample_session: Session,
     ) -> None:
         endpoint = pod_manager._chat_endpoint(sample_session)
-        assert endpoint == f"/s/{sample_session.id}/session"
+        assert endpoint == f"ws://k3d-volundr-serverlb/s/{sample_session.id}/session"
 
     def test_code_endpoint(
         self,
@@ -118,7 +118,7 @@ class TestResourceNames:
         sample_session: Session,
     ) -> None:
         endpoint = pod_manager._code_endpoint(sample_session)
-        assert endpoint == f"/s/{sample_session.id}/"
+        assert endpoint == f"http://k3d-volundr-serverlb/s/{sample_session.id}/"
 
     def test_middleware_name(
         self,
@@ -155,7 +155,7 @@ class TestEnvironment:
         spec = make_spec()
         env = pod_manager._build_env(sample_session, spec)
 
-        env_dict = {e["name"]: e["value"] for e in env}
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
         assert env_dict["SESSION_ID"] == str(sample_session.id)
         assert env_dict["SESSION_NAME"] == sample_session.name
         assert env_dict["DATABASE__HOST"] == "host.k3d.internal"
@@ -174,7 +174,7 @@ class TestEnvironment:
         )
         env = pod_manager._build_env(sample_session, spec)
 
-        env_dict = {e["name"]: e["value"] for e in env}
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
         assert env_dict["GIT_CLONE_URL"] == "https://github.com/org/repo"
         assert env_dict["GIT_BRANCH"] == "develop"
 
@@ -186,7 +186,7 @@ class TestEnvironment:
         spec = make_spec(session={"model": "claude-opus-4-20250514"})
         env = pod_manager._build_env(sample_session, spec)
 
-        env_dict = {e["name"]: e["value"] for e in env}
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
         assert env_dict["SESSION_MODEL"] == "claude-opus-4-20250514"
 
     def test_build_env_with_extra_env(
@@ -197,7 +197,7 @@ class TestEnvironment:
         spec = make_spec(env={"CUSTOM_VAR": "custom_value", "PORT": 3000})
         env = pod_manager._build_env(sample_session, spec)
 
-        env_dict = {e["name"]: e["value"] for e in env}
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
         assert env_dict["CUSTOM_VAR"] == "custom_value"
         assert env_dict["PORT"] == "3000"
 
@@ -228,7 +228,7 @@ class TestManifests:
 
         # Check skuld env vars.
         skuld = next(c for c in containers if c["name"] == "skuld")
-        env_dict = {e["name"]: e["value"] for e in skuld["env"]}
+        env_dict = {e["name"]: e["value"] for e in skuld["env"] if "value" in e}
         assert env_dict["SESSION_ID"] == str(sample_session.id)
         assert env_dict["DATABASE__HOST"] == "host.k3d.internal"
 
@@ -364,16 +364,17 @@ class TestStart:
 
         mock_cr.assert_called_once()
 
-        assert mock_apply.call_count == 3
+        assert mock_apply.call_count == 4
         call_classes = [
             c.kwargs["api_class"] for c in mock_apply.call_args_list
         ]
         assert "AppsV1Api" in call_classes
-        assert "CoreV1Api" in call_classes
         assert "NetworkingV1Api" in call_classes
+        # CoreV1Api appears twice: ConfigMap + Service
+        assert call_classes.count("CoreV1Api") == 2
 
-        assert result.chat_endpoint == f"/s/{sample_session.id}/session"
-        assert result.code_endpoint == f"/s/{sample_session.id}/"
+        assert result.chat_endpoint == f"ws://k3d-volundr-serverlb/s/{sample_session.id}/session"
+        assert result.code_endpoint == f"http://k3d-volundr-serverlb/s/{sample_session.id}/"
         assert result.pod_name == f"skuld-{sample_session.id}"
 
 
@@ -398,13 +399,14 @@ class TestStop:
             result = await pod_manager.stop(sample_session)
 
         assert result is True
-        assert mock_delete.call_count == 3
+        assert mock_delete.call_count == 4
         call_classes = [
             c.args[0] for c in mock_delete.call_args_list
         ]
         assert "AppsV1Api" in call_classes
-        assert "CoreV1Api" in call_classes
         assert "NetworkingV1Api" in call_classes
+        # CoreV1Api appears twice: Service + ConfigMap
+        assert call_classes.count("CoreV1Api") == 2
         mock_delete_cr.assert_called_once()
 
 
