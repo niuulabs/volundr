@@ -184,14 +184,18 @@ func (w *WSClient) SendRaw(data []byte) error {
 // Close closes the WebSocket connection.
 func (w *WSClient) Close() error {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 
 	if w.conn == nil {
+		w.mu.Unlock()
 		return nil
 	}
 
 	err := w.conn.Close()
 	w.conn = nil
+	w.mu.Unlock()
+
+	// Update state and fire callback outside the lock to avoid deadlock
+	// when the callback (ProgramSender.Send) blocks on the Bubble Tea channel.
 	w.setState(WSDisconnected)
 	return err
 }

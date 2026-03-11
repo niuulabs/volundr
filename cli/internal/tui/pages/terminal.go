@@ -223,7 +223,24 @@ func (t *TerminalPage) ConnectSessionOnCluster(sess api.Session, contextKey stri
 // ConnectSession creates a new terminal tab and connects to the given session.
 // It uses the session's CodeEndpoint to connect directly to the session pod.
 // If CodeEndpoint is empty, it falls back to the control-plane proxy.
+// Any existing tabs are closed first to prevent goroutine leaks.
 func (t *TerminalPage) ConnectSession(sess api.Session) {
+	// Detach callbacks and close asynchronously to avoid deadlock —
+	// Close() fires OnStateChange which calls p.Send() and blocks
+	// when called from inside Update().
+	for _, tab := range t.tabs {
+		tab.ws.OnData = nil
+		tab.ws.OnStateChange = nil
+		tab.ws.OnError = nil
+		oldWS := tab.ws
+		oldEmu := tab.emulator
+		go func() {
+			_ = oldWS.Close()
+			_ = oldEmu.Close()
+		}()
+	}
+	t.tabs = nil
+	t.activeTab = 0
 	token := ""
 	if t.client != nil {
 		token = t.client.Token()
