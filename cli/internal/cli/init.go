@@ -195,10 +195,12 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 	fmt.Println("  config.yaml        ... done")
 
-	// Save credentials if an API key was provided.
-	if apiKey != "" {
+	// Save credentials if an API key or GitHub token was provided.
+	githubToken := cfg.Git.GitHub.CloneToken
+	if apiKey != "" || githubToken != "" {
 		creds := &config.Credentials{
 			AnthropicAPIKey: apiKey,
+			GithubToken:     githubToken,
 		}
 		// Use a machine-derived key for now (no passphrase prompt in phase 1).
 		machineKey := machinePassphrase()

@@ -46,6 +46,9 @@ var composeTemplate = template.Must(template.New("compose").Parse(`services:
 {{- if .AnthropicAPIKey}}
       ANTHROPIC_API_KEY: "{{.AnthropicAPIKey}}"
 {{- end}}
+{{- if .GithubToken}}
+      GITHUB_TOKEN: "{{.GithubToken}}"
+{{- end}}
     volumes:
       - "{{.ConfigPath}}:/etc/volundr/config.yaml:ro"
       - "{{.StorageDir}}:/volundr-storage"
@@ -68,6 +71,7 @@ type composeData struct {
 	DBPassword      string
 	DBName          string
 	AnthropicAPIKey string
+	GithubToken     string
 	ConfigPath      string
 	StorageDir      string
 }
@@ -443,6 +447,7 @@ func (r *DockerRuntime) buildComposeData(cfg *config.Config) composeData {
 		DBPassword:      cfg.Database.Password,
 		DBName:          cfg.Database.Name,
 		AnthropicAPIKey: cfg.Anthropic.APIKey,
+		GithubToken:     cfg.Git.GitHub.CloneToken,
 		ConfigPath:      filepath.Join(cfgDir, dockerConfigFileName),
 		StorageDir:      cfgDir,
 	}

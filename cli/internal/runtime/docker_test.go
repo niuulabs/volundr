@@ -20,6 +20,7 @@ func TestRenderComposeTemplate_WithAnthropicKey(t *testing.T) {
 		DBPassword:      "secret",
 		DBName:          "volundr",
 		AnthropicAPIKey: "sk-ant-test-key",
+		GithubToken:     "ghp_test123",
 		ConfigPath:      "/home/user/.volundr/docker-config.yaml",
 		StorageDir:      "/home/user/.volundr",
 	}
@@ -39,6 +40,7 @@ func TestRenderComposeTemplate_WithAnthropicKey(t *testing.T) {
 		`DATABASE__PASSWORD: "secret"`,
 		`DATABASE__NAME: "volundr"`,
 		`ANTHROPIC_API_KEY: "sk-ant-test-key"`,
+		`GITHUB_TOKEN: "ghp_test123"`,
 		`volundr-net`,
 		`external: true`,
 		`/home/user/.volundr/docker-config.yaml:/etc/volundr/config.yaml:ro`,
@@ -63,6 +65,7 @@ func TestRenderComposeTemplate_WithoutAnthropicKey(t *testing.T) {
 		DBPassword:      "pass",
 		DBName:          "mydb",
 		AnthropicAPIKey: "",
+		GithubToken:     "",
 		ConfigPath:      "/home/user/.volundr/docker-config.yaml",
 		StorageDir:      "/home/user/.volundr",
 	}
@@ -74,6 +77,10 @@ func TestRenderComposeTemplate_WithoutAnthropicKey(t *testing.T) {
 
 	if strings.Contains(result, "ANTHROPIC_API_KEY") {
 		t.Errorf("expected no ANTHROPIC_API_KEY when key is empty, got:\n%s", result)
+	}
+
+	if strings.Contains(result, "GITHUB_TOKEN") {
+		t.Errorf("expected no GITHUB_TOKEN when token is empty, got:\n%s", result)
 	}
 
 	if !strings.Contains(result, "image: ghcr.io/niuu/volundr-api:v1.0.0") {
@@ -90,6 +97,61 @@ func TestRenderComposeTemplate_WithoutAnthropicKey(t *testing.T) {
 
 	if !strings.Contains(result, `/home/user/.volundr/docker-config.yaml:/etc/volundr/config.yaml:ro`) {
 		t.Errorf("expected config volume mount, got:\n%s", result)
+	}
+}
+
+func TestRenderComposeTemplate_WithGithubTokenOnly(t *testing.T) {
+	data := composeData{
+		APIImage:        "ghcr.io/niuu/volundr-api:latest",
+		APIPort:         18080,
+		DBHost:          "host.docker.internal",
+		DBPort:          5433,
+		DBUser:          "volundr",
+		DBPassword:      "secret",
+		DBName:          "volundr",
+		AnthropicAPIKey: "",
+		GithubToken:     "ghp_onlytoken",
+		ConfigPath:      "/home/user/.volundr/docker-config.yaml",
+		StorageDir:      "/home/user/.volundr",
+	}
+
+	result, err := renderComposeTemplate(data)
+	if err != nil {
+		t.Fatalf("renderComposeTemplate: %v", err)
+	}
+
+	if strings.Contains(result, "ANTHROPIC_API_KEY") {
+		t.Errorf("expected no ANTHROPIC_API_KEY when key is empty, got:\n%s", result)
+	}
+
+	if !strings.Contains(result, `GITHUB_TOKEN: "ghp_onlytoken"`) {
+		t.Errorf("expected GITHUB_TOKEN in output, got:\n%s", result)
+	}
+}
+
+func TestBuildComposeData_IncludesGithubToken(t *testing.T) {
+	r := NewDockerRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Host:     "localhost",
+			Port:     5433,
+			User:     "volundr",
+			Password: "testpass",
+			Name:     "volundr",
+		},
+		Anthropic: config.AnthropicConfig{APIKey: "sk-test"},
+		Git: config.GitConfig{
+			GitHub: config.GitHubConfig{
+				CloneToken: "ghp_clone_token",
+			},
+		},
+	}
+
+	data := r.buildComposeData(cfg)
+
+	if data.GithubToken != "ghp_clone_token" {
+		t.Errorf("expected GithubToken to be ghp_clone_token, got %q", data.GithubToken)
 	}
 }
 

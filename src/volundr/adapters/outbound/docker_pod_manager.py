@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import shutil
 from functools import partial
 from pathlib import Path
@@ -148,6 +149,13 @@ class DockerPodManager(PodManager):
             "DATABASE__PASSWORD": self._db_password,
             "DATABASE__NAME": self._db_name,
         }
+
+        # Forward critical secrets from the API container environment
+        # into skuld session containers (Docker mode only).
+        for env_key in ("ANTHROPIC_API_KEY", "GITHUB_TOKEN"):
+            val = os.environ.get(env_key)
+            if val and env_key not in skuld_env:
+                skuld_env[env_key] = val
 
         # Apply resolved secrets from envSecrets
         if resolved_secrets:

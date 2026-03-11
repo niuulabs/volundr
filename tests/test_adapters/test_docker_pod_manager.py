@@ -736,6 +736,107 @@ async def test_compose_handles_extra_env(
 
 
 @pytest.mark.asyncio
+async def test_compose_forwards_api_env_secrets(
+    pod_manager: DockerPodManager,
+    sample_session: Session,
+    tmp_compose_dir: Path,
+):
+    """Verify ANTHROPIC_API_KEY and GITHUB_TOKEN are forwarded from os.environ."""
+    spec = make_spec()
+    client = _mock_docker_client()
+
+    env_patch = {
+        "ANTHROPIC_API_KEY": "sk-ant-forwarded",
+        "GITHUB_TOKEN": "ghp_forwarded",
+    }
+
+    with (
+        patch.object(pod_manager, "_docker_client", return_value=client),
+        patch.dict("os.environ", env_patch),
+    ):
+        await pod_manager.start(sample_session, spec)
+
+    import yaml
+
+    compose_path = tmp_compose_dir / str(sample_session.id) / "docker-compose.yml"
+    compose = yaml.safe_load(compose_path.read_text())
+
+    skuld_env = compose["services"]["skuld"]["environment"]
+    assert skuld_env["ANTHROPIC_API_KEY"] == "sk-ant-forwarded"
+    assert skuld_env["GITHUB_TOKEN"] == "ghp_forwarded"
+
+
+@pytest.mark.asyncio
+async def test_compose_env_secrets_override_forwarded_env(
+    pod_manager: DockerPodManager,
+    sample_session: Session,
+    tmp_compose_dir: Path,
+):
+    """Verify envSecrets from credential store override forwarded env vars."""
+    sample_session.owner_id = "user-456"
+    store = _mock_credential_store({
+        "anthropic": {"key": "sk-ant-from-store"},
+    })
+    pod_manager.set_credential_store(store)
+
+    spec = make_spec(
+        envSecrets=[
+            {
+                "secretName": "anthropic",
+                "secretKey": "key",
+                "envVar": "ANTHROPIC_API_KEY",
+            },
+        ],
+    )
+    client = _mock_docker_client()
+
+    env_patch = {"ANTHROPIC_API_KEY": "sk-ant-from-os-env"}
+
+    with (
+        patch.object(pod_manager, "_docker_client", return_value=client),
+        patch.dict("os.environ", env_patch),
+    ):
+        await pod_manager.start(sample_session, spec)
+
+    import yaml
+
+    compose_path = tmp_compose_dir / str(sample_session.id) / "docker-compose.yml"
+    compose = yaml.safe_load(compose_path.read_text())
+
+    skuld_env = compose["services"]["skuld"]["environment"]
+    # envSecrets should win over os.environ forwarding
+    assert skuld_env["ANTHROPIC_API_KEY"] == "sk-ant-from-store"
+
+
+@pytest.mark.asyncio
+async def test_compose_no_forwarding_when_env_not_set(
+    pod_manager: DockerPodManager,
+    sample_session: Session,
+    tmp_compose_dir: Path,
+):
+    """Verify no ANTHROPIC_API_KEY/GITHUB_TOKEN when not in os.environ."""
+    spec = make_spec()
+    client = _mock_docker_client()
+
+    env_patch = {}
+
+    with (
+        patch.object(pod_manager, "_docker_client", return_value=client),
+        patch.dict("os.environ", env_patch, clear=True),
+    ):
+        await pod_manager.start(sample_session, spec)
+
+    import yaml
+
+    compose_path = tmp_compose_dir / str(sample_session.id) / "docker-compose.yml"
+    compose = yaml.safe_load(compose_path.read_text())
+
+    skuld_env = compose["services"]["skuld"]["environment"]
+    assert "ANTHROPIC_API_KEY" not in skuld_env
+    assert "GITHUB_TOKEN" not in skuld_env
+
+
+@pytest.mark.asyncio
 async def test_compose_handles_session_model(
     pod_manager: DockerPodManager,
     sample_session: Session,
