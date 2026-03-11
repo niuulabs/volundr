@@ -46,6 +46,10 @@ const k3sContainerName = "volundr-k3s-api"
 // Written to ~/.volundr/ so we never touch ~/.kube/config.
 const k3sHostKubeconfigFile = "kubeconfig.yaml"
 
+// k3sNodeStoragePath is the path inside k3d nodes where host storage is mounted.
+// Used with hostPath volumes so pods can access the volundr storage directory.
+const k3sNodeStoragePath = "/volundr-storage"
+
 // k3sDockerKubeconfigFile is the kubeconfig rewritten for Docker network access.
 const k3sDockerKubeconfigFile = "k3d-kubeconfig.yaml"
 
@@ -103,10 +107,11 @@ type k3sAPIConfig struct {
 	CredentialStore map[string]interface{} `yaml:"credential_store"`
 	Storage         map[string]interface{} `yaml:"storage"`
 	SecretInjection map[string]interface{} `yaml:"secret_injection"`
-	Git             map[string]interface{} `yaml:"git,omitempty"`
-	Identity        map[string]interface{} `yaml:"identity"`
-	Authorization   map[string]interface{} `yaml:"authorization"`
-	Gateway         map[string]interface{} `yaml:"gateway"`
+	Identity             map[string]interface{}   `yaml:"identity"`
+	Authorization        map[string]interface{}   `yaml:"authorization"`
+	Gateway              map[string]interface{}   `yaml:"gateway"`
+	Git                  map[string]interface{}   `yaml:"git,omitempty"`
+	SessionContributors  []map[string]interface{} `yaml:"session_contributors,omitempty"`
 }
 
 // K3sRuntime manages the Volundr stack using k3s/k3d for Kubernetes
@@ -270,6 +275,14 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 		fmt.Println("failed")
 		return fmt.Errorf("create proxy: %w", err)
 	}
+	// Route /s/ paths to the k3d ingress (Traefik on port 80).
+	if err := rtr.SetSessionBackend("http://127.0.0.1:80"); err != nil {
+		fmt.Println("failed")
+		return fmt.Errorf("set session backend: %w", err)
+	}
+	// Rewrite Docker-internal endpoint hostnames in API responses so
+	// the browser gets URLs it can resolve (using the request Host header).
+	rtr.AddRewriteHost(fmt.Sprintf("k3d-%s-serverlb", k3sClusterName))
 	r.proxyRtr = rtr
 
 	listenAddr := fmt.Sprintf("%s:%d", cfg.Listen.Host, cfg.Listen.Port)
@@ -491,12 +504,20 @@ func (r *K3sRuntime) initK3d(ctx context.Context) error {
 	}
 
 	// Create the cluster — do NOT update ~/.kube/config.
+	// Mount the volundr storage dir into k3d nodes so pods can use hostPath volumes.
 	fmt.Print("creating ... ")
+	cfgDir, err := config.ConfigDir()
+	if err != nil {
+		fmt.Println("failed")
+		return fmt.Errorf("get config dir: %w", err)
+	}
+	storageVolume := cfgDir + ":" + k3sNodeStoragePath
 	createOut, err := exec.CommandContext(ctx,
 		"k3d", "cluster", "create", k3sClusterName,
 		"-p", k3sLoadBalancerHTTPPort,
 		"-p", k3sLoadBalancerHTTPSPort,
 		"--kubeconfig-update-default=false",
+		"--volume", storageVolume,
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println("failed")
@@ -854,15 +875,17 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 		PodManager: map[string]interface{}{
 			"adapter": "volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
 			"kwargs": map[string]interface{}{
-				"namespace":    namespace,
-				"kubeconfig":   containerKubeconfigPath,
-				"base_path":    "/s",
-				"ingress_class": "traefik",
-				"db_host":      "host.k3d.internal",
-				"db_port":      cfg.Database.Port,
-				"db_user":      cfg.Database.User,
-				"db_password":  cfg.Database.Password,
-				"db_name":      cfg.Database.Name,
+				"namespace":       namespace,
+				"kubeconfig":      containerKubeconfigPath,
+				"base_path":       "/s",
+				"ingress_class":   "traefik",
+				"ingress_backend": fmt.Sprintf("k3d-%s-serverlb", k3sClusterName),
+				"storage_path":    k3sNodeStoragePath,
+				"db_host":         "host.k3d.internal",
+				"db_port":         cfg.Database.Port,
+				"db_user":         cfg.Database.User,
+				"db_password":     cfg.Database.Password,
+				"db_name":         cfg.Database.Name,
 			},
 		},
 		CredentialStore: map[string]interface{}{
@@ -894,6 +917,11 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	// Add git provider config if enabled.
 	if cfg.Git.GitHub.Enabled && len(cfg.Git.GitHub.Instances) > 0 {
 		apiCfg.Git = buildGitConfig(cfg)
+	}
+
+	// Wire up session contributors.
+	apiCfg.SessionContributors = []map[string]interface{}{
+		{"adapter": "volundr.adapters.outbound.contributors.git.GitContributor"},
 	}
 
 	data, err := yaml.Marshal(&apiCfg)

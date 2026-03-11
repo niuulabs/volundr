@@ -3,11 +3,14 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/niuulabs/volundr/cli/internal/web"
@@ -23,10 +26,14 @@ type SessionRoute struct {
 
 // Router manages reverse proxy routing.
 type Router struct {
-	apiURL    *url.URL
-	webConfig *web.RuntimeConfig
-	sessions  map[string]*SessionRoute
-	mu        sync.RWMutex
+	apiURL         *url.URL
+	sessionBackend *url.URL
+	webConfig      *web.RuntimeConfig
+	sessions       map[string]*SessionRoute
+	mu             sync.RWMutex
+	// rewriteHosts lists Docker-internal hostnames that should be replaced
+	// with the browser-facing host (derived from the request's Host header).
+	rewriteHosts []string
 }
 
 // NewRouter creates a new Router with the given API backend URL.
@@ -61,11 +68,77 @@ func (r *Router) RemoveSession(sessionID string) {
 	delete(r.sessions, sessionID)
 }
 
+// SetSessionBackend sets the URL for proxying session paths (/s/).
+// In k3s mode this points at the k3d ingress (e.g., http://127.0.0.1:80).
+func (r *Router) SetSessionBackend(backendURL string) error {
+	u, err := url.Parse(backendURL)
+	if err != nil {
+		return fmt.Errorf("parse session backend URL %q: %w", backendURL, err)
+	}
+	r.sessionBackend = u
+	return nil
+}
+
+// AddRewriteHost registers a Docker-internal hostname that should be
+// dynamically replaced with the browser-facing host from the request.
+func (r *Router) AddRewriteHost(internalHost string) {
+	r.rewriteHosts = append(r.rewriteHosts, internalHost)
+}
+
+// rewriteBody replaces internal hostnames with the external host.
+func (r *Router) rewriteBody(body []byte, externalHost string) []byte {
+	if len(r.rewriteHosts) == 0 {
+		return body
+	}
+	result := string(body)
+	for _, internal := range r.rewriteHosts {
+		result = strings.ReplaceAll(result, internal, externalHost)
+	}
+	return []byte(result)
+}
+
 // Handler returns an http.Handler that routes requests.
 func (r *Router) Handler() http.Handler {
 	apiProxy := httputil.NewSingleHostReverseProxy(r.apiURL)
 
+	// Rewrite Docker-internal hostnames in API responses using the
+	// browser's Host header so URLs resolve regardless of access method.
+	if len(r.rewriteHosts) > 0 {
+		apiProxy.ModifyResponse = func(resp *http.Response) error {
+			contentType := resp.Header.Get("Content-Type")
+			if !strings.Contains(contentType, "json") && !strings.Contains(contentType, "text") {
+				return nil
+			}
+
+			externalHost := ""
+			if resp.Request != nil {
+				externalHost = resp.Request.Host
+			}
+			if externalHost == "" {
+				return nil
+			}
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			_ = resp.Body.Close()
+
+			body = r.rewriteBody(body, externalHost)
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.ContentLength = int64(len(body))
+			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
+			return nil
+		}
+	}
+
 	mux := http.NewServeMux()
+
+	// Session paths -> k3d ingress (Traefik).
+	if r.sessionBackend != nil {
+		sessionProxy := httputil.NewSingleHostReverseProxy(r.sessionBackend)
+		mux.Handle("/s/", sessionProxy)
+	}
 
 	// API routes -> Python API.
 	mux.Handle("/api/", apiProxy)
