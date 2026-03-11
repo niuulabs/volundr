@@ -96,6 +96,7 @@ type k3sAPIConfig struct {
 	CredentialStore map[string]interface{} `yaml:"credential_store"`
 	Storage         map[string]interface{} `yaml:"storage"`
 	SecretInjection map[string]interface{} `yaml:"secret_injection"`
+	Git             map[string]interface{} `yaml:"git,omitempty"`
 	Identity        map[string]interface{} `yaml:"identity"`
 	Authorization   map[string]interface{} `yaml:"authorization"`
 	Gateway         map[string]interface{} `yaml:"gateway"`
@@ -851,6 +852,11 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 		Gateway: map[string]interface{}{
 			"adapter": "volundr.adapters.outbound.k8s_gateway.InMemoryGatewayAdapter",
 		},
+	}
+
+	// Add git provider config if enabled.
+	if cfg.Git.GitHub.Enabled && len(cfg.Git.GitHub.Instances) > 0 {
+		apiCfg.Git = buildGitConfig(cfg)
 	}
 
 	data, err := yaml.Marshal(&apiCfg)
