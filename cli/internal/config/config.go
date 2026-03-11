@@ -163,7 +163,7 @@ func DefaultConfig() (*Config, error) {
 		Docker: DockerConfig{
 			APIImage:        "ghcr.io/niuu/volundr-api:latest",
 			SkuldImage:      "ghcr.io/niuu/skuld:latest",
-			CodeServerImage: "ghcr.io/niuu/code-server:latest",
+			CodeServerImage: "codercom/code-server:latest",
 			TtydImage:       "ghcr.io/niuu/ttyd:latest",
 			Network:         "volundr-net",
 		},

@@ -60,7 +60,7 @@ class TerminalServer:
         self.port = port
         self.shell_path = shell_path
         self.workspace_dir = workspace_dir
-        self._restricted = os.environ.get("TERMINAL_RESTRICTED", "true").lower() != "false"
+        self._restricted = os.environ.get("TERMINAL_RESTRICTED", "false").lower() != "false"
         self._sessions: dict[str, _PtySession] = {}
         self._app = web.Application()
         self._app.router.add_get("/ws", self._handle_ws)
