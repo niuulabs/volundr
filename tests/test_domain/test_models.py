@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from volundr.domain.models import (
     GitProviderType,
+    GitSource,
     Model,
     ModelProvider,
     ModelTier,
@@ -46,8 +47,7 @@ class TestSession:
         session = Session(
             name="test-session",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         assert session.name == "test-session"
@@ -75,8 +75,7 @@ class TestSession:
             id=session_id,
             name="full-session",
             model="claude-3-sonnet",
-            repo="https://github.com/org/repo",
-            branch="feature/test",
+            source=GitSource(repo="https://github.com/org/repo", branch="feature/test"),
             status=SessionStatus.RUNNING,
             chat_endpoint="wss://chat.example.com",
             code_endpoint="https://code.example.com",
@@ -103,8 +102,7 @@ class TestSession:
             Session(
                 name="",
                 model="claude-3-opus",
-                repo="https://github.com/org/repo",
-                branch="main",
+                source=GitSource(repo="https://github.com/org/repo", branch="main"),
             )
 
         assert "String should have at least 1 character" in str(exc_info.value)
@@ -115,32 +113,31 @@ class TestSession:
             Session(
                 name="x" * 256,
                 model="claude-3-opus",
-                repo="https://github.com/org/repo",
-                branch="main",
+                source=GitSource(repo="https://github.com/org/repo", branch="main"),
             )
 
         assert "String should have at most 255 characters" in str(exc_info.value)
 
     def test_model_allows_empty(self):
         """Model can be empty (for non-SESSION workloads like OVAS streams)."""
-        session = Session(name="test", model="", repo="https://github.com/org/repo", branch="main")
+        session = Session(name="test", model="", source=GitSource(repo="https://github.com/org/repo", branch="main"))
         assert session.model == ""
 
     def test_model_validation_too_long(self):
         """Model cannot exceed 100 characters."""
         with pytest.raises(ValidationError) as exc_info:
-            Session(name="test", model="x" * 101, repo="https://github.com/org/repo", branch="main")
+            Session(name="test", model="x" * 101, source=GitSource(repo="https://github.com/org/repo", branch="main"))
 
         assert "String should have at most 100 characters" in str(exc_info.value)
 
     def test_repo_allows_empty(self):
         """Repo can be empty (for workloads that don't need a git repo)."""
-        session = Session(name="test", model="claude-3-opus", repo="", branch="main")
+        session = Session(name="test", model="claude-3-opus", source=GitSource(repo="", branch="main"))
         assert session.repo == ""
 
     def test_branch_defaults_to_main(self):
         """Branch defaults to main when not provided."""
-        session = Session(name="test", model="claude-3-opus", repo="https://github.com/org/repo")
+        session = Session(name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo"))
         assert session.branch == "main"
 
 
@@ -152,8 +149,7 @@ class TestSessionCanStart:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.CREATED,
         )
         assert session.can_start() is True
@@ -163,8 +159,7 @@ class TestSessionCanStart:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.STOPPED,
         )
         assert session.can_start() is True
@@ -174,8 +169,7 @@ class TestSessionCanStart:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.FAILED,
         )
         assert session.can_start() is True
@@ -185,8 +179,7 @@ class TestSessionCanStart:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.STARTING,
         )
         assert session.can_start() is False
@@ -196,8 +189,7 @@ class TestSessionCanStart:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.RUNNING,
         )
         assert session.can_start() is False
@@ -207,8 +199,7 @@ class TestSessionCanStart:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.STOPPING,
         )
         assert session.can_start() is False
@@ -222,8 +213,7 @@ class TestSessionCanStop:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.RUNNING,
         )
         assert session.can_stop() is True
@@ -233,8 +223,7 @@ class TestSessionCanStop:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.CREATED,
         )
         assert session.can_stop() is False
@@ -244,8 +233,7 @@ class TestSessionCanStop:
         session = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             status=SessionStatus.STOPPED,
         )
         assert session.can_stop() is False
@@ -259,8 +247,7 @@ class TestSessionCopyMethods:
         original = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         original_updated_at = original.updated_at
 
@@ -277,8 +264,7 @@ class TestSessionCopyMethods:
         original = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         updated = original.with_endpoints("wss://chat.example.com", "https://code.example.com")
@@ -292,8 +278,7 @@ class TestSessionCopyMethods:
         original = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
             chat_endpoint="wss://chat.example.com",
             code_endpoint="https://code.example.com",
         )
@@ -309,8 +294,7 @@ class TestSessionCopyMethods:
         original = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         updated = original.with_pod_name("volundr-abc123")
@@ -323,8 +307,7 @@ class TestSessionCopyMethods:
         original = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         updated = original.with_error("Something went wrong")
@@ -337,8 +320,7 @@ class TestSessionCopyMethods:
         original = Session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         original_last_active = original.last_active
 

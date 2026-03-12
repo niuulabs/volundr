@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   VolundrSession,
   SessionChronicle,
+  SessionSource,
   PullRequest,
   McpServer,
   ChronicleEvent,
@@ -26,8 +27,7 @@ export interface ModelConfigData {
   model: string;
   taskType: string;
   taskDescription: string;
-  repo: string;
-  branch: string;
+  source: SessionSource;
 }
 
 export interface UseContextSidebarResult {
@@ -70,8 +70,7 @@ function buildModelConfig(session: VolundrSession): ModelConfigData {
     model: session.model,
     taskType: taskDef?.name ?? taskType,
     taskDescription: taskDef?.description ?? '',
-    repo: session.repo,
-    branch: session.branch,
+    source: session.source,
   };
 }
 

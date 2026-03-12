@@ -73,8 +73,10 @@ function buildState(overrides: Partial<WizardState> = {}): WizardState {
   return {
     template: baseTemplate,
     name: '',
+    sourceType: 'git',
     repo: '',
     branch: '',
+    mountPaths: [],
     model: '',
     taskType: '',
     mcpServers: [],

@@ -102,8 +102,7 @@ vi.mock('@/components/LaunchWizard', () => ({
         onClick={() =>
           onLaunch({
             name: 'test-session',
-            repo: 'https://github.com/kanuckvalley/my-repo.git',
-            branch: 'main',
+            source: { type: 'git', repo: 'https://github.com/kanuckvalley/my-repo.git', branch: 'main' },
             model: 'qwen3-coder:70b',
             templateName: templates[0]?.name ?? '',
           })
@@ -144,8 +143,7 @@ const mockSessions: VolundrSession[] = [
   {
     id: 'forge-7f3a2b1c',
     name: 'printer-firmware-thermal',
-    repo: 'kanuckvalley/printer-firmware',
-    branch: 'feature/thermal-calibration',
+    source: { type: 'git', repo: 'kanuckvalley/printer-firmware', branch: 'feature/thermal-calibration' },
     status: 'running',
     model: 'qwen3-coder:70b',
     lastActive: Date.now() - 1000 * 60 * 5,
@@ -157,8 +155,7 @@ const mockSessions: VolundrSession[] = [
   {
     id: 'forge-2c5d9e7b',
     name: 'nalir-truenas-adapter',
-    repo: 'kanuckvalley/nalir',
-    branch: 'feature/truenas-integration',
+    source: { type: 'git', repo: 'kanuckvalley/nalir', branch: 'feature/truenas-integration' },
     status: 'stopped',
     model: 'qwen3-coder:32b',
     lastActive: Date.now() - 1000 * 60 * 60 * 3,
@@ -168,8 +165,7 @@ const mockSessions: VolundrSession[] = [
   {
     id: 'forge-8e2f4a6c',
     name: 'kaolin-support-gen',
-    repo: 'kanuckvalley/kaolin-supports',
-    branch: 'feature/fenics-cohesive',
+    source: { type: 'git', repo: 'kanuckvalley/kaolin-supports', branch: 'feature/fenics-cohesive' },
     status: 'error',
     model: 'glm-4.7-flash',
     lastActive: Date.now() - 1000 * 60 * 30,
@@ -920,8 +916,7 @@ describe('VolundrPage', () => {
       await waitFor(() => {
         expect(startSession).toHaveBeenCalledWith({
           name: 'test-session',
-          repo: 'https://github.com/kanuckvalley/my-repo.git',
-          branch: 'main',
+          source: { type: 'git', repo: 'https://github.com/kanuckvalley/my-repo.git', branch: 'main' },
           model: 'qwen3-coder:70b',
           templateName: 'full-stack-dev',
         });
@@ -1218,14 +1213,13 @@ describe('VolundrPage', () => {
       const manualSession: VolundrSession = {
         id: 'manual-abc12345',
         name: 'my-skuld',
-        repo: '',
-        branch: '',
+        source: { type: 'git', repo: '', branch: '' },
         status: 'running',
         model: 'external',
         lastActive: Date.now(),
         messageCount: 0,
         tokensUsed: 0,
-        source: 'manual',
+        origin: 'manual',
         hostname: 'skuld-01.local',
       };
       connectSession.mockResolvedValue(manualSession);
@@ -1266,14 +1260,13 @@ describe('VolundrPage', () => {
       const manualSession: VolundrSession = {
         id: 'manual-abc12345',
         name: 'my-skuld',
-        repo: '',
-        branch: '',
+        source: { type: 'git', repo: '', branch: '' },
         status: 'running',
         model: 'external',
         lastActive: Date.now(),
         messageCount: 0,
         tokensUsed: 0,
-        source: 'manual',
+        origin: 'manual',
         hostname: 'skuld-01.local',
       };
       connectSession.mockResolvedValue(manualSession);
@@ -1311,14 +1304,13 @@ describe('VolundrPage', () => {
     const manualSession: VolundrSession = {
       id: 'manual-abc12345',
       name: 'my-skuld-dev',
-      repo: '',
-      branch: '',
+      source: { type: 'git', repo: '', branch: '' },
       status: 'running',
       model: 'external',
       lastActive: Date.now(),
       messageCount: 0,
       tokensUsed: 0,
-      source: 'manual',
+      origin: 'manual',
       hostname: 'skuld-01.local',
     };
 
@@ -1521,8 +1513,7 @@ describe('VolundrPage', () => {
     const startingSession: VolundrSession = {
       id: 'forge-starting-1',
       name: 'starting-session',
-      repo: 'kanuckvalley/test-repo',
-      branch: 'main',
+      source: { type: 'git', repo: 'kanuckvalley/test-repo', branch: 'main' },
       status: 'starting',
       model: 'qwen3-coder:70b',
       lastActive: Date.now(),
@@ -1847,8 +1838,7 @@ describe('VolundrPage', () => {
         {
           id: 'forge-archived-1',
           name: 'old-feature-work',
-          repo: 'kanuckvalley/my-repo',
-          branch: 'feature/old',
+          source: { type: 'git', repo: 'kanuckvalley/my-repo', branch: 'feature/old' },
           status: 'archived',
           model: 'qwen3-coder:70b',
           lastActive: Date.now() - 1000 * 60 * 60 * 24 * 7,
@@ -1879,8 +1869,7 @@ describe('VolundrPage', () => {
         {
           id: 'forge-archived-1',
           name: 'old-feature-work',
-          repo: 'kanuckvalley/my-repo',
-          branch: 'feature/old',
+          source: { type: 'git', repo: 'kanuckvalley/my-repo', branch: 'feature/old' },
           status: 'archived',
           model: 'qwen3-coder:70b',
           lastActive: Date.now() - 1000 * 60 * 60 * 24 * 7,
@@ -1917,8 +1906,7 @@ describe('VolundrPage', () => {
         {
           id: 'forge-archived-1',
           name: 'old-feature-work',
-          repo: 'kanuckvalley/my-repo',
-          branch: 'feature/old',
+          source: { type: 'git', repo: 'kanuckvalley/my-repo', branch: 'feature/old' },
           status: 'archived',
           model: 'qwen3-coder:70b',
           lastActive: Date.now() - 1000 * 60 * 60 * 24 * 7,

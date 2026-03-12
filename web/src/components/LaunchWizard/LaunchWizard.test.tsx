@@ -222,7 +222,7 @@ describe('LaunchWizard', () => {
         expect.objectContaining({
           name: 'test-session',
           model: 'claude-sonnet',
-          repo: 'https://github.com/org/repo.git',
+          source: { type: 'git', repo: 'https://github.com/org/repo.git', branch: 'develop' },
           terminalRestricted: false,
         })
       );

@@ -1,11 +1,12 @@
 """PostgreSQL adapter for session repository."""
 
+import json
 from datetime import UTC
 from uuid import UUID
 
 import asyncpg
 
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, LocalMountSource, Session, SessionStatus
 from volundr.domain.ports import SessionRepository
 
 
@@ -17,21 +18,21 @@ class PostgresSessionRepository(SessionRepository):
 
     async def create(self, session: Session) -> Session:
         """Persist a new session."""
+        source_json = json.dumps(session.source.model_dump())
         await self._pool.execute(
             """
             INSERT INTO sessions
-                (id, name, model, repo, branch, status, chat_endpoint, code_endpoint,
+                (id, name, model, source, status, chat_endpoint, code_endpoint,
                  created_at, updated_at, last_active, message_count, tokens_used,
                  pod_name, error, tracker_issue_id, preset_id, archived_at,
                  owner_id, tenant_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+                    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             """,
             session.id,
             session.name,
             session.model,
-            session.repo,
-            session.branch,
+            source_json,
             session.status.value,
             session.chat_endpoint,
             session.code_endpoint,
@@ -96,22 +97,22 @@ class PostgresSessionRepository(SessionRepository):
 
     async def update(self, session: Session) -> Session:
         """Update an existing session."""
+        source_json = json.dumps(session.source.model_dump())
         await self._pool.execute(
             """
             UPDATE sessions
-            SET name = $2, model = $3, repo = $4, branch = $5, status = $6,
-                chat_endpoint = $7, code_endpoint = $8, updated_at = $9,
-                last_active = $10, message_count = $11, tokens_used = $12,
-                pod_name = $13, error = $14, tracker_issue_id = $15,
-                preset_id = $16, archived_at = $17,
-                owner_id = $18, tenant_id = $19
+            SET name = $2, model = $3, source = $4, status = $5,
+                chat_endpoint = $6, code_endpoint = $7, updated_at = $8,
+                last_active = $9, message_count = $10, tokens_used = $11,
+                pod_name = $12, error = $13, tracker_issue_id = $14,
+                preset_id = $15, archived_at = $16,
+                owner_id = $17, tenant_id = $18
             WHERE id = $1
             """,
             session.id,
             session.name,
             session.model,
-            session.repo,
-            session.branch,
+            source_json,
             session.status.value,
             session.chat_endpoint,
             session.code_endpoint,
@@ -153,12 +154,13 @@ class PostgresSessionRepository(SessionRepository):
         if archived_at is not None and archived_at.tzinfo is None:
             archived_at = archived_at.replace(tzinfo=UTC)
 
+        source = self._parse_source(row.get("source"))
+
         return Session(
             id=row["id"],
             name=row["name"],
             model=row["model"],
-            repo=row["repo"],
-            branch=row["branch"],
+            source=source,
             status=SessionStatus(row["status"]),
             chat_endpoint=row["chat_endpoint"],
             code_endpoint=row["code_endpoint"],
@@ -175,3 +177,15 @@ class PostgresSessionRepository(SessionRepository):
             owner_id=row.get("owner_id"),
             tenant_id=row.get("tenant_id"),
         )
+
+    @staticmethod
+    def _parse_source(raw: str | dict | None) -> GitSource | LocalMountSource:
+        """Parse source JSONB from DB, with backward compat for old repo/branch columns."""
+        if raw is None:
+            return GitSource()
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        source_type = raw.get("type", "git")
+        if source_type == "local_mount":
+            return LocalMountSource.model_validate(raw)
+        return GitSource.model_validate(raw)

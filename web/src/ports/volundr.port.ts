@@ -33,6 +33,7 @@ import type {
   WorkspaceStatus,
   VolundrMember,
   VolundrProvisioningResult,
+  SessionSource,
 } from '@/models';
 
 /**
@@ -142,8 +143,7 @@ export interface IVolundrService {
    */
   startSession(config: {
     name: string;
-    repo: string;
-    branch: string;
+    source: SessionSource;
     model: string;
     templateName?: string;
     taskType?: string;

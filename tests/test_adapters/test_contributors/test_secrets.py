@@ -8,7 +8,7 @@ from volundr.adapters.outbound.contributors.secrets import (
     SecretInjectionContributor,
     SecretsContributor,
 )
-from volundr.domain.models import PodSpecAdditions, Session
+from volundr.domain.models import GitSource, PodSpecAdditions, Session
 from volundr.domain.ports import SessionContext
 
 
@@ -17,8 +17,7 @@ def session():
     return Session(
         name="test",
         model="claude",
-        repo="",
-        branch="main",
+        source=GitSource(repo="", branch="main"),
         owner_id="user-1",
     )
 
@@ -35,7 +34,7 @@ class TestSecretInjectionContributor:
         assert result.pod_spec is None
 
     async def test_no_owner_returns_empty(self):
-        session = Session(name="test", model="claude", repo="", branch="main")
+        session = Session(name="test", model="claude", source=GitSource(repo="", branch="main"))
         adapter = AsyncMock()
         c = SecretInjectionContributor(secret_injection=adapter)
         result = await c.contribute(session, SessionContext())

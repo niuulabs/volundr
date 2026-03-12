@@ -13,6 +13,7 @@ from volundr.adapters.outbound.flux import (
     FluxPodManager,
 )
 from volundr.domain.models import (
+    GitSource,
     Session,
     SessionStatus,
 )
@@ -24,8 +25,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 

@@ -148,8 +148,7 @@ describe('ApiVolundrService', () => {
     id: '123e4567-e89b-12d3-a456-426614174000',
     name: 'Test Session',
     model: 'claude-sonnet-4-20250514',
-    repo: 'odin/core',
-    branch: 'main',
+    source: { type: 'git', repo: 'odin/core', branch: 'main' },
     status: 'running',
     chat_endpoint: 'http://localhost:8080/chat',
     code_endpoint: 'http://localhost:8080/code',
@@ -206,8 +205,7 @@ describe('ApiVolundrService', () => {
 
       const sessions = await service.getSessions();
 
-      expect(sessions[0].repo).toBe('odin/core');
-      expect(sessions[0].branch).toBe('main');
+      expect(sessions[0].source).toEqual({ type: 'git', repo: 'odin/core', branch: 'main' });
       expect(sessions[0].messageCount).toBe(0);
       expect(sessions[0].tokensUsed).toBe(0);
     });
@@ -234,8 +232,7 @@ describe('ApiVolundrService', () => {
 
       const sessions = await service.getSessions();
 
-      expect(sessions[0].repo).toBe('odin/core');
-      expect(sessions[0].branch).toBe('main');
+      expect(sessions[0].source).toEqual({ type: 'git', repo: 'odin/core', branch: 'main' });
       expect(sessions[0].messageCount).toBe(42);
       expect(sessions[0].tokensUsed).toBe(15000);
       expect(sessions[0].podName).toBe('volundr-abc123');
@@ -394,8 +391,7 @@ describe('ApiVolundrService', () => {
 
       const session = await service.startSession({
         name: 'Test',
-        repo: 'odin/core',
-        branch: 'main',
+        source: { type: 'git', repo: 'odin/core', branch: 'main' },
         model: 'claude-sonnet-4-20250514',
       });
 
@@ -407,8 +403,7 @@ describe('ApiVolundrService', () => {
       const createBody = JSON.parse(createCall[1].body);
       expect(createBody.name).toBe('Test');
       expect(createBody.model).toBe('claude-sonnet-4-20250514');
-      expect(createBody.repo).toBe('odin/core');
-      expect(createBody.branch).toBe('main');
+      expect(createBody.source).toEqual({ type: 'git', repo: 'odin/core', branch: 'main' });
     });
   });
 
@@ -489,8 +484,7 @@ describe('ApiVolundrService', () => {
       id: '550e8400-e29b-41d4-a716-446655440000',
       name: 'SSE Test Session',
       model: 'claude-sonnet-4-20250514',
-      repo: 'https://github.com/org/repo',
-      branch: 'main',
+      source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
       status: 'running',
       chat_endpoint: 'https://session-abc.volundr.example.com/chat',
       code_endpoint: 'https://session-abc.volundr.example.com/code',
@@ -774,7 +768,7 @@ describe('ApiVolundrService', () => {
       expect(mockFetch).not.toHaveBeenCalled();
       expect(session.name).toBe('my-skuld');
       expect(session.hostname).toBe('skuld-01.local');
-      expect(session.source).toBe('manual');
+      expect(session.origin).toBe('manual');
       expect(session.status).toBe('starting');
       expect(session.id).toMatch(/^manual-/);
     });
@@ -796,7 +790,7 @@ describe('ApiVolundrService', () => {
 
       // The session was already added, so subscriber won't be called retroactively
       // But we can verify by connecting another to trigger notification
-      expect(session.source).toBe('manual');
+      expect(session.origin).toBe('manual');
     });
 
     it('notifies session subscribers', async () => {
@@ -914,8 +908,7 @@ describe('ApiVolundrService', () => {
       id: 'session-for-msgs',
       name: 'Msg Test',
       model: 'claude-sonnet-4-20250514',
-      repo: 'org/repo',
-      branch: 'main',
+      source: { type: 'git', repo: 'org/repo', branch: 'main' },
       status: 'running',
       chat_endpoint: null,
       code_endpoint: null,
@@ -2232,7 +2225,7 @@ describe('ApiVolundrService', () => {
 
       // Send block with comment/unknown lines
       await MockSSEStream.instances[0].simulateRawBlock(
-        ': this is a comment\nevent: session_created\nid: 123\ndata: {"id":"s1","name":"test","model":"m","repo":"r","branch":"b","status":"running","chat_endpoint":null,"code_endpoint":null,"created_at":"2026-01-01T00:00:00","updated_at":"2026-01-01T00:00:00","last_active":"2026-01-01T00:00:00","message_count":0,"tokens_used":0,"pod_name":null,"error":null}\n\n'
+        ': this is a comment\nevent: session_created\nid: 123\ndata: {"id":"s1","name":"test","model":"m","source":{"type":"git","repo":"r","branch":"b"},"status":"running","chat_endpoint":null,"code_endpoint":null,"created_at":"2026-01-01T00:00:00","updated_at":"2026-01-01T00:00:00","last_active":"2026-01-01T00:00:00","message_count":0,"tokens_used":0,"pod_name":null,"error":null}\n\n'
       );
 
       expect(callback).toHaveBeenCalled();

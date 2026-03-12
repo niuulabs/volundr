@@ -14,7 +14,7 @@ from tests.conftest import (
     MockPodManager,
 )
 from volundr.adapters.inbound.rest import create_router
-from volundr.domain.models import TimelineEvent, TimelineEventType
+from volundr.domain.models import GitSource, TimelineEvent, TimelineEventType
 from volundr.domain.services import ChronicleService, SessionService
 
 
@@ -99,7 +99,7 @@ class TestGetTimeline:
     ):
         """Returns full timeline with events, files, commits, and token_burn."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", repo="https://github.com/org/repo", branch="main"
+            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 
@@ -192,7 +192,7 @@ class TestGetTimeline:
     ):
         """Returns empty timeline when chronicle has no events."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", repo="https://github.com/org/repo", branch="main"
+            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         await chronicle_svc.create_chronicle(session.id)
 
@@ -237,7 +237,7 @@ class TestAddTimelineEvent:
     ):
         """Adding a timeline event returns 201 with the event."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", repo="https://github.com/org/repo", branch="main"
+            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         await chronicle_svc.create_chronicle(session.id)
 
@@ -266,7 +266,7 @@ class TestAddTimelineEvent:
     ):
         """Adding a file event with ins/del/action."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", repo="https://github.com/org/repo", branch="main"
+            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         await chronicle_svc.create_chronicle(session.id)
 
@@ -296,7 +296,7 @@ class TestAddTimelineEvent:
     ):
         """Adding a git event with hash."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", repo="https://github.com/org/repo", branch="main"
+            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         await chronicle_svc.create_chronicle(session.id)
 
@@ -322,7 +322,7 @@ class TestAddTimelineEvent:
     ):
         """Adding a terminal event with exit code."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", repo="https://github.com/org/repo", branch="main"
+            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         await chronicle_svc.create_chronicle(session.id)
 
@@ -379,7 +379,7 @@ class TestTimelineRoundTrip:
     ):
         """Events added via POST appear in GET timeline."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", repo="https://github.com/org/repo", branch="main"
+            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         await chronicle_svc.create_chronicle(session.id)
 

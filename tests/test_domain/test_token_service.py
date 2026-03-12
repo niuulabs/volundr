@@ -6,7 +6,7 @@ import pytest
 
 from tests.conftest import InMemorySessionRepository, InMemoryTokenTracker
 from volundr.adapters.outbound.pricing import HardcodedPricingProvider
-from volundr.domain.models import ModelProvider, Session, SessionStatus
+from volundr.domain.models import GitSource, ModelProvider, Session, SessionStatus
 from volundr.domain.services import (
     SessionNotFoundError,
     SessionNotRunningError,
@@ -48,8 +48,7 @@ def running_session() -> Session:
     return Session(
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/test/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/test/repo", branch="main"),
         status=SessionStatus.RUNNING,
     )
 
@@ -150,8 +149,7 @@ class TestTokenServiceRecordUsage:
         stopped_session = Session(
             name="Stopped Session",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
             status=SessionStatus.STOPPED,
         )
         await session_repository.create(stopped_session)

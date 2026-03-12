@@ -12,7 +12,7 @@ import respx
 
 from tests.conftest import make_spec
 from volundr.adapters.outbound.farm import FarmApiError, FarmPodManager
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 # A fixed Farm-assigned task_id to use in tests (distinct from session_id)
 FARM_TASK_ID = "f94e02f2-0dab-4869-9386-7370428fa47f"
@@ -62,8 +62,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 
 from volundr.adapters.inbound.rest import create_router
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 from volundr.domain.services import SessionService
 
 
@@ -26,8 +26,7 @@ def _make_session(*, has_endpoint: bool = True) -> Session:
         id=uuid4(),
         name="test-session",
         model="claude-sonnet-4-6",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
         status=SessionStatus.RUNNING,
         chat_endpoint="wss://test-session.example.com/session" if has_endpoint else None,
         code_endpoint="https://test-session.example.com/" if has_endpoint else None,

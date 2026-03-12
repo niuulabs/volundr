@@ -11,6 +11,7 @@ from volundr.domain.models import (
     ChronicleStatus,
     CommitSummary,
     FileSummary,
+    GitSource,
     Session,
     TimelineEvent,
     TimelineResponse,
@@ -236,8 +237,7 @@ class ChronicleService:
         session = await self._session_service.create_session(
             name=f"{name} (reforged)",
             model=model,
-            repo=repo,
-            branch=branch,
+            source=GitSource(repo=repo, branch=branch),
         )
 
         logger.info(

@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from volundr.domain.models import ModelProvider, Session, SessionStatus
+from volundr.domain.models import GitSource, ModelProvider, Session, SessionStatus
 from volundr.domain.services import SessionService, TokenService
 
 
@@ -28,8 +28,7 @@ class TestSessionServiceBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         assert len(broadcaster.session_created_events) == 1
@@ -41,8 +40,7 @@ class TestSessionServiceBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         # Clear the created event
@@ -59,8 +57,7 @@ class TestSessionServiceBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         deleted = await service.delete_session(session.id)
@@ -75,8 +72,7 @@ class TestSessionServiceBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         # Clear previous events
@@ -105,8 +101,7 @@ class TestSessionServiceBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         await service.start_session(session.id)
@@ -139,8 +134,7 @@ class TestSessionServiceBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         broadcaster._session_updated_events.clear()
@@ -174,8 +168,7 @@ class TestSessionServiceWithoutBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         assert session.name == "Test"
@@ -186,8 +179,7 @@ class TestSessionServiceWithoutBroadcaster:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         started = await service.start_session(session.id)
@@ -214,8 +206,7 @@ class TestTokenServiceBroadcaster:
         session = Session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
             status=SessionStatus.RUNNING,
         )
         await repository.create(session)
@@ -252,8 +243,7 @@ class TestTokenServiceWithoutBroadcaster:
         session = Session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
             status=SessionStatus.RUNNING,
         )
         await repository.create(session)
@@ -288,8 +278,7 @@ class TestSessionProvisioningState:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         result = await service.start_session(session.id)
@@ -304,8 +293,7 @@ class TestSessionProvisioningState:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         await service.start_session(session.id)
@@ -333,8 +321,7 @@ class TestSessionProvisioningState:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         await service.start_session(session.id)
@@ -352,8 +339,7 @@ class TestSessionProvisioningState:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         started = await service.start_session(session.id)
@@ -371,8 +357,7 @@ class TestSessionProvisioningState:
         session = Session(
             name="Test",
             model="test",
-            repo="test",
-            branch="main",
+            source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
         )
         assert session.can_stop() is True
@@ -383,8 +368,7 @@ class TestSessionProvisioningState:
         session = Session(
             name="Test",
             model="test",
-            repo="test",
-            branch="main",
+            source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
         )
         assert session.can_start() is False
@@ -395,8 +379,7 @@ class TestSessionProvisioningState:
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
         )
 
         await service.start_session(session.id)
@@ -422,8 +405,7 @@ class TestSessionProvisioningState:
         session = Session(
             name="Stuck",
             model="test",
-            repo="test",
-            branch="main",
+            source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
             pod_name="volundr-test",
         )
@@ -454,8 +436,7 @@ class TestFarmWaitForReady:
         session = Session(
             name="Test",
             model="test",
-            repo="test",
-            branch="main",
+            source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
         )
 
@@ -481,8 +462,7 @@ class TestFarmWaitForReady:
         session = Session(
             name="Test",
             model="test",
-            repo="test",
-            branch="main",
+            source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
         )
 
@@ -504,8 +484,7 @@ class TestFarmWaitForReady:
         session = Session(
             name="Test",
             model="test",
-            repo="test",
-            branch="main",
+            source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
         )
 
@@ -556,7 +535,7 @@ class TestFluxWaitForReady:
 
             flux = FluxPodManager(namespace="test")
             session = Session(
-                name="Test", model="test", repo="test", branch="main",
+                name="Test", model="test", source=GitSource(repo="test", branch="main"),
                 status=SessionStatus.PROVISIONING,
             )
 
@@ -603,7 +582,7 @@ class TestFluxWaitForReady:
 
             flux = FluxPodManager(namespace="test")
             session = Session(
-                name="Test", model="test", repo="test", branch="main",
+                name="Test", model="test", source=GitSource(repo="test", branch="main"),
                 status=SessionStatus.PROVISIONING,
             )
 
@@ -623,7 +602,7 @@ class TestFluxWaitForReady:
 
         flux = FluxPodManager(namespace="test")
         session = Session(
-            name="Test", model="test", repo="test", branch="main",
+            name="Test", model="test", source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
         )
 

@@ -219,6 +219,8 @@ def _create_contributors(
     Config kwargs are merged with injected port instances so contributors
     can accept the ports they need and ignore others via **_extra.
     """
+    from volundr.adapters.outbound.contributors.local_mount import LocalMountContributor
+
     contributors: list[SessionContributor] = []
     for cfg in settings.session_contributors:
         cls = import_class(cfg.adapter)
@@ -231,6 +233,18 @@ def _create_contributors(
             instance.name,
             cfg.adapter.rsplit(".", 1)[-1],
         )
+
+    # Auto-wire LocalMountContributor from local_mounts config
+    lm = settings.local_mounts
+    local_mount_contributor = LocalMountContributor(
+        enabled=lm.enabled,
+        allow_root_mount=lm.allow_root_mount,
+        allowed_prefixes=lm.allowed_prefixes,
+    )
+    contributors.append(local_mount_contributor)
+    if lm.enabled:
+        logger.info("Session contributor: local_mount (enabled)")
+
     return contributors
 
 

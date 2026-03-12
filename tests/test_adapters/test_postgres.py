@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from volundr.adapters.outbound.postgres import PostgresSessionRepository
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 
 @pytest.fixture
@@ -33,8 +33,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
         status=SessionStatus.CREATED,
         chat_endpoint=None,
         code_endpoint=None,

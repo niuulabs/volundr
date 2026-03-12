@@ -10,7 +10,7 @@ from tests.conftest import (
     MockGitRegistry,
     MockPodManager,
 )
-from volundr.domain.models import GitProviderType, RepoInfo, SessionStatus
+from volundr.domain.models import GitProviderType, GitSource, RepoInfo, SessionStatus
 from volundr.domain.services import (
     RepoService,
     RepoValidationError,
@@ -34,8 +34,7 @@ class TestSessionServiceCreate:
         session = await service.create_session(
             name="my-session",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         assert session.name == "my-session"
@@ -57,7 +56,7 @@ class TestSessionServiceGet:
         """Getting an existing session returns it."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         result = await service.get_session(created.id)
@@ -92,14 +91,12 @@ class TestSessionServiceList:
         await service.create_session(
             name="session-1",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         await service.create_session(
             name="session-2",
             model="claude-3-sonnet",
-            repo="https://github.com/org/repo",
-            branch="dev",
+            source=GitSource(repo="https://github.com/org/repo", branch="dev"),
         )
 
         result = await service.list_sessions()
@@ -118,8 +115,7 @@ class TestSessionServiceUpdate:
         created = await service.create_session(
             name="old-name",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         updated = await service.update_session(created.id, name="new-name")
@@ -131,7 +127,7 @@ class TestSessionServiceUpdate:
         """Updating session model works."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         updated = await service.update_session(created.id, model="claude-3-sonnet")
@@ -143,7 +139,7 @@ class TestSessionServiceUpdate:
         """Updating session branch works."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         updated = await service.update_session(created.id, branch="feature/new")
@@ -155,7 +151,7 @@ class TestSessionServiceUpdate:
         """Updating name, model, and branch works."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="old", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="old", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         updated = await service.update_session(
@@ -184,7 +180,7 @@ class TestSessionServiceDelete:
         """Deleting an existing session returns True."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         result = await service.delete_session(created.id)
@@ -204,7 +200,7 @@ class TestSessionServiceDelete:
         """Deleting a running session stops its pods first."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         # Manually set to running to simulate started session
@@ -226,7 +222,7 @@ class TestSessionServiceDelete:
         """
         service = SessionService(repository, failing_pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         # Manually set to running to simulate started session
@@ -246,7 +242,7 @@ class TestSessionServiceDelete:
         """Deleting a running session attempts pod stop even if it will fail."""
         service = SessionService(repository, failing_pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         running = created.with_status(SessionStatus.RUNNING)
@@ -266,7 +262,7 @@ class TestSessionServiceStart:
         """Starting a session updates status and sets endpoints."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         result = await service.start_session(created.id)
@@ -281,7 +277,7 @@ class TestSessionServiceStart:
         """Starting a stopped session works."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         stopped = created.with_status(SessionStatus.STOPPED)
         await repository.update(stopped)
@@ -294,7 +290,7 @@ class TestSessionServiceStart:
         """Starting a failed session works (retry)."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         failed = created.with_status(SessionStatus.FAILED)
         await repository.update(failed)
@@ -314,7 +310,7 @@ class TestSessionServiceStart:
         """Starting an already running session raises SessionStateError."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         running = created.with_status(SessionStatus.RUNNING)
         await repository.update(running)
@@ -331,7 +327,7 @@ class TestSessionServiceStart:
         """If pod start fails, session is marked as FAILED with error message."""
         service = SessionService(repository, failing_pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         with pytest.raises(RuntimeError):
@@ -351,7 +347,7 @@ class TestSessionServiceStop:
         """Stopping a session updates status and clears endpoints."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         # Start it first
@@ -377,7 +373,7 @@ class TestSessionServiceStop:
         """Stopping a CREATED session raises SessionStateError."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
 
         with pytest.raises(SessionStateError) as exc_info:
@@ -390,7 +386,7 @@ class TestSessionServiceStop:
         """Stopping an already stopped session raises SessionStateError."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         stopped = created.with_status(SessionStatus.STOPPED)
         await repository.update(stopped)
@@ -406,7 +402,7 @@ class TestSessionServiceStop:
         """If pod stop fails, session is marked as FAILED with error message."""
         service = SessionService(repository, failing_pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         running = created.with_status(SessionStatus.RUNNING)
         await repository.update(running)
@@ -427,7 +423,7 @@ class TestSessionServiceRecordActivity:
         """Recording activity updates metrics and last_active."""
         service = SessionService(repository, pod_manager)
         created = await service.create_session(
-            name="test", model="claude-3-opus", repo="https://github.com/org/repo", branch="main"
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo", branch="main")
         )
         original_last_active = created.last_active
 
@@ -461,8 +457,7 @@ class TestSessionServiceGitValidation:
         session = await service.create_session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         assert session is not None
@@ -483,8 +478,7 @@ class TestSessionServiceGitValidation:
             await service.create_session(
                 name="test",
                 model="claude-3-opus",
-                repo="https://github.com/org/repo",
-                branch="main",
+                source=GitSource(repo="https://github.com/org/repo", branch="main"),
             )
 
         assert "does not exist" in str(exc_info.value)
@@ -501,8 +495,7 @@ class TestSessionServiceGitValidation:
             await service.create_session(
                 name="test",
                 model="claude-3-opus",
-                repo="https://unknown.com/org/repo",
-                branch="main",
+                source=GitSource(repo="https://unknown.com/org/repo", branch="main"),
             )
 
         assert "no git provider supports" in str(exc_info.value)
@@ -518,8 +511,7 @@ class TestSessionServiceGitValidation:
         session = await service.create_session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         assert session is not None
@@ -532,8 +524,7 @@ class TestSessionServiceGitValidation:
         session = await service.create_session(
             name="test",
             model="claude-3-opus",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         assert session is not None
@@ -670,8 +661,7 @@ class TestSessionServiceCreateWithTemplate:
         session = await service.create_session(
             name="my-session",
             model="",
-            repo="",
-            branch="main",
+            source=GitSource(repo="", branch="main"),
             template_name="fullstack",
         )
 
@@ -703,8 +693,7 @@ class TestSessionServiceCreateWithTemplate:
         session = await service.create_session(
             name="my-session",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/other/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/other/repo", branch="main"),
             template_name="fullstack",
         )
 

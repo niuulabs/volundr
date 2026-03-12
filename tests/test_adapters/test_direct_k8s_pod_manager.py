@@ -20,7 +20,7 @@ from volundr.adapters.outbound.direct_k8s_pod_manager import (
     SESSION_SERVICE_PORT,
     DirectK8sPodManager,
 )
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 
 @pytest.fixture
@@ -30,8 +30,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test K3s Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 

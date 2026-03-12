@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from volundr.adapters.outbound.contributors.storage import StorageContributor
-from volundr.domain.models import PVCRef, Session, Workspace, WorkspaceStatus
+from volundr.domain.models import GitSource, PVCRef, Session, Workspace, WorkspaceStatus
 from volundr.domain.ports import SessionContext
 
 
@@ -14,8 +14,7 @@ def session():
     return Session(
         name="test",
         model="claude",
-        repo="",
-        branch="main",
+        source=GitSource(repo="", branch="main"),
         owner_id="user-1",
         tenant_id="tenant-1",
     )

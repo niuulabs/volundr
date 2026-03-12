@@ -9,7 +9,7 @@ from tests.conftest import (
     InMemorySessionRepository,
     MockPodManager,
 )
-from volundr.domain.models import ChronicleStatus, SessionStatus
+from volundr.domain.models import ChronicleStatus, GitSource, SessionStatus
 from volundr.domain.services import (
     ChronicleNotFoundError,
     ChronicleService,
@@ -39,8 +39,7 @@ class TestChronicleServiceCreate:
         session = await session_service.create_session(
             name="my-session",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         chronicle = await chronicle_service.create_chronicle(session.id)
@@ -92,8 +91,7 @@ class TestChronicleServiceCreate:
             session = await session_service.create_session(
                 name="test",
                 model="claude-sonnet-4-20250514",
-                repo=repo_url,
-                branch="main",
+                source=GitSource(repo=repo_url, branch="main"),
             )
             chronicle = await chronicle_service.create_chronicle(session.id)
             assert chronicle.project == expected_project, (
@@ -118,8 +116,7 @@ class TestChronicleServiceGet:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         created = await chronicle_service.create_chronicle(session.id)
 
@@ -174,14 +171,12 @@ class TestChronicleServiceList:
         s1 = await session_service.create_session(
             name="session-1",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo1",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo1", branch="main"),
         )
         s2 = await session_service.create_session(
             name="session-2",
             model="claude-opus-4-20250514",
-            repo="https://github.com/org/repo2",
-            branch="dev",
+            source=GitSource(repo="https://github.com/org/repo2", branch="dev"),
         )
         await chronicle_service.create_chronicle(s1.id)
         await chronicle_service.create_chronicle(s2.id)
@@ -203,14 +198,12 @@ class TestChronicleServiceList:
         s1 = await session_service.create_session(
             name="session-1",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/alpha",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/alpha", branch="main"),
         )
         s2 = await session_service.create_session(
             name="session-2",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/beta",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/beta", branch="main"),
         )
         await chronicle_service.create_chronicle(s1.id)
         await chronicle_service.create_chronicle(s2.id)
@@ -233,14 +226,12 @@ class TestChronicleServiceList:
         s1 = await session_service.create_session(
             name="session-1",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo1",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo1", branch="main"),
         )
         s2 = await session_service.create_session(
             name="session-2",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo2",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo2", branch="main"),
         )
         c1 = await chronicle_service.create_chronicle(s1.id)
         c2 = await chronicle_service.create_chronicle(s2.id)
@@ -270,8 +261,7 @@ class TestChronicleServiceUpdate:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         created = await chronicle_service.create_chronicle(session.id)
 
@@ -293,8 +283,7 @@ class TestChronicleServiceUpdate:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         created = await chronicle_service.create_chronicle(session.id)
 
@@ -315,8 +304,7 @@ class TestChronicleServiceUpdate:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         created = await chronicle_service.create_chronicle(session.id)
         assert created.status == ChronicleStatus.DRAFT
@@ -360,8 +348,7 @@ class TestChronicleServiceDelete:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         created = await chronicle_service.create_chronicle(session.id)
 
@@ -401,8 +388,7 @@ class TestChronicleServiceCreateOrUpdateFromBroker:
         session = await session_service.create_session(
             name="broker-session",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
 
         chronicle = await chronicle_service.create_or_update_from_broker(
@@ -432,8 +418,7 @@ class TestChronicleServiceCreateOrUpdateFromBroker:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         existing = await chronicle_service.create_chronicle(session.id)
         assert existing.summary is None
@@ -465,8 +450,7 @@ class TestChronicleServiceCreateOrUpdateFromBroker:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         existing = await chronicle_service.create_chronicle(session.id)
         await chronicle_service.update_chronicle(existing.id, status=ChronicleStatus.COMPLETE)
@@ -508,8 +492,7 @@ class TestChronicleServiceCreateOrUpdateFromBroker:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         existing = await chronicle_service.create_chronicle(session.id)
         await chronicle_service.update_chronicle(
@@ -544,8 +527,7 @@ class TestChronicleServiceGetBySession:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         created = await chronicle_service.create_chronicle(session.id)
 
@@ -586,8 +568,7 @@ class TestChronicleServiceGetChain:
         session = await session_service.create_session(
             name="test",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         chronicle = await chronicle_service.create_chronicle(session.id)
 
@@ -627,8 +608,7 @@ class TestChronicleServiceReforge:
         session = await session_service.create_session(
             name="original-session",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
         chronicle = await chronicle_service.create_chronicle(session.id)
 
@@ -654,8 +634,7 @@ class TestChronicleServiceReforge:
         session = await session_service.create_session(
             name="original",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/org/repo",
-            branch="feature/old",
+            source=GitSource(repo="https://github.com/org/repo", branch="feature/old"),
         )
         chronicle = await chronicle_service.create_chronicle(session.id)
 

@@ -3,7 +3,7 @@
 import pytest
 
 from volundr.adapters.outbound.contributors.isolation import IsolationContributor
-from volundr.domain.models import LABEL_OWNER, LABEL_SESSION_ID, Session
+from volundr.domain.models import GitSource, LABEL_OWNER, LABEL_SESSION_ID, Session
 from volundr.domain.ports import SessionContext
 
 
@@ -12,8 +12,7 @@ def session():
     return Session(
         name="test",
         model="claude",
-        repo="",
-        branch="main",
+        source=GitSource(repo="", branch="main"),
         owner_id="user-1",
     )
 
@@ -31,7 +30,7 @@ class TestIsolationContributor:
         assert labels[LABEL_OWNER] == "user-1"
 
     async def test_labels_without_owner(self):
-        session = Session(name="test", model="claude", repo="", branch="main")
+        session = Session(name="test", model="claude", source=GitSource(repo="", branch="main"))
         c = IsolationContributor()
         result = await c.contribute(session, SessionContext())
         labels = result.values["podLabels"]

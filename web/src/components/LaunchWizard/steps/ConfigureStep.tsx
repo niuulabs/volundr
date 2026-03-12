@@ -17,6 +17,8 @@ import {
   HardDrive,
   KeyRound,
   Plug,
+  HardDriveDownload,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { serializePresetYaml, parsePresetYaml } from '@/utils/presetYaml';
@@ -29,10 +31,12 @@ import type {
   CliTool,
   LinearIssue,
   RepoProvider,
+  MountMapping,
   VolundrWorkspace,
   StoredCredential,
   IntegrationConnection,
 } from '@/models';
+import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/ports';
 import { LinearIssueSearch } from '@/components';
 import type { WizardState } from '../LaunchWizard';
@@ -552,51 +556,158 @@ export function ConfigureStep({
           </div>
         )}
 
-        {/* Repository */}
+        {/* Source Type Toggle */}
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>
-            <FolderGit2 className={styles.formLabelIcon} />
-            Repository
+            Workspace Source
             <span className={styles.required}>*</span>
           </label>
-          <select
-            className={styles.formSelect}
-            value={state.repo}
-            onChange={e => handleRepoChange(e.target.value)}
-          >
-            <option value="">Select repository...</option>
-            {Object.entries(reposByProvider).map(([provider, providerRepos]) => (
-              <optgroup key={provider} label={PROVIDER_LABELS[provider as RepoProvider]}>
-                {providerRepos.map(repo => (
-                  <option key={repo.cloneUrl} value={repo.cloneUrl}>
-                    {repo.org}/{repo.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <div className={styles.sourceTypeToggle}>
+            <button
+              type="button"
+              className={cn(styles.sourceTypeButton, state.sourceType === 'git' && styles.sourceTypeActive)}
+              onClick={() => onChange({ sourceType: 'git' as SourceType })}
+            >
+              <FolderGit2 className={styles.formLabelIcon} />
+              Git Repository
+            </button>
+            <button
+              type="button"
+              className={cn(styles.sourceTypeButton, state.sourceType === 'local_mount' && styles.sourceTypeActive)}
+              onClick={() => onChange({ sourceType: 'local_mount' as SourceType })}
+            >
+              <HardDriveDownload className={styles.formLabelIcon} />
+              Local Mount
+            </button>
+          </div>
         </div>
 
-        {/* Branch */}
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>
-            Branch
-            <span className={styles.required}>*</span>
-          </label>
-          <select
-            className={styles.formSelect}
-            value={state.branch}
-            onChange={e => onChange({ branch: e.target.value })}
-            disabled={!state.repo}
-          >
-            <option value="">Select branch...</option>
-            {branches.map(branch => (
-              <option key={branch} value={branch}>
-                {branch}
-              </option>
-            ))}
-          </select>
-        </div>
+        {state.sourceType === 'git' && (
+          <>
+            {/* Repository */}
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>
+                <FolderGit2 className={styles.formLabelIcon} />
+                Repository
+                <span className={styles.required}>*</span>
+              </label>
+              <select
+                className={styles.formSelect}
+                value={state.repo}
+                onChange={e => handleRepoChange(e.target.value)}
+              >
+                <option value="">Select repository...</option>
+                {Object.entries(reposByProvider).map(([provider, providerRepos]) => (
+                  <optgroup key={provider} label={PROVIDER_LABELS[provider as RepoProvider]}>
+                    {providerRepos.map(repo => (
+                      <option key={repo.cloneUrl} value={repo.cloneUrl}>
+                        {repo.org}/{repo.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            {/* Branch */}
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>
+                Branch
+                <span className={styles.required}>*</span>
+              </label>
+              <select
+                className={styles.formSelect}
+                value={state.branch}
+                onChange={e => onChange({ branch: e.target.value })}
+                disabled={!state.repo}
+              >
+                <option value="">Select branch...</option>
+                {branches.map(branch => (
+                  <option key={branch} value={branch}>
+                    {branch}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+
+        {state.sourceType === 'local_mount' && (
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>
+              <HardDriveDownload className={styles.formLabelIcon} />
+              Mount Paths
+              <span className={styles.required}>*</span>
+            </label>
+            <div className={styles.mountEditor}>
+              {state.mountPaths.map((mapping, idx) => (
+                <div key={idx} className={styles.mountRow}>
+                  <input
+                    className={styles.formInput}
+                    type="text"
+                    placeholder="Host path (e.g. /home/user/project)"
+                    value={mapping.host_path}
+                    onChange={e => {
+                      const updated = [...state.mountPaths];
+                      updated[idx] = { ...mapping, host_path: e.target.value };
+                      onChange({ mountPaths: updated });
+                    }}
+                  />
+                  <input
+                    className={styles.formInput}
+                    type="text"
+                    placeholder="Container path (e.g. /workspace)"
+                    value={mapping.mount_path}
+                    onChange={e => {
+                      const updated = [...state.mountPaths];
+                      updated[idx] = { ...mapping, mount_path: e.target.value };
+                      onChange({ mountPaths: updated });
+                    }}
+                  />
+                  <label className={styles.mountReadOnly}>
+                    <input
+                      type="checkbox"
+                      checked={mapping.read_only}
+                      onChange={e => {
+                        const updated = [...state.mountPaths];
+                        updated[idx] = { ...mapping, read_only: e.target.checked };
+                        onChange({ mountPaths: updated });
+                      }}
+                    />
+                    Read-only
+                  </label>
+                  {state.mountPaths.length > 1 && (
+                    <button
+                      type="button"
+                      className={styles.mountRemoveButton}
+                      onClick={() => {
+                        const updated = state.mountPaths.filter((_, i) => i !== idx);
+                        onChange({ mountPaths: updated });
+                      }}
+                    >
+                      <Trash2 className={styles.buttonIcon} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                className={styles.addMountButton}
+                onClick={() =>
+                  onChange({
+                    mountPaths: [
+                      ...state.mountPaths,
+                      { host_path: '', mount_path: '', read_only: true },
+                    ],
+                  })
+                }
+              >
+                <Plus className={styles.buttonIcon} />
+                Add mount
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Model */}
         <div className={styles.formGroup}>

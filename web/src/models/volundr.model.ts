@@ -2,7 +2,27 @@ import type { SessionStatus } from './status.model';
 
 export type ModelTier = 'frontier' | 'balanced' | 'execution' | 'reasoning';
 export type ModelProvider = 'cloud' | 'local';
-export type SessionSource = 'managed' | 'manual';
+export type SessionOrigin = 'managed' | 'manual';
+
+export interface GitSource {
+  type: 'git';
+  repo: string;
+  branch: string;
+}
+
+export interface MountMapping {
+  host_path: string;
+  mount_path: string;
+  read_only: boolean;
+}
+
+export interface LocalMountSource {
+  type: 'local_mount';
+  paths: MountMapping[];
+  node_selector?: Record<string, string>;
+}
+
+export type SessionSource = GitSource | LocalMountSource;
 
 export type LinearIssueStatus = 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
 
@@ -59,8 +79,7 @@ export const TASK_TYPES: Record<string, TaskType> = {
 export interface VolundrSession {
   id: string;
   name: string;
-  repo: string;
-  branch: string;
+  source: SessionSource;
   status: SessionStatus;
   model: string;
   lastActive: number;
@@ -68,7 +87,7 @@ export interface VolundrSession {
   tokensUsed: number;
   podName?: string;
   error?: string;
-  source?: SessionSource;
+  origin?: SessionOrigin;
   hostname?: string;
   chatEndpoint?: string;
   codeEndpoint?: string;

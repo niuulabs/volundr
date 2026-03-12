@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from volundr.adapters.outbound.contributors.gateway import GatewayContributor
-from volundr.domain.models import Session
+from volundr.domain.models import GitSource, Session
 from volundr.domain.ports import SessionContext
 
 
@@ -14,8 +14,7 @@ def session():
     return Session(
         name="test",
         model="claude",
-        repo="",
-        branch="main",
+        source=GitSource(repo="", branch="main"),
         owner_id="user-1",
     )
 

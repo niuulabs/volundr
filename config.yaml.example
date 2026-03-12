@@ -146,6 +146,17 @@ mcp_servers:
   #   args: ["-y", "@anthropic-ai/postgres-mcp-server"]
   #   description: "PostgreSQL database access"
 
+# Local mount configuration
+# Allows mounting host filesystem paths into session pods.
+# Useful for local-first workflows (e.g. DGX Spark with local projects).
+local_mounts:
+  enabled: false
+  allow_root_mount: false
+  allowed_prefixes:
+    - "/home"
+    - "/opt/projects"
+  default_read_only: true
+
 git:
   validate_on_create: true
 

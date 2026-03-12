@@ -4,6 +4,7 @@ import type { VolundrSession, VolundrModel } from '@/models';
 import { StatusBadge } from '@/components/atoms/StatusBadge';
 import { LinearIssueBadge } from '@/components/molecules/LinearIssueBadge';
 import { cn, formatTime, formatTokens } from '@/utils';
+import { getSourceLabel, getBranch, isGitSource } from '@/utils/source';
 import styles from './SessionCard.module.css';
 
 export interface SessionCardProps {
@@ -26,7 +27,7 @@ export function SessionCard({
   onClick,
   className,
 }: SessionCardProps) {
-  const isManual = session.source === 'manual';
+  const isManual = session.origin === 'manual';
   const isLocal = model?.provider === 'local';
   const lastActiveTime = formatTime(session.lastActive);
   const tokens = formatTokens(session.tokensUsed);
@@ -49,8 +50,10 @@ export function SessionCard({
           ) : (
             <div className={styles.repo}>
               <GitBranch className={styles.repoIcon} />
-              <span>{session.repo}</span>
-              <span className={styles.branch}>{session.branch}</span>
+              <span>{getSourceLabel(session.source)}</span>
+              {isGitSource(session.source) && (
+                <span className={styles.branch}>{getBranch(session.source)}</span>
+              )}
             </div>
           )}
         </div>

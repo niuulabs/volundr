@@ -474,4 +474,34 @@ data:
     ALTER TABLE users DROP COLUMN IF EXISTS provisioned_at;
 
     DROP TABLE IF EXISTS workspaces;
+
+  000016_session_source.up.sql: |
+    -- Migrate sessions from flat repo/branch columns to source JSONB.
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source JSONB;
+
+    UPDATE sessions
+    SET source = jsonb_build_object(
+        'type', 'git',
+        'repo', COALESCE(repo, ''),
+        'branch', COALESCE(branch, 'main')
+    )
+    WHERE source IS NULL;
+
+    ALTER TABLE sessions ALTER COLUMN source SET DEFAULT '{"type": "git", "repo": "", "branch": "main"}'::jsonb;
+    ALTER TABLE sessions ALTER COLUMN source SET NOT NULL;
+
+    ALTER TABLE sessions DROP COLUMN IF EXISTS repo;
+    ALTER TABLE sessions DROP COLUMN IF EXISTS branch;
+
+  000016_session_source.down.sql: |
+    -- Reverse migration: restore flat repo/branch columns from source JSONB.
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS repo VARCHAR(500) DEFAULT '';
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS branch VARCHAR(255) DEFAULT 'main';
+
+    UPDATE sessions
+    SET repo = COALESCE(source->>'repo', ''),
+        branch = COALESCE(source->>'branch', 'main')
+    WHERE source IS NOT NULL AND source->>'type' = 'git';
+
+    ALTER TABLE sessions DROP COLUMN IF EXISTS source;
 {{- end }}

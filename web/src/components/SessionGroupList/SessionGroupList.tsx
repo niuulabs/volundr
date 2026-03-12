@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/utils';
+import { getRepo } from '@/utils/source';
 import { useLocalStorage } from '@/hooks';
 import type { VolundrSession } from '@/models';
 import styles from './SessionGroupList.module.css';
@@ -33,7 +34,7 @@ function groupSessions(sessions: VolundrSession[]): SessionGroup[] {
   const map = new Map<string, VolundrSession[]>();
 
   for (const session of sessions) {
-    const key = extractRepoKey(session.repo) || 'Ungrouped';
+    const key = extractRepoKey(getRepo(session.source)) || 'Ungrouped';
     const existing = map.get(key) ?? [];
     existing.push(session);
     map.set(key, existing);

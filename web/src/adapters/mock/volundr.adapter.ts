@@ -225,8 +225,7 @@ export class MockVolundrService implements IVolundrService {
 
   async startSession(config: {
     name: string;
-    repo: string;
-    branch: string;
+    source: import('@/models').SessionSource;
     model: string;
     templateName?: string;
     taskType?: string;
@@ -238,8 +237,7 @@ export class MockVolundrService implements IVolundrService {
     const newSession: VolundrSession = {
       id: `forge-${Math.random().toString(36).substring(2, 10)}`,
       name: config.name,
-      repo: config.repo,
-      branch: config.branch,
+      source: config.source,
       status: 'starting',
       model: config.model,
       lastActive: Date.now(),
@@ -262,14 +260,13 @@ export class MockVolundrService implements IVolundrService {
     const newSession: VolundrSession = {
       id: `manual-${Math.random().toString(36).substring(2, 10)}`,
       name: config.name,
-      repo: '',
-      branch: '',
+      source: { type: 'git', repo: '', branch: '' },
       status: 'starting',
       model: 'external',
       lastActive: Date.now(),
       messageCount: 0,
       tokensUsed: 0,
-      source: 'manual',
+      origin: 'manual',
       hostname: config.hostname,
     };
     this.sessions.unshift(newSession);
@@ -440,7 +437,7 @@ export class MockVolundrService implements IVolundrService {
     if (!session || session.status !== 'running') {
       return null;
     }
-    if (session.source === 'manual' && session.hostname) {
+    if (session.origin === 'manual' && session.hostname) {
       return `https://${session.hostname}/`;
     }
     return `https://code.skuld.local/${sessionId}`;
@@ -582,7 +579,8 @@ export class MockVolundrService implements IVolundrService {
     targetBranch = 'main'
   ): Promise<PullRequest> {
     const session = this.sessions.find(s => s.id === sessionId);
-    const repo = mockVolundrRepos.find(r => r.url.includes(session?.repo ?? ''));
+    const sessionRepo = session?.source.type === 'git' ? session.source.repo : '';
+    const repo = mockVolundrRepos.find(r => r.url.includes(sessionRepo));
     const prNumber = Math.floor(Math.random() * 200) + 100;
 
     const pr: PullRequest = {
@@ -591,7 +589,7 @@ export class MockVolundrService implements IVolundrService {
       url: `${repo?.url ?? 'https://github.com/unknown'}/pull/${prNumber}`,
       repoUrl: repo?.url ?? '',
       provider: repo?.provider ?? 'github',
-      sourceBranch: session?.branch ?? 'main',
+      sourceBranch: session?.source.type === 'git' ? session.source.branch : 'main',
       targetBranch,
       status: 'open',
       ciStatus: 'pending',

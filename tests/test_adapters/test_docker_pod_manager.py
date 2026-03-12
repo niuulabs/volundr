@@ -13,7 +13,7 @@ from python_on_whales import DockerException
 
 from tests.conftest import make_spec
 from volundr.adapters.outbound.docker_pod_manager import DockerPodManager
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 
 @pytest.fixture
@@ -23,8 +23,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="test-session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 

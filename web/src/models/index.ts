@@ -58,7 +58,11 @@ export type { MimirStats, MimirConsultation } from './mimir.model';
 export type {
   ModelTier,
   ModelProvider,
+  GitSource,
+  LocalMountSource,
+  MountMapping,
   SessionSource,
+  SessionOrigin,
   RepoProvider,
   TaskType,
   VolundrModel,

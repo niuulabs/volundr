@@ -33,6 +33,27 @@ CONFIG_PATHS = [
 ]
 
 
+class LocalMountsConfig(BaseModel):
+    """Configuration for local filesystem mount support."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable local path mounts as session workspace sources.",
+    )
+    allow_root_mount: bool = Field(
+        default=False,
+        description="Allow mounting the root filesystem (/). Requires enabled=true.",
+    )
+    allowed_prefixes: list[str] = Field(
+        default_factory=list,
+        description="Restrict mountable host paths to these prefixes. Empty = allow all when enabled.",
+    )
+    default_read_only: bool = Field(
+        default=True,
+        description="Default read_only flag for new mount mappings.",
+    )
+
+
 class ProvisioningConfig(BaseModel):
     """Configuration for the session provisioning readiness polling."""
 
@@ -709,6 +730,7 @@ class Settings(BaseSettings):
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
+    local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)
