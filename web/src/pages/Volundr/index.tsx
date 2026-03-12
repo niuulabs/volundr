@@ -380,6 +380,7 @@ export function VolundrPage() {
     effectiveSelectedSession?.chatEndpoint,
     effectiveSelectedSession?.status,
     effectiveSelectedSession?.source,
+    effectiveSelectedSession?.origin,
     getLogs,
     fetchSessionHostLogs,
   ]);
@@ -418,6 +419,7 @@ export function VolundrPage() {
     effectiveSelectedSession?.status,
     effectiveSelectedSession?.source,
     effectiveSelectedSession?.hostname,
+    effectiveSelectedSession?.origin,
     getCodeServerUrl,
   ]);
 
