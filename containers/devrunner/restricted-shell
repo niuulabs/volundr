@@ -35,6 +35,7 @@ DEFAULT_ALLOWED = [
     "npx",
     "claude",
     "codex",
+    "brew",
 ]
 
 

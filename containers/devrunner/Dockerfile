@@ -57,6 +57,13 @@ RUN pip install --no-cache-dir \
     pyyaml \
     aiohttp
 
+# Install Homebrew dependencies (so users can brew install without root)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    procps \
+    file \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create devrunner user (UID 1000 to match skuld)
 RUN useradd -m -s /bin/bash -u 1000 devrunner
 
