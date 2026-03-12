@@ -1199,4 +1199,46 @@ describe('ConfigureStep', () => {
       expect(onChange).toHaveBeenCalledWith({ setupScripts: [] });
     });
   });
+
+  describe('local mount source toggle', () => {
+    it('does not show source type toggle when localMountsEnabled is false', () => {
+      renderStep({ localMountsEnabled: false });
+      expect(screen.queryByText('Workspace Source')).not.toBeInTheDocument();
+      expect(screen.queryByText('Local Mount')).not.toBeInTheDocument();
+    });
+
+    it('shows source type toggle when localMountsEnabled is true', () => {
+      renderStep({ localMountsEnabled: true });
+      expect(screen.getByText('Workspace Source')).toBeInTheDocument();
+      expect(screen.getByText('Git Repository')).toBeInTheDocument();
+      expect(screen.getByText('Local Mount')).toBeInTheDocument();
+    });
+
+    it('switches to local mount source type', () => {
+      renderStep({ localMountsEnabled: true });
+      fireEvent.click(screen.getByText('Local Mount'));
+      expect(onChange).toHaveBeenCalledWith({ sourceType: 'local_mount' });
+    });
+
+    it('switches back to git source type', () => {
+      renderStep({
+        localMountsEnabled: true,
+        state: buildState({ sourceType: 'local_mount' }),
+      });
+      fireEvent.click(screen.getByText('Git Repository'));
+      expect(onChange).toHaveBeenCalledWith({ sourceType: 'git' });
+    });
+
+    it('renders mount path inputs when source type is local_mount', () => {
+      renderStep({
+        localMountsEnabled: true,
+        state: buildState({
+          sourceType: 'local_mount',
+          mountPaths: [{ host_path: '', mount_path: '', read_only: true }],
+        }),
+      });
+      expect(screen.getByPlaceholderText('Host path (e.g. /home/user/project)')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Container path (e.g. /workspace)')).toBeInTheDocument();
+    });
+  });
 });
