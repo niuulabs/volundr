@@ -35,7 +35,6 @@ import type {
   StoredCredential,
   IntegrationConnection,
   ClusterResourceInfo,
-  ResourceType,
 } from '@/models';
 import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/ports';
