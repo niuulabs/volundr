@@ -169,14 +169,16 @@ describe('TerminalTabBar', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument();
 
     // All CLI options should be visible
-    expect(screen.getByRole('menuitem', { name: /shell/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^bash$/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^zsh$/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^fish$/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /claude/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /codex/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /aider/i })).toBeInTheDocument();
 
     // Click a menu item to spawn via onAddCliTab
-    fireEvent.click(screen.getByRole('menuitem', { name: /shell/i }));
-    expect(onAddCli).toHaveBeenCalledWith('shell');
+    fireEvent.click(screen.getByRole('menuitem', { name: /^bash$/i }));
+    expect(onAddCli).toHaveBeenCalledWith('bash');
   });
 
   it('closes dropdown when clicking add button again', () => {
@@ -217,7 +219,7 @@ describe('TerminalTabBar', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /new terminal/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /shell/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^bash$/i }));
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 

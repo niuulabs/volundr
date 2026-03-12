@@ -232,7 +232,7 @@ class TestHandleSpawn:
         body = json.loads(response.text)
 
         assert "terminalId" in body
-        assert body["cli_type"] == "shell"
+        assert body["cli_type"] == "zsh"
         assert body["persistent"] is True
         assert body["terminalId"] in server._sessions
 

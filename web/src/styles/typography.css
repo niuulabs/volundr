@@ -2,6 +2,23 @@
 
 /* Font imports are handled via index.html preconnect + link tags */
 
+/* JetBrainsMono Nerd Font — needed for Starship prompt glyphs in xterm.js */
+@font-face {
+  font-family: 'JetBrainsMono NF';
+  src: url('/fonts/JetBrainsMonoNerdFont-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrainsMono NF';
+  src: url('/fonts/JetBrainsMonoNerdFont-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Heading styles */
 h1 {
   font-size: var(--text-2xl);
