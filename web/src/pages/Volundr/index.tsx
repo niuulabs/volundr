@@ -373,7 +373,7 @@ export function VolundrPage() {
     }
 
     // Fallback: use Volundr API for non-running managed sessions
-    if (effectiveSelectedSession.source !== 'manual') {
+    if (effectiveSelectedSession.origin !== 'manual') {
       getLogs(sessionId);
     }
 
