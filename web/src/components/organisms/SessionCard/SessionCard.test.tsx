@@ -7,7 +7,11 @@ describe('SessionCard', () => {
   const runningSession: VolundrSession = {
     id: 'forge-7f3a2b1c',
     name: 'printer-firmware-thermal',
-    source: { type: 'git', repo: 'kanuckvalley/printer-firmware', branch: 'feature/thermal-calibration' },
+    source: {
+      type: 'git',
+      repo: 'kanuckvalley/printer-firmware',
+      branch: 'feature/thermal-calibration',
+    },
     status: 'running',
     model: 'qwen3-coder:70b',
     lastActive: Date.now() - 1000 * 60 * 5,
@@ -30,7 +34,11 @@ describe('SessionCard', () => {
   const errorSession: VolundrSession = {
     id: 'forge-8e2f4a6c',
     name: 'kaolin-support-gen',
-    source: { type: 'git', repo: 'kanuckvalley/kaolin-supports', branch: 'feature/fenics-cohesive' },
+    source: {
+      type: 'git',
+      repo: 'kanuckvalley/kaolin-supports',
+      branch: 'feature/fenics-cohesive',
+    },
     status: 'error',
     model: 'glm-4.7-flash',
     lastActive: Date.now() - 1000 * 60 * 30,

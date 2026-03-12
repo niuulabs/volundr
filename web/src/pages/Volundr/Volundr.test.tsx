@@ -102,7 +102,11 @@ vi.mock('@/components/LaunchWizard', () => ({
         onClick={() =>
           onLaunch({
             name: 'test-session',
-            source: { type: 'git', repo: 'https://github.com/kanuckvalley/my-repo.git', branch: 'main' },
+            source: {
+              type: 'git',
+              repo: 'https://github.com/kanuckvalley/my-repo.git',
+              branch: 'main',
+            },
             model: 'qwen3-coder:70b',
             templateName: templates[0]?.name ?? '',
           })
@@ -143,7 +147,11 @@ const mockSessions: VolundrSession[] = [
   {
     id: 'forge-7f3a2b1c',
     name: 'printer-firmware-thermal',
-    source: { type: 'git', repo: 'kanuckvalley/printer-firmware', branch: 'feature/thermal-calibration' },
+    source: {
+      type: 'git',
+      repo: 'kanuckvalley/printer-firmware',
+      branch: 'feature/thermal-calibration',
+    },
     status: 'running',
     model: 'qwen3-coder:70b',
     lastActive: Date.now() - 1000 * 60 * 5,
@@ -165,7 +173,11 @@ const mockSessions: VolundrSession[] = [
   {
     id: 'forge-8e2f4a6c',
     name: 'kaolin-support-gen',
-    source: { type: 'git', repo: 'kanuckvalley/kaolin-supports', branch: 'feature/fenics-cohesive' },
+    source: {
+      type: 'git',
+      repo: 'kanuckvalley/kaolin-supports',
+      branch: 'feature/fenics-cohesive',
+    },
     status: 'error',
     model: 'glm-4.7-flash',
     lastActive: Date.now() - 1000 * 60 * 30,
@@ -916,7 +928,11 @@ describe('VolundrPage', () => {
       await waitFor(() => {
         expect(startSession).toHaveBeenCalledWith({
           name: 'test-session',
-          source: { type: 'git', repo: 'https://github.com/kanuckvalley/my-repo.git', branch: 'main' },
+          source: {
+            type: 'git',
+            repo: 'https://github.com/kanuckvalley/my-repo.git',
+            branch: 'main',
+          },
           model: 'qwen3-coder:70b',
           templateName: 'full-stack-dev',
         });

@@ -16,7 +16,11 @@ function makeSession(overrides: Partial<VolundrSession> = {}): VolundrSession {
     id: 'session-1',
     name: 'test-session',
     status: 'running',
-    source: { type: 'git', source: { type: 'git', repo: 'https://github.com/org/repo-a', branch: 'main' }, branch: 'main' },
+    source: {
+      type: 'git',
+      source: { type: 'git', repo: 'https://github.com/org/repo-a', branch: 'main' },
+      branch: 'main',
+    },
     model: 'claude-sonnet-4-20250514',
     createdAt: Date.now(),
     lastActive: Date.now(),
@@ -33,9 +37,21 @@ describe('SessionGroupList', () => {
 
   it('groups sessions by repository', () => {
     const sessions = [
-      makeSession({ id: 's1', name: 'S1', source: { type: 'git', repo: 'https://github.com/org/repo-a', branch: 'main' } }),
-      makeSession({ id: 's2', name: 'S2', source: { type: 'git', repo: 'https://github.com/org/repo-b', branch: 'main' } }),
-      makeSession({ id: 's3', name: 'S3', source: { type: 'git', repo: 'https://github.com/org/repo-a', branch: 'main' } }),
+      makeSession({
+        id: 's1',
+        name: 'S1',
+        source: { type: 'git', repo: 'https://github.com/org/repo-a', branch: 'main' },
+      }),
+      makeSession({
+        id: 's2',
+        name: 'S2',
+        source: { type: 'git', repo: 'https://github.com/org/repo-b', branch: 'main' },
+      }),
+      makeSession({
+        id: 's3',
+        name: 'S3',
+        source: { type: 'git', repo: 'https://github.com/org/repo-a', branch: 'main' },
+      }),
     ];
 
     render(
@@ -56,8 +72,16 @@ describe('SessionGroupList', () => {
 
   it('renders all sessions via renderSession prop', () => {
     const sessions = [
-      makeSession({ id: 's1', name: 'Session One', source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' } }),
-      makeSession({ id: 's2', name: 'Session Two', source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' } }),
+      makeSession({
+        id: 's1',
+        name: 'Session One',
+        source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
+      }),
+      makeSession({
+        id: 's2',
+        name: 'Session Two',
+        source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
+      }),
     ];
 
     render(
@@ -74,9 +98,21 @@ describe('SessionGroupList', () => {
 
   it('shows active count badge for running sessions', () => {
     const sessions = [
-      makeSession({ id: 's1', status: 'running', source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' } }),
-      makeSession({ id: 's2', status: 'stopped', source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' } }),
-      makeSession({ id: 's3', status: 'running', source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' } }),
+      makeSession({
+        id: 's1',
+        status: 'running',
+        source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
+      }),
+      makeSession({
+        id: 's2',
+        status: 'stopped',
+        source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
+      }),
+      makeSession({
+        id: 's3',
+        status: 'running',
+        source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
+      }),
     ];
 
     render(
@@ -94,7 +130,12 @@ describe('SessionGroupList', () => {
   });
 
   it('toggles group collapse on header click', () => {
-    const sessions = [makeSession({ id: 's1', source: { type: 'git', repo: 'https://github.com/org/my-repo', branch: 'main' } })];
+    const sessions = [
+      makeSession({
+        id: 's1',
+        source: { type: 'git', repo: 'https://github.com/org/my-repo', branch: 'main' },
+      }),
+    ];
 
     render(
       <SessionGroupList
@@ -110,7 +151,9 @@ describe('SessionGroupList', () => {
   });
 
   it('groups sessions without repo URL under Ungrouped', () => {
-    const sessions = [makeSession({ id: 's1', name: 'No Repo', source: { type: 'git', repo: '', branch: 'main' } })];
+    const sessions = [
+      makeSession({ id: 's1', name: 'No Repo', source: { type: 'git', repo: '', branch: 'main' } }),
+    ];
 
     render(
       <SessionGroupList
@@ -124,7 +167,13 @@ describe('SessionGroupList', () => {
   });
 
   it('handles non-URL repo values', () => {
-    const sessions = [makeSession({ id: 's1', name: 'Plain Repo', source: { type: 'git', repo: 'my-local-repo', branch: 'main' } })];
+    const sessions = [
+      makeSession({
+        id: 's1',
+        name: 'Plain Repo',
+        source: { type: 'git', repo: 'my-local-repo', branch: 'main' },
+      }),
+    ];
 
     render(
       <SessionGroupList
@@ -138,7 +187,12 @@ describe('SessionGroupList', () => {
   });
 
   it('strips .git suffix from repo URLs', () => {
-    const sessions = [makeSession({ id: 's1', source: { type: 'git', repo: 'https://github.com/org/repo.git', branch: 'main' } })];
+    const sessions = [
+      makeSession({
+        id: 's1',
+        source: { type: 'git', repo: 'https://github.com/org/repo.git', branch: 'main' },
+      }),
+    ];
 
     render(
       <SessionGroupList
@@ -155,7 +209,11 @@ describe('SessionGroupList', () => {
     mockCollapsedState = { 'org/repo': true };
 
     const sessions = [
-      makeSession({ id: 's1', name: 'Found It', source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' } }),
+      makeSession({
+        id: 's1',
+        name: 'Found It',
+        source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
+      }),
     ];
 
     render(
@@ -172,8 +230,16 @@ describe('SessionGroupList', () => {
 
   it('sorts groups by most recently active', () => {
     const sessions = [
-      makeSession({ id: 's1', source: { type: 'git', repo: 'https://github.com/org/old-repo', branch: 'main' }, lastActive: 1000 }),
-      makeSession({ id: 's2', source: { type: 'git', repo: 'https://github.com/org/new-repo', branch: 'main' }, lastActive: 2000 }),
+      makeSession({
+        id: 's1',
+        source: { type: 'git', repo: 'https://github.com/org/old-repo', branch: 'main' },
+        lastActive: 1000,
+      }),
+      makeSession({
+        id: 's2',
+        source: { type: 'git', repo: 'https://github.com/org/new-repo', branch: 'main' },
+        lastActive: 2000,
+      }),
     ];
 
     render(
@@ -191,7 +257,11 @@ describe('SessionGroupList', () => {
 
   it('does not show active badge when no sessions are running', () => {
     const sessions = [
-      makeSession({ id: 's1', status: 'stopped', source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' } }),
+      makeSession({
+        id: 's1',
+        status: 'stopped',
+        source: { type: 'git', repo: 'https://github.com/org/repo', branch: 'main' },
+      }),
     ];
 
     render(

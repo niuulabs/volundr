@@ -567,7 +567,10 @@ export function ConfigureStep({
             <div className={styles.sourceTypeToggle}>
               <button
                 type="button"
-                className={cn(styles.sourceTypeButton, state.sourceType === 'git' && styles.sourceTypeActive)}
+                className={cn(
+                  styles.sourceTypeButton,
+                  state.sourceType === 'git' && styles.sourceTypeActive
+                )}
                 onClick={() => onChange({ sourceType: 'git' as SourceType })}
               >
                 <FolderGit2 className={styles.formLabelIcon} />
@@ -575,7 +578,10 @@ export function ConfigureStep({
               </button>
               <button
                 type="button"
-                className={cn(styles.sourceTypeButton, state.sourceType === 'local_mount' && styles.sourceTypeActive)}
+                className={cn(
+                  styles.sourceTypeButton,
+                  state.sourceType === 'local_mount' && styles.sourceTypeActive
+                )}
                 onClick={() => onChange({ sourceType: 'local_mount' as SourceType })}
               >
                 <HardDriveDownload className={styles.formLabelIcon} />

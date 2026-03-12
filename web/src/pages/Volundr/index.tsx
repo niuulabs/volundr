@@ -159,11 +159,7 @@ export function VolundrPage() {
     if (!repo) {
       return '';
     }
-    const match = repos.find(
-      r =>
-        `${r.org}/${r.name}` === repo ||
-        r.url === repo
-    );
+    const match = repos.find(r => `${r.org}/${r.name}` === repo || r.url === repo);
     return match?.url ?? '';
   }, [effectiveSelectedSession, repos]);
 
@@ -800,7 +796,8 @@ export function VolundrPage() {
                     <div className={styles.archivedItemInfo}>
                       <span className={styles.archivedItemName}>{session.name}</span>
                       <span className={styles.archivedItemMeta}>
-                        {getSourceLabel(session.source)} &middot; {formatArchivedDate(session.archivedAt)}
+                        {getSourceLabel(session.source)} &middot;{' '}
+                        {formatArchivedDate(session.archivedAt)}
                       </span>
                     </div>
                     <button
@@ -964,7 +961,9 @@ export function VolundrPage() {
                   {isGitSource(effectiveSelectedSession.source) && (
                     <>
                       <span className={styles.branchArrow}>&rarr;</span>
-                      <span className={styles.branchName}>{getBranch(effectiveSelectedSession.source)}</span>
+                      <span className={styles.branchName}>
+                        {getBranch(effectiveSelectedSession.source)}
+                      </span>
                     </>
                   )}
                 </div>
