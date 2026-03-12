@@ -22,8 +22,12 @@ class FakeGitProvider:
     """Minimal fake that satisfies the GitProvider interface shape."""
 
     def __init__(
-        self, *, name: str, base_url: str = "",
-        token: str | None = None, orgs: tuple[str, ...] = (),
+        self,
+        *,
+        name: str,
+        base_url: str = "",
+        token: str | None = None,
+        orgs: tuple[str, ...] = (),
     ):
         self._name = name
         self._token = token
@@ -206,7 +210,8 @@ async def test_get_providers_filters_by_type(
 ) -> None:
     await service.get_providers("user-1", IntegrationType.SOURCE_CONTROL)
     integration_repo.list_connections.assert_called_once_with(
-        "user-1", integration_type=IntegrationType.SOURCE_CONTROL,
+        "user-1",
+        integration_type=IntegrationType.SOURCE_CONTROL,
     )
 
 
@@ -289,3 +294,63 @@ async def test_build_provider_constructor_failure_skipped(
 
     providers = await service.get_git_providers("user-1")
     assert len(providers) == 1  # only shared, failed instantiation skipped
+
+
+async def test_find_git_provider_for_returns_matching(
+    service: UserIntegrationService,
+) -> None:
+    """find_git_provider_for returns the first provider that supports the URL."""
+    provider = await service.find_git_provider_for("https://github.com/org/repo", "user-1")
+    # The shared FakeGitProvider.supports() returns True for all URLs
+    assert provider is not None
+    assert provider.name == "Org GitHub"
+
+
+async def test_find_git_provider_for_returns_none_when_no_match(
+    integration_repo: AsyncMock,
+    credential_store: AsyncMock,
+    registry: IntegrationRegistry,
+) -> None:
+    """find_git_provider_for returns None when no provider supports the URL."""
+
+    class NeverMatchProvider(FakeGitProvider):
+        def supports(self, repo_url: str) -> bool:
+            return False
+
+    svc = UserIntegrationService(
+        shared_git_providers=[NeverMatchProvider(name="NoMatch")],
+        integration_repo=integration_repo,
+        integration_registry=registry,
+        credential_store=credential_store,
+    )
+    provider = await svc.find_git_provider_for("https://unknown.com/repo", "user-1")
+    assert provider is None
+
+
+async def test_resolve_credentials(
+    service: UserIntegrationService,
+    credential_store: AsyncMock,
+) -> None:
+    """resolve_credentials fetches credential values by name."""
+    result = await service.resolve_credentials("user-1", "my-pat")
+    assert result == {"token": "ghp_test123"}
+    credential_store.get_value.assert_called_once_with("user", "user-1", "my-pat")
+
+
+async def test_resolve_credentials_empty_name(
+    service: UserIntegrationService,
+) -> None:
+    """resolve_credentials returns empty dict for empty credential name."""
+    result = await service.resolve_credentials("user-1", "")
+    assert result == {}
+
+
+async def test_add_shared_issue_provider(
+    service: UserIntegrationService,
+) -> None:
+    """add_shared_issue_provider adds a provider that appears in get_issue_providers."""
+    fake = FakeIssueProvider(name="NewIssue")
+    service.add_shared_issue_provider(fake)
+
+    providers = await service.get_issue_providers("user-1")
+    assert any(p.name == "NewIssue" for p in providers)

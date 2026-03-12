@@ -110,7 +110,6 @@ def configure_logging(config: LoggingConfig | None = None) -> None:
     )
 
 
-
 def _resolve_secret_kwargs(
     kwargs: dict[str, Any],
     secret_kwargs_env: dict[str, str],
@@ -219,6 +218,8 @@ def _create_contributors(
     Config kwargs are merged with injected port instances so contributors
     can accept the ports they need and ignore others via **_extra.
     """
+    from volundr.adapters.outbound.contributors.local_mount import LocalMountContributor
+
     contributors: list[SessionContributor] = []
     for cfg in settings.session_contributors:
         cls = import_class(cfg.adapter)
@@ -231,6 +232,18 @@ def _create_contributors(
             instance.name,
             cfg.adapter.rsplit(".", 1)[-1],
         )
+
+    # Auto-wire LocalMountContributor from local_mounts config
+    lm = settings.local_mounts
+    local_mount_contributor = LocalMountContributor(
+        enabled=lm.enabled,
+        allow_root_mount=lm.allow_root_mount,
+        allowed_prefixes=lm.allowed_prefixes,
+    )
+    contributors.append(local_mount_contributor)
+    if lm.enabled:
+        logger.info("Session contributor: local_mount (enabled)")
+
     return contributors
 
 
@@ -511,7 +524,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 token_tracker, repository, pricing_provider, broadcaster=broadcaster
             )
             repo_service = RepoService(
-                git_registry, user_integration=user_integration_service,
+                git_registry,
+                user_integration=user_integration_service,
             )
             chronicle_repository = PostgresChronicleRepository(pool)
             timeline_repository = PostgresTimelineRepository(pool)

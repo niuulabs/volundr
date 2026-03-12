@@ -78,31 +78,39 @@ class UserIntegrationService:
     async def get_git_providers(self, user_id: str) -> list[GitProvider]:
         """Return shared + user's source_control providers (ephemeral)."""
         user_providers = await self._instantiate_providers(
-            user_id, IntegrationType.SOURCE_CONTROL,
+            user_id,
+            IntegrationType.SOURCE_CONTROL,
         )
         return [*self._shared_git, *user_providers]
 
     async def get_issue_providers(
-        self, user_id: str,
+        self,
+        user_id: str,
     ) -> list[IssueTrackerProvider]:
         """Return shared + user's issue_tracker providers (ephemeral)."""
         user_providers = await self._instantiate_providers(
-            user_id, IntegrationType.ISSUE_TRACKER,
+            user_id,
+            IntegrationType.ISSUE_TRACKER,
         )
         return [*self._shared_issues, *user_providers]
 
     async def get_providers(
-        self, user_id: str, integration_type: IntegrationType,
+        self,
+        user_id: str,
+        integration_type: IntegrationType,
     ) -> list[Any]:
         """Return shared + user's providers for any integration type."""
         shared = self._get_shared_for_type(integration_type)
         user_providers = await self._instantiate_providers(
-            user_id, integration_type,
+            user_id,
+            integration_type,
         )
         return [*shared, *user_providers]
 
     async def find_git_provider_for(
-        self, repo_url: str, user_id: str,
+        self,
+        repo_url: str,
+        user_id: str,
     ) -> GitProvider | None:
         """Return the first git provider that supports *repo_url*.
 
@@ -117,14 +125,18 @@ class UserIntegrationService:
         return None
 
     async def resolve_credentials(
-        self, user_id: str, credential_name: str,
+        self,
+        user_id: str,
+        credential_name: str,
     ) -> dict[str, str]:
         """Fetch credential values by name for a user. Never cached."""
         if not credential_name:
             return {}
 
         cred_data = await self._credential_store.get_value(
-            "user", user_id, credential_name,
+            "user",
+            user_id,
+            credential_name,
         )
         return cred_data or {}
 
@@ -138,7 +150,9 @@ class UserIntegrationService:
             return {}
 
         cred_data = await self._credential_store.get_value(
-            "user", user_id, connection.credential_name,
+            "user",
+            user_id,
+            connection.credential_name,
         )
         return cred_data or {}
 
@@ -153,7 +167,8 @@ class UserIntegrationService:
     ) -> list[Any]:
         """Create ephemeral provider instances from user's connections."""
         connections = await self._integration_repo.list_connections(
-            user_id, integration_type=integration_type,
+            user_id,
+            integration_type=integration_type,
         )
 
         eligible = [c for c in connections if c.enabled and c.adapter]

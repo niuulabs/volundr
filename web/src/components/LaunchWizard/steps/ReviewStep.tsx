@@ -43,6 +43,7 @@ export function ReviewStep({ state, repos, models }: ReviewStepProps) {
   const preset = state.preset;
   const modelInfo = models[state.model];
   const currentRepo = repos.find(r => r.cloneUrl === state.repo);
+  const isLocalMount = state.sourceType === 'local_mount';
 
   // Compare against loaded preset if available, otherwise against template
   const modifications = useMemo(() => {
@@ -112,15 +113,37 @@ export function ReviewStep({ state, repos, models }: ReviewStepProps) {
         </div>
         <div className={styles.summaryGrid}>
           <div className={styles.summaryRow}>
-            <span className={styles.summaryLabel}>Repository</span>
-            <span className={styles.summaryValueMono}>
-              {currentRepo ? `${currentRepo.org}/${currentRepo.name}` : state.repo}
+            <span className={styles.summaryLabel}>Source Type</span>
+            <span className={styles.summaryValue}>
+              {isLocalMount ? 'Local Mount' : 'Git Repository'}
             </span>
           </div>
-          <div className={styles.summaryRow}>
-            <span className={styles.summaryLabel}>Branch</span>
-            <span className={styles.summaryValueMono}>{state.branch}</span>
-          </div>
+          {!isLocalMount && (
+            <>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Repository</span>
+                <span className={styles.summaryValueMono}>
+                  {currentRepo ? `${currentRepo.org}/${currentRepo.name}` : state.repo}
+                </span>
+              </div>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Branch</span>
+                <span className={styles.summaryValueMono}>{state.branch}</span>
+              </div>
+            </>
+          )}
+          {isLocalMount &&
+            state.mountPaths
+              .filter(p => p.host_path && p.mount_path)
+              .map((p, i) => (
+                <div key={i} className={styles.summaryRow}>
+                  <span className={styles.summaryLabel}>Mount {i + 1}</span>
+                  <span className={styles.summaryValueMono}>
+                    {p.host_path} → {p.mount_path}
+                    {p.read_only ? ' (ro)' : ' (rw)'}
+                  </span>
+                </div>
+              ))}
           <div className={styles.summaryRow}>
             <span className={styles.summaryLabel}>Setup Scripts</span>
             <span className={styles.summaryValue}>

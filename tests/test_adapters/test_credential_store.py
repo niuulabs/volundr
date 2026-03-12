@@ -281,7 +281,11 @@ class TestCredentialService:
     async def test_oauth_validation(self, service):
         with pytest.raises(CredentialValidationError):
             await service.create(
-                "user", "u1", "oauth", SecretType.OAUTH_TOKEN, {"refresh_token": "tok"},
+                "user",
+                "u1",
+                "oauth",
+                SecretType.OAUTH_TOKEN,
+                {"refresh_token": "tok"},
             )
 
     @pytest.mark.asyncio()

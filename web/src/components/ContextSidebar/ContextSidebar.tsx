@@ -13,6 +13,7 @@ import {
 import type { PullRequest, McpServer } from '@/models';
 import type { TokenUsageData, ActiveTask, ModelConfigData } from '@/hooks';
 import { cn } from '@/utils';
+import { getRepo, getBranch, isGitSource } from '@/utils/source';
 import styles from './ContextSidebar.module.css';
 
 export interface ContextSidebarProps {
@@ -191,12 +192,14 @@ function ModelConfigSection({ config }: { config: ModelConfigData }) {
         )}
         <div className={styles.configRow}>
           <span className={styles.configLabel}>Repo</span>
-          <span className={styles.configValueMono}>{config.repo}</span>
+          <span className={styles.configValueMono}>{getRepo(config.source)}</span>
         </div>
-        <div className={styles.configRow}>
-          <span className={styles.configLabel}>Branch</span>
-          <span className={styles.configValueMono}>{config.branch}</span>
-        </div>
+        {isGitSource(config.source) && (
+          <div className={styles.configRow}>
+            <span className={styles.configLabel}>Branch</span>
+            <span className={styles.configValueMono}>{getBranch(config.source)}</span>
+          </div>
+        )}
       </div>
     </div>
   );

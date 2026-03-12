@@ -1,4 +1,5 @@
 import type {
+  VolundrFeatures,
   VolundrSession,
   VolundrStats,
   VolundrModel,
@@ -33,6 +34,7 @@ import type {
   WorkspaceStatus,
   VolundrMember,
   VolundrProvisioningResult,
+  SessionSource,
 } from '@/models';
 
 /**
@@ -40,6 +42,11 @@ import type {
  * Manages Claude Code sessions
  */
 export interface IVolundrService {
+  /**
+   * Get feature flags from the server
+   */
+  getFeatures(): Promise<VolundrFeatures>;
+
   /**
    * Get all sessions
    */
@@ -142,8 +149,7 @@ export interface IVolundrService {
    */
   startSession(config: {
     name: string;
-    repo: string;
-    branch: string;
+    source: SessionSource;
     model: string;
     templateName?: string;
     taskType?: string;

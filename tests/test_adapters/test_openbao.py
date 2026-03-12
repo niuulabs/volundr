@@ -46,7 +46,8 @@ class TestStoreCredential:
 
     @respx.mock
     async def test_makes_correct_post(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         route = respx.post(
             f"{BAO_URL}/v1/volundr/data/users/u1/keys/my-key",
@@ -65,7 +66,8 @@ class TestStoreCredential:
 
     @respx.mock
     async def test_raises_on_error(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.post(
             f"{BAO_URL}/v1/volundr/data/path",
@@ -81,7 +83,8 @@ class TestGetCredential:
 
     @respx.mock
     async def test_parses_kv_v2_response(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.get(
             f"{BAO_URL}/v1/volundr/data/users/u1/keys/my-key",
@@ -110,7 +113,8 @@ class TestGetCredential:
 
     @respx.mock
     async def test_returns_none_on_404(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.get(
             f"{BAO_URL}/v1/volundr/data/missing",
@@ -121,7 +125,8 @@ class TestGetCredential:
 
     @respx.mock
     async def test_raises_on_server_error(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.get(
             f"{BAO_URL}/v1/volundr/data/err",
@@ -136,7 +141,8 @@ class TestDeleteCredential:
 
     @respx.mock
     async def test_returns_true_on_success(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.delete(
             f"{BAO_URL}/v1/volundr/data/p",
@@ -146,7 +152,8 @@ class TestDeleteCredential:
 
     @respx.mock
     async def test_returns_false_on_404(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.delete(
             f"{BAO_URL}/v1/volundr/data/gone",
@@ -160,7 +167,8 @@ class TestListCredentials:
 
     @respx.mock
     async def test_parses_list_response(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.get(
             f"{BAO_URL}/v1/volundr/metadata/users/u1/keys",
@@ -180,7 +188,8 @@ class TestListCredentials:
 
     @respx.mock
     async def test_returns_empty_on_404(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.get(
             f"{BAO_URL}/v1/volundr/metadata/empty",
@@ -195,16 +204,15 @@ class TestProvisionUser:
 
     @respx.mock
     async def test_creates_policy_and_role(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         policy_route = respx.put(
-            f"{BAO_URL}/v1/sys/policies/acl/"
-            f"volundr-user-user-42",
+            f"{BAO_URL}/v1/sys/policies/acl/volundr-user-user-42",
         ).respond(status_code=204)
 
         role_route = respx.post(
-            f"{BAO_URL}/v1/auth/kubernetes/role/"
-            f"volundr-user-user-42",
+            f"{BAO_URL}/v1/auth/kubernetes/role/volundr-user-user-42",
         ).respond(status_code=204)
 
         await repo.provision_user("user-42", "tenant-1")
@@ -213,9 +221,7 @@ class TestProvisionUser:
         policy_body = json.loads(
             policy_route.calls.last.request.content,
         )
-        assert "volundr/data/users/user-42" in (
-            policy_body["policy"]
-        )
+        assert "volundr/data/users/user-42" in (policy_body["policy"])
         assert "tenants/tenant-1" in policy_body["policy"]
 
         assert role_route.called
@@ -225,10 +231,7 @@ class TestProvisionUser:
         assert role_body["policies"] == [
             "volundr-user-user-42",
         ]
-        assert (
-            "volundr-session-user-user-42-*"
-            in role_body["bound_service_account_names"]
-        )
+        assert "volundr-session-user-user-42-*" in role_body["bound_service_account_names"]
 
 
 class TestDeprovisionUser:
@@ -236,16 +239,15 @@ class TestDeprovisionUser:
 
     @respx.mock
     async def test_deletes_role_and_policy(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         role_route = respx.delete(
-            f"{BAO_URL}/v1/auth/kubernetes/role/"
-            f"volundr-user-user-42",
+            f"{BAO_URL}/v1/auth/kubernetes/role/volundr-user-user-42",
         ).respond(status_code=204)
 
         policy_route = respx.delete(
-            f"{BAO_URL}/v1/sys/policies/acl/"
-            f"volundr-user-user-42",
+            f"{BAO_URL}/v1/sys/policies/acl/volundr-user-user-42",
         ).respond(status_code=204)
 
         await repo.deprovision_user("user-42")
@@ -255,16 +257,15 @@ class TestDeprovisionUser:
 
     @respx.mock
     async def test_tolerates_404_on_delete(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         respx.delete(
-            f"{BAO_URL}/v1/auth/kubernetes/role/"
-            f"volundr-user-ghost",
+            f"{BAO_URL}/v1/auth/kubernetes/role/volundr-user-ghost",
         ).respond(status_code=404)
 
         respx.delete(
-            f"{BAO_URL}/v1/sys/policies/acl/"
-            f"volundr-user-ghost",
+            f"{BAO_URL}/v1/sys/policies/acl/volundr-user-ghost",
         ).respond(status_code=404)
 
         # Should not raise
@@ -276,11 +277,11 @@ class TestCreateSessionSecrets:
 
     @respx.mock
     async def test_stores_manifest(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         route = respx.post(
-            f"{BAO_URL}/v1/volundr/data/"
-            f"sessions/s1/manifest",
+            f"{BAO_URL}/v1/volundr/data/sessions/s1/manifest",
         ).respond(status_code=200, json={})
 
         mounts = [
@@ -306,7 +307,8 @@ class TestDeleteSessionSecrets:
 
     @respx.mock
     async def test_cleans_up_manifest(
-        self, repo: OpenBaoSecretRepository,
+        self,
+        repo: OpenBaoSecretRepository,
     ):
         # list returns one sub-key
         respx.get(
@@ -318,8 +320,7 @@ class TestDeleteSessionSecrets:
 
         # delete sub-key
         respx.delete(
-            f"{BAO_URL}/v1/volundr/data/"
-            f"sessions/s1/manifest",
+            f"{BAO_URL}/v1/volundr/data/sessions/s1/manifest",
         ).respond(status_code=204)
 
         await repo.delete_session_secrets("s1")

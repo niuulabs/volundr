@@ -33,6 +33,29 @@ CONFIG_PATHS = [
 ]
 
 
+class LocalMountsConfig(BaseModel):
+    """Configuration for local filesystem mount support."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable local path mounts as session workspace sources.",
+    )
+    allow_root_mount: bool = Field(
+        default=False,
+        description="Allow mounting the root filesystem (/). Requires enabled=true.",
+    )
+    allowed_prefixes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Restrict mountable host paths to these prefixes. Empty = allow all when enabled."
+        ),
+    )
+    default_read_only: bool = Field(
+        default=True,
+        description="Default read_only flag for new mount mappings.",
+    )
+
+
 class ProvisioningConfig(BaseModel):
     """Configuration for the session provisioning readiness polling."""
 
@@ -543,7 +566,11 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             config_schema={
                 "properties": {
                     "name": {"label": "Display Name", "type": "string"},
-                    "base_url": {"label": "API URL", "type": "url", "default": "https://api.github.com"},
+                    "base_url": {
+                        "label": "API URL",
+                        "type": "url",
+                        "default": "https://api.github.com",
+                    },
                     "orgs": {"label": "Organizations", "type": "string[]"},
                 },
             },
@@ -570,7 +597,11 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             config_schema={
                 "properties": {
                     "name": {"label": "Display Name", "type": "string"},
-                    "base_url": {"label": "Instance URL", "type": "url", "default": "https://gitlab.com"},
+                    "base_url": {
+                        "label": "Instance URL",
+                        "type": "url",
+                        "default": "https://gitlab.com",
+                    },
                     "groups": {"label": "Groups", "type": "string[]"},
                 },
             },
@@ -649,12 +680,8 @@ class AuthDiscoveryConfig(BaseModel):
     """
 
     issuer: str = Field(default="", description="OIDC issuer URL")
-    cli_client_id: str = Field(
-        default="volundr-cli", description="OIDC client ID for CLI clients"
-    )
-    scopes: str = Field(
-        default="openid profile email", description="OIDC scopes"
-    )
+    cli_client_id: str = Field(default="volundr-cli", description="OIDC client ID for CLI clients")
+    scopes: str = Field(default="openid profile email", description="OIDC scopes")
 
 
 class LinearConfig(BaseModel):
@@ -709,6 +736,7 @@ class Settings(BaseSettings):
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
+    local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)

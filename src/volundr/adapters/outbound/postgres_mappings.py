@@ -34,9 +34,7 @@ class PostgresMappingRepository(ProjectMappingRepository):
 
     async def list(self) -> list[ProjectMapping]:
         """Retrieve all project mappings."""
-        rows = await self._pool.fetch(
-            "SELECT * FROM project_mappings ORDER BY created_at DESC"
-        )
+        rows = await self._pool.fetch("SELECT * FROM project_mappings ORDER BY created_at DESC")
         return [self._row_to_mapping(row) for row in rows]
 
     async def get_by_repo(self, repo_url: str) -> ProjectMapping | None:

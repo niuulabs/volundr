@@ -1,5 +1,6 @@
 import type { IVolundrService } from '@/ports';
 import type {
+  SessionSource,
   VolundrSession,
   VolundrStats,
   VolundrModel,
@@ -158,14 +159,32 @@ function extractHost(endpoint: string | null | undefined): string | undefined {
 /**
  * Transform API session response to UI model
  */
+function transformSource(apiSource: ApiSessionResponse['source']): SessionSource {
+  if (apiSource.type === 'local_mount') {
+    return {
+      type: 'local_mount',
+      paths: (apiSource.paths ?? []).map(p => ({
+        host_path: p.host_path,
+        mount_path: p.mount_path,
+        read_only: p.read_only,
+      })),
+      node_selector: apiSource.node_selector,
+    };
+  }
+  return {
+    type: 'git',
+    repo: apiSource.repo ?? '',
+    branch: apiSource.branch ?? 'main',
+  };
+}
+
 function transformSession(api: ApiSessionResponse): VolundrSession {
   return {
     id: api.id,
     name: api.name,
     model: api.model,
     status: mapSessionStatus(api.status),
-    repo: api.repo,
-    branch: api.branch,
+    source: transformSource(api.source),
     lastActive: new Date(api.last_active).getTime(),
     messageCount: api.message_count,
     tokensUsed: api.tokens_used,
@@ -419,8 +438,7 @@ function transformSSESession(payload: SSESessionPayload): VolundrSession {
     name: payload.name,
     model: payload.model,
     status: mapSessionStatus(payload.status),
-    repo: payload.repo,
-    branch: payload.branch,
+    source: transformSource(payload.source),
     lastActive: new Date(payload.last_active).getTime(),
     messageCount: payload.message_count,
     tokensUsed: payload.tokens_used,
@@ -491,6 +509,15 @@ export class ApiVolundrService implements IVolundrService {
         return computeStatsFromSessions(sessions);
       }
       throw error;
+    }
+  }
+
+  async getFeatures(): Promise<import('@/models').VolundrFeatures> {
+    try {
+      const response = await api.get<{ local_mounts_enabled: boolean }>('/features');
+      return { localMountsEnabled: response.local_mounts_enabled };
+    } catch {
+      return { localMountsEnabled: false };
     }
   }
 
@@ -654,8 +681,7 @@ export class ApiVolundrService implements IVolundrService {
 
   async startSession(config: {
     name: string;
-    repo: string;
-    branch: string;
+    source: import('@/models').SessionSource;
     model: string;
     templateName?: string;
     taskType?: string;
@@ -667,8 +693,7 @@ export class ApiVolundrService implements IVolundrService {
     const createRequest: ApiSessionCreate = {
       name: config.name,
       model: config.model,
-      repo: config.repo,
-      branch: config.branch,
+      source: config.source,
       template_name: config.templateName ?? null,
       task_type: config.taskType ?? null,
       terminal_restricted: config.terminalRestricted ?? false,
@@ -704,14 +729,13 @@ export class ApiVolundrService implements IVolundrService {
     const session: VolundrSession = {
       id: `manual-${Math.random().toString(36).substring(2, 10)}`,
       name: config.name,
-      repo: '',
-      branch: '',
+      source: { type: 'git', repo: '', branch: '' },
       status: 'starting',
       model: 'external',
       lastActive: Date.now(),
       messageCount: 0,
       tokensUsed: 0,
-      source: 'manual',
+      origin: 'manual',
       hostname: config.hostname,
     };
 
@@ -725,7 +749,7 @@ export class ApiVolundrService implements IVolundrService {
     const session = this.cachedSessions.find(s => s.id === sessionId);
 
     // Manual sessions only update local state
-    if (session?.source === 'manual') {
+    if (session?.origin === 'manual') {
       session.status = 'stopped';
       this.notifySessionSubscribers();
       return;
@@ -744,7 +768,7 @@ export class ApiVolundrService implements IVolundrService {
 
     // Manual sessions only update local state — set to 'starting' so the
     // client-side probe re-verifies WebSocket connectivity before showing UI.
-    if (session?.source === 'manual') {
+    if (session?.origin === 'manual') {
       session.status = 'starting';
       session.lastActive = Date.now();
       this.notifySessionSubscribers();
@@ -763,7 +787,7 @@ export class ApiVolundrService implements IVolundrService {
     const session = this.cachedSessions.find(s => s.id === sessionId);
 
     // Manual sessions: no-op on backend, just remove locally
-    if (session?.source !== 'manual') {
+    if (session?.origin !== 'manual') {
       await api.delete(`/sessions/${sessionId}`);
     }
 
@@ -845,7 +869,7 @@ export class ApiVolundrService implements IVolundrService {
     // Check the cache first, then fall back to the ID prefix for cases
     // where the cache hasn't been populated yet (e.g. fresh popout window).
     const cached = this.cachedSessions.find(s => s.id === sessionId);
-    if (cached?.source === 'manual' || sessionId.startsWith('manual-')) {
+    if (cached?.origin === 'manual' || sessionId.startsWith('manual-')) {
       if (!cached || cached.status !== 'running' || !cached.hostname) {
         return null;
       }

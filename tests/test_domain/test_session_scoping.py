@@ -4,7 +4,7 @@ import pytest
 
 from tests.conftest import InMemorySessionRepository, MockPodManager
 from volundr.adapters.outbound.authorization import SimpleRoleAuthorizationAdapter
-from volundr.domain.models import Principal, SessionStatus, TenantRole
+from volundr.domain.models import GitSource, Principal, SessionStatus, TenantRole
 from volundr.domain.services import SessionService
 from volundr.domain.services.session import SessionAccessDeniedError
 
@@ -41,8 +41,7 @@ class TestCreateSessionScoping:
         session = await service.create_session(
             name="s1",
             model="m",
-            repo="r",
-            branch="main",
+            source=GitSource(repo="r", branch="main"),
             principal=principal,
         )
 
@@ -59,8 +58,7 @@ class TestCreateSessionScoping:
         session = await service.create_session(
             name="s1",
             model="m",
-            repo="r",
-            branch="main",
+            source=GitSource(repo="r", branch="main"),
         )
 
         assert session.owner_id is None
@@ -79,22 +77,19 @@ class TestListSessionsScoping:
         s_alice = await service.create_session(
             name="alice-1",
             model="m",
-            repo="r",
-            branch="main",
+            source=GitSource(repo="r", branch="main"),
             principal=p_alice,
         )
         s_bob = await service.create_session(
             name="bob-1",
             model="m",
-            repo="r",
-            branch="main",
+            source=GitSource(repo="r", branch="main"),
             principal=p_bob,
         )
         s_carol = await service.create_session(
             name="carol-1",
             model="m",
-            repo="r",
-            branch="main",
+            source=GitSource(repo="r", branch="main"),
             principal=p_carol,
         )
         return s_alice, s_bob, s_carol, p_alice, p_bob, p_carol
@@ -176,8 +171,7 @@ class TestOwnershipValidation:
         return await service.create_session(
             name=name,
             model="m",
-            repo="r",
-            branch="main",
+            source=GitSource(repo="r", branch="main"),
             principal=principal,
         )
 
@@ -454,6 +448,8 @@ class TestOwnershipValidation:
 
         # Bob can update Alice's session when no authz adapter
         updated = await service.update_session(
-            session.id, name="no-authz", principal=bob,
+            session.id,
+            name="no-authz",
+            principal=bob,
         )
         assert updated.name == "no-authz"

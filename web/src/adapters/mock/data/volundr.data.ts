@@ -246,8 +246,11 @@ export const mockVolundrSessions: VolundrSession[] = [
   {
     id: 'forge-7f3a2b1c',
     name: 'printer-firmware-thermal',
-    repo: 'kanuckvalley/printer-firmware',
-    branch: 'feature/thermal-calibration',
+    source: {
+      type: 'git',
+      repo: 'kanuckvalley/printer-firmware',
+      branch: 'feature/thermal-calibration',
+    },
     status: 'running',
     model: 'qwen3-coder:70b',
     lastActive: Date.now() - 1000 * 60 * 5,
@@ -260,8 +263,7 @@ export const mockVolundrSessions: VolundrSession[] = [
   {
     id: 'forge-9d4e8f2a',
     name: 'odin-huginn-reflex',
-    repo: 'kanuckvalley/buri-odin',
-    branch: 'feature/huginn-reflex-layer',
+    source: { type: 'git', repo: 'kanuckvalley/buri-odin', branch: 'feature/huginn-reflex-layer' },
     status: 'running',
     model: 'claude-opus',
     lastActive: Date.now() - 1000 * 60 * 12,
@@ -274,8 +276,7 @@ export const mockVolundrSessions: VolundrSession[] = [
   {
     id: 'forge-2c5d9e7b',
     name: 'nalir-truenas-adapter',
-    repo: 'kanuckvalley/nalir',
-    branch: 'feature/truenas-integration',
+    source: { type: 'git', repo: 'kanuckvalley/nalir', branch: 'feature/truenas-integration' },
     status: 'stopped',
     model: 'qwen3-coder:32b',
     lastActive: Date.now() - 1000 * 60 * 60 * 3,
@@ -287,8 +288,7 @@ export const mockVolundrSessions: VolundrSession[] = [
   {
     id: 'forge-5a1b3c8d',
     name: 'volundr-broker-service',
-    repo: 'kanuckvalley/volundr',
-    branch: 'feature/broker-websocket',
+    source: { type: 'git', repo: 'kanuckvalley/volundr', branch: 'feature/broker-websocket' },
     status: 'stopped',
     model: 'deepseek-r1:70b',
     lastActive: Date.now() - 1000 * 60 * 60 * 24,
@@ -299,8 +299,11 @@ export const mockVolundrSessions: VolundrSession[] = [
   {
     id: 'forge-8e2f4a6c',
     name: 'kaolin-support-gen',
-    repo: 'kanuckvalley/kaolin-supports',
-    branch: 'feature/fenics-cohesive',
+    source: {
+      type: 'git',
+      repo: 'kanuckvalley/kaolin-supports',
+      branch: 'feature/fenics-cohesive',
+    },
     status: 'error',
     model: 'glm-4.7-flash',
     lastActive: Date.now() - 1000 * 60 * 30,
@@ -315,8 +318,7 @@ export const mockArchivedSessions: VolundrSession[] = [
   {
     id: 'forge-arch-001',
     name: 'odin-memory-refactor',
-    repo: 'kanuckvalley/buri-odin',
-    branch: 'feature/memory-store',
+    source: { type: 'git', repo: 'kanuckvalley/buri-odin', branch: 'feature/memory-store' },
     status: 'archived',
     model: 'claude-sonnet',
     lastActive: Date.now() - 1000 * 60 * 60 * 24 * 7,
@@ -328,8 +330,7 @@ export const mockArchivedSessions: VolundrSession[] = [
   {
     id: 'forge-arch-002',
     name: 'nalir-api-docs',
-    repo: 'kanuckvalley/nalir',
-    branch: 'develop',
+    source: { type: 'git', repo: 'kanuckvalley/nalir', branch: 'develop' },
     status: 'archived',
     model: 'qwen3-coder:32b',
     lastActive: Date.now() - 1000 * 60 * 60 * 24 * 14,
@@ -341,8 +342,11 @@ export const mockArchivedSessions: VolundrSession[] = [
   {
     id: 'forge-arch-003',
     name: 'printer-bed-leveling',
-    repo: 'kanuckvalley/printer-firmware',
-    branch: 'feature/heated-bed-pid',
+    source: {
+      type: 'git',
+      repo: 'kanuckvalley/printer-firmware',
+      branch: 'feature/heated-bed-pid',
+    },
     status: 'archived',
     model: 'qwen3-coder:70b',
     lastActive: Date.now() - 1000 * 60 * 60 * 24 * 21,

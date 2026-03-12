@@ -54,7 +54,8 @@ class TestWorkspaceServiceList:
         assert len(active) == 1
 
         archived = await service.list_workspaces(
-            "user-1", WorkspaceStatus.ARCHIVED,
+            "user-1",
+            WorkspaceStatus.ARCHIVED,
         )
         assert len(archived) == 1
 

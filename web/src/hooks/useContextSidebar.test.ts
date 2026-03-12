@@ -27,8 +27,7 @@ vi.mock('@/adapters', () => ({
 const mockSession: VolundrSession = {
   id: 'session-001',
   name: 'test-session',
-  repo: 'org/repo',
-  branch: 'feature/test',
+  source: { type: 'git', repo: 'org/repo', branch: 'feature/test' },
   status: 'running',
   model: 'claude-sonnet',
   lastActive: Date.now(),
@@ -136,8 +135,7 @@ describe('useContextSidebar', () => {
       model: 'claude-sonnet',
       taskType: 'Skuld Claude',
       taskDescription: 'Interactive Claude Code CLI session',
-      repo: 'org/repo',
-      branch: 'feature/test',
+      source: { type: 'git', repo: 'org/repo', branch: 'feature/test' },
     });
   });
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Rocket } from 'lucide-react';
 import type {
   VolundrPreset,
@@ -7,6 +7,8 @@ import type {
   VolundrModel,
   McpServerConfig,
   LinearIssue,
+  SessionSource,
+  MountMapping,
 } from '@/models';
 import type { IVolundrService } from '@/ports';
 import { WizardStepper } from './WizardStepper';
@@ -17,8 +19,7 @@ import styles from './LaunchWizard.module.css';
 
 export interface LaunchConfig {
   name: string;
-  repo: string;
-  branch: string;
+  source: SessionSource;
   model: string;
   templateName?: string;
   presetId?: string;
@@ -30,12 +31,16 @@ export interface LaunchConfig {
   integrationIds?: string[];
 }
 
+export type SourceType = 'git' | 'local_mount';
+
 export interface WizardState {
   template: VolundrTemplate;
   preset: VolundrPreset | null;
   name: string;
+  sourceType: SourceType;
   repo: string;
   branch: string;
+  mountPaths: MountMapping[];
   model: string;
   taskType: string;
   linearIssue?: LinearIssue;
@@ -88,8 +93,10 @@ function buildInitialState(template: VolundrTemplate, repos: VolundrRepo[]): Wiz
     template,
     preset: null,
     name: '',
+    sourceType: 'git',
     repo,
     branch,
+    mountPaths: [{ host_path: '', mount_path: '', read_only: true }],
     model: template.model ?? '',
     taskType: `skuld-${template.cliTool}`,
     mcpServers: [...template.mcpServers],
@@ -121,6 +128,11 @@ export function LaunchWizard(props: LaunchWizardProps) {
   } = props;
   const [step, setStep] = useState(1);
   const [state, setState] = useState<WizardState | null>(null);
+  const [localMountsEnabled, setLocalMountsEnabled] = useState(false);
+
+  useEffect(() => {
+    service.getFeatures().then(f => setLocalMountsEnabled(f.localMountsEnabled));
+  }, [service]);
 
   const handleTemplateSelect = useCallback(
     (template: VolundrTemplate | null) => {
@@ -153,10 +165,14 @@ export function LaunchWizard(props: LaunchWizardProps) {
       return;
     }
 
+    const source: SessionSource =
+      state.sourceType === 'local_mount'
+        ? { type: 'local_mount', paths: state.mountPaths.filter(p => p.host_path && p.mount_path) }
+        : { type: 'git', repo: state.repo, branch: state.branch };
+
     await onLaunch({
       name: state.name.trim(),
-      repo: state.repo,
-      branch: state.branch,
+      source,
       model: state.model,
       templateName: state.template.name || undefined,
       presetId: state.preset?.id,
@@ -169,8 +185,14 @@ export function LaunchWizard(props: LaunchWizardProps) {
     });
   }, [state, onLaunch]);
 
+  const hasValidSource =
+    state !== null &&
+    (state.sourceType === 'git'
+      ? state.repo !== ''
+      : state.mountPaths.some(p => p.host_path && p.mount_path));
+
   const canProceedToStep3 =
-    state !== null && state.name.trim() !== '' && state.repo !== '' && state.model !== '';
+    state !== null && state.name.trim() !== '' && hasValidSource && state.model !== '';
 
   const canLaunch = canProceedToStep3 && !isLaunching;
 
@@ -191,6 +213,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
             availableSecrets={availableSecrets}
             service={service}
             searchLinearIssues={searchLinearIssues}
+            localMountsEnabled={localMountsEnabled}
             onChange={updateState}
             onSavePreset={onSavePreset}
           />

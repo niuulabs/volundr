@@ -70,8 +70,7 @@ const mockSessions: VolundrSession[] = [
   {
     id: 'session-001',
     name: 'API Refactor',
-    repo: 'odin-core',
-    branch: 'feature/api-v2',
+    source: { type: 'git', repo: 'odin-core', branch: 'feature/api-v2' },
     status: 'running',
     model: 'claude-sonnet',
     lastActive: Date.now(),
@@ -82,8 +81,7 @@ const mockSessions: VolundrSession[] = [
   {
     id: 'session-002',
     name: 'Documentation',
-    repo: 'odin-docs',
-    branch: 'main',
+    source: { type: 'git', repo: 'odin-docs', branch: 'main' },
     status: 'stopped',
     model: 'llama-70b',
     lastActive: Date.now() - 3600000,
@@ -188,8 +186,7 @@ describe('useVolundr', () => {
     const newSession: VolundrSession = {
       id: 'session-003',
       name: 'New Task',
-      repo: 'odin-core',
-      branch: 'main',
+      source: { type: 'git', repo: 'odin-core', branch: 'main' },
       status: 'running',
       model: 'claude-sonnet',
       lastActive: Date.now(),
@@ -209,16 +206,14 @@ describe('useVolundr', () => {
     await act(async () => {
       returnedSession = await result.current.startSession({
         name: 'New Task',
-        repo: 'odin-core',
-        branch: 'main',
+        source: { type: 'git', repo: 'odin-core', branch: 'main' },
         model: 'claude-sonnet',
       });
     });
 
     expect(volundrService.startSession).toHaveBeenCalledWith({
       name: 'New Task',
-      repo: 'odin-core',
-      branch: 'main',
+      source: { type: 'git', repo: 'odin-core', branch: 'main' },
       model: 'claude-sonnet',
     });
     expect(returnedSession).toEqual(newSession);
@@ -528,14 +523,13 @@ describe('useVolundr', () => {
       const manualSession: VolundrSession = {
         id: 'manual-abc',
         name: 'My Skuld',
-        repo: '',
-        branch: '',
+        source: { type: 'git', repo: '', branch: '' },
         status: 'running',
         model: 'external',
         lastActive: Date.now(),
         messageCount: 0,
         tokensUsed: 0,
-        source: 'manual',
+        origin: 'manual',
         hostname: 'skuld-01.local',
       };
 
@@ -1146,8 +1140,7 @@ describe('useVolundr', () => {
     const mockArchivedSession: VolundrSession = {
       id: 'archived-001',
       name: 'Old Session',
-      repo: 'odin-core',
-      branch: 'feature/old',
+      source: { type: 'git', repo: 'odin-core', branch: 'feature/old' },
       status: 'archived',
       model: 'claude-sonnet',
       lastActive: Date.now() - 86400000,

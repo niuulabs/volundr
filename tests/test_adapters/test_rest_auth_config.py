@@ -30,9 +30,7 @@ def _make_app(session_service: SessionService, settings: Settings) -> FastAPI:
 class TestAuthConfigEndpoint:
     """Tests for GET /api/v1/volundr/auth/config."""
 
-    def test_returns_auth_config_when_issuer_set(
-        self, session_service: SessionService
-    ):
+    def test_returns_auth_config_when_issuer_set(self, session_service: SessionService):
         """Returns OIDC config when auth_discovery.issuer is configured."""
         settings = Settings(
             auth_discovery=AuthDiscoveryConfig(
@@ -53,9 +51,7 @@ class TestAuthConfigEndpoint:
         assert data["scopes"] == "openid profile"
         assert data["device_authorization_supported"] is True
 
-    def test_falls_back_to_gateway_issuer_url(
-        self, session_service: SessionService
-    ):
+    def test_falls_back_to_gateway_issuer_url(self, session_service: SessionService):
         """Falls back to gateway kwargs issuer_url when auth_discovery.issuer is empty."""
         settings = Settings(
             auth_discovery=AuthDiscoveryConfig(issuer=""),
@@ -71,9 +67,7 @@ class TestAuthConfigEndpoint:
         assert response.status_code == 200
         assert response.json()["issuer"] == "https://idp.example.com/realms/v"
 
-    def test_returns_404_when_no_issuer_configured(
-        self, session_service: SessionService
-    ):
+    def test_returns_404_when_no_issuer_configured(self, session_service: SessionService):
         """Returns 404 when neither auth_discovery nor gateway issuer is set."""
         settings = Settings(
             auth_discovery=AuthDiscoveryConfig(issuer=""),
@@ -86,9 +80,7 @@ class TestAuthConfigEndpoint:
 
         assert response.status_code == 404
 
-    def test_uses_default_cli_client_id_and_scopes(
-        self, session_service: SessionService
-    ):
+    def test_uses_default_cli_client_id_and_scopes(self, session_service: SessionService):
         """Uses default cli_client_id and scopes when not explicitly set."""
         settings = Settings(
             auth_discovery=AuthDiscoveryConfig(
@@ -105,9 +97,7 @@ class TestAuthConfigEndpoint:
         assert data["client_id"] == "volundr-cli"
         assert data["scopes"] == "openid profile email"
 
-    def test_endpoint_requires_no_authentication(
-        self, session_service: SessionService
-    ):
+    def test_endpoint_requires_no_authentication(self, session_service: SessionService):
         """The auth/config endpoint is accessible without auth headers."""
         settings = Settings(
             auth_discovery=AuthDiscoveryConfig(

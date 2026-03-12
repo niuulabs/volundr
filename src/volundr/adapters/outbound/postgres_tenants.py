@@ -44,17 +44,13 @@ class PostgresTenantRepository(TenantRepository):
         return self._row_to_tenant(row)
 
     async def get(self, tenant_id: str) -> Tenant | None:
-        row = await self._pool.fetchrow(
-            "SELECT * FROM tenants WHERE id = $1", tenant_id
-        )
+        row = await self._pool.fetchrow("SELECT * FROM tenants WHERE id = $1", tenant_id)
         if row is None:
             return None
         return self._row_to_tenant(row)
 
     async def get_by_path(self, path: str) -> Tenant | None:
-        row = await self._pool.fetchrow(
-            "SELECT * FROM tenants WHERE path = $1", path
-        )
+        row = await self._pool.fetchrow("SELECT * FROM tenants WHERE path = $1", path)
         if row is None:
             return None
         return self._row_to_tenant(row)
@@ -66,9 +62,7 @@ class PostgresTenantRepository(TenantRepository):
                 parent_id,
             )
         else:
-            rows = await self._pool.fetch(
-                "SELECT * FROM tenants ORDER BY path"
-            )
+            rows = await self._pool.fetch("SELECT * FROM tenants ORDER BY path")
         return [self._row_to_tenant(r) for r in rows]
 
     async def get_ancestors(self, path: str) -> list[Tenant]:
@@ -100,7 +94,5 @@ class PostgresTenantRepository(TenantRepository):
         return self._row_to_tenant(row)
 
     async def delete(self, tenant_id: str) -> bool:
-        result = await self._pool.execute(
-            "DELETE FROM tenants WHERE id = $1", tenant_id
-        )
+        result = await self._pool.execute("DELETE FROM tenants WHERE id = $1", tenant_id)
         return result == "DELETE 1"

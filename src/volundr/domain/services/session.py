@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from volundr.domain.models import (
+    GitSource,
     IntegrationConnection,
     Principal,
     Session,
+    SessionSource,
     SessionSpec,
     SessionStatus,
     TenantRole,
@@ -107,8 +109,7 @@ class SessionService:
         self,
         name: str,
         model: str,
-        repo: str,
-        branch: str,
+        source: SessionSource | None = None,
         template_name: str | None = None,
         preset_id: UUID | None = None,
         principal: Principal | None = None,
@@ -119,11 +120,10 @@ class SessionService:
         Args:
             name: Session name.
             model: Model identifier.
-            repo: Repository URL.
-            branch: Git branch name.
+            source: Workspace source (git or local_mount). Defaults to empty GitSource.
             template_name: Optional workspace template name. When provided,
                 the template's repos/profile are used to fill in defaults
-                for repo, branch, and model if not explicitly provided.
+                for source and model if not explicitly provided.
             preset_id: Optional preset ID to associate with the session.
             principal: Authenticated identity. When provided, sets owner_id
                 and tenant_id on the session.
@@ -134,26 +134,33 @@ class SessionService:
         Raises:
             RepoValidationError: If repository validation is enabled and fails.
         """
+        if source is None:
+            source = GitSource()
+
         # Resolve template defaults when a template is specified
         if template_name and self._template_provider:
             template = self._template_provider.get(template_name)
             if template is not None:
                 logger.info("Applying workspace template: %s", template_name)
                 # Use first repo from template if caller didn't provide one
-                if not repo and template.repos:
+                if isinstance(source, GitSource) and not source.repo and template.repos:
                     first_repo = template.repos[0]
-                    repo = first_repo.get("url", "")
-                    branch = first_repo.get("branch", branch or "main")
+                    source = GitSource(
+                        repo=first_repo.get("url", ""),
+                        branch=first_repo.get("branch", source.branch or "main"),
+                    )
                 # Use model from template directly (unified template)
                 if not model and template.model:
                     model = template.model
 
+        repo = source.repo if isinstance(source, GitSource) else ""
+
         logger.info(
-            "Creating session: name=%s, model=%s, repo=%s, branch=%s",
+            "Creating session: name=%s, model=%s, source_type=%s, repo=%s",
             name,
             model,
+            source.type,
             repo,
-            branch,
         )
         logger.debug(
             "Session creation config: git_registry=%s, validate_repos=%s",
@@ -161,18 +168,18 @@ class SessionService:
             self._validate_repos,
         )
 
-        if self._git_registry and self._validate_repos:
-            await self._validate_repository(repo)
-        elif not self._git_registry:
-            logger.debug("Skipping repo validation: no git registry configured")
-        elif not self._validate_repos:
-            logger.debug("Skipping repo validation: validation disabled")
+        if isinstance(source, GitSource) and repo:
+            if self._git_registry and self._validate_repos:
+                await self._validate_repository(repo)
+            elif not self._git_registry:
+                logger.debug("Skipping repo validation: no git registry configured")
+            elif not self._validate_repos:
+                logger.debug("Skipping repo validation: validation disabled")
 
         session = Session(
             name=name,
             model=model,
-            repo=repo,
-            branch=branch,
+            source=source,
             preset_id=preset_id,
             owner_id=principal.user_id if principal else None,
             tenant_id=principal.tenant_id if principal else None,
@@ -338,8 +345,8 @@ class SessionService:
             updates["name"] = name
         if model is not None:
             updates["model"] = model
-        if branch is not None:
-            updates["branch"] = branch
+        if branch is not None and isinstance(session.source, GitSource):
+            updates["source"] = session.source.model_copy(update={"branch": branch})
         if tracker_issue_id is not None:
             updates["tracker_issue_id"] = tracker_issue_id
 
@@ -445,9 +452,7 @@ class SessionService:
             # Launch background readiness poller
             task = asyncio.create_task(self._poll_readiness(final))
             self._provisioning_tasks[final.id] = task
-            task.add_done_callback(
-                lambda t: self._provisioning_tasks.pop(final.id, None)
-            )
+            task.add_done_callback(lambda t: self._provisioning_tasks.pop(final.id, None))
 
             return final
         except Exception as e:
@@ -528,7 +533,10 @@ class SessionService:
                 )
 
     async def _poll_readiness(
-        self, session: Session, *, skip_initial_delay: bool = False,
+        self,
+        session: Session,
+        *,
+        skip_initial_delay: bool = False,
     ) -> None:
         """Wait for backend readiness, then transition to RUNNING or FAILED."""
         if not skip_initial_delay:
@@ -731,9 +739,7 @@ class SessionService:
                 "Reconciling stuck PROVISIONING session %s, re-launching readiness poll",
                 session.id,
             )
-            task = asyncio.create_task(
-                self._poll_readiness(session, skip_initial_delay=True)
-            )
+            task = asyncio.create_task(self._poll_readiness(session, skip_initial_delay=True))
             self._provisioning_tasks[session.id] = task
             task.add_done_callback(
                 lambda t, sid=session.id: self._provisioning_tasks.pop(sid, None)

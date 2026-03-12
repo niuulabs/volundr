@@ -13,7 +13,7 @@ from python_on_whales import DockerException
 
 from tests.conftest import make_spec
 from volundr.adapters.outbound.docker_pod_manager import DockerPodManager
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 
 @pytest.fixture
@@ -23,8 +23,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="test-session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 
@@ -131,9 +130,7 @@ async def test_start_generates_compose_and_runs(
     assert "code-server" in compose["services"]
     assert "ttyd" in compose["services"]
     assert compose["services"]["skuld"]["image"] == "test/skuld:latest"
-    assert compose["services"]["skuld"]["environment"]["SESSION_ID"] == str(
-        sample_session.id
-    )
+    assert compose["services"]["skuld"]["environment"]["SESSION_ID"] == str(sample_session.id)
     assert compose["services"]["skuld"]["environment"]["DATABASE__HOST"] == "localhost"
 
     # Verify docker compose up was called with detach=True
@@ -319,12 +316,8 @@ async def test_start_with_gateway_domain(
     with patch.object(gateway_pod_manager, "_docker_client", return_value=client):
         result = await gateway_pod_manager.start(sample_session, sample_spec)
 
-    assert result.chat_endpoint == (
-        f"wss://volundr.example.com/s/{sample_session.id}/session"
-    )
-    assert result.code_endpoint == (
-        f"https://volundr.example.com/s/{sample_session.id}/"
-    )
+    assert result.chat_endpoint == (f"wss://volundr.example.com/s/{sample_session.id}/session")
+    assert result.code_endpoint == (f"https://volundr.example.com/s/{sample_session.id}/")
 
 
 @pytest.mark.asyncio
@@ -498,9 +491,11 @@ async def test_compose_handles_env_secrets(
 ):
     """Verify envSecrets are resolved via the credential store."""
     sample_session.owner_id = "user-123"
-    store = _mock_credential_store({
-        "my-api-key": {"token": "secret-token-value"},
-    })
+    store = _mock_credential_store(
+        {
+            "my-api-key": {"token": "secret-token-value"},
+        }
+    )
     pod_manager.set_credential_store(store)
 
     spec = make_spec(

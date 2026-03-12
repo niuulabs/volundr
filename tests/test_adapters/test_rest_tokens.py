@@ -14,7 +14,7 @@ from tests.conftest import (
 )
 from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.outbound.pricing import HardcodedPricingProvider
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 from volundr.domain.services import (
     SessionService,
     StatsService,
@@ -76,8 +76,7 @@ def running_session() -> Session:
     return Session(
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/test/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/test/repo", branch="main"),
         status=SessionStatus.RUNNING,
     )
 
@@ -165,8 +164,7 @@ class TestReportTokenUsageEndpoint:
         stopped_session = Session(
             name="Stopped Session",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
             status=SessionStatus.STOPPED,
         )
         asyncio.get_event_loop().run_until_complete(session_repository.create(stopped_session))
@@ -272,8 +270,7 @@ class TestReportUsageWithPricing:
         running_session = Session(
             name="Test Session",
             model="claude-sonnet-4-20250514",
-            repo="https://github.com/test/repo",
-            branch="main",
+            source=GitSource(repo="https://github.com/test/repo", branch="main"),
             status=SessionStatus.RUNNING,
         )
         asyncio.get_event_loop().run_until_complete(session_repository.create(running_session))

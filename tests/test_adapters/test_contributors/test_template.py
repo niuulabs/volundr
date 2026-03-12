@@ -5,13 +5,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from volundr.adapters.outbound.contributors.template import TemplateContributor
-from volundr.domain.models import ForgeProfile, Session, WorkspaceTemplate
+from volundr.domain.models import ForgeProfile, GitSource, Session, WorkspaceTemplate
 from volundr.domain.ports import SessionContext
 
 
 @pytest.fixture
 def session():
-    return Session(name="test", model="claude", repo="", branch="main")
+    return Session(name="test", model="claude", source=GitSource())
 
 
 @pytest.fixture

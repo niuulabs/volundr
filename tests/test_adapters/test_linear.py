@@ -114,9 +114,7 @@ class TestGraphQL:
     async def test_successful_query(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"data": {"viewer": {"id": "1"}}}
-        )
+        adapter._client.post.return_value = _mock_response({"data": {"viewer": {"id": "1"}}})
 
         result = await adapter._graphql("query { viewer { id } }")
         assert result == {"viewer": {"id": "1"}}
@@ -124,21 +122,18 @@ class TestGraphQL:
     async def test_query_with_variables(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"data": {"issue": {"id": "1"}}}
-        )
+        adapter._client.post.return_value = _mock_response({"data": {"issue": {"id": "1"}}})
 
         result = await adapter._graphql(
-            "query($id: String!) { issue(id: $id) { id } }", {"id": "1"},
+            "query($id: String!) { issue(id: $id) { id } }",
+            {"id": "1"},
         )
         assert result == {"issue": {"id": "1"}}
 
     async def test_api_error(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"errors": [{"message": "Not found"}]}
-        )
+        adapter._client.post.return_value = _mock_response({"errors": [{"message": "Not found"}]})
 
         with pytest.raises(LinearAPIError, match="Not found"):
             await adapter._graphql("query { bad }")
@@ -205,9 +200,7 @@ class TestSearchIssues:
     async def test_search_with_project(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"data": {"issueSearch": {"nodes": []}}}
-        )
+        adapter._client.post.return_value = _mock_response({"data": {"issueSearch": {"nodes": []}}})
 
         issues = await adapter.search_issues("test", project_id="proj-1")
         assert len(issues) == 0
@@ -233,9 +226,7 @@ class TestGetIssue:
     async def test_get_existing(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"data": {"issue": _issue_node()}}
-        )
+        adapter._client.post.return_value = _mock_response({"data": {"issue": _issue_node()}})
 
         issue = await adapter.get_issue("issue-1")
         assert issue is not None
@@ -244,9 +235,7 @@ class TestGetIssue:
     async def test_get_missing(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"data": {"issue": None}}
-        )
+        adapter._client.post.return_value = _mock_response({"data": {"issue": None}})
 
         issue = await adapter.get_issue("nonexistent")
         assert issue is None
@@ -254,9 +243,7 @@ class TestGetIssue:
     async def test_get_api_error(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"errors": [{"message": "Not found"}]}
-        )
+        adapter._client.post.return_value = _mock_response({"errors": [{"message": "Not found"}]})
 
         issue = await adapter.get_issue("bad-id")
         assert issue is None
@@ -309,9 +296,7 @@ class TestUpdateIssueStatus:
     async def test_update_issue_not_found(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
-            {"data": {"issue": None}}
-        )
+        adapter._client.post.return_value = _mock_response({"data": {"issue": None}})
 
         with pytest.raises(LinearAPIError, match="Issue not found"):
             await adapter.update_issue_status("bad-id", "Done")

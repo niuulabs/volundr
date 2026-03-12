@@ -55,6 +55,7 @@ import { getAccessToken } from '@/adapters/api/client';
 import type { VolundrSession, VolundrLog } from '@/models';
 import { isSessionBooting, isSessionActive } from '@/models';
 import { formatTokens, cn } from '@/utils';
+import { getRepo, getBranch, getSourceLabel, isGitSource } from '@/utils/source';
 import styles from './VolundrPage.module.css';
 
 const STATUS_OPTIONS = ['all', 'running', 'stopped', 'error'];
@@ -150,20 +151,17 @@ export function VolundrPage() {
     }
     return sessions.length > 0 ? sessions[0] : null;
   }, [selectedSession, sessions]);
-  const isManualSession = effectiveSelectedSession?.source === 'manual';
+  const isManualSession = effectiveSelectedSession?.origin === 'manual';
 
   // Resolve the repo URL for PR lookups (session stores org/name, API needs full URL)
   const sessionRepoUrl = useMemo(() => {
-    if (!effectiveSelectedSession?.repo) {
+    const repo = effectiveSelectedSession ? getRepo(effectiveSelectedSession.source) : '';
+    if (!repo) {
       return '';
     }
-    const match = repos.find(
-      r =>
-        `${r.org}/${r.name}` === effectiveSelectedSession.repo ||
-        r.url === effectiveSelectedSession.repo
-    );
+    const match = repos.find(r => `${r.org}/${r.name}` === repo || r.url === repo);
     return match?.url ?? '';
-  }, [effectiveSelectedSession?.repo, repos]);
+  }, [effectiveSelectedSession, repos]);
 
   // Track whether the selected session's WebSocket has been verified as
   // connectable.  This prevents showing the chat/terminal before the
@@ -371,7 +369,7 @@ export function VolundrPage() {
     }
 
     // Fallback: use Volundr API for non-running managed sessions
-    if (effectiveSelectedSession.source !== 'manual') {
+    if (effectiveSelectedSession.origin !== 'manual') {
       getLogs(sessionId);
     }
 
@@ -398,7 +396,7 @@ export function VolundrPage() {
       return;
     }
 
-    if (effectiveSelectedSession.source === 'manual' && effectiveSelectedSession.hostname) {
+    if (effectiveSelectedSession.origin === 'manual' && effectiveSelectedSession.hostname) {
       setIdeUrl(`https://${effectiveSelectedSession.hostname}/`);
       setIdeLoading(false);
       return;
@@ -538,8 +536,7 @@ export function VolundrPage() {
       try {
         const session = await startSession({
           name: config.name,
-          repo: config.repo,
-          branch: config.branch,
+          source: config.source,
           model: config.model,
           templateName: config.templateName,
           taskType: config.taskType,
@@ -799,7 +796,8 @@ export function VolundrPage() {
                     <div className={styles.archivedItemInfo}>
                       <span className={styles.archivedItemName}>{session.name}</span>
                       <span className={styles.archivedItemMeta}>
-                        {session.repo} &middot; {formatArchivedDate(session.archivedAt)}
+                        {getSourceLabel(session.source)} &middot;{' '}
+                        {formatArchivedDate(session.archivedAt)}
                       </span>
                     </div>
                     <button
@@ -959,9 +957,15 @@ export function VolundrPage() {
               ) : (
                 <div className={styles.repoInfo}>
                   <FolderGit2 className={styles.repoInfoIcon} />
-                  <span>{effectiveSelectedSession.repo}</span>
-                  <span className={styles.branchArrow}>&rarr;</span>
-                  <span className={styles.branchName}>{effectiveSelectedSession.branch}</span>
+                  <span>{getSourceLabel(effectiveSelectedSession.source)}</span>
+                  {isGitSource(effectiveSelectedSession.source) && (
+                    <>
+                      <span className={styles.branchArrow}>&rarr;</span>
+                      <span className={styles.branchName}>
+                        {getBranch(effectiveSelectedSession.source)}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
               {!isManualSession && selectedModel && (
@@ -1179,7 +1183,7 @@ export function VolundrPage() {
                 onFetch={getChronicle}
                 className={styles.tabPanel}
                 repoUrl={sessionRepoUrl}
-                branch={effectiveSelectedSession.branch}
+                branch={getBranch(effectiveSelectedSession.source)}
                 pullRequest={pullRequest}
                 prLoading={prLoading}
                 prCreating={prCreating}

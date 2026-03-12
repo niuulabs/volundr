@@ -20,7 +20,7 @@ from volundr.adapters.outbound.direct_k8s_pod_manager import (
     SESSION_SERVICE_PORT,
     DirectK8sPodManager,
 )
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 
 @pytest.fixture
@@ -30,8 +30,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test K3s Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 
@@ -285,9 +284,7 @@ class TestStripPrefixMiddleware:
         assert mw["kind"] == "Middleware"
         assert mw["metadata"]["name"] == f"skuld-{sample_session.id}-strip"
         assert mw["metadata"]["namespace"] == "test-ns"
-        assert mw["spec"]["stripPrefix"]["prefixes"] == [
-            f"/s/{sample_session.id}"
-        ]
+        assert mw["spec"]["stripPrefix"]["prefixes"] == [f"/s/{sample_session.id}"]
 
 
 class TestDeploymentStatus:
@@ -355,19 +352,24 @@ class TestStart:
 
         mock_cr = AsyncMock()
         mock_apply = AsyncMock()
-        with patch.object(
-            pod_manager, "_apply_custom_resource", mock_cr,
-        ), patch.object(
-            pod_manager, "_apply_resource", mock_apply,
+        with (
+            patch.object(
+                pod_manager,
+                "_apply_custom_resource",
+                mock_cr,
+            ),
+            patch.object(
+                pod_manager,
+                "_apply_resource",
+                mock_apply,
+            ),
         ):
             result = await pod_manager.start(sample_session, spec)
 
         mock_cr.assert_called_once()
 
         assert mock_apply.call_count == 4
-        call_classes = [
-            c.kwargs["api_class"] for c in mock_apply.call_args_list
-        ]
+        call_classes = [c.kwargs["api_class"] for c in mock_apply.call_args_list]
         assert "AppsV1Api" in call_classes
         assert "NetworkingV1Api" in call_classes
         # CoreV1Api appears twice: ConfigMap + Service
@@ -391,18 +393,23 @@ class TestStop:
 
         mock_delete = AsyncMock(return_value=True)
         mock_delete_cr = AsyncMock()
-        with patch.object(
-            pod_manager, "_delete_resource", mock_delete,
-        ), patch.object(
-            pod_manager, "_delete_custom_resource", mock_delete_cr,
+        with (
+            patch.object(
+                pod_manager,
+                "_delete_resource",
+                mock_delete,
+            ),
+            patch.object(
+                pod_manager,
+                "_delete_custom_resource",
+                mock_delete_cr,
+            ),
         ):
             result = await pod_manager.stop(sample_session)
 
         assert result is True
         assert mock_delete.call_count == 4
-        call_classes = [
-            c.args[0] for c in mock_delete.call_args_list
-        ]
+        call_classes = [c.args[0] for c in mock_delete.call_args_list]
         assert "AppsV1Api" in call_classes
         assert "NetworkingV1Api" in call_classes
         # CoreV1Api appears twice: Service + ConfigMap
@@ -427,7 +434,8 @@ class TestStatus:
         pod_manager._api_client = MagicMock()
 
         with patch.object(
-            pod_manager, "_read_deployment",
+            pod_manager,
+            "_read_deployment",
             new_callable=AsyncMock,
             return_value=deployment,
         ):
@@ -444,7 +452,8 @@ class TestStatus:
         pod_manager._api_client = MagicMock()
 
         with patch.object(
-            pod_manager, "_read_deployment",
+            pod_manager,
+            "_read_deployment",
             new_callable=AsyncMock,
             return_value=None,
         ):

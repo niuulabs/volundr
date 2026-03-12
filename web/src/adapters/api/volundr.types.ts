@@ -19,12 +19,19 @@ export type ApiSessionStatus =
 /**
  * Session response from API
  */
+export interface ApiSessionSource {
+  type: 'git' | 'local_mount';
+  repo?: string;
+  branch?: string;
+  paths?: Array<{ host_path: string; mount_path: string; read_only: boolean }>;
+  node_selector?: Record<string, string>;
+}
+
 export interface ApiSessionResponse {
   id: string;
   name: string;
   model: string;
-  repo: string;
-  branch: string;
+  source: ApiSessionSource;
   status: ApiSessionStatus;
   chat_endpoint: string | null;
   code_endpoint: string | null;
@@ -83,8 +90,7 @@ export interface ApiTenantResponse {
 export interface ApiSessionCreate {
   name: string;
   model: string;
-  repo: string;
-  branch: string;
+  source: ApiSessionSource;
   template_name?: string | null;
   task_type?: string | null;
   terminal_restricted?: boolean;
@@ -199,8 +205,7 @@ export interface SSESessionPayload {
   id: string;
   name: string;
   model: string;
-  repo: string;
-  branch: string;
+  source: ApiSessionSource;
   status: ApiSessionStatus;
   chat_endpoint: string | null;
   code_endpoint: string | null;

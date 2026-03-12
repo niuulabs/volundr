@@ -12,7 +12,7 @@ import respx
 
 from tests.conftest import make_spec
 from volundr.adapters.outbound.farm import FarmApiError, FarmPodManager
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 # A fixed Farm-assigned task_id to use in tests (distinct from session_id)
 FARM_TASK_ID = "f94e02f2-0dab-4869-9386-7370428fa47f"
@@ -62,8 +62,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 
@@ -81,8 +80,6 @@ def pod_manager() -> FarmPodManager:
         chat_scheme="wss",
         code_scheme="https",
     )
-
-
 
 
 class TestFarmPodManagerStart:
@@ -884,8 +881,6 @@ class TestFarmPodManagerClient:
         await mock_client.aclose()
 
 
-
-
 class TestFarmPodManagerGatewayEndpoints:
     """Tests for path-based endpoint generation with gateway_domain."""
 
@@ -909,9 +904,7 @@ class TestFarmPodManagerGatewayEndpoints:
         assert pm._chat_endpoint("my-session", sid) == (
             "wss://gateway.example.com/s/abc-123/session"
         )
-        assert pm._code_endpoint("my-session", sid) == (
-            "https://gateway.example.com/s/abc-123/"
-        )
+        assert pm._code_endpoint("my-session", sid) == ("https://gateway.example.com/s/abc-123/")
 
     @respx.mock
     async def test_start_returns_path_based_endpoints(self, sample_session: Session):

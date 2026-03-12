@@ -62,7 +62,8 @@ class IntegrationContributor(SessionContributor):
             cred_results = await asyncio.gather(
                 *(
                     self._user_integration.resolve_credentials(
-                        context.principal.user_id, c.credential_name,
+                        context.principal.user_id,
+                        c.credential_name,
                     )
                     for c in active
                 ),
@@ -86,11 +87,13 @@ class IntegrationContributor(SessionContributor):
                 continue
 
             for env_var, cred_field in defn.env_from_credentials.items():
-                env_secrets.append({
-                    "envVar": env_var,
-                    "secretName": conn.credential_name,
-                    "secretKey": cred_field,
-                })
+                env_secrets.append(
+                    {
+                        "envVar": env_var,
+                        "secretName": conn.credential_name,
+                        "secretKey": cred_field,
+                    }
+                )
 
         values: dict[str, Any] = {}
         if mcp_servers:

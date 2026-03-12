@@ -13,6 +13,7 @@ from volundr.adapters.outbound.flux import (
     FluxPodManager,
 )
 from volundr.domain.models import (
+    GitSource,
     Session,
     SessionStatus,
 )
@@ -24,8 +25,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 
@@ -53,8 +53,6 @@ def pod_manager() -> FluxPodManager:
 def mock_api():
     api = AsyncMock()
     return api
-
-
 
 
 class TestFluxPodManagerStart:
@@ -277,9 +275,7 @@ class TestFluxPodManagerGatewayEndpoints:
         assert pm._chat_endpoint("my-session", sid) == (
             "wss://gateway.example.com/s/abc-123/session"
         )
-        assert pm._code_endpoint("my-session", sid) == (
-            "https://gateway.example.com/s/abc-123/"
-        )
+        assert pm._code_endpoint("my-session", sid) == ("https://gateway.example.com/s/abc-123/")
 
     async def test_start_returns_path_based_endpoints(
         self,
@@ -304,7 +300,9 @@ class TestFluxPodManagerSpecValues:
     """Tests for spec values pass-through to Skuld Helm values."""
 
     async def test_spec_values_passed_to_helmrelease(
-        self, sample_session: Session, mock_api,
+        self,
+        sample_session: Session,
+        mock_api,
     ):
         pm = FluxPodManager(
             namespace="test-ns",
@@ -327,7 +325,9 @@ class TestFluxPodManagerSpecValues:
         assert body["spec"]["values"]["git"]["repoUrl"] == "https://github.com/org/repo"
 
     async def test_empty_spec_uses_only_defaults(
-        self, sample_session: Session, mock_api,
+        self,
+        sample_session: Session,
+        mock_api,
     ):
         pm = FluxPodManager(
             namespace="test-ns",

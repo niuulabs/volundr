@@ -15,11 +15,13 @@ from volundr.domain.models import (
     Chronicle,
     ChronicleStatus,
     GitProviderType,
+    GitSource,
     Model,
     ModelProvider,
     ModelTier,
     Principal,
     Session,
+    SessionSource,
     SessionStatus,
     TimelineEvent,
     TimelineEventType,
@@ -49,8 +51,7 @@ class SessionCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     model: str = Field(default="", max_length=100)
-    repo: str = Field(default="", max_length=500)
-    branch: str = Field(default="main", max_length=255)
+    source: SessionSource = Field(default_factory=GitSource)
     template_name: str | None = Field(default=None, max_length=255)
     profile_name: str | None = Field(default=None, max_length=255)
     preset_id: UUID | None = Field(default=None)
@@ -84,8 +85,7 @@ class SessionResponse(BaseModel):
     id: UUID
     name: str
     model: str
-    repo: str
-    branch: str
+    source: SessionSource
     status: SessionStatus
     chat_endpoint: str | None
     code_endpoint: str | None
@@ -109,8 +109,7 @@ class SessionResponse(BaseModel):
             id=session.id,
             name=session.name,
             model=session.model,
-            repo=session.repo,
-            branch=session.branch,
+            source=session.source,
             status=session.status,
             chat_endpoint=session.chat_endpoint,
             code_endpoint=session.code_endpoint,
@@ -440,6 +439,18 @@ def create_router(
 
         return principal
 
+    @router.get("/features", tags=["Features"])
+    async def get_features(request: Request) -> dict:
+        """Return feature flags derived from server configuration.
+
+        Lets the frontend adapt its UI based on what the backend supports
+        (e.g. local mounts are only meaningful in k3s / CLI mode).
+        """
+        settings = request.app.state.settings
+        return {
+            "local_mounts_enabled": settings.local_mounts.enabled,
+        }
+
     @router.get("/auth/config", tags=["Auth"])
     async def get_auth_config(request: Request) -> dict:
         """Public auth discovery endpoint for CLI and external clients.
@@ -466,6 +477,7 @@ def create_router(
             "scopes": settings.auth_discovery.scopes,
             "device_authorization_supported": True,
         }
+
     async def _optional_user_id(request: Request) -> str | None:
         """Extract user_id from auth principal if available, else None."""
         principal = await _optional_principal(request)
@@ -597,8 +609,7 @@ def create_router(
             session = await service.create_session(
                 name=data.name,
                 model=data.model,
-                repo=data.repo,
-                branch=data.branch,
+                source=data.source,
                 template_name=data.template_name,
                 preset_id=data.preset_id,
                 principal=principal,

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 
 from volundr.adapters.inbound.rest import create_router
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 from volundr.domain.services import SessionService
 
 
@@ -26,8 +26,7 @@ def _make_session(*, has_endpoint: bool = True) -> Session:
         id=uuid4(),
         name="test-session",
         model="claude-sonnet-4-6",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
         status=SessionStatus.RUNNING,
         chat_endpoint="wss://test-session.example.com/session" if has_endpoint else None,
         code_endpoint="https://test-session.example.com/" if has_endpoint else None,
@@ -39,14 +38,14 @@ class TestDiffEndpoint:
 
     @pytest.mark.asyncio
     async def test_session_not_found_returns_404(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/sessions/{uuid4()}/diff",
                 params={"base": "last-commit"},
@@ -56,16 +55,16 @@ class TestDiffEndpoint:
 
     @pytest.mark.asyncio
     async def test_invalid_base_returns_400(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/sessions/{session.id}/diff",
                 params={"base": "invalid-mode"},
@@ -76,16 +75,16 @@ class TestDiffEndpoint:
 
     @pytest.mark.asyncio
     async def test_no_endpoint_returns_404(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session(has_endpoint=False)
         await repository.create(session)
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/sessions/{session.id}/diff",
                 params={"base": "last-commit"},
@@ -97,7 +96,9 @@ class TestDiffEndpoint:
     @pytest.mark.asyncio
     @respx.mock
     async def test_successful_diff_proxy(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
@@ -123,9 +124,7 @@ class TestDiffEndpoint:
             return_value=Response(200, json=diff_response)
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/sessions/{session.id}/diff",
                 params={"base": "last-commit"},
@@ -140,7 +139,9 @@ class TestDiffEndpoint:
     @pytest.mark.asyncio
     @respx.mock
     async def test_default_branch_mode(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
@@ -157,9 +158,7 @@ class TestDiffEndpoint:
             return_value=Response(200, json=diff_data)
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/sessions/{session.id}/diff",
                 params={"base": "default-branch"},
@@ -170,7 +169,9 @@ class TestDiffEndpoint:
     @pytest.mark.asyncio
     @respx.mock
     async def test_skuld_error_returns_502(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
@@ -181,9 +182,7 @@ class TestDiffEndpoint:
             return_value=Response(500, text="Internal Server Error")
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/sessions/{session.id}/diff",
                 params={"base": "last-commit"},
@@ -194,7 +193,9 @@ class TestDiffEndpoint:
     @pytest.mark.asyncio
     @respx.mock
     async def test_connection_error_returns_502(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
@@ -202,13 +203,12 @@ class TestDiffEndpoint:
         app = _make_app(service)
 
         import httpx
+
         respx.get("https://test-session.example.com/api/diff").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/sessions/{session.id}/diff",
                 params={"base": "last-commit"},
@@ -223,14 +223,14 @@ class TestChronicleDiffEndpoint:
 
     @pytest.mark.asyncio
     async def test_session_not_found_returns_404(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/chronicles/{uuid4()}/diff",
                 params={"file": "src/main.py", "base": "last-commit"},
@@ -240,16 +240,16 @@ class TestChronicleDiffEndpoint:
 
     @pytest.mark.asyncio
     async def test_invalid_base_returns_400(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/chronicles/{session.id}/diff",
                 params={"file": "src/main.py", "base": "invalid"},
@@ -260,16 +260,16 @@ class TestChronicleDiffEndpoint:
 
     @pytest.mark.asyncio
     async def test_missing_file_param_returns_422(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/chronicles/{session.id}/diff",
                 params={"base": "last-commit"},
@@ -279,16 +279,16 @@ class TestChronicleDiffEndpoint:
 
     @pytest.mark.asyncio
     async def test_no_endpoint_returns_404(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session(has_endpoint=False)
         await repository.create(session)
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/chronicles/{session.id}/diff",
                 params={"file": "src/main.py", "base": "last-commit"},
@@ -300,7 +300,9 @@ class TestChronicleDiffEndpoint:
     @pytest.mark.asyncio
     @respx.mock
     async def test_successful_diff_proxy(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
@@ -328,9 +330,7 @@ class TestChronicleDiffEndpoint:
             return_value=Response(200, json=diff_response)
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/chronicles/{session.id}/diff",
                 params={"file": "src/main.py", "base": "last-commit"},
@@ -344,7 +344,9 @@ class TestChronicleDiffEndpoint:
     @pytest.mark.asyncio
     @respx.mock
     async def test_skuld_error_returns_502(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
@@ -355,9 +357,7 @@ class TestChronicleDiffEndpoint:
             return_value=Response(500, text="Internal Server Error")
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/chronicles/{session.id}/diff",
                 params={"file": "src/main.py", "base": "last-commit"},
@@ -368,7 +368,9 @@ class TestChronicleDiffEndpoint:
     @pytest.mark.asyncio
     @respx.mock
     async def test_connection_error_returns_502(
-        self, repository, pod_manager,
+        self,
+        repository,
+        pod_manager,
     ):
         session = _make_session()
         await repository.create(session)
@@ -376,13 +378,12 @@ class TestChronicleDiffEndpoint:
         app = _make_app(service)
 
         import httpx
+
         respx.get("https://test-session.example.com/api/diff").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/api/v1/volundr/chronicles/{session.id}/diff",
                 params={"file": "src/main.py", "base": "last-commit"},

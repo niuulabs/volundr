@@ -70,6 +70,7 @@ const mockService = {
   listWorkspaces: vi.fn().mockResolvedValue([]),
   getCredentials: vi.fn().mockResolvedValue([]),
   getIntegrations: vi.fn().mockResolvedValue([]),
+  getFeatures: vi.fn().mockResolvedValue({ localMountsEnabled: false }),
 } as unknown as import('@/ports').IVolundrService;
 
 const defaultProps = {
@@ -222,7 +223,7 @@ describe('LaunchWizard', () => {
         expect.objectContaining({
           name: 'test-session',
           model: 'claude-sonnet',
-          repo: 'https://github.com/org/repo.git',
+          source: { type: 'git', repo: 'https://github.com/org/repo.git', branch: 'develop' },
           terminalRestricted: false,
         })
       );

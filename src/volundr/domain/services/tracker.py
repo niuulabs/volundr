@@ -52,7 +52,8 @@ class TrackerService:
         self._tracker_factory = tracker_factory
 
     async def _get_tracker_for_user(
-        self, user_id: str | None = None,
+        self,
+        user_id: str | None = None,
     ) -> IssueTrackerProvider | None:
         """Resolve the issue tracker for a user.
 
@@ -61,7 +62,8 @@ class TrackerService:
         """
         if user_id and self._integration_repo and self._tracker_factory:
             connections = await self._integration_repo.list_connections(
-                user_id, IntegrationType.ISSUE_TRACKER,
+                user_id,
+                IntegrationType.ISSUE_TRACKER,
             )
             active = [c for c in connections if c.enabled]
             if active:
@@ -70,7 +72,8 @@ class TrackerService:
         return self._default_provider
 
     def _require_tracker(
-        self, tracker: IssueTrackerProvider | None,
+        self,
+        tracker: IssueTrackerProvider | None,
     ) -> IssueTrackerProvider:
         """Ensure a tracker is available, raising if not."""
         if tracker is None:
@@ -78,7 +81,8 @@ class TrackerService:
         return tracker
 
     async def check_connection(
-        self, user_id: str | None = None,
+        self,
+        user_id: str | None = None,
     ) -> TrackerConnectionStatus:
         """Check the connection to the issue tracker."""
         tracker = await self._get_tracker_for_user(user_id)
@@ -173,8 +177,6 @@ class TrackerService:
         """Delete a project mapping."""
         deleted = await self._mappings.delete(mapping_id)
         if not deleted:
-            raise TrackerMappingNotFoundError(
-                f"Mapping not found: {mapping_id}"
-            )
+            raise TrackerMappingNotFoundError(f"Mapping not found: {mapping_id}")
         logger.info("Deleted project mapping: id=%s", mapping_id)
         return True

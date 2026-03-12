@@ -1370,6 +1370,7 @@ class SecretInjectionPort(ABC):
 @dataclass(frozen=True)
 class SessionContext:
     """Read-only context for contributors."""
+
     principal: Principal | None = None
     template_name: str | None = None
     profile_name: str | None = None
@@ -1382,6 +1383,7 @@ class SessionContext:
 @dataclass(frozen=True)
 class SessionContribution:
     """Output from a single contributor."""
+
     values: dict[str, Any] = field(default_factory=dict)
     pod_spec: PodSpecAdditions | None = None
 
@@ -1399,7 +1401,9 @@ class SessionContributor(ABC):
 
     @abstractmethod
     async def contribute(
-        self, session: Session, context: SessionContext,
+        self,
+        session: Session,
+        context: SessionContext,
     ) -> SessionContribution: ...
 
     async def cleanup(self, session: Session, context: SessionContext) -> None:

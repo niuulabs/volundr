@@ -56,9 +56,14 @@ export type { Memory, MemoryStats } from './memory.model';
 export type { MimirStats, MimirConsultation } from './mimir.model';
 
 export type {
+  VolundrFeatures,
   ModelTier,
   ModelProvider,
+  GitSource,
+  LocalMountSource,
+  MountMapping,
   SessionSource,
+  SessionOrigin,
   RepoProvider,
   TaskType,
   VolundrModel,

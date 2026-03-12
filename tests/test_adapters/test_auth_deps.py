@@ -28,15 +28,19 @@ def _make_app(identity=None, authorization=None):
 
 def _admin_principal():
     return Principal(
-        user_id="u1", email="admin@test.com",
-        tenant_id="t1", roles=["volundr:admin"],
+        user_id="u1",
+        email="admin@test.com",
+        tenant_id="t1",
+        roles=["volundr:admin"],
     )
 
 
 def _viewer_principal():
     return Principal(
-        user_id="u2", email="viewer@test.com",
-        tenant_id="t1", roles=["volundr:viewer"],
+        user_id="u2",
+        email="viewer@test.com",
+        tenant_id="t1",
+        roles=["volundr:viewer"],
     )
 
 
@@ -168,12 +172,15 @@ class TestEnvoyHeaderMode:
             }
 
         client = TestClient(app)
-        resp = client.get("/test", headers={
-            "x-auth-user-id": "envoy-user",
-            "x-auth-email": "envoy@test.com",
-            "x-auth-tenant": "acme",
-            "x-auth-roles": "volundr:admin",
-        })
+        resp = client.get(
+            "/test",
+            headers={
+                "x-auth-user-id": "envoy-user",
+                "x-auth-email": "envoy@test.com",
+                "x-auth-tenant": "acme",
+                "x-auth-roles": "volundr:admin",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["user_id"] == "envoy-user"
@@ -216,6 +223,7 @@ class TestCheckAuthorization:
         resource = Resource(kind="session", id="s1", attr={})
 
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException) as exc_info:
             await check_authorization(request, principal, "delete", resource)
         assert exc_info.value.status_code == 403

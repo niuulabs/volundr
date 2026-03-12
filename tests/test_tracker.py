@@ -182,34 +182,24 @@ class TestTrackerService:
         assert len(results) == 1
         assert results[0].identifier == "NIU-57"
 
-    async def test_search_issues_by_identifier(
-        self, tracker_service: TrackerService
-    ):
+    async def test_search_issues_by_identifier(self, tracker_service: TrackerService):
         results = await tracker_service.search_issues("NIU-58")
         assert len(results) == 1
         assert results[0].title == "Fix dashboard bug"
 
-    async def test_search_issues_no_results(
-        self, tracker_service: TrackerService
-    ):
+    async def test_search_issues_no_results(self, tracker_service: TrackerService):
         results = await tracker_service.search_issues("nonexistent")
         assert len(results) == 0
 
-    async def test_search_issues_with_project_id(
-        self, tracker_service: TrackerService
-    ):
-        results = await tracker_service.search_issues(
-            "Linear", project_id="proj-1"
-        )
+    async def test_search_issues_with_project_id(self, tracker_service: TrackerService):
+        results = await tracker_service.search_issues("Linear", project_id="proj-1")
         assert len(results) == 1
 
     async def test_get_recent_issues(self, tracker_service: TrackerService):
         results = await tracker_service.get_recent_issues("proj-1")
         assert len(results) == 2
 
-    async def test_get_recent_issues_with_limit(
-        self, tracker_service: TrackerService
-    ):
+    async def test_get_recent_issues_with_limit(self, tracker_service: TrackerService):
         results = await tracker_service.get_recent_issues("proj-1", limit=1)
         assert len(results) == 1
 
@@ -223,15 +213,11 @@ class TestTrackerService:
             await tracker_service.get_issue("nonexistent")
 
     async def test_update_issue_status(self, tracker_service: TrackerService):
-        updated = await tracker_service.update_issue_status(
-            "issue-1", "Done"
-        )
+        updated = await tracker_service.update_issue_status("issue-1", "Done")
         assert updated.status == "Done"
         assert updated.identifier == "NIU-57"
 
-    async def test_update_issue_status_not_found(
-        self, tracker_service: TrackerService
-    ):
+    async def test_update_issue_status_not_found(self, tracker_service: TrackerService):
         with pytest.raises(TrackerIssueNotFoundError):
             await tracker_service.update_issue_status("nonexistent", "Done")
 
@@ -266,15 +252,11 @@ class TestTrackerServiceMappings:
             repo_url="https://github.com/niuulabs/volundr",
             project_id="proj-1",
         )
-        mapping = await tracker_service.get_mapping_by_repo(
-            "https://github.com/niuulabs/volundr"
-        )
+        mapping = await tracker_service.get_mapping_by_repo("https://github.com/niuulabs/volundr")
         assert mapping is not None
         assert mapping.project_id == "proj-1"
 
-    async def test_get_mapping_by_repo_not_found(
-        self, tracker_service: TrackerService
-    ):
+    async def test_get_mapping_by_repo_not_found(self, tracker_service: TrackerService):
         mapping = await tracker_service.get_mapping_by_repo("nonexistent")
         assert mapping is None
 
@@ -288,9 +270,7 @@ class TestTrackerServiceMappings:
         mappings = await tracker_service.list_mappings()
         assert len(mappings) == 0
 
-    async def test_delete_mapping_not_found(
-        self, tracker_service: TrackerService
-    ):
+    async def test_delete_mapping_not_found(self, tracker_service: TrackerService):
         with pytest.raises(TrackerMappingNotFoundError):
             await tracker_service.delete_mapping(uuid4())
 
@@ -310,9 +290,7 @@ class TestTrackerEndpoints:
         assert data["workspace"] == "Test Workspace"
 
     def test_search_issues(self, tracker_client: TestClient):
-        response = tracker_client.get(
-            "/api/v1/volundr/tracker/issues", params={"q": "Linear"}
-        )
+        response = tracker_client.get("/api/v1/volundr/tracker/issues", params={"q": "Linear"})
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -347,12 +325,8 @@ class TestTrackerEndpoints:
         data = response.json()
         assert len(data) == 1
 
-    def test_get_recent_issues_missing_project_id(
-        self, tracker_client: TestClient
-    ):
-        response = tracker_client.get(
-            "/api/v1/volundr/tracker/issues/recent"
-        )
+    def test_get_recent_issues_missing_project_id(self, tracker_client: TestClient):
+        response = tracker_client.get("/api/v1/volundr/tracker/issues/recent")
         assert response.status_code == 422
 
     def test_update_issue_status(self, tracker_client: TestClient):
@@ -373,9 +347,7 @@ class TestTrackerEndpoints:
         assert response.status_code == 404
 
     def test_list_mappings_empty(self, tracker_client: TestClient):
-        response = tracker_client.get(
-            "/api/v1/volundr/tracker/mappings"
-        )
+        response = tracker_client.get("/api/v1/volundr/tracker/mappings")
         assert response.status_code == 200
         assert response.json() == []
 
@@ -404,9 +376,7 @@ class TestTrackerEndpoints:
                 "project_id": "proj-1",
             },
         )
-        response = tracker_client.get(
-            "/api/v1/volundr/tracker/mappings"
-        )
+        response = tracker_client.get("/api/v1/volundr/tracker/mappings")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -420,16 +390,12 @@ class TestTrackerEndpoints:
             },
         )
         mapping_id = create_response.json()["id"]
-        response = tracker_client.delete(
-            f"/api/v1/volundr/tracker/mappings/{mapping_id}"
-        )
+        response = tracker_client.delete(f"/api/v1/volundr/tracker/mappings/{mapping_id}")
         assert response.status_code == 204
 
     def test_delete_mapping_not_found(self, tracker_client: TestClient):
         random_id = uuid4()
-        response = tracker_client.delete(
-            f"/api/v1/volundr/tracker/mappings/{random_id}"
-        )
+        response = tracker_client.delete(f"/api/v1/volundr/tracker/mappings/{random_id}")
         assert response.status_code == 404
 
     def test_create_mapping_validation(self, tracker_client: TestClient):
@@ -440,9 +406,7 @@ class TestTrackerEndpoints:
         assert response.status_code == 422
 
     def test_issue_response_fields(self, tracker_client: TestClient):
-        response = tracker_client.get(
-            "/api/v1/volundr/tracker/issues", params={"q": "NIU-57"}
-        )
+        response = tracker_client.get("/api/v1/volundr/tracker/issues", params={"q": "NIU-57"})
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1

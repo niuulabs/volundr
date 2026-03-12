@@ -29,13 +29,15 @@ class TestStoreAndGetCredential:
         assert result == data
 
     async def test_get_missing_returns_none(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         result = await repo.get_credential("nonexistent/path")
         assert result is None
 
     async def test_overwrite_existing(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         await repo.store_credential("p", {"k": "v1"})
         await repo.store_credential("p", {"k": "v2"})
@@ -48,14 +50,16 @@ class TestDeleteCredential:
     """Tests for delete_credential."""
 
     async def test_delete_existing_returns_true(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         await repo.store_credential("p", {"k": "v"})
         assert await repo.delete_credential("p") is True
         assert await repo.get_credential("p") is None
 
     async def test_delete_missing_returns_false(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         assert await repo.delete_credential("missing") is False
 
@@ -64,32 +68,39 @@ class TestListCredentials:
     """Tests for list_credentials with prefix filtering."""
 
     async def test_empty_store(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         result = await repo.list_credentials("users/u1/keys")
         assert result == []
 
     async def test_prefix_filtering(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         await repo.store_credential(
-            "users/u1/keys/cred-a", {"k": "v"},
+            "users/u1/keys/cred-a",
+            {"k": "v"},
         )
         await repo.store_credential(
-            "users/u1/keys/cred-b", {"k": "v"},
+            "users/u1/keys/cred-b",
+            {"k": "v"},
         )
         await repo.store_credential(
-            "users/u2/keys/cred-c", {"k": "v"},
+            "users/u2/keys/cred-c",
+            {"k": "v"},
         )
 
         result = await repo.list_credentials("users/u1/keys")
         assert sorted(result) == ["cred-a", "cred-b"]
 
     async def test_nested_keys_return_directory_suffix(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         await repo.store_credential(
-            "a/b/c/d", {"k": "v"},
+            "a/b/c/d",
+            {"k": "v"},
         )
 
         result = await repo.list_credentials("a/b")
@@ -100,7 +111,8 @@ class TestProvisionUser:
     """Tests for provision_user."""
 
     async def test_creates_policy_and_role(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         await repo.provision_user("user-42", "tenant-1")
 
@@ -111,17 +123,15 @@ class TestProvisionUser:
         assert policy_name in repo._k8s_roles
         role = repo._k8s_roles[policy_name]
         assert role["policies"] == [policy_name]
-        assert (
-            "volundr-session-user-user-42-*"
-            in role["bound_service_account_names"]
-        )
+        assert "volundr-session-user-user-42-*" in role["bound_service_account_names"]
 
 
 class TestDeprovisionUser:
     """Tests for deprovision_user."""
 
     async def test_removes_policy_and_role(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         await repo.provision_user("user-42", "tenant-1")
         await repo.deprovision_user("user-42")
@@ -130,7 +140,8 @@ class TestDeprovisionUser:
         assert "volundr-user-user-42" not in repo._k8s_roles
 
     async def test_deprovision_nonexistent_is_noop(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         await repo.deprovision_user("ghost")
         assert "volundr-user-ghost" not in repo._policies
@@ -140,7 +151,8 @@ class TestSessionSecrets:
     """Tests for create_session_secrets / delete_session_secrets."""
 
     async def test_create_session_secrets(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         mounts = [
             SecretMountSpec(
@@ -161,7 +173,8 @@ class TestSessionSecrets:
         assert manifest["mounts"][0]["mount_type"] == "env_file"
 
     async def test_delete_session_secrets(
-        self, repo: InMemorySecretRepository,
+        self,
+        repo: InMemorySecretRepository,
     ):
         mounts = [
             SecretMountSpec(

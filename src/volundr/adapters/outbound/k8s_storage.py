@@ -125,7 +125,9 @@ class InMemoryStorageAdapter(StoragePort):
         self._user_pvcs.pop(user_id, None)
 
     def _entry_to_workspace(
-        self, session_id: str, entry: _WorkspaceEntry,
+        self,
+        session_id: str,
+        entry: _WorkspaceEntry,
     ) -> Workspace:
         return Workspace(
             id=entry.uid,

@@ -25,10 +25,7 @@ class InMemoryIntegrationRepository(IntegrationRepository):
         integration_type: IntegrationType | None = None,
     ) -> list[IntegrationConnection]:
         """List connections for a user, optionally filtered by type."""
-        results = [
-            c for c in self._store.values()
-            if c.user_id == user_id
-        ]
+        results = [c for c in self._store.values() if c.user_id == user_id]
         if integration_type is not None:
             results = [c for c in results if c.integration_type == integration_type]
         return sorted(results, key=lambda c: c.created_at, reverse=True)
