@@ -47,6 +47,13 @@ vi.mock('@/hooks/useIsTouchDevice', () => ({
   useIsTouchDevice: vi.fn(() => false),
 }));
 
+// Mock DotfileManager
+vi.mock('@/components/DotfileManager', () => ({
+  DotfileManager: ({ httpBase }: { httpBase: string }) => (
+    <div data-testid="dotfile-manager" data-http-base={httpBase} />
+  ),
+}));
+
 // Mock getAccessToken
 vi.mock('@/adapters/api/client', () => ({
   getAccessToken: vi.fn(() => 'test-token'),
@@ -599,5 +606,35 @@ describe('SessionTerminal', () => {
 
     // Should not crash
     expect(screen.getByRole('tablist')).toBeInTheDocument();
+  });
+
+  it('toggles dotfile manager when settings button is clicked', async () => {
+    (globalThis.fetch as Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        sessions: [{ terminalId: 'term-1', label: 'Shell', cli_type: 'shell', status: 'running' }],
+      }),
+    });
+
+    render(<SessionTerminal url="ws://test-host/terminal/ws" />);
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 10));
+    });
+
+    // Settings button should exist
+    const settingsBtn = screen.getByRole('button', { name: /terminal settings/i });
+    expect(settingsBtn).toBeInTheDocument();
+    expect(settingsBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Click to open dotfile manager
+    fireEvent.click(settingsBtn);
+    expect(settingsBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('dotfile-manager')).toBeInTheDocument();
+
+    // Click again to close
+    fireEvent.click(settingsBtn);
+    expect(settingsBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('dotfile-manager')).toBeNull();
   });
 });

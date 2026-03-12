@@ -40,6 +40,27 @@
   height: 12px;
 }
 
+.settingsButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast);
+}
+
+.settingsButton:hover {
+  color: var(--color-accent-cyan);
+}
+
+.settingsButton[aria-pressed='true'] {
+  color: var(--color-accent-cyan);
+}
+
 .terminalArea {
   flex: 1;
   min-height: 0;

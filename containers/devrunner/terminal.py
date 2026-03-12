@@ -35,13 +35,29 @@ TMUX_SERVER_NAME = "volundr"
 TMUX_SOCKET_DIR = "/tmp/volundr-tmux"
 TMUX_SCROLLBACK = 50000
 
+PERSISTENT_HOME = "/volundr/home"
+PREFS_FILENAME = ".volundr-prefs"
+SKEL_DIR = "/etc/skel"
+
 # CLI tool -> command mapping
 CLI_COMMANDS: dict[str, str] = {
     "claude": "claude",
     "codex": "codex",
     "aider": "aider",
     "shell": "/bin/bash",
+    "bash": "/bin/bash",
+    "zsh": "/bin/zsh",
+    "fish": "/usr/bin/fish",
 }
+
+# Dotfiles that are managed (relative to home directory)
+MANAGED_DOTFILES = [
+    ".bashrc",
+    ".zshrc",
+    ".config/fish/config.fish",
+    ".gitconfig",
+    ".vimrc",
+]
 
 
 def _set_pty_size(fd: int, rows: int, cols: int) -> None:
@@ -120,6 +136,13 @@ class TerminalServer:
         self._app.router.add_post("/api/terminal/mode", self._handle_mode)
         self._app.router.add_get("/api/terminal/mode", self._handle_get_mode)
         self._app.router.add_get("/api/terminal/sessions", self._handle_list_sessions)
+        self._app.router.add_get("/api/terminal/dotfiles", self._handle_list_dotfiles)
+        self._app.router.add_post("/api/terminal/dotfiles", self._handle_upload_dotfile)
+        self._app.router.add_delete(
+            "/api/terminal/dotfiles/{filename:.+}", self._handle_delete_dotfile
+        )
+        self._app.router.add_get("/api/terminal/preferences", self._handle_get_preferences)
+        self._app.router.add_post("/api/terminal/preferences", self._handle_set_preferences)
         self._runner: web.AppRunner | None = None
 
     async def start(self) -> None:
@@ -218,6 +241,14 @@ class TerminalServer:
             else:
                 command = os.environ.get("SHELL", UNRESTRICTED_SHELL_PATH)
 
+        # Ensure HOME is set in tmux's environment so shells find
+        # dotfiles in the persistent home directory, not /home/devrunner
+        home_dir = os.environ.get("HOME", PERSISTENT_HOME)
+        _tmux_run("set-environment", "-t", TMUX_SERVER_NAME, "HOME", home_dir)
+
+        # Seed default dotfiles on first launch
+        self._init_home(home_dir)
+
         # Build the full command with workspace cd
         if self.workspace_dir:
             full_cmd = f"cd {self.workspace_dir} && {command}"
@@ -310,12 +341,16 @@ class TerminalServer:
         cli_type = body.get("cli_type", "shell")
         name = body.get("name")
 
+        # "shell" means "use the user's preferred shell"
+        if cli_type == "shell":
+            cli_type = self._get_preferred_shell()
+
         # Resolve command for the CLI type
-        if cli_type in CLI_COMMANDS and cli_type != "shell":
+        if cli_type in CLI_COMMANDS:
             command = CLI_COMMANDS[cli_type]
         else:
-            cli_type = "shell"
-            command = None  # Will use default shell
+            cli_type = "bash"
+            command = CLI_COMMANDS["bash"]
 
         self._session_counter += 1
         terminal_id = name or f"{cli_type}-{self._session_counter}"
@@ -380,6 +415,159 @@ class TerminalServer:
                 "tmux": self._tmux_ready,
             }
         )
+
+    # --- Home Directory & Preferences ---
+
+    @staticmethod
+    def _get_home_dir() -> str:
+        return os.environ.get("HOME", PERSISTENT_HOME)
+
+    def _init_home(self, home_dir: str) -> None:
+        """Seed default dotfiles from /etc/skel if they don't exist."""
+        if not os.path.isdir(SKEL_DIR):
+            return
+        for root, _dirs, files in os.walk(SKEL_DIR):
+            for fname in files:
+                src = os.path.join(root, fname)
+                rel = os.path.relpath(src, SKEL_DIR)
+                dest = os.path.join(home_dir, rel)
+                if not os.path.exists(dest):
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    try:
+                        shutil.copy2(src, dest)
+                        logger.info("Seeded dotfile: %s", rel)
+                    except OSError:
+                        logger.warning("Failed to seed dotfile: %s", rel)
+
+        # Seed oh-my-zsh if installed system-wide
+        omz_src = "/usr/share/oh-my-zsh"
+        omz_dest = os.path.join(home_dir, ".oh-my-zsh")
+        if os.path.isdir(omz_src) and not os.path.isdir(omz_dest):
+            try:
+                shutil.copytree(omz_src, omz_dest)
+                logger.info("Seeded oh-my-zsh to %s", omz_dest)
+            except OSError:
+                logger.warning("Failed to seed oh-my-zsh")
+
+    def _get_preferred_shell(self) -> str:
+        """Read the user's preferred shell from their prefs file."""
+        home_dir = self._get_home_dir()
+        prefs_path = os.path.join(home_dir, PREFS_FILENAME)
+        try:
+            with open(prefs_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("default_shell="):
+                        shell = line.split("=", 1)[1].strip()
+                        if shell in CLI_COMMANDS:
+                            return shell
+        except FileNotFoundError:
+            pass
+        return "zsh"
+
+    @staticmethod
+    def _set_preferred_shell(shell: str) -> None:
+        """Write the user's preferred shell to their prefs file."""
+        home_dir = os.environ.get("HOME", PERSISTENT_HOME)
+        prefs_path = os.path.join(home_dir, PREFS_FILENAME)
+        os.makedirs(os.path.dirname(prefs_path) or ".", exist_ok=True)
+        with open(prefs_path, "w") as f:
+            f.write(f"default_shell={shell}\n")
+
+    # --- Dotfile Handlers ---
+
+    async def _handle_list_dotfiles(self, request: web.Request) -> web.Response:
+        """List dotfiles in the user's home directory."""
+        home_dir = self._get_home_dir()
+        dotfiles = []
+        for rel_path in MANAGED_DOTFILES:
+            full_path = os.path.join(home_dir, rel_path)
+            exists = os.path.isfile(full_path)
+            has_default = os.path.isfile(os.path.join(SKEL_DIR, rel_path))
+            entry: dict[str, str | bool | int] = {
+                "name": rel_path,
+                "exists": exists,
+                "hasDefault": has_default,
+            }
+            if exists:
+                try:
+                    stat = os.stat(full_path)
+                    entry["size"] = stat.st_size
+                except OSError:
+                    pass
+            dotfiles.append(entry)
+        return web.json_response({"dotfiles": dotfiles, "homeDir": home_dir})
+
+    async def _handle_upload_dotfile(self, request: web.Request) -> web.Response:
+        """Upload a dotfile to the user's home directory."""
+        home_dir = self._get_home_dir()
+
+        body = await request.json()
+        filename = body.get("filename", "")
+        content = body.get("content", "")
+
+        if not filename:
+            return web.json_response({"error": "filename is required"}, status=400)
+
+        # Security: prevent path traversal
+        norm = os.path.normpath(filename)
+        if norm.startswith("/") or ".." in norm.split(os.sep):
+            return web.json_response({"error": "invalid filename"}, status=400)
+
+        dest = os.path.join(home_dir, norm)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        try:
+            with open(dest, "w") as f:
+                f.write(content)
+        except OSError as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+        logger.info("Uploaded dotfile: %s", norm)
+        return web.json_response({"ok": True, "filename": norm})
+
+    async def _handle_delete_dotfile(self, request: web.Request) -> web.Response:
+        """Delete a user dotfile. Defaults will be restored on next shell start."""
+        home_dir = self._get_home_dir()
+        filename = request.match_info["filename"]
+
+        # Security: prevent path traversal
+        norm = os.path.normpath(filename)
+        if norm.startswith("/") or ".." in norm.split(os.sep):
+            return web.json_response({"error": "invalid filename"}, status=400)
+
+        full_path = os.path.join(home_dir, norm)
+        if not os.path.isfile(full_path):
+            return web.json_response({"error": "not found"}, status=404)
+
+        try:
+            os.remove(full_path)
+        except OSError as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+        logger.info("Deleted dotfile: %s", norm)
+        return web.json_response({"ok": True, "filename": norm})
+
+    # --- Preference Handlers ---
+
+    async def _handle_get_preferences(self, request: web.Request) -> web.Response:
+        """Get user terminal preferences."""
+        shell = self._get_preferred_shell()
+        return web.json_response({"default_shell": shell})
+
+    async def _handle_set_preferences(self, request: web.Request) -> web.Response:
+        """Set user terminal preferences."""
+        body = await request.json()
+        shell = body.get("default_shell", "")
+
+        if shell not in ("bash", "zsh", "fish"):
+            return web.json_response(
+                {"error": f"Invalid shell: {shell}. Must be bash, zsh, or fish."},
+                status=400,
+            )
+
+        self._set_preferred_shell(shell)
+        logger.info("Set preferred shell: %s", shell)
+        return web.json_response({"ok": True, "default_shell": shell})
 
     # --- WebSocket Handler ---
 

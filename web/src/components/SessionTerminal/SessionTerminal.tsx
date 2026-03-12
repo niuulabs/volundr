@@ -2,18 +2,21 @@ import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff, Settings } from 'lucide-react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useIsTouchDevice } from '@/hooks/useIsTouchDevice';
 import { getAccessToken } from '@/adapters/api/client';
 import { cn } from '@/utils';
 import { TerminalTabBar } from '@/components/TerminalTabBar';
 import { TerminalAccessoryBar } from '@/components/TerminalAccessoryBar';
+import { DotfileManager } from '@/components/DotfileManager';
 import type { TerminalTab } from '@/models';
 import styles from './SessionTerminal.module.css';
 
 const FONT_LOAD_TIMEOUT_MS = 2000;
-const TERMINAL_FONT = '13px "JetBrains Mono"';
+const TERMINAL_FONT = '13px "JetBrainsMono NF"';
+const NERD_FONT_FAMILY =
+  '"JetBrainsMono NF", var(--font-mono), "JetBrains Mono", "Fira Code", monospace';
 
 interface TerminalInstance {
   term: XTerm;
@@ -148,6 +151,7 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [fontReady, setFontReady] = useState(false);
+  const [showDotfiles, setShowDotfiles] = useState(false);
 
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const instanceRefs = useRef<Map<string, TerminalInstance>>(new Map());
@@ -206,14 +210,27 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
   // Wait for terminal font before initializing
   useEffect(() => {
     let cancelled = false;
-    Promise.race([
-      document.fonts.load(TERMINAL_FONT),
-      new Promise(r => setTimeout(r, FONT_LOAD_TIMEOUT_MS)),
-    ]).then(() => {
+
+    async function waitForFont() {
+      // Wait for all font-face declarations to finish loading
+      await document.fonts.ready;
+
+      // Explicitly load the Nerd Font (triggers fetch if not already started)
+      try {
+        await Promise.race([
+          document.fonts.load(TERMINAL_FONT),
+          new Promise(r => setTimeout(r, FONT_LOAD_TIMEOUT_MS)),
+        ]);
+      } catch {
+        // Font load failed — proceed with fallback
+      }
+
       if (!cancelled) {
         setFontReady(true);
       }
-    });
+    }
+
+    waitForFont();
     return () => {
       cancelled = true;
     };
@@ -274,7 +291,7 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
       const term = new XTerm({
         cursorBlink: true,
         cursorStyle: 'block',
-        fontFamily: 'var(--font-mono), "JetBrains Mono", "Fira Code", monospace',
+        fontFamily: NERD_FONT_FAMILY,
         fontSize: 13,
         lineHeight: 1.4,
         theme: {
@@ -510,6 +527,14 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
           )}
           <span>{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
+        <button
+          className={styles.settingsButton}
+          onClick={() => setShowDotfiles(prev => !prev)}
+          aria-label="Terminal settings"
+          aria-pressed={showDotfiles}
+        >
+          <Settings className={styles.statusIcon} />
+        </button>
       </div>
 
       <TerminalTabBar
@@ -522,18 +547,22 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
       />
 
       <div className={styles.terminalArea}>
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            className={styles.terminalContainer}
-            data-visible={tab.id === activeTabId}
-            ref={el => {
-              if (el) {
-                mountTerminal(tab.id, el);
-              }
-            }}
-          />
-        ))}
+        {showDotfiles && httpBase ? (
+          <DotfileManager httpBase={httpBase} />
+        ) : (
+          tabs.map(tab => (
+            <div
+              key={tab.id}
+              className={styles.terminalContainer}
+              data-visible={tab.id === activeTabId}
+              ref={el => {
+                if (el) {
+                  mountTerminal(tab.id, el);
+                }
+              }}
+            />
+          ))
+        )}
       </div>
 
       {isTouch && <TerminalAccessoryBar onInput={handleAccessoryInput} />}

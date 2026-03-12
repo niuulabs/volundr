@@ -4,7 +4,9 @@ import type { TerminalTab } from '@/models';
 import styles from './TerminalTabBar.module.css';
 
 const CLI_OPTIONS = [
-  { id: 'shell', label: 'Shell' },
+  { id: 'bash', label: 'Bash' },
+  { id: 'zsh', label: 'Zsh' },
+  { id: 'fish', label: 'Fish' },
   { id: 'claude', label: 'Claude' },
   { id: 'codex', label: 'Codex' },
   { id: 'aider', label: 'Aider' },

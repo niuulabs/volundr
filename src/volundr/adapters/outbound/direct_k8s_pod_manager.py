@@ -531,6 +531,7 @@ fi
                                 "env": [
                                     {"name": "SESSION_ID", "value": str(session.id)},
                                     {"name": "TERMINAL_PORT", "value": "7681"},
+                                    {"name": "HOME", "value": "/volundr/home"},
                                 ],
                                 "securityContext": {
                                     "runAsUser": 1000,

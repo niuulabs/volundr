@@ -9,7 +9,7 @@ LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies: Node.js, PostgreSQL server, inotify-tools
+# Install system dependencies: Node.js, PostgreSQL server, shells, inotify-tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -18,7 +18,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     inotify-tools \
     git \
     tmux \
+    zsh \
+    fish \
+    zsh-autosuggestions \
+    zsh-syntax-highlighting \
     && rm -rf /var/lib/apt/lists/*
+
+# Install oh-my-zsh system-wide (users get a copy via init-home.sh)
+RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-zsh
 
 # Install Node.js 20 LTS
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
@@ -56,11 +63,18 @@ RUN useradd -m -s /bin/bash -u 1000 devrunner
 # Allow devrunner user to run PostgreSQL
 RUN mkdir -p /run/postgresql && chown devrunner:devrunner /run/postgresql
 
-# Copy process manager and terminal server
+# Copy default dotfiles into /etc/skel for first-launch seeding
+COPY containers/devrunner/configs/.bashrc /etc/skel/.bashrc
+COPY containers/devrunner/configs/.zshrc /etc/skel/.zshrc
+COPY containers/devrunner/configs/.config/fish/config.fish /etc/skel/.config/fish/config.fish
+COPY containers/devrunner/configs/.config/fish/functions/fish_prompt.fish /etc/skel/.config/fish/functions/fish_prompt.fish
+
+# Copy process manager, terminal server, and init script
 COPY containers/devrunner/devrunner.py /usr/local/bin/devrunner
 COPY containers/devrunner/terminal.py /usr/local/bin/terminal.py
 COPY containers/devrunner/restricted-shell /usr/local/bin/restricted-shell
-RUN chmod +x /usr/local/bin/devrunner /usr/local/bin/restricted-shell
+COPY containers/devrunner/configs/init-home.sh /usr/local/bin/init-home.sh
+RUN chmod +x /usr/local/bin/devrunner /usr/local/bin/restricted-shell /usr/local/bin/init-home.sh
 
 # Switch to non-root user
 USER devrunner
