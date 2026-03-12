@@ -26,3 +26,11 @@ done
 if [ -d /usr/share/oh-my-zsh ] && [ ! -d "$TARGET_DIR/.oh-my-zsh" ]; then
     cp -r /usr/share/oh-my-zsh "$TARGET_DIR/.oh-my-zsh"
 fi
+
+# Install Homebrew into persistent home if not already present
+if [ ! -x "$TARGET_DIR/.linuxbrew/bin/brew" ]; then
+    echo "Installing Homebrew into $TARGET_DIR/.linuxbrew ..."
+    git clone --depth=1 https://github.com/Homebrew/brew "$TARGET_DIR/.linuxbrew/Homebrew"
+    mkdir -p "$TARGET_DIR/.linuxbrew/bin"
+    ln -sf "$TARGET_DIR/.linuxbrew/Homebrew/bin/brew" "$TARGET_DIR/.linuxbrew/bin/brew"
+fi
