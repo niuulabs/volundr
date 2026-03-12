@@ -173,9 +173,7 @@ class TestBranchesEndpoint:
     @pytest.mark.asyncio
     async def test_list_branches_ok(self):
         app = _make_app()
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/api/v1/volundr/repos/branches",
                 params={"repo_url": "https://github.com/org/repo"},
@@ -190,9 +188,7 @@ class TestBranchesEndpoint:
             error=GitAuthError("Authentication failed: HTTP 401"),
         )
         app = _make_app(provider=provider)
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/api/v1/volundr/repos/branches",
                 params={"repo_url": "https://github.com/org/private"},
@@ -207,9 +203,7 @@ class TestBranchesEndpoint:
             error=GitRepoNotFoundError("Repository not found"),
         )
         app = _make_app(provider=provider)
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/api/v1/volundr/repos/branches",
                 params={"repo_url": "https://github.com/org/gone"},
@@ -221,9 +215,7 @@ class TestBranchesEndpoint:
     @pytest.mark.asyncio
     async def test_list_branches_no_provider_returns_400(self):
         app = _make_app()
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/api/v1/volundr/repos/branches",
                 params={"repo_url": "https://unknown.host/org/repo"},
@@ -235,9 +227,7 @@ class TestBranchesEndpoint:
     @pytest.mark.asyncio
     async def test_list_branches_missing_param_returns_422(self):
         app = _make_app()
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/api/v1/volundr/repos/branches")
 
         assert resp.status_code == 422
@@ -245,9 +235,7 @@ class TestBranchesEndpoint:
     @pytest.mark.asyncio
     async def test_list_branches_no_service_returns_503(self):
         app = _make_app(repo_service=None)
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/api/v1/volundr/repos/branches",
                 params={"repo_url": "https://github.com/org/repo"},

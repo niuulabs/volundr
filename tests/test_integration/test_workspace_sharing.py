@@ -105,8 +105,6 @@ class TestPersistenceConfiguration:
         assert "if .Values.persistence.enabled" in deployment_yaml
 
 
-
-
 class TestSecurityContext:
     """Tests for security context consistency between containers."""
 

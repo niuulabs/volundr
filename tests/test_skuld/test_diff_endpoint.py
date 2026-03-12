@@ -46,13 +46,7 @@ class TestParseDiffOutput:
         assert lines[2]["content"] == "new_line_a"
 
     def test_single_hunk_with_removals(self):
-        raw = (
-            "@@ -1,4 +1,2 @@\n"
-            " keep\n"
-            "-removed_a\n"
-            "-removed_b\n"
-            " keep2\n"
-        )
+        raw = "@@ -1,4 +1,2 @@\n keep\n-removed_a\n-removed_b\n keep2\n"
         result = _parse_diff_output(raw, "file.py")
         lines = result["hunks"][0]["lines"]
         assert len(lines) == 4
@@ -61,31 +55,14 @@ class TestParseDiffOutput:
         assert "oldLine" in lines[1]
 
     def test_multiple_hunks(self):
-        raw = (
-            "@@ -1,3 +1,3 @@\n"
-            " a\n"
-            "-b\n"
-            "+B\n"
-            " c\n"
-            "@@ -10,3 +10,3 @@\n"
-            " x\n"
-            "-y\n"
-            "+Y\n"
-            " z\n"
-        )
+        raw = "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n@@ -10,3 +10,3 @@\n x\n-y\n+Y\n z\n"
         result = _parse_diff_output(raw, "file.py")
         assert len(result["hunks"]) == 2
         assert result["hunks"][0]["oldStart"] == 1
         assert result["hunks"][1]["oldStart"] == 10
 
     def test_line_numbers_increment(self):
-        raw = (
-            "@@ -5,3 +5,4 @@\n"
-            " ctx\n"
-            "+added\n"
-            " ctx2\n"
-            " ctx3\n"
-        )
+        raw = "@@ -5,3 +5,4 @@\n ctx\n+added\n ctx2\n ctx3\n"
         result = _parse_diff_output(raw, "file.py")
         lines = result["hunks"][0]["lines"]
         # Context line at old=5, new=5
@@ -116,9 +93,7 @@ class TestDiffEndpoint:
         assert response.status_code == 422
 
     def test_invalid_base_returns_400(self):
-        response = self.client.get(
-            "/api/diff", params={"file": "main.py", "base": "invalid"}
-        )
+        response = self.client.get("/api/diff", params={"file": "main.py", "base": "invalid"})
         assert response.status_code == 400
         assert "Invalid base" in response.json()["detail"]
 
@@ -132,24 +107,15 @@ class TestDiffEndpoint:
 
     @patch("volundr.skuld.broker.asyncio")
     def test_successful_diff(self, mock_asyncio):
-        diff_output = (
-            "@@ -1,2 +1,3 @@\n"
-            " line1\n"
-            "+added\n"
-            " line2\n"
-        )
+        diff_output = "@@ -1,2 +1,3 @@\n line1\n+added\n line2\n"
 
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(
-            return_value=(diff_output.encode(), b"")
-        )
+        mock_proc.communicate = AsyncMock(return_value=(diff_output.encode(), b""))
 
         mock_asyncio.create_subprocess_exec = AsyncMock(return_value=mock_proc)
         mock_asyncio.subprocess = subprocess
-        mock_asyncio.wait_for = AsyncMock(
-            return_value=(diff_output.encode(), b"")
-        )
+        mock_asyncio.wait_for = AsyncMock(return_value=(diff_output.encode(), b""))
 
         response = self.client.get(
             "/api/diff",
@@ -164,15 +130,11 @@ class TestDiffEndpoint:
     def test_git_diff_failure_returns_502(self, mock_asyncio):
         mock_proc = AsyncMock()
         mock_proc.returncode = 128
-        mock_proc.communicate = AsyncMock(
-            return_value=(b"", b"fatal: bad object")
-        )
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"fatal: bad object"))
 
         mock_asyncio.create_subprocess_exec = AsyncMock(return_value=mock_proc)
         mock_asyncio.subprocess = subprocess
-        mock_asyncio.wait_for = AsyncMock(
-            return_value=(b"", b"fatal: bad object")
-        )
+        mock_asyncio.wait_for = AsyncMock(return_value=(b"", b"fatal: bad object"))
 
         response = self.client.get(
             "/api/diff",

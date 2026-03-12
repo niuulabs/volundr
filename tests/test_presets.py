@@ -159,9 +159,7 @@ class TestPresetService:
         first = await preset_service.create_preset(
             name="First", is_default=True, cli_tool="claude-code"
         )
-        await preset_service.create_preset(
-            name="Second", is_default=True, cli_tool="claude-code"
-        )
+        await preset_service.create_preset(name="Second", is_default=True, cli_tool="claude-code")
         # Refresh first to see cleared default
         refreshed = await preset_service.get_preset(first.id)
         assert refreshed.is_default is False

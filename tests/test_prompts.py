@@ -39,8 +39,7 @@ class InMemoryPromptRepository(SavedPromptRepository):
             results = [p for p in results if p.scope == scope]
         if repo is not None:
             results = [
-                p for p in results
-                if p.scope == PromptScope.GLOBAL or p.project_repo == repo
+                p for p in results if p.scope == PromptScope.GLOBAL or p.project_repo == repo
             ]
         results.sort(key=lambda p: p.updated_at, reverse=True)
         return results
@@ -113,9 +112,7 @@ class TestPromptService:
         assert prompt.tags == ["testing"]
 
     async def test_get_prompt(self, prompt_service: PromptService):
-        created = await prompt_service.create_prompt(
-            name="Test", content="Content"
-        )
+        created = await prompt_service.create_prompt(name="Test", content="Content")
         fetched = await prompt_service.get_prompt(created.id)
         assert fetched.id == created.id
         assert fetched.name == "Test"
@@ -127,8 +124,10 @@ class TestPromptService:
     async def test_list_prompts(self, prompt_service: PromptService):
         await prompt_service.create_prompt(name="A", content="Content A")
         await prompt_service.create_prompt(
-            name="B", content="Content B",
-            scope=PromptScope.PROJECT, project_repo="repo1",
+            name="B",
+            content="Content B",
+            scope=PromptScope.PROJECT,
+            project_repo="repo1",
         )
         all_prompts = await prompt_service.list_prompts()
         assert len(all_prompts) == 2
@@ -136,8 +135,10 @@ class TestPromptService:
     async def test_list_prompts_filtered_by_scope(self, prompt_service: PromptService):
         await prompt_service.create_prompt(name="Global", content="G")
         await prompt_service.create_prompt(
-            name="Project", content="P",
-            scope=PromptScope.PROJECT, project_repo="repo1",
+            name="Project",
+            content="P",
+            scope=PromptScope.PROJECT,
+            project_repo="repo1",
         )
         global_only = await prompt_service.list_prompts(scope=PromptScope.GLOBAL)
         assert len(global_only) == 1
@@ -146,12 +147,16 @@ class TestPromptService:
     async def test_list_prompts_filtered_by_repo(self, prompt_service: PromptService):
         await prompt_service.create_prompt(name="Global", content="G")
         await prompt_service.create_prompt(
-            name="Repo1", content="R1",
-            scope=PromptScope.PROJECT, project_repo="repo1",
+            name="Repo1",
+            content="R1",
+            scope=PromptScope.PROJECT,
+            project_repo="repo1",
         )
         await prompt_service.create_prompt(
-            name="Repo2", content="R2",
-            scope=PromptScope.PROJECT, project_repo="repo2",
+            name="Repo2",
+            content="R2",
+            scope=PromptScope.PROJECT,
+            project_repo="repo2",
         )
         results = await prompt_service.list_prompts(repo="repo1")
         assert len(results) == 2  # global + repo1
@@ -161,9 +166,7 @@ class TestPromptService:
 
     async def test_update_prompt(self, prompt_service: PromptService):
         created = await prompt_service.create_prompt(name="Old", content="Old content")
-        updated = await prompt_service.update_prompt(
-            created.id, name="New", content="New content"
-        )
+        updated = await prompt_service.update_prompt(created.id, name="New", content="New content")
         assert updated.name == "New"
         assert updated.content == "New content"
 
@@ -184,12 +187,8 @@ class TestPromptService:
         await prompt_service.create_prompt(
             name="Security Review", content="Check for vulnerabilities"
         )
-        await prompt_service.create_prompt(
-            name="Code Style", content="Review code style"
-        )
-        await prompt_service.create_prompt(
-            name="Unrelated", content="Something else"
-        )
+        await prompt_service.create_prompt(name="Code Style", content="Review code style")
+        await prompt_service.create_prompt(name="Unrelated", content="Something else")
         results = await prompt_service.search_prompts("review")
         assert len(results) == 2
 
@@ -199,12 +198,8 @@ class TestPromptService:
         assert len(results) == 1
 
     async def test_search_name_ranked_first(self, prompt_service: PromptService):
-        await prompt_service.create_prompt(
-            name="Other", content="security analysis"
-        )
-        await prompt_service.create_prompt(
-            name="Security Review", content="review code"
-        )
+        await prompt_service.create_prompt(name="Other", content="security analysis")
+        await prompt_service.create_prompt(name="Security Review", content="review code")
         results = await prompt_service.search_prompts("security")
         assert results[0].name == "Security Review"
 

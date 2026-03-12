@@ -67,7 +67,8 @@ async def extract_principal(request: Request) -> Principal:
 
 
 async def get_current_user(
-    request: Request, principal: Principal = Depends(extract_principal),
+    request: Request,
+    principal: Principal = Depends(extract_principal),
 ) -> User:
     """FastAPI dependency: get or provision the current user.
 

@@ -13,8 +13,8 @@ from tests.conftest import (
     MockEventBroadcaster,
 )
 from volundr.domain.models import (
-    CIStatus,
     Chronicle,
+    CIStatus,
     GitProviderType,
     GitSource,
     PullRequest,

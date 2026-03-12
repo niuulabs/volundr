@@ -46,7 +46,9 @@ class LocalMountsConfig(BaseModel):
     )
     allowed_prefixes: list[str] = Field(
         default_factory=list,
-        description="Restrict mountable host paths to these prefixes. Empty = allow all when enabled.",
+        description=(
+            "Restrict mountable host paths to these prefixes. Empty = allow all when enabled."
+        ),
     )
     default_read_only: bool = Field(
         default=True,
@@ -564,7 +566,11 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             config_schema={
                 "properties": {
                     "name": {"label": "Display Name", "type": "string"},
-                    "base_url": {"label": "API URL", "type": "url", "default": "https://api.github.com"},
+                    "base_url": {
+                        "label": "API URL",
+                        "type": "url",
+                        "default": "https://api.github.com",
+                    },
                     "orgs": {"label": "Organizations", "type": "string[]"},
                 },
             },
@@ -591,7 +597,11 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             config_schema={
                 "properties": {
                     "name": {"label": "Display Name", "type": "string"},
-                    "base_url": {"label": "Instance URL", "type": "url", "default": "https://gitlab.com"},
+                    "base_url": {
+                        "label": "Instance URL",
+                        "type": "url",
+                        "default": "https://gitlab.com",
+                    },
                     "groups": {"label": "Groups", "type": "string[]"},
                 },
             },
@@ -670,12 +680,8 @@ class AuthDiscoveryConfig(BaseModel):
     """
 
     issuer: str = Field(default="", description="OIDC issuer URL")
-    cli_client_id: str = Field(
-        default="volundr-cli", description="OIDC client ID for CLI clients"
-    )
-    scopes: str = Field(
-        default="openid profile email", description="OIDC scopes"
-    )
+    cli_client_id: str = Field(default="volundr-cli", description="OIDC client ID for CLI clients")
+    scopes: str = Field(default="openid profile email", description="OIDC scopes")
 
 
 class LinearConfig(BaseModel):

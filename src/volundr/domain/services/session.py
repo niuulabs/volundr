@@ -154,7 +154,6 @@ class SessionService:
                     model = template.model
 
         repo = source.repo if isinstance(source, GitSource) else ""
-        branch = source.branch if isinstance(source, GitSource) else ""
 
         logger.info(
             "Creating session: name=%s, model=%s, source_type=%s, repo=%s",
@@ -453,9 +452,7 @@ class SessionService:
             # Launch background readiness poller
             task = asyncio.create_task(self._poll_readiness(final))
             self._provisioning_tasks[final.id] = task
-            task.add_done_callback(
-                lambda t: self._provisioning_tasks.pop(final.id, None)
-            )
+            task.add_done_callback(lambda t: self._provisioning_tasks.pop(final.id, None))
 
             return final
         except Exception as e:
@@ -536,7 +533,10 @@ class SessionService:
                 )
 
     async def _poll_readiness(
-        self, session: Session, *, skip_initial_delay: bool = False,
+        self,
+        session: Session,
+        *,
+        skip_initial_delay: bool = False,
     ) -> None:
         """Wait for backend readiness, then transition to RUNNING or FAILED."""
         if not skip_initial_delay:
@@ -739,9 +739,7 @@ class SessionService:
                 "Reconciling stuck PROVISIONING session %s, re-launching readiness poll",
                 session.id,
             )
-            task = asyncio.create_task(
-                self._poll_readiness(session, skip_initial_delay=True)
-            )
+            task = asyncio.create_task(self._poll_readiness(session, skip_initial_delay=True))
             self._provisioning_tasks[session.id] = task
             task.add_done_callback(
                 lambda t, sid=session.id: self._provisioning_tasks.pop(sid, None)

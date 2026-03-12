@@ -16,11 +16,9 @@ from volundr.domain.models import (
     ChronicleStatus,
     GitProviderType,
     GitSource,
-    LocalMountSource,
     Model,
     ModelProvider,
     ModelTier,
-    MountMapping,
     Principal,
     Session,
     SessionSource,
@@ -479,6 +477,7 @@ def create_router(
             "scopes": settings.auth_discovery.scopes,
             "device_authorization_supported": True,
         }
+
     async def _optional_user_id(request: Request) -> str | None:
         """Extract user_id from auth principal if available, else None."""
         principal = await _optional_principal(request)

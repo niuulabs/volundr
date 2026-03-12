@@ -93,7 +93,12 @@ class TestGetTimeline:
     ):
         """Returns empty timeline when chronicle exists but has no events."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         await chronicle_svc.create_chronicle(session.id)
 
@@ -113,7 +118,12 @@ class TestGetTimeline:
     ):
         """Events are ordered by elapsed time."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 
@@ -142,7 +152,12 @@ class TestAddTimelineEvent:
     ):
         """Event is persisted in the timeline repository."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 
@@ -161,7 +176,12 @@ class TestAddTimelineEvent:
     ):
         """Adding an event publishes a chronicle_event via SSE."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 
@@ -193,7 +213,12 @@ class TestAggregateFiles:
     ):
         """File events are deduplicated and aggregated."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 
@@ -260,7 +285,12 @@ class TestAggregateCommits:
     ):
         """Git events are listed as commits, newest first."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 
@@ -306,7 +336,12 @@ class TestAggregateTokenBurn:
     ):
         """Message tokens are bucketed into 5-minute intervals."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 
@@ -335,7 +370,12 @@ class TestAggregateTokenBurn:
     ):
         """No message events results in empty token_burn."""
         session = await session_service.create_session(
-            name="Test", model="sonnet", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            name="Test",
+            model="sonnet",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         chronicle = await chronicle_svc.create_chronicle(session.id)
 

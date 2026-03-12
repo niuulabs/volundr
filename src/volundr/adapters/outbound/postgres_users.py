@@ -49,25 +49,19 @@ class PostgresUserRepository(UserRepository):
         return self._row_to_user(row)
 
     async def get(self, user_id: str) -> User | None:
-        row = await self._pool.fetchrow(
-            "SELECT * FROM users WHERE id = $1", user_id
-        )
+        row = await self._pool.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
         if row is None:
             return None
         return self._row_to_user(row)
 
     async def get_by_email(self, email: str) -> User | None:
-        row = await self._pool.fetchrow(
-            "SELECT * FROM users WHERE email = $1", email
-        )
+        row = await self._pool.fetchrow("SELECT * FROM users WHERE email = $1", email)
         if row is None:
             return None
         return self._row_to_user(row)
 
     async def list(self) -> list[User]:
-        rows = await self._pool.fetch(
-            "SELECT * FROM users ORDER BY created_at DESC"
-        )
+        rows = await self._pool.fetch("SELECT * FROM users ORDER BY created_at DESC")
         return [self._row_to_user(r) for r in rows]
 
     async def update(self, user: User) -> User:
@@ -89,9 +83,7 @@ class PostgresUserRepository(UserRepository):
         return self._row_to_user(row)
 
     async def delete(self, user_id: str) -> bool:
-        result = await self._pool.execute(
-            "DELETE FROM users WHERE id = $1", user_id
-        )
+        result = await self._pool.execute("DELETE FROM users WHERE id = $1", user_id)
         return result == "DELETE 1"
 
     async def add_membership(self, membership: TenantMembership) -> TenantMembership:

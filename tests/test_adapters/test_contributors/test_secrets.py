@@ -11,7 +11,6 @@ from volundr.adapters.outbound.contributors.secrets import (
 )
 from volundr.domain.models import (
     GitSource,
-    MountType,
     PodSpecAdditions,
     Principal,
     SecretType,

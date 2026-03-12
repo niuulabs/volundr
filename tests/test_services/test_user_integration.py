@@ -22,8 +22,12 @@ class FakeGitProvider:
     """Minimal fake that satisfies the GitProvider interface shape."""
 
     def __init__(
-        self, *, name: str, base_url: str = "",
-        token: str | None = None, orgs: tuple[str, ...] = (),
+        self,
+        *,
+        name: str,
+        base_url: str = "",
+        token: str | None = None,
+        orgs: tuple[str, ...] = (),
     ):
         self._name = name
         self._token = token
@@ -206,7 +210,8 @@ async def test_get_providers_filters_by_type(
 ) -> None:
     await service.get_providers("user-1", IntegrationType.SOURCE_CONTROL)
     integration_repo.list_connections.assert_called_once_with(
-        "user-1", integration_type=IntegrationType.SOURCE_CONTROL,
+        "user-1",
+        integration_type=IntegrationType.SOURCE_CONTROL,
     )
 
 

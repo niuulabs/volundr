@@ -207,6 +207,4 @@ class LocalStorageAdapter(StoragePort):
         for child in self._home_dir.iterdir():
             if not child.is_dir():
                 continue
-            self._user_pvcs[child.name] = PVCRef(
-                name=str(child), namespace="local"
-            )
+            self._user_pvcs[child.name] = PVCRef(name=str(child), namespace="local")

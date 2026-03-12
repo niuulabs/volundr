@@ -512,30 +512,27 @@ class TestFluxWaitForReady:
         mock_watch_instance = MagicMock()
 
         async def fake_stream(*args, **kwargs):
-            yield {
-                "object": {
-                    "status": {
-                        "conditions": [
-                            {"type": "Ready", "status": "True"}
-                        ]
-                    }
-                }
-            }
+            yield {"object": {"status": {"conditions": [{"type": "Ready", "status": "True"}]}}}
 
         mock_watch_instance.stream = fake_stream
         mock_watch_instance.stop = MagicMock()
         mock_watch_mod.Watch = MagicMock(return_value=mock_watch_instance)
         mock_k8s.watch = mock_watch_mod
 
-        with patch.dict(sys.modules, {
-            "kubernetes_asyncio": mock_k8s,
-            "kubernetes_asyncio.watch": mock_watch_mod,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "kubernetes_asyncio": mock_k8s,
+                "kubernetes_asyncio.watch": mock_watch_mod,
+            },
+        ):
             from volundr.adapters.outbound.flux import FluxPodManager
 
             flux = FluxPodManager(namespace="test")
             session = Session(
-                name="Test", model="test", source=GitSource(repo="test", branch="main"),
+                name="Test",
+                model="test",
+                source=GitSource(repo="test", branch="main"),
                 status=SessionStatus.PROVISIONING,
             )
 
@@ -574,15 +571,20 @@ class TestFluxWaitForReady:
         mock_watch_mod.Watch = MagicMock(return_value=mock_watch_instance)
         mock_k8s.watch = mock_watch_mod
 
-        with patch.dict(sys.modules, {
-            "kubernetes_asyncio": mock_k8s,
-            "kubernetes_asyncio.watch": mock_watch_mod,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "kubernetes_asyncio": mock_k8s,
+                "kubernetes_asyncio.watch": mock_watch_mod,
+            },
+        ):
             from volundr.adapters.outbound.flux import FluxPodManager
 
             flux = FluxPodManager(namespace="test")
             session = Session(
-                name="Test", model="test", source=GitSource(repo="test", branch="main"),
+                name="Test",
+                model="test",
+                source=GitSource(repo="test", branch="main"),
                 status=SessionStatus.PROVISIONING,
             )
 
@@ -602,7 +604,9 @@ class TestFluxWaitForReady:
 
         flux = FluxPodManager(namespace="test")
         session = Session(
-            name="Test", model="test", source=GitSource(repo="test", branch="main"),
+            name="Test",
+            model="test",
+            source=GitSource(repo="test", branch="main"),
             status=SessionStatus.PROVISIONING,
         )
 

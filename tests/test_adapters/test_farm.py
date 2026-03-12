@@ -82,8 +82,6 @@ def pod_manager() -> FarmPodManager:
     )
 
 
-
-
 class TestFarmPodManagerStart:
     """Tests for start method (POST /queue/management/tasks/submit)."""
 
@@ -883,8 +881,6 @@ class TestFarmPodManagerClient:
         await mock_client.aclose()
 
 
-
-
 class TestFarmPodManagerGatewayEndpoints:
     """Tests for path-based endpoint generation with gateway_domain."""
 
@@ -908,9 +904,7 @@ class TestFarmPodManagerGatewayEndpoints:
         assert pm._chat_endpoint("my-session", sid) == (
             "wss://gateway.example.com/s/abc-123/session"
         )
-        assert pm._code_endpoint("my-session", sid) == (
-            "https://gateway.example.com/s/abc-123/"
-        )
+        assert pm._code_endpoint("my-session", sid) == ("https://gateway.example.com/s/abc-123/")
 
     @respx.mock
     async def test_start_returns_path_based_endpoints(self, sample_session: Session):

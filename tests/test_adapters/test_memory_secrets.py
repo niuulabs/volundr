@@ -12,10 +12,12 @@ from volundr.domain.ports import SecretAlreadyExistsError, SecretValidationError
 @pytest.fixture
 def manager() -> InMemorySecretManager:
     """Create manager with sample secrets."""
-    return InMemorySecretManager([
-        SecretInfo(name="github-token", keys=["GITHUB_TOKEN"]),
-        SecretInfo(name="api-key", keys=["API_KEY", "API_SECRET"]),
-    ])
+    return InMemorySecretManager(
+        [
+            SecretInfo(name="github-token", keys=["GITHUB_TOKEN"]),
+            SecretInfo(name="api-key", keys=["API_KEY", "API_SECRET"]),
+        ]
+    )
 
 
 class TestValidateK8sName:

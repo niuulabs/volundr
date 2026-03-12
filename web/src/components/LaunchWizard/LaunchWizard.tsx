@@ -8,7 +8,6 @@ import type {
   McpServerConfig,
   LinearIssue,
   SessionSource,
-  GitSource,
   MountMapping,
 } from '@/models';
 import type { IVolundrService } from '@/ports';

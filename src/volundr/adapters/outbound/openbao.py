@@ -35,9 +35,7 @@ class OpenBaoApiError(Exception):
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
         self.message = message
-        super().__init__(
-            f"OpenBao API error ({status_code}): {message}"
-        )
+        super().__init__(f"OpenBao API error ({status_code}): {message}")
 
 
 # HCL policy template for user provisioning.
@@ -107,7 +105,8 @@ class OpenBaoSecretRepository(SecretRepository):
         )
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
 
     async def get_credential(
@@ -125,7 +124,8 @@ class OpenBaoSecretRepository(SecretRepository):
             return None
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
 
         body = response.json()
@@ -143,7 +143,8 @@ class OpenBaoSecretRepository(SecretRepository):
             return False
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
         return True
 
@@ -163,7 +164,8 @@ class OpenBaoSecretRepository(SecretRepository):
             return []
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
 
         body = response.json()
@@ -208,12 +210,14 @@ class OpenBaoSecretRepository(SecretRepository):
         )
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
 
         logger.info(
             "Created policy %s for user %s",
-            policy_name, user_id,
+            policy_name,
+            user_id,
         )
 
     async def _delete_policy(self, user_id: str) -> None:
@@ -232,7 +236,8 @@ class OpenBaoSecretRepository(SecretRepository):
             return
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
 
         logger.info("Deleted policy %s", policy_name)
@@ -260,12 +265,14 @@ class OpenBaoSecretRepository(SecretRepository):
         )
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
 
         logger.info(
             "Created K8s auth role %s for user %s",
-            role_name, user_id,
+            role_name,
+            user_id,
         )
 
     async def _delete_k8s_role(self, user_id: str) -> None:
@@ -285,7 +292,8 @@ class OpenBaoSecretRepository(SecretRepository):
             return
         if response.status_code >= 400:
             raise OpenBaoApiError(
-                response.status_code, response.text,
+                response.status_code,
+                response.text,
             )
 
         logger.info("Deleted K8s auth role %s", role_name)
@@ -325,9 +333,10 @@ class OpenBaoSecretRepository(SecretRepository):
         )
 
         logger.info(
-            "Created session secrets for session %s "
-            "(user %s, %d mounts)",
-            session_id, user_id, len(mounts),
+            "Created session secrets for session %s (user %s, %d mounts)",
+            session_id,
+            user_id,
+            len(mounts),
         )
 
     async def delete_session_secrets(

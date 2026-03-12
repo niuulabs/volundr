@@ -110,7 +110,6 @@ def configure_logging(config: LoggingConfig | None = None) -> None:
     )
 
 
-
 def _resolve_secret_kwargs(
     kwargs: dict[str, Any],
     secret_kwargs_env: dict[str, str],
@@ -525,7 +524,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 token_tracker, repository, pricing_provider, broadcaster=broadcaster
             )
             repo_service = RepoService(
-                git_registry, user_integration=user_integration_service,
+                git_registry,
+                user_integration=user_integration_service,
             )
             chronicle_repository = PostgresChronicleRepository(pool)
             timeline_repository = PostgresTimelineRepository(pool)

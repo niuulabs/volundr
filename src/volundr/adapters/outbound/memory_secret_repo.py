@@ -66,7 +66,7 @@ class InMemorySecretRepository(SecretRepository):
             if not stored_path.startswith(prefix):
                 continue
 
-            remainder = stored_path[len(prefix):]
+            remainder = stored_path[len(prefix) :]
             slash_idx = remainder.find("/")
             if slash_idx == -1:
                 keys.add(remainder)
@@ -97,7 +97,8 @@ class InMemorySecretRepository(SecretRepository):
 
         logger.debug(
             "Provisioned in-memory user %s (tenant %s)",
-            user_id, tenant_id,
+            user_id,
+            tenant_id,
         )
 
     async def deprovision_user(self, user_id: str) -> None:
@@ -107,7 +108,8 @@ class InMemorySecretRepository(SecretRepository):
         self._k8s_roles.pop(policy_name, None)
 
         logger.debug(
-            "Deprovisioned in-memory user %s", user_id,
+            "Deprovisioned in-memory user %s",
+            user_id,
         )
 
     # ------------------------------------------------------------------
@@ -145,9 +147,9 @@ class InMemorySecretRepository(SecretRepository):
         )
 
         logger.debug(
-            "Created in-memory session secrets for %s "
-            "(%d mounts)",
-            session_id, len(mounts),
+            "Created in-memory session secrets for %s (%d mounts)",
+            session_id,
+            len(mounts),
         )
 
     async def delete_session_secrets(

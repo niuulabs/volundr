@@ -56,7 +56,8 @@ class GitContributor(SessionContributor):
         # Prefer user-scoped resolution (shared + per-user credentials)
         if context.principal and self._user_integration:
             provider = await self._user_integration.find_git_provider_for(
-                session.repo, context.principal.user_id,
+                session.repo,
+                context.principal.user_id,
             )
             if provider:
                 clone_url = provider.get_clone_url(session.repo)

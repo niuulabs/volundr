@@ -56,15 +56,19 @@ class LocalMountContributor(SessionContributor):
             self._validate_host_path(mapping.host_path)
 
             vol_name = f"local-mount-{i}"
-            volumes.append({
-                "name": vol_name,
-                "hostPath": {"path": mapping.host_path, "type": "Directory"},
-            })
-            mounts.append({
-                "name": vol_name,
-                "mountPath": mapping.mount_path,
-                "readOnly": mapping.read_only,
-            })
+            volumes.append(
+                {
+                    "name": vol_name,
+                    "hostPath": {"path": mapping.host_path, "type": "Directory"},
+                }
+            )
+            mounts.append(
+                {
+                    "name": vol_name,
+                    "mountPath": mapping.mount_path,
+                    "readOnly": mapping.read_only,
+                }
+            )
 
         pod_spec = PodSpecAdditions(
             volumes=tuple(volumes),
@@ -83,9 +87,7 @@ class LocalMountContributor(SessionContributor):
 
         if resolved == "/":
             if not self._allow_root_mount:
-                raise ValueError(
-                    "Mounting root filesystem (/) requires allow_root_mount=true"
-                )
+                raise ValueError("Mounting root filesystem (/) requires allow_root_mount=true")
             return
 
         if not self._allowed_prefixes:
@@ -97,6 +99,5 @@ class LocalMountContributor(SessionContributor):
                 return
 
         raise ValueError(
-            f"Host path '{host_path}' is not under any allowed prefix: "
-            f"{self._allowed_prefixes}"
+            f"Host path '{host_path}' is not under any allowed prefix: {self._allowed_prefixes}"
         )

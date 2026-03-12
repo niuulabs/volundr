@@ -75,21 +75,23 @@ def _make_profile(**overrides) -> ForgeProfile:
 @pytest.fixture
 def config_provider() -> ConfigProfileProvider:
     """ConfigProfileProvider with two seed profiles."""
-    return ConfigProfileProvider([
-        ProfileConfig(
-            name="default",
-            description="Default profile",
-            is_default=True,
-            model="claude-sonnet-4-20250514",
-            resource_config={"cpu": 2, "memory": "4Gi"},
-        ),
-        ProfileConfig(
-            name="heavy",
-            description="Heavy workload profile",
-            model="claude-opus-4-20250514",
-            resource_config={"cpu": 8, "memory": "16Gi", "gpu": 1},
-        ),
-    ])
+    return ConfigProfileProvider(
+        [
+            ProfileConfig(
+                name="default",
+                description="Default profile",
+                is_default=True,
+                model="claude-sonnet-4-20250514",
+                resource_config={"cpu": 2, "memory": "4Gi"},
+            ),
+            ProfileConfig(
+                name="heavy",
+                description="Heavy workload profile",
+                model="claude-opus-4-20250514",
+                resource_config={"cpu": 8, "memory": "16Gi", "gpu": 1},
+            ),
+        ]
+    )
 
 
 @pytest.fixture
@@ -195,16 +197,12 @@ class TestProfileServiceCreate:
         with pytest.raises(ProfileValidationError, match="gpu"):
             await profile_service.create_profile(profile)
 
-    async def test_create_invalid_model_empty(
-        self, profile_service: ForgeProfileService
-    ):
+    async def test_create_invalid_model_empty(self, profile_service: ForgeProfileService):
         profile = _make_profile(name="bad-model", model="  ")
         with pytest.raises(ProfileValidationError, match="model"):
             await profile_service.create_profile(profile)
 
-    async def test_create_invalid_mcp_no_type(
-        self, profile_service: ForgeProfileService
-    ):
+    async def test_create_invalid_mcp_no_type(self, profile_service: ForgeProfileService):
         profile = _make_profile(
             name="bad-mcp",
             mcp_servers=[{"name": "foo"}],
@@ -212,9 +210,7 @@ class TestProfileServiceCreate:
         with pytest.raises(ProfileValidationError, match="mcp_servers"):
             await profile_service.create_profile(profile)
 
-    async def test_create_invalid_image_empty(
-        self, profile_service: ForgeProfileService
-    ):
+    async def test_create_invalid_image_empty(self, profile_service: ForgeProfileService):
         profile = _make_profile(
             name="bad-image",
             workload_config={"image": "  "},
@@ -222,9 +218,7 @@ class TestProfileServiceCreate:
         with pytest.raises(ProfileValidationError, match="image"):
             await profile_service.create_profile(profile)
 
-    async def test_create_readonly_provider(
-        self, readonly_service: ForgeProfileService
-    ):
+    async def test_create_readonly_provider(self, readonly_service: ForgeProfileService):
         profile = _make_profile(name="will-fail")
         with pytest.raises(ProfileReadOnlyError):
             await readonly_service.create_profile(profile)
@@ -440,9 +434,7 @@ class TestProfileEndpoints:
         assert "default" in names
 
     def test_list_profiles_filter(self, client: TestClient):
-        resp = client.get(
-            "/api/v1/volundr/profiles", params={"workload_type": "session"}
-        )
+        resp = client.get("/api/v1/volundr/profiles", params={"workload_type": "session"})
         assert resp.status_code == 200
         assert len(resp.json()) == 2
 

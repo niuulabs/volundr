@@ -107,7 +107,11 @@ class TestLocalMountContributor:
         session = _make_session(
             source=LocalMountSource(
                 paths=[
-                    MountMapping(host_path="/home/user/code", mount_path="/workspace", read_only=False),
+                    MountMapping(
+                        host_path="/home/user/code",
+                        mount_path="/workspace",
+                        read_only=False,
+                    ),
                 ],
             ),
         )

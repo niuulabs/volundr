@@ -55,8 +55,6 @@ def mock_api():
     return api
 
 
-
-
 class TestFluxPodManagerStart:
     async def test_start_creates_helmrelease(
         self, pod_manager: FluxPodManager, sample_session: Session, mock_api
@@ -277,9 +275,7 @@ class TestFluxPodManagerGatewayEndpoints:
         assert pm._chat_endpoint("my-session", sid) == (
             "wss://gateway.example.com/s/abc-123/session"
         )
-        assert pm._code_endpoint("my-session", sid) == (
-            "https://gateway.example.com/s/abc-123/"
-        )
+        assert pm._code_endpoint("my-session", sid) == ("https://gateway.example.com/s/abc-123/")
 
     async def test_start_returns_path_based_endpoints(
         self,
@@ -304,7 +300,9 @@ class TestFluxPodManagerSpecValues:
     """Tests for spec values pass-through to Skuld Helm values."""
 
     async def test_spec_values_passed_to_helmrelease(
-        self, sample_session: Session, mock_api,
+        self,
+        sample_session: Session,
+        mock_api,
     ):
         pm = FluxPodManager(
             namespace="test-ns",
@@ -327,7 +325,9 @@ class TestFluxPodManagerSpecValues:
         assert body["spec"]["values"]["git"]["repoUrl"] == "https://github.com/org/repo"
 
     async def test_empty_spec_uses_only_defaults(
-        self, sample_session: Session, mock_api,
+        self,
+        sample_session: Session,
+        mock_api,
     ):
         pm = FluxPodManager(
             namespace="test-ns",

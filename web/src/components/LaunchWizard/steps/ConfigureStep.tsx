@@ -31,7 +31,6 @@ import type {
   CliTool,
   LinearIssue,
   RepoProvider,
-  MountMapping,
   VolundrWorkspace,
   StoredCredential,
   IntegrationConnection,

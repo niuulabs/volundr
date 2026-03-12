@@ -120,24 +120,44 @@ class TestSession:
 
     def test_model_allows_empty(self):
         """Model can be empty (for non-SESSION workloads like OVAS streams)."""
-        session = Session(name="test", model="", source=GitSource(repo="https://github.com/org/repo", branch="main"))
+        session = Session(
+            name="test",
+            model="",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
+        )
         assert session.model == ""
 
     def test_model_validation_too_long(self):
         """Model cannot exceed 100 characters."""
         with pytest.raises(ValidationError) as exc_info:
-            Session(name="test", model="x" * 101, source=GitSource(repo="https://github.com/org/repo", branch="main"))
+            Session(
+                name="test",
+                model="x" * 101,
+                source=GitSource(
+                    repo="https://github.com/org/repo",
+                    branch="main",
+                ),
+            )
 
         assert "String should have at most 100 characters" in str(exc_info.value)
 
     def test_repo_allows_empty(self):
         """Repo can be empty (for workloads that don't need a git repo)."""
-        session = Session(name="test", model="claude-3-opus", source=GitSource(repo="", branch="main"))
+        session = Session(
+            name="test",
+            model="claude-3-opus",
+            source=GitSource(repo="", branch="main"),
+        )
         assert session.repo == ""
 
     def test_branch_defaults_to_main(self):
         """Branch defaults to main when not provided."""
-        session = Session(name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo"))
+        session = Session(
+            name="test", model="claude-3-opus", source=GitSource(repo="https://github.com/org/repo")
+        )
         assert session.branch == "main"
 
 

@@ -448,6 +448,8 @@ class TestOwnershipValidation:
 
         # Bob can update Alice's session when no authz adapter
         updated = await service.update_session(
-            session.id, name="no-authz", principal=bob,
+            session.id,
+            name="no-authz",
+            principal=bob,
         )
         assert updated.name == "no-authz"

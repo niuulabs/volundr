@@ -22,7 +22,7 @@ from volundr.adapters.inbound.rest import (
     StatsResponse,
     create_router,
 )
-from volundr.config import LocalMountsConfig, Settings
+from volundr.config import LocalMountsConfig
 from volundr.domain.models import GitProviderType, GitSource, RepoInfo, Session, SessionStatus
 from volundr.domain.services import RepoService, SessionService, StatsService
 
@@ -100,7 +100,12 @@ class TestSessionCreate:
         """SessionCreate rejects empty name."""
         with pytest.raises(ValueError):
             SessionCreate(
-                name="", model="claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+                name="",
+                model="claude-sonnet-4",
+                source=GitSource(
+                    repo="https://github.com/org/repo",
+                    branch="main",
+                ),
             )
 
     def test_session_create_name_too_long_rejected(self):
@@ -176,10 +181,20 @@ class TestListSessions:
     async def test_list_sessions_with_data(self, client: TestClient, service: SessionService):
         """Returns list of sessions."""
         await service.create_session(
-            "Session 1", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Session 1",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         await service.create_session(
-            "Session 2", "claude-opus-4", source=GitSource(repo="https://github.com/org/repo", branch="dev")
+            "Session 2",
+            "claude-opus-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="dev",
+            ),
         )
 
         response = client.get("/api/v1/volundr/sessions")
@@ -229,7 +244,10 @@ class TestCreateSession:
         """Returns 422 for missing required field (name)."""
         response = client.post(
             "/api/v1/volundr/sessions",
-            json={"model": "claude-sonnet-4", "source": {"type": "git", "repo": "https://github.com/org/repo"}},
+            json={
+                "model": "claude-sonnet-4",
+                "source": {"type": "git", "repo": "https://github.com/org/repo"},
+            },
         )
         assert response.status_code == 422
 
@@ -240,7 +258,12 @@ class TestGetSession:
     async def test_get_session_success(self, client: TestClient, service: SessionService):
         """Returns session by ID."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         response = client.get(f"/api/v1/volundr/sessions/{session.id}")
@@ -270,7 +293,12 @@ class TestUpdateSession:
     async def test_update_session_name(self, client: TestClient, service: SessionService):
         """Updates session name."""
         session = await service.create_session(
-            "Old Name", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Old Name",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         response = client.put(
@@ -285,7 +313,12 @@ class TestUpdateSession:
     async def test_update_session_model(self, client: TestClient, service: SessionService):
         """Updates session model."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         response = client.put(
@@ -299,7 +332,12 @@ class TestUpdateSession:
     async def test_update_session_branch(self, client: TestClient, service: SessionService):
         """Updates session branch."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         response = client.put(
@@ -313,7 +351,12 @@ class TestUpdateSession:
     async def test_update_session_all_fields(self, client: TestClient, service: SessionService):
         """Updates name, model, and branch."""
         session = await service.create_session(
-            "Old", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Old",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         response = client.put(
@@ -342,7 +385,12 @@ class TestDeleteSession:
     async def test_delete_session_success(self, client: TestClient, service: SessionService):
         """Deletes session and returns 204."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         response = client.delete(f"/api/v1/volundr/sessions/{session.id}")
@@ -365,7 +413,12 @@ class TestStartSession:
     async def test_start_session_success(self, client: TestClient, service: SessionService):
         """Starts session and returns endpoints."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         response = client.post(f"/api/v1/volundr/sessions/{session.id}/start")
@@ -385,7 +438,12 @@ class TestStartSession:
     async def test_start_session_invalid_state(self, client: TestClient, service: SessionService):
         """Returns 409 when session cannot be started."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         await service.start_session(session.id)
 
@@ -401,7 +459,12 @@ class TestStopSession:
     async def test_stop_session_success(self, client: TestClient, service: SessionService):
         """Stops session and clears endpoints."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
         await service.start_session(session.id)
 
@@ -421,7 +484,12 @@ class TestStopSession:
     async def test_stop_session_invalid_state(self, client: TestClient, service: SessionService):
         """Returns 409 when session cannot be stopped."""
         session = await service.create_session(
-            "Test", "claude-sonnet-4", source=GitSource(repo="https://github.com/org/repo", branch="main")
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
         )
 
         # Try to stop a created (not running) session

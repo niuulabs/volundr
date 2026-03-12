@@ -32,9 +32,7 @@ class TestFileCredentialStore:
 
     @pytest.mark.asyncio()
     async def test_store_and_get(self, store: FileCredentialStore) -> None:
-        cred = await store.store(
-            "user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"}
-        )
+        cred = await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"})
         assert cred.name == "my-key"
         assert cred.secret_type == SecretType.API_KEY
         assert "token" in cred.keys
@@ -48,21 +46,15 @@ class TestFileCredentialStore:
 
     @pytest.mark.asyncio()
     async def test_store_and_get_value(self, store: FileCredentialStore) -> None:
-        await store.store(
-            "user", "u1", "my-key", SecretType.API_KEY, {"token": "secret-val"}
-        )
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "secret-val"})
         value = await store.get_value("user", "u1", "my-key")
         assert value is not None
         assert value == {"token": "secret-val"}
 
     @pytest.mark.asyncio()
     async def test_store_overwrites_existing(self, store: FileCredentialStore) -> None:
-        cred1 = await store.store(
-            "user", "u1", "my-key", SecretType.API_KEY, {"token": "v1"}
-        )
-        cred2 = await store.store(
-            "user", "u1", "my-key", SecretType.API_KEY, {"token": "v2"}
-        )
+        cred1 = await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "v1"})
+        cred2 = await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "v2"})
         # Same id is preserved on overwrite
         assert cred2.id == cred1.id
         assert cred2.created_at == cred1.created_at
@@ -83,9 +75,7 @@ class TestFileCredentialStore:
 
     @pytest.mark.asyncio()
     async def test_delete_existing(self, store: FileCredentialStore) -> None:
-        await store.store(
-            "user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"}
-        )
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"})
         await store.delete("user", "u1", "my-key")
         assert await store.get("user", "u1", "my-key") is None
         assert await store.get_value("user", "u1", "my-key") is None
@@ -125,16 +115,12 @@ class TestFileCredentialStore:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio()
-    async def test_store_with_encryption(
-        self, encrypted_store: FileCredentialStore
-    ) -> None:
+    async def test_store_with_encryption(self, encrypted_store: FileCredentialStore) -> None:
         await encrypted_store.store(
             "user", "u1", "secret", SecretType.API_KEY, {"token": "plain-text"}
         )
         # Read the raw file -- it should NOT be valid JSON (it's encrypted)
-        cred_file = (
-            encrypted_store._base_dir / "user" / "u1" / "credentials.json"
-        )
+        cred_file = encrypted_store._base_dir / "user" / "u1" / "credentials.json"
         raw = cred_file.read_bytes()
         assert b"plain-text" not in raw
         # Encrypted Fernet tokens start with 'gAAAAA'
