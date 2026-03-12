@@ -426,7 +426,13 @@ describe('ApiVolundrService', () => {
       mockFetch.mockReturnValueOnce(
         mockResponse({
           resource_types: [
-            { name: 'cpu', resource_key: 'cpu', display_name: 'CPU', unit: 'cores', category: 'compute' },
+            {
+              name: 'cpu',
+              resource_key: 'cpu',
+              display_name: 'CPU',
+              unit: 'cores',
+              category: 'compute',
+            },
           ],
           nodes: [],
         })

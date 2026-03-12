@@ -1251,9 +1251,27 @@ describe('ConfigureStep', () => {
         ...mockService,
         getClusterResources: vi.fn().mockResolvedValue({
           resourceTypes: [
-            { name: 'cpu', resourceKey: 'cpu', displayName: 'CPU', unit: 'cores', category: 'compute' },
-            { name: 'gpu_A100', resourceKey: 'nvidia.com/gpu', displayName: 'NVIDIA A100', unit: 'devices', category: 'accelerator' },
-            { name: 'gpu_H100', resourceKey: 'nvidia.com/gpu', displayName: 'NVIDIA H100', unit: 'devices', category: 'accelerator' },
+            {
+              name: 'cpu',
+              resourceKey: 'cpu',
+              displayName: 'CPU',
+              unit: 'cores',
+              category: 'compute',
+            },
+            {
+              name: 'gpu_A100',
+              resourceKey: 'nvidia.com/gpu',
+              displayName: 'NVIDIA A100',
+              unit: 'devices',
+              category: 'accelerator',
+            },
+            {
+              name: 'gpu_H100',
+              resourceKey: 'nvidia.com/gpu',
+              displayName: 'NVIDIA H100',
+              unit: 'devices',
+              category: 'accelerator',
+            },
           ],
           nodes: [],
         }),
@@ -1276,7 +1294,13 @@ describe('ConfigureStep', () => {
         ...mockService,
         getClusterResources: vi.fn().mockResolvedValue({
           resourceTypes: [
-            { name: 'gpu_A100', resourceKey: 'nvidia.com/gpu', displayName: 'NVIDIA A100', unit: 'devices', category: 'accelerator' },
+            {
+              name: 'gpu_A100',
+              resourceKey: 'nvidia.com/gpu',
+              displayName: 'NVIDIA A100',
+              unit: 'devices',
+              category: 'accelerator',
+            },
           ],
           nodes: [],
         }),

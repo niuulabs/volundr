@@ -231,8 +231,20 @@ export class MockVolundrService implements IVolundrService {
     return {
       resourceTypes: [
         { name: 'cpu', resourceKey: 'cpu', displayName: 'CPU', unit: 'cores', category: 'compute' },
-        { name: 'memory', resourceKey: 'memory', displayName: 'Memory', unit: 'bytes', category: 'compute' },
-        { name: 'gpu', resourceKey: 'nvidia.com/gpu', displayName: 'GPU', unit: 'devices', category: 'accelerator' },
+        {
+          name: 'memory',
+          resourceKey: 'memory',
+          displayName: 'Memory',
+          unit: 'bytes',
+          category: 'compute',
+        },
+        {
+          name: 'gpu',
+          resourceKey: 'nvidia.com/gpu',
+          displayName: 'GPU',
+          unit: 'devices',
+          category: 'accelerator',
+        },
       ],
       nodes: [],
     };
