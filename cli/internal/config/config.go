@@ -67,16 +67,25 @@ type GitHubConfig struct {
 	CloneToken string                 `yaml:"clone_token,omitempty"`
 }
 
+// LocalMountsConfig holds settings for local filesystem mount support.
+type LocalMountsConfig struct {
+	Enabled         bool     `yaml:"enabled"`
+	AllowRootMount  bool     `yaml:"allow_root_mount"`
+	AllowedPrefixes []string `yaml:"allowed_prefixes,omitempty"`
+	DefaultReadOnly bool     `yaml:"default_read_only"`
+}
+
 // Config represents the full volundr configuration.
 type Config struct {
-	Runtime   string          `yaml:"runtime"`
-	Listen    ListenConfig    `yaml:"listen"`
-	TLS       TLSConfig       `yaml:"tls"`
-	Database  DatabaseConfig  `yaml:"database"`
-	Anthropic AnthropicConfig `yaml:"anthropic"`
-	Git       GitConfig       `yaml:"git,omitempty"`
-	Docker    DockerConfig    `yaml:"docker,omitempty"`
-	K3s       K3sConfig       `yaml:"k3s,omitempty"`
+	Runtime     string            `yaml:"runtime"`
+	Listen      ListenConfig      `yaml:"listen"`
+	TLS         TLSConfig         `yaml:"tls"`
+	Database    DatabaseConfig    `yaml:"database"`
+	Anthropic   AnthropicConfig   `yaml:"anthropic"`
+	Git         GitConfig         `yaml:"git,omitempty"`
+	Docker      DockerConfig      `yaml:"docker,omitempty"`
+	K3s         K3sConfig         `yaml:"k3s,omitempty"`
+	LocalMounts LocalMountsConfig `yaml:"local_mounts,omitempty"`
 }
 
 // ListenConfig holds the listener settings.
@@ -161,10 +170,10 @@ func DefaultConfig() (*Config, error) {
 		},
 		Anthropic: AnthropicConfig{},
 		Docker: DockerConfig{
-			APIImage:        "ghcr.io/niuu/volundr-api:latest",
-			SkuldImage:      "ghcr.io/niuu/skuld:latest",
+			APIImage:        "ghcr.io/niuulabs/volundr-api:latest",
+			SkuldImage:      "ghcr.io/niuulabs/skuld:latest",
 			CodeServerImage: "codercom/code-server:latest",
-			TtydImage:       "ghcr.io/niuu/ttyd:latest",
+			TtydImage:       "ghcr.io/niuulabs/ttyd:latest",
 			Network:         "volundr-net",
 		},
 		K3s: K3sConfig{

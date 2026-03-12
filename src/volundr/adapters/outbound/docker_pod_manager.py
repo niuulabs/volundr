@@ -7,7 +7,7 @@ and ttyd containers on a shared Docker network.
 Constructor accepts plain kwargs (dynamic adapter pattern):
     adapter: "volundr.adapters.outbound.docker_pod_manager.DockerPodManager"
     network: "volundr-net"
-    skuld_image: "ghcr.io/niuu/skuld:latest"
+    skuld_image: "ghcr.io/niuulabs/skuld:latest"
     compose_dir: "~/.volundr/sessions"
     gateway_domain: "localhost:8443"
 """
@@ -57,9 +57,9 @@ class DockerPodManager(PodManager):
         self,
         *,
         network: str = "volundr-net",
-        skuld_image: str = "ghcr.io/niuu/skuld:latest",
-        code_server_image: str = "ghcr.io/niuu/code-server:latest",
-        ttyd_image: str = "ghcr.io/niuu/ttyd:latest",
+        skuld_image: str = "ghcr.io/niuulabs/skuld:latest",
+        code_server_image: str = "ghcr.io/niuulabs/code-server:latest",
+        ttyd_image: str = "ghcr.io/niuulabs/ttyd:latest",
         compose_dir: str = "~/.volundr/sessions",
         gateway_domain: str | None = None,
         db_host: str = "host.docker.internal",

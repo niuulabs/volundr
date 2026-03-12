@@ -435,6 +435,22 @@ fi
 
         env_vars = env_list
 
+        # Merge contributor-provided volumes and volume mounts.
+        extra_volumes = list(spec.pod_spec.volumes) if spec.pod_spec else []
+        extra_mounts = list(spec.pod_spec.volume_mounts) if spec.pod_spec else []
+
+        volumes = [
+            self._build_workspace_volume(session),
+            {
+                "name": "nginx-config",
+                "configMap": {"name": f"{release_name}-nginx"},
+            },
+            *extra_volumes,
+        ]
+
+        base_mounts = [{"name": "workspace", "mountPath": "/volundr"}]
+        workload_mounts = base_mounts + extra_mounts
+
         return {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
@@ -459,13 +475,7 @@ fi
                             "fsGroup": 1000,
                         },
                         "initContainers": self._build_init_containers(session, spec),
-                        "volumes": [
-                            self._build_workspace_volume(session),
-                            {
-                                "name": "nginx-config",
-                                "configMap": {"name": f"{release_name}-nginx"},
-                            },
-                        ],
+                        "volumes": volumes,
                         "containers": [
                             {
                                 "name": "nginx",
@@ -494,9 +504,7 @@ fi
                                     "runAsUser": 1000,
                                     "allowPrivilegeEscalation": False,
                                 },
-                                "volumeMounts": [
-                                    {"name": "workspace", "mountPath": "/volundr"},
-                                ],
+                                "volumeMounts": workload_mounts,
                                 "resources": {
                                     "requests": {"memory": "256Mi", "cpu": "100m"},
                                     "limits": {"memory": "1Gi", "cpu": "500m"},
@@ -517,9 +525,7 @@ fi
                                     "runAsUser": 1000,
                                     "allowPrivilegeEscalation": False,
                                 },
-                                "volumeMounts": [
-                                    {"name": "workspace", "mountPath": "/volundr"},
-                                ],
+                                "volumeMounts": workload_mounts,
                                 "resources": {
                                     "requests": {"memory": "256Mi", "cpu": "100m"},
                                     "limits": {"memory": "2Gi", "cpu": "1000m"},
@@ -537,9 +543,7 @@ fi
                                     "runAsUser": 1000,
                                     "allowPrivilegeEscalation": False,
                                 },
-                                "volumeMounts": [
-                                    {"name": "workspace", "mountPath": "/volundr"},
-                                ],
+                                "volumeMounts": workload_mounts,
                                 "resources": {
                                     "requests": {"memory": "512Mi", "cpu": "100m"},
                                     "limits": {"memory": "4Gi", "cpu": "2000m"},

@@ -63,6 +63,20 @@ class Devrunner:
 
     async def run(self) -> None:
         """Main entry point - start postgres, watch config, reconcile services."""
+        # Seed persistent home directory (dotfiles, oh-my-zsh, Homebrew)
+        init_home = Path("/usr/local/bin/init-home.sh")
+        if init_home.exists():
+            logger.info("Running init-home.sh to seed persistent home directory")
+            result = subprocess.run(
+                [str(init_home)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                logger.warning(f"init-home.sh failed: {result.stderr}")
+            else:
+                logger.info("Home directory initialized")
+
         self.services_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(exist_ok=True)
         self.status_dir.mkdir(exist_ok=True)

@@ -74,15 +74,17 @@ type composeData struct {
 
 // dockerAPIConfig represents the Python API config file structure for Docker mode.
 type dockerAPIConfig struct {
-	Database        map[string]interface{} `yaml:"database"`
-	PodManager      map[string]interface{} `yaml:"pod_manager"`
-	CredentialStore map[string]interface{} `yaml:"credential_store"`
-	Storage         map[string]interface{} `yaml:"storage"`
-	SecretInjection map[string]interface{} `yaml:"secret_injection"`
-	Git             map[string]interface{} `yaml:"git,omitempty"`
-	Identity        map[string]interface{} `yaml:"identity"`
-	Authorization   map[string]interface{} `yaml:"authorization"`
-	Gateway         map[string]interface{} `yaml:"gateway"`
+	Database             map[string]interface{}   `yaml:"database"`
+	PodManager           map[string]interface{}   `yaml:"pod_manager"`
+	CredentialStore      map[string]interface{}   `yaml:"credential_store"`
+	Storage              map[string]interface{}   `yaml:"storage"`
+	SecretInjection      map[string]interface{}   `yaml:"secret_injection"`
+	Git                  map[string]interface{}   `yaml:"git,omitempty"`
+	Identity             map[string]interface{}   `yaml:"identity"`
+	Authorization        map[string]interface{}   `yaml:"authorization"`
+	Gateway              map[string]interface{}   `yaml:"gateway"`
+	LocalMounts          map[string]interface{}   `yaml:"local_mounts,omitempty"`
+	SessionContributors  []map[string]interface{} `yaml:"session_contributors,omitempty"`
 }
 
 // dockerAPIInternalPort is the host port the API container binds to.
@@ -114,7 +116,7 @@ func (r *DockerRuntime) Init(_ context.Context, cfg *config.Config) error {
 	}
 
 	// Ensure required images are available (pull if not present locally).
-	apiImage := dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuu/volundr-api:latest")
+	apiImage := dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr-api:latest")
 	if err := ensureImage(apiImage); err != nil {
 		return err
 	}
@@ -435,7 +437,7 @@ func (r *DockerRuntime) buildComposeData(cfg *config.Config) composeData {
 	cfgDir, _ := config.ConfigDir()
 
 	return composeData{
-		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuu/volundr-api:latest"),
+		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr-api:latest"),
 		APIPort:         dockerAPIInternalPort,
 		DBHost:          dbHost,
 		DBPort:          cfg.Database.Port,
@@ -473,9 +475,9 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 			"adapter": "volundr.adapters.outbound.docker_pod_manager.DockerPodManager",
 			"kwargs": map[string]interface{}{
 				"network":            dockerImageOrDefault(cfg.Docker.Network, "volundr-net"),
-				"skuld_image":        dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuu/skuld:latest"),
-				"code_server_image":  dockerImageOrDefault(cfg.Docker.CodeServerImage, "ghcr.io/niuu/code-server:latest"),
-				"ttyd_image":         dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuu/ttyd:latest"),
+				"skuld_image":        dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuulabs/skuld:latest"),
+				"code_server_image":  dockerImageOrDefault(cfg.Docker.CodeServerImage, "ghcr.io/niuulabs/code-server:latest"),
+				"ttyd_image":         dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuulabs/ttyd:latest"),
 				"compose_dir":        containerStoragePath + "/sessions",
 				"gateway_domain":     "",
 				"db_host":            dbHost,
@@ -514,6 +516,22 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 	// Add git provider config if enabled.
 	if cfg.Git.GitHub.Enabled && len(cfg.Git.GitHub.Instances) > 0 {
 		apiCfg.Git = buildGitConfig(cfg)
+	}
+
+	// Pass through local_mounts config if enabled.
+	if cfg.LocalMounts.Enabled {
+		apiCfg.LocalMounts = map[string]interface{}{
+			"enabled":           cfg.LocalMounts.Enabled,
+			"allow_root_mount":  cfg.LocalMounts.AllowRootMount,
+			"allowed_prefixes":  cfg.LocalMounts.AllowedPrefixes,
+			"default_read_only": cfg.LocalMounts.DefaultReadOnly,
+		}
+	}
+
+	// Wire up session contributors.
+	// LocalMountContributor is auto-wired by Python main.py from local_mounts config.
+	apiCfg.SessionContributors = []map[string]interface{}{
+		{"adapter": "volundr.adapters.outbound.contributors.git.GitContributor"},
 	}
 
 	data, err := yaml.Marshal(&apiCfg)
