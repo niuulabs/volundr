@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Rocket } from 'lucide-react';
 import type {
   VolundrPreset,
@@ -129,6 +129,11 @@ export function LaunchWizard(props: LaunchWizardProps) {
   } = props;
   const [step, setStep] = useState(1);
   const [state, setState] = useState<WizardState | null>(null);
+  const [localMountsEnabled, setLocalMountsEnabled] = useState(false);
+
+  useEffect(() => {
+    service.getFeatures().then(f => setLocalMountsEnabled(f.localMountsEnabled));
+  }, [service]);
 
   const handleTemplateSelect = useCallback(
     (template: VolundrTemplate | null) => {
@@ -209,6 +214,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
             availableSecrets={availableSecrets}
             service={service}
             searchLinearIssues={searchLinearIssues}
+            localMountsEnabled={localMountsEnabled}
             onChange={updateState}
             onSavePreset={onSavePreset}
           />

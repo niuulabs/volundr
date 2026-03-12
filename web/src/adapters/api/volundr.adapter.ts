@@ -512,6 +512,15 @@ export class ApiVolundrService implements IVolundrService {
     }
   }
 
+  async getFeatures(): Promise<import('@/models').VolundrFeatures> {
+    try {
+      const response = await api.get<{ local_mounts_enabled: boolean }>('/features');
+      return { localMountsEnabled: response.local_mounts_enabled };
+    } catch {
+      return { localMountsEnabled: false };
+    }
+  }
+
   async getModels(): Promise<Record<string, VolundrModel>> {
     const response = await api.get<ApiModelInfo[]>('/models');
     const models: Record<string, VolundrModel> = {};

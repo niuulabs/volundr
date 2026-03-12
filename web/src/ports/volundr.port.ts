@@ -1,4 +1,5 @@
 import type {
+  VolundrFeatures,
   VolundrSession,
   VolundrStats,
   VolundrModel,
@@ -41,6 +42,11 @@ import type {
  * Manages Claude Code sessions
  */
 export interface IVolundrService {
+  /**
+   * Get feature flags from the server
+   */
+  getFeatures(): Promise<VolundrFeatures>;
+
   /**
    * Get all sessions
    */

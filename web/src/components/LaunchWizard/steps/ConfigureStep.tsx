@@ -51,6 +51,7 @@ export interface ConfigureStepProps {
   availableSecrets: string[];
   service: IVolundrService;
   searchLinearIssues?: (query: string) => Promise<LinearIssue[]>;
+  localMountsEnabled?: boolean;
   onChange: (updates: Partial<WizardState>) => void;
   onSavePreset: (
     preset: Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
@@ -77,6 +78,7 @@ export function ConfigureStep({
   availableSecrets,
   service,
   searchLinearIssues,
+  localMountsEnabled = false,
   onChange,
   onSavePreset,
 }: ConfigureStepProps) {
@@ -556,31 +558,33 @@ export function ConfigureStep({
           </div>
         )}
 
-        {/* Source Type Toggle */}
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>
-            Workspace Source
-            <span className={styles.required}>*</span>
-          </label>
-          <div className={styles.sourceTypeToggle}>
-            <button
-              type="button"
-              className={cn(styles.sourceTypeButton, state.sourceType === 'git' && styles.sourceTypeActive)}
-              onClick={() => onChange({ sourceType: 'git' as SourceType })}
-            >
-              <FolderGit2 className={styles.formLabelIcon} />
-              Git Repository
-            </button>
-            <button
-              type="button"
-              className={cn(styles.sourceTypeButton, state.sourceType === 'local_mount' && styles.sourceTypeActive)}
-              onClick={() => onChange({ sourceType: 'local_mount' as SourceType })}
-            >
-              <HardDriveDownload className={styles.formLabelIcon} />
-              Local Mount
-            </button>
+        {/* Source Type Toggle — only show when local mounts are enabled */}
+        {localMountsEnabled && (
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>
+              Workspace Source
+              <span className={styles.required}>*</span>
+            </label>
+            <div className={styles.sourceTypeToggle}>
+              <button
+                type="button"
+                className={cn(styles.sourceTypeButton, state.sourceType === 'git' && styles.sourceTypeActive)}
+                onClick={() => onChange({ sourceType: 'git' as SourceType })}
+              >
+                <FolderGit2 className={styles.formLabelIcon} />
+                Git Repository
+              </button>
+              <button
+                type="button"
+                className={cn(styles.sourceTypeButton, state.sourceType === 'local_mount' && styles.sourceTypeActive)}
+                onClick={() => onChange({ sourceType: 'local_mount' as SourceType })}
+              >
+                <HardDriveDownload className={styles.formLabelIcon} />
+                Local Mount
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {state.sourceType === 'git' && (
           <>

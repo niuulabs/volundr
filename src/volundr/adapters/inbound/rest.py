@@ -441,6 +441,18 @@ def create_router(
 
         return principal
 
+    @router.get("/features", tags=["Features"])
+    async def get_features(request: Request) -> dict:
+        """Return feature flags derived from server configuration.
+
+        Lets the frontend adapt its UI based on what the backend supports
+        (e.g. local mounts are only meaningful in k3s / CLI mode).
+        """
+        settings = request.app.state.settings
+        return {
+            "local_mounts_enabled": settings.local_mounts.enabled,
+        }
+
     @router.get("/auth/config", tags=["Auth"])
     async def get_auth_config(request: Request) -> dict:
         """Public auth discovery endpoint for CLI and external clients.

@@ -22,6 +22,7 @@ from volundr.adapters.inbound.rest import (
     StatsResponse,
     create_router,
 )
+from volundr.config import LocalMountsConfig, Settings
 from volundr.domain.models import GitProviderType, GitSource, RepoInfo, Session, SessionStatus
 from volundr.domain.services import RepoService, SessionService, StatsService
 
@@ -65,6 +66,12 @@ def app(
     app = FastAPI()
     router = create_router(service, stats_service, pricing_provider=pricing)
     app.include_router(router)
+
+    # Minimal settings stub for endpoints that read app.state.settings
+    class _SettingsStub:
+        local_mounts = LocalMountsConfig()
+
+    app.state.settings = _SettingsStub()
     return app
 
 
@@ -421,6 +428,18 @@ class TestStopSession:
         response = client.post(f"/api/v1/volundr/sessions/{session.id}/stop")
         assert response.status_code == 409
         assert "cannot stop" in response.json()["detail"].lower()
+
+
+class TestFeatures:
+    """Tests for GET /api/v1/volundr/features."""
+
+    def test_features_returns_local_mounts_flag(self, client: TestClient):
+        """Returns feature flags including local_mounts_enabled."""
+        response = client.get("/api/v1/volundr/features")  # prefix + /features
+        assert response.status_code == 200
+        data = response.json()
+        assert "local_mounts_enabled" in data
+        assert isinstance(data["local_mounts_enabled"], bool)
 
 
 class TestListModels:

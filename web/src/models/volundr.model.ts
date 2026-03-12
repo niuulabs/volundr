@@ -1,5 +1,9 @@
 import type { SessionStatus } from './status.model';
 
+export interface VolundrFeatures {
+  localMountsEnabled: boolean;
+}
+
 export type ModelTier = 'frontier' | 'balanced' | 'execution' | 'reasoning';
 export type ModelProvider = 'cloud' | 'local';
 export type SessionOrigin = 'managed' | 'manual';

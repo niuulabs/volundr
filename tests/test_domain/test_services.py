@@ -604,6 +604,128 @@ class TestRepoService:
         assert len(result["GitHub"]) == 1
         assert result["GitHub"][0].name == "repo1"
 
+    async def test_list_repos_with_user_id_delegates_to_user_integration(self):
+        """list_repos with user_id uses user integration when available."""
+        from unittest.mock import AsyncMock
+
+        registry = MockGitRegistry()
+        user_int = AsyncMock()
+        user_int.get_git_providers = AsyncMock(return_value=[
+            MockGitProvider(name="UserGH", orgs=("myorg",), repos=[
+                RepoInfo(
+                    provider=GitProviderType.GITHUB,
+                    org="myorg",
+                    name="user-repo",
+                    clone_url="https://github.com/myorg/user-repo.git",
+                    url="https://github.com/myorg/user-repo",
+                ),
+            ]),
+        ])
+        service = RepoService(registry, user_integration=user_int)
+
+        result = await service.list_repos(user_id="user-1")
+
+        assert "UserGH" in result
+        assert result["UserGH"][0].name == "user-repo"
+
+    async def test_list_repos_without_user_id_uses_registry(self):
+        """list_repos without user_id falls back to registry."""
+        from unittest.mock import AsyncMock
+
+        repos = [
+            RepoInfo(
+                provider=GitProviderType.GITHUB,
+                org="org1",
+                name="shared-repo",
+                clone_url="https://github.com/org1/shared-repo.git",
+                url="https://github.com/org1/shared-repo",
+            ),
+        ]
+        gh = MockGitProvider(name="GitHub", orgs=("org1",), repos=repos)
+        registry = MockGitRegistry([gh])
+        user_int = AsyncMock()
+        service = RepoService(registry, user_integration=user_int)
+
+        result = await service.list_repos()
+
+        assert "GitHub" in result
+        user_int.get_git_providers.assert_not_called()
+
+    async def test_list_repos_for_user_deduplicates_repos(self):
+        """_list_repos_for_user deduplicates repos across providers by URL."""
+        from unittest.mock import AsyncMock
+
+        repo_info = RepoInfo(
+            provider=GitProviderType.GITHUB,
+            org="myorg",
+            name="shared",
+            clone_url="https://github.com/myorg/shared.git",
+            url="https://github.com/myorg/shared",
+        )
+        provider1 = MockGitProvider(name="P1", orgs=("myorg",), repos=[repo_info])
+        provider2 = MockGitProvider(name="P2", orgs=("myorg",), repos=[repo_info])
+
+        registry = MockGitRegistry()
+        user_int = AsyncMock()
+        user_int.get_git_providers = AsyncMock(return_value=[provider1, provider2])
+        service = RepoService(registry, user_integration=user_int)
+
+        result = await service.list_repos(user_id="user-1")
+
+        # Same URL from two providers should only appear once
+        total_repos = sum(len(v) for v in result.values())
+        assert total_repos == 1
+
+    async def test_list_repos_for_user_handles_provider_errors(self):
+        """_list_repos_for_user handles provider errors gracefully."""
+        from unittest.mock import AsyncMock
+
+        failing_provider = MockGitProvider(name="FailGH", orgs=("bad-org",))
+        # Override list_repos to raise
+        failing_provider.list_repos = AsyncMock(side_effect=RuntimeError("API error"))
+
+        registry = MockGitRegistry()
+        user_int = AsyncMock()
+        user_int.get_git_providers = AsyncMock(return_value=[failing_provider])
+        service = RepoService(registry, user_integration=user_int)
+
+        result = await service.list_repos(user_id="user-1")
+
+        # Error is swallowed, empty result
+        assert result == {}
+
+    async def test_list_branches_with_user_integration(self):
+        """list_branches prefers user's provider when available."""
+        from unittest.mock import AsyncMock
+
+        provider = AsyncMock()
+        provider.supports.return_value = True
+        provider.list_branches.return_value = ["main", "dev"]
+
+        registry = MockGitRegistry()
+        user_int = AsyncMock()
+        user_int.find_git_provider_for = AsyncMock(return_value=provider)
+        service = RepoService(registry, user_integration=user_int)
+
+        result = await service.list_branches("https://github.com/org/repo", user_id="user-1")
+
+        assert result == ["main", "dev"]
+        provider.list_branches.assert_called_once_with("https://github.com/org/repo")
+
+    async def test_list_branches_falls_back_to_registry(self):
+        """list_branches falls back to registry when user provider not found."""
+        from unittest.mock import AsyncMock
+
+        registry = MockGitRegistry()
+        registry.list_branches = AsyncMock(return_value=["main"])
+        user_int = AsyncMock()
+        user_int.find_git_provider_for = AsyncMock(return_value=None)
+        service = RepoService(registry, user_integration=user_int)
+
+        result = await service.list_branches("https://github.com/org/repo", user_id="user-1")
+
+        assert result == ["main"]
+
 
 # ---------------------------------------------------------------------------
 # In-memory stubs for TemplateProvider

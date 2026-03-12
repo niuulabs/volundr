@@ -70,6 +70,7 @@ const mockService = {
   listWorkspaces: vi.fn().mockResolvedValue([]),
   getCredentials: vi.fn().mockResolvedValue([]),
   getIntegrations: vi.fn().mockResolvedValue([]),
+  getFeatures: vi.fn().mockResolvedValue({ localMountsEnabled: false }),
 } as unknown as import('@/ports').IVolundrService;
 
 const defaultProps = {

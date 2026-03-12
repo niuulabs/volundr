@@ -121,6 +121,10 @@ export class MockVolundrService implements IVolundrService {
     return { ...this.stats };
   }
 
+  async getFeatures(): Promise<import('@/models').VolundrFeatures> {
+    return { localMountsEnabled: true };
+  }
+
   async getModels(): Promise<Record<string, VolundrModel>> {
     return { ...this.models };
   }
