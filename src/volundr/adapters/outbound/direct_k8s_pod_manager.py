@@ -445,6 +445,7 @@ fi
                 "template": {
                     "metadata": {"labels": labels},
                     "spec": {
+                        "hostname": session.name,
                         "terminationGracePeriodSeconds": 30,
                         "securityContext": {
                             "fsGroup": 1000,

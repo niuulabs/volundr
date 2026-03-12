@@ -17,6 +17,9 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      {{- if .Values.session.name }}
+      hostname: {{ .Values.session.name | lower | trunc 63 | trimSuffix "-" | quote }}
+      {{- end }}
       {{- with .Values.runtimeClassName }}
       runtimeClassName: {{ . | quote }}
       {{- end }}
@@ -345,6 +348,8 @@ spec:
           env:
             - name: SESSION_ID
               value: {{ .Values.session.id | quote }}
+            - name: SESSION_NAME
+              value: {{ .Values.session.name | quote }}
             - name: WORKSPACE_DIR
               value: {{ include "skuld.workspacePath" . | quote }}
             - name: PERSISTENCE_MOUNT_PATH
