@@ -34,6 +34,8 @@ import type {
   VolundrWorkspace,
   StoredCredential,
   IntegrationConnection,
+  ClusterResourceInfo,
+  ResourceType,
 } from '@/models';
 import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/ports';
@@ -102,6 +104,7 @@ export function ConfigureStep({
 
   const [credentials, setCredentials] = useState<StoredCredential[]>([]);
   const [integrations, setIntegrations] = useState<IntegrationConnection[]>([]);
+  const [clusterResources, setClusterResources] = useState<ClusterResourceInfo | null>(null);
 
   useEffect(() => {
     service
@@ -116,7 +119,22 @@ export function ConfigureStep({
       .getIntegrations()
       .then(setIntegrations)
       .catch(() => {});
+    service
+      .getClusterResources()
+      .then(setClusterResources)
+      .catch(() => {});
   }, [service]);
+
+  // Derive GPU types from cluster resources for dropdown
+  const gpuTypes = useMemo(() => {
+    if (!clusterResources) return [];
+    return clusterResources.resourceTypes
+      .filter(rt => rt.category === 'accelerator' && rt.name.startsWith('gpu_'))
+      .map(rt => ({
+        label: rt.displayName,
+        value: rt.name.replace('gpu_', ''),
+      }));
+  }, [clusterResources]);
 
   // Merge availableSecrets and stored credentials into a unified list
   const allCredentials = useMemo(() => {
@@ -1162,6 +1180,30 @@ export function ConfigureStep({
                     placeholder="e.g. 1"
                   />
                 </div>
+                {gpuTypes.length > 0 && (
+                  <div className={styles.resourceField}>
+                    <label className={styles.resourceLabel}>GPU Type</label>
+                    <select
+                      className={styles.formSelect}
+                      value={state.resourceConfig.gpu_type ?? ''}
+                      onChange={e =>
+                        onChange({
+                          resourceConfig: {
+                            ...state.resourceConfig,
+                            gpu_type: e.target.value || undefined,
+                          },
+                        })
+                      }
+                    >
+                      <option value="">Any</option>
+                      {gpuTypes.map(gt => (
+                        <option key={gt.value} value={gt.value}>
+                          {gt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 

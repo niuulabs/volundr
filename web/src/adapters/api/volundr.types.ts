@@ -97,6 +97,37 @@ export interface ApiSessionCreate {
   workspace_id?: string | null;
   credential_names?: string[];
   integration_ids?: string[];
+  resource_config?: Record<string, string | undefined>;
+}
+
+/**
+ * Resource type from cluster discovery
+ */
+export interface ApiResourceType {
+  name: string;
+  resource_key: string;
+  display_name: string;
+  unit: string;
+  category: string;
+}
+
+/**
+ * Node resource summary from cluster discovery
+ */
+export interface ApiNodeResourceSummary {
+  name: string;
+  labels: Record<string, string>;
+  allocatable: Record<string, string>;
+  allocated: Record<string, string>;
+  available: Record<string, string>;
+}
+
+/**
+ * Cluster resource discovery response
+ */
+export interface ApiClusterResourceInfo {
+  resource_types: ApiResourceType[];
+  nodes: ApiNodeResourceSummary[];
 }
 
 /**

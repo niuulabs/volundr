@@ -952,6 +952,55 @@ class WorkspaceTemplate(BaseModel):
     model_config = {"frozen": False}
 
 
+class ResourceCategory(StrEnum):
+    """Category of a resource type."""
+
+    COMPUTE = "compute"
+    ACCELERATOR = "accelerator"
+    CUSTOM = "custom"
+
+
+@dataclass(frozen=True)
+class ResourceType:
+    """A discoverable resource type available in the cluster."""
+
+    name: str
+    resource_key: str  # K8s resource key, e.g. "nvidia.com/gpu"
+    display_name: str
+    unit: str
+    category: ResourceCategory = ResourceCategory.COMPUTE
+
+
+@dataclass(frozen=True)
+class NodeResourceSummary:
+    """Resource availability summary for a single node."""
+
+    name: str
+    labels: dict[str, str] = field(default_factory=dict)
+    allocatable: dict[str, str] = field(default_factory=dict)
+    allocated: dict[str, str] = field(default_factory=dict)
+    available: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ClusterResourceInfo:
+    """Discovered cluster resource types and capacity."""
+
+    resource_types: list[ResourceType] = field(default_factory=list)
+    nodes: list[NodeResourceSummary] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TranslatedResources:
+    """K8s-native resource specification translated from user-friendly config."""
+
+    requests: dict[str, str] = field(default_factory=dict)
+    limits: dict[str, str] = field(default_factory=dict)
+    node_selector: dict[str, str] = field(default_factory=dict)
+    tolerations: list[dict] = field(default_factory=list)
+    runtime_class_name: str | None = None
+
+
 @dataclass
 class SessionSpec:
     """Merged result from all contributors."""

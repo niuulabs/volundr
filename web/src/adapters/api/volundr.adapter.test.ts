@@ -405,6 +405,39 @@ describe('ApiVolundrService', () => {
       expect(createBody.model).toBe('claude-sonnet-4-20250514');
       expect(createBody.source).toEqual({ type: 'git', repo: 'odin/core', branch: 'main' });
     });
+
+    it('includes resource_config when resourceConfig is provided', async () => {
+      mockFetch.mockReturnValueOnce(mockResponse(mockApiSession, 201));
+
+      await service.startSession({
+        name: 'GPU Session',
+        source: { type: 'git', repo: 'odin/core', branch: 'main' },
+        model: 'claude-sonnet-4-20250514',
+        resourceConfig: { cpu: '4', memory: '8Gi', gpu: '1' },
+      });
+
+      const createBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(createBody.resource_config).toEqual({ cpu: '4', memory: '8Gi', gpu: '1' });
+    });
+  });
+
+  describe('getClusterResources', () => {
+    it('fetches and maps cluster resources', async () => {
+      mockFetch.mockReturnValueOnce(
+        mockResponse({
+          resource_types: [
+            { name: 'cpu', resource_key: 'cpu', display_name: 'CPU', unit: 'cores', category: 'compute' },
+          ],
+          nodes: [],
+        })
+      );
+
+      const result = await service.getClusterResources();
+      expect(result.resourceTypes).toHaveLength(1);
+      expect(result.resourceTypes[0].name).toBe('cpu');
+      expect(result.resourceTypes[0].displayName).toBe('CPU');
+      expect(result.nodes).toEqual([]);
+    });
   });
 
   describe('stopSession', () => {

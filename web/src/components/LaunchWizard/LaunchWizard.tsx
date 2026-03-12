@@ -29,6 +29,7 @@ export interface LaunchConfig {
   workspaceId?: string;
   credentialNames?: string[];
   integrationIds?: string[];
+  resourceConfig?: Record<string, string | undefined>;
 }
 
 export type SourceType = 'git' | 'local_mount';
@@ -170,6 +171,11 @@ export function LaunchWizard(props: LaunchWizardProps) {
         ? { type: 'local_mount', paths: state.mountPaths.filter(p => p.host_path && p.mount_path) }
         : { type: 'git', repo: state.repo, branch: state.branch };
 
+    // Build resource config, filtering out empty values
+    const resourceConfig = Object.fromEntries(
+      Object.entries(state.resourceConfig).filter(([, v]) => v !== undefined && v !== '')
+    );
+
     await onLaunch({
       name: state.name.trim(),
       source,
@@ -182,6 +188,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
       workspaceId: state.workspaceId,
       credentialNames: state.selectedCredentials.length ? state.selectedCredentials : undefined,
       integrationIds: state.selectedIntegrations.length ? state.selectedIntegrations : undefined,
+      resourceConfig: Object.keys(resourceConfig).length > 0 ? resourceConfig : undefined,
     });
   }, [state, onLaunch]);
 

@@ -541,9 +541,11 @@ export function VolundrPage() {
           templateName: config.templateName,
           taskType: config.taskType,
           linearIssue: config.linearIssue,
+          terminalRestricted: config.terminalRestricted,
           workspaceId: config.workspaceId,
           credentialNames: config.credentialNames,
           integrationIds: config.integrationIds,
+          resourceConfig: config.resourceConfig,
         });
         setSelectedSession(session);
         setShowLaunchWizard(false);

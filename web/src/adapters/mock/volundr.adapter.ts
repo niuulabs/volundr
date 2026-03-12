@@ -227,6 +227,17 @@ export class MockVolundrService implements IVolundrService {
     return { name, keys: Object.keys(data) };
   }
 
+  async getClusterResources(): Promise<import('@/models').ClusterResourceInfo> {
+    return {
+      resourceTypes: [
+        { name: 'cpu', resourceKey: 'cpu', displayName: 'CPU', unit: 'cores', category: 'compute' },
+        { name: 'memory', resourceKey: 'memory', displayName: 'Memory', unit: 'bytes', category: 'compute' },
+        { name: 'gpu', resourceKey: 'nvidia.com/gpu', displayName: 'GPU', unit: 'devices', category: 'accelerator' },
+      ],
+      nodes: [],
+    };
+  }
+
   async startSession(config: {
     name: string;
     source: import('@/models').SessionSource;
@@ -237,6 +248,7 @@ export class MockVolundrService implements IVolundrService {
     terminalRestricted?: boolean;
     credentialNames?: string[];
     integrationIds?: string[];
+    resourceConfig?: Record<string, string | undefined>;
   }): Promise<VolundrSession> {
     const newSession: VolundrSession = {
       id: `forge-${Math.random().toString(36).substring(2, 10)}`,

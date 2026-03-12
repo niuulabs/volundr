@@ -481,6 +481,25 @@ storageAdapter:
   # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
   secretKwargs: []
 
+# Resource provider (dynamic adapter pattern)
+# Discovers cluster resources, validates requests, and translates
+# user-friendly specs to K8s-native primitives (requests/limits,
+# nodeSelector, tolerations, runtimeClassName).
+#
+# ── Kubernetes (device-plugin) ─────────────────────────────────
+#   resourceProvider:
+#     adapter: "volundr.adapters.outbound.k8s_resource_provider.K8sResourceProvider"
+#     kwargs:
+#       namespace: "volundr-sessions"
+#
+resourceProvider:
+  # -- Fully-qualified class path for the ResourceProvider adapter
+  adapter: "volundr.adapters.outbound.static_resource_provider.StaticResourceProvider"
+  # -- All kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
+  secretKwargs: []
+
 identity:
   # -- Fully-qualified class path for the IdentityPort adapter
   adapter: "volundr.adapters.outbound.identity.AllowAllIdentityAdapter"
@@ -622,6 +641,9 @@ sessionContributors:
     kwargs: {}
     secretKwargs: []
   - adapter: "volundr.adapters.outbound.contributors.gateway.GatewayContributor"
+    kwargs: {}
+    secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.resource.ResourceContributor"
     kwargs: {}
     secretKwargs: []
   - adapter: "volundr.adapters.outbound.contributors.isolation.IsolationContributor"

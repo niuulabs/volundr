@@ -100,6 +100,7 @@ const mockService = {
   listWorkspaces: vi.fn().mockResolvedValue([]),
   getCredentials: vi.fn().mockResolvedValue([]),
   getIntegrations: vi.fn().mockResolvedValue([]),
+  getClusterResources: vi.fn().mockResolvedValue({ resourceTypes: [], nodes: [] }),
 } as unknown as import('@/ports').IVolundrService;
 
 function renderStep(overrides: Partial<ConfigureStepProps> = {}) {
@@ -1241,6 +1242,57 @@ describe('ConfigureStep', () => {
         screen.getByPlaceholderText('Host path (e.g. /home/user/project)')
       ).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Container path (e.g. /workspace)')).toBeInTheDocument();
+    });
+  });
+
+  describe('GPU type dropdown', () => {
+    it('shows GPU type dropdown when cluster reports accelerator types', async () => {
+      const serviceWithGpu = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue({
+          resourceTypes: [
+            { name: 'cpu', resourceKey: 'cpu', displayName: 'CPU', unit: 'cores', category: 'compute' },
+            { name: 'gpu_A100', resourceKey: 'nvidia.com/gpu', displayName: 'NVIDIA A100', unit: 'devices', category: 'accelerator' },
+            { name: 'gpu_H100', resourceKey: 'nvidia.com/gpu', displayName: 'NVIDIA H100', unit: 'devices', category: 'accelerator' },
+          ],
+          nodes: [],
+        }),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service: serviceWithGpu });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      const gpuTypeLabel = await screen.findByText('GPU Type');
+      expect(gpuTypeLabel).toBeInTheDocument();
+    });
+
+    it('does not show GPU type dropdown when no accelerator types', () => {
+      renderStep();
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      expect(screen.queryByText('GPU Type')).not.toBeInTheDocument();
+    });
+
+    it('calls onChange when selecting a GPU type', async () => {
+      const serviceWithGpu = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue({
+          resourceTypes: [
+            { name: 'gpu_A100', resourceKey: 'nvidia.com/gpu', displayName: 'NVIDIA A100', unit: 'devices', category: 'accelerator' },
+          ],
+          nodes: [],
+        }),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service: serviceWithGpu });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      const gpuTypeLabel = await screen.findByText('GPU Type');
+      const select = gpuTypeLabel.closest('div')?.querySelector('select');
+      expect(select).toBeTruthy();
+      fireEvent.change(select!, { target: { value: 'A100' } });
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceConfig: expect.objectContaining({ gpu_type: 'A100' }),
+        })
+      );
     });
   });
 });
