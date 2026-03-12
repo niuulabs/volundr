@@ -199,7 +199,7 @@ class TerminalServer:
             ("set-option", "-t", TMUX_SERVER_NAME, "-g", "status", "off"),
             ("set-option", "-t", TMUX_SERVER_NAME, "-g", "prefix", "None"),
             ("set-option", "-t", TMUX_SERVER_NAME, "-g", "history-limit", str(TMUX_SCROLLBACK)),
-            ("set-option", "-t", TMUX_SERVER_NAME, "-g", "mouse", "off"),
+            ("set-option", "-t", TMUX_SERVER_NAME, "-g", "mouse", "on"),
             ("unbind-key", "-a"),
         ]:
             _tmux_run(*args)
