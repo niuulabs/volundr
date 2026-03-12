@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Wifi, WifiOff } from 'lucide-react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useIsTouchDevice } from '@/hooks/useIsTouchDevice';
+import { getAccessToken } from '@/adapters/api/client';
 import { cn } from '@/utils';
 import { TerminalTabBar } from '@/components/TerminalTabBar';
 import { TerminalAccessoryBar } from '@/components/TerminalAccessoryBar';
@@ -26,40 +27,141 @@ interface SessionTerminalProps {
   className?: string;
 }
 
-function makeTabLabel(index: number): string {
-  return `Terminal ${index + 1}`;
+/**
+ * Derive the REST base URL from the WebSocket base URL.
+ * e.g. wss://host/s/{id}/terminal/ws -> https://host/s/{id}/terminal
+ */
+function deriveHttpBase(wsUrl: string): string {
+  const httpProto = wsUrl.startsWith('wss:') ? 'https:' : 'http:';
+  const parsed = new URL(wsUrl);
+  const prefix = parsed.pathname.replace(/\/ws\/?$/, '');
+  return `${httpProto}//${parsed.host}${prefix}`;
+}
+
+interface ServerSession {
+  terminalId: string;
+  label: string;
+  cli_type: string;
+  status: string;
+}
+
+/**
+ * List existing terminal sessions from the server.
+ */
+async function listSessions(httpBase: string): Promise<ServerSession[]> {
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const resp = await fetch(`${httpBase}/api/terminal/sessions`, { headers });
+    if (!resp.ok) {
+      return [];
+    }
+    const data = (await resp.json()) as { sessions: ServerSession[] };
+    return data.sessions || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Kill a terminal session via the REST API.
+ */
+async function killSession(httpBase: string, terminalId: string): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const token = getAccessToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    await fetch(`${httpBase}/api/terminal/kill`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ terminalId }),
+    });
+  } catch {
+    // Best-effort — the tmux window will be cleaned up on pod restart regardless
+  }
+}
+
+/**
+ * Spawn a terminal session via the REST API.
+ * Returns the terminalId on success, null on failure.
+ */
+async function spawnSession(
+  httpBase: string,
+  cliType: string,
+  name?: string
+): Promise<{ terminalId: string; label: string } | null> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const token = getAccessToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const body: Record<string, string> = { cli_type: cliType };
+  if (name) {
+    body.name = name;
+  }
+
+  try {
+    const resp = await fetch(`${httpBase}/api/terminal/spawn`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      console.error(`Terminal spawn failed (${resp.status}):`, text);
+      return null;
+    }
+
+    const data = (await resp.json()) as { terminalId: string; label?: string };
+    return { terminalId: data.terminalId, label: data.label || data.terminalId };
+  } catch (err) {
+    console.error('Terminal spawn request failed:', err);
+    return null;
+  }
 }
 
 /**
  * Multi-tab interactive PTY terminal backed by xterm.js + WebSocket.
+ *
+ * All tabs are spawned via the REST API to get a stable tmux-backed terminal ID.
+ * WebSocket connects to /ws/{terminalId} so tab switches reattach to the same session.
  *
  * Protocol (both directions are JSON):
  *   Client -> Server: { type: "input", data: string } | { type: "resize", cols: number, rows: number }
  *   Server -> Client: { type: "output", data: string } | { type: "exit", data: string }
  */
 export function SessionTerminal({ url, className }: SessionTerminalProps) {
-  const [tabs, setTabs] = useState<TerminalTab[]>(() => [
-    { id: 'default', label: makeTabLabel(0), restricted: false },
-  ]);
-  const [activeTabId, setActiveTabId] = useState('default');
+  const [tabs, setTabs] = useState<TerminalTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [fontReady, setFontReady] = useState(false);
 
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const instanceRefs = useRef<Map<string, TerminalInstance>>(new Map());
-  const tabCounterRef = useRef(1);
   const isTouch = useIsTouchDevice();
+  const initialSpawnedRef = useRef(false);
+
+  // Derive HTTP base for REST calls
+  const httpBase = useMemo(() => (url ? deriveHttpBase(url) : null), [url]);
 
   // Compute the WebSocket URL for the active tab
   const activeWsUrl = useMemo(() => {
-    if (!url) {
+    if (!url || !activeTabId) {
       return null;
     }
-    // For the default ad-hoc tab, use the base URL (backward compat)
-    if (activeTabId === 'default') {
-      return url;
-    }
-    // For spawned tabs, append terminalId
     const base = url.replace(/\/ws\/?$/, '');
     return `${base}/ws/${activeTabId}`;
   }, [url, activeTabId]);
@@ -67,7 +169,9 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
   // Stable reference so the WebSocket callbacks can write to xterm
   const writeToTerminal = useCallback(
     (data: string) => {
-      instanceRefs.current.get(activeTabId)?.term.write(data);
+      if (activeTabId) {
+        instanceRefs.current.get(activeTabId)?.term.write(data);
+      }
     },
     [activeTabId]
   );
@@ -75,9 +179,11 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
   const { sendJson } = useWebSocket(activeWsUrl, {
     onOpen: () => {
       setConnected(true);
-      const inst = instanceRefs.current.get(activeTabId);
-      if (inst) {
-        sendJson({ type: 'resize', cols: inst.term.cols, rows: inst.term.rows });
+      if (activeTabId) {
+        const inst = instanceRefs.current.get(activeTabId);
+        if (inst) {
+          sendJson({ type: 'resize', cols: inst.term.cols, rows: inst.term.rows });
+        }
       }
     },
     onMessage: (raw: string) => {
@@ -112,6 +218,44 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
       cancelled = true;
     };
   }, []);
+
+  // Load existing sessions or spawn an initial shell tab
+  useEffect(() => {
+    if (!httpBase || initialSpawnedRef.current) {
+      return;
+    }
+    initialSpawnedRef.current = true;
+
+    (async () => {
+      // Check for existing sessions (e.g. after tab switch re-mount)
+      const existing = await listSessions(httpBase);
+      if (existing.length > 0) {
+        const restoredTabs = existing.map((s, i) => ({
+          id: s.terminalId,
+          label: s.label || `Terminal ${i + 1}`,
+          restricted: false,
+          cliType: s.cli_type,
+        }));
+        setTabs(restoredTabs);
+        setActiveTabId(restoredTabs[0].id);
+        return;
+      }
+
+      // No existing sessions — spawn a fresh shell
+      const result = await spawnSession(httpBase, 'shell');
+      if (!result) {
+        return;
+      }
+      const tab: TerminalTab = {
+        id: result.terminalId,
+        label: 'Terminal 1',
+        restricted: false,
+        cliType: 'shell',
+      };
+      setTabs([tab]);
+      setActiveTabId(result.terminalId);
+    })();
+  }, [httpBase]);
 
   // Create xterm instance for a tab when its container mounts
   const mountTerminal = useCallback(
@@ -192,8 +336,12 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
     };
   }, []);
 
-  // Forward terminal input to WebSocket for active tab
+  // Forward terminal input to WebSocket for active tab.
+  // Depends on fontReady so the effect re-runs after the xterm instance is created.
   useEffect(() => {
+    if (!activeTabId) {
+      return;
+    }
     const inst = instanceRefs.current.get(activeTabId);
     if (!inst) {
       return;
@@ -204,10 +352,13 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
     });
 
     return () => disposable.dispose();
-  }, [activeTabId, sendJson]);
+  }, [activeTabId, sendJson, fontReady]);
 
   // Forward resize events
   useEffect(() => {
+    if (!activeTabId) {
+      return;
+    }
     const inst = instanceRefs.current.get(activeTabId);
     if (!inst) {
       return;
@@ -218,10 +369,13 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
     });
 
     return () => disposable.dispose();
-  }, [activeTabId, sendJson]);
+  }, [activeTabId, sendJson, fontReady]);
 
   // Refit on container resize
   useEffect(() => {
+    if (!activeTabId) {
+      return;
+    }
     const container = containerRefs.current.get(activeTabId);
     if (!container) {
       return;
@@ -241,6 +395,9 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
 
   // Refit when tab changes
   useEffect(() => {
+    if (!activeTabId) {
+      return;
+    }
     // Small delay to let display: none -> block settle
     const timer = setTimeout(() => {
       try {
@@ -260,21 +417,57 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
     [sendJson]
   );
 
-  // Tab management
+  // Tab management — local-only fallback (should not normally be needed)
   const handleAddTab = useCallback(() => {
-    const index = tabCounterRef.current;
-    tabCounterRef.current += 1;
-    const newTab: TerminalTab = {
-      id: `tab-${index}`,
-      label: makeTabLabel(index),
-      restricted: false,
-    };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(newTab.id);
-  }, []);
+    if (!httpBase) {
+      return;
+    }
+    spawnSession(httpBase, 'shell').then(result => {
+      if (!result) {
+        return;
+      }
+      const newTab: TerminalTab = {
+        id: result.terminalId,
+        label: result.label,
+        restricted: false,
+        cliType: 'shell',
+      };
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabId(result.terminalId);
+    });
+  }, [httpBase]);
+
+  // Spawn a CLI tab via the terminal REST API
+  const handleAddCliTab = useCallback(
+    async (cliType: string) => {
+      if (!httpBase) {
+        return;
+      }
+
+      const result = await spawnSession(httpBase, cliType);
+      if (!result) {
+        return;
+      }
+
+      const newTab: TerminalTab = {
+        id: result.terminalId,
+        label: result.label,
+        restricted: false,
+        cliType,
+      };
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabId(result.terminalId);
+    },
+    [httpBase]
+  );
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
+      // Kill the server-side tmux session
+      if (httpBase) {
+        killSession(httpBase, tabId);
+      }
+
       setTabs(prev => {
         if (prev.length <= 1) {
           return prev;
@@ -299,7 +492,7 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
         return filtered;
       });
     },
-    [activeTabId]
+    [activeTabId, httpBase]
   );
 
   const handleSelectTab = useCallback((tabId: string) => {
@@ -321,10 +514,11 @@ export function SessionTerminal({ url, className }: SessionTerminalProps) {
 
       <TerminalTabBar
         tabs={tabs}
-        activeTabId={activeTabId}
+        activeTabId={activeTabId ?? ''}
         onSelectTab={handleSelectTab}
         onCloseTab={handleCloseTab}
         onAddTab={handleAddTab}
+        onAddCliTab={handleAddCliTab}
       />
 
       <div className={styles.terminalArea}>

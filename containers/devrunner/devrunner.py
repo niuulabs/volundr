@@ -133,7 +133,9 @@ class Devrunner:
         if not self.pg_data_dir.exists():
             logger.info("Initializing PostgreSQL database cluster")
             proc = await asyncio.create_subprocess_exec(
-                str(pg_bin / "initdb"), "-D", str(self.pg_data_dir),
+                str(pg_bin / "initdb"),
+                "-D",
+                str(self.pg_data_dir),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -165,7 +167,9 @@ class Devrunner:
         logger.info("Starting PostgreSQL")
         with open(log_file, "a") as lf:
             self._postgres = await asyncio.create_subprocess_exec(
-                str(pg_bin / "postgres"), "-D", str(self.pg_data_dir),
+                str(pg_bin / "postgres"),
+                "-D",
+                str(self.pg_data_dir),
                 stdout=lf,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -245,13 +249,16 @@ class Devrunner:
         )
         self._services[name] = state
 
-        self._write_status(name, {
-            "status": "running",
-            "pid": proc.pid,
-            "port": spec.port,
-            "command": spec.command,
-            "started_at": state.started_at,
-        })
+        self._write_status(
+            name,
+            {
+                "status": "running",
+                "pid": proc.pid,
+                "port": spec.port,
+                "command": spec.command,
+                "started_at": state.started_at,
+            },
+        )
 
         logger.info(f"Service {name} started with PID {proc.pid}")
 
@@ -304,10 +311,7 @@ class Devrunner:
         for name in desired_names & running_names:
             svc_config = desired_services[name]
             state = self._services[name]
-            if (
-                state.spec.command != svc_config["command"]
-                or state.spec.port != svc_config["port"]
-            ):
+            if state.spec.command != svc_config["command"] or state.spec.port != svc_config["port"]:
                 logger.info(f"Service {name} config changed, restarting")
                 await self._stop_service(name)
                 spec = ServiceSpec(
@@ -341,21 +345,27 @@ class Devrunner:
                 logger.warning(f"Service {name} exited with code {exit_code}")
 
                 if state.spec.restart_policy == "never":
-                    self._write_status(name, {
-                        "status": "exited",
-                        "exit_code": exit_code,
-                    })
+                    self._write_status(
+                        name,
+                        {
+                            "status": "exited",
+                            "exit_code": exit_code,
+                        },
+                    )
                     continue
 
                 if state.restart_count >= state.spec.max_restarts:
                     logger.error(
                         f"Service {name} exceeded max restarts ({state.spec.max_restarts})"
                     )
-                    self._write_status(name, {
-                        "status": "failed",
-                        "exit_code": exit_code,
-                        "restart_count": state.restart_count,
-                    })
+                    self._write_status(
+                        name,
+                        {
+                            "status": "failed",
+                            "exit_code": exit_code,
+                            "restart_count": state.restart_count,
+                        },
+                    )
                     continue
 
                 # Restart the service
@@ -376,8 +386,11 @@ class Devrunner:
         while not self._shutting_down:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "inotifywait", "-e", "modify,create,delete",
-                    "-q", str(self.config_path),
+                    "inotifywait",
+                    "-e",
+                    "modify,create,delete",
+                    "-q",
+                    str(self.config_path),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -436,7 +449,7 @@ class Devrunner:
             lines.append(f"    proxy_pass http://127.0.0.1:{port}/;")
             lines.append("    proxy_http_version 1.1;")
             lines.append("    proxy_set_header Upgrade $http_upgrade;")
-            lines.append("    proxy_set_header Connection \"upgrade\";")
+            lines.append('    proxy_set_header Connection "upgrade";')
             lines.append("    proxy_set_header Host $host;")
             lines.append("    proxy_set_header X-Real-IP $remote_addr;")
             lines.append("    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
@@ -484,10 +497,12 @@ async def main() -> None:
     """Entry point."""
     session_id = os.environ.get("SESSION_ID", "unknown")
     mount_path = os.environ.get("PERSISTENCE_MOUNT_PATH", "/volundr/sessions")
-    workspace_dir = Path(os.environ.get(
-        "WORKSPACE_DIR",
-        f"{mount_path}/{session_id}/workspace",
-    ))
+    workspace_dir = Path(
+        os.environ.get(
+            "WORKSPACE_DIR",
+            f"{mount_path}/{session_id}/workspace",
+        )
+    )
     services_dir = workspace_dir / ".services"
 
     logger.info(f"Devrunner starting for session {session_id}")

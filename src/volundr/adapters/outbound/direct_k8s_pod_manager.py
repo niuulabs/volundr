@@ -313,16 +313,18 @@ class DirectK8sPodManager(PodManager):
             {"envVar": "GITHUB_TOKEN", "secretName": "github-token", "secretKey": "token"},
         ]
         for es in env_secrets:
-            env.append({
-                "name": es["envVar"],
-                "valueFrom": {
-                    "secretKeyRef": {
-                        "name": es["secretName"],
-                        "key": es["secretKey"],
-                        "optional": True,
+            env.append(
+                {
+                    "name": es["envVar"],
+                    "valueFrom": {
+                        "secretKeyRef": {
+                            "name": es["secretName"],
+                            "key": es["secretKey"],
+                            "optional": True,
+                        },
                     },
-                },
-            })
+                }
+            )
 
         return env
 
@@ -347,7 +349,9 @@ class DirectK8sPodManager(PodManager):
         }
 
     def _build_init_containers(
-        self, session: Session, spec: SessionSpec,
+        self,
+        session: Session,
+        spec: SessionSpec,
     ) -> list[dict[str, Any]]:
         """Build init containers: permissions fix + optional git clone."""
         containers: list[dict[str, Any]] = [
@@ -392,33 +396,37 @@ else
   echo "Repository cloned successfully"
 fi
 """
-        containers.append({
-            "name": "git-clone",
-            "image": "alpine/git:latest",
-            "command": ["/bin/sh", "-c"],
-            "args": [clone_script],
-            "env": [
-                {
-                    "name": "GITHUB_TOKEN",
-                    "valueFrom": {
-                        "secretKeyRef": {
-                            "name": "github-token",
-                            "key": "token",
-                            "optional": True,
+        containers.append(
+            {
+                "name": "git-clone",
+                "image": "alpine/git:latest",
+                "command": ["/bin/sh", "-c"],
+                "args": [clone_script],
+                "env": [
+                    {
+                        "name": "GITHUB_TOKEN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "name": "github-token",
+                                "key": "token",
+                                "optional": True,
+                            },
                         },
                     },
-                },
-            ],
-            "securityContext": {"runAsUser": 1000, "allowPrivilegeEscalation": False},
-            "volumeMounts": [
-                {"name": "workspace", "mountPath": "/volundr"},
-            ],
-        })
+                ],
+                "securityContext": {"runAsUser": 1000, "allowPrivilegeEscalation": False},
+                "volumeMounts": [
+                    {"name": "workspace", "mountPath": "/volundr"},
+                ],
+            }
+        )
 
         return containers
 
     def _build_deployment_manifest(
-        self, session: Session, spec: SessionSpec,
+        self,
+        session: Session,
+        spec: SessionSpec,
     ) -> dict[str, Any]:
         """Build a Kubernetes Deployment manifest dict for the session."""
         labels = self._build_labels(session)
@@ -445,6 +453,7 @@ fi
                 "template": {
                     "metadata": {"labels": labels},
                     "spec": {
+                        "hostname": session.name,
                         "terminationGracePeriodSeconds": 30,
                         "securityContext": {
                             "fsGroup": 1000,
@@ -697,7 +706,9 @@ fi
         except api_exception as exc:
             if exc.status == 409:
                 logger.info(
-                    "%s %s already exists, patching", api_class, name,
+                    "%s %s already exists, patching",
+                    api_class,
+                    name,
                 )
                 await patch_fn(
                     name=name,
@@ -708,7 +719,8 @@ fi
                 raise
 
     async def _apply_custom_resource(
-        self, manifest: dict[str, Any],
+        self,
+        manifest: dict[str, Any],
     ) -> None:
         """Apply a custom resource (create or update)."""
         api = self._get_api("CustomObjectsApi")
@@ -722,7 +734,8 @@ fi
         plural = kind.lower() + "s"
         name = manifest["metadata"]["name"]
         namespace = manifest["metadata"].get(
-            "namespace", self._namespace,
+            "namespace",
+            self._namespace,
         )
 
         try:
@@ -745,7 +758,10 @@ fi
                 )
             else:
                 logger.warning(
-                    "Failed to apply %s %s: %s", kind, name, exc,
+                    "Failed to apply %s %s: %s",
+                    kind,
+                    name,
+                    exc,
                 )
                 raise
 
@@ -771,7 +787,10 @@ fi
         except api_exception as exc:
             if exc.status != 404:
                 logger.warning(
-                    "Failed to delete %s/%s: %s", plural, name, exc,
+                    "Failed to delete %s/%s: %s",
+                    plural,
+                    name,
+                    exc,
                 )
 
     async def _delete_resource(
@@ -791,7 +810,10 @@ fi
         except api_exception as exc:
             if exc.status != 404:
                 logger.error(
-                    "Failed to delete %s %s: %s", api_class, name, exc,
+                    "Failed to delete %s %s: %s",
+                    api_class,
+                    name,
+                    exc,
                 )
             return False
 
@@ -802,7 +824,8 @@ fi
 
         try:
             return await api.read_namespaced_deployment(
-                name=name, namespace=self._namespace,
+                name=name,
+                namespace=self._namespace,
             )
         except api_exception as exc:
             if exc.status == 404:
@@ -912,7 +935,8 @@ fi
 
         if d1 or d2 or d3 or d4:
             logger.info(
-                "Deleted K8s resources for session %s", session.id,
+                "Deleted K8s resources for session %s",
+                session.id,
             )
 
         return True
@@ -969,9 +993,7 @@ fi
             await asyncio.sleep(self._poll_interval)
             elapsed += self._poll_interval
 
-        logger.warning(
-            "Timed out waiting for session %s after %.1fs", session.id, timeout
-        )
+        logger.warning("Timed out waiting for session %s after %.1fs", session.id, timeout)
         return SessionStatus.FAILED
 
     async def close(self) -> None:

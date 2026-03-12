@@ -145,6 +145,13 @@ export function useWebSocket(
       ws.onclose = (event: CloseEvent) => {
         onCloseRef.current?.(event.code, event.reason);
 
+        // If this WS was replaced by a newer connection, ignore it.
+        // Prevents stale reconnect when URL changes and the old WS
+        // fires onclose after intentionalCloseRef was already reset.
+        if (wsRef.current !== ws) {
+          return;
+        }
+
         if (intentionalCloseRef.current) {
           return;
         }

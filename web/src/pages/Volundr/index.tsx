@@ -436,6 +436,7 @@ export function VolundrPage() {
   const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
     { id: 'chat', label: 'Chat', icon: MessageSquare },
     { id: 'terminal', label: 'Terminal', icon: Terminal },
+
     { id: 'code', label: isManualSession ? 'IDE' : 'Code', icon: Code },
     { id: 'diffs', label: 'Diffs', icon: GitCompareArrows },
     { id: 'chronicles', label: 'Chronicles', icon: ScrollText },

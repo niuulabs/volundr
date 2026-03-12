@@ -1,4 +1,4 @@
-"""Tests for the devrunner terminal server."""
+"""Tests for the devrunner terminal server (tmux-based architecture)."""
 
 from __future__ import annotations
 
@@ -63,8 +63,9 @@ from terminal import (  # noqa: E402
     PTY_READ_TIMEOUT_SECONDS,
     UNRESTRICTED_SHELL_PATH,
     TerminalServer,
-    _PtySession,
+    _AttachHandle,
     _set_pty_size,
+    _TmuxSession,
 )
 
 
@@ -105,20 +106,29 @@ class TestTerminalServerInit:
         assert server._restricted is False
 
 
-class TestPtySession:
-    """Test _PtySession data class."""
+class TestTmuxSession:
+    """Test _TmuxSession data class."""
 
     def test_creation(self) -> None:
-        session = _PtySession(
+        session = _TmuxSession(
             terminal_id="test-id",
-            master_fd=5,
-            child_pid=1234,
-            restricted=True,
+            label="Test Terminal",
+            cli_type="shell",
+            window_name="test-id",
         )
         assert session.terminal_id == "test-id"
-        assert session.master_fd == 5
-        assert session.child_pid == 1234
-        assert session.restricted is True
+        assert session.label == "Test Terminal"
+        assert session.cli_type == "shell"
+        assert session.window_name == "test-id"
+
+
+class TestAttachHandle:
+    """Test _AttachHandle data class."""
+
+    def test_creation(self) -> None:
+        handle = _AttachHandle(master_fd=5, child_pid=1234)
+        assert handle.master_fd == 5
+        assert handle.child_pid == 1234
 
 
 class TestConstants:
@@ -153,46 +163,20 @@ class TestSetPtySize:
         mock_ioctl.assert_called_once()
 
 
-class TestSpawnShell:
-    """Test shell spawning logic."""
-
-    @patch("terminal.pty.fork", return_value=(1234, 5))
-    @patch("terminal.fcntl.fcntl")
-    def test_spawn_restricted_shell(self, mock_fcntl: MagicMock, mock_fork: MagicMock) -> None:
-        server = TerminalServer(shell_path="/usr/local/bin/restricted-shell")
-        session = server._create_pty_session("test-id", restricted=True)
-        assert session.terminal_id == "test-id"
-        assert session.child_pid == 1234
-        assert session.master_fd == 5
-        assert session.restricted is True
-
-    @patch("terminal.pty.fork", return_value=(1234, 5))
-    @patch("terminal.fcntl.fcntl")
-    def test_spawn_unrestricted_shell(self, mock_fcntl: MagicMock, mock_fork: MagicMock) -> None:
-        server = TerminalServer()
-        session = server._create_pty_session("test-id", restricted=False)
-        assert session.restricted is False
-
-
-class TestCleanupSession:
-    """Test session cleanup."""
+class TestCleanupAttach:
+    """Test attach handle cleanup."""
 
     @patch("terminal.os.waitpid")
     @patch("terminal.os.kill")
     @patch("terminal.os.close")
-    def test_cleanup_session(
+    def test_cleanup_attach(
         self,
         mock_close: MagicMock,
         mock_kill: MagicMock,
         mock_waitpid: MagicMock,
     ) -> None:
-        session = _PtySession(
-            terminal_id="test",
-            master_fd=5,
-            child_pid=1234,
-            restricted=True,
-        )
-        TerminalServer._cleanup_session(session)
+        handle = _AttachHandle(master_fd=5, child_pid=1234)
+        TerminalServer._cleanup_attach(handle)
         mock_close.assert_called_once_with(5)
         mock_kill.assert_called_once()
         mock_waitpid.assert_called_once()
@@ -200,20 +184,15 @@ class TestCleanupSession:
     @patch("terminal.os.waitpid", side_effect=ChildProcessError)
     @patch("terminal.os.kill", side_effect=ProcessLookupError)
     @patch("terminal.os.close", side_effect=OSError)
-    def test_cleanup_session_handles_errors(
+    def test_cleanup_attach_handles_errors(
         self,
         mock_close: MagicMock,
         mock_kill: MagicMock,
         mock_waitpid: MagicMock,
     ) -> None:
-        session = _PtySession(
-            terminal_id="test",
-            master_fd=5,
-            child_pid=1234,
-            restricted=True,
-        )
+        handle = _AttachHandle(master_fd=5, child_pid=1234)
         # Should not raise
-        TerminalServer._cleanup_session(session)
+        TerminalServer._cleanup_attach(handle)
 
 
 class TestBlockingRead:
@@ -241,12 +220,11 @@ class TestHandleSpawn:
     """Test the spawn endpoint."""
 
     @pytest.mark.asyncio
-    @patch("terminal.pty.fork", return_value=(1234, 5))
-    @patch("terminal.fcntl.fcntl")
-    async def test_spawn_returns_terminal_id(
-        self, mock_fcntl: MagicMock, mock_fork: MagicMock
-    ) -> None:
+    @patch("terminal._tmux_run")
+    async def test_spawn_returns_terminal_id(self, mock_tmux: MagicMock) -> None:
+        mock_tmux.return_value = MagicMock(returncode=0, stdout="")
         server = TerminalServer()
+        server._tmux_ready = True
         request = MagicMock()
         request.can_read_body = False
 
@@ -254,8 +232,44 @@ class TestHandleSpawn:
         body = json.loads(response.text)
 
         assert "terminalId" in body
-        assert body["restricted"] is False
+        assert body["cli_type"] == "shell"
+        assert body["persistent"] is True
         assert body["terminalId"] in server._sessions
+
+    @pytest.mark.asyncio
+    @patch("terminal._tmux_run")
+    async def test_spawn_with_cli_type(self, mock_tmux: MagicMock) -> None:
+        mock_tmux.return_value = MagicMock(returncode=0, stdout="")
+        server = TerminalServer()
+        server._tmux_ready = True
+        request = MagicMock()
+        request.can_read_body = True
+        request.json = AsyncMock(return_value={"cli_type": "claude"})
+
+        response = await server._handle_spawn(request)
+        body = json.loads(response.text)
+
+        assert body["cli_type"] == "claude"
+
+    @pytest.mark.asyncio
+    @patch("terminal._tmux_run")
+    async def test_spawn_duplicate_returns_409(self, mock_tmux: MagicMock) -> None:
+        mock_tmux.return_value = MagicMock(returncode=0, stdout="")
+        server = TerminalServer()
+        server._tmux_ready = True
+        server._sessions["my-session"] = _TmuxSession(
+            terminal_id="my-session",
+            label="my-session",
+            cli_type="shell",
+            window_name="my-session",
+        )
+
+        request = MagicMock()
+        request.can_read_body = True
+        request.json = AsyncMock(return_value={"name": "my-session"})
+
+        response = await server._handle_spawn(request)
+        assert response.status == 409
 
 
 class TestHandleKill:
@@ -271,14 +285,15 @@ class TestHandleKill:
         assert response.status == 404
 
     @pytest.mark.asyncio
-    @patch.object(TerminalServer, "_cleanup_session")
-    async def test_kill_existing_session(self, mock_cleanup: MagicMock) -> None:
+    @patch("terminal._tmux_run")
+    async def test_kill_existing_session(self, mock_tmux: MagicMock) -> None:
+        mock_tmux.return_value = MagicMock(returncode=0, stdout="")
         server = TerminalServer()
-        session = _PtySession(
+        session = _TmuxSession(
             terminal_id="test-id",
-            master_fd=5,
-            child_pid=1234,
-            restricted=True,
+            label="Test",
+            cli_type="shell",
+            window_name="test-id",
         )
         server._sessions["test-id"] = session
 
@@ -290,7 +305,6 @@ class TestHandleKill:
 
         assert body["ok"] is True
         assert "test-id" not in server._sessions
-        mock_cleanup.assert_called_once_with(session)
 
 
 class TestHandleMode:
@@ -325,21 +339,18 @@ class TestStop:
     """Test server shutdown."""
 
     @pytest.mark.asyncio
-    @patch.object(TerminalServer, "_cleanup_session")
-    async def test_stop_cleans_up_sessions(self, mock_cleanup: MagicMock) -> None:
+    async def test_stop_clears_sessions(self) -> None:
         server = TerminalServer()
-        session = _PtySession(
+        server._sessions["test"] = _TmuxSession(
             terminal_id="test",
-            master_fd=5,
-            child_pid=1234,
-            restricted=True,
+            label="Test",
+            cli_type="shell",
+            window_name="test",
         )
-        server._sessions["test"] = session
         server._runner = MagicMock()
         server._runner.cleanup = AsyncMock()
 
         await server.stop()
 
-        mock_cleanup.assert_called_once_with(session)
         assert len(server._sessions) == 0
         server._runner.cleanup.assert_called_once()

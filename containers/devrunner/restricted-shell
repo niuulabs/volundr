@@ -65,7 +65,7 @@ def main() -> None:
     except (FileNotFoundError, PermissionError):
         pass
 
-    hostname = os.environ.get("SESSION_ID", "devrunner")
+    hostname = os.environ.get("SESSION_NAME", os.environ.get("SESSION_ID", "devrunner"))
     print(f"Restricted shell - {len(allowed)} commands available")
     print("Type 'help' for available commands\n")
 

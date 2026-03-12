@@ -200,7 +200,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Always forward async data messages to the right page,
 	// regardless of which page is active or whether help is showing.
 	switch msg.(type) {
-	case pages.TerminalOutputMsg, pages.TerminalConnectedMsg, pages.TerminalDisconnectedMsg:
+	case pages.TerminalOutputMsg, pages.TerminalConnectedMsg, pages.TerminalDisconnectedMsg,
+		pages.TerminalSessionsLoadedMsg, pages.TerminalSpawnedMsg:
 		m.terminal, cmd = m.terminal.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -275,12 +276,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			key := keyMsg.String()
 			// Let these keys through to the app layer:
 			switch {
-			case key == "ctrl+c", key == "f11", key == "ctrl+f",
+			case key == "f11", key == "ctrl+f",
 				key == "?", key == "esc", key == "[":
 				// fall through to app
 			case len(key) == 1 && key >= "1" && key <= "7":
 				// number keys for page navigation
 			default:
+				// Forward everything else (including ctrl+c) to the terminal.
 				m.terminal, cmd = m.terminal.Update(msg)
 				if cmd != nil {
 					cmds = append(cmds, cmd)
