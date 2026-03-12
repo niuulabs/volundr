@@ -96,9 +96,10 @@ describe('TerminalTabBar', () => {
     expect(screen.queryAllByRole('button', { name: /close/i })).toHaveLength(0);
   });
 
-  it('calls onAddTab when the add button is clicked', () => {
+  it('opens dropdown when the add button is clicked', () => {
     const tabs = makeTabs(1);
     const onAdd = vi.fn();
+    const onAddCli = vi.fn();
     render(
       <TerminalTabBar
         tabs={tabs}
@@ -106,11 +107,16 @@ describe('TerminalTabBar', () => {
         onSelectTab={vi.fn()}
         onCloseTab={vi.fn()}
         onAddTab={onAdd}
+        onAddCliTab={onAddCli}
       />
     );
 
     fireEvent.click(screen.getByRole('button', { name: /new terminal/i }));
-    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    // Click a menu item to spawn via onAddCliTab
+    fireEvent.click(screen.getByRole('menuitem', { name: /shell/i }));
+    expect(onAddCli).toHaveBeenCalledWith('shell');
   });
 
   it('renders the tablist role on the container', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { SessionTerminal } from './SessionTerminal';
 
 // Mock xterm.js — jsdom has no canvas support
@@ -115,7 +115,8 @@ describe('SessionTerminal', () => {
       await Promise.resolve();
     });
 
-    expect(useWebSocket).toHaveBeenCalledWith('ws://test-host/terminal/ws', expect.any(Object));
+    // With no active tab yet, the computed WS URL is null (tabs load async)
+    expect(useWebSocket).toHaveBeenCalledWith(null, expect.any(Object));
   });
 
   it('passes null url to useWebSocket when url is null', async () => {
@@ -145,30 +146,19 @@ describe('SessionTerminal', () => {
       await Promise.resolve();
     });
 
+    // Tab bar is always rendered, but with url=null no tabs are spawned
     expect(screen.getByRole('tablist')).toBeInTheDocument();
-    expect(screen.getByText('Terminal 1')).toBeInTheDocument();
   });
 
-  it('adds a new tab when add button is clicked', async () => {
-    render(<SessionTerminal url={null} />);
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /new terminal/i }));
-
-    expect(screen.getByText('Terminal 2')).toBeInTheDocument();
-  });
-
-  it('renders terminal container element', async () => {
+  it('renders empty terminal area when url is null', async () => {
     const { container } = render(<SessionTerminal url={null} />);
 
     await act(async () => {
       await Promise.resolve();
     });
 
+    // No tabs are created when url is null (no httpBase for REST calls)
     const terminalDiv = container.querySelector('[data-visible]');
-    expect(terminalDiv).toBeTruthy();
+    expect(terminalDiv).toBeNull();
   });
 });

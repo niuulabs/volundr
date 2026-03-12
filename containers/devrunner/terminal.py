@@ -19,7 +19,6 @@ import signal
 import struct
 import subprocess
 import termios
-import uuid
 
 from aiohttp import web
 
@@ -156,10 +155,16 @@ class TerminalServer:
 
         # Create detached session with placeholder window
         _tmux_run(
-            "new-session", "-d",
-            "-s", TMUX_SERVER_NAME,
-            "-n", "__init__",
-            "-x", "200", "-y", "50",
+            "new-session",
+            "-d",
+            "-s",
+            TMUX_SERVER_NAME,
+            "-n",
+            "__init__",
+            "-x",
+            "200",
+            "-y",
+            "50",
         )
         self._apply_headless_config()
         self._tmux_ready = True
@@ -178,9 +183,7 @@ class TerminalServer:
 
     def _reload_sessions(self) -> None:
         """Reload session metadata from a running tmux server."""
-        result = _tmux_run(
-            "list-windows", "-t", TMUX_SERVER_NAME, "-F", "#{window_name}"
-        )
+        result = _tmux_run("list-windows", "-t", TMUX_SERVER_NAME, "-F", "#{window_name}")
         if result.returncode != 0:
             return
 
@@ -224,8 +227,10 @@ class TerminalServer:
         # Use terminal_id as the tmux window name for easy lookup
         _tmux_run(
             "new-window",
-            "-t", TMUX_SERVER_NAME,
-            "-n", terminal_id,
+            "-t",
+            TMUX_SERVER_NAME,
+            "-n",
+            terminal_id,
             full_cmd,
         )
 
@@ -255,7 +260,8 @@ class TerminalServer:
                 tmux,
                 _tmux_cmd(
                     "attach-session",
-                    "-t", f"{TMUX_SERVER_NAME}:{window_name}",
+                    "-t",
+                    f"{TMUX_SERVER_NAME}:{window_name}",
                 ),
                 env,
             )
@@ -327,12 +333,14 @@ class TerminalServer:
             terminal_id, label=label, cli_type=cli_type, command=command
         )
 
-        return web.json_response({
-            "terminalId": session.terminal_id,
-            "label": session.label,
-            "cli_type": session.cli_type,
-            "persistent": True,
-        })
+        return web.json_response(
+            {
+                "terminalId": session.terminal_id,
+                "label": session.label,
+                "cli_type": session.cli_type,
+                "persistent": True,
+            }
+        )
 
     async def _handle_kill(self, request: web.Request) -> web.Response:
         """Kill a terminal session by ID."""
@@ -358,16 +366,20 @@ class TerminalServer:
         sessions = []
         for s in self._sessions.values():
             alive = self._window_alive(s.window_name)
-            sessions.append({
-                "terminalId": s.terminal_id,
-                "label": s.label,
-                "cli_type": s.cli_type,
-                "status": "running" if alive else "exited",
-            })
-        return web.json_response({
-            "sessions": sessions,
-            "tmux": self._tmux_ready,
-        })
+            sessions.append(
+                {
+                    "terminalId": s.terminal_id,
+                    "label": s.label,
+                    "cli_type": s.cli_type,
+                    "status": "running" if alive else "exited",
+                }
+            )
+        return web.json_response(
+            {
+                "sessions": sessions,
+                "tmux": self._tmux_ready,
+            }
+        )
 
     # --- WebSocket Handler ---
 
@@ -381,19 +393,21 @@ class TerminalServer:
         if not terminal_id:
             self._session_counter += 1
             terminal_id = f"term-{self._session_counter}"
-            self._create_tmux_window(
-                terminal_id, label=terminal_id, cli_type="shell"
-            )
+            self._create_tmux_window(terminal_id, label=terminal_id, cli_type="shell")
 
         session = self._sessions.get(terminal_id)
         if not session:
             # Maybe the session exists in tmux but we don't have metadata
             # (e.g. after restart). Try to attach anyway.
             if not self._window_alive(terminal_id):
-                await ws.send_str(json.dumps({
-                    "type": "error",
-                    "data": f"Terminal session {terminal_id} not found",
-                }))
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "data": f"Terminal session {terminal_id} not found",
+                        }
+                    )
+                )
                 await ws.close()
                 return ws
             # Re-register it
@@ -467,10 +481,12 @@ class TerminalServer:
                     await ws.send_str(json.dumps({"type": "exit", "data": ""}))
                     break
                 await ws.send_str(
-                    json.dumps({
-                        "type": "output",
-                        "data": data.decode("utf-8", errors="replace"),
-                    })
+                    json.dumps(
+                        {
+                            "type": "output",
+                            "data": data.decode("utf-8", errors="replace"),
+                        }
+                    )
                 )
         except (OSError, ConnectionResetError):
             pass
