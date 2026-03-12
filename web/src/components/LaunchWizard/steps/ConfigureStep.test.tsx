@@ -1237,7 +1237,9 @@ describe('ConfigureStep', () => {
           mountPaths: [{ host_path: '', mount_path: '', read_only: true }],
         }),
       });
-      expect(screen.getByPlaceholderText('Host path (e.g. /home/user/project)')).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText('Host path (e.g. /home/user/project)')
+      ).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Container path (e.g. /workspace)')).toBeInTheDocument();
     });
   });
