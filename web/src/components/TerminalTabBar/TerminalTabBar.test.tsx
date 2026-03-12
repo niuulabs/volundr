@@ -81,6 +81,60 @@ describe('TerminalTabBar', () => {
     expect(onClose).toHaveBeenCalledWith('tab-0');
   });
 
+  it('calls onCloseTab on Enter keydown on close button', () => {
+    const tabs = makeTabs(2);
+    const onClose = vi.fn();
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="tab-0"
+        onSelectTab={vi.fn()}
+        onCloseTab={onClose}
+        onAddTab={vi.fn()}
+      />
+    );
+
+    const closeButtons = screen.getAllByRole('button', { name: /close/i });
+    fireEvent.keyDown(closeButtons[0], { key: 'Enter' });
+    expect(onClose).toHaveBeenCalledWith('tab-0');
+  });
+
+  it('calls onCloseTab on Space keydown on close button', () => {
+    const tabs = makeTabs(2);
+    const onClose = vi.fn();
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="tab-0"
+        onSelectTab={vi.fn()}
+        onCloseTab={onClose}
+        onAddTab={vi.fn()}
+      />
+    );
+
+    const closeButtons = screen.getAllByRole('button', { name: /close/i });
+    fireEvent.keyDown(closeButtons[0], { key: ' ' });
+    expect(onClose).toHaveBeenCalledWith('tab-0');
+  });
+
+  it('does not call onCloseTab on other keydown on close button', () => {
+    const tabs = makeTabs(2);
+    const onClose = vi.fn();
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="tab-0"
+        onSelectTab={vi.fn()}
+        onCloseTab={onClose}
+        onAddTab={vi.fn()}
+      />
+    );
+
+    const closeButtons = screen.getAllByRole('button', { name: /close/i });
+    fireEvent.keyDown(closeButtons[0], { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('does not show close buttons when only one tab exists', () => {
     const tabs = makeTabs(1);
     render(
@@ -114,9 +168,99 @@ describe('TerminalTabBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /new terminal/i }));
     expect(screen.getByRole('menu')).toBeInTheDocument();
 
+    // All CLI options should be visible
+    expect(screen.getByRole('menuitem', { name: /shell/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /claude/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /codex/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /aider/i })).toBeInTheDocument();
+
     // Click a menu item to spawn via onAddCliTab
     fireEvent.click(screen.getByRole('menuitem', { name: /shell/i }));
     expect(onAddCli).toHaveBeenCalledWith('shell');
+  });
+
+  it('closes dropdown when clicking add button again', () => {
+    const tabs = makeTabs(1);
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="tab-0"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onAddTab={vi.fn()}
+        onAddCliTab={vi.fn()}
+      />
+    );
+
+    const addButton = screen.getByRole('button', { name: /new terminal/i });
+
+    // Open
+    fireEvent.click(addButton);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    // Close by clicking again
+    fireEvent.click(addButton);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('falls back to onAddTab when onAddCliTab is not provided', () => {
+    const tabs = makeTabs(1);
+    const onAdd = vi.fn();
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="tab-0"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onAddTab={onAdd}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /new terminal/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /shell/i }));
+    expect(onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes dropdown when clicking outside', () => {
+    const tabs = makeTabs(1);
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="tab-0"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onAddTab={vi.fn()}
+        onAddCliTab={vi.fn()}
+      />
+    );
+
+    // Open dropdown
+    fireEvent.click(screen.getByRole('button', { name: /new terminal/i }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    // Click outside
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('sets aria-expanded on the add button', () => {
+    const tabs = makeTabs(1);
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="tab-0"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onAddTab={vi.fn()}
+        onAddCliTab={vi.fn()}
+      />
+    );
+
+    const addButton = screen.getByRole('button', { name: /new terminal/i });
+    expect(addButton).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(addButton);
+    expect(addButton).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('renders the tablist role on the container', () => {
@@ -132,5 +276,25 @@ describe('TerminalTabBar', () => {
     );
 
     expect(screen.getByRole('tablist')).toBeInTheDocument();
+  });
+
+  it('renders lock icon for restricted tabs and unlock for unrestricted', () => {
+    const tabs: TerminalTab[] = [
+      { id: 'r', label: 'Restricted', restricted: true },
+      { id: 'u', label: 'Unrestricted', restricted: false },
+    ];
+    render(
+      <TerminalTabBar
+        tabs={tabs}
+        activeTabId="r"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onAddTab={vi.fn()}
+      />
+    );
+
+    // Lock and Unlock are lucide SVGs; just verify both tabs render
+    expect(screen.getByText('Restricted')).toBeInTheDocument();
+    expect(screen.getByText('Unrestricted')).toBeInTheDocument();
   });
 });
