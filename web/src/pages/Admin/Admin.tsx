@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Building2, HardDrive } from 'lucide-react';
+import { Users, Building2, HardDrive, Cpu } from 'lucide-react';
 import type { IVolundrService } from '@/ports';
 import { SectionLayout } from '@/components/SectionLayout';
 import type { SectionDefinition } from '@/components/SectionLayout';
@@ -7,11 +7,13 @@ import { AdminGuard } from '@/components/AdminGuard';
 import { UsersSection } from './sections/UsersSection';
 import { TenantsSection } from './sections/TenantsSection';
 import { StorageSection } from './sections/StorageSection';
+import { ResourcesSection } from './sections/ResourcesSection';
 
 const sections: SectionDefinition[] = [
   { key: 'users', label: 'Users', icon: Users, component: UsersSection },
   { key: 'tenants', label: 'Tenants', icon: Building2, component: TenantsSection },
   { key: 'storage', label: 'Storage', icon: HardDrive, component: StorageSection },
+  { key: 'resources', label: 'Resources', icon: Cpu, component: ResourcesSection },
 ];
 
 interface AdminPageProps {
