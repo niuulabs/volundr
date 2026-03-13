@@ -43,6 +43,7 @@ interface UseVolundrResult {
     workspaceId?: string;
     credentialNames?: string[];
     integrationIds?: string[];
+    resourceConfig?: Record<string, string | undefined>;
   }) => Promise<VolundrSession>;
   connectSession: (config: { name: string; hostname: string }) => Promise<VolundrSession>;
   stopSession: (sessionId: string) => Promise<void>;
@@ -219,6 +220,7 @@ export function useVolundr(): UseVolundrResult {
       workspaceId?: string;
       credentialNames?: string[];
       integrationIds?: string[];
+      resourceConfig?: Record<string, string | undefined>;
     }) => {
       return volundrService.startSession(config);
     },

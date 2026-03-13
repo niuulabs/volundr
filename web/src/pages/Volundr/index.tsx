@@ -380,6 +380,7 @@ export function VolundrPage() {
     effectiveSelectedSession?.chatEndpoint,
     effectiveSelectedSession?.status,
     effectiveSelectedSession?.source,
+    effectiveSelectedSession?.origin,
     getLogs,
     fetchSessionHostLogs,
   ]);
@@ -418,6 +419,7 @@ export function VolundrPage() {
     effectiveSelectedSession?.status,
     effectiveSelectedSession?.source,
     effectiveSelectedSession?.hostname,
+    effectiveSelectedSession?.origin,
     getCodeServerUrl,
   ]);
 
@@ -541,9 +543,11 @@ export function VolundrPage() {
           templateName: config.templateName,
           taskType: config.taskType,
           linearIssue: config.linearIssue,
+          terminalRestricted: config.terminalRestricted,
           workspaceId: config.workspaceId,
           credentialNames: config.credentialNames,
           integrationIds: config.integrationIds,
+          resourceConfig: config.resourceConfig,
         });
         setSelectedSession(session);
         setShowLaunchWizard(false);

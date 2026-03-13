@@ -59,6 +59,7 @@ class SessionCreate(BaseModel):
     terminal_restricted: bool = Field(default=False)
     credential_names: list[str] = Field(default_factory=list)
     integration_ids: list[str] = Field(default_factory=list)
+    resource_config: dict = Field(default_factory=dict)
 
 
 class SessionUpdate(BaseModel):
@@ -630,6 +631,7 @@ def create_router(
                 terminal_restricted=data.terminal_restricted,
                 credential_names=data.credential_names,
                 integration_ids=data.integration_ids,
+                resource_config=data.resource_config or None,
             )
             return SessionResponse.from_session(started)
         except SessionStateError as e:

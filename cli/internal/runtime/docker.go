@@ -83,6 +83,7 @@ type dockerAPIConfig struct {
 	Identity             map[string]interface{}   `yaml:"identity"`
 	Authorization        map[string]interface{}   `yaml:"authorization"`
 	Gateway              map[string]interface{}   `yaml:"gateway"`
+	ResourceProvider     map[string]interface{}   `yaml:"resource_provider,omitempty"`
 	LocalMounts          map[string]interface{}   `yaml:"local_mounts,omitempty"`
 	SessionContributors  []map[string]interface{} `yaml:"session_contributors,omitempty"`
 }
@@ -528,10 +529,16 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 		}
 	}
 
+	// Wire up resource provider (static defaults for local dev).
+	apiCfg.ResourceProvider = map[string]interface{}{
+		"adapter": "volundr.adapters.outbound.static_resource_provider.StaticResourceProvider",
+	}
+
 	// Wire up session contributors.
 	// LocalMountContributor is auto-wired by Python main.py from local_mounts config.
 	apiCfg.SessionContributors = []map[string]interface{}{
 		{"adapter": "volundr.adapters.outbound.contributors.git.GitContributor"},
+		{"adapter": "volundr.adapters.outbound.contributors.resource.ResourceContributor"},
 	}
 
 	data, err := yaml.Marshal(&apiCfg)

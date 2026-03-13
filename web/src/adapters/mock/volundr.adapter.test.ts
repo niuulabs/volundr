@@ -1381,4 +1381,20 @@ describe('MockVolundrService', () => {
       expect(hasDir).toBe(true);
     });
   });
+
+  describe('getClusterResources', () => {
+    it('returns resource types including cpu, memory, and gpu', async () => {
+      const result = await service.getClusterResources();
+      expect(result.resourceTypes.length).toBeGreaterThanOrEqual(3);
+      const names = result.resourceTypes.map(rt => rt.name);
+      expect(names).toContain('cpu');
+      expect(names).toContain('memory');
+      expect(names).toContain('gpu');
+    });
+
+    it('returns empty nodes array', async () => {
+      const result = await service.getClusterResources();
+      expect(result.nodes).toEqual([]);
+    });
+  });
 });

@@ -57,6 +57,9 @@ export type { MimirStats, MimirConsultation } from './mimir.model';
 
 export type {
   VolundrFeatures,
+  ResourceType,
+  NodeResourceSummary,
+  ClusterResourceInfo,
   ModelTier,
   ModelProvider,
   GitSource,

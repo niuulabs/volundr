@@ -4,6 +4,27 @@ export interface VolundrFeatures {
   localMountsEnabled: boolean;
 }
 
+export interface ResourceType {
+  name: string;
+  resourceKey: string;
+  displayName: string;
+  unit: string;
+  category: string;
+}
+
+export interface NodeResourceSummary {
+  name: string;
+  labels: Record<string, string>;
+  allocatable: Record<string, string>;
+  allocated: Record<string, string>;
+  available: Record<string, string>;
+}
+
+export interface ClusterResourceInfo {
+  resourceTypes: ResourceType[];
+  nodes: NodeResourceSummary[];
+}
+
 export type ModelTier = 'frontier' | 'balanced' | 'execution' | 'reasoning';
 export type ModelProvider = 'cloud' | 'local';
 export type SessionOrigin = 'managed' | 'manual';

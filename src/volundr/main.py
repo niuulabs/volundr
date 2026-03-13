@@ -19,6 +19,7 @@ from volundr.adapters.inbound.rest_integrations import create_integrations_route
 from volundr.adapters.inbound.rest_presets import create_presets_router
 from volundr.adapters.inbound.rest_profiles import create_profiles_router
 from volundr.adapters.inbound.rest_prompts import create_prompts_router
+from volundr.adapters.inbound.rest_resources import create_resources_router
 from volundr.adapters.inbound.rest_secrets import create_secrets_router
 from volundr.adapters.inbound.rest_tenants import create_tenants_router
 from volundr.adapters.inbound.rest_tracker import create_tracker_router
@@ -195,6 +196,16 @@ def _create_secret_injection_adapter(settings: Settings) -> "SecretInjectionPort
     kwargs = _resolve_secret_kwargs(si_cfg.kwargs, si_cfg.secret_kwargs_env)
     instance = cls(**kwargs)
     logger.info("Secret injection: %s", si_cfg.adapter.rsplit(".", 1)[-1])
+    return instance
+
+
+def _create_resource_provider(settings: Settings) -> "ResourceProvider":  # noqa: F821
+    """Create the ResourceProvider adapter from dynamic config."""
+    rp_cfg = settings.resource_provider
+    cls = import_class(rp_cfg.adapter)
+    kwargs = _resolve_secret_kwargs(rp_cfg.kwargs, rp_cfg.secret_kwargs_env)
+    instance = cls(**kwargs)
+    logger.info("Resource provider: %s", rp_cfg.adapter.rsplit(".", 1)[-1])
     return instance
 
 
@@ -423,6 +434,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tenant_repository = PostgresTenantRepository(pool)
             user_repository = PostgresUserRepository(pool)
 
+            resource_provider = _create_resource_provider(settings)
             storage_adapter = _create_storage_adapter(settings)
             identity_adapter = _create_identity_adapter(
                 settings,
@@ -504,6 +516,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 integration_repo=integration_repo,
                 integration_registry=integration_registry,
                 user_integration=user_integration_service,
+                resource_provider=resource_provider,
             )
 
             session_service = SessionService(
@@ -563,6 +576,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             profiles_router = create_profiles_router(profile_service, template_service)
             app.include_router(profiles_router)
+
+            # Resource discovery endpoint
+            resources_router = create_resources_router(resource_provider)
+            app.include_router(resources_router)
+            app.state.resource_provider = resource_provider
 
             # MCP servers and secrets
             mcp_provider = ConfigMCPServerProvider(settings.mcp_servers)

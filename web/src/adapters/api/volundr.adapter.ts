@@ -8,6 +8,7 @@ import type {
   VolundrMessage,
   VolundrLog,
   SessionChronicle,
+  ClusterResourceInfo,
   DiffData,
   DiffBase,
   SessionStatus,
@@ -73,6 +74,7 @@ import type {
   ApiStoredCredentialListResponse,
   ApiSecretTypeInfoResponse,
   ApiWorkspaceResponse,
+  ApiClusterResourceInfo,
 } from './volundr.types';
 
 /**
@@ -679,6 +681,26 @@ export class ApiVolundrService implements IVolundrService {
     return api.post<ApiCreateSecretResponse>('/secrets', { name, data });
   }
 
+  async getClusterResources(): Promise<ClusterResourceInfo> {
+    const response = await api.get<ApiClusterResourceInfo>('/resources');
+    return {
+      resourceTypes: response.resource_types.map(rt => ({
+        name: rt.name,
+        resourceKey: rt.resource_key,
+        displayName: rt.display_name,
+        unit: rt.unit,
+        category: rt.category,
+      })),
+      nodes: response.nodes.map(n => ({
+        name: n.name,
+        labels: n.labels,
+        allocatable: n.allocatable,
+        allocated: n.allocated,
+        available: n.available,
+      })),
+    };
+  }
+
   async startSession(config: {
     name: string;
     source: import('@/models').SessionSource;
@@ -689,6 +711,7 @@ export class ApiVolundrService implements IVolundrService {
     workspaceId?: string;
     credentialNames?: string[];
     integrationIds?: string[];
+    resourceConfig?: Record<string, string | undefined>;
   }): Promise<VolundrSession> {
     const createRequest: ApiSessionCreate = {
       name: config.name,
@@ -700,6 +723,7 @@ export class ApiVolundrService implements IVolundrService {
       workspace_id: config.workspaceId ?? null,
       credential_names: config.credentialNames?.length ? config.credentialNames : undefined,
       integration_ids: config.integrationIds?.length ? config.integrationIds : undefined,
+      resource_config: config.resourceConfig,
     };
 
     const response = await api.post<ApiSessionResponse>('/sessions', createRequest);

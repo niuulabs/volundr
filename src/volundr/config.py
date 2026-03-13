@@ -480,6 +480,34 @@ class SecretInjectionConfig(BaseModel):
     )
 
 
+class ResourceProviderConfig(BaseModel):
+    """Dynamic resource provider adapter configuration.
+
+    The ``adapter`` key is a fully-qualified class path.  All other
+    fields in ``kwargs`` are forwarded to the constructor.
+
+    Example YAML::
+
+        resource_provider:
+          adapter: "volundr.adapters.outbound.k8s_resource_provider.K8sResourceProvider"
+          kwargs:
+            namespace: "volundr-sessions"
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.static_resource_provider.StaticResourceProvider",
+        description="Fully-qualified class path for the ResourceProvider adapter.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
 class StorageConfig(BaseModel):
     """Dynamic storage adapter configuration.
 
@@ -731,6 +759,7 @@ class Settings(BaseSettings):
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     secret_injection: SecretInjectionConfig = Field(default_factory=SecretInjectionConfig)
+    resource_provider: ResourceProviderConfig = Field(default_factory=ResourceProviderConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)

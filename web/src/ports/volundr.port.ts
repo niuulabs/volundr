@@ -7,6 +7,7 @@ import type {
   VolundrMessage,
   VolundrLog,
   SessionChronicle,
+  ClusterResourceInfo,
   DiffData,
   DiffBase,
   PullRequest,
@@ -145,6 +146,11 @@ export interface IVolundrService {
   ): Promise<{ name: string; keys: string[] }>;
 
   /**
+   * Get cluster resource types and capacity
+   */
+  getClusterResources(): Promise<ClusterResourceInfo>;
+
+  /**
    * Start a new session
    */
   startSession(config: {
@@ -158,6 +164,7 @@ export interface IVolundrService {
     workspaceId?: string;
     credentialNames?: string[];
     integrationIds?: string[];
+    resourceConfig?: Record<string, string | undefined>;
   }): Promise<VolundrSession>;
 
   /**

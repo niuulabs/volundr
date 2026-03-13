@@ -110,6 +110,7 @@ type k3sAPIConfig struct {
 	Identity             map[string]interface{}   `yaml:"identity"`
 	Authorization        map[string]interface{}   `yaml:"authorization"`
 	Gateway              map[string]interface{}   `yaml:"gateway"`
+	ResourceProvider     map[string]interface{}   `yaml:"resource_provider,omitempty"`
 	Git                  map[string]interface{}   `yaml:"git,omitempty"`
 	LocalMounts          map[string]interface{}   `yaml:"local_mounts,omitempty"`
 	SessionContributors  []map[string]interface{} `yaml:"session_contributors,omitempty"`
@@ -1028,10 +1029,20 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 		}
 	}
 
+	// Wire up resource provider — use K8sResourceProvider for real cluster data.
+	apiCfg.ResourceProvider = map[string]interface{}{
+		"adapter": "volundr.adapters.outbound.k8s_resource_provider.K8sResourceProvider",
+		"kwargs": map[string]interface{}{
+			"namespace":  namespace,
+			"kubeconfig": containerKubeconfigPath,
+		},
+	}
+
 	// Wire up session contributors.
 	// LocalMountContributor is auto-wired by Python main.py from local_mounts config.
 	apiCfg.SessionContributors = []map[string]interface{}{
 		{"adapter": "volundr.adapters.outbound.contributors.git.GitContributor"},
+		{"adapter": "volundr.adapters.outbound.contributors.resource.ResourceContributor"},
 	}
 
 	data, err := yaml.Marshal(&apiCfg)

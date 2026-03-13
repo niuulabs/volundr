@@ -411,6 +411,7 @@ class SessionService:
         terminal_restricted: bool = False,
         credential_names: list[str] | None = None,
         integration_ids: list[str] | None = None,
+        resource_config: dict | None = None,
     ) -> Session:
         """Start a session's pods via the contributor pipeline."""
         session = await self._repository.get(session_id)
@@ -437,6 +438,7 @@ class SessionService:
                 terminal_restricted,
                 credential_names=credential_names,
                 integration_ids=integration_ids,
+                resource_config=resource_config,
             )
 
             provisioning = (
@@ -473,6 +475,7 @@ class SessionService:
         terminal_restricted: bool,
         credential_names: list[str] | None = None,
         integration_ids: list[str] | None = None,
+        resource_config: dict | None = None,
     ):
         """Run the contributor pipeline and start pods with merged spec."""
         # Auto-include all enabled integrations when none are specified.
@@ -499,6 +502,7 @@ class SessionService:
             credential_names=tuple(credential_names or ()),
             integration_ids=tuple(c.id for c in resolved_connections),
             integration_connections=tuple(resolved_connections),
+            resource_config=resource_config or {},
         )
 
         contributions: list[SessionContribution] = []
