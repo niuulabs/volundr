@@ -276,15 +276,18 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// In normal mode: keys fall through to the app layer for navigation.
 	if m.app.ActivePage == tuipkg.PageTerminal {
 		if _, ok := msg.(tea.KeyMsg); ok {
-			// Always send to the terminal page first — it handles mode
+			wasInsert := m.terminal.InsertMode()
+
+			// Send to the terminal page first — it handles mode
 			// switching (ctrl+], i) and PTY forwarding internally.
 			m.terminal, cmd = m.terminal.Update(msg)
 			cmds = appendCmd(cmds, cmd)
 
-			// In insert mode, the terminal consumed the key. Stop here.
-			// In normal mode, also let the key fall through to the app
-			// layer so 1-7, q, ?, [ etc. work as global navigation.
-			if m.terminal.InsertMode() {
+			// If the terminal consumed the key (insert mode, or mode
+			// just changed), stop here. Only let keys fall through to
+			// the app layer when we were already in normal mode and
+			// the mode didn't change (i.e. a navigation key).
+			if m.terminal.InsertMode() || wasInsert != m.terminal.InsertMode() {
 				return m, tea.Batch(cmds...)
 			}
 		}
