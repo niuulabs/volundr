@@ -156,8 +156,8 @@ func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) 
 	case "space":
 		s.search += " "
 	default:
-		if len(msg.String()) == 1 {
-			s.search += msg.String()
+		if text := msg.Key().Text; len(text) > 0 {
+			s.search += text
 		}
 	}
 	s.applyFilter()

@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/niuulabs/volundr/cli/internal/api"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
-
 )
 
 // ChatStreamEventMsg carries an incoming stream event from the WS.
@@ -240,8 +239,8 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 			case "space":
 				c.input += " "
 			default:
-				if len(key) == 1 {
-					c.input += key
+				if text := msg.Key().Text; len(text) > 0 {
+					c.input += text
 				}
 			}
 			break
@@ -249,6 +248,8 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) {
 
 		// Scroll mode: input is not active.
 		switch key {
+		case "i":
+			c.inputActive = true
 		case "up", "k":
 			c.scrollPos++
 		case "down", "j":
@@ -437,7 +438,7 @@ func (c ChatPage) View() string {
 			messages,
 			"",
 			inputArea,
-			lipgloss.NewStyle().Foreground(theme.TextMuted).Render("  Tab: scroll/input  Enter: send  ↑↓/j/k: scroll  PgUp/PgDn: page  G/g: bottom/top"),
+			lipgloss.NewStyle().Foreground(theme.TextMuted).Render("  i: insert  Esc: normal  Tab: toggle  Enter: send  ↑↓/j/k: scroll  G/g: bottom/top"),
 		))
 }
 
@@ -508,7 +509,7 @@ func (c ChatPage) renderMessages(maxHeight int) string {
 		return lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(theme.BorderSubtle).
-			Width(c.width - 6).
+			Width(c.width-6).
 			Height(maxHeight).
 			Padding(2, 1).
 			Foreground(theme.TextMuted).
@@ -568,7 +569,7 @@ func (c ChatPage) renderMessages(maxHeight int) string {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(theme.BorderSubtle).
-		Width(c.width - 6).
+		Width(c.width-6).
 		Height(maxHeight).
 		Padding(0, 1).
 		Render(rendered)
@@ -650,7 +651,7 @@ func (c ChatPage) renderInput() string {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Width(c.width - 6).
+		Width(c.width-6).
 		Padding(0, 1).
 		Render(inputContent)
 }
@@ -775,32 +776,32 @@ var chatStyleConfig = ansi.StyleConfig{
 			Margin: uintPtr(2),
 		},
 		Chroma: &ansi.Chroma{
-			Text:    ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
-			Error:   ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
-			Comment: ansi.StylePrimitive{Color: stringPtr("#6A6A6A")},
-			CommentPreproc: ansi.StylePrimitive{Color: stringPtr("#D7875F")},
-			Keyword:         ansi.StylePrimitive{Color: stringPtr("#5F87D7")},
-			KeywordReserved: ansi.StylePrimitive{Color: stringPtr("#D75FAF")},
-			KeywordNamespace: ansi.StylePrimitive{Color: stringPtr("#D7875F")},
-			KeywordType:     ansi.StylePrimitive{Color: stringPtr("#5F87AF")},
-			Operator:        ansi.StylePrimitive{Color: stringPtr("#AFAFAF")},
-			Punctuation:     ansi.StylePrimitive{Color: stringPtr("#AFAFAF")},
-			Name:            ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
-			NameBuiltin:     ansi.StylePrimitive{Color: stringPtr("#D7AF87")},
-			NameTag:         ansi.StylePrimitive{Color: stringPtr("#5F87D7")},
-			NameAttribute:   ansi.StylePrimitive{Color: stringPtr("#87AFD7")},
-			NameClass:       ansi.StylePrimitive{Color: stringPtr("#D7D787"), Bold: boolPtr(true)},
-			NameDecorator:   ansi.StylePrimitive{Color: stringPtr("#D7D787")},
-			NameFunction:    ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
-			LiteralNumber:   ansi.StylePrimitive{Color: stringPtr("#87D7D7")},
-			LiteralString:   ansi.StylePrimitive{Color: stringPtr("#D7AF87")},
+			Text:                ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
+			Error:               ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
+			Comment:             ansi.StylePrimitive{Color: stringPtr("#6A6A6A")},
+			CommentPreproc:      ansi.StylePrimitive{Color: stringPtr("#D7875F")},
+			Keyword:             ansi.StylePrimitive{Color: stringPtr("#5F87D7")},
+			KeywordReserved:     ansi.StylePrimitive{Color: stringPtr("#D75FAF")},
+			KeywordNamespace:    ansi.StylePrimitive{Color: stringPtr("#D7875F")},
+			KeywordType:         ansi.StylePrimitive{Color: stringPtr("#5F87AF")},
+			Operator:            ansi.StylePrimitive{Color: stringPtr("#AFAFAF")},
+			Punctuation:         ansi.StylePrimitive{Color: stringPtr("#AFAFAF")},
+			Name:                ansi.StylePrimitive{Color: stringPtr("#C4C4C4")},
+			NameBuiltin:         ansi.StylePrimitive{Color: stringPtr("#D7AF87")},
+			NameTag:             ansi.StylePrimitive{Color: stringPtr("#5F87D7")},
+			NameAttribute:       ansi.StylePrimitive{Color: stringPtr("#87AFD7")},
+			NameClass:           ansi.StylePrimitive{Color: stringPtr("#D7D787"), Bold: boolPtr(true)},
+			NameDecorator:       ansi.StylePrimitive{Color: stringPtr("#D7D787")},
+			NameFunction:        ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
+			LiteralNumber:       ansi.StylePrimitive{Color: stringPtr("#87D7D7")},
+			LiteralString:       ansi.StylePrimitive{Color: stringPtr("#D7AF87")},
 			LiteralStringEscape: ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
-			GenericDeleted:  ansi.StylePrimitive{Color: stringPtr("#D75F5F")},
-			GenericEmph:     ansi.StylePrimitive{Italic: boolPtr(true)},
-			GenericInserted: ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
-			GenericStrong:   ansi.StylePrimitive{Bold: boolPtr(true)},
-			GenericSubheading: ansi.StylePrimitive{Color: stringPtr("#6A6A6A")},
-			Background:      ansi.StylePrimitive{BackgroundColor: stringPtr("#303030")},
+			GenericDeleted:      ansi.StylePrimitive{Color: stringPtr("#D75F5F")},
+			GenericEmph:         ansi.StylePrimitive{Italic: boolPtr(true)},
+			GenericInserted:     ansi.StylePrimitive{Color: stringPtr("#87D7AF")},
+			GenericStrong:       ansi.StylePrimitive{Bold: boolPtr(true)},
+			GenericSubheading:   ansi.StylePrimitive{Color: stringPtr("#6A6A6A")},
+			Background:          ansi.StylePrimitive{BackgroundColor: stringPtr("#303030")},
 		},
 	},
 	Table: ansi.StyleTable{
@@ -813,9 +814,9 @@ var chatStyleConfig = ansi.StyleConfig{
 	},
 }
 
-func boolPtr(b bool) *bool     { return &b }
+func boolPtr(b bool) *bool       { return &b }
 func stringPtr(s string) *string { return &s }
-func uintPtr(u uint) *uint     { return &u }
+func uintPtr(u uint) *uint       { return &u }
 
 // renderMarkdown renders markdown content for terminal display using glamour.
 func renderMarkdown(content string, width int) string {

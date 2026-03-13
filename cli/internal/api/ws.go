@@ -37,10 +37,10 @@ type StreamEvent struct {
 	Delta *StreamDelta `json:"delta,omitempty"`
 
 	// 'result' event
-	Subtype  string  `json:"subtype,omitempty"`
-	CostUSD  float64 `json:"cost_usd,omitempty"`
-	IsError  bool    `json:"is_error,omitempty"`
-	Result   string  `json:"result,omitempty"`
+	Subtype string  `json:"subtype,omitempty"`
+	CostUSD float64 `json:"cost_usd,omitempty"`
+	IsError bool    `json:"is_error,omitempty"`
+	Result  string  `json:"result,omitempty"`
 
 	// 'error' event
 	Error json.RawMessage `json:"error,omitempty"`
@@ -54,10 +54,10 @@ type StreamEvent struct {
 
 // StreamEventMessage holds the message field from an 'assistant' event.
 type StreamEventMessage struct {
-	ID      string                `json:"id,omitempty"`
-	Role    string                `json:"role,omitempty"`
-	Model   string                `json:"model,omitempty"`
-	Content []StreamMessageBlock  `json:"content,omitempty"`
+	ID      string               `json:"id,omitempty"`
+	Role    string               `json:"role,omitempty"`
+	Model   string               `json:"model,omitempty"`
+	Content []StreamMessageBlock `json:"content,omitempty"`
 }
 
 // StreamMessageBlock represents a content block inside a message (text, tool_use, etc.).
@@ -272,7 +272,6 @@ func appendAccessToken(rawURL, token string) string {
 	}
 	return rawURL + sep + "access_token=" + url.QueryEscape(token)
 }
-
 
 // String returns a human-readable representation of the connection state.
 func (s WSState) String() string {

@@ -83,9 +83,9 @@ Example:
 
 // contextListEntry is used for JSON output of context list.
 type contextListEntry struct {
-	Key          string `json:"key"`
-	Name         string `json:"name"`
-	Server       string `json:"server"`
+	Key           string `json:"key"`
+	Name          string `json:"name"`
+	Server        string `json:"server"`
 	Authenticated bool   `json:"authenticated"`
 }
 

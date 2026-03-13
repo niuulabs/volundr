@@ -343,7 +343,7 @@ func TestChatPage_Update_TypeChar(t *testing.T) {
 	page.inputActive = true
 	page.input = ""
 
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'x'})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
 	if page.input != "x" {
 		t.Errorf("expected input %q, got %q", "x", page.input)
 	}

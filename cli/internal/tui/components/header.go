@@ -25,7 +25,7 @@ type Header struct {
 	Width       int
 	Title       string
 	ServerURL   string
-	Connected   bool        // kept for backward compat; use State instead
+	Connected   bool // kept for backward compat; use State instead
 	State       HeaderState
 	PoolSummary string
 }

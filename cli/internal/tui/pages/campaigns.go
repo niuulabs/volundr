@@ -149,12 +149,12 @@ func (c CampaignsPage) renderList() string {
 		if i == c.cursor {
 			rows = append(rows, lipgloss.NewStyle().
 				Background(theme.BgTertiary).
-				Width(c.width - 6).
+				Width(c.width-6).
 				Padding(0, 1).
 				Render(entry))
 		} else {
 			rows = append(rows, lipgloss.NewStyle().
-				Width(c.width - 6).
+				Width(c.width-6).
 				Padding(0, 1).
 				Render(entry))
 		}

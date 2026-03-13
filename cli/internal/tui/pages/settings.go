@@ -162,8 +162,8 @@ func (s *SettingsPage) handleEditInput(msg tea.KeyMsg) {
 	case "space":
 		s.editBuf += " "
 	default:
-		if len(msg.String()) == 1 {
-			s.editBuf += msg.String()
+		if text := msg.Key().Text; len(text) > 0 {
+			s.editBuf += text
 		}
 	}
 }

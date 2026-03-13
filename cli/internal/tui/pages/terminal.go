@@ -52,12 +52,12 @@ type terminalTab struct {
 	label      string
 	terminalID string // server-side tmux session ID (for kill calls)
 	sessionID  string
-	wsURL     string // WebSocket URL for reconnecting on tab switch
-	emulator  *vt.Emulator
-	ws        *api.TerminalWSClient
-	connState string
-	connErr   error
-	mu        sync.Mutex
+	wsURL      string // WebSocket URL for reconnecting on tab switch
+	emulator   *vt.Emulator
+	ws         *api.TerminalWSClient
+	connState  string
+	connErr    error
+	mu         sync.Mutex
 }
 
 // TerminalPage implements a full remote PTY terminal via WebSocket and x/vt.
@@ -674,7 +674,7 @@ func (t TerminalPage) termDimensions() (int, int) {
 		return defaultTermWidth, defaultTermHeight
 	}
 
-	w := t.width - 4 // padding
+	w := t.width - 4  // padding
 	h := t.height - 4 // status line + tab bar + padding
 
 	if t.fullScreen {
@@ -723,7 +723,7 @@ func (t TerminalPage) View() string {
 
 	helpText := lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
-		Render("  ctrl+t: new tab  ctrl+w: close  ctrl+n/p: switch tabs  ctrl+f: fullscreen")
+		Render("  Esc: nav mode (1-7/q/?/[, i: back)  ctrl+t: new  ctrl+w: close  ctrl+n/p: tabs  ctrl+f: fullscreen")
 
 	return lipgloss.NewStyle().
 		Width(t.width).
@@ -831,15 +831,16 @@ func (t TerminalPage) renderTabBar() string {
 	return "  " + strings.Join(tabs, "  │  ")
 }
 
-
 // keyToBytes converts a bubbletea KeyMsg to raw bytes for the PTY.
 func keyToBytes(msg tea.KeyMsg) []byte {
 	// Use Keystroke() for matching — String() may return raw control chars
 	// that don't match our "ctrl+n" style case labels.
 	key := msg.Key().Keystroke()
 
-	// If the key has printable text and no modifier, return it directly.
-	if text := msg.Key().Text; len(text) > 0 && msg.Key().Mod == 0 {
+	// If the key has printable text and no modifier (or only Shift), return it directly.
+	// Shift is included because Kitty keyboard protocol explicitly reports Shift
+	// for uppercase letters, but the text already contains the shifted character.
+	if text := msg.Key().Text; len(text) > 0 && (msg.Key().Mod == 0 || msg.Key().Mod == tea.ModShift) {
 		return []byte(text)
 	}
 

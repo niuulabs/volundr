@@ -456,10 +456,10 @@ func TestSessionsPage_Update_SearchMode(t *testing.T) {
 	}
 
 	// Type "auth"
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'a'})
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'u'})
-	page, _ = page.Update(tea.KeyPressMsg{Code: 't'})
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'h'})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'u', Text: "u"})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
 	if page.search != "auth" {
 		t.Errorf("expected search %q, got %q", "auth", page.search)
 	}
