@@ -36,10 +36,10 @@ class TestResourceDiscoveryEndpoint:
         assert "nodes" in data
 
         types = data["resource_types"]
-        assert len(types) == 3
+        assert len(types) == 2
 
         names = {t["name"] for t in types}
-        assert names == {"cpu", "memory", "gpu"}
+        assert names == {"cpu", "memory"}
 
     @pytest.mark.asyncio
     async def test_resource_type_structure(self, client):
@@ -50,14 +50,6 @@ class TestResourceDiscoveryEndpoint:
         assert cpu_type["display_name"] == "CPU"
         assert cpu_type["unit"] == "cores"
         assert cpu_type["category"] == "compute"
-
-    @pytest.mark.asyncio
-    async def test_gpu_type_structure(self, client):
-        response = await client.get("/api/v1/volundr/resources")
-        data = response.json()
-        gpu_type = next(t for t in data["resource_types"] if t["name"] == "gpu")
-        assert gpu_type["resource_key"] == "nvidia.com/gpu"
-        assert gpu_type["category"] == "accelerator"
 
     @pytest.mark.asyncio
     async def test_static_provider_returns_no_nodes(self, client):

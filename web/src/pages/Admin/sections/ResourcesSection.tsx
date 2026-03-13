@@ -3,53 +3,8 @@ import { Cpu, RefreshCw } from 'lucide-react';
 import type { ClusterResourceInfo, ResourceType, NodeResourceSummary } from '@/models';
 import type { IVolundrService } from '@/ports';
 import { cn } from '@/utils/classnames';
+import { parseK8sQuantity, formatResourceValue } from '@/utils/k8sQuantity';
 import styles from './ResourcesSection.module.css';
-
-/**
- * Parse a Kubernetes quantity string (e.g. "8024304Ki", "929001317467", "4Gi")
- * into a raw byte count. Returns NaN for non-byte values.
- */
-function parseK8sBytes(raw: string): number {
-  const match = raw.match(/^(\d+(?:\.\d+)?)\s*([KMGTPE]i?)?$/);
-  if (!match) return parseFloat(raw) || 0;
-  const num = parseFloat(match[1]);
-  const suffix = match[2] ?? '';
-  const multipliers: Record<string, number> = {
-    '': 1,
-    K: 1e3,
-    M: 1e6,
-    G: 1e9,
-    T: 1e12,
-    P: 1e15,
-    E: 1e18,
-    Ki: 1024,
-    Mi: 1024 ** 2,
-    Gi: 1024 ** 3,
-    Ti: 1024 ** 4,
-    Pi: 1024 ** 5,
-    Ei: 1024 ** 6,
-  };
-  return num * (multipliers[suffix] ?? 1);
-}
-
-function formatHumanBytes(bytes: number): string {
-  if (bytes >= 1024 ** 5) return `${(bytes / 1024 ** 5).toFixed(1)} PiB`;
-  if (bytes >= 1024 ** 4) return `${(bytes / 1024 ** 4).toFixed(1)} TiB`;
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${bytes} B`;
-}
-
-function formatResourceValue(value: number | string, unit: string): string {
-  const raw = String(value);
-  if (unit === 'bytes') {
-    return formatHumanBytes(parseK8sBytes(raw));
-  }
-  const num = parseFloat(raw) || 0;
-  if (Number.isInteger(num)) return String(num);
-  return num.toFixed(1);
-}
 
 function calculateUtilization(allocated: string, allocatable: string): number {
   const alloc = parseFloat(allocated) || 0;
@@ -78,8 +33,8 @@ interface AggregatedResource {
 }
 
 function parseNodeValue(raw: string, unit: string): number {
-  if (unit === 'bytes') return parseK8sBytes(raw);
-  return parseFloat(raw) || 0;
+  const parsed = parseK8sQuantity(raw, unit);
+  return isNaN(parsed) ? 0 : parsed;
 }
 
 function aggregateResources(

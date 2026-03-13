@@ -81,7 +81,7 @@ class ResourceContributor(SessionContributor):
             # Devrunner always gets user-specified CPU/memory + GPU
             devrunner_resources: dict[str, Any] = {}
             if cpu_mem_requests:
-                devrunner_resources["requests"] = cpu_mem_requests
+                devrunner_resources["requests"] = dict(cpu_mem_requests)
             if cpu_mem_limits or gpu_limits:
                 devrunner_resources["limits"] = {**cpu_mem_limits, **gpu_limits}
             if devrunner_resources:
