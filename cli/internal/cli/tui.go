@@ -82,13 +82,6 @@ type tuiModel struct {
 
 	// Active session (set when user presses Enter on a session).
 	activeSession *api.Session
-
-	// termEscNavMode is set when the user presses Esc on the terminal page.
-	// The next keypress is treated as a navigation command: if it's 1-7 it
-	// navigates to that page, otherwise it's forwarded to the PTY and the
-	// flag is cleared. This provides a macOS-friendly alternative to alt+N
-	// (since Option+N produces special characters in most Mac terminals).
-	termEscNavMode bool
 }
 
 // newTUIModel creates the fully initialized TUI model.
@@ -277,49 +270,22 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	}
 
-	// When terminal page is active, forward almost all keys to PTY.
-	// Esc enters "nav mode" where the next key is treated as a navigation
-	// command (1-7 switches page, q quits, ? help, [ sidebar, i returns
-	// to insert mode). This provides a macOS-friendly alternative to alt+N.
+	// When terminal page is active, route keys based on insert/normal mode.
+	// In insert mode: all keys go to the terminal (PTY) except ctrl+],
+	// ctrl+t/n/p/w/f, f11, and alt+N which the terminal handles internally.
+	// In normal mode: keys fall through to the app layer for navigation.
 	if m.app.ActivePage == tuipkg.PageTerminal {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			key := keyMsg.String()
+		if _, ok := msg.(tea.KeyMsg); ok {
+			// Always send to the terminal page first — it handles mode
+			// switching (ctrl+], i) and PTY forwarding internally.
+			m.terminal, cmd = m.terminal.Update(msg)
+			cmds = appendCmd(cmds, cmd)
 
-			// In Esc nav mode, handle the follow-up key.
-			if m.termEscNavMode {
-				m.termEscNavMode = false
-				_, isNav := tuipkg.IsNavigationKey(keyMsg)
-				switch {
-				case key == "i":
-					// Return to insert (PTY) mode — consume the key.
-					return m, tea.Batch(cmds...)
-				case isNav:
-					// Fall through to app layer for page navigation.
-				case key == "q", key == "?", key == "[":
-					// Fall through to app layer for global bindings.
-				default:
-					// Not a nav key — forward to PTY.
-					m.terminal, cmd = m.terminal.Update(msg)
-					cmds = appendCmd(cmds, cmd)
-					return m, tea.Batch(cmds...)
-				}
-				// Fall through to app layer for navigation keys.
-			} else {
-				switch {
-				case key == "f11", key == "ctrl+f":
-					// fall through to app
-				case key == "esc":
-					// Enter nav mode instead of forwarding to PTY.
-					m.termEscNavMode = true
-					return m, tea.Batch(cmds...)
-				case strings.HasPrefix(key, "alt+"):
-					// alt+number navigation — fall through to app
-				default:
-					// Forward everything else to the terminal.
-					m.terminal, cmd = m.terminal.Update(msg)
-					cmds = appendCmd(cmds, cmd)
-					return m, tea.Batch(cmds...)
-				}
+			// In insert mode, the terminal consumed the key. Stop here.
+			// In normal mode, also let the key fall through to the app
+			// layer so 1-7, q, ?, [ etc. work as global navigation.
+			if m.terminal.InsertMode() {
+				return m, tea.Batch(cmds...)
 			}
 		}
 	}
@@ -495,7 +461,7 @@ func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model
 func (m tuiModel) isInputCaptured() bool {
 	switch m.app.ActivePage {
 	case tuipkg.PageTerminal:
-		return !m.termEscNavMode
+		return m.terminal.InsertMode()
 	case tuipkg.PageChat:
 		return m.chat.InputActive()
 	case tuipkg.PageSessions:
