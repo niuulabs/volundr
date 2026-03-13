@@ -62,13 +62,46 @@ class ResourceContributor(SessionContributor):
 
         values: dict[str, Any] = {}
 
-        if translated.requests or translated.limits:
-            values["resources"] = {}
-            if translated.requests:
-                values["resources"]["requests"] = translated.requests
-            if translated.limits:
-                values["resources"]["limits"] = translated.limits
+        # Build per-container resource overrides matching the Helm chart layout.
+        # CPU/memory requests+limits go to the workload containers (devrunner
+        # gets the full user budget, code-server and skuld keep defaults).
+        # GPU limits always go to devrunner; when gpu_timeslice is enabled,
+        # GPU limits are also set on skuld so both containers share the GPU
+        # via NVIDIA time-slicing.
+        gpu_timeslice = str(resource_config.get("gpu_timeslice", "")).lower() == "true"
 
+        if translated.requests or translated.limits:
+            # Separate CPU/memory from accelerator resources (GPU)
+            cpu_mem_requests = {
+                k: v for k, v in translated.requests.items() if k in ("cpu", "memory")
+            }
+            cpu_mem_limits = {k: v for k, v in translated.limits.items() if k in ("cpu", "memory")}
+            gpu_limits = {k: v for k, v in translated.limits.items() if k not in ("cpu", "memory")}
+
+            # Devrunner always gets user-specified CPU/memory + GPU
+            devrunner_resources: dict[str, Any] = {}
+            if cpu_mem_requests:
+                devrunner_resources["requests"] = cpu_mem_requests
+            if cpu_mem_limits or gpu_limits:
+                devrunner_resources["limits"] = {**cpu_mem_limits, **gpu_limits}
+            if devrunner_resources:
+                values.setdefault("localServices", {}).setdefault("devrunner", {})["resources"] = (
+                    devrunner_resources
+                )
+
+            # Top-level "resources" key (skuld broker)
+            skuld_limits = dict(cpu_mem_limits)
+            if gpu_timeslice and gpu_limits:
+                skuld_limits.update(gpu_limits)
+
+            if cpu_mem_requests or skuld_limits:
+                values["resources"] = {}
+                if cpu_mem_requests:
+                    values["resources"]["requests"] = cpu_mem_requests
+                if skuld_limits:
+                    values["resources"]["limits"] = skuld_limits
+
+        # Pod-level scheduling constraints
         if translated.node_selector:
             values["nodeSelector"] = translated.node_selector
 
@@ -82,7 +115,7 @@ class ResourceContributor(SessionContributor):
             logger.info(
                 "Resource contributor: session %s → %s",
                 session.id,
-                {k: v for k, v in values.items() if k != "resources"},
+                {k: v for k, v in values.items() if k not in ("resources", "localServices")},
             )
 
         return SessionContribution(values=values)

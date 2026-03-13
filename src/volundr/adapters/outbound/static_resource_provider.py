@@ -8,7 +8,8 @@ from volundr.domain.models import (
 )
 from volundr.domain.ports import ResourceProvider
 
-# Standard resource types always available
+# Standard resource types always available (CPU + Memory only;
+# GPU and other resources are discovered dynamically from node data)
 STANDARD_RESOURCE_TYPES = [
     ResourceType(
         name="cpu",
@@ -23,13 +24,6 @@ STANDARD_RESOURCE_TYPES = [
         display_name="Memory",
         unit="bytes",
         category=ResourceCategory.COMPUTE,
-    ),
-    ResourceType(
-        name="gpu",
-        resource_key="nvidia.com/gpu",
-        display_name="GPU",
-        unit="devices",
-        category=ResourceCategory.ACCELERATOR,
     ),
 ]
 

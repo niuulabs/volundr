@@ -58,6 +58,109 @@ export interface ConfigureStepProps {
   ) => Promise<VolundrPreset>;
 }
 
+const BYTE_MULTIPLIERS: Record<string, number> = {
+  '': 1,
+  K: 1e3,
+  M: 1e6,
+  G: 1e9,
+  T: 1e12,
+  P: 1e15,
+  E: 1e18,
+  Ki: 1024,
+  Mi: 1024 ** 2,
+  Gi: 1024 ** 3,
+  Ti: 1024 ** 4,
+  Pi: 1024 ** 5,
+  Ei: 1024 ** 6,
+};
+
+/**
+ * Parse a Kubernetes quantity string into a canonical numeric value.
+ * - bytes unit: "8Gi" → bytes, "500Mi" → bytes, "8024304Ki" → bytes
+ * - cores unit: "4" → 4, "500m" → 0.5, "1.5" → 1.5
+ * - other: plain parseFloat
+ * Returns NaN if the string is not a valid quantity.
+ */
+function parseK8sQuantity(raw: string, unit: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed) return NaN;
+
+  if (unit === 'bytes') {
+    const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*([KMGTPE]i?)?$/);
+    if (!match) return NaN;
+    const num = parseFloat(match[1]);
+    const suffix = match[2] ?? '';
+    if (!(suffix in BYTE_MULTIPLIERS)) return NaN;
+    return num * BYTE_MULTIPLIERS[suffix];
+  }
+
+  if (unit === 'cores') {
+    // CPU supports millicores (e.g. "500m" = 0.5 cores) or plain numbers
+    const milliMatch = trimmed.match(/^(\d+)m$/);
+    if (milliMatch) return parseInt(milliMatch[1], 10) / 1000;
+    const num = parseFloat(trimmed);
+    if (isNaN(num) || num < 0) return NaN;
+    return num;
+  }
+
+  // Generic: plain number
+  const num = parseFloat(trimmed);
+  if (isNaN(num) || num < 0) return NaN;
+  return num;
+}
+
+function formatHumanBytes(bytes: number): string {
+  if (bytes >= 1024 ** 5) return `${(bytes / 1024 ** 5).toFixed(1)} PiB`;
+  if (bytes >= 1024 ** 4) return `${(bytes / 1024 ** 4).toFixed(1)} TiB`;
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${bytes} B`;
+}
+
+function formatResourceValue(value: number | string, unit: string): string {
+  const raw = String(value);
+  if (unit === 'bytes') {
+    const bytes = parseK8sQuantity(raw, 'bytes');
+    if (isNaN(bytes)) return raw;
+    return formatHumanBytes(bytes);
+  }
+  const num = parseFloat(raw) || 0;
+  if (Number.isInteger(num)) return String(num);
+  return num.toFixed(1);
+}
+
+/**
+ * Validate a resource input value against the available capacity.
+ * Returns an error string or null if valid.
+ */
+function validateResourceInput(
+  inputValue: string,
+  unit: string,
+  totalAvailable: number
+): string | null {
+  if (!inputValue.trim()) return null;
+
+  const parsed = parseK8sQuantity(inputValue, unit);
+  if (isNaN(parsed)) {
+    if (unit === 'bytes') return 'Invalid format. Use e.g. 4Gi, 512Mi, 1Ti';
+    if (unit === 'cores') return 'Invalid format. Use e.g. 4, 500m, 1.5';
+    return 'Invalid number';
+  }
+
+  if (parsed <= 0) return 'Must be greater than 0';
+
+  if (totalAvailable > 0 && parsed > totalAvailable) {
+    const availFormatted =
+      unit === 'bytes'
+        ? formatHumanBytes(totalAvailable)
+        : `${Number.isInteger(totalAvailable) ? totalAvailable : totalAvailable.toFixed(1)} ${unit}`;
+    return `Exceeds available capacity (${availFormatted})`;
+  }
+
+  return null;
+}
+
 const CLI_TOOLS: { value: CliTool; label: string; description: string }[] = [
   { value: 'claude', label: 'Claude Code', description: 'Anthropic Claude CLI agent' },
   { value: 'codex', label: 'Codex', description: 'OpenAI Codex CLI agent' },
@@ -134,6 +237,37 @@ export function ConfigureStep({
         value: rt.name.replace('gpu_', ''),
       }));
   }, [clusterResources]);
+
+  // Aggregate available resources across nodes per resource type
+  const aggregatedResources = useMemo(() => {
+    if (!clusterResources || clusterResources.nodes.length === 0) return [];
+    return clusterResources.resourceTypes
+      .filter(rt => !rt.name.startsWith('gpu_'))
+      .map(rt => {
+        let totalAvailable = 0;
+        for (const node of clusterResources.nodes) {
+          const val = node.available[rt.resourceKey];
+          if (val) {
+            const parsed = parseK8sQuantity(val, rt.unit);
+            if (!isNaN(parsed)) totalAvailable += parsed;
+          }
+        }
+        return { resourceType: rt, totalAvailable };
+      });
+  }, [clusterResources]);
+
+  // Check if user has requested any GPU resources
+  const hasGpuRequested = useMemo(() => {
+    const gpuVal = state.resourceConfig.gpu;
+    if (gpuVal && gpuVal !== '0') return true;
+    // Also check dynamically discovered GPU resource types
+    return aggregatedResources.some(
+      ar =>
+        ar.resourceType.category === 'accelerator' &&
+        state.resourceConfig[ar.resourceType.name] &&
+        state.resourceConfig[ar.resourceType.name] !== '0'
+    );
+  }, [state.resourceConfig, aggregatedResources]);
 
   // Merge availableSecrets and stored credentials into a unified list
   const allCredentials = useMemo(() => {
@@ -1130,80 +1264,170 @@ export function ConfigureStep({
             {/* Resource Config */}
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Resources</label>
-              <div className={styles.resourceGrid}>
-                <div className={styles.resourceField}>
-                  <label className={styles.resourceLabel}>CPU</label>
-                  <input
-                    className={styles.formInput}
-                    value={state.resourceConfig.cpu ?? ''}
-                    onChange={e =>
-                      onChange({
-                        resourceConfig: {
-                          ...state.resourceConfig,
-                          cpu: e.target.value || undefined,
-                        },
-                      })
-                    }
-                    placeholder="e.g. 4"
-                  />
-                </div>
-                <div className={styles.resourceField}>
-                  <label className={styles.resourceLabel}>Memory</label>
-                  <input
-                    className={styles.formInput}
-                    value={state.resourceConfig.memory ?? ''}
-                    onChange={e =>
-                      onChange({
-                        resourceConfig: {
-                          ...state.resourceConfig,
-                          memory: e.target.value || undefined,
-                        },
-                      })
-                    }
-                    placeholder="e.g. 8Gi"
-                  />
-                </div>
-                <div className={styles.resourceField}>
-                  <label className={styles.resourceLabel}>GPU</label>
-                  <input
-                    className={styles.formInput}
-                    value={state.resourceConfig.gpu ?? ''}
-                    onChange={e =>
-                      onChange({
-                        resourceConfig: {
-                          ...state.resourceConfig,
-                          gpu: e.target.value || undefined,
-                        },
-                      })
-                    }
-                    placeholder="e.g. 1"
-                  />
-                </div>
-                {gpuTypes.length > 0 && (
+              {aggregatedResources.length > 0 ? (
+                <>
+                  {['compute', 'accelerator'].map(category => {
+                    const items = aggregatedResources.filter(
+                      ar => ar.resourceType.category === category
+                    );
+                    if (items.length === 0) return null;
+                    return (
+                      <div
+                        key={category}
+                        className={styles.resourceCategory}
+                        data-category={category}
+                      >
+                        <span className={styles.resourceCategoryLabel}>
+                          {category === 'compute' ? 'Compute' : 'Accelerator'}
+                        </span>
+                        <div className={styles.resourceGrid}>
+                          {items.map(({ resourceType: rt, totalAvailable }) => {
+                            const inputVal = state.resourceConfig[rt.name] ?? '';
+                            const error = validateResourceInput(inputVal, rt.unit, totalAvailable);
+                            const parsed = inputVal ? parseK8sQuantity(inputVal, rt.unit) : NaN;
+                            const showParsed =
+                              !isNaN(parsed) && rt.unit === 'bytes' && inputVal.trim() !== '';
+                            return (
+                              <div key={rt.name} className={styles.resourceField}>
+                                <label className={styles.resourceLabel}>
+                                  {rt.displayName}
+                                  <span className={styles.resourceUnit}>
+                                    {rt.unit === 'bytes'
+                                      ? 'e.g. 4Gi, 512Mi'
+                                      : rt.unit === 'cores'
+                                        ? 'e.g. 4, 500m'
+                                        : rt.unit}
+                                  </span>
+                                </label>
+                                <input
+                                  className={cn(styles.formInput, error && styles.formInputError)}
+                                  value={inputVal}
+                                  onChange={e =>
+                                    onChange({
+                                      resourceConfig: {
+                                        ...state.resourceConfig,
+                                        [rt.name]: e.target.value || undefined,
+                                      },
+                                    })
+                                  }
+                                  placeholder={
+                                    rt.name === 'memory' || rt.unit === 'bytes'
+                                      ? 'e.g. 8Gi'
+                                      : rt.name === 'cpu'
+                                        ? 'e.g. 4'
+                                        : 'e.g. 1'
+                                  }
+                                />
+                                {error ? (
+                                  <span className={styles.resourceError}>{error}</span>
+                                ) : (
+                                  <span
+                                    className={styles.resourceCapacity}
+                                    data-category={category}
+                                  >
+                                    {showParsed && `= ${formatHumanBytes(parsed)} · `}
+                                    {formatResourceValue(totalAvailable, rt.unit)}{' '}
+                                    {rt.unit === 'bytes' ? '' : rt.unit} available
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <div className={styles.resourceGrid}>
                   <div className={styles.resourceField}>
-                    <label className={styles.resourceLabel}>GPU Type</label>
-                    <select
-                      className={styles.formSelect}
-                      value={state.resourceConfig.gpu_type ?? ''}
+                    <label className={styles.resourceLabel}>CPU</label>
+                    <input
+                      className={styles.formInput}
+                      value={state.resourceConfig.cpu ?? ''}
                       onChange={e =>
                         onChange({
                           resourceConfig: {
                             ...state.resourceConfig,
-                            gpu_type: e.target.value || undefined,
+                            cpu: e.target.value || undefined,
                           },
                         })
                       }
-                    >
-                      <option value="">Any</option>
-                      {gpuTypes.map(gt => (
-                        <option key={gt.value} value={gt.value}>
-                          {gt.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="e.g. 4"
+                    />
                   </div>
-                )}
-              </div>
+                  <div className={styles.resourceField}>
+                    <label className={styles.resourceLabel}>Memory</label>
+                    <input
+                      className={styles.formInput}
+                      value={state.resourceConfig.memory ?? ''}
+                      onChange={e =>
+                        onChange({
+                          resourceConfig: {
+                            ...state.resourceConfig,
+                            memory: e.target.value || undefined,
+                          },
+                        })
+                      }
+                      placeholder="e.g. 8Gi"
+                    />
+                  </div>
+                </div>
+              )}
+              {gpuTypes.length > 0 && (
+                <div className={styles.resourceField}>
+                  <label className={styles.resourceLabel}>GPU Type</label>
+                  <select
+                    className={styles.formSelect}
+                    value={state.resourceConfig.gpu_type ?? ''}
+                    onChange={e =>
+                      onChange({
+                        resourceConfig: {
+                          ...state.resourceConfig,
+                          gpu_type: e.target.value || undefined,
+                        },
+                      })
+                    }
+                  >
+                    <option value="">Any</option>
+                    {gpuTypes.map(gt => (
+                      <option key={gt.value} value={gt.value}>
+                        {gt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {hasGpuRequested && (
+                <div className={styles.toggleRow}>
+                  <label className={styles.formLabel}>GPU time-slicing</label>
+                  <button
+                    className={cn(
+                      styles.toggle,
+                      state.resourceConfig.gpu_timeslice === 'true' && styles.toggleActive
+                    )}
+                    onClick={() =>
+                      onChange({
+                        resourceConfig: {
+                          ...state.resourceConfig,
+                          gpu_timeslice:
+                            state.resourceConfig.gpu_timeslice === 'true' ? undefined : 'true',
+                        },
+                      })
+                    }
+                    type="button"
+                    role="switch"
+                    aria-checked={state.resourceConfig.gpu_timeslice === 'true'}
+                  >
+                    <span className={styles.toggleKnob} />
+                  </button>
+                </div>
+              )}
+              {hasGpuRequested && state.resourceConfig.gpu_timeslice === 'true' && (
+                <span className={styles.terminalRestrictedHint}>
+                  GPU is shared between the AI broker and your workload via NVIDIA time-slicing
+                </span>
+              )}
             </div>
 
             {/* Environment Variables */}

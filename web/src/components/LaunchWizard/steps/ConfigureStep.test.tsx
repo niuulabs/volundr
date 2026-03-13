@@ -2,7 +2,13 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ConfigureStep } from './ConfigureStep';
 import type { ConfigureStepProps } from './ConfigureStep';
-import type { VolundrTemplate, VolundrRepo, VolundrModel, McpServerConfig } from '@/models';
+import type {
+  VolundrTemplate,
+  VolundrRepo,
+  VolundrModel,
+  McpServerConfig,
+  ClusterResourceInfo,
+} from '@/models';
 import type { WizardState } from '../LaunchWizard';
 
 const baseTemplate: VolundrTemplate = {
@@ -427,13 +433,12 @@ describe('ConfigureStep', () => {
   });
 
   describe('resource config', () => {
-    it('renders CPU, Memory, GPU inputs', () => {
+    it('renders CPU and Memory inputs in fallback mode', () => {
       renderStep();
       fireEvent.click(screen.getByText('Advanced Configuration'));
 
       expect(screen.getByPlaceholderText('e.g. 4')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('e.g. 8Gi')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('e.g. 1')).toBeInTheDocument();
     });
 
     it('calls onChange when setting CPU', () => {
@@ -445,6 +450,139 @@ describe('ConfigureStep', () => {
       });
 
       expect(onChange).toHaveBeenCalledWith({ resourceConfig: { cpu: '2' } });
+    });
+  });
+
+  describe('dynamic resource rendering', () => {
+    const clusterResourceData: ClusterResourceInfo = {
+      resourceTypes: [
+        {
+          name: 'cpu',
+          resourceKey: 'cpu',
+          displayName: 'CPU',
+          unit: 'cores',
+          category: 'compute',
+        },
+        {
+          name: 'memory',
+          resourceKey: 'memory',
+          displayName: 'Memory',
+          unit: 'bytes',
+          category: 'compute',
+        },
+        {
+          name: 'gpu',
+          resourceKey: 'nvidia.com/gpu',
+          displayName: 'GPU',
+          unit: 'devices',
+          category: 'accelerator',
+        },
+      ],
+      nodes: [
+        {
+          name: 'node-1',
+          labels: {},
+          allocatable: { cpu: '8', memory: '16384', 'nvidia.com/gpu': '2' },
+          allocated: {},
+          available: { cpu: '8', memory: '16384', 'nvidia.com/gpu': '2' },
+        },
+        {
+          name: 'node-2',
+          labels: {},
+          allocatable: { cpu: '4', memory: '8192' },
+          allocated: {},
+          available: { cpu: '4', memory: '8192' },
+        },
+      ],
+    };
+
+    it('renders dynamic resource types from cluster data', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      // Wait for cluster resources to load and render
+      expect(await screen.findByText('Compute')).toBeInTheDocument();
+      expect(screen.getByText('Accelerator')).toBeInTheDocument();
+    });
+
+    it('shows capacity text when nodes have data', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      // CPU: 8 + 4 = 12 cores available
+      expect(await screen.findByText('12 cores available')).toBeInTheDocument();
+      // Memory: 16384 + 8192 = 24576 bytes -> formatted as 24.0 KiB
+      expect(screen.getByText(/24\.0 KiB/)).toBeInTheDocument();
+    });
+
+    it('renders fallback static inputs when no cluster data', () => {
+      renderStep();
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      // Static fallback should show CPU and Memory inputs
+      expect(screen.getByPlaceholderText('e.g. 4')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('e.g. 8Gi')).toBeInTheDocument();
+      // Category labels should not appear
+      expect(screen.queryByText('Compute')).not.toBeInTheDocument();
+    });
+
+    it('shows validation error when resource exceeds available capacity', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { cpu: '24' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      // CPU total is 12 cores, requesting 24 should show error
+      expect(await screen.findByText(/Exceeds available capacity/)).toBeInTheDocument();
+    });
+
+    it('shows format error for invalid K8s quantity', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { memory: 'abc' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(await screen.findByText(/Invalid format/)).toBeInTheDocument();
+    });
+
+    it('accepts valid K8s quantity notation without error', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { cpu: '4' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      // Should show capacity, not an error
+      expect(await screen.findByText('12 cores available')).toBeInTheDocument();
+      expect(screen.queryByText(/Exceeds/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Invalid/)).not.toBeInTheDocument();
     });
   });
 
@@ -714,19 +852,6 @@ describe('ConfigureStep', () => {
       });
     });
 
-    it('calls onChange when setting GPU', () => {
-      renderStep();
-      fireEvent.click(screen.getByText('Advanced Configuration'));
-
-      fireEvent.change(screen.getByPlaceholderText('e.g. 1'), {
-        target: { value: '2' },
-      });
-
-      expect(onChange).toHaveBeenCalledWith({
-        resourceConfig: { gpu: '2' },
-      });
-    });
-
     it('sets memory to undefined when cleared', () => {
       renderStep({
         state: buildState({ resourceConfig: { memory: '8Gi' } }),
@@ -739,21 +864,6 @@ describe('ConfigureStep', () => {
 
       expect(onChange).toHaveBeenCalledWith({
         resourceConfig: { memory: undefined },
-      });
-    });
-
-    it('sets gpu to undefined when cleared', () => {
-      renderStep({
-        state: buildState({ resourceConfig: { gpu: '1' } }),
-      });
-      fireEvent.click(screen.getByText('Advanced Configuration'));
-
-      fireEvent.change(screen.getByPlaceholderText('e.g. 1'), {
-        target: { value: '' },
-      });
-
-      expect(onChange).toHaveBeenCalledWith({
-        resourceConfig: { gpu: undefined },
       });
     });
   });

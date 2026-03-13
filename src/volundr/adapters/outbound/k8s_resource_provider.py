@@ -19,6 +19,51 @@ from .static_resource_provider import (
 
 logger = logging.getLogger(__name__)
 
+# Mapping of well-known K8s resource keys to display metadata
+_WELL_KNOWN_RESOURCES: dict[str, tuple[str, str, ResourceCategory]] = {
+    "ephemeral-storage": ("Ephemeral Storage", "bytes", ResourceCategory.COMPUTE),
+    "pods": ("Pods", "pods", ResourceCategory.COMPUTE),
+}
+
+
+def _resource_type_from_key(key: str) -> ResourceType:
+    """Build a ResourceType from an allocatable key."""
+    if key in _WELL_KNOWN_RESOURCES:
+        display, unit, category = _WELL_KNOWN_RESOURCES[key]
+        return ResourceType(
+            name=key.replace("/", "_").replace(".", "_"),
+            resource_key=key,
+            display_name=display,
+            unit=unit,
+            category=category,
+        )
+
+    # Vendor-prefixed resources (e.g. "nvidia.com/gpu") → accelerator
+    if "/" in key:
+        category = ResourceCategory.ACCELERATOR
+    else:
+        category = ResourceCategory.COMPUTE
+
+    # Derive a human-readable display name from the key
+    short = key.rsplit("/", 1)[-1]
+    display_name = short.replace("-", " ").replace("_", " ").title()
+
+    # Guess unit from name
+    if "storage" in key or "memory" in key:
+        unit = "bytes"
+    elif "gpu" in key:
+        unit = "devices"
+    else:
+        unit = ""
+
+    return ResourceType(
+        name=key.replace("/", "_").replace(".", "_"),
+        resource_key=key,
+        display_name=display_name,
+        unit=unit,
+        category=category,
+    )
+
 
 class K8sResourceProvider(ResourceProvider):
     """Resource provider that queries the Kubernetes API for node capacity.
@@ -27,15 +72,24 @@ class K8sResourceProvider(ResourceProvider):
     DRA-backed adapter can be swapped in for v1.31+ without changing callers.
     """
 
-    def __init__(self, *, namespace: str = "volundr-sessions", **_extra: object) -> None:
+    def __init__(
+        self, *, namespace: str = "volundr-sessions", kubeconfig: str = "", **_extra: object
+    ) -> None:
         self._namespace = namespace
+        self._kubeconfig = kubeconfig
 
     async def discover(self) -> ClusterResourceInfo:
         """List nodes, extract GPU labels/allocatable, build ClusterResourceInfo."""
         try:
             from kubernetes_asyncio import client, config
 
-            await config.load_incluster_config()
+            if self._kubeconfig:
+                await config.load_kube_config(config_file=self._kubeconfig)
+            else:
+                try:
+                    await config.load_incluster_config()
+                except config.ConfigException:
+                    await config.load_kube_config()
             v1 = client.CoreV1Api()
             nodes_resp = await v1.list_node()
         except Exception:
@@ -48,13 +102,16 @@ class K8sResourceProvider(ResourceProvider):
                 nodes=[],
             )
 
-        resource_types = list(STANDARD_RESOURCE_TYPES)
         seen_gpu_products: set[str] = set()
+        seen_resource_keys: set[str] = set()
         nodes: list[NodeResourceSummary] = []
 
         for node in nodes_resp.items:
             labels = node.metadata.labels or {}
             allocatable = {k: str(v) for k, v in (node.status.allocatable or {}).items()}
+
+            # Track all resource keys across nodes
+            seen_resource_keys.update(allocatable.keys())
 
             # Discover GPU product types from node labels
             gpu_product = labels.get("nvidia.com/gpu.product")
@@ -71,7 +128,11 @@ class K8sResourceProvider(ResourceProvider):
                 )
             )
 
-        # Add discovered GPU types as resource types
+        # Build resource types dynamically from what nodes actually report
+        resource_types = list(STANDARD_RESOURCE_TYPES)
+        standard_keys = {rt.resource_key for rt in STANDARD_RESOURCE_TYPES}
+
+        # Add discovered GPU product variants
         for product in sorted(seen_gpu_products):
             resource_types.append(
                 ResourceType(
@@ -82,6 +143,18 @@ class K8sResourceProvider(ResourceProvider):
                     category=ResourceCategory.ACCELERATOR,
                 )
             )
+
+        # Add any node-reported resources not covered by standard types
+        # Skip keys that are not useful as requestable session resources
+        ignored_keys = {"pods"}
+        for key in sorted(seen_resource_keys - standard_keys - ignored_keys):
+            # Skip hugepages with zero value across all nodes
+            if key.startswith("hugepages-"):
+                all_zero = all((int(node.allocatable.get(key, "0") or "0") == 0) for node in nodes)
+                if all_zero:
+                    continue
+
+            resource_types.append(_resource_type_from_key(key))
 
         return ClusterResourceInfo(resource_types=resource_types, nodes=nodes)
 
