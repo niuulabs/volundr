@@ -187,7 +187,8 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
 
 	// Ctrl+] always toggles between insert and normal mode (like the
 	// classic telnet escape character). Works regardless of current mode.
-	if key == "ctrl+]" {
+	// Match both "ctrl+]" (Kitty protocol) and raw 0x1D (legacy terminals).
+	if key == "ctrl+]" || msg.Key().Code == 0x1D {
 		t.insertMode = !t.insertMode
 		return t, nil
 	}
