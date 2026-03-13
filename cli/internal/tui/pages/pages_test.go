@@ -96,6 +96,17 @@ func TestSettingsPage_View_AllSections(t *testing.T) {
 	}
 }
 
+func TestSettingsPage_Editing(t *testing.T) {
+	page := NewSettingsPage(nil, nil)
+	if page.Editing() {
+		t.Error("expected not editing initially")
+	}
+	page.editing = true
+	if !page.Editing() {
+		t.Error("expected editing after setting flag")
+	}
+}
+
 func TestMaskToken(t *testing.T) {
 	tests := []struct {
 		token string

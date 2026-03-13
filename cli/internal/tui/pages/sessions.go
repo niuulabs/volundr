@@ -247,6 +247,11 @@ func (s SessionsPage) SelectedSession() *tui.ClusterSession {
 	return &sess
 }
 
+// Searching returns whether the search input is active.
+func (s SessionsPage) Searching() bool {
+	return s.searching
+}
+
 // SetSize updates the page dimensions.
 func (s *SessionsPage) SetSize(w, h int) {
 	s.width = w
@@ -430,13 +435,13 @@ func (s SessionsPage) renderSessionCard(sess tui.ClusterSession, selected bool) 
 	if selected {
 		return lipgloss.NewStyle().
 			Background(theme.BgTertiary).
-			Width(s.width - 6).
+			Width(s.width-6).
 			Padding(0, 1).
 			Render(content)
 	}
 
 	return lipgloss.NewStyle().
-		Width(s.width - 6).
+		Width(s.width-6).
 		Padding(0, 1).
 		Render(content)
 }
@@ -577,7 +582,7 @@ func demoSessions() []api.Session {
 			ID: "f6a7b8c9-d0e1-2345-fabc-456789012345", Name: "fix/migration-lock",
 			Model: "claude-sonnet-4", Repo: "niuu/volundr", Branch: "fix/migration",
 			Status: "error", MessageCount: 7, TokensUsed: 23400,
-			Error: "Pod OOMKilled after 4.2GB memory usage",
+			Error:     "Pod OOMKilled after 4.2GB memory usage",
 			CreatedAt: "2026-03-08T13:00:00Z", LastActive: "2026-03-08T13:12:00Z",
 		},
 		{

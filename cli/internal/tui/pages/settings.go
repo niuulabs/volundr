@@ -186,6 +186,11 @@ func (s SettingsPage) settingsHelp() string {
 	return "  Tab/Shift+Tab: switch section  ↑↓: navigate  Enter: edit  r: refresh"
 }
 
+// Editing returns whether the settings editor is active.
+func (s SettingsPage) Editing() bool {
+	return s.editing
+}
+
 // SetSize updates the page dimensions.
 func (s *SettingsPage) SetSize(w, h int) {
 	s.width = w
@@ -418,7 +423,7 @@ func (s SettingsPage) renderSettingRows(rows []settingRow, theme tui.Theme) stri
 		if i == s.cursor {
 			lines = append(lines, lipgloss.NewStyle().
 				Background(theme.BgTertiary).
-				Width(s.width - 8).
+				Width(s.width-8).
 				Render(line))
 		} else {
 			lines = append(lines, line)
