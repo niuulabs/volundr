@@ -183,4 +183,142 @@ describe('ResourcesSection', () => {
     const gpuCard = gpuElements[0].closest('[data-category]');
     expect(gpuCard).toHaveAttribute('data-category', 'accelerator');
   });
+
+  it('handles nodes with unparseable resource values gracefully', async () => {
+    const badResources: ClusterResourceInfo = {
+      resourceTypes: [
+        {
+          name: 'cpu',
+          resourceKey: 'cpu',
+          displayName: 'CPU',
+          unit: 'cores',
+          category: 'compute',
+        },
+      ],
+      nodes: [
+        {
+          name: 'bad-node',
+          labels: {},
+          allocatable: { cpu: 'not-a-number' },
+          allocated: { cpu: 'also-bad' },
+          available: { cpu: 'nope' },
+        },
+      ],
+    };
+
+    service = createMockService(badResources);
+    render(<ResourcesSection service={service} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('bad-node')).toBeInTheDocument();
+    });
+  });
+
+  it('handles nodes with missing resource keys using defaults', async () => {
+    const sparseResources: ClusterResourceInfo = {
+      resourceTypes: [
+        {
+          name: 'cpu',
+          resourceKey: 'cpu',
+          displayName: 'CPU',
+          unit: 'cores',
+          category: 'compute',
+        },
+        {
+          name: 'gpu',
+          resourceKey: 'nvidia.com/gpu',
+          displayName: 'GPU',
+          unit: 'devices',
+          category: 'accelerator',
+        },
+      ],
+      nodes: [
+        {
+          name: 'sparse-node',
+          labels: {},
+          allocatable: { cpu: '8' },
+          allocated: { cpu: '4' },
+          available: { cpu: '4' },
+        },
+      ],
+    };
+
+    service = createMockService(sparseResources);
+    render(<ResourcesSection service={service} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('sparse-node')).toBeInTheDocument();
+    });
+
+    // GPU should show 0/0 with 0% utilization (calculateUtilization with total=0)
+    const zeroBadges = screen.getAllByText('0%');
+    expect(zeroBadges.length).toBeGreaterThan(0);
+  });
+
+  it('renders resources with bytes unit formatted correctly in summary', async () => {
+    const bytesResources: ClusterResourceInfo = {
+      resourceTypes: [
+        {
+          name: 'memory',
+          resourceKey: 'memory',
+          displayName: 'Memory',
+          unit: 'bytes',
+          category: 'compute',
+        },
+      ],
+      nodes: [
+        {
+          name: 'mem-node',
+          labels: {},
+          allocatable: { memory: '8Gi' },
+          allocated: { memory: '4Gi' },
+          available: { memory: '4Gi' },
+        },
+      ],
+    };
+
+    service = createMockService(bytesResources);
+    render(<ResourcesSection service={service} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('mem-node')).toBeInTheDocument();
+    });
+
+    // bytes unit: summary card shows formatted bytes without unit suffix
+    // Available 4Gi = 4.0 GiB
+    expect(screen.getByText('4.0 GiB')).toBeInTheDocument();
+  });
+
+  it('renders 0% utilization when allocatable is zero', async () => {
+    const zeroResources: ClusterResourceInfo = {
+      resourceTypes: [
+        {
+          name: 'gpu',
+          resourceKey: 'nvidia.com/gpu',
+          displayName: 'GPU',
+          unit: 'devices',
+          category: 'accelerator',
+        },
+      ],
+      nodes: [
+        {
+          name: 'no-gpu-node',
+          labels: {},
+          allocatable: { 'nvidia.com/gpu': '0' },
+          allocated: { 'nvidia.com/gpu': '0' },
+          available: { 'nvidia.com/gpu': '0' },
+        },
+      ],
+    };
+
+    service = createMockService(zeroResources);
+    render(<ResourcesSection service={service} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('no-gpu-node')).toBeInTheDocument();
+    });
+
+    // 0/0 = 0% utilization
+    expect(screen.getByText('0%')).toHaveAttribute('data-status', 'healthy');
+  });
 });

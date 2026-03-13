@@ -1429,4 +1429,219 @@ describe('ConfigureStep', () => {
       );
     });
   });
+
+  describe('validateResourceInput branches', () => {
+    const clusterResourceData: ClusterResourceInfo = {
+      resourceTypes: [
+        {
+          name: 'cpu',
+          resourceKey: 'cpu',
+          displayName: 'CPU',
+          unit: 'cores',
+          category: 'compute',
+        },
+        {
+          name: 'memory',
+          resourceKey: 'memory',
+          displayName: 'Memory',
+          unit: 'bytes',
+          category: 'compute',
+        },
+        {
+          name: 'gpu',
+          resourceKey: 'nvidia.com/gpu',
+          displayName: 'GPU',
+          unit: 'devices',
+          category: 'accelerator',
+        },
+      ],
+      nodes: [
+        {
+          name: 'node-1',
+          labels: {},
+          allocatable: { cpu: '8', memory: '17179869184', 'nvidia.com/gpu': '2' },
+          allocated: {},
+          available: { cpu: '8', memory: '17179869184', 'nvidia.com/gpu': '2' },
+        },
+      ],
+    };
+
+    it('shows cores format error for invalid CPU value', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { cpu: 'xyz' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(await screen.findByText('Invalid format. Use e.g. 4, 500m, 1.5')).toBeInTheDocument();
+    });
+
+    it('shows bytes format error for invalid memory value', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { memory: 'notbytes' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(
+        await screen.findByText('Invalid format. Use e.g. 4Gi, 512Mi, 1Ti')
+      ).toBeInTheDocument();
+    });
+
+    it('shows error when value is zero or negative', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { cpu: '0' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(await screen.findByText('Must be greater than 0')).toBeInTheDocument();
+    });
+
+    it('shows capacity exceeded with bytes formatting for memory', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { memory: '999Ti' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(await screen.findByText(/Exceeds available capacity/)).toBeInTheDocument();
+    });
+
+    it('shows capacity exceeded with cores formatting for CPU', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue(clusterResourceData),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { cpu: '100' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(await screen.findByText('Exceeds available capacity (8 cores)')).toBeInTheDocument();
+    });
+  });
+
+  describe('hasGpuRequested', () => {
+    it('shows GPU time-slicing toggle when static gpu field is set', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue({
+          resourceTypes: [
+            {
+              name: 'gpu',
+              resourceKey: 'nvidia.com/gpu',
+              displayName: 'GPU',
+              unit: 'devices',
+              category: 'accelerator',
+            },
+          ],
+          nodes: [],
+        }),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { gpu: '1' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(await screen.findByText('GPU time-slicing')).toBeInTheDocument();
+    });
+
+    it('shows GPU time-slicing toggle when dynamic accelerator resource is set', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue({
+          resourceTypes: [
+            {
+              name: 'custom_accel',
+              resourceKey: 'custom.io/accel',
+              displayName: 'Custom Accelerator',
+              unit: 'devices',
+              category: 'accelerator',
+            },
+          ],
+          nodes: [
+            {
+              name: 'node-1',
+              labels: {},
+              allocatable: { 'custom.io/accel': '4' },
+              allocated: {},
+              available: { 'custom.io/accel': '4' },
+            },
+          ],
+        }),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { custom_accel: '2' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(await screen.findByText('GPU time-slicing')).toBeInTheDocument();
+    });
+
+    it('does not show GPU time-slicing when no GPU resources requested', () => {
+      renderStep({
+        state: buildState({ resourceConfig: {} }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(screen.queryByText('GPU time-slicing')).not.toBeInTheDocument();
+    });
+
+    it('shows time-slicing hint when gpu_timeslice is enabled', async () => {
+      const service = {
+        ...mockService,
+        getClusterResources: vi.fn().mockResolvedValue({
+          resourceTypes: [
+            {
+              name: 'gpu',
+              resourceKey: 'nvidia.com/gpu',
+              displayName: 'GPU',
+              unit: 'devices',
+              category: 'accelerator',
+            },
+          ],
+          nodes: [],
+        }),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({ resourceConfig: { gpu: '1', gpu_timeslice: 'true' } }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+
+      expect(
+        await screen.findByText(
+          'GPU is shared between the AI broker and your workload via NVIDIA time-slicing'
+        )
+      ).toBeInTheDocument();
+    });
+  });
 });
