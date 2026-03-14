@@ -1,11 +1,10 @@
 """Tests for Skuld message channel abstraction."""
 
 import json
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-import sys
 
 from volundr.skuld.channels import (
     ChannelRegistry,
