@@ -22,15 +22,19 @@ class TenantCreate(BaseModel):
     """Request model for creating a tenant."""
 
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Human-readable tenant name",
     )
     tenant_id: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="Custom tenant ID (auto-generated if omitted)",
     )
     parent_id: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="Parent tenant ID for hierarchy",
     )
     tier: str = Field(
@@ -38,11 +42,13 @@ class TenantCreate(BaseModel):
         description="Tenant tier (developer, team, enterprise)",
     )
     max_sessions: int = Field(
-        default=5, ge=1,
+        default=5,
+        ge=1,
         description="Maximum concurrent sessions allowed",
     )
     max_storage_gb: int = Field(
-        default=50, ge=1,
+        default=50,
+        ge=1,
         description="Maximum storage quota in GB",
     )
 
@@ -95,7 +101,8 @@ class MemberCreate(BaseModel):
     """Request model for adding a tenant member."""
 
     user_id: str = Field(
-        ..., description="ID of the user to add",
+        ...,
+        description="ID of the user to add",
     )
     role: str = Field(
         default="volundr:developer",

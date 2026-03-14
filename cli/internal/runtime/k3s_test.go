@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1392,7 +1394,7 @@ func TestNewRuntime_K3s(t *testing.T) {
 	}
 }
 
-// --- Tests for prompt/install/init functions ---
+// Tests for prompt/install/init functions.
 
 func TestPromptYesNo_Yes(t *testing.T) {
 	withMockStdin(t, "y\n")
@@ -2260,6 +2262,124 @@ func TestEnsureK8sSecrets_UpsertFail(t *testing.T) {
 	err := r.ensureK8sSecrets(cfg, "test-ns")
 	if err == nil {
 		t.Fatal("expected error when upsert fails")
+	}
+}
+
+func TestK3sRuntime_Up_AlreadyRunning(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a PID file with our own PID to simulate already running.
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	if err := os.WriteFile(pidPath, []byte("1"), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	// Overwrite with our own PID so CheckNotRunning sees a live process.
+	pid := strconv.Itoa(os.Getpid())
+	if err := os.WriteFile(pidPath, []byte(pid), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{}
+
+	// The PID "1" is always running (init process on Unix), so CheckNotRunning will error.
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when already running")
+	}
+}
+
+func TestK3sRuntime_Up_ExternalDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	cfgDir := filepath.Join(tmpDir, config.DefaultConfigDir)
+	if err := os.MkdirAll(cfgDir, 0o750); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a kubeconfig for writeK3dKubeconfig.
+	kcPath := filepath.Join(volundrDir, k3sHostKubeconfigFile)
+	if err := os.WriteFile(kcPath, []byte("apiVersion: v1\nclusters:\n- cluster:\n    server: https://127.0.0.1:6443\n"), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+
+	// Mock returns cluster list containing "volundr" so cluster is "found".
+	withMockExec(t, `MOCK_RESPONSE=[{"name":"volundr"}]`)
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0},
+		Database: config.DatabaseConfig{
+			Mode:     "external",
+			Host:     "db.example.com",
+			Port:     5432,
+			User:     "user",
+			Password: "pass",
+			Name:     "mydb",
+		},
+		K3s: config.K3sConfig{
+			Provider: "k3d",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := r.Up(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+
+	// Verify PID file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); err != nil {
+		t.Error("expected PID file to be written")
+	}
+
+	// Verify state file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, StateFile)); err != nil {
+		t.Error("expected state file to be written")
+	}
+
+	cancel()
+}
+
+func TestK3sRuntime_Up_ClusterFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExecFail(t)
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "external",
+		},
+		K3s: config.K3sConfig{
+			Provider: "k3d",
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when cluster check fails")
 	}
 }
 

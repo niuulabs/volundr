@@ -21,18 +21,23 @@ class PromptCreate(BaseModel):
     """Request model for creating a saved prompt."""
 
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Human-readable prompt name",
     )
     content: str = Field(
-        ..., min_length=1, description="The prompt text content",
+        ...,
+        min_length=1,
+        description="The prompt text content",
     )
     scope: PromptScope = Field(
         default=PromptScope.GLOBAL,
         description="Visibility scope: global or project",
     )
     project_repo: str | None = Field(
-        default=None, max_length=500,
+        default=None,
+        max_length=500,
         description="Repository URL when scope is project",
     )
     tags: list[str] = Field(
@@ -45,22 +50,28 @@ class PromptUpdate(BaseModel):
     """Request model for updating a saved prompt."""
 
     name: str | None = Field(
-        default=None, min_length=1, max_length=255,
+        default=None,
+        min_length=1,
+        max_length=255,
         description="New prompt name",
     )
     content: str | None = Field(
-        default=None, min_length=1,
+        default=None,
+        min_length=1,
         description="New prompt content",
     )
     scope: PromptScope | None = Field(
-        default=None, description="New visibility scope",
+        default=None,
+        description="New visibility scope",
     )
     project_repo: str | None = Field(
-        default=None, max_length=500,
+        default=None,
+        max_length=500,
         description="New repository URL for project scope",
     )
     tags: list[str] | None = Field(
-        default=None, description="New tags list",
+        default=None,
+        description="New tags list",
     )
 
 
@@ -188,7 +199,8 @@ def create_prompts_router(prompt_service: PromptService) -> APIRouter:
     )
     async def search_prompts(
         q: str = Query(
-            ..., min_length=1,
+            ...,
+            min_length=1,
             description="Search query to match against prompt name and content",
         ),
     ) -> list[PromptResponse]:

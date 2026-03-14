@@ -25,11 +25,14 @@ class PresetCreate(BaseModel):
     """Request model for creating a preset."""
 
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Human-readable preset name",
     )
     description: str = Field(
-        default="", description="Description of the preset purpose",
+        default="",
+        description="Description of the preset purpose",
     )
     is_default: bool = Field(
         default=False,
@@ -40,14 +43,17 @@ class PresetCreate(BaseModel):
         description="CLI tool this preset targets (e.g. claude, aider)",
     )
     workload_type: str = Field(
-        default="session", description="Workload type (e.g. session)",
+        default="session",
+        description="Workload type (e.g. session)",
     )
     model: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="Default LLM model identifier",
     )
     system_prompt: str | None = Field(
-        default=None, description="System prompt for the LLM",
+        default=None,
+        description="System prompt for the LLM",
     )
     resource_config: dict = Field(
         default_factory=dict,
@@ -101,51 +107,67 @@ class PresetUpdate(BaseModel):
     """Request model for updating a preset (all fields optional)."""
 
     name: str | None = Field(
-        default=None, min_length=1, max_length=255,
+        default=None,
+        min_length=1,
+        max_length=255,
         description="New preset name",
     )
     description: str | None = Field(
-        default=None, description="New description",
+        default=None,
+        description="New description",
     )
     is_default: bool | None = Field(
-        default=None, description="New default flag",
+        default=None,
+        description="New default flag",
     )
     cli_tool: str | None = Field(
-        default=None, description="New CLI tool target",
+        default=None,
+        description="New CLI tool target",
     )
     workload_type: str | None = Field(
-        default=None, description="New workload type",
+        default=None,
+        description="New workload type",
     )
     model: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="New LLM model identifier",
     )
     system_prompt: str | None = Field(
-        default=None, description="New system prompt",
+        default=None,
+        description="New system prompt",
     )
     resource_config: dict | None = Field(
-        default=None, description="New resource config",
+        default=None,
+        description="New resource config",
     )
     mcp_servers: list[dict] | None = Field(
-        default=None, description="New MCP server list",
+        default=None,
+        description="New MCP server list",
     )
     terminal_sidecar: dict | None = Field(
-        default=None, description="New terminal sidecar config",
+        default=None,
+        description="New terminal sidecar config",
     )
     skills: list[dict] | None = Field(
-        default=None, description="New skill definitions",
+        default=None,
+        description="New skill definitions",
     )
     rules: list[dict] | None = Field(
-        default=None, description="New rule definitions",
+        default=None,
+        description="New rule definitions",
     )
     env_vars: dict[str, str] | None = Field(
-        default=None, description="New environment variables",
+        default=None,
+        description="New environment variables",
     )
     env_secret_refs: list[str] | None = Field(
-        default=None, description="New K8s secret references",
+        default=None,
+        description="New K8s secret references",
     )
     workload_config: dict | None = Field(
-        default=None, description="New workload config",
+        default=None,
+        description="New workload config",
     )
 
 
@@ -230,7 +252,9 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
         responses={404: {"model": ErrorResponse}},
         tags=["Presets"],
     )
-    async def get_preset(preset_id: UUID = Path(description="Unique preset identifier")) -> PresetResponse:
+    async def get_preset(
+        preset_id: UUID = Path(description="Unique preset identifier"),
+    ) -> PresetResponse:
         """Get a preset by ID."""
         try:
             preset = await preset_service.get_preset(preset_id)
@@ -281,7 +305,9 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
         responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
         tags=["Presets"],
     )
-    async def update_preset(preset_id: UUID = Path(description="Unique preset identifier"), data: PresetUpdate = ...) -> PresetResponse:
+    async def update_preset(
+        preset_id: UUID = Path(description="Unique preset identifier"), data: PresetUpdate = ...
+    ) -> PresetResponse:
         """Update a preset."""
         try:
             updates = data.model_dump(exclude_unset=True)

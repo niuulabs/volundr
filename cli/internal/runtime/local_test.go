@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1071,6 +1072,268 @@ func TestDownFromPID_SuccessPath(t *testing.T) {
 	// Both files should be cleaned up.
 	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
 		t.Error("expected PID file to be removed")
+	}
+}
+
+func TestLocalRuntime_Init_EmbeddedDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockPostgres(t, &fakePostgres{})
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+	}
+
+	err := r.Init(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+}
+
+func TestLocalRuntime_Init_EmbeddedDB_StartFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockPostgres(t, &fakePostgres{startErr: fmt.Errorf("download failed")})
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+	}
+
+	err := r.Init(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when postgres start fails")
+	}
+	if !contains(err.Error(), "test embedded postgres") {
+		t.Errorf("expected 'test embedded postgres' error, got: %v", err)
+	}
+}
+
+func TestLocalRuntime_Init_EmbeddedDB_StopFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockPostgres(t, &fakePostgres{stopErr: fmt.Errorf("stop failed")})
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+	}
+
+	err := r.Init(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when postgres stop fails")
+	}
+	if !contains(err.Error(), "stop test postgres") {
+		t.Errorf("expected 'stop test postgres' error, got: %v", err)
+	}
+}
+
+func TestLocalRuntime_Up_EmbeddedDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	logsDir := filepath.Join(volundrDir, "logs")
+	if err := os.MkdirAll(logsDir, 0o700); err != nil {
+		t.Fatalf("create logs dir: %v", err)
+	}
+
+	withMockExec(t)
+	withMockPostgres(t, &fakePostgres{migrationsN: 3})
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0},
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+			DataDir:  filepath.Join(volundrDir, "data", "pg"),
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := r.Up(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+
+	// Verify PID file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); err != nil {
+		t.Error("expected PID file to be written")
+	}
+
+	// Verify state file was written with postgres service.
+	stateData, err := os.ReadFile(filepath.Join(volundrDir, StateFile)) //nolint:gosec // test reads from temp dir
+	if err != nil {
+		t.Fatalf("read state file: %v", err)
+	}
+	var services []ServiceStatus
+	if err := json.Unmarshal(stateData, &services); err != nil {
+		t.Fatalf("unmarshal state: %v", err)
+	}
+	foundPostgres := false
+	for _, svc := range services {
+		if svc.Name == "postgres" {
+			foundPostgres = true
+		}
+	}
+	if !foundPostgres {
+		t.Error("expected postgres service in state file for embedded mode")
+	}
+
+	if r.apiCmd != nil {
+		_ = r.apiCmd.Wait()
+	}
+	cancel()
+}
+
+func TestLocalRuntime_Up_EmbeddedDB_StartFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockPostgres(t, &fakePostgres{startErr: fmt.Errorf("pg start failed")})
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when postgres start fails")
+	}
+	if !contains(err.Error(), "start embedded postgres") {
+		t.Errorf("expected 'start embedded postgres' error, got: %v", err)
+	}
+}
+
+func TestLocalRuntime_Up_EmbeddedDB_MigrationFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Create a migrations dir so findMigrationsDir finds it.
+	migDir := filepath.Join(tmpDir, "migrations")
+	if err := os.MkdirAll(migDir, 0o700); err != nil {
+		t.Fatalf("create migrations dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	withMockExec(t)
+	withMockPostgres(t, &fakePostgres{migrationsErr: fmt.Errorf("migration failed")})
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when migrations fail")
+	}
+	if !contains(err.Error(), "run migrations") {
+		t.Errorf("expected 'run migrations' error, got: %v", err)
+	}
+}
+
+func TestLocalRuntime_Down_WithPostgres(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	r := NewLocalRuntime()
+	r.pg = &fakePostgres{}
+
+	err := r.Down(context.Background())
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+}
+
+func TestLocalRuntime_Down_WithPostgresStopFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	r := NewLocalRuntime()
+	r.pg = &fakePostgres{stopErr: fmt.Errorf("stop failed")}
+
+	err := r.Down(context.Background())
+	if err == nil {
+		t.Fatal("expected error when postgres stop fails")
+	}
+	if !contains(err.Error(), "stop postgres") {
+		t.Errorf("expected 'stop postgres' error, got: %v", err)
+	}
+}
+
+func TestLocalRuntime_Up_StartAPIFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	// Create config dir but NOT logs dir, so startAPI fails.
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0},
+		Database: config.DatabaseConfig{
+			Mode: "external",
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when startAPI fails")
+	}
+	if !contains(err.Error(), "start API") {
+		t.Errorf("expected 'start API' error, got: %v", err)
 	}
 }
 

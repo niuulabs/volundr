@@ -29,7 +29,8 @@ class NodeResourceSummaryResponse(BaseModel):
 
     name: str = Field(description="Kubernetes node name")
     labels: dict[str, str] = Field(
-        default_factory=dict, description="Node labels",
+        default_factory=dict,
+        description="Node labels",
     )
     allocatable: dict[str, str] = Field(
         default_factory=dict,

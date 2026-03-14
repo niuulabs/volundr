@@ -30,17 +30,23 @@ class IntegrationCreateRequest(BaseModel):
     """Request model for creating an integration connection."""
 
     integration_type: str = Field(
-        ..., min_length=1, max_length=50,
+        ...,
+        min_length=1,
+        max_length=50,
         description="Integration category (source_control, issue_tracker, etc.)",
         examples=["issue_tracker"],
     )
     adapter: str = Field(
-        ..., min_length=1, max_length=500,
+        ...,
+        min_length=1,
+        max_length=500,
         description="Fully-qualified adapter class path",
         examples=["volundr.adapters.trackers.linear.LinearAdapter"],
     )
     credential_name: str = Field(
-        ..., min_length=1, max_length=253,
+        ...,
+        min_length=1,
+        max_length=253,
         description="Stored credential name for authentication",
         examples=["linear-api-key"],
     )
@@ -55,7 +61,8 @@ class IntegrationCreateRequest(BaseModel):
         examples=[True],
     )
     slug: str = Field(
-        default="", max_length=100,
+        default="",
+        max_length=100,
         description="Catalog entry slug (references IntegrationDefinition)",
         examples=["linear"],
     )
@@ -65,7 +72,8 @@ class IntegrationUpdateRequest(BaseModel):
     """Request model for updating an integration connection."""
 
     credential_name: str | None = Field(
-        default=None, max_length=253,
+        default=None,
+        max_length=253,
         description="New credential name (null to keep current)",
         examples=["linear-api-key"],
     )
@@ -86,15 +94,22 @@ class IntegrationResponse(BaseModel):
 
     id: str = Field(description="Unique connection identifier", examples=["a1b2c3d4"])
     integration_type: str = Field(description="Integration category", examples=["issue_tracker"])
-    adapter: str = Field(description="Fully-qualified adapter class path", examples=["volundr.adapters.trackers.linear.LinearAdapter"])
+    adapter: str = Field(
+        description="Fully-qualified adapter class path",
+        examples=["volundr.adapters.trackers.linear.LinearAdapter"],
+    )
     credential_name: str = Field(description="Stored credential name", examples=["linear-api-key"])
     config: dict[str, str] = Field(
         description="Adapter-specific configuration",
         examples=[{"team_id": "TEAM-1"}],
     )
     enabled: bool = Field(description="Whether the integration is active", examples=[True])
-    created_at: str = Field(description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"])
-    updated_at: str = Field(description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"])
+    created_at: str = Field(
+        description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
+    updated_at: str = Field(
+        description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
     slug: str = Field(
         default="",
         description="Catalog entry slug",
@@ -134,9 +149,14 @@ class CatalogEntryResponse(BaseModel):
 
     slug: str = Field(description="Unique integration identifier", examples=["linear"])
     name: str = Field(description="Human-readable integration name", examples=["Linear"])
-    description: str = Field(description="Integration description", examples=["Issue tracking with Linear"])
+    description: str = Field(
+        description="Integration description", examples=["Issue tracking with Linear"]
+    )
     integration_type: str = Field(description="Integration category", examples=["issue_tracker"])
-    adapter: str = Field(description="Fully-qualified adapter class path", examples=["volundr.adapters.trackers.linear.LinearAdapter"])
+    adapter: str = Field(
+        description="Fully-qualified adapter class path",
+        examples=["volundr.adapters.trackers.linear.LinearAdapter"],
+    )
     icon: str = Field(description="Icon identifier for the UI", examples=["linear"])
     credential_schema: dict = Field(
         description="JSON Schema for required credentials",
@@ -184,13 +204,19 @@ class IntegrationTestResult(BaseModel):
     success: bool = Field(description="Whether the test connection succeeded", examples=[True])
     provider: str = Field(description="Provider name", examples=["Linear"])
     workspace: str | None = Field(
-        default=None, description="Workspace name if connected", examples=["My Workspace"],
+        default=None,
+        description="Workspace name if connected",
+        examples=["My Workspace"],
     )
     user: str | None = Field(
-        default=None, description="Authenticated user if connected", examples=["user@example.com"],
+        default=None,
+        description="Authenticated user if connected",
+        examples=["user@example.com"],
     )
     error: str | None = Field(
-        default=None, description="Error message if test failed", examples=[None],
+        default=None,
+        description="Error message if test failed",
+        examples=[None],
     )
 
 

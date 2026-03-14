@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/niuulabs/volundr/cli/internal/config"
 )
 
 // TestHelperProcess is used by mockExecCommand to simulate external commands.
@@ -128,6 +130,28 @@ func withMockExecFail(t *testing.T) {
 		execCommandContext = origCtx
 		execCommand = origCmd
 	})
+}
+
+// fakePostgres is a mock implementation of postgresProvider for testing.
+type fakePostgres struct {
+	startErr      error
+	stopErr       error
+	migrationsErr error
+	migrationsN   int
+}
+
+func (f *fakePostgres) Start(_ context.Context) error { return f.startErr }
+func (f *fakePostgres) Stop() error                   { return f.stopErr }
+func (f *fakePostgres) RunMigrations(_ context.Context, _ string) (int, error) {
+	return f.migrationsN, f.migrationsErr
+}
+
+// withMockPostgres replaces newPostgres with a function returning a fakePostgres.
+func withMockPostgres(t *testing.T, fp *fakePostgres) {
+	t.Helper()
+	orig := newPostgres
+	newPostgres = func(_ *config.Config) postgresProvider { return fp }
+	t.Cleanup(func() { newPostgres = orig })
 }
 
 // withMockStdin replaces stdinBufReader with a reader backed by the given string.

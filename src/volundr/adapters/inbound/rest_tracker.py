@@ -89,7 +89,8 @@ class IssueStatusUpdate(BaseModel):
     """Request model for updating an issue's status."""
 
     status: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="New status value for the issue",
     )
 
@@ -98,11 +99,14 @@ class MappingCreate(BaseModel):
     """Request model for creating a project mapping."""
 
     repo_url: str = Field(
-        ..., min_length=1, max_length=500,
+        ...,
+        min_length=1,
+        max_length=500,
         description="Git repository URL to map",
     )
     project_id: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Tracker project identifier",
     )
     project_name: str = Field(
@@ -170,7 +174,8 @@ def create_tracker_router(tracker_service: TrackerService) -> APIRouter:
     )
     async def search_issues(
         q: str = Query(
-            ..., min_length=1,
+            ...,
+            min_length=1,
             description="Search query string",
         ),
         project_id: str | None = Query(
@@ -192,10 +197,13 @@ def create_tracker_router(tracker_service: TrackerService) -> APIRouter:
     )
     async def get_recent_issues(
         project_id: str = Query(
-            ..., description="Tracker project ID",
+            ...,
+            description="Tracker project ID",
         ),
         limit: int = Query(
-            default=10, ge=1, le=100,
+            default=10,
+            ge=1,
+            le=100,
             description="Maximum number of issues to return",
         ),
     ) -> list[IssueResponse]:

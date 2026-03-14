@@ -90,7 +90,8 @@ class PullRequestResponse(BaseModel):
     target_branch: str = Field(description="Target branch name")
     status: str = Field(description="PR status (open, merged, closed)")
     description: str | None = Field(
-        default=None, description="PR body/description",
+        default=None,
+        description="PR body/description",
     )
     ci_status: str | None = Field(
         default=None,
@@ -101,10 +102,12 @@ class PullRequestResponse(BaseModel):
         description="Review status (approved, changes_requested, pending)",
     )
     created_at: str | None = Field(
-        default=None, description="ISO 8601 creation timestamp",
+        default=None,
+        description="ISO 8601 creation timestamp",
     )
     updated_at: str | None = Field(
-        default=None, description="ISO 8601 last update timestamp",
+        default=None,
+        description="ISO 8601 last update timestamp",
     )
 
     @classmethod

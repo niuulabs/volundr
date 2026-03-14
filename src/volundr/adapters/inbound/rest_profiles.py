@@ -62,19 +62,24 @@ class ProfileCreateRequest(BaseModel):
     """Request model for creating a forge profile."""
 
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Profile name",
     )
     description: str = Field(default="", description="Profile description")
     workload_type: str = Field(
-        default="session", description="Workload type",
+        default="session",
+        description="Workload type",
     )
     model: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="Default LLM model identifier",
     )
     system_prompt: str | None = Field(
-        default=None, description="System prompt for the LLM",
+        default=None,
+        description="System prompt for the LLM",
     )
     resource_config: dict = Field(
         default_factory=dict,
@@ -119,39 +124,51 @@ class ProfileUpdateRequest(BaseModel):
     """Request model for updating a forge profile."""
 
     name: str | None = Field(
-        default=None, min_length=1, max_length=255,
+        default=None,
+        min_length=1,
+        max_length=255,
         description="New profile name",
     )
     description: str | None = Field(
-        default=None, description="New description",
+        default=None,
+        description="New description",
     )
     workload_type: str | None = Field(
-        default=None, description="New workload type",
+        default=None,
+        description="New workload type",
     )
     model: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="New LLM model identifier",
     )
     system_prompt: str | None = Field(
-        default=None, description="New system prompt",
+        default=None,
+        description="New system prompt",
     )
     resource_config: dict | None = Field(
-        default=None, description="New resource config",
+        default=None,
+        description="New resource config",
     )
     mcp_servers: list[dict] | None = Field(
-        default=None, description="New MCP server list",
+        default=None,
+        description="New MCP server list",
     )
     env_vars: dict[str, str] | None = Field(
-        default=None, description="New environment variables",
+        default=None,
+        description="New environment variables",
     )
     env_secret_refs: list[str] | None = Field(
-        default=None, description="New K8s secret references",
+        default=None,
+        description="New K8s secret references",
     )
     workload_config: dict | None = Field(
-        default=None, description="New workload config",
+        default=None,
+        description="New workload config",
     )
     is_default: bool | None = Field(
-        default=None, description="New default flag",
+        default=None,
+        description="New default flag",
     )
 
 
@@ -174,7 +191,8 @@ class TemplateResponse(BaseModel):
     env_secret_refs: list[str] = Field(description="K8s secret references")
     workload_config: dict = Field(description="Workload-specific config")
     session_definition: str | None = Field(
-        default=None, description="Skuld session definition CRD name",
+        default=None,
+        description="Skuld session definition CRD name",
     )
 
     @classmethod
@@ -238,7 +256,9 @@ def create_profiles_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Profiles"],
     )
-    async def get_profile(profile_name: str = Path(description="Profile name to retrieve")) -> ProfileResponse:
+    async def get_profile(
+        profile_name: str = Path(description="Profile name to retrieve"),
+    ) -> ProfileResponse:
         """Get a forge profile by name."""
         profile = profile_service.get_profile(profile_name)
         if profile is None:
@@ -375,7 +395,9 @@ def create_profiles_router(
         },
         tags=["Profiles"],
     )
-    async def delete_profile(profile_name: str = Path(description="Profile name to delete")) -> None:
+    async def delete_profile(
+        profile_name: str = Path(description="Profile name to delete"),
+    ) -> None:
         """Delete a forge profile."""
         try:
             await profile_service.delete_profile(profile_name)
@@ -418,7 +440,9 @@ def create_profiles_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Templates"],
     )
-    async def get_template(template_name: str = Path(description="Template name to retrieve")) -> TemplateResponse:
+    async def get_template(
+        template_name: str = Path(description="Template name to retrieve"),
+    ) -> TemplateResponse:
         """Get a workspace template by name (loaded from configuration)."""
         template = template_service.get_template(template_name)
         if template is None:

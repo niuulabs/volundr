@@ -50,11 +50,14 @@ class SessionCreate(BaseModel):
     """Request model for creating a session."""
 
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Human-readable session name",
     )
     model: str = Field(
-        default="", max_length=100,
+        default="",
+        max_length=100,
         description="LLM model identifier (e.g. claude-sonnet-4-20250514)",
     )
     source: SessionSource = Field(
@@ -62,11 +65,13 @@ class SessionCreate(BaseModel):
         description="Workspace source (git repo or local mount)",
     )
     template_name: str | None = Field(
-        default=None, max_length=255,
+        default=None,
+        max_length=255,
         description="Workspace template name to apply",
     )
     profile_name: str | None = Field(
-        default=None, max_length=255,
+        default=None,
+        max_length=255,
         description="Forge profile name for resource allocation",
     )
     preset_id: UUID | None = Field(
@@ -114,15 +119,21 @@ class SessionUpdate(BaseModel):
     """Request model for updating a session."""
 
     name: str | None = Field(
-        default=None, min_length=1, max_length=255,
+        default=None,
+        min_length=1,
+        max_length=255,
         description="New session name",
     )
     model: str | None = Field(
-        default=None, min_length=1, max_length=100,
+        default=None,
+        min_length=1,
+        max_length=100,
         description="New LLM model identifier",
     )
     branch: str | None = Field(
-        default=None, min_length=1, max_length=255,
+        default=None,
+        min_length=1,
+        max_length=255,
         description="New git branch to checkout",
     )
     tracker_issue_id: str | None = Field(
@@ -146,7 +157,8 @@ class SessionStart(BaseModel):
     """Request model for (re)starting a session."""
 
     profile_name: str | None = Field(
-        default=None, max_length=255,
+        default=None,
+        max_length=255,
         description="Forge profile name to use when starting",
     )
 
@@ -185,19 +197,24 @@ class SessionResponse(BaseModel):
         description="Error message if session is in failed state",
     )
     tracker_issue_id: str | None = Field(
-        default=None, description="Linked issue tracker identifier",
+        default=None,
+        description="Linked issue tracker identifier",
     )
     preset_id: UUID | None = Field(
-        default=None, description="Preset used to configure this session",
+        default=None,
+        description="Preset used to configure this session",
     )
     archived_at: str | None = Field(
-        default=None, description="ISO 8601 archive timestamp",
+        default=None,
+        description="ISO 8601 archive timestamp",
     )
     owner_id: str | None = Field(
-        default=None, description="User ID of the session owner",
+        default=None,
+        description="User ID of the session owner",
     )
     tenant_id: str | None = Field(
-        default=None, description="Tenant ID for multi-tenant isolation",
+        default=None,
+        description="Tenant ID for multi-tenant isolation",
     )
 
     model_config = {
@@ -341,7 +358,8 @@ class BrokerChronicleReport(BaseModel):
         description="Incomplete work for the next session",
     )
     duration_seconds: int | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="Session duration in seconds",
     )
 
@@ -508,23 +526,29 @@ class TimelineEventResponse(BaseModel):
     type: str = Field(description="Event type (session, message, file, etc.)")
     label: str = Field(description="Display text for the event")
     tokens: int | None = Field(
-        default=None, description="Tokens consumed (message events)",
+        default=None,
+        description="Tokens consumed (message events)",
     )
     action: str | None = Field(
-        default=None, description="File action (created, modified, deleted)",
+        default=None,
+        description="File action (created, modified, deleted)",
     )
     ins: int | None = Field(
-        default=None, description="Lines inserted (file events)",
+        default=None,
+        description="Lines inserted (file events)",
     )
     del_: int | None = Field(
-        default=None, alias="del",
+        default=None,
+        alias="del",
         description="Lines deleted (file events)",
     )
     hash: str | None = Field(
-        default=None, description="Short commit hash (git events)",
+        default=None,
+        description="Short commit hash (git events)",
     )
     exit: int | None = Field(
-        default=None, description="Exit code (terminal events)",
+        default=None,
+        description="Exit code (terminal events)",
     )
 
     model_config = {"populate_by_name": True}
@@ -577,27 +601,34 @@ class TimelineEventCreate(BaseModel):
     )
     label: str = Field(..., min_length=1, description="Display text")
     tokens: int | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="Tokens consumed (message events)",
     )
     action: str | None = Field(
-        default=None, pattern="^(created|modified|deleted)$",
+        default=None,
+        pattern="^(created|modified|deleted)$",
         description="File action (created, modified, deleted)",
     )
     ins: int | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="Lines inserted (file events)",
     )
     del_: int | None = Field(
-        default=None, ge=0, alias="del",
+        default=None,
+        ge=0,
+        alias="del",
         description="Lines deleted (file events)",
     )
     hash: str | None = Field(
-        default=None, max_length=40,
+        default=None,
+        max_length=40,
         description="Short commit hash (git events)",
     )
     exit_code: int | None = Field(
-        default=None, alias="exit",
+        default=None,
+        alias="exit",
         description="Exit code (terminal events)",
     )
 
@@ -619,22 +650,29 @@ class TokenUsageReport(BaseModel):
     """Request model for reporting token usage."""
 
     tokens: int = Field(
-        ..., gt=0, description="Number of tokens used",
+        ...,
+        gt=0,
+        description="Number of tokens used",
     )
     provider: str = Field(
-        ..., pattern="^(cloud|local)$",
+        ...,
+        pattern="^(cloud|local)$",
         description="Model provider (cloud or local)",
     )
     model: str = Field(
-        ..., min_length=1, max_length=100,
+        ...,
+        min_length=1,
+        max_length=100,
         description="Model identifier",
     )
     message_count: int = Field(
-        default=1, ge=1,
+        default=1,
+        ge=1,
         description="Number of messages in this usage report",
     )
     cost: float | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="Pre-calculated cost in USD (from CLI)",
     )
 
@@ -933,7 +971,9 @@ def create_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Sessions"],
     )
-    async def get_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
+    async def get_session(
+        request: Request, session_id: UUID = Path(description="Unique session identifier")
+    ) -> SessionResponse:
         """Get a session by ID."""
         session = await service.get_session(session_id)
         if session is None:
@@ -993,7 +1033,9 @@ def create_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Sessions"],
     )
-    async def delete_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> None:
+    async def delete_session(
+        request: Request, session_id: UUID = Path(description="Unique session identifier")
+    ) -> None:
         """Delete a session."""
         principal = await _optional_principal(request)
         try:
@@ -1062,7 +1104,9 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def stop_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
+    async def stop_session(
+        request: Request, session_id: UUID = Path(description="Unique session identifier")
+    ) -> SessionResponse:
         """Stop a session's pods."""
         principal = await _optional_principal(request)
         try:
@@ -1093,7 +1137,9 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def archive_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
+    async def archive_session(
+        request: Request, session_id: UUID = Path(description="Unique session identifier")
+    ) -> SessionResponse:
         """Archive a session. Stops pod if running."""
         principal = await _optional_principal(request)
         try:
@@ -1127,7 +1173,9 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def restore_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
+    async def restore_session(
+        request: Request, session_id: UUID = Path(description="Unique session identifier")
+    ) -> SessionResponse:
         """Restore an archived session to stopped state."""
         principal = await _optional_principal(request)
         try:
@@ -1192,7 +1240,10 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def report_token_usage(session_id: UUID = Path(description="Unique session identifier"), data: TokenUsageReport = ...) -> TokenUsageResponse:
+    async def report_token_usage(
+        session_id: UUID = Path(description="Unique session identifier"),
+        data: TokenUsageReport = ...,
+    ) -> TokenUsageResponse:
         """Report token usage for a session."""
         if token_service is None:
             raise HTTPException(
@@ -1242,7 +1293,9 @@ def create_router(
     async def get_session_logs(
         session_id: UUID = Path(description="Unique session identifier"),
         lines: int = Query(
-            default=100, ge=1, le=2000,
+            default=100,
+            ge=1,
+            le=2000,
             description="Number of log lines to retrieve",
         ),
         level: str = Query(
@@ -1565,7 +1618,10 @@ def create_router(
         },
         tags=["Chronicles"],
     )
-    async def report_chronicle(session_id: UUID = Path(description="Unique session identifier"), data: BrokerChronicleReport = ...) -> ChronicleResponse:
+    async def report_chronicle(
+        session_id: UUID = Path(description="Unique session identifier"),
+        data: BrokerChronicleReport = ...,
+    ) -> ChronicleResponse:
         """Ingest chronicle data reported by the Skuld broker at shutdown.
 
         Creates a new DRAFT chronicle or enriches an existing one.
@@ -1596,23 +1652,30 @@ def create_router(
     @router.get("/chronicles", response_model=list[ChronicleResponse], tags=["Chronicles"])
     async def list_chronicles(
         project: str | None = Query(
-            default=None, description="Filter by project name",
+            default=None,
+            description="Filter by project name",
         ),
         repo: str | None = Query(
-            default=None, description="Filter by repository URL",
+            default=None,
+            description="Filter by repository URL",
         ),
         model_name: str | None = Query(
-            default=None, description="Filter by LLM model name",
+            default=None,
+            description="Filter by LLM model name",
         ),
         tags: str | None = Query(
-            default=None, description="Comma-separated tags to filter by",
+            default=None,
+            description="Comma-separated tags to filter by",
         ),
         limit: int = Query(
-            default=50, ge=1, le=200,
+            default=50,
+            ge=1,
+            le=200,
             description="Maximum number of results to return",
         ),
         offset: int = Query(
-            default=0, ge=0,
+            default=0,
+            ge=0,
             description="Number of results to skip for pagination",
         ),
     ) -> list[ChronicleResponse]:
@@ -1662,7 +1725,9 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def get_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> ChronicleResponse:
+    async def get_chronicle(
+        chronicle_id: UUID = Path(description="Unique chronicle identifier"),
+    ) -> ChronicleResponse:
         """Get a chronicle by ID."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1683,7 +1748,10 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def update_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier"), data: ChronicleUpdate = ...) -> ChronicleResponse:
+    async def update_chronicle(
+        chronicle_id: UUID = Path(description="Unique chronicle identifier"),
+        data: ChronicleUpdate = ...,
+    ) -> ChronicleResponse:
         """Update a chronicle's mutable fields."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1712,7 +1780,9 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def delete_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> None:
+    async def delete_chronicle(
+        chronicle_id: UUID = Path(description="Unique chronicle identifier"),
+    ) -> None:
         """Delete a chronicle."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1732,7 +1802,9 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def reforge_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> SessionResponse:
+    async def reforge_chronicle(
+        chronicle_id: UUID = Path(description="Unique chronicle identifier"),
+    ) -> SessionResponse:
         """Relaunch a session from a chronicle entry."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1754,7 +1826,9 @@ def create_router(
         responses={503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def get_chronicle_chain(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> list[ChronicleResponse]:
+    async def get_chronicle_chain(
+        chronicle_id: UUID = Path(description="Unique chronicle identifier"),
+    ) -> list[ChronicleResponse]:
         """Get the full reforge chain for a chronicle."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1773,7 +1847,9 @@ def create_router(
         },
         tags=["Chronicles"],
     )
-    async def get_session_chronicle(session_id: UUID = Path(description="Unique session identifier")) -> ChronicleResponse:
+    async def get_session_chronicle(
+        session_id: UUID = Path(description="Unique session identifier"),
+    ) -> ChronicleResponse:
         """Get the most recent chronicle for a session."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1799,7 +1875,9 @@ def create_router(
         },
         tags=["Timeline"],
     )
-    async def get_timeline(session_id: UUID = Path(description="Session identifier for timeline lookup")) -> TimelineResponseModel:
+    async def get_timeline(
+        session_id: UUID = Path(description="Session identifier for timeline lookup"),
+    ) -> TimelineResponseModel:
         """Get the event timeline for a session's chronicle."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1854,7 +1932,8 @@ def create_router(
         tags=["Timeline"],
     )
     async def add_timeline_event(
-        session_id: UUID = Path(description="Session identifier for timeline lookup"), data: TimelineEventCreate = ...
+        session_id: UUID = Path(description="Session identifier for timeline lookup"),
+        data: TimelineEventCreate = ...,
     ) -> TimelineEventResponse:
         """Add a timeline event for a session's chronicle."""
         if chronicle_service is None:
@@ -2007,7 +2086,8 @@ def create_router(
     async def list_workspaces(
         request: Request,
         status_filter: str | None = Query(
-            None, alias="status",
+            None,
+            alias="status",
             description="Filter by workspace status (active, archived)",
         ),
     ):
@@ -2054,7 +2134,8 @@ def create_router(
             description="Filter by user ID (IDP sub claim)",
         ),
         status_filter: str | None = Query(
-            None, alias="status",
+            None,
+            alias="status",
             description="Filter by workspace status (active, archived)",
         ),
         _: Principal = Depends(require_role("volundr:admin")),

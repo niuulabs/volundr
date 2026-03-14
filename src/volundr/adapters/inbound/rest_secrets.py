@@ -27,16 +27,24 @@ class MCPServerResponse(BaseModel):
     name: str = Field(description="MCP server name", examples=["linear-mcp"])
     type: str = Field(description="Server type (stdio or sse)", examples=["stdio"])
     command: str | None = Field(
-        default=None, description="Command to launch (stdio servers)", examples=["npx"],
+        default=None,
+        description="Command to launch (stdio servers)",
+        examples=["npx"],
     )
     url: str | None = Field(
-        default=None, description="Server URL (SSE servers)", examples=["http://localhost:3000/sse"],
+        default=None,
+        description="Server URL (SSE servers)",
+        examples=["http://localhost:3000/sse"],
     )
     args: list[str] = Field(
-        default_factory=list, description="Command-line arguments", examples=[["@linear/mcp-server"]],
+        default_factory=list,
+        description="Command-line arguments",
+        examples=[["@linear/mcp-server"]],
     )
     description: str = Field(
-        default="", description="Server description", examples=["Linear issue tracker MCP server"],
+        default="",
+        description="Server description",
+        examples=["Linear issue tracker MCP server"],
     )
 
     @classmethod
@@ -56,7 +64,9 @@ class SecretResponse(BaseModel):
     """Response model for a Kubernetes secret (metadata only, no values)."""
 
     name: str = Field(description="Kubernetes secret name", examples=["my-api-secret"])
-    keys: list[str] = Field(description="List of data key names in the secret", examples=[["token", "secret"]])
+    keys: list[str] = Field(
+        description="List of data key names in the secret", examples=[["token", "secret"]]
+    )
 
     @classmethod
     def from_info(cls, info: SecretInfo) -> SecretResponse:
@@ -68,12 +78,15 @@ class SecretCreateRequest(BaseModel):
     """Request model for creating a Kubernetes secret."""
 
     name: str = Field(
-        ..., min_length=1, max_length=253,
+        ...,
+        min_length=1,
+        max_length=253,
         description="Kubernetes secret name (DNS-compatible)",
         examples=["my-api-secret"],
     )
     data: dict[str, str] = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Key-value pairs of secret data",
         examples=[{"token": "sk-abc123"}],
     )
@@ -82,7 +95,9 @@ class SecretCreateRequest(BaseModel):
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str = Field(description="Human-readable error message", examples=["Secret not found: my-secret"])
+    detail: str = Field(
+        description="Human-readable error message", examples=["Secret not found: my-secret"]
+    )
 
 
 # --- Router factory ---

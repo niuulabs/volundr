@@ -13,7 +13,6 @@ import (
 	"text/template"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
-	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
 	"gopkg.in/yaml.v3"
 )
@@ -93,7 +92,7 @@ const dockerAPIInternalPort = 18080
 
 // DockerRuntime manages the Volundr stack using Docker containers.
 type DockerRuntime struct {
-	pg       *postgres.EmbeddedPostgres
+	pg       postgresProvider
 	proxyRtr *proxy.Router
 }
 
@@ -132,7 +131,7 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	// Start embedded PostgreSQL on the host if configured.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Print("  PostgreSQL    ... ")
-		r.pg = postgres.New(cfg)
+		r.pg = newPostgres(cfg)
 		if err := r.pg.Start(ctx); err != nil {
 			fmt.Println("failed")
 			return fmt.Errorf("start embedded postgres: %w", err)

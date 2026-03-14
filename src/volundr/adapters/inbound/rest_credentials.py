@@ -47,10 +47,18 @@ class CredentialResponse(BaseModel):
     id: str = Field(description="Unique credential identifier", examples=["a1b2c3d4"])
     name: str = Field(description="Credential name", examples=["my-api-key"])
     secret_type: str = Field(description="Secret type classification", examples=["api_key"])
-    keys: list[str] = Field(description="List of secret data key names", examples=[["token", "secret"]])
-    metadata: dict = Field(description="Credential metadata labels", examples=[{"environment": "production"}])
-    created_at: str = Field(description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"])
-    updated_at: str = Field(description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"])
+    keys: list[str] = Field(
+        description="List of secret data key names", examples=[["token", "secret"]]
+    )
+    metadata: dict = Field(
+        description="Credential metadata labels", examples=[{"environment": "production"}]
+    )
+    created_at: str = Field(
+        description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
+    updated_at: str = Field(
+        description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
 
 
 class CredentialListResponse(BaseModel):
@@ -66,7 +74,9 @@ class SecretTypeInfoResponse(BaseModel):
 
     type: str = Field(description="Secret type identifier", examples=["api_key"])
     label: str = Field(description="Human-readable label", examples=["API Key"])
-    description: str = Field(description="Description of the secret type", examples=["Token-based API authentication"])
+    description: str = Field(
+        description="Description of the secret type", examples=["Token-based API authentication"]
+    )
     fields: list[dict] = Field(
         description="Required fields for this secret type",
         examples=[[{"name": "token", "required": True}]],

@@ -13,7 +13,6 @@ import (
 	"text/template"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
-	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
 	"gopkg.in/yaml.v3"
 )
@@ -116,7 +115,7 @@ type k3sAPIConfig struct {
 // K3sRuntime manages the Volundr stack using k3s/k3d for Kubernetes
 // workloads with a Docker container for the API and embedded PostgreSQL.
 type K3sRuntime struct {
-	pg       *postgres.EmbeddedPostgres
+	pg       postgresProvider
 	proxyRtr *proxy.Router
 }
 
@@ -192,7 +191,7 @@ func (r *K3sRuntime) Init(ctx context.Context, cfg *config.Config) error {
 	// Test embedded postgres if in embedded mode.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Println("  Downloading PostgreSQL binary...")
-		pg := postgres.New(cfg)
+		pg := newPostgres(cfg)
 		if err := pg.Start(ctx); err != nil {
 			return fmt.Errorf("test embedded postgres: %w", err)
 		}
@@ -214,7 +213,7 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	// Start embedded PostgreSQL if configured.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Print("  PostgreSQL    ... ")
-		r.pg = postgres.New(cfg)
+		r.pg = newPostgres(cfg)
 		if err := r.pg.Start(ctx); err != nil {
 			fmt.Println("failed")
 			return fmt.Errorf("start embedded postgres: %w", err)
