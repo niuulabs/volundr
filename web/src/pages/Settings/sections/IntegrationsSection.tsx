@@ -58,10 +58,40 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
     [connections]
   );
 
-  const handleIntegrationConnect = useCallback((entry: CatalogEntry) => {
-    setConnectingEntry(entry);
-    setIntegrationFormError('');
-  }, []);
+  const handleIntegrationConnect = useCallback(
+    async (entry: CatalogEntry) => {
+      if (entry.auth_type === 'oauth2_authorization_code') {
+        try {
+          const resp = await fetch(
+            `/api/v1/volundr/integrations/oauth/${entry.slug}/authorize`,
+            { credentials: 'include' }
+          );
+          if (!resp.ok) {
+            setIntegrationFormError('Failed to start OAuth flow');
+            return;
+          }
+          const { url } = await resp.json();
+          const popup = window.open(url, `oauth-${entry.slug}`, 'width=600,height=700');
+          if (!popup) {
+            setIntegrationFormError('Popup blocked — please allow popups for this site');
+            return;
+          }
+          const interval = setInterval(() => {
+            if (popup.closed) {
+              clearInterval(interval);
+              loadIntegrations();
+            }
+          }, 500);
+        } catch (err) {
+          setIntegrationFormError(err instanceof Error ? err.message : 'OAuth flow failed');
+        }
+        return;
+      }
+      setConnectingEntry(entry);
+      setIntegrationFormError('');
+    },
+    [loadIntegrations]
+  );
 
   const handleIntegrationDisconnect = useCallback(
     async (connectionId: string) => {
@@ -80,10 +110,17 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
     [service]
   );
 
+  const inferSecretType = (integrationType: string): string => {
+    if (integrationType === 'source_control') {
+      return 'git_credential';
+    }
+    return 'api_key';
+  };
+
   const handleIntegrationSubmit = useCallback(
     async (
       credentialName: string,
-      _credentials: Record<string, string>,
+      credentials: Record<string, string>,
       config: Record<string, string>
     ) => {
       if (!connectingEntry) {
@@ -91,6 +128,12 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
       }
 
       try {
+        await service.createCredential({
+          name: credentialName,
+          secretType: inferSecretType(connectingEntry.integration_type) as import('@/models').SecretType,
+          data: credentials,
+        });
+
         await service.createIntegration({
           integrationType: connectingEntry.integration_type,
           adapter: connectingEntry.adapter,

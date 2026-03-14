@@ -15,6 +15,7 @@ from volundr.domain.models import (
     IntegrationDefinition,
     IntegrationType,
     MCPServerSpec,
+    OAuthSpec,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,19 @@ def definitions_from_config(
                 env_from_credentials=mcp_raw.get("env_from_credentials", {}),
             )
 
+        oauth_raw = item.get("oauth")
+        oauth_spec: OAuthSpec | None = None
+        if oauth_raw and isinstance(oauth_raw, dict):
+            oauth_spec = OAuthSpec(
+                authorize_url=oauth_raw["authorize_url"],
+                token_url=oauth_raw["token_url"],
+                revoke_url=oauth_raw.get("revoke_url", ""),
+                scopes=tuple(oauth_raw.get("scopes", [])),
+                token_field_mapping=oauth_raw.get("token_field_mapping", {}),
+                extra_authorize_params=oauth_raw.get("extra_authorize_params", {}),
+                extra_token_params=oauth_raw.get("extra_token_params", {}),
+            )
+
         defn = IntegrationDefinition(
             slug=item["slug"],
             name=item["name"],
@@ -125,6 +139,8 @@ def definitions_from_config(
             config_schema=item.get("config_schema", {}),
             mcp_server=mcp_spec,
             env_from_credentials=item.get("env_from_credentials", {}),
+            auth_type=item.get("auth_type", "api_key"),
+            oauth=oauth_spec,
         )
         result.append(defn)
         logger.debug("Loaded integration definition: %s", defn.slug)

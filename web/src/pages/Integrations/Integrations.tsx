@@ -50,10 +50,40 @@ export function IntegrationsPage({ service = volundrService }: IntegrationsPageP
     [connections]
   );
 
-  const handleConnect = useCallback((entry: CatalogEntry) => {
-    setConnectingEntry(entry);
-    setFormError('');
-  }, []);
+  const handleConnect = useCallback(
+    async (entry: CatalogEntry) => {
+      if (entry.auth_type === 'oauth2_authorization_code') {
+        try {
+          const resp = await fetch(
+            `/api/v1/volundr/integrations/oauth/${entry.slug}/authorize`,
+            { credentials: 'include' }
+          );
+          if (!resp.ok) {
+            setFormError('Failed to start OAuth flow');
+            return;
+          }
+          const { url } = await resp.json();
+          const popup = window.open(url, `oauth-${entry.slug}`, 'width=600,height=700');
+          if (!popup) {
+            setFormError('Popup blocked — please allow popups for this site');
+            return;
+          }
+          const interval = setInterval(() => {
+            if (popup.closed) {
+              clearInterval(interval);
+              loadData();
+            }
+          }, 500);
+        } catch (err) {
+          setFormError(err instanceof Error ? err.message : 'OAuth flow failed');
+        }
+        return;
+      }
+      setConnectingEntry(entry);
+      setFormError('');
+    },
+    [loadData]
+  );
 
   const handleDisconnect = useCallback(
     async (connectionId: string) => {
@@ -72,10 +102,17 @@ export function IntegrationsPage({ service = volundrService }: IntegrationsPageP
     [service]
   );
 
+  const inferSecretType = (integrationType: string): string => {
+    if (integrationType === 'source_control') {
+      return 'git_credential';
+    }
+    return 'api_key';
+  };
+
   const handleSubmit = useCallback(
     async (
       credentialName: string,
-      _credentials: Record<string, string>,
+      credentials: Record<string, string>,
       config: Record<string, string>
     ) => {
       if (!connectingEntry) {
@@ -83,6 +120,12 @@ export function IntegrationsPage({ service = volundrService }: IntegrationsPageP
       }
 
       try {
+        await service.createCredential({
+          name: credentialName,
+          secretType: inferSecretType(connectingEntry.integration_type) as import('@/models').SecretType,
+          data: credentials,
+        });
+
         await service.createIntegration({
           integrationType: connectingEntry.integration_type,
           adapter: connectingEntry.adapter,

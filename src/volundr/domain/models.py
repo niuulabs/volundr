@@ -288,11 +288,14 @@ class Session(BaseModel):
         description="Unique session identifier",
     )
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Human-readable session name",
     )
     model: str = Field(
-        default="", max_length=100,
+        default="",
+        max_length=100,
         description="LLM model identifier used by the session",
     )
     source: SessionSource = Field(
@@ -324,11 +327,13 @@ class Session(BaseModel):
         description="Timestamp of the last activity",
     )
     message_count: int = Field(
-        default=0, ge=0,
+        default=0,
+        ge=0,
         description="Total number of chat messages exchanged",
     )
     tokens_used: int = Field(
-        default=0, ge=0,
+        default=0,
+        ge=0,
         description="Total token count consumed by the session",
     )
     pod_name: str | None = Field(
@@ -342,6 +347,10 @@ class Session(BaseModel):
     tracker_issue_id: str | None = Field(
         default=None,
         description="Linked issue tracker issue identifier",
+    )
+    issue_tracker_url: str | None = Field(
+        default=None,
+        description="Web URL for the linked issue in the tracker",
     )
     preset_id: UUID | None = Field(
         default=None,
@@ -530,19 +539,27 @@ class Chronicle(BaseModel):
         description="Whether the chronicle is draft or complete",
     )
     project: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Project name derived from the repository",
     )
     repo: str = Field(
-        ..., min_length=1, max_length=500,
+        ...,
+        min_length=1,
+        max_length=500,
         description="Git repository URL",
     )
     branch: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Git branch used during the session",
     )
     model: str = Field(
-        ..., min_length=1, max_length=100,
+        ...,
+        min_length=1,
+        max_length=100,
         description="LLM model used during the session",
     )
     config_snapshot: dict = Field(
@@ -562,7 +579,8 @@ class Chronicle(BaseModel):
         description="Description of work left incomplete for the next session",
     )
     token_usage: int = Field(
-        default=0, ge=0,
+        default=0,
+        ge=0,
         description="Total tokens consumed during the session",
     )
     cost: Decimal | None = Field(
@@ -570,7 +588,8 @@ class Chronicle(BaseModel):
         description="Estimated cost in USD for cloud model usage",
     )
     duration_seconds: int | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="Wall-clock duration of the session in seconds",
     )
     tags: list[str] = Field(
@@ -719,11 +738,14 @@ class SavedPrompt(BaseModel):
         description="Unique prompt identifier",
     )
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Human-readable prompt name",
     )
     content: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="The prompt text content",
     )
     scope: PromptScope = Field(
@@ -731,7 +753,8 @@ class SavedPrompt(BaseModel):
         description="Visibility scope: global or project-specific",
     )
     project_repo: str | None = Field(
-        default=None, max_length=500,
+        default=None,
+        max_length=500,
         description="Repository URL when scope is project",
     )
     tags: list[str] = Field(
@@ -850,6 +873,29 @@ class MCPServerSpec:
 
 
 @dataclass(frozen=True)
+class OAuthSpec:
+    """OAuth2 provider specification — all URLs and params needed for a flow."""
+
+    authorize_url: str
+    token_url: str
+    revoke_url: str = ""
+    scopes: tuple[str, ...] = ()
+    token_field_mapping: dict[str, str] = ()  # type: ignore[assignment]
+    extra_authorize_params: dict[str, str] = ()  # type: ignore[assignment]
+    extra_token_params: dict[str, str] = ()  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.scopes, tuple):
+            object.__setattr__(self, "scopes", tuple(self.scopes))
+        if not isinstance(self.token_field_mapping, dict):
+            object.__setattr__(self, "token_field_mapping", dict(self.token_field_mapping))
+        if not isinstance(self.extra_authorize_params, dict):
+            object.__setattr__(self, "extra_authorize_params", dict(self.extra_authorize_params))
+        if not isinstance(self.extra_token_params, dict):
+            object.__setattr__(self, "extra_token_params", dict(self.extra_token_params))
+
+
+@dataclass(frozen=True)
 class IntegrationDefinition:
     """A known integration type in the catalog.
 
@@ -871,6 +917,8 @@ class IntegrationDefinition:
     config_schema: dict = ()  # type: ignore[assignment]
     mcp_server: MCPServerSpec | None = None
     env_from_credentials: dict[str, str] = ()  # type: ignore[assignment]
+    auth_type: str = "api_key"
+    oauth: OAuthSpec | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.credential_schema, dict):
@@ -1077,7 +1125,9 @@ class ForgeProfile(BaseModel):
     """
 
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Profile name used as a reference key",
     )
     description: str = Field(
@@ -1089,7 +1139,8 @@ class ForgeProfile(BaseModel):
         description="Workload type this profile targets",
     )
     model: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="Default LLM model identifier",
     )
     system_prompt: str | None = Field(
@@ -1140,7 +1191,9 @@ class Preset(BaseModel):
         description="Unique preset identifier",
     )
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Human-readable preset name",
     )
     description: str = Field(
@@ -1160,7 +1213,8 @@ class Preset(BaseModel):
         description="Workload type (e.g. session)",
     )
     model: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="Default LLM model identifier",
     )
     system_prompt: str | None = Field(
@@ -1221,7 +1275,9 @@ class WorkspaceTemplate(BaseModel):
     """
 
     name: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         description="Template name used as a reference key",
     )
     description: str = Field(
@@ -1251,7 +1307,8 @@ class WorkspaceTemplate(BaseModel):
         description="Workload type (e.g. session)",
     )
     model: str | None = Field(
-        default=None, max_length=100,
+        default=None,
+        max_length=100,
         description="Default LLM model identifier",
     )
     system_prompt: str | None = Field(

@@ -98,6 +98,11 @@ class SessionCreate(BaseModel):
         default_factory=dict,
         description="Resource allocation overrides (cpu, memory, gpu)",
     )
+    issue_id: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Issue tracker ID to link to the session",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -200,6 +205,10 @@ class SessionResponse(BaseModel):
         default=None,
         description="Linked issue tracker identifier",
     )
+    issue_tracker_url: str | None = Field(
+        default=None,
+        description="Web URL for the linked issue in the tracker",
+    )
     preset_id: UUID | None = Field(
         default=None,
         description="Preset used to configure this session",
@@ -265,6 +274,7 @@ class SessionResponse(BaseModel):
             pod_name=session.pod_name,
             error=session.error,
             tracker_issue_id=session.tracker_issue_id,
+            issue_tracker_url=session.issue_tracker_url,
             preset_id=session.preset_id,
             archived_at=(session.archived_at.isoformat() if session.archived_at else None),
             owner_id=session.owner_id,
@@ -940,6 +950,7 @@ def create_router(
                 preset_id=data.preset_id,
                 principal=principal,
                 workspace_id=data.workspace_id,
+                tracker_issue_id=data.issue_id,
             )
         except RepoValidationError as e:
             raise HTTPException(

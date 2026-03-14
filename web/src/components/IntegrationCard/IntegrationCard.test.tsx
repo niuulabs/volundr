@@ -21,6 +21,8 @@ const mockCatalogEntry: CatalogEntry = {
     args: ['-y', '@anthropic-ai/linear-mcp-server'],
     env_from_credentials: { LINEAR_API_KEY: 'api_key' },
   },
+  auth_type: 'api_key',
+  oauth_scopes: [],
 };
 
 const mockConnection: IntegrationConnection = {
