@@ -21,7 +21,7 @@ func setupTestConfig(t *testing.T, cfg *remote.Config) {
 
 	if cfg != nil {
 		configDir := filepath.Join(tmpDir, ".config", "volundr")
-		if err := os.MkdirAll(configDir, 0o755); err != nil {
+		if err := os.MkdirAll(configDir, 0o750); err != nil { //nolint:gosec // test directory
 			t.Fatalf("mkdir: %v", err)
 		}
 		if err := cfg.Save(); err != nil {
@@ -176,11 +176,11 @@ func TestContextList_JSON(t *testing.T) {
 		t.Fatalf("context list --json: %v", err)
 	}
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 
 	var entries []contextListEntry
 	if err := json.Unmarshal(buf.Bytes(), &entries); err != nil {
@@ -266,7 +266,7 @@ func TestContextRename_NotFound(t *testing.T) {
 // --- Login helper tests ---
 
 func TestTokenStillValid_NoToken(t *testing.T) {
-	rctx := &remote.Context{Token: "", TokenExpiry: "2099-01-01T00:00:00Z"}
+	rctx := &remote.Context{Token: "", TokenExpiry: "2099-01-01T00:00:00Z"} //nolint:gosec // test fixture, not real credentials
 	if tokenStillValid(rctx) {
 		t.Error("expected false for empty token")
 	}
@@ -430,9 +430,9 @@ func TestTryAuthDiscovery_Localhost(t *testing.T) {
 }
 
 func TestTryAuthDiscovery_ServerWithAuthConfig(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"issuer":    "https://idp.example.com",
 			"client_id": "test-client",
 		})
@@ -450,7 +450,7 @@ func TestTryAuthDiscovery_ServerWithAuthConfig(t *testing.T) {
 }
 
 func TestTryAuthDiscovery_ServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -463,9 +463,9 @@ func TestTryAuthDiscovery_ServerError(t *testing.T) {
 }
 
 func TestTryAuthDiscovery_EmptyIssuerResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"issuer":    "",
 			"client_id": "test-client",
 		})
@@ -581,7 +581,7 @@ func TestConfigSet_UnknownKey(t *testing.T) {
 
 func TestLogout(t *testing.T) {
 	cfg := remote.DefaultConfig()
-	cfg.Contexts["default"] = &remote.Context{
+	cfg.Contexts["default"] = &remote.Context{ //nolint:gosec // test fixture, not real credentials
 		Name:         "default",
 		Server:       "https://prod.example.com",
 		Token:        "my-token",
@@ -670,7 +670,7 @@ func TestFormatDuration_HoursAndMinutes(t *testing.T) {
 // --- getContextValue / setContextValue tests ---
 
 func TestGetContextValue_AllKeys(t *testing.T) {
-	ctx := &remote.Context{
+	ctx := &remote.Context{ //nolint:gosec // test fixture, not real credentials
 		Server:       "https://srv.com",
 		Token:        "tok",
 		RefreshToken: "ref",
@@ -679,7 +679,7 @@ func TestGetContextValue_AllKeys(t *testing.T) {
 		ClientID:     "cid",
 	}
 
-	tests := map[string]string{
+	tests := map[string]string{ //nolint:gosec // test fixture, not real credentials
 		"server":        "https://srv.com",
 		"token":         "tok",
 		"refresh_token": "ref",

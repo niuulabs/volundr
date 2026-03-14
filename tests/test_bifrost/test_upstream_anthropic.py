@@ -112,7 +112,7 @@ class TestNonStreamingForward:
 
         adapter = AnthropicDirectAdapter(passthrough_config)
         try:
-            status, headers, body = await adapter.forward(
+            status, _headers, body = await adapter.forward(
                 json.dumps({"model": "claude-sonnet-4-5-20250929", "messages": []}).encode(),
                 {"content-type": "application/json", "x-api-key": "sk-test"},
             )
@@ -166,7 +166,7 @@ class TestStreamingForward:
 
         adapter = AnthropicDirectAdapter(passthrough_config)
         try:
-            status, headers, chunk_iter = await adapter.stream_forward(
+            status, _headers, chunk_iter = await adapter.stream_forward(
                 b'{"model": "test", "stream": true, "messages": []}',
                 {"content-type": "application/json", "x-api-key": "sk-test"},
             )

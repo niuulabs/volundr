@@ -3,6 +3,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,6 +36,7 @@ func NewClient(baseURL, token string) *Client {
 }
 
 // NewClientWithConfig creates an API client that can auto-refresh expired tokens.
+//
 // Deprecated: Use NewClientWithContext for multi-context support.
 func NewClientWithConfig(baseURL, token string, cfg *remote.Config) *Client {
 	return &Client{
@@ -298,7 +300,7 @@ func (c *Client) do(method, path string, body any) (*http.Response, error) {
 	}
 
 	url := c.baseURL + path
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequestWithContext(context.Background(), method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -319,7 +321,7 @@ func (c *Client) do(method, path string, body any) (*http.Response, error) {
 // decodeResponse reads and decodes a JSON response body.
 func decodeResponse[T any](resp *http.Response) (T, error) {
 	var result T
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -346,7 +348,7 @@ func decodeResponse[T any](resp *http.Response) (T, error) {
 
 // ListSessions returns all sessions for the current user.
 func (c *Client) ListSessions() ([]Session, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/sessions", nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions", nil) //nolint:bodyclose // closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +357,7 @@ func (c *Client) ListSessions() ([]Session, error) {
 
 // GetSession returns a single session by ID.
 func (c *Client) GetSession(id string) (*Session, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+id, nil)
+	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+id, nil) //nolint:bodyclose // closed in decodeResponsePtr
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +366,7 @@ func (c *Client) GetSession(id string) (*Session, error) {
 
 // CreateSession creates a new session.
 func (c *Client) CreateSession(create SessionCreate) (*Session, error) {
-	resp, err := c.do("POST", "/api/v1/volundr/sessions", create)
+	resp, err := c.do("POST", "/api/v1/volundr/sessions", create) //nolint:bodyclose // closed in decodeResponsePtr
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +379,7 @@ func (c *Client) StartSession(id string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
@@ -391,7 +393,7 @@ func (c *Client) StopSession(id string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
@@ -405,7 +407,7 @@ func (c *Client) DeleteSession(id string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
@@ -415,7 +417,7 @@ func (c *Client) DeleteSession(id string) error {
 
 // ListChronicles returns all chronicles.
 func (c *Client) ListChronicles() ([]Chronicle, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/chronicles", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/chronicles", nil) //nolint:bodyclose // body closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +426,7 @@ func (c *Client) ListChronicles() ([]Chronicle, error) {
 
 // GetTimeline returns the full timeline for a session's chronicle.
 func (c *Client) GetTimeline(sessionID string) (*TimelineResponse, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/chronicles/"+sessionID+"/timeline", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/chronicles/"+sessionID+"/timeline", nil) //nolint:bodyclose // body closed in decodeResponsePtr->decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +435,7 @@ func (c *Client) GetTimeline(sessionID string) (*TimelineResponse, error) {
 
 // ListModels returns all available AI models.
 func (c *Client) ListModels() ([]ModelInfo, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/models", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/models", nil) //nolint:bodyclose // body closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +511,7 @@ func (c *Client) TestIntegration(connectionID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(body))
@@ -532,7 +534,7 @@ func (c *Client) Ping() error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
 	}
@@ -551,7 +553,7 @@ type AuthDiscoveryResponse struct {
 // This endpoint is unauthenticated, so no Bearer token is sent.
 func (c *Client) GetAuthConfig() (*AuthDiscoveryResponse, error) {
 	url := c.baseURL + "/api/v1/volundr/auth/config"
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}

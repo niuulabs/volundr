@@ -51,8 +51,7 @@ func (c CampaignsPage) Init() tea.Cmd {
 
 // Update handles messages for the campaigns page.
 func (c CampaignsPage) Update(msg tea.Msg) (CampaignsPage, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if c.cursor > 0 {
@@ -172,7 +171,7 @@ func (c CampaignsPage) renderDetail(camp Campaign) string {
 	labelStyle := lipgloss.NewStyle().Foreground(theme.TextMuted).Width(12)
 	valueStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary)
 
-	var lines []string
+	lines := make([]string, 0, 8+len(camp.Phases))
 	lines = append(lines, nameStyle.Render(camp.Name))
 	lines = append(lines, descStyle.Render(camp.Description))
 	lines = append(lines, "")

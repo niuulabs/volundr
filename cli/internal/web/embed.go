@@ -46,10 +46,10 @@ func Handler(cfg *RuntimeConfig) http.Handler {
 
 	// Serve /config.json dynamically so the SPA picks up the
 	// correct API base URL without a rebuild.
-	mux.HandleFunc("/config.json", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/config.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Write(configJSON)
+		_, _ = w.Write(configJSON)
 	})
 
 	// Serve everything else from the embedded filesystem, with SPA
@@ -75,7 +75,7 @@ func spaHandler(assets fs.FS) http.Handler {
 		// Try to open the file. If it exists, serve it.
 		f, err := assets.Open(path)
 		if err == nil {
-			f.Close()
+			_ = f.Close()
 
 			// Static assets get long cache; HTML gets no-cache.
 			if strings.HasPrefix(path, "assets/") {

@@ -46,8 +46,7 @@ func (r RealmsPage) Init() tea.Cmd {
 
 // Update handles messages for the realms page.
 func (r RealmsPage) Update(msg tea.Msg) (RealmsPage, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if r.cursor > 0 {
@@ -96,7 +95,7 @@ func (r RealmsPage) View() string {
 	})
 
 	// Realm grid
-	var rows []string
+	rows := make([]string, 0, len(r.realms))
 	for i, realm := range r.realms {
 		rows = append(rows, r.renderRealmCard(realm, i == r.cursor))
 	}
@@ -158,11 +157,11 @@ func (r RealmsPage) renderRealmCard(realm Realm, selected bool) string {
 }
 
 // renderBar renders a simple progress bar.
-func renderBar(current, max, width int, fillColor, emptyColor color.Color) string {
-	if max == 0 {
+func renderBar(current, capacity, width int, fillColor, emptyColor color.Color) string {
+	if capacity == 0 {
 		return strings.Repeat("░", width)
 	}
-	filled := width * current / max
+	filled := width * current / capacity
 	if filled > width {
 		filled = width
 	}

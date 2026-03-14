@@ -215,7 +215,7 @@ class TestTenantCredentialEndpoints:
     """Tests for tenant credential endpoints (admin only)."""
 
     def test_list_tenant_credentials(self):
-        app, service = _make_app()
+        app, _service = _make_app()
         client = TestClient(app)
 
         client.post(

@@ -435,7 +435,7 @@ class TestLiteLLMAdapterForward:
 
         with patch("volundr.bifrost.adapters.litellm_adapter.litellm", create=True) as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-            status, headers, resp_body = await adapter.forward(body, {})
+            status, _headers, resp_body = await adapter.forward(body, {})
 
         assert status == 200
         data = json.loads(resp_body)
@@ -452,7 +452,7 @@ class TestLiteLLMAdapterForward:
 
         with patch("volundr.bifrost.adapters.litellm_adapter.litellm", create=True) as mock_litellm:
             mock_litellm.acompletion = AsyncMock(side_effect=RuntimeError("API error"))
-            status, headers, resp_body = await adapter.forward(body, {})
+            status, _headers, resp_body = await adapter.forward(body, {})
 
         assert status == 502
         data = json.loads(resp_body)
@@ -469,7 +469,7 @@ class TestLiteLLMAdapterForward:
 
         with patch("volundr.bifrost.adapters.litellm_adapter.litellm", create=True) as mock_litellm:
             mock_litellm.acompletion = AsyncMock(side_effect=RuntimeError("API error"))
-            status, headers, chunk_iter = await adapter.stream_forward(body, {})
+            status, _headers, chunk_iter = await adapter.stream_forward(body, {})
 
         assert status == 502
         chunks = []

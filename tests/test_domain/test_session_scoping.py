@@ -100,7 +100,7 @@ class TestListSessionsScoping:
         pod_manager: Pods,
     ):
         service = SessionService(repository, pod_manager, authorization=_authz)
-        s_alice, s_bob, s_carol, p_alice, p_bob, p_carol = await self._seed(
+        s_alice, _s_bob, _s_carol, p_alice, _p_bob, _p_carol = await self._seed(
             service,
             repository,
         )
@@ -136,7 +136,7 @@ class TestListSessionsScoping:
         pod_manager: Pods,
     ):
         service = SessionService(repository, pod_manager, authorization=_authz)
-        s_alice, s_bob, s_carol, _, _, p_carol = await self._seed(
+        _s_alice, _s_bob, s_carol, _, _, p_carol = await self._seed(
             service,
             repository,
         )

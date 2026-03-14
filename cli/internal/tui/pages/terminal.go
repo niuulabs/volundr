@@ -348,7 +348,7 @@ func (t *TerminalPage) ConnectCliSessionOnCluster(sess api.Session, contextKey, 
 }
 
 // connectCliSessionWith creates a terminal tab connected to a CLI session WebSocket.
-func (t *TerminalPage) connectCliSessionWith(sess api.Session, serverURL, token, sessionName string) {
+func (t *TerminalPage) connectCliSessionWith(sess api.Session, _, token, sessionName string) {
 	t.activeSession = &sess
 	t.activeToken = token
 
@@ -361,7 +361,7 @@ func (t *TerminalPage) connectCliSessionWith(sess api.Session, serverURL, token,
 
 // connectSessionWith discovers existing terminal sessions (or spawns one) and
 // sends a message back to the Update loop to create tabs synchronously.
-func (t *TerminalPage) connectSessionWith(sess api.Session, serverURL, token string) {
+func (t *TerminalPage) connectSessionWith(sess api.Session, _, token string) {
 	// Store session context so ctrl+t can spawn additional tabs.
 	t.activeSession = &sess
 	t.activeToken = token
@@ -549,6 +549,8 @@ func (t *TerminalPage) connectTab(index int) {
 			case connCh <- TerminalDisconnectedMsg{TabIndex: index}:
 			default:
 			}
+		case api.WSConnecting, api.WSReconnecting:
+			// Transitional states, no action needed.
 		}
 	}
 
@@ -818,7 +820,7 @@ func (t TerminalPage) renderFullScreen(tab *terminalTab) string {
 // renderTabBar renders the tab strip at the top of the terminal.
 func (t TerminalPage) renderTabBar() string {
 	theme := tui.DefaultTheme
-	var tabs []string
+	tabs := make([]string, 0, len(t.tabs))
 
 	for i, tab := range t.tabs {
 		tab.mu.Lock()

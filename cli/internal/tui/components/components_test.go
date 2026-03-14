@@ -72,7 +72,7 @@ func TestMetricRow(t *testing.T) {
 	}
 }
 
-func TestMetricRow_Empty(t *testing.T) {
+func TestMetricRow_Empty(_ *testing.T) {
 	view := MetricRow(nil)
 	// Should not panic.
 	_ = view
@@ -169,7 +169,7 @@ func TestTabs_View(t *testing.T) {
 	}
 }
 
-func TestTabs_View_Empty(t *testing.T) {
+func TestTabs_View_Empty(_ *testing.T) {
 	tabs := Tabs{Width: 80}
 	view := tabs.View()
 	_ = view // should not panic

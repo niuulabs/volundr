@@ -1,0 +1,61 @@
+version: "2"
+
+run:
+  go: "1.25"
+
+formatters:
+  enable:
+    - goimports
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errname
+    - errorlint
+    - exhaustive
+    - gocritic
+    - godot
+    - gosec
+    - makezero
+    - misspell
+    - nilerr
+    - noctx
+    - prealloc
+    - predeclared
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - whitespace
+
+linters-settings:
+  exhaustive:
+    default-signifies-exhaustive: true
+  godot:
+    scope: toplevel
+    capital: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: exported
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: range
+      - name: receiver-naming
+      - name: unexported-return
+      - name: var-naming
+
+issues:
+  exclude-dirs:
+    - internal/web/dist

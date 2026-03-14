@@ -58,7 +58,7 @@ func (m MetricCard) View() string {
 
 // MetricRow renders a horizontal row of metric cards.
 func MetricRow(cards []MetricCard) string {
-	var rendered []string
+	rendered := make([]string, 0, len(cards))
 	for _, card := range cards {
 		rendered = append(rendered, card.View())
 	}

@@ -437,7 +437,7 @@ func TestDefaultTheme_ColorsNonNil(t *testing.T) {
 	}
 }
 
-func TestThemeStyles_NotZeroValue(t *testing.T) {
+func TestThemeStyles_NotZeroValue(_ *testing.T) {
 	// Just verify the package-level styles can be accessed without panic.
 	_ = SidebarStyle.Render("test")
 	_ = SidebarActiveStyle.Render("test")

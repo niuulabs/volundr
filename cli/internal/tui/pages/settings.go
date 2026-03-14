@@ -15,6 +15,7 @@ import (
 // SettingsSection represents a tab in the settings page.
 type SettingsSection int
 
+// SettingsSection constants for settings page tabs.
 const (
 	SectionConnection SettingsSection = iota
 	SectionCredentials
@@ -212,15 +213,16 @@ func (s SettingsPage) View() string {
 	}
 
 	var content string
-	if s.loading {
+	switch {
+	case s.loading:
 		content = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Render("  Loading settings...")
-	} else if s.loadErr != nil {
+	case s.loadErr != nil:
 		content = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
 			Render(fmt.Sprintf("  Error: %v  (r to retry)", s.loadErr))
-	} else {
+	default:
 		switch s.section {
 		case SectionConnection:
 			content = s.renderConnection()

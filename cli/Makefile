@@ -5,7 +5,7 @@ WEB_DIR := ../web
 EMBED_DEST := internal/web/dist
 DIST_DIR := dist
 
-.PHONY: build build-dev build-all web test lint clean fmt vet
+.PHONY: build build-dev build-all web test test-coverage lint clean fmt vet verify
 
 # build compiles the CLI with the embedded frontend for the current platform.
 build: web
@@ -34,12 +34,22 @@ web:
 test:
 	go test ./... -v -count=1
 
-lint: vet
-	@which golangci-lint > /dev/null 2>&1 || echo "Install golangci-lint: https://golangci-lint.run/welcome/install-locally/"
+test-coverage:
+	go test ./... -v -count=1 -coverprofile=coverage.out
+	@total=$$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $$3}' | tr -d '%'); \
+	echo "Total coverage: $${total}%"; \
+	if awk "BEGIN {exit !($$total < 85.0)}"; then \
+		echo "FAIL: Coverage $${total}% is below minimum threshold of 85%"; \
+		exit 1; \
+	fi
+
+lint:
 	golangci-lint run ./...
 
 vet:
 	go vet ./...
+
+verify: lint test-coverage
 
 fmt:
 	gofmt -w .

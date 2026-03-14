@@ -500,9 +500,9 @@ func TestSessionsPage_Update_Refresh(t *testing.T) {
 	}
 }
 
-func TestSessionsPage_Update_ContextCycle(t *testing.T) {
+func TestSessionsPage_Update_ContextCycle(_ *testing.T) {
 	page := SessionsPage{filter: "all"}
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'c'})
+	_, _ = page.Update(tea.KeyPressMsg{Code: 'c'})
 	// Should not panic with nil pool
 }
 

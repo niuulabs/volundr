@@ -49,7 +49,7 @@ func buildGitConfig(cfg *config.Config) map[string]interface{} {
 		}
 
 		if len(cfg.Git.GitHub.Instances) > 0 {
-			var instances []map[string]interface{}
+			instances := make([]map[string]interface{}, 0, len(cfg.Git.GitHub.Instances))
 			for _, inst := range cfg.Git.GitHub.Instances {
 				m := map[string]interface{}{
 					"name":     inst.Name,

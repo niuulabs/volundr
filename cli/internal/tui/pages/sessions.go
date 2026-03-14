@@ -1,3 +1,4 @@
+// Package pages provides the individual page models for the TUI.
 package pages
 
 import (
@@ -375,9 +376,7 @@ func (s SessionsPage) View() string {
 	if searchBar != "" {
 		parts = append(parts, searchBar)
 	}
-	for _, el := range errorLines {
-		parts = append(parts, el)
-	}
+	parts = append(parts, errorLines...)
 	parts = append(parts, "")
 	parts = append(parts, sessionList)
 

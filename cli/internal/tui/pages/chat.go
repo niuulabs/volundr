@@ -127,6 +127,8 @@ func (c *ChatPage) SetSession(sess api.Session) {
 			sender.Send(ChatConnectedMsg{})
 		case api.WSDisconnected:
 			sender.Send(ChatDisconnectedMsg{})
+		case api.WSConnecting, api.WSReconnecting:
+			// Transitional states, no action needed.
 		}
 	}
 
@@ -462,15 +464,16 @@ func (c ChatPage) renderModelBar() string {
 		sessionName = sessionStyle.Render(c.session.Name)
 	}
 
-	// Connection status
+	// Connection status.
 	var connStatus string
-	if c.connected {
+	switch {
+	case c.connected:
 		connStatus = lipgloss.NewStyle().Foreground(theme.AccentEmerald).Render("● Connected")
-	} else if c.connErr != nil {
+	case c.connErr != nil:
 		connStatus = lipgloss.NewStyle().Foreground(theme.AccentRed).Render("○ " + friendlyConnError(c.connErr))
-	} else if c.session != nil {
+	case c.session != nil:
 		connStatus = lipgloss.NewStyle().Foreground(theme.TextSecondary).Render("◌ Connecting...")
-	} else {
+	default:
 		connStatus = lipgloss.NewStyle().Foreground(theme.TextMuted).Render("○ No session")
 	}
 
@@ -906,12 +909,13 @@ func wrapText(text string, width int) string {
 		words := strings.Fields(paragraph)
 		var line string
 		for _, word := range words {
-			if len(line)+len(word)+1 > width {
+			switch {
+			case len(line)+len(word)+1 > width:
 				lines = append(lines, line)
 				line = word
-			} else if line == "" {
+			case line == "":
 				line = word
-			} else {
+			default:
 				line += " " + word
 			}
 		}

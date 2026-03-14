@@ -161,7 +161,7 @@ func TestConfigDSN(t *testing.T) {
 		},
 	}
 
-	expected := "postgres://volundr:secret@127.0.0.1:5433/volundr?sslmode=disable"
+	expected := "postgres://volundr:secret@127.0.0.1:5433/volundr?sslmode=disable" //nolint:gosec // test fixture, not real credentials
 	if got := cfg.DSN(); got != expected {
 		t.Errorf("DSN() = %q, want %q", got, expected)
 	}
@@ -170,7 +170,7 @@ func TestConfigDSN(t *testing.T) {
 	cfg.Database.Mode = "external"
 	cfg.Database.Host = "db.example.com"
 	cfg.Database.Port = 5432
-	expected = "postgres://volundr:secret@db.example.com:5432/volundr?sslmode=disable"
+	expected = "postgres://volundr:secret@db.example.com:5432/volundr?sslmode=disable" //nolint:gosec // test fixture, not real credentials
 	if got := cfg.DSN(); got != expected {
 		t.Errorf("DSN() = %q, want %q", got, expected)
 	}
@@ -222,5 +222,279 @@ func TestGeneratePassword(t *testing.T) {
 	}
 	if len(p1) != 32 {
 		t.Errorf("expected 32-char hex password, got %d chars", len(p1))
+	}
+}
+
+func TestConfigDir(t *testing.T) {
+	t.Run("uses VOLUNDR_HOME when set", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv(EnvHome, tmpDir)
+
+		dir, err := ConfigDir()
+		if err != nil {
+			t.Fatalf("ConfigDir() error: %v", err)
+		}
+		if dir != tmpDir {
+			t.Errorf("ConfigDir() = %q, want %q", dir, tmpDir)
+		}
+	})
+
+	t.Run("falls back to home directory", func(t *testing.T) {
+		t.Setenv(EnvHome, "")
+
+		dir, err := ConfigDir()
+		if err != nil {
+			t.Fatalf("ConfigDir() error: %v", err)
+		}
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatalf("UserHomeDir() error: %v", err)
+		}
+		expected := filepath.Join(home, DefaultConfigDir)
+		if dir != expected {
+			t.Errorf("ConfigDir() = %q, want %q", dir, expected)
+		}
+	})
+}
+
+func TestConfigPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(EnvHome, tmpDir)
+
+	path, err := ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath() error: %v", err)
+	}
+
+	expected := filepath.Join(tmpDir, DefaultConfigFile)
+	if path != expected {
+		t.Errorf("ConfigPath() = %q, want %q", path, expected)
+	}
+}
+
+func TestLoadAndSaveViaDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(EnvHome, tmpDir)
+
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+	cfg.Anthropic.APIKey = "sk-ant-roundtrip"
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save() error: %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if loaded.Anthropic.APIKey != "sk-ant-roundtrip" {
+		t.Errorf("Load() APIKey = %q, want %q", loaded.Anthropic.APIKey, "sk-ant-roundtrip")
+	}
+	if loaded.Runtime != "local" {
+		t.Errorf("Load() Runtime = %q, want %q", loaded.Runtime, "local")
+	}
+}
+
+func TestExists(t *testing.T) {
+	t.Run("returns false when config does not exist", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv(EnvHome, tmpDir)
+
+		exists, err := Exists()
+		if err != nil {
+			t.Fatalf("Exists() error: %v", err)
+		}
+		if exists {
+			t.Error("Exists() = true, want false")
+		}
+	})
+
+	t.Run("returns true when config exists", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv(EnvHome, tmpDir)
+
+		cfg, err := DefaultConfig()
+		if err != nil {
+			t.Fatalf("DefaultConfig() error: %v", err)
+		}
+		if err := cfg.Save(); err != nil {
+			t.Fatalf("Save() error: %v", err)
+		}
+
+		exists, err := Exists()
+		if err != nil {
+			t.Fatalf("Exists() error: %v", err)
+		}
+		if !exists {
+			t.Error("Exists() = false, want true")
+		}
+	})
+}
+
+func TestLoadFromInvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bad.yaml")
+
+	// Use a YAML document with a mapping value where a scalar is expected to
+	// trigger an unmarshal error into the Config struct.
+	if err := os.WriteFile(path, []byte("runtime:\n  - :\n  :\n\t"), 0o600); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	_, err := LoadFrom(path)
+	if err == nil {
+		t.Error("expected error for invalid YAML")
+	}
+}
+
+func TestValidateDBPortOutOfRange(t *testing.T) {
+	tests := []struct {
+		name string
+		port int
+	}{
+		{"db port zero", 0},
+		{"db port negative", -1},
+		{"db port too high", 70000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := DefaultConfig()
+			if err != nil {
+				t.Fatalf("DefaultConfig() error: %v", err)
+			}
+			cfg.Database.Port = tt.port
+			if err := cfg.Validate(); err == nil {
+				t.Errorf("Validate() expected error for db port %d", tt.port)
+			}
+		})
+	}
+}
+
+func TestDefaultConfigWithVOLUNDR_HOME(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(EnvHome, tmpDir)
+
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+
+	expectedDataDir := filepath.Join(tmpDir, "data", "pg")
+	if cfg.Database.DataDir != expectedDataDir {
+		t.Errorf("DataDir = %q, want %q", cfg.Database.DataDir, expectedDataDir)
+	}
+
+	// Verify Docker defaults.
+	if cfg.Docker.Network != "volundr-net" {
+		t.Errorf("Docker.Network = %q, want %q", cfg.Docker.Network, "volundr-net")
+	}
+	if cfg.K3s.Provider != "auto" {
+		t.Errorf("K3s.Provider = %q, want %q", cfg.K3s.Provider, "auto")
+	}
+	if cfg.K3s.Namespace != "volundr" {
+		t.Errorf("K3s.Namespace = %q, want %q", cfg.K3s.Namespace, "volundr")
+	}
+}
+
+func TestConfigDirErrorWhenNoHome(t *testing.T) {
+	t.Setenv(EnvHome, "")
+	t.Setenv("HOME", "")
+
+	_, err := ConfigDir()
+	if err == nil {
+		t.Error("expected error when HOME is unset")
+	}
+}
+
+func TestConfigPathErrorWhenNoHome(t *testing.T) {
+	t.Setenv(EnvHome, "")
+	t.Setenv("HOME", "")
+
+	_, err := ConfigPath()
+	if err == nil {
+		t.Error("expected error when HOME is unset")
+	}
+}
+
+func TestDefaultConfigErrorWhenNoHome(t *testing.T) {
+	t.Setenv(EnvHome, "")
+	t.Setenv("HOME", "")
+
+	_, err := DefaultConfig()
+	if err == nil {
+		t.Error("expected error when HOME is unset")
+	}
+}
+
+func TestLoadErrorWhenNoHome(t *testing.T) {
+	t.Setenv(EnvHome, "")
+	t.Setenv("HOME", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("expected error when HOME is unset")
+	}
+}
+
+func TestSaveErrorWhenNoHome(t *testing.T) {
+	t.Setenv(EnvHome, "")
+	t.Setenv("HOME", "")
+
+	cfg := &Config{Runtime: "local"}
+	if err := cfg.Save(); err == nil {
+		t.Error("expected error when HOME is unset")
+	}
+}
+
+func TestExistsErrorWhenNoHome(t *testing.T) {
+	t.Setenv(EnvHome, "")
+	t.Setenv("HOME", "")
+
+	_, err := Exists()
+	if err == nil {
+		t.Error("expected error when HOME is unset")
+	}
+}
+
+func TestSaveToReadOnlyDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	readOnly := filepath.Join(tmpDir, "readonly")
+	if err := os.Mkdir(readOnly, 0o500); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) }) //nolint:gosec // restoring permissions for cleanup
+
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+
+	nested := filepath.Join(readOnly, "sub", "config.yaml")
+	if err := cfg.SaveTo(nested); err == nil {
+		t.Error("expected error saving to read-only directory")
+	}
+}
+
+func TestSaveToCreatesDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	nested := filepath.Join(tmpDir, "a", "b", "c", "config.yaml")
+
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+
+	if err := cfg.SaveTo(nested); err != nil {
+		t.Fatalf("SaveTo() error: %v", err)
+	}
+
+	if _, err := os.Stat(nested); err != nil {
+		t.Errorf("expected file to exist at %s", nested)
 	}
 }

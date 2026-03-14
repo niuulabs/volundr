@@ -964,9 +964,9 @@ func TestTerminalPage_HandleKey_CtrlT(t *testing.T) {
 	_ = page
 }
 
-func TestTerminalPage_HandleKey_NoTabs(t *testing.T) {
+func TestTerminalPage_HandleKey_NoTabs(_ *testing.T) {
 	page := NewTerminalPage("", nil, nil)
-	page, _ = page.handleKey(tea.KeyPressMsg{Code: 'a'})
+	_, _ = page.handleKey(tea.KeyPressMsg{Code: 'a'})
 	// Should not panic with 0 tabs.
 }
 

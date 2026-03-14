@@ -15,7 +15,7 @@ var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Display information about the current user",
 	Long:  "Call the OIDC userinfo endpoint and display the authenticated user's identity.",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)

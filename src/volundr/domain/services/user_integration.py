@@ -238,3 +238,4 @@ class UserIntegrationService:
                 return self._shared_issues
             case IntegrationType.MESSAGING | IntegrationType.AI_PROVIDER:
                 return []
+        return []

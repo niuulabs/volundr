@@ -36,7 +36,7 @@ func TestCheckNotRunning_StalePIDFile(t *testing.T) {
 
 	// Write a PID file with a PID that's very unlikely to be running.
 	pidPath := filepath.Join(volundrDir, PIDFile)
-	if err := os.WriteFile(pidPath, []byte("999999999"), 0o644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("999999999"), 0o600); err != nil {
 		t.Fatalf("write stale PID file: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestCheckNotRunning_InvalidPIDFile(t *testing.T) {
 
 	// Write an invalid PID file.
 	pidPath := filepath.Join(volundrDir, PIDFile)
-	if err := os.WriteFile(pidPath, []byte("not-a-number"), 0o644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("not-a-number"), 0o600); err != nil {
 		t.Fatalf("write invalid PID file: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestWritePIDFile_RemovePIDFile(t *testing.T) {
 
 	// Verify the file was written with the current PID.
 	pidPath := filepath.Join(volundrDir, PIDFile)
-	data, err := os.ReadFile(pidPath)
+	data, err := os.ReadFile(pidPath) //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read PID file: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 
 	// Read it back.
 	stateFilePath := filepath.Join(volundrDir, StateFile)
-	data, err := os.ReadFile(stateFilePath)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read state file: %v", err)
 	}

@@ -148,8 +148,6 @@ class TestK8sResourceProviderKubeconfig:
     @pytest.mark.asyncio
     async def test_kubeconfig_kwarg_triggers_load_kube_config(self):
         """When kubeconfig is provided, load_kube_config(config_file=...) is called."""
-        provider = k8s_mod.K8sResourceProvider(kubeconfig="/path/to/kubeconfig")
-
         # Directly test via mocking kubernetes_asyncio imports
         mock_config = AsyncMock()
         mock_client = AsyncMock()

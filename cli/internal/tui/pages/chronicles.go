@@ -16,6 +16,7 @@ import (
 // EventType classifies a chronicle timeline event.
 type EventType string
 
+// EventType constants for chronicle timeline events.
 const (
 	EventSession  EventType = "session"
 	EventMessage  EventType = "message"
@@ -53,7 +54,6 @@ type ChroniclesPage struct {
 	commits   []api.TimelineCommit
 	filtered  []ChronicleEvent
 	cursor    int
-	scrollPos int
 	filter    string // "all", "session", "message", "file", "git", "terminal", "error"
 	loading   bool
 	loadErr   error
@@ -146,7 +146,7 @@ func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) {
 
 // timelineEventsFromAPI converts API timeline events to display events.
 func timelineEventsFromAPI(events []api.TimelineEvent) []ChronicleEvent {
-	var result []ChronicleEvent
+	result := make([]ChronicleEvent, 0, len(events))
 	for _, ev := range events {
 		eventType := mapEventType(ev.Type)
 
@@ -268,17 +268,18 @@ func (c ChroniclesPage) View() string {
 	timelineHeight := c.height - 12
 	var timeline string
 
-	if c.loading {
+	switch {
+	case c.loading:
 		timeline = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Padding(2, 0).
 			Render("  Loading timeline...")
-	} else if c.loadErr != nil {
+	case c.loadErr != nil:
 		timeline = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
 			Padding(2, 0).
 			Render(fmt.Sprintf("  Error: %v  (r to retry)", c.loadErr))
-	} else {
+	default:
 		timeline = c.renderTimeline(timelineHeight)
 	}
 
@@ -431,7 +432,7 @@ func formatElapsed(seconds int) string {
 		return fmt.Sprintf("%dm%02ds", m, s)
 	}
 	h := m / 60
-	m = m % 60
+	m %= 60
 	return fmt.Sprintf("%dh%02dm", h, m)
 }
 

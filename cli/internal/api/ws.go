@@ -15,6 +15,7 @@ import (
 // WSState represents the WebSocket connection state.
 type WSState int
 
+// WSState constants for WebSocket connection lifecycle.
 const (
 	WSDisconnected WSState = iota
 	WSConnecting
@@ -293,7 +294,7 @@ func (s WSState) String() string {
 var debugWS = os.Getenv("VOLUNDR_WS_DEBUG") == "1"
 
 func debugLogWS(data []byte) {
-	f, err := os.OpenFile("/tmp/volundr-ws-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("/tmp/volundr-ws-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) //nolint:gosec // debug log in /tmp, not sensitive
 	if err != nil {
 		return
 	}

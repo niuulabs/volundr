@@ -14,6 +14,7 @@ import (
 // AdminTab represents a tab in the admin panel.
 type AdminTab int
 
+// AdminTab constants for admin panel tabs.
 const (
 	AdminUsers AdminTab = iota
 	AdminTenants
@@ -134,15 +135,16 @@ func (a AdminPage) View() string {
 	}
 
 	var content string
-	if a.loading {
+	switch {
+	case a.loading:
 		content = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Render("  Loading admin data...")
-	} else if a.loadErr != nil {
+	case a.loadErr != nil:
 		content = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
 			Render(fmt.Sprintf("  Error: %v  (r to retry)", a.loadErr))
-	} else {
+	default:
 		switch a.tab {
 		case AdminUsers:
 			content = a.renderUsers()
@@ -290,7 +292,7 @@ func (a AdminPage) renderStats() string {
 	})
 
 	// Token breakdown
-	var breakdown []string
+	breakdown := make([]string, 0, 5)
 	breakdown = append(breakdown, "")
 	breakdown = append(breakdown, lipgloss.NewStyle().
 		Foreground(theme.TextPrimary).Bold(true).Render("  Token Breakdown"))
