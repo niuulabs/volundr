@@ -336,6 +336,51 @@ spec:
               mountPath: /etc/vscode-defaults
               readOnly: true
         {{- end }}
+        {{- if .Values.reh.enabled }}
+        # VS Code REH (Remote Extension Host) server — headless WebSocket-only
+        # backend for the VS Code workbench hosted in Hliðskjálf.
+        - name: vscode-reh
+          image: "{{ .Values.reh.image.repository }}:{{ .Values.reh.image.tag }}"
+          imagePullPolicy: {{ .Values.reh.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.securityContext.runAsUser }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          ports:
+            - name: reh
+              containerPort: {{ .Values.reh.port }}
+              protocol: TCP
+          command: ["/opt/vscode-reh/bin/code-server-oss"]
+          args:
+            - "--host=0.0.0.0"
+            - "--port={{ .Values.reh.port }}"
+            - "--without-connection-token"
+            - "--accept-server-license-terms"
+          env:
+            - name: SESSION_ID
+              value: {{ .Values.session.id | quote }}
+          livenessProbe:
+            tcpSocket:
+              port: reh
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: reh
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.reh.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: sessions
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.homeVolume.enabled }}
+            - name: home
+              mountPath: {{ .Values.homeVolume.mountPath }}
+            {{- end }}
+        {{- end }}
         {{- if .Values.localServices.enabled }}
         # Devrunner - minimal runtime for local service testing
         - name: devrunner

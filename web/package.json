@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "description": "Volundr Web — AI-native development platform UI",
   "license": "Apache-2.0",
-  "keywords": ["volundr", "ai", "development-platform", "react"],
+  "keywords": [
+    "volundr",
+    "ai",
+    "development-platform",
+    "react"
+  ],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
@@ -58,6 +63,10 @@
     }
   },
   "dependencies": {
+    "@codingame/monaco-vscode-api": "^28.0.1",
+    "@codingame/monaco-vscode-remote-agent-service-override": "^28.0.1",
+    "@codingame/monaco-vscode-terminal-service-override": "^28.0.1",
+    "@codingame/monaco-vscode-workbench-service-override": "^28.0.1",
     "@tailwindcss/postcss": "^4.2.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.1",
