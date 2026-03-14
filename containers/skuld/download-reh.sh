@@ -11,17 +11,19 @@ set -euo pipefail
 
 OUTPUT_DIR="${1:-/opt/vscode-reh}"
 ARCH="${ARCH:-linux-x64}"
-PACKAGE_JSON="node_modules/@codingame/monaco-vscode-api/package.json"
+PRODUCT_JS="node_modules/@codingame/monaco-vscode-api/vscode/product.json.js"
 
-if [ ! -f "$PACKAGE_JSON" ]; then
-  echo "ERROR: $PACKAGE_JSON not found." >&2
+if [ ! -f "$PRODUCT_JS" ]; then
+  echo "ERROR: $PRODUCT_JS not found." >&2
   echo "Run 'npm install' in the web/ directory first." >&2
   exit 1
 fi
 
-COMMIT=$(jq -r '.config.vscode.commit // empty' "$PACKAGE_JSON")
+# The commit hash is embedded in the webviewContentExternalBaseUrlTemplate URL
+# inside the product.json.js file, in the pattern /insider/<commit>/out/
+COMMIT=$(grep -oP '(?<=/insider/)[0-9a-f]{40}(?=/)' "$PRODUCT_JS" | head -1)
 if [ -z "$COMMIT" ]; then
-  echo "ERROR: Could not read .config.vscode.commit from $PACKAGE_JSON" >&2
+  echo "ERROR: Could not extract VS Code commit hash from $PRODUCT_JS" >&2
   exit 1
 fi
 
