@@ -53,6 +53,7 @@ nav:
       - Hexagonal Design: architecture/hexagonal.md
       - Components: architecture/components.md
   - API Reference:
+      - OpenAPI Spec: api/openapi.md
       - Sessions: api/sessions.md
       - Chronicles: api/chronicles.md
       - Git Workflows: api/git.md
