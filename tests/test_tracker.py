@@ -177,6 +177,12 @@ class TestTrackerService:
         assert status.workspace == "Test Workspace"
         assert status.user == "Test User"
 
+    async def test_check_connection_no_tracker(self, mapping_repo):
+        service = TrackerService(None, mapping_repo)
+        status = await service.check_connection()
+        assert status.connected is False
+        assert status.provider == "none"
+
     async def test_search_issues(self, tracker_service: TrackerService):
         results = await tracker_service.search_issues("Linear")
         assert len(results) == 1

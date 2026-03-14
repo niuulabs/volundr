@@ -1,11 +1,11 @@
 """Tests for GitContributor."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from volundr.adapters.outbound.contributors.git import GitContributor
-from volundr.domain.models import GitSource, Session
+from volundr.domain.models import GitSource, Principal, Session
 from volundr.domain.ports import SessionContext
 
 
@@ -51,3 +51,26 @@ class TestGitContributor:
         c = GitContributor(git_registry=registry)
         result = await c.contribute(session, SessionContext())
         assert result.values == {}
+
+    async def test_user_integration_provides_clone_url(self, session):
+        provider = MagicMock()
+        provider.get_clone_url.return_value = "https://user-token@github.com/org/repo.git"
+        user_integration = AsyncMock()
+        user_integration.find_git_provider_for.return_value = provider
+
+        principal = Principal(user_id="u1", email="u@test.com", tenant_id="t1", roles=[])
+        c = GitContributor(user_integration=user_integration)
+        result = await c.contribute(session, SessionContext(principal=principal))
+        assert result.values["git"]["cloneUrl"] == "https://user-token@github.com/org/repo.git"
+        user_integration.find_git_provider_for.assert_called_once_with(session.repo, "u1")
+
+    async def test_user_integration_no_provider_falls_back(self, session):
+        user_integration = AsyncMock()
+        user_integration.find_git_provider_for.return_value = None
+        registry = MagicMock()
+        registry.get_clone_url.return_value = "https://shared@github.com/org/repo.git"
+
+        principal = Principal(user_id="u1", email="u@test.com", tenant_id="t1", roles=[])
+        c = GitContributor(git_registry=registry, user_integration=user_integration)
+        result = await c.contribute(session, SessionContext(principal=principal))
+        assert result.values["git"]["cloneUrl"] == "https://shared@github.com/org/repo.git"

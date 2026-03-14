@@ -170,6 +170,18 @@ class TestPromptService:
         assert updated.name == "New"
         assert updated.content == "New content"
 
+    async def test_update_prompt_all_fields(self, prompt_service: PromptService):
+        created = await prompt_service.create_prompt(name="Base", content="Base content")
+        updated = await prompt_service.update_prompt(
+            created.id,
+            scope=PromptScope.PROJECT,
+            project_repo="org/repo",
+            tags=["python", "test"],
+        )
+        assert updated.scope == PromptScope.PROJECT
+        assert updated.project_repo == "org/repo"
+        assert updated.tags == ["python", "test"]
+
     async def test_update_prompt_not_found(self, prompt_service: PromptService):
         with pytest.raises(PromptNotFoundError):
             await prompt_service.update_prompt(uuid4(), name="X")
