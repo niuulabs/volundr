@@ -296,6 +296,206 @@ func TestHelpOverlay_View_Visible(t *testing.T) {
 	}
 }
 
+// MentionMenu tests.
+
+func TestNewMentionMenu(t *testing.T) {
+	m := NewMentionMenu('@')
+	if m.Trigger != '@' {
+		t.Errorf("expected trigger '@', got %q", m.Trigger)
+	}
+	if m.Active {
+		t.Error("expected not active by default")
+	}
+	if m.MaxVisible != defaultMaxVisible {
+		t.Errorf("expected max visible %d, got %d", defaultMaxVisible, m.MaxVisible)
+	}
+}
+
+func TestMentionMenu_OpenClose(t *testing.T) {
+	m := NewMentionMenu('/')
+	m.Open()
+	if !m.IsActive() {
+		t.Error("expected active after Open()")
+	}
+	m.Close()
+	if m.IsActive() {
+		t.Error("expected not active after Close()")
+	}
+}
+
+func TestMentionMenu_SetItems(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+
+	items := []MentionItem{
+		{Label: "file1.go", Value: "@file1.go", Icon: "F"},
+		{Label: "file2.go", Value: "@file2.go", Icon: "F"},
+	}
+	m.SetItems(items)
+
+	if len(m.Items) != 2 {
+		t.Errorf("expected 2 items, got %d", len(m.Items))
+	}
+	if m.Loading {
+		t.Error("expected loading false after SetItems")
+	}
+}
+
+func TestMentionMenu_Navigation(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	m.SetItems([]MentionItem{
+		{Label: "a", Value: "a"},
+		{Label: "b", Value: "b"},
+		{Label: "c", Value: "c"},
+	})
+
+	// Start at 0
+	if m.Selected != 0 {
+		t.Errorf("expected selected 0, got %d", m.Selected)
+	}
+
+	// Move down
+	m.MoveDown()
+	if m.Selected != 1 {
+		t.Errorf("expected selected 1, got %d", m.Selected)
+	}
+
+	// Move down to end
+	m.MoveDown()
+	if m.Selected != 2 {
+		t.Errorf("expected selected 2, got %d", m.Selected)
+	}
+
+	// Wrap around
+	m.MoveDown()
+	if m.Selected != 0 {
+		t.Errorf("expected wrap to 0, got %d", m.Selected)
+	}
+
+	// Move up wraps from 0
+	m.MoveUp()
+	if m.Selected != 2 {
+		t.Errorf("expected wrap to 2, got %d", m.Selected)
+	}
+}
+
+func TestMentionMenu_SelectedItem(t *testing.T) {
+	m := NewMentionMenu('@')
+
+	// No items
+	if m.SelectedItem() != nil {
+		t.Error("expected nil when no items")
+	}
+
+	m.Open()
+	m.SetItems([]MentionItem{
+		{Label: "first", Value: "v1"},
+		{Label: "second", Value: "v2"},
+	})
+
+	item := m.SelectedItem()
+	if item == nil {
+		t.Fatal("expected non-nil selected item")
+	}
+	if item.Label != "first" {
+		t.Errorf("expected 'first', got %q", item.Label)
+	}
+
+	m.MoveDown()
+	item = m.SelectedItem()
+	if item.Label != "second" {
+		t.Errorf("expected 'second', got %q", item.Label)
+	}
+}
+
+func TestMentionMenu_View_Inactive(t *testing.T) {
+	m := NewMentionMenu('@')
+	view := m.View(60)
+	if view != "" {
+		t.Error("expected empty view when inactive")
+	}
+}
+
+func TestMentionMenu_View_Loading(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	m.Loading = true
+	view := m.View(60)
+	if view == "" {
+		t.Error("expected non-empty view when loading")
+	}
+}
+
+func TestMentionMenu_View_Empty(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	view := m.View(60)
+	if view == "" {
+		t.Error("expected non-empty view (no matches)")
+	}
+}
+
+func TestMentionMenu_View_WithItems(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	m.SetItems([]MentionItem{
+		{Label: "main.go", Value: "@main.go", Detail: "cmd/main.go", Icon: "F", Category: "file"},
+		{Label: "utils.go", Value: "@utils.go", Detail: "pkg/utils.go", Icon: "F", Category: "file"},
+	})
+	view := m.View(60)
+	if view == "" {
+		t.Error("expected non-empty view with items")
+	}
+}
+
+func TestMentionMenu_SetItems_ClampsSelection(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	m.SetItems([]MentionItem{
+		{Label: "a"}, {Label: "b"}, {Label: "c"},
+	})
+	m.Selected = 2
+
+	// Now set fewer items
+	m.SetItems([]MentionItem{{Label: "x"}})
+	if m.Selected != 0 {
+		t.Errorf("expected selection clamped to 0, got %d", m.Selected)
+	}
+}
+
+func TestMentionMenu_MoveOnEmpty(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	// Should not panic.
+	m.MoveUp()
+	m.MoveDown()
+	if m.Selected != 0 {
+		t.Errorf("expected selected 0 on empty, got %d", m.Selected)
+	}
+}
+
+func TestFuzzyMatch(t *testing.T) {
+	tests := []struct {
+		text, query string
+		want        bool
+	}{
+		{"main.go", "", true},
+		{"main.go", "main", true},
+		{"main.go", "MAIN", true},
+		{"main.go", "xyz", false},
+		{"README.md", "read", true},
+		{"src/utils.go", "util", true},
+	}
+
+	for _, tt := range tests {
+		got := FuzzyMatch(tt.text, tt.query)
+		if got != tt.want {
+			t.Errorf("FuzzyMatch(%q, %q) = %v, want %v", tt.text, tt.query, got, tt.want)
+		}
+	}
+}
+
 // Helper for tests.
 
 func configWithContexts() *tui.ClientPool {
