@@ -8,18 +8,12 @@ hide:
 
 Interactive API documentation generated from the Volundr source code.
 
-<script
+<iframe
   id="api-reference"
-  data-url="../openapi.json"
-  data-configuration='{"theme":"dark","layout":"modern","hideDownloadButton":false}'
-></script>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-
-<style>
-  /* Let Scalar fill the content area */
-  .md-content__inner { padding: 0 !important; max-width: 100% !important; }
-  .md-content { max-width: 100% !important; }
-</style>
+  src="../api-reference.html"
+  style="width: 100%; height: 85vh; border: none; border-radius: 8px;"
+  loading="lazy"
+></iframe>
 
 !!! info "Download"
     The raw OpenAPI spec is available at [`openapi.json`](../openapi.json).
