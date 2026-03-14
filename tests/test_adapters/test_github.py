@@ -830,7 +830,7 @@ class TestGitHubProviderWorkflow:
         """create_branch returns False for unsupported URLs."""
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             provider.create_branch("https://gitlab.com/org/repo", "test", "main")
         )
         assert result is False
