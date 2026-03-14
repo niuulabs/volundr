@@ -70,6 +70,11 @@ class TestTranslateResourceConfig:
         assert result.requests == {"memory": "8Gi"}
         assert result.limits == {"memory": "8Gi"}
 
+    def test_invalid_memory_string_passed_through(self):
+        result = translate_resource_config({"memory": "lots"})
+        assert result.requests == {"memory": "lots"}
+        assert result.limits == {"memory": "lots"}
+
     def test_full_config(self):
         result = translate_resource_config(
             {
@@ -122,6 +127,11 @@ class TestValidateResourceConfig:
         errors = validate_resource_config({"memory": "4"})
         assert len(errors) == 1
         assert "no unit suffix" in errors[0]
+
+    def test_empty_memory_string_invalid(self):
+        errors = validate_resource_config({"memory": ""})
+        assert len(errors) == 1
+        assert "must not be empty" in errors[0]
 
     def test_invalid_gpu(self):
         errors = validate_resource_config({"gpu": "1.5"})
