@@ -7,6 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from volundr.adapters.outbound.oauth2_provider import OAuth2Provider
 from volundr.domain.models import OAuthSpec
 
+_HTTPX_CLIENT = (
+    "volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient"
+)
+
 
 def _make_spec(**overrides) -> OAuthSpec:
     defaults = {
@@ -36,7 +40,9 @@ class TestAuthorizationUrl:
     def test_builds_url_with_required_params(self):
         provider = _make_provider()
 
-        url = provider.authorization_url(state="abc123", redirect_uri="https://app.test/callback")
+        url = provider.authorization_url(
+            state="abc123", redirect_uri="https://app.test/callback",
+        )
 
         assert "https://auth.example.com/authorize?" in url
         assert "client_id=test-client-id" in url
@@ -53,7 +59,9 @@ class TestAuthorizationUrl:
         assert "scope=read+write+admin" in url
 
     def test_includes_extra_authorize_params(self):
-        spec = _make_spec(extra_authorize_params={"prompt": "consent", "access_type": "offline"})
+        spec = _make_spec(
+            extra_authorize_params={"prompt": "consent", "access_type": "offline"},
+        )
         provider = _make_provider(spec=spec)
 
         url = provider.authorization_url(state="s1", redirect_uri="https://app/cb")
@@ -75,7 +83,10 @@ class TestExchangeCode:
         provider = _make_provider(spec=spec)
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {"access_token": "tok-abc", "token_type": "bearer"}
+        mock_response.json.return_value = {
+            "access_token": "tok-abc",
+            "token_type": "bearer",
+        }
         mock_response.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()
@@ -83,8 +94,10 @@ class TestExchangeCode:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient", return_value=mock_client):
-            result = await provider.exchange_code("auth-code-123", "https://app/cb")
+        with patch(_HTTPX_CLIENT, return_value=mock_client):
+            result = await provider.exchange_code(
+                "auth-code-123", "https://app/cb",
+            )
 
         assert result == {"api_key": "tok-abc"}
         mock_client.post.assert_called_once()
@@ -98,7 +111,10 @@ class TestExchangeCode:
 
     async def test_applies_token_field_mapping(self):
         spec = _make_spec(
-            token_field_mapping={"api_key": "access_token", "refresh": "refresh_token"},
+            token_field_mapping={
+                "api_key": "access_token",
+                "refresh": "refresh_token",
+            },
         )
         provider = _make_provider(spec=spec)
 
@@ -115,7 +131,7 @@ class TestExchangeCode:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient", return_value=mock_client):
+        with patch(_HTTPX_CLIENT, return_value=mock_client):
             result = await provider.exchange_code("code", "https://app/cb")
 
         assert result == {"api_key": "at-123", "refresh": "rt-456"}
@@ -133,13 +149,15 @@ class TestExchangeCode:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient", return_value=mock_client):
+        with patch(_HTTPX_CLIENT, return_value=mock_client):
             result = await provider.exchange_code("code", "https://app/cb")
 
         assert result == {"access_token": "fallback-tok"}
 
     async def test_includes_extra_token_params(self):
-        spec = _make_spec(extra_token_params={"audience": "https://api.example.com"})
+        spec = _make_spec(
+            extra_token_params={"audience": "https://api.example.com"},
+        )
         provider = _make_provider(spec=spec)
 
         mock_response = MagicMock()
@@ -151,7 +169,7 @@ class TestExchangeCode:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient", return_value=mock_client):
+        with patch(_HTTPX_CLIENT, return_value=mock_client):
             await provider.exchange_code("code", "https://app/cb")
 
         post_data = mock_client.post.call_args[1]["data"]
@@ -163,7 +181,7 @@ class TestRevokeToken:
         spec = _make_spec(revoke_url="")
         provider = _make_provider(spec=spec)
 
-        with patch("volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient") as mock_cls:
+        with patch(_HTTPX_CLIENT) as mock_cls:
             await provider.revoke_token("some-token")
 
         mock_cls.assert_not_called()
@@ -176,7 +194,7 @@ class TestRevokeToken:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient", return_value=mock_client):
+        with patch(_HTTPX_CLIENT, return_value=mock_client):
             await provider.revoke_token("tok-to-revoke")
 
         mock_client.post.assert_called_once()
@@ -193,7 +211,7 @@ class TestRevokeToken:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient", return_value=mock_client):
+        with patch(_HTTPX_CLIENT, return_value=mock_client):
             await provider.revoke_token("tok")  # should not raise
 
 

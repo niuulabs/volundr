@@ -55,30 +55,33 @@ export function useIntegrations(): UseIntegrationsResult {
     return volundrService.testIntegration(id);
   }, []);
 
-  const startOAuthFlow = useCallback(async (slug: string) => {
-    const resp = await fetch(`/api/v1/volundr/integrations/oauth/${slug}/authorize`, {
-      credentials: 'include',
-    });
-    if (!resp.ok) {
-      throw new Error('Failed to start OAuth flow');
-    }
-    const { url } = await resp.json();
-    const popup = window.open(url, `oauth-${slug}`, 'width=600,height=700');
-    if (!popup) {
-      throw new Error('Popup blocked — please allow popups for this site');
-    }
+  const startOAuthFlow = useCallback(
+    async (slug: string) => {
+      const resp = await fetch(`/api/v1/volundr/integrations/oauth/${slug}/authorize`, {
+        credentials: 'include',
+      });
+      if (!resp.ok) {
+        throw new Error('Failed to start OAuth flow');
+      }
+      const { url } = await resp.json();
+      const popup = window.open(url, `oauth-${slug}`, 'width=600,height=700');
+      if (!popup) {
+        throw new Error('Popup blocked — please allow popups for this site');
+      }
 
-    await new Promise<void>((resolve) => {
-      const interval = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(interval);
-          resolve();
-        }
-      }, 500);
-    });
+      await new Promise<void>(resolve => {
+        const interval = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 500);
+      });
 
-    await fetchIntegrations();
-  }, [fetchIntegrations]);
+      await fetchIntegrations();
+    },
+    [fetchIntegrations]
+  );
 
   return {
     integrations,

@@ -54,10 +54,9 @@ export function IntegrationsPage({ service = volundrService }: IntegrationsPageP
     async (entry: CatalogEntry) => {
       if (entry.auth_type === 'oauth2_authorization_code') {
         try {
-          const resp = await fetch(
-            `/api/v1/volundr/integrations/oauth/${entry.slug}/authorize`,
-            { credentials: 'include' }
-          );
+          const resp = await fetch(`/api/v1/volundr/integrations/oauth/${entry.slug}/authorize`, {
+            credentials: 'include',
+          });
           if (!resp.ok) {
             setFormError('Failed to start OAuth flow');
             return;
@@ -122,7 +121,9 @@ export function IntegrationsPage({ service = volundrService }: IntegrationsPageP
       try {
         await service.createCredential({
           name: credentialName,
-          secretType: inferSecretType(connectingEntry.integration_type) as import('@/models').SecretType,
+          secretType: inferSecretType(
+            connectingEntry.integration_type
+          ) as import('@/models').SecretType,
           data: credentials,
         });
 

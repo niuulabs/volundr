@@ -13,7 +13,7 @@ export function IssuePicker({ onSelect, onClear, selectedIssue }: IssuePickerPro
   const { issues, loading, searchIssues } = useIssues();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleChange = useCallback(
     (value: string) => {

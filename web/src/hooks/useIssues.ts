@@ -28,10 +28,9 @@ export function useIssues(): UseIssuesResult {
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch(
-        `/api/v1/volundr/issues/search?q=${encodeURIComponent(query)}`,
-        { credentials: 'include' }
-      );
+      const resp = await fetch(`/api/v1/volundr/issues/search?q=${encodeURIComponent(query)}`, {
+        credentials: 'include',
+      });
       if (!resp.ok) {
         throw new Error('Failed to search issues');
       }
@@ -47,10 +46,9 @@ export function useIssues(): UseIssuesResult {
 
   const getIssue = useCallback(async (issueId: string): Promise<TrackerIssue | null> => {
     try {
-      const resp = await fetch(
-        `/api/v1/volundr/issues/${encodeURIComponent(issueId)}`,
-        { credentials: 'include' }
-      );
+      const resp = await fetch(`/api/v1/volundr/issues/${encodeURIComponent(issueId)}`, {
+        credentials: 'include',
+      });
       if (!resp.ok) {
         return null;
       }
