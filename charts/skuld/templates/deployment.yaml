@@ -352,7 +352,7 @@ spec:
             - name: reh
               containerPort: {{ .Values.reh.port }}
               protocol: TCP
-          command: ["/opt/vscode-reh/bin/code-server-oss"]
+          command: ["/opt/vscode-reh/bin/reh-server"]
           args:
             - "--host=0.0.0.0"
             - "--port={{ .Values.reh.port }}"

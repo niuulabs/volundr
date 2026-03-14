@@ -50,13 +50,26 @@ RUN usermod -l coder -d /home/coder -m ubuntu && groupmod -n coder ubuntu
 
 COPY --from=fetch /opt/vscode-reh /opt/vscode-reh
 
-# Ensure the binary is executable
-RUN chmod +x /opt/vscode-reh/bin/code-server-oss
+# Ensure all binaries are executable and create a stable entrypoint
+# symlink. The binary name varies across VS Code versions
+# (code-server-oss, code-server, server.sh).
+RUN chmod -R +x /opt/vscode-reh/bin/ && \
+    if [ -f /opt/vscode-reh/bin/code-server-oss ]; then \
+      ln -sf /opt/vscode-reh/bin/code-server-oss /opt/vscode-reh/bin/reh-server; \
+    elif [ -f /opt/vscode-reh/bin/code-server ]; then \
+      ln -sf /opt/vscode-reh/bin/code-server /opt/vscode-reh/bin/reh-server; \
+    elif [ -f /opt/vscode-reh/server.sh ]; then \
+      ln -sf /opt/vscode-reh/server.sh /opt/vscode-reh/bin/reh-server; \
+    else \
+      echo "ERROR: No known REH server binary found in /opt/vscode-reh/bin/" >&2; \
+      ls -la /opt/vscode-reh/bin/ >&2; \
+      exit 1; \
+    fi
 
 USER coder
 WORKDIR /home/coder
 
 EXPOSE 8445
 
-ENTRYPOINT ["/opt/vscode-reh/bin/code-server-oss"]
+ENTRYPOINT ["/opt/vscode-reh/bin/reh-server"]
 CMD ["--host=0.0.0.0", "--port=8445", "--without-connection-token", "--accept-server-license-terms"]
