@@ -262,11 +262,11 @@ jobs:
       - name: Run tests with coverage
         run: go test ./... -v -count=1 -coverprofile=coverage.out
 
-      - name: Enforce minimum coverage (80%)
+      - name: Enforce minimum coverage (84%)
         run: |
           total=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
           echo "Total coverage: ${total}%"
-          threshold=80.0
+          threshold=84.0
           if awk "BEGIN {exit !($total < $threshold)}"; then
             echo "::error::Coverage ${total}% is below minimum threshold of ${threshold}%"
             exit 1

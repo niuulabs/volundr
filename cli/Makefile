@@ -38,8 +38,8 @@ test-coverage:
 	go test ./... -v -count=1 -coverprofile=coverage.out
 	@total=$$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $$3}' | tr -d '%'); \
 	echo "Total coverage: $${total}%"; \
-	if awk "BEGIN {exit !($$total < 80.0)}"; then \
-		echo "FAIL: Coverage $${total}% is below minimum threshold of 80%"; \
+	if awk "BEGIN {exit !($$total < 84.0)}"; then \
+		echo "FAIL: Coverage $${total}% is below minimum threshold of 84%"; \
 		exit 1; \
 	fi
 
