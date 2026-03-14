@@ -73,6 +73,10 @@ http {{
         server 127.0.0.1:8443;
     }}
 
+    upstream reh {{
+        server 127.0.0.1:8445;
+    }}
+
     server {{
         listen 8080;
         server_name _;
@@ -147,6 +151,20 @@ http {{
             return 200 '{{"services":[],"hint":"use svc start to add services"}}';
         }}
 
+        # VS Code REH: WebSocket RPC for editor workbench
+        location /reh/ {{
+            proxy_pass http://reh/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }}
+
         # Default catch-all -> code-server IDE
         location / {{
             proxy_pass http://codeserver/;
@@ -185,6 +203,7 @@ class DirectK8sPodManager(PodManager):
         external_url: str = "http://127.0.0.1:8080",
         skuld_image: str = "ghcr.io/niuulabs/skuld:0.2.0",
         code_server_image: str = "codercom/code-server:latest",
+        reh_image: str = "ghcr.io/niuulabs/vscode-reh:latest",
         nginx_image: str = "nginx:alpine",
         devrunner_image: str = "ghcr.io/niuulabs/devrunner:0.2.0",
         db_host: str = "host.k3d.internal",
@@ -206,6 +225,7 @@ class DirectK8sPodManager(PodManager):
         self._external_url = external_url.rstrip("/")
         self._skuld_image = skuld_image
         self._code_server_image = code_server_image
+        self._reh_image = reh_image
         self._nginx_image = nginx_image
         self._devrunner_image = devrunner_image
         self._db_host = db_host
@@ -597,6 +617,27 @@ fi
                     },
                     "volumeMounts": workload_mounts,
                     "resources": code_server_res,
+                },
+                {
+                    "name": "vscode-reh",
+                    "image": self._reh_image,
+                    "ports": [{"containerPort": 8445, "name": "reh"}],
+                    "securityContext": {
+                        "runAsUser": 1000,
+                        "allowPrivilegeEscalation": False,
+                    },
+                    "volumeMounts": workload_mounts,
+                    "resources": code_server_res,
+                    "livenessProbe": {
+                        "tcpSocket": {"port": 8445},
+                        "initialDelaySeconds": 10,
+                        "periodSeconds": 30,
+                    },
+                    "readinessProbe": {
+                        "tcpSocket": {"port": 8445},
+                        "initialDelaySeconds": 5,
+                        "periodSeconds": 10,
+                    },
                 },
                 {
                     "name": "devrunner",

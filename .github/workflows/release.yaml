@@ -38,7 +38,7 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -90,7 +90,7 @@ jobs:
       id-token: write
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -161,7 +161,7 @@ jobs:
       packages: read
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

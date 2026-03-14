@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { VolundrPage } from './index';
-import { useAuth } from '@/auth';
 import type {
   VolundrSession,
   VolundrMessage,
@@ -69,6 +68,27 @@ vi.mock('@/components/SessionChat', () => ({
   SessionChat: ({ url, className }: { url: string | null; className?: string }) => (
     <div data-testid="session-chat" data-url={url ?? ''} className={className}>
       Mock Chat
+    </div>
+  ),
+}));
+
+vi.mock('@/components/EditorPanel', () => ({
+  EditorPanel: ({
+    hostname,
+    sessionId,
+    className,
+  }: {
+    hostname: string | null;
+    sessionId: string | null;
+    className?: string;
+  }) => (
+    <div
+      data-testid="editor-panel"
+      data-hostname={hostname ?? ''}
+      data-session-id={sessionId ?? ''}
+      className={className}
+    >
+      {hostname && sessionId ? 'Mock Editor' : 'Start a session to access the editor'}
     </div>
   ),
 }));
@@ -736,9 +756,9 @@ describe('VolundrPage', () => {
     });
   });
 
-  // New tests for IDE functionality
-  describe('IDE functionality', () => {
-    it('loads IDE iframe when code tab is active and session is running', async () => {
+  // Tests for embedded editor panel (VS Code workbench via REH)
+  describe('Editor panel', () => {
+    it('renders EditorPanel when code tab is active and session is running', () => {
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -747,32 +767,25 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      // Switch to Code tab
-      const codeTab = screen.getByText('Code');
-      fireEvent.click(codeTab);
+      fireEvent.click(screen.getByText('Code'));
 
-      await waitFor(() => {
-        expect(getCodeServerUrl).toHaveBeenCalledWith('forge-7f3a2b1c');
-      });
-
-      await waitFor(() => {
-        const iframe = document.querySelector('iframe');
-        expect(iframe).toBeTruthy();
-        expect(iframe?.src).toContain('code.skuld.local');
-      });
+      const panel = screen.getByTestId('editor-panel');
+      expect(panel).toBeInTheDocument();
+      expect(panel).toHaveAttribute('data-hostname', 'skuld-7f3a2b1c.volundr.local');
+      expect(panel).toHaveAttribute('data-session-id', 'forge-7f3a2b1c');
     });
 
-    it('shows open-in-new-tab link when auth is enabled', async () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-      vi.mocked(useAuth).mockReturnValue({
-        enabled: true,
-        authenticated: true,
-        loading: false,
-        user: null,
-        accessToken: 'test-token',
-        login: vi.fn(),
-        logout: vi.fn(),
-      });
+    it('shows empty state when session is not running', () => {
+      vi.mocked(useVolundr).mockReturnValue(
+        createMockHookReturn({
+          sessions: [
+            {
+              ...mockSessions[0],
+              status: 'stopped',
+            },
+          ],
+        })
+      );
 
       render(
         <MemoryRouter>
@@ -780,29 +793,9 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      const codeTab = screen.getByText('Code');
-      fireEvent.click(codeTab);
+      fireEvent.click(screen.getByText('Code'));
 
-      await waitFor(() => {
-        const link = screen.getByText('Open IDE in new tab');
-        expect(link).toBeTruthy();
-        expect(link.closest('a')).toHaveAttribute(
-          'href',
-          expect.stringContaining('code.skuld.local')
-        );
-        expect(link.closest('a')).toHaveAttribute('target', '_blank');
-      });
-
-      // Restore default mock
-      vi.mocked(useAuth).mockReturnValue({
-        enabled: false,
-        authenticated: true,
-        loading: false,
-        user: null,
-        accessToken: null,
-        login: vi.fn(),
-        logout: vi.fn(),
-      });
+      expect(screen.getByText('Start the session to access IDE')).toBeInTheDocument();
     });
   });
 
@@ -2029,11 +2022,9 @@ describe('VolundrPage', () => {
     });
   });
 
-  // Tests for IDE states
-  describe('IDE states', () => {
-    it('shows loading state while IDE URL is being resolved', () => {
-      getCodeServerUrl.mockReturnValue(new Promise(() => {})); // never resolves
-
+  // Tests for editor panel states
+  describe('Editor panel states', () => {
+    it('renders EditorPanel with session hostname when code tab is active', () => {
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -2044,25 +2035,8 @@ describe('VolundrPage', () => {
 
       fireEvent.click(screen.getByText('Code'));
 
-      expect(screen.getByText('Connecting to IDE...')).toBeInTheDocument();
-    });
-
-    it('shows not available when getCodeServerUrl returns null', async () => {
-      getCodeServerUrl.mockResolvedValue(null);
-
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Code'));
-
-      await waitFor(() => {
-        expect(screen.getByText('IDE not available for this session')).toBeInTheDocument();
-      });
+      const panel = screen.getByTestId('editor-panel');
+      expect(panel).toHaveAttribute('data-hostname', 'skuld-7f3a2b1c.volundr.local');
     });
 
     it('opens popout window for code tab', () => {

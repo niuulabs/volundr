@@ -25,6 +25,11 @@ export default defineConfig(({ mode }) => {
       : []),
   ],
   base: env.VITE_BASE_PATH || '/',
+  // @codingame/monaco-vscode-* packages check process.env at import time.
+  // Without this polyfill the app crashes silently in the browser.
+  define: {
+    'process.env': '{}',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
