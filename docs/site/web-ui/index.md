@@ -1,4 +1,4 @@
-# Web UI (Hlidskjalf)
+# Web UI
 
 The web UI is a React single-page application built with Vite.
 
