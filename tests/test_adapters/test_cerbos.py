@@ -70,8 +70,10 @@ class TestCerbosAdapter:
         mock_resp.raise_for_status = MagicMock()
 
         with patch.object(
-            adapter._client, "post",
-            new_callable=AsyncMock, return_value=mock_resp,
+            adapter._client,
+            "post",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
         ) as mock_post:
             result = await adapter.is_allowed(_principal(), "read", resource)
 
@@ -98,7 +100,9 @@ class TestCerbosAdapter:
         resource = _resource()
 
         with patch.object(
-            adapter._client, "post", new_callable=AsyncMock,
+            adapter._client,
+            "post",
+            new_callable=AsyncMock,
             side_effect=httpx.ConnectError("connection refused"),
         ):
             result = await adapter.is_allowed(_principal(), "read", resource)
@@ -145,7 +149,9 @@ class TestCerbosAdapter:
     async def test_filter_allowed_returns_empty_on_http_error(self, adapter):
         resource = _resource()
         with patch.object(
-            adapter._client, "post", new_callable=AsyncMock,
+            adapter._client,
+            "post",
+            new_callable=AsyncMock,
             side_effect=httpx.ConnectError("connection refused"),
         ):
             result = await adapter.filter_allowed(_principal(), "read", [resource])

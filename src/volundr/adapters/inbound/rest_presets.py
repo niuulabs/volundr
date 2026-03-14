@@ -127,9 +127,7 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
         is_default: bool | None = Query(default=None),
     ) -> list[PresetResponse]:
         """List presets with optional filters."""
-        presets = await preset_service.list_presets(
-            cli_tool=cli_tool, is_default=is_default
-        )
+        presets = await preset_service.list_presets(cli_tool=cli_tool, is_default=is_default)
         return [PresetResponse.from_preset(p) for p in presets]
 
     @router.get(

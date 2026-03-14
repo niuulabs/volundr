@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from volundr.adapters.outbound.contributors.git import GitContributor
-from volundr.domain.models import Session
+from volundr.domain.models import GitSource, Session
 from volundr.domain.ports import SessionContext
 
 
@@ -14,8 +14,7 @@ def session():
     return Session(
         name="test",
         model="claude",
-        repo="https://github.com/org/repo",
-        branch="feat/test",
+        source=GitSource(repo="https://github.com/org/repo", branch="feat/test"),
     )
 
 
@@ -30,7 +29,7 @@ class TestGitContributor:
         assert result.values == {}
 
     async def test_no_repo_returns_empty(self):
-        session = Session(name="test", model="claude", repo="", branch="main")
+        session = Session(name="test", model="claude", source=GitSource(repo="", branch="main"))
         registry = MagicMock()
         c = GitContributor(git_registry=registry)
         result = await c.contribute(session, SessionContext())

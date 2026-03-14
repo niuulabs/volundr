@@ -435,6 +435,143 @@ fi
 
         env_vars = env_list
 
+        # Merge contributor-provided volumes and volume mounts.
+        extra_volumes = list(spec.pod_spec.volumes) if spec.pod_spec else []
+        extra_mounts = list(spec.pod_spec.volume_mounts) if spec.pod_spec else []
+
+        volumes = [
+            self._build_workspace_volume(session),
+            {
+                "name": "nginx-config",
+                "configMap": {"name": f"{release_name}-nginx"},
+            },
+            *extra_volumes,
+        ]
+
+        base_mounts = [{"name": "workspace", "mountPath": "/volundr"}]
+        workload_mounts = base_mounts + extra_mounts
+
+        # Extract resource overrides from contributor spec values.
+        # These mirror the Helm chart values layout set by ResourceContributor.
+        skuld_resources = spec.values.get("resources", {})
+        devrunner_resources = (
+            spec.values.get("localServices", {}).get("devrunner", {}).get("resources", {})
+        )
+
+        # Default resources per container — overridden by user-specified values.
+        nginx_res = {
+            "requests": {"memory": "32Mi", "cpu": "10m"},
+            "limits": {"memory": "128Mi", "cpu": "100m"},
+        }
+        skuld_res = {
+            "requests": {"memory": "256Mi", "cpu": "100m"},
+            "limits": {"memory": "1Gi", "cpu": "500m"},
+        }
+        code_server_res = {
+            "requests": {"memory": "256Mi", "cpu": "100m"},
+            "limits": {"memory": "2Gi", "cpu": "1000m"},
+        }
+        devrunner_res = {
+            "requests": {"memory": "512Mi", "cpu": "100m"},
+            "limits": {"memory": "4Gi", "cpu": "2000m"},
+        }
+
+        # Apply user-specified skuld overrides
+        if skuld_resources.get("requests"):
+            skuld_res["requests"].update(skuld_resources["requests"])
+        if skuld_resources.get("limits"):
+            skuld_res["limits"].update(skuld_resources["limits"])
+
+        # Apply user-specified devrunner overrides (CPU, memory, GPU)
+        if devrunner_resources.get("requests"):
+            devrunner_res["requests"].update(devrunner_resources["requests"])
+        if devrunner_resources.get("limits"):
+            devrunner_res["limits"].update(devrunner_resources["limits"])
+
+        # Pod-level scheduling from contributor values
+        node_selector = spec.values.get("nodeSelector", {})
+        tolerations = spec.values.get("tolerations", [])
+        runtime_class_name = spec.values.get("runtimeClassName")
+
+        pod_spec: dict[str, Any] = {
+            "hostname": session.name,
+            "terminationGracePeriodSeconds": 30,
+            "securityContext": {
+                "fsGroup": 1000,
+            },
+            "initContainers": self._build_init_containers(session, spec),
+            "volumes": volumes,
+            "containers": [
+                {
+                    "name": "nginx",
+                    "image": self._nginx_image,
+                    "ports": [{"containerPort": SESSION_SERVICE_PORT, "name": "http"}],
+                    "volumeMounts": [
+                        {
+                            "name": "nginx-config",
+                            "mountPath": "/etc/nginx/nginx.conf",
+                            "subPath": "nginx.conf",
+                            "readOnly": True,
+                        },
+                        {"name": "workspace", "mountPath": "/volundr"},
+                    ],
+                    "resources": nginx_res,
+                },
+                {
+                    "name": "skuld",
+                    "image": self._skuld_image,
+                    "ports": [{"containerPort": 8081, "name": "broker"}],
+                    "env": env_vars,
+                    "securityContext": {
+                        "runAsUser": 1000,
+                        "allowPrivilegeEscalation": False,
+                    },
+                    "volumeMounts": workload_mounts,
+                    "resources": skuld_res,
+                },
+                {
+                    "name": "code-server",
+                    "image": self._code_server_image,
+                    "ports": [{"containerPort": 8443, "name": "ide"}],
+                    "command": ["dumb-init", "--", "/usr/bin/code-server"],
+                    "args": [
+                        "--bind-addr=0.0.0.0:8443",
+                        "--auth=none",
+                        "--disable-telemetry",
+                        f"/volundr/sessions/{session.id}/workspace",
+                    ],
+                    "securityContext": {
+                        "runAsUser": 1000,
+                        "allowPrivilegeEscalation": False,
+                    },
+                    "volumeMounts": workload_mounts,
+                    "resources": code_server_res,
+                },
+                {
+                    "name": "devrunner",
+                    "image": self._devrunner_image,
+                    "env": [
+                        {"name": "SESSION_ID", "value": str(session.id)},
+                        {"name": "TERMINAL_PORT", "value": "7681"},
+                        {"name": "HOME", "value": "/volundr/home"},
+                    ],
+                    "securityContext": {
+                        "runAsUser": 1000,
+                        "allowPrivilegeEscalation": False,
+                    },
+                    "volumeMounts": workload_mounts,
+                    "resources": devrunner_res,
+                },
+            ],
+        }
+
+        if node_selector:
+            pod_spec["nodeSelector"] = node_selector
+        if tolerations:
+            pod_spec["tolerations"] = tolerations
+        if runtime_class_name:
+            pod_spec["runtimeClassName"] = runtime_class_name
+
         return {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
@@ -452,101 +589,7 @@ fi
                 },
                 "template": {
                     "metadata": {"labels": labels},
-                    "spec": {
-                        "hostname": session.name,
-                        "terminationGracePeriodSeconds": 30,
-                        "securityContext": {
-                            "fsGroup": 1000,
-                        },
-                        "initContainers": self._build_init_containers(session, spec),
-                        "volumes": [
-                            self._build_workspace_volume(session),
-                            {
-                                "name": "nginx-config",
-                                "configMap": {"name": f"{release_name}-nginx"},
-                            },
-                        ],
-                        "containers": [
-                            {
-                                "name": "nginx",
-                                "image": self._nginx_image,
-                                "ports": [{"containerPort": SESSION_SERVICE_PORT, "name": "http"}],
-                                "volumeMounts": [
-                                    {
-                                        "name": "nginx-config",
-                                        "mountPath": "/etc/nginx/nginx.conf",
-                                        "subPath": "nginx.conf",
-                                        "readOnly": True,
-                                    },
-                                    {"name": "workspace", "mountPath": "/volundr"},
-                                ],
-                                "resources": {
-                                    "requests": {"memory": "32Mi", "cpu": "10m"},
-                                    "limits": {"memory": "128Mi", "cpu": "100m"},
-                                },
-                            },
-                            {
-                                "name": "skuld",
-                                "image": self._skuld_image,
-                                "ports": [{"containerPort": 8081, "name": "broker"}],
-                                "env": env_vars,
-                                "securityContext": {
-                                    "runAsUser": 1000,
-                                    "allowPrivilegeEscalation": False,
-                                },
-                                "volumeMounts": [
-                                    {"name": "workspace", "mountPath": "/volundr"},
-                                ],
-                                "resources": {
-                                    "requests": {"memory": "256Mi", "cpu": "100m"},
-                                    "limits": {"memory": "1Gi", "cpu": "500m"},
-                                },
-                            },
-                            {
-                                "name": "code-server",
-                                "image": self._code_server_image,
-                                "ports": [{"containerPort": 8443, "name": "ide"}],
-                                "command": ["dumb-init", "--", "/usr/bin/code-server"],
-                                "args": [
-                                    "--bind-addr=0.0.0.0:8443",
-                                    "--auth=none",
-                                    "--disable-telemetry",
-                                    f"/volundr/sessions/{session.id}/workspace",
-                                ],
-                                "securityContext": {
-                                    "runAsUser": 1000,
-                                    "allowPrivilegeEscalation": False,
-                                },
-                                "volumeMounts": [
-                                    {"name": "workspace", "mountPath": "/volundr"},
-                                ],
-                                "resources": {
-                                    "requests": {"memory": "256Mi", "cpu": "100m"},
-                                    "limits": {"memory": "2Gi", "cpu": "1000m"},
-                                },
-                            },
-                            {
-                                "name": "devrunner",
-                                "image": self._devrunner_image,
-                                "env": [
-                                    {"name": "SESSION_ID", "value": str(session.id)},
-                                    {"name": "TERMINAL_PORT", "value": "7681"},
-                                    {"name": "HOME", "value": "/volundr/home"},
-                                ],
-                                "securityContext": {
-                                    "runAsUser": 1000,
-                                    "allowPrivilegeEscalation": False,
-                                },
-                                "volumeMounts": [
-                                    {"name": "workspace", "mountPath": "/volundr"},
-                                ],
-                                "resources": {
-                                    "requests": {"memory": "512Mi", "cpu": "100m"},
-                                    "limits": {"memory": "4Gi", "cpu": "2000m"},
-                                },
-                            },
-                        ],
-                    },
+                    "spec": pod_spec,
                 },
             },
         }

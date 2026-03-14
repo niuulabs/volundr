@@ -26,8 +26,10 @@ def _mock_identity(principal=None):
     identity = AsyncMock()
     if principal is None:
         principal = Principal(
-            user_id="u1", email="admin@test.com",
-            tenant_id="t1", roles=["volundr:admin"],
+            user_id="u1",
+            email="admin@test.com",
+            tenant_id="t1",
+            roles=["volundr:admin"],
         )
     identity.validate_token.return_value = principal
     return identity
@@ -43,8 +45,12 @@ def _make_app(tenant_service, identity=None):
 
 def _sample_tenant(**overrides):
     defaults = dict(
-        id="t1", path="t1", name="Test",
-        tier=TenantTier.DEVELOPER, max_sessions=5, max_storage_gb=50,
+        id="t1",
+        path="t1",
+        name="Test",
+        tier=TenantTier.DEVELOPER,
+        max_sessions=5,
+        max_storage_gb=50,
     )
     defaults.update(overrides)
     return Tenant(**defaults)
@@ -142,8 +148,10 @@ class TestCreateTenant:
     def test_create_requires_admin(self):
         svc = AsyncMock(spec=TenantService)
         viewer = Principal(
-            user_id="u2", email="v@test.com",
-            tenant_id="t1", roles=["volundr:viewer"],
+            user_id="u2",
+            email="v@test.com",
+            tenant_id="t1",
+            roles=["volundr:viewer"],
         )
         app = _make_app(svc, identity=_mock_identity(viewer))
         client = TestClient(app)
@@ -220,7 +228,9 @@ class TestMembers:
     def test_add_member_success(self):
         svc = AsyncMock(spec=TenantService)
         svc.add_member.return_value = TenantMembership(
-            user_id="u2", tenant_id="t1", role=TenantRole.DEVELOPER,
+            user_id="u2",
+            tenant_id="t1",
+            role=TenantRole.DEVELOPER,
         )
         app = _make_app(svc)
         client = TestClient(app)

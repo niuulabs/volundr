@@ -14,7 +14,6 @@ import (
 	"strings"
 	"text/template"
 
-
 	"github.com/niuulabs/volundr/cli/internal/config"
 	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
@@ -102,16 +101,18 @@ type k3sComposeData struct {
 
 // k3sAPIConfig represents the Python API config file structure for k3s mode.
 type k3sAPIConfig struct {
-	Database        map[string]interface{} `yaml:"database"`
-	PodManager      map[string]interface{} `yaml:"pod_manager"`
-	CredentialStore map[string]interface{} `yaml:"credential_store"`
-	Storage         map[string]interface{} `yaml:"storage"`
-	SecretInjection map[string]interface{} `yaml:"secret_injection"`
-	Identity             map[string]interface{}   `yaml:"identity"`
-	Authorization        map[string]interface{}   `yaml:"authorization"`
-	Gateway              map[string]interface{}   `yaml:"gateway"`
-	Git                  map[string]interface{}   `yaml:"git,omitempty"`
-	SessionContributors  []map[string]interface{} `yaml:"session_contributors,omitempty"`
+	Database            map[string]interface{}   `yaml:"database"`
+	PodManager          map[string]interface{}   `yaml:"pod_manager"`
+	CredentialStore     map[string]interface{}   `yaml:"credential_store"`
+	Storage             map[string]interface{}   `yaml:"storage"`
+	SecretInjection     map[string]interface{}   `yaml:"secret_injection"`
+	Identity            map[string]interface{}   `yaml:"identity"`
+	Authorization       map[string]interface{}   `yaml:"authorization"`
+	Gateway             map[string]interface{}   `yaml:"gateway"`
+	ResourceProvider    map[string]interface{}   `yaml:"resource_provider,omitempty"`
+	Git                 map[string]interface{}   `yaml:"git,omitempty"`
+	LocalMounts         map[string]interface{}   `yaml:"local_mounts,omitempty"`
+	SessionContributors []map[string]interface{} `yaml:"session_contributors,omitempty"`
 }
 
 // K3sRuntime manages the Volundr stack using k3s/k3d for Kubernetes
@@ -152,15 +153,15 @@ func (r *K3sRuntime) Init(ctx context.Context, cfg *config.Config) error {
 
 	switch provider {
 	case "k3d":
-		if err := r.initK3d(ctx); err != nil {
+		if err := r.initK3d(ctx, cfg); err != nil {
 			return err
 		}
 	case "native":
-		if err := r.initNativeK3s(); err != nil {
+		if err := r.initNativeK3s(cfg); err != nil {
 			return err
 		}
 	default:
-		if err := r.offerInstallation(ctx); err != nil {
+		if err := r.offerInstallation(ctx, cfg); err != nil {
 			return err
 		}
 	}
@@ -480,7 +481,7 @@ func (r *K3sRuntime) detectProvider(cfg *config.Config) string {
 }
 
 // initK3d sets up k3d.
-func (r *K3sRuntime) initK3d(ctx context.Context) error {
+func (r *K3sRuntime) initK3d(ctx context.Context, cfg *config.Config) error {
 	fmt.Print("  k3d            ... ")
 
 	// Check if k3d is installed.
@@ -512,12 +513,24 @@ func (r *K3sRuntime) initK3d(ctx context.Context) error {
 		return fmt.Errorf("get config dir: %w", err)
 	}
 	storageVolume := cfgDir + ":" + k3sNodeStoragePath
-	createOut, err := exec.CommandContext(ctx,
-		"k3d", "cluster", "create", k3sClusterName,
+	createArgs := []string{
+		"cluster", "create", k3sClusterName,
 		"-p", k3sLoadBalancerHTTPPort,
 		"-p", k3sLoadBalancerHTTPSPort,
 		"--kubeconfig-update-default=false",
 		"--volume", storageVolume,
+	}
+
+	// Ask the user if they want local folder mounts and which root path
+	// to bind-mount into the k3d node.
+	for _, prefix := range r.promptK3dLocalMountPrefixes(cfg) {
+		createArgs = append(createArgs, "--volume", prefix+":"+prefix)
+	}
+
+	fmt.Print("  Creating k3d cluster ... ")
+
+	createOut, err := exec.CommandContext(ctx,
+		"k3d", createArgs...,
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println("failed")
@@ -533,8 +546,10 @@ func (r *K3sRuntime) initK3d(ctx context.Context) error {
 	return nil
 }
 
-// initNativeK3s verifies native k3s is running.
-func (r *K3sRuntime) initNativeK3s() error {
+// initNativeK3s verifies native k3s is running and optionally enables
+// local folder mounts (no volume dance needed — host paths are directly
+// accessible on native k3s).
+func (r *K3sRuntime) initNativeK3s(cfg *config.Config) error {
 	fmt.Print("  k3s            ... ")
 
 	// For native k3s, copy the default kubeconfig to the volundr config dir.
@@ -556,7 +571,88 @@ func (r *K3sRuntime) initNativeK3s() error {
 	}
 	fmt.Println("ok")
 
+	// Offer to enable local folder mounts if not already configured.
+	if !cfg.LocalMounts.Enabled {
+		r.promptEnableLocalMounts(cfg)
+	}
+
 	return nil
+}
+
+// promptK3dLocalMountPrefixes asks the user which host paths to mount
+// into the k3d node during cluster creation. k3d runs k3s inside Docker,
+// so host directories must be explicitly bind-mounted into the node
+// before pods can use them via hostPath volumes.
+//
+// Returns the list of prefixes to mount, or nil if the user declines.
+// Persists the choice back to config.
+func (r *K3sRuntime) promptK3dLocalMountPrefixes(cfg *config.Config) []string {
+	// If already fully configured, use as-is.
+	if cfg.LocalMounts.Enabled && len(cfg.LocalMounts.AllowedPrefixes) > 0 {
+		return cfg.LocalMounts.AllowedPrefixes
+	}
+
+	fmt.Println()
+	fmt.Println("  Local folder mounts let sessions access directories from this machine.")
+	fmt.Println("  Since k3d runs Kubernetes inside Docker, host directories must be")
+	fmt.Println("  mounted into the k3d node at cluster creation time.")
+	fmt.Println()
+
+	if !promptYesNo("  Enable local folder mounts?") {
+		return nil
+	}
+
+	home, _ := os.UserHomeDir()
+	fmt.Println()
+	fmt.Println("  Enter the root path that sessions are allowed to mount.")
+	fmt.Println("  Any subdirectory under this path will be mountable.")
+	fmt.Println()
+	if home != "" {
+		fmt.Printf("  Root path [%s]: ", home)
+	} else {
+		fmt.Print("  Root path: ")
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	answer, _ := reader.ReadString('\n')
+	answer = strings.TrimSpace(answer)
+
+	if answer == "" {
+		answer = home
+	}
+	if answer == "" {
+		return nil
+	}
+
+	// Persist to config.
+	cfg.LocalMounts.Enabled = true
+	cfg.LocalMounts.AllowedPrefixes = []string{answer}
+	r.saveConfig(cfg)
+
+	return []string{answer}
+}
+
+// promptEnableLocalMounts offers to enable local folder mounts on native
+// k3s, where host paths are directly accessible without extra volume
+// mounting. Only sets the enabled flag in config.
+func (r *K3sRuntime) promptEnableLocalMounts(cfg *config.Config) {
+	fmt.Println()
+	fmt.Println("  Local folder mounts let sessions access directories from this machine.")
+	fmt.Println()
+
+	if !promptYesNo("  Enable local folder mounts?") {
+		return
+	}
+
+	cfg.LocalMounts.Enabled = true
+	r.saveConfig(cfg)
+}
+
+// saveConfig persists the current config back to disk.
+func (r *K3sRuntime) saveConfig(cfg *config.Config) {
+	if cfgPath, err := config.ConfigPath(); err == nil {
+		_ = cfg.SaveTo(cfgPath)
+	}
 }
 
 // promptYesNo asks the user a yes/no question and returns true for yes.
@@ -569,15 +665,15 @@ func promptYesNo(prompt string) bool {
 }
 
 // offerInstallation offers to install k3d (and k3s on Linux) interactively.
-func (r *K3sRuntime) offerInstallation(ctx context.Context) error {
+func (r *K3sRuntime) offerInstallation(ctx context.Context, cfg *config.Config) error {
 	fmt.Println("  No k3s provider found.")
 	fmt.Println()
 
 	switch runtime.GOOS {
 	case "darwin":
-		return r.offerInstallK3dDarwin(ctx)
+		return r.offerInstallK3dDarwin(ctx, cfg)
 	case "linux":
-		return r.offerInstallLinux(ctx)
+		return r.offerInstallLinux(ctx, cfg)
 	default:
 		return fmt.Errorf(
 			"unsupported platform %q for k3s runtime. Install k3d manually: https://k3d.io",
@@ -587,7 +683,7 @@ func (r *K3sRuntime) offerInstallation(ctx context.Context) error {
 }
 
 // offerInstallK3dDarwin offers to install k3d via Homebrew on macOS.
-func (r *K3sRuntime) offerInstallK3dDarwin(ctx context.Context) error {
+func (r *K3sRuntime) offerInstallK3dDarwin(ctx context.Context, cfg *config.Config) error {
 	// Check if Homebrew is available.
 	if _, err := exec.Command("brew", "--version").CombinedOutput(); err != nil {
 		fmt.Println("  Homebrew is not installed. Install k3d manually:")
@@ -611,11 +707,11 @@ func (r *K3sRuntime) offerInstallK3dDarwin(ctx context.Context) error {
 	fmt.Println("ok")
 
 	// Now init the k3d cluster.
-	return r.initK3d(ctx)
+	return r.initK3d(ctx, cfg)
 }
 
 // offerInstallLinux offers k3d or native k3s installation on Linux.
-func (r *K3sRuntime) offerInstallLinux(ctx context.Context) error {
+func (r *K3sRuntime) offerInstallLinux(ctx context.Context, cfg *config.Config) error {
 	fmt.Println("  Available options:")
 	fmt.Println("    1) k3d  - k3s in Docker (recommended if Docker is available)")
 	fmt.Println("    2) k3s  - native k3s (requires root, full GPU support)")
@@ -628,23 +724,23 @@ func (r *K3sRuntime) offerInstallLinux(ctx context.Context) error {
 
 	switch choice {
 	case "1", "k3d", "":
-		return r.offerInstallK3dLinux(ctx)
+		return r.offerInstallK3dLinux(ctx, cfg)
 	case "2", "k3s":
-		return r.offerInstallNativeK3s(ctx)
+		return r.offerInstallNativeK3s(ctx, cfg)
 	default:
 		return fmt.Errorf("invalid choice. Run 'volundr init' again")
 	}
 }
 
 // offerInstallK3dLinux installs k3d via the install script on Linux.
-func (r *K3sRuntime) offerInstallK3dLinux(ctx context.Context) error {
+func (r *K3sRuntime) offerInstallK3dLinux(ctx context.Context, cfg *config.Config) error {
 	if !promptYesNo("  Install k3d? (curl install script)") {
 		return fmt.Errorf("k3d is required. Install it and run 'volundr init' again")
 	}
 	if err := r.installK3dScript(ctx); err != nil {
 		return err
 	}
-	return r.initK3d(ctx)
+	return r.initK3d(ctx, cfg)
 }
 
 // installK3dScript installs k3d using the official install script.
@@ -663,7 +759,7 @@ func (r *K3sRuntime) installK3dScript(ctx context.Context) error {
 }
 
 // offerInstallNativeK3s installs k3s using the official install script.
-func (r *K3sRuntime) offerInstallNativeK3s(ctx context.Context) error {
+func (r *K3sRuntime) offerInstallNativeK3s(ctx context.Context, cfg *config.Config) error {
 	if !promptYesNo("  Install k3s? (requires sudo, curl install script)") {
 		return fmt.Errorf("k3s is required. Install it and run 'volundr init' again")
 	}
@@ -679,7 +775,7 @@ func (r *K3sRuntime) offerInstallNativeK3s(ctx context.Context) error {
 	}
 	fmt.Println("ok")
 
-	return r.initNativeK3s()
+	return r.initNativeK3s(cfg)
 }
 
 // offerInstallHelm offers to install Helm interactively.
@@ -922,9 +1018,30 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 		apiCfg.Git = buildGitConfig(cfg)
 	}
 
+	// Pass through local_mounts config if enabled.
+	if cfg.LocalMounts.Enabled {
+		apiCfg.LocalMounts = map[string]interface{}{
+			"enabled":           cfg.LocalMounts.Enabled,
+			"allow_root_mount":  cfg.LocalMounts.AllowRootMount,
+			"allowed_prefixes":  cfg.LocalMounts.AllowedPrefixes,
+			"default_read_only": cfg.LocalMounts.DefaultReadOnly,
+		}
+	}
+
+	// Wire up resource provider — use K8sResourceProvider for real cluster data.
+	apiCfg.ResourceProvider = map[string]interface{}{
+		"adapter": "volundr.adapters.outbound.k8s_resource_provider.K8sResourceProvider",
+		"kwargs": map[string]interface{}{
+			"namespace":  namespace,
+			"kubeconfig": containerKubeconfigPath,
+		},
+	}
+
 	// Wire up session contributors.
+	// LocalMountContributor is auto-wired by Python main.py from local_mounts config.
 	apiCfg.SessionContributors = []map[string]interface{}{
 		{"adapter": "volundr.adapters.outbound.contributors.git.GitContributor"},
+		{"adapter": "volundr.adapters.outbound.contributors.resource.ResourceContributor"},
 	}
 
 	data, err := yaml.Marshal(&apiCfg)
@@ -961,7 +1078,7 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 	}
 
 	data := k3sComposeData{
-		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuu/volundr-api:latest"),
+		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr-api:latest"),
 		ContainerName:   k3sContainerName,
 		APIPort:         k3sAPIInternalPort,
 		DBHost:          dbHost,

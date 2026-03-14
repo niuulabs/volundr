@@ -7,7 +7,7 @@ and ttyd containers on a shared Docker network.
 Constructor accepts plain kwargs (dynamic adapter pattern):
     adapter: "volundr.adapters.outbound.docker_pod_manager.DockerPodManager"
     network: "volundr-net"
-    skuld_image: "ghcr.io/niuu/skuld:latest"
+    skuld_image: "ghcr.io/niuulabs/skuld:latest"
     compose_dir: "~/.volundr/sessions"
     gateway_domain: "localhost:8443"
 """
@@ -57,9 +57,9 @@ class DockerPodManager(PodManager):
         self,
         *,
         network: str = "volundr-net",
-        skuld_image: str = "ghcr.io/niuu/skuld:latest",
-        code_server_image: str = "ghcr.io/niuu/code-server:latest",
-        ttyd_image: str = "ghcr.io/niuu/ttyd:latest",
+        skuld_image: str = "ghcr.io/niuulabs/skuld:latest",
+        code_server_image: str = "ghcr.io/niuulabs/code-server:latest",
+        ttyd_image: str = "ghcr.io/niuulabs/ttyd:latest",
         compose_dir: str = "~/.volundr/sessions",
         gateway_domain: str | None = None,
         db_host: str = "host.docker.internal",
@@ -86,19 +86,21 @@ class DockerPodManager(PodManager):
 
     # Keys from spec.values that are structured and should NOT be dumped
     # as flat environment variables.
-    _STRUCTURED_KEYS: frozenset[str] = frozenset({
-        "envSecrets",
-        "persistence",
-        "homeVolume",
-        "git",
-        "mcpServers",
-        "session",
-        "env",
-        "ingress",
-        "resources",
-        "podSpec",
-        "pod_spec",
-    })
+    _STRUCTURED_KEYS: frozenset[str] = frozenset(
+        {
+            "envSecrets",
+            "persistence",
+            "homeVolume",
+            "git",
+            "mcpServers",
+            "session",
+            "env",
+            "ingress",
+            "resources",
+            "podSpec",
+            "pod_spec",
+        }
+    )
 
     def set_credential_store(self, store: CredentialStorePort) -> None:
         """Inject credential store for resolving envSecrets."""
@@ -116,9 +118,7 @@ class DockerPodManager(PodManager):
     def _chat_endpoint(self, session: Session) -> str:
         if self._gateway_domain:
             return f"wss://{self._gateway_domain}/s/{session.id}/session"
-        return (
-            f"http://{self._project_name(session)}-skuld-1:8080/session"
-        )
+        return f"http://{self._project_name(session)}-skuld-1:8080/session"
 
     def _code_endpoint(self, session: Session) -> str:
         if self._gateway_domain:
@@ -281,17 +281,23 @@ class DockerPodManager(PodManager):
                 continue
 
             cred_data = await self._credential_store.get_value(
-                "user", owner_id, secret_name,
+                "user",
+                owner_id,
+                secret_name,
             )
             if not cred_data:
                 logger.warning(
-                    "Secret %r not found for session %s", secret_name, session.id,
+                    "Secret %r not found for session %s",
+                    secret_name,
+                    session.id,
                 )
                 continue
             if secret_key not in cred_data:
                 logger.warning(
                     "Key %r not found in secret %r for session %s",
-                    secret_key, secret_name, session.id,
+                    secret_key,
+                    secret_name,
+                    session.id,
                 )
                 continue
             resolved[env_var] = cred_data[secret_key]
@@ -323,9 +329,7 @@ class DockerPodManager(PodManager):
             await self._run_in_executor(client.compose.up, detach=True)
         except DockerException as exc:
             logger.error("Failed to start session %s: %s", session.id, exc)
-            raise RuntimeError(
-                f"docker compose up failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"docker compose up failed: {exc}") from exc
 
         logger.info("Started Docker Compose stack for session %s", session.id)
         return PodStartResult(
@@ -415,7 +419,5 @@ class DockerPodManager(PodManager):
             await asyncio.sleep(self._poll_interval)
             elapsed += self._poll_interval
 
-        logger.warning(
-            "Timed out waiting for session %s after %.1fs", session.id, timeout
-        )
+        logger.warning("Timed out waiting for session %s after %.1fs", session.id, timeout)
         return SessionStatus.FAILED

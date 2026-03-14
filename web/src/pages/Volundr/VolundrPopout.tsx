@@ -17,6 +17,7 @@ import { getAccessToken } from '@/adapters/api/client';
 import { useVolundr, useBroadcastChannel, useSessionProbe } from '@/hooks';
 import type { VolundrSession } from '@/models';
 import { isSessionBooting } from '@/models';
+import { getSourceLabel, getBranch, isGitSource } from '@/utils/source';
 import styles from './VolundrPopout.module.css';
 
 type TabType = 'terminal' | 'code' | 'chat';
@@ -56,7 +57,7 @@ export function VolundrPopout() {
   }, [sessions, sessionId]);
   const selectedModel = session ? models[session.model] : null;
   const isLocal = selectedModel?.provider === 'local';
-  const isManual = session?.source === 'manual';
+  const isManual = session?.origin === 'manual';
 
   // IDE state for code tab - track which session the URL was fetched for
   const [fetchedIde, setFetchedIde] = useState<{ sessionId: string; url: string | null } | null>(
@@ -73,7 +74,7 @@ export function VolundrPopout() {
     if (!shouldLoadIde || !session) {
       return null;
     }
-    if (session.source === 'manual' && session.hostname) {
+    if (session.origin === 'manual' && session.hostname) {
       return `https://${session.hostname}/`;
     }
     return null;
@@ -249,9 +250,13 @@ export function VolundrPopout() {
               ) : (
                 <>
                   <FolderGit2 className={styles.repoIcon} />
-                  <span>{session.repo}</span>
-                  <span className={styles.branchArrow}>→</span>
-                  <span className={styles.branchName}>{session.branch}</span>
+                  <span>{getSourceLabel(session.source)}</span>
+                  {isGitSource(session.source) && (
+                    <>
+                      <span className={styles.branchArrow}>→</span>
+                      <span className={styles.branchName}>{getBranch(session.source)}</span>
+                    </>
+                  )}
                 </>
               )}
               {selectedModel && (

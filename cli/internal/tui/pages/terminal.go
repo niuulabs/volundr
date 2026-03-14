@@ -52,12 +52,12 @@ type terminalTab struct {
 	label      string
 	terminalID string // server-side tmux session ID (for kill calls)
 	sessionID  string
-	wsURL     string // WebSocket URL for reconnecting on tab switch
-	emulator  *vt.Emulator
-	ws        *api.TerminalWSClient
-	connState string
-	connErr   error
-	mu        sync.Mutex
+	wsURL      string // WebSocket URL for reconnecting on tab switch
+	emulator   *vt.Emulator
+	ws         *api.TerminalWSClient
+	connState  string
+	connErr    error
+	mu         sync.Mutex
 }
 
 // TerminalPage implements a full remote PTY terminal via WebSocket and x/vt.
@@ -76,6 +76,11 @@ type TerminalPage struct {
 	// activeSession is stored so new tabs can be spawned from ctrl+t.
 	activeSession *api.Session
 	activeToken   string
+
+	// insertMode tracks whether keystrokes are forwarded to the PTY (true)
+	// or handled as navigation commands (false). Ctrl+] exits insert mode,
+	// i re-enters it — mirroring the chat page's input/scroll modes.
+	insertMode bool
 }
 
 // defaultTermWidth and defaultTermHeight are initial vt emulator dimensions
@@ -91,13 +96,14 @@ func NewTerminalPage(serverURL string, client *api.Client, pool *tui.ClientPool)
 	connCh := make(chan tea.Msg, 16)
 
 	return TerminalPage{
-		tabs:      nil,
-		activeTab: 0,
-		serverURL: serverURL,
-		client:    client,
-		pool:      pool,
-		outputCh:  outputCh,
-		connCh:    connCh,
+		tabs:       nil,
+		activeTab:  0,
+		serverURL:  serverURL,
+		client:     client,
+		pool:       pool,
+		outputCh:   outputCh,
+		connCh:     connCh,
+		insertMode: true,
 	}
 }
 
@@ -177,26 +183,28 @@ func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) {
 
 // handleKey processes keyboard input.
 func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
-	// Use Keystroke() for matching — unlike String(), it always returns the
-	// canonical "ctrl+n" format regardless of whether the terminal sends
-	// the raw control character or enhanced key data.
 	key := msg.Key().Keystroke()
 
-	// Full-screen toggle: F11 or ctrl+f
+	// Ctrl+] always toggles between insert and normal mode (like the
+	// classic telnet escape character). Works regardless of current mode.
+	// Match both "ctrl+]" (Kitty protocol) and raw 0x1D (legacy terminals).
+	if key == "ctrl+]" || msg.Key().Code == 0x1D {
+		t.insertMode = !t.insertMode
+		return t, nil
+	}
+
+	// Full-screen toggle: F11 or ctrl+f (works in both modes).
 	if key == "f11" || key == "ctrl+f" {
 		t.fullScreen = !t.fullScreen
 		t.resizeAllEmulators()
 		return t, nil
 	}
 
-	// Tab management: ctrl+t to create new tab
+	// Tab management works in both modes.
 	if key == "ctrl+t" {
 		t.spawnNewTab()
 		return t, nil
 	}
-
-	// Tab switching: ctrl+n for next, ctrl+p for previous.
-	// Reconnects WebSocket since the server only supports one active connection.
 	if key == "ctrl+n" && len(t.tabs) > 1 {
 		t.activeTab = (t.activeTab + 1) % len(t.tabs)
 		t.connectTab(t.activeTab)
@@ -207,14 +215,23 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
 		t.connectTab(t.activeTab)
 		return t, nil
 	}
-
-	// Close tab: ctrl+w
 	if key == "ctrl+w" && len(t.tabs) > 0 {
 		t.closeTab(t.activeTab)
 		return t, nil
 	}
 
-	// Forward all other keys to the active terminal's WebSocket
+	// --- Normal mode: navigation keys, i to re-enter insert mode ---
+	if !t.insertMode {
+		// i enters insert mode (like vim / chat page).
+		if key == "i" {
+			t.insertMode = true
+		}
+		// All other keys are ignored in normal mode; they fall through
+		// to the app layer in tui.go for page navigation (1-7, q, ?, [).
+		return t, nil
+	}
+
+	// --- Insert mode: forward keys to the active PTY ---
 	if len(t.tabs) == 0 {
 		return t, nil
 	}
@@ -639,6 +656,11 @@ func (t *TerminalPage) Close() {
 	t.tabs = nil
 }
 
+// InsertMode returns whether the terminal is in insert mode (keys go to PTY).
+func (t TerminalPage) InsertMode() bool {
+	return t.insertMode
+}
+
 // SetSize updates the page dimensions and resizes all emulators.
 func (t *TerminalPage) SetSize(w, h int) {
 	t.width = w
@@ -674,7 +696,7 @@ func (t TerminalPage) termDimensions() (int, int) {
 		return defaultTermWidth, defaultTermHeight
 	}
 
-	w := t.width - 4 // padding
+	w := t.width - 4  // padding
 	h := t.height - 4 // status line + tab bar + padding
 
 	if t.fullScreen {
@@ -721,9 +743,15 @@ func (t TerminalPage) View() string {
 		Width(termW).
 		Height(termH)
 
-	helpText := lipgloss.NewStyle().
-		Foreground(theme.TextMuted).
-		Render("  ctrl+t: new tab  ctrl+w: close  ctrl+n/p: switch tabs  ctrl+f: fullscreen")
+	var helpText string
+	if t.insertMode {
+		modeTag := lipgloss.NewStyle().Foreground(theme.AccentEmerald).Bold(true).Render("INSERT")
+		helpText = fmt.Sprintf("  %s  ctrl+]: normal mode  ctrl+t: new  ctrl+w: close  ctrl+n/p: tabs  ctrl+f: fullscreen", modeTag)
+	} else {
+		modeTag := lipgloss.NewStyle().Foreground(theme.AccentAmber).Bold(true).Render("NORMAL")
+		helpText = fmt.Sprintf("  %s  i: insert  1-7: navigate  q: quit  ?: help  [: sidebar  ctrl+]: insert mode", modeTag)
+	}
+	helpText = lipgloss.NewStyle().Foreground(theme.TextMuted).Render(helpText)
 
 	return lipgloss.NewStyle().
 		Width(t.width).
@@ -831,15 +859,16 @@ func (t TerminalPage) renderTabBar() string {
 	return "  " + strings.Join(tabs, "  │  ")
 }
 
-
 // keyToBytes converts a bubbletea KeyMsg to raw bytes for the PTY.
 func keyToBytes(msg tea.KeyMsg) []byte {
 	// Use Keystroke() for matching — String() may return raw control chars
 	// that don't match our "ctrl+n" style case labels.
 	key := msg.Key().Keystroke()
 
-	// If the key has printable text and no modifier, return it directly.
-	if text := msg.Key().Text; len(text) > 0 && msg.Key().Mod == 0 {
+	// If the key has printable text and no modifier (or only Shift), return it directly.
+	// Shift is included because Kitty keyboard protocol explicitly reports Shift
+	// for uppercase letters, but the text already contains the shifted character.
+	if text := msg.Key().Text; len(text) > 0 && (msg.Key().Mod == 0 || msg.Key().Mod == tea.ModShift) {
 		return []byte(text)
 	}
 

@@ -20,7 +20,7 @@ from volundr.adapters.outbound.direct_k8s_pod_manager import (
     SESSION_SERVICE_PORT,
     DirectK8sPodManager,
 )
-from volundr.domain.models import Session, SessionStatus
+from volundr.domain.models import GitSource, Session, SessionStatus
 
 
 @pytest.fixture
@@ -30,8 +30,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test K3s Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 
@@ -271,6 +270,118 @@ class TestManifests:
         assert annotations["traefik.ingress.kubernetes.io/router.middlewares"] == expected_mw
 
 
+class TestResourceOverrides:
+    """Test that user-specified resources are applied to the deployment manifest."""
+
+    def test_default_resources_when_no_overrides(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec()
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        containers = {c["name"]: c for c in manifest["spec"]["template"]["spec"]["containers"]}
+        # Defaults should be present
+        assert containers["devrunner"]["resources"]["requests"]["memory"] == "512Mi"
+        assert containers["devrunner"]["resources"]["limits"]["cpu"] == "2000m"
+        assert containers["skuld"]["resources"]["limits"]["memory"] == "1Gi"
+        assert containers["nginx"]["resources"]["requests"]["cpu"] == "10m"
+
+    def test_user_cpu_memory_applied_to_devrunner(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(
+            resources={
+                "requests": {"cpu": "4", "memory": "16Gi"},
+                "limits": {"cpu": "4", "memory": "16Gi"},
+            },
+            localServices={
+                "devrunner": {
+                    "resources": {
+                        "requests": {"cpu": "4", "memory": "16Gi"},
+                        "limits": {"cpu": "4", "memory": "16Gi"},
+                    }
+                }
+            },
+        )
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        containers = {c["name"]: c for c in manifest["spec"]["template"]["spec"]["containers"]}
+        # Devrunner should have user-specified resources
+        assert containers["devrunner"]["resources"]["requests"]["cpu"] == "4"
+        assert containers["devrunner"]["resources"]["requests"]["memory"] == "16Gi"
+        assert containers["devrunner"]["resources"]["limits"]["cpu"] == "4"
+        assert containers["devrunner"]["resources"]["limits"]["memory"] == "16Gi"
+        # Skuld should also reflect the override (top-level resources)
+        assert containers["skuld"]["resources"]["requests"]["cpu"] == "4"
+        # Nginx stays at defaults
+        assert containers["nginx"]["resources"]["requests"]["cpu"] == "10m"
+
+    def test_gpu_applied_to_devrunner_limits(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(
+            localServices={
+                "devrunner": {
+                    "resources": {
+                        "limits": {"nvidia.com/gpu": "2"},
+                    }
+                }
+            },
+        )
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        containers = {c["name"]: c for c in manifest["spec"]["template"]["spec"]["containers"]}
+        assert containers["devrunner"]["resources"]["limits"]["nvidia.com/gpu"] == "2"
+        # Other containers should not have GPU
+        assert "nvidia.com/gpu" not in containers["skuld"]["resources"]["limits"]
+
+    def test_node_selector_applied_to_pod_spec(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(nodeSelector={"nvidia.com/gpu.product": "A100"})
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        pod_spec = manifest["spec"]["template"]["spec"]
+        assert pod_spec["nodeSelector"] == {"nvidia.com/gpu.product": "A100"}
+
+    def test_tolerations_applied_to_pod_spec(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        toleration = {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
+        spec = make_spec(tolerations=[toleration])
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        pod_spec = manifest["spec"]["template"]["spec"]
+        assert pod_spec["tolerations"] == [toleration]
+
+    def test_runtime_class_name_applied_to_pod_spec(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(runtimeClassName="nvidia")
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        pod_spec = manifest["spec"]["template"]["spec"]
+        assert pod_spec["runtimeClassName"] == "nvidia"
+
+    def test_no_scheduling_fields_when_not_specified(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec()
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        pod_spec = manifest["spec"]["template"]["spec"]
+        assert "nodeSelector" not in pod_spec
+        assert "tolerations" not in pod_spec
+        assert "runtimeClassName" not in pod_spec
+
+
 class TestStripPrefixMiddleware:
     """Test Traefik middleware generation."""
 
@@ -285,9 +396,7 @@ class TestStripPrefixMiddleware:
         assert mw["kind"] == "Middleware"
         assert mw["metadata"]["name"] == f"skuld-{sample_session.id}-strip"
         assert mw["metadata"]["namespace"] == "test-ns"
-        assert mw["spec"]["stripPrefix"]["prefixes"] == [
-            f"/s/{sample_session.id}"
-        ]
+        assert mw["spec"]["stripPrefix"]["prefixes"] == [f"/s/{sample_session.id}"]
 
 
 class TestDeploymentStatus:
@@ -355,19 +464,24 @@ class TestStart:
 
         mock_cr = AsyncMock()
         mock_apply = AsyncMock()
-        with patch.object(
-            pod_manager, "_apply_custom_resource", mock_cr,
-        ), patch.object(
-            pod_manager, "_apply_resource", mock_apply,
+        with (
+            patch.object(
+                pod_manager,
+                "_apply_custom_resource",
+                mock_cr,
+            ),
+            patch.object(
+                pod_manager,
+                "_apply_resource",
+                mock_apply,
+            ),
         ):
             result = await pod_manager.start(sample_session, spec)
 
         mock_cr.assert_called_once()
 
         assert mock_apply.call_count == 4
-        call_classes = [
-            c.kwargs["api_class"] for c in mock_apply.call_args_list
-        ]
+        call_classes = [c.kwargs["api_class"] for c in mock_apply.call_args_list]
         assert "AppsV1Api" in call_classes
         assert "NetworkingV1Api" in call_classes
         # CoreV1Api appears twice: ConfigMap + Service
@@ -391,18 +505,23 @@ class TestStop:
 
         mock_delete = AsyncMock(return_value=True)
         mock_delete_cr = AsyncMock()
-        with patch.object(
-            pod_manager, "_delete_resource", mock_delete,
-        ), patch.object(
-            pod_manager, "_delete_custom_resource", mock_delete_cr,
+        with (
+            patch.object(
+                pod_manager,
+                "_delete_resource",
+                mock_delete,
+            ),
+            patch.object(
+                pod_manager,
+                "_delete_custom_resource",
+                mock_delete_cr,
+            ),
         ):
             result = await pod_manager.stop(sample_session)
 
         assert result is True
         assert mock_delete.call_count == 4
-        call_classes = [
-            c.args[0] for c in mock_delete.call_args_list
-        ]
+        call_classes = [c.args[0] for c in mock_delete.call_args_list]
         assert "AppsV1Api" in call_classes
         assert "NetworkingV1Api" in call_classes
         # CoreV1Api appears twice: Service + ConfigMap
@@ -427,7 +546,8 @@ class TestStatus:
         pod_manager._api_client = MagicMock()
 
         with patch.object(
-            pod_manager, "_read_deployment",
+            pod_manager,
+            "_read_deployment",
             new_callable=AsyncMock,
             return_value=deployment,
         ):
@@ -444,7 +564,8 @@ class TestStatus:
         pod_manager._api_client = MagicMock()
 
         with patch.object(
-            pod_manager, "_read_deployment",
+            pod_manager,
+            "_read_deployment",
             new_callable=AsyncMock,
             return_value=None,
         ):

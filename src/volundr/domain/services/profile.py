@@ -23,15 +23,13 @@ class ProfileValidationError(Exception):
     """Raised when profile data fails validation."""
 
 
-_MEMORY_RE = re.compile(
-    r"^(\d+(?:\.\d+)?)(Ki|Mi|Gi|Ti)$"
-)
+_MEMORY_RE = re.compile(r"^(\d+(?:\.\d+)?)(Ki|Mi|Gi|Ti)$")
 
 _MEMORY_LIMITS = {
     "Ki": (512 * 1024, 64 * 1024 * 1024),  # 512Ki .. 64Ti (in Ki)
-    "Mi": (512, 64 * 1024),                 # 512Mi .. 64Gi (in Mi)
-    "Gi": (0.5, 64),                        # 0.5Gi .. 64Gi
-    "Ti": (0.0005, 64),                     # tiny .. 64Ti
+    "Mi": (512, 64 * 1024),  # 512Mi .. 64Gi (in Mi)
+    "Gi": (0.5, 64),  # 0.5Gi .. 64Gi
+    "Ti": (0.0005, 64),  # tiny .. 64Ti
 }
 
 
@@ -50,13 +48,9 @@ def validate_profile(profile: ForgeProfile) -> list[str]:
             try:
                 cpu_val = float(cpu)
                 if cpu_val < 0.5 or cpu_val > 16:
-                    errors.append(
-                        f"resource_config.cpu must be between 0.5 and 16, got {cpu_val}"
-                    )
+                    errors.append(f"resource_config.cpu must be between 0.5 and 16, got {cpu_val}")
             except (TypeError, ValueError):
-                errors.append(
-                    f"resource_config.cpu must be a number, got {cpu!r}"
-                )
+                errors.append(f"resource_config.cpu must be a number, got {cpu!r}")
 
         memory = rc.get("memory")
         if memory is not None:
@@ -72,8 +66,7 @@ def validate_profile(profile: ForgeProfile) -> list[str]:
                 lo, hi = _MEMORY_LIMITS[unit]
                 if val < lo or val > hi:
                     errors.append(
-                        f"resource_config.memory {memory} is out of range "
-                        f"({lo}{unit}..{hi}{unit})"
+                        f"resource_config.memory {memory} is out of range ({lo}{unit}..{hi}{unit})"
                     )
 
         gpu = rc.get("gpu")
@@ -81,13 +74,9 @@ def validate_profile(profile: ForgeProfile) -> list[str]:
             try:
                 gpu_val = int(gpu)
                 if gpu_val < 0 or gpu_val > 4:
-                    errors.append(
-                        f"resource_config.gpu must be between 0 and 4, got {gpu_val}"
-                    )
+                    errors.append(f"resource_config.gpu must be between 0 and 4, got {gpu_val}")
             except (TypeError, ValueError):
-                errors.append(
-                    f"resource_config.gpu must be an integer, got {gpu!r}"
-                )
+                errors.append(f"resource_config.gpu must be an integer, got {gpu!r}")
 
     # Model must be non-empty if provided
     if profile.model is not None and len(profile.model.strip()) == 0:
@@ -192,14 +181,10 @@ class ForgeProfileService:
         # Check if any running sessions use this profile
         if self._session_repository is not None:
             sessions = await self._session_repository.list()
-            in_use = [
-                s for s in sessions
-                if s.status == SessionStatus.RUNNING and s.name == name
-            ]
+            in_use = [s for s in sessions if s.status == SessionStatus.RUNNING and s.name == name]
             if in_use:
                 raise ValueError(
-                    f"Cannot delete profile '{name}': in use by "
-                    f"{len(in_use)} running session(s)"
+                    f"Cannot delete profile '{name}': in use by {len(in_use)} running session(s)"
                 )
 
         return await self._mutable.delete(name)

@@ -198,10 +198,7 @@ class LinearAdapter(IssueTrackerProvider):
             title=node["title"],
             status=node.get("state", {}).get("name", "Unknown"),
             assignee=(node.get("assignee") or {}).get("name"),
-            labels=[
-                n["name"]
-                for n in (node.get("labels") or {}).get("nodes", [])
-            ],
+            labels=[n["name"] for n in (node.get("labels") or {}).get("nodes", [])],
             priority=node.get("priority", 0),
             url=node.get("url", ""),
         )
@@ -323,10 +320,7 @@ class LinearAdapter(IssueTrackerProvider):
 
         if target_state is None:
             available = [s["name"] for s in states]
-            raise LinearAPIError(
-                f"Status '{status}' not found. "
-                f"Available: {', '.join(available)}"
-            )
+            raise LinearAPIError(f"Status '{status}' not found. Available: {', '.join(available)}")
 
         # Update the issue
         data = await self._graphql(
@@ -339,8 +333,7 @@ class LinearAdapter(IssueTrackerProvider):
 
         # Invalidate caches
         self._cache = {
-            k: v for k, v in self._cache.items()
-            if not k.startswith(("search:", "recent:"))
+            k: v for k, v in self._cache.items() if not k.startswith(("search:", "recent:"))
         }
 
         return self._node_to_issue(updated)

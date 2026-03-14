@@ -101,8 +101,7 @@ describe('useAppStore', () => {
     const mockSession: VolundrSession = {
       id: 'session-001',
       name: 'Test Session',
-      repo: 'odin-core',
-      branch: 'main',
+      source: { type: 'git', repo: 'odin-core', branch: 'main' },
       status: 'running',
       model: 'claude-sonnet',
       lastActive: Date.now(),
@@ -180,8 +179,7 @@ describe('useAppStore', () => {
     const mockSession: VolundrSession = {
       id: 'session-001',
       name: 'Test Session',
-      repo: 'odin-core',
-      branch: 'main',
+      source: { type: 'git', repo: 'odin-core', branch: 'main' },
       status: 'running',
       model: 'claude-sonnet',
       lastActive: Date.now(),

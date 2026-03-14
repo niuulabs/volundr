@@ -75,7 +75,13 @@ class TemplateContributor(SessionContributor):
 
     @staticmethod
     def _apply(values: dict, source: WorkspaceTemplate | ForgeProfile) -> None:
-        """Merge runtime config from template or profile into values."""
+        """Merge runtime config from template or profile into values.
+
+        Template/profile resource configs are already in K8s-native format
+        (e.g. ``{"requests": {"cpu": "100m"}}``), so they pass through directly
+        as ``resources``.  Ad-hoc user configs from the launch request are
+        translated by ``ResourceContributor`` via the ``SessionContext``.
+        """
         if source.resource_config:
             values["resources"] = source.resource_config
         if source.env_vars:

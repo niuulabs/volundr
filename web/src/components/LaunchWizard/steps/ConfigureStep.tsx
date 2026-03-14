@@ -17,9 +17,12 @@ import {
   HardDrive,
   KeyRound,
   Plug,
+  HardDriveDownload,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { serializePresetYaml, parsePresetYaml } from '@/utils/presetYaml';
+import { parseK8sQuantity, formatHumanBytes, formatResourceValue } from '@/utils/k8sQuantity';
 import type {
   VolundrPreset,
   VolundrRepo,
@@ -32,7 +35,9 @@ import type {
   VolundrWorkspace,
   StoredCredential,
   IntegrationConnection,
+  ClusterResourceInfo,
 } from '@/models';
+import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/ports';
 import { LinearIssueSearch } from '@/components';
 import type { WizardState } from '../LaunchWizard';
@@ -47,10 +52,42 @@ export interface ConfigureStepProps {
   availableSecrets: string[];
   service: IVolundrService;
   searchLinearIssues?: (query: string) => Promise<LinearIssue[]>;
+  localMountsEnabled?: boolean;
   onChange: (updates: Partial<WizardState>) => void;
   onSavePreset: (
     preset: Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
   ) => Promise<VolundrPreset>;
+}
+
+/**
+ * Validate a resource input value against the available capacity.
+ * Returns an error string or null if valid.
+ */
+function validateResourceInput(
+  inputValue: string,
+  unit: string,
+  totalAvailable: number
+): string | null {
+  if (!inputValue.trim()) return null;
+
+  const parsed = parseK8sQuantity(inputValue, unit);
+  if (isNaN(parsed)) {
+    if (unit === 'bytes') return 'Invalid format. Use e.g. 4Gi, 512Mi, 1Ti';
+    if (unit === 'cores') return 'Invalid format. Use e.g. 4, 500m, 1.5';
+    return 'Invalid number';
+  }
+
+  if (parsed <= 0) return 'Must be greater than 0';
+
+  if (totalAvailable > 0 && parsed > totalAvailable) {
+    const availFormatted =
+      unit === 'bytes'
+        ? formatHumanBytes(totalAvailable)
+        : `${Number.isInteger(totalAvailable) ? totalAvailable : totalAvailable.toFixed(1)} ${unit}`;
+    return `Exceeds available capacity (${availFormatted})`;
+  }
+
+  return null;
 }
 
 const CLI_TOOLS: { value: CliTool; label: string; description: string }[] = [
@@ -73,6 +110,7 @@ export function ConfigureStep({
   availableSecrets,
   service,
   searchLinearIssues,
+  localMountsEnabled = false,
   onChange,
   onSavePreset,
 }: ConfigureStepProps) {
@@ -97,6 +135,7 @@ export function ConfigureStep({
 
   const [credentials, setCredentials] = useState<StoredCredential[]>([]);
   const [integrations, setIntegrations] = useState<IntegrationConnection[]>([]);
+  const [clusterResources, setClusterResources] = useState<ClusterResourceInfo | null>(null);
 
   useEffect(() => {
     service
@@ -111,7 +150,53 @@ export function ConfigureStep({
       .getIntegrations()
       .then(setIntegrations)
       .catch(() => {});
+    service
+      .getClusterResources()
+      .then(setClusterResources)
+      .catch(() => {});
   }, [service]);
+
+  // Derive GPU types from cluster resources for dropdown
+  const gpuTypes = useMemo(() => {
+    if (!clusterResources) return [];
+    return clusterResources.resourceTypes
+      .filter(rt => rt.category === 'accelerator' && rt.name.startsWith('gpu_'))
+      .map(rt => ({
+        label: rt.displayName,
+        value: rt.name.replace('gpu_', ''),
+      }));
+  }, [clusterResources]);
+
+  // Aggregate available resources across nodes per resource type
+  const aggregatedResources = useMemo(() => {
+    if (!clusterResources || clusterResources.nodes.length === 0) return [];
+    return clusterResources.resourceTypes
+      .filter(rt => !rt.name.startsWith('gpu_'))
+      .map(rt => {
+        let totalAvailable = 0;
+        for (const node of clusterResources.nodes) {
+          const val = node.available[rt.resourceKey];
+          if (val) {
+            const parsed = parseK8sQuantity(val, rt.unit);
+            if (!isNaN(parsed)) totalAvailable += parsed;
+          }
+        }
+        return { resourceType: rt, totalAvailable };
+      });
+  }, [clusterResources]);
+
+  // Check if user has requested any GPU resources
+  const hasGpuRequested = useMemo(() => {
+    const gpuVal = state.resourceConfig.gpu;
+    if (gpuVal && gpuVal !== '0') return true;
+    // Also check dynamically discovered GPU resource types
+    return aggregatedResources.some(
+      ar =>
+        ar.resourceType.category === 'accelerator' &&
+        state.resourceConfig[ar.resourceType.name] &&
+        state.resourceConfig[ar.resourceType.name] !== '0'
+    );
+  }, [state.resourceConfig, aggregatedResources]);
 
   // Merge availableSecrets and stored credentials into a unified list
   const allCredentials = useMemo(() => {
@@ -552,51 +637,166 @@ export function ConfigureStep({
           </div>
         )}
 
-        {/* Repository */}
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>
-            <FolderGit2 className={styles.formLabelIcon} />
-            Repository
-            <span className={styles.required}>*</span>
-          </label>
-          <select
-            className={styles.formSelect}
-            value={state.repo}
-            onChange={e => handleRepoChange(e.target.value)}
-          >
-            <option value="">Select repository...</option>
-            {Object.entries(reposByProvider).map(([provider, providerRepos]) => (
-              <optgroup key={provider} label={PROVIDER_LABELS[provider as RepoProvider]}>
-                {providerRepos.map(repo => (
-                  <option key={repo.cloneUrl} value={repo.cloneUrl}>
-                    {repo.org}/{repo.name}
+        {/* Source Type Toggle — only show when local mounts are enabled */}
+        {localMountsEnabled && (
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>
+              Workspace Source
+              <span className={styles.required}>*</span>
+            </label>
+            <div className={styles.sourceTypeToggle}>
+              <button
+                type="button"
+                className={cn(
+                  styles.sourceTypeButton,
+                  state.sourceType === 'git' && styles.sourceTypeActive
+                )}
+                onClick={() => onChange({ sourceType: 'git' as SourceType })}
+              >
+                <FolderGit2 className={styles.formLabelIcon} />
+                Git Repository
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  styles.sourceTypeButton,
+                  state.sourceType === 'local_mount' && styles.sourceTypeActive
+                )}
+                onClick={() => onChange({ sourceType: 'local_mount' as SourceType })}
+              >
+                <HardDriveDownload className={styles.formLabelIcon} />
+                Local Mount
+              </button>
+            </div>
+          </div>
+        )}
+
+        {state.sourceType === 'git' && (
+          <>
+            {/* Repository */}
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>
+                <FolderGit2 className={styles.formLabelIcon} />
+                Repository
+                <span className={styles.required}>*</span>
+              </label>
+              <select
+                className={styles.formSelect}
+                value={state.repo}
+                onChange={e => handleRepoChange(e.target.value)}
+              >
+                <option value="">Select repository...</option>
+                {Object.entries(reposByProvider).map(([provider, providerRepos]) => (
+                  <optgroup key={provider} label={PROVIDER_LABELS[provider as RepoProvider]}>
+                    {providerRepos.map(repo => (
+                      <option key={repo.cloneUrl} value={repo.cloneUrl}>
+                        {repo.org}/{repo.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            {/* Branch */}
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>
+                Branch
+                <span className={styles.required}>*</span>
+              </label>
+              <select
+                className={styles.formSelect}
+                value={state.branch}
+                onChange={e => onChange({ branch: e.target.value })}
+                disabled={!state.repo}
+              >
+                <option value="">Select branch...</option>
+                {branches.map(branch => (
+                  <option key={branch} value={branch}>
+                    {branch}
                   </option>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
+              </select>
+            </div>
+          </>
+        )}
 
-        {/* Branch */}
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>
-            Branch
-            <span className={styles.required}>*</span>
-          </label>
-          <select
-            className={styles.formSelect}
-            value={state.branch}
-            onChange={e => onChange({ branch: e.target.value })}
-            disabled={!state.repo}
-          >
-            <option value="">Select branch...</option>
-            {branches.map(branch => (
-              <option key={branch} value={branch}>
-                {branch}
-              </option>
-            ))}
-          </select>
-        </div>
+        {state.sourceType === 'local_mount' && (
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>
+              <HardDriveDownload className={styles.formLabelIcon} />
+              Mount Paths
+              <span className={styles.required}>*</span>
+            </label>
+            <div className={styles.mountEditor}>
+              {state.mountPaths.map((mapping, idx) => (
+                <div key={idx} className={styles.mountRow}>
+                  <input
+                    className={styles.formInput}
+                    type="text"
+                    placeholder="Host path (e.g. /home/user/project)"
+                    value={mapping.host_path}
+                    onChange={e => {
+                      const updated = [...state.mountPaths];
+                      updated[idx] = { ...mapping, host_path: e.target.value };
+                      onChange({ mountPaths: updated });
+                    }}
+                  />
+                  <input
+                    className={styles.formInput}
+                    type="text"
+                    placeholder="Container path (e.g. /workspace)"
+                    value={mapping.mount_path}
+                    onChange={e => {
+                      const updated = [...state.mountPaths];
+                      updated[idx] = { ...mapping, mount_path: e.target.value };
+                      onChange({ mountPaths: updated });
+                    }}
+                  />
+                  <label className={styles.mountReadOnly}>
+                    <input
+                      type="checkbox"
+                      checked={mapping.read_only}
+                      onChange={e => {
+                        const updated = [...state.mountPaths];
+                        updated[idx] = { ...mapping, read_only: e.target.checked };
+                        onChange({ mountPaths: updated });
+                      }}
+                    />
+                    Read-only
+                  </label>
+                  {state.mountPaths.length > 1 && (
+                    <button
+                      type="button"
+                      className={styles.mountRemoveButton}
+                      onClick={() => {
+                        const updated = state.mountPaths.filter((_, i) => i !== idx);
+                        onChange({ mountPaths: updated });
+                      }}
+                    >
+                      <Trash2 className={styles.buttonIcon} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                className={styles.addMountButton}
+                onClick={() =>
+                  onChange({
+                    mountPaths: [
+                      ...state.mountPaths,
+                      { host_path: '', mount_path: '', read_only: true },
+                    ],
+                  })
+                }
+              >
+                <Plus className={styles.buttonIcon} />
+                Add mount
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Model */}
         <div className={styles.formGroup}>
@@ -993,56 +1193,170 @@ export function ConfigureStep({
             {/* Resource Config */}
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Resources</label>
-              <div className={styles.resourceGrid}>
+              {aggregatedResources.length > 0 ? (
+                <>
+                  {['compute', 'accelerator'].map(category => {
+                    const items = aggregatedResources.filter(
+                      ar => ar.resourceType.category === category
+                    );
+                    if (items.length === 0) return null;
+                    return (
+                      <div
+                        key={category}
+                        className={styles.resourceCategory}
+                        data-category={category}
+                      >
+                        <span className={styles.resourceCategoryLabel}>
+                          {category === 'compute' ? 'Compute' : 'Accelerator'}
+                        </span>
+                        <div className={styles.resourceGrid}>
+                          {items.map(({ resourceType: rt, totalAvailable }) => {
+                            const inputVal = state.resourceConfig[rt.name] ?? '';
+                            const error = validateResourceInput(inputVal, rt.unit, totalAvailable);
+                            const parsed = inputVal ? parseK8sQuantity(inputVal, rt.unit) : NaN;
+                            const showParsed =
+                              !isNaN(parsed) && rt.unit === 'bytes' && inputVal.trim() !== '';
+                            return (
+                              <div key={rt.name} className={styles.resourceField}>
+                                <label className={styles.resourceLabel}>
+                                  {rt.displayName}
+                                  <span className={styles.resourceUnit}>
+                                    {rt.unit === 'bytes'
+                                      ? 'e.g. 4Gi, 512Mi'
+                                      : rt.unit === 'cores'
+                                        ? 'e.g. 4, 500m'
+                                        : rt.unit}
+                                  </span>
+                                </label>
+                                <input
+                                  className={cn(styles.formInput, error && styles.formInputError)}
+                                  value={inputVal}
+                                  onChange={e =>
+                                    onChange({
+                                      resourceConfig: {
+                                        ...state.resourceConfig,
+                                        [rt.name]: e.target.value || undefined,
+                                      },
+                                    })
+                                  }
+                                  placeholder={
+                                    rt.name === 'memory' || rt.unit === 'bytes'
+                                      ? 'e.g. 8Gi'
+                                      : rt.name === 'cpu'
+                                        ? 'e.g. 4'
+                                        : 'e.g. 1'
+                                  }
+                                />
+                                {error ? (
+                                  <span className={styles.resourceError}>{error}</span>
+                                ) : (
+                                  <span
+                                    className={styles.resourceCapacity}
+                                    data-category={category}
+                                  >
+                                    {showParsed && `= ${formatHumanBytes(parsed)} · `}
+                                    {formatResourceValue(totalAvailable, rt.unit)}{' '}
+                                    {rt.unit === 'bytes' ? '' : rt.unit} available
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <div className={styles.resourceGrid}>
+                  <div className={styles.resourceField}>
+                    <label className={styles.resourceLabel}>CPU</label>
+                    <input
+                      className={styles.formInput}
+                      value={state.resourceConfig.cpu ?? ''}
+                      onChange={e =>
+                        onChange({
+                          resourceConfig: {
+                            ...state.resourceConfig,
+                            cpu: e.target.value || undefined,
+                          },
+                        })
+                      }
+                      placeholder="e.g. 4"
+                    />
+                  </div>
+                  <div className={styles.resourceField}>
+                    <label className={styles.resourceLabel}>Memory</label>
+                    <input
+                      className={styles.formInput}
+                      value={state.resourceConfig.memory ?? ''}
+                      onChange={e =>
+                        onChange({
+                          resourceConfig: {
+                            ...state.resourceConfig,
+                            memory: e.target.value || undefined,
+                          },
+                        })
+                      }
+                      placeholder="e.g. 8Gi"
+                    />
+                  </div>
+                </div>
+              )}
+              {gpuTypes.length > 0 && (
                 <div className={styles.resourceField}>
-                  <label className={styles.resourceLabel}>CPU</label>
-                  <input
-                    className={styles.formInput}
-                    value={state.resourceConfig.cpu ?? ''}
+                  <label className={styles.resourceLabel}>GPU Type</label>
+                  <select
+                    className={styles.formSelect}
+                    value={state.resourceConfig.gpu_type ?? ''}
                     onChange={e =>
                       onChange({
                         resourceConfig: {
                           ...state.resourceConfig,
-                          cpu: e.target.value || undefined,
+                          gpu_type: e.target.value || undefined,
                         },
                       })
                     }
-                    placeholder="e.g. 4"
-                  />
+                  >
+                    <option value="">Any</option>
+                    {gpuTypes.map(gt => (
+                      <option key={gt.value} value={gt.value}>
+                        {gt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className={styles.resourceField}>
-                  <label className={styles.resourceLabel}>Memory</label>
-                  <input
-                    className={styles.formInput}
-                    value={state.resourceConfig.memory ?? ''}
-                    onChange={e =>
+              )}
+              {hasGpuRequested && (
+                <div className={styles.toggleRow}>
+                  <label className={styles.formLabel}>GPU time-slicing</label>
+                  <button
+                    className={cn(
+                      styles.toggle,
+                      state.resourceConfig.gpu_timeslice === 'true' && styles.toggleActive
+                    )}
+                    onClick={() =>
                       onChange({
                         resourceConfig: {
                           ...state.resourceConfig,
-                          memory: e.target.value || undefined,
+                          gpu_timeslice:
+                            state.resourceConfig.gpu_timeslice === 'true' ? undefined : 'true',
                         },
                       })
                     }
-                    placeholder="e.g. 8Gi"
-                  />
+                    type="button"
+                    role="switch"
+                    aria-checked={state.resourceConfig.gpu_timeslice === 'true'}
+                  >
+                    <span className={styles.toggleKnob} />
+                  </button>
                 </div>
-                <div className={styles.resourceField}>
-                  <label className={styles.resourceLabel}>GPU</label>
-                  <input
-                    className={styles.formInput}
-                    value={state.resourceConfig.gpu ?? ''}
-                    onChange={e =>
-                      onChange({
-                        resourceConfig: {
-                          ...state.resourceConfig,
-                          gpu: e.target.value || undefined,
-                        },
-                      })
-                    }
-                    placeholder="e.g. 1"
-                  />
-                </div>
-              </div>
+              )}
+              {hasGpuRequested && state.resourceConfig.gpu_timeslice === 'true' && (
+                <span className={styles.terminalRestrictedHint}>
+                  GPU is shared between the AI broker and your workload via NVIDIA time-slicing
+                </span>
+              )}
             </div>
 
             {/* Environment Variables */}

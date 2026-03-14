@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from volundr.adapters.outbound.contributors.gateway import GatewayContributor
-from volundr.domain.models import Session
+from volundr.domain.models import GitSource, Session
 from volundr.domain.ports import SessionContext
 
 
@@ -14,8 +14,7 @@ def session():
     return Session(
         name="test",
         model="claude",
-        repo="",
-        branch="main",
+        source=GitSource(repo="", branch="main"),
         owner_id="user-1",
     )
 
@@ -50,9 +49,7 @@ class TestGatewayContributor:
         assert result.values["gateway"]["name"] == "my-gw"
         assert result.values["gateway"]["namespace"] == "system"
         assert result.values["gateway"]["userId"] == "user-1"
-        assert result.values["gateway"]["cors"]["allowOrigins"] == [
-            "https://app.example.com"
-        ]
+        assert result.values["gateway"]["cors"]["allowOrigins"] == ["https://app.example.com"]
 
     async def test_gateway_with_jwt(self, session):
         gw = MagicMock()

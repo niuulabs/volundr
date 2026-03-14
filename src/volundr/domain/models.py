@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -219,14 +219,49 @@ class RealtimeEvent:
     timestamp: datetime
 
 
+class GitSource(BaseModel):
+    """Git repository workspace source."""
+
+    type: Literal["git"] = "git"
+    repo: str = Field(default="", max_length=500)
+    branch: str = Field(default="main", max_length=255)
+
+    model_config = {"frozen": False}
+
+
+class MountMapping(BaseModel):
+    """A single host-to-container path mapping."""
+
+    host_path: str = Field(..., min_length=1)
+    mount_path: str = Field(..., min_length=1)
+    read_only: bool = True
+
+    model_config = {"frozen": False}
+
+
+class LocalMountSource(BaseModel):
+    """Local filesystem mount workspace source."""
+
+    type: Literal["local_mount"] = "local_mount"
+    paths: list[MountMapping] = Field(min_length=1)
+    node_selector: dict[str, str] = Field(default_factory=dict)
+
+    model_config = {"frozen": False}
+
+
+SessionSource = Annotated[
+    GitSource | LocalMountSource,
+    Field(discriminator="type"),
+]
+
+
 class Session(BaseModel):
     """A Claude Code coding session."""
 
     id: UUID = Field(default_factory=uuid4)
     name: str = Field(..., min_length=1, max_length=255)
     model: str = Field(default="", max_length=100)
-    repo: str = Field(default="", max_length=500)
-    branch: str = Field(default="main", max_length=255)
+    source: SessionSource = Field(default_factory=GitSource)
     status: SessionStatus = Field(default=SessionStatus.CREATED)
     chat_endpoint: str | None = Field(default=None)
     code_endpoint: str | None = Field(default=None)
@@ -245,6 +280,20 @@ class Session(BaseModel):
     workspace_id: UUID | None = Field(default=None)
 
     model_config = {"frozen": False}
+
+    @property
+    def repo(self) -> str:
+        """Repository URL from git source, or empty string for non-git sources."""
+        if isinstance(self.source, GitSource):
+            return self.source.repo
+        return ""
+
+    @property
+    def branch(self) -> str:
+        """Branch from git source, or empty string for non-git sources."""
+        if isinstance(self.source, GitSource):
+            return self.source.branch
+        return ""
 
     def model_post_init(self, __context) -> None:
         """Initialize last_active to created_at if not set."""
@@ -901,6 +950,55 @@ class WorkspaceTemplate(BaseModel):
     session_definition: str | None = Field(default=None)
 
     model_config = {"frozen": False}
+
+
+class ResourceCategory(StrEnum):
+    """Category of a resource type."""
+
+    COMPUTE = "compute"
+    ACCELERATOR = "accelerator"
+    CUSTOM = "custom"
+
+
+@dataclass(frozen=True)
+class ResourceType:
+    """A discoverable resource type available in the cluster."""
+
+    name: str
+    resource_key: str  # K8s resource key, e.g. "nvidia.com/gpu"
+    display_name: str
+    unit: str
+    category: ResourceCategory = ResourceCategory.COMPUTE
+
+
+@dataclass(frozen=True)
+class NodeResourceSummary:
+    """Resource availability summary for a single node."""
+
+    name: str
+    labels: dict[str, str] = field(default_factory=dict)
+    allocatable: dict[str, str] = field(default_factory=dict)
+    allocated: dict[str, str] = field(default_factory=dict)
+    available: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ClusterResourceInfo:
+    """Discovered cluster resource types and capacity."""
+
+    resource_types: list[ResourceType] = field(default_factory=list)
+    nodes: list[NodeResourceSummary] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TranslatedResources:
+    """K8s-native resource specification translated from user-friendly config."""
+
+    requests: dict[str, str] = field(default_factory=dict)
+    limits: dict[str, str] = field(default_factory=dict)
+    node_selector: dict[str, str] = field(default_factory=dict)
+    tolerations: list[dict] = field(default_factory=list)
+    runtime_class_name: str | None = None
 
 
 @dataclass

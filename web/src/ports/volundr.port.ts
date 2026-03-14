@@ -1,4 +1,5 @@
 import type {
+  VolundrFeatures,
   VolundrSession,
   VolundrStats,
   VolundrModel,
@@ -6,6 +7,7 @@ import type {
   VolundrMessage,
   VolundrLog,
   SessionChronicle,
+  ClusterResourceInfo,
   DiffData,
   DiffBase,
   PullRequest,
@@ -33,6 +35,7 @@ import type {
   WorkspaceStatus,
   VolundrMember,
   VolundrProvisioningResult,
+  SessionSource,
 } from '@/models';
 
 /**
@@ -40,6 +43,11 @@ import type {
  * Manages Claude Code sessions
  */
 export interface IVolundrService {
+  /**
+   * Get feature flags from the server
+   */
+  getFeatures(): Promise<VolundrFeatures>;
+
   /**
    * Get all sessions
    */
@@ -138,12 +146,16 @@ export interface IVolundrService {
   ): Promise<{ name: string; keys: string[] }>;
 
   /**
+   * Get cluster resource types and capacity
+   */
+  getClusterResources(): Promise<ClusterResourceInfo>;
+
+  /**
    * Start a new session
    */
   startSession(config: {
     name: string;
-    repo: string;
-    branch: string;
+    source: SessionSource;
     model: string;
     templateName?: string;
     taskType?: string;
@@ -152,6 +164,7 @@ export interface IVolundrService {
     workspaceId?: string;
     credentialNames?: string[];
     integrationIds?: string[];
+    resourceConfig?: Record<string, string | undefined>;
   }): Promise<VolundrSession>;
 
   /**

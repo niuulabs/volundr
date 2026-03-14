@@ -167,9 +167,7 @@ class TestGet:
         store = VaultCredentialStore()
         mock_client = AsyncMock()
         store._client = mock_client
-        mock_client.get.return_value = _mock_response(
-            {"data": {"data": {"key": "val"}}}
-        )
+        mock_client.get.return_value = _mock_response({"data": {"data": {"key": "val"}}})
 
         result = await store.get("user", "u1", "cred")
         assert result is None

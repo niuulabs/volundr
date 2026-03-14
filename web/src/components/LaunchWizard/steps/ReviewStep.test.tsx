@@ -59,8 +59,10 @@ function buildState(overrides: Partial<WizardState> = {}): WizardState {
   return {
     template: baseTemplate,
     name: 'my-session',
+    sourceType: 'git',
     repo: 'https://github.com/kanuckvalley/printer-firmware.git',
     branch: 'main',
+    mountPaths: [],
     model: 'claude-sonnet',
     taskType: '',
     mcpServers: [],

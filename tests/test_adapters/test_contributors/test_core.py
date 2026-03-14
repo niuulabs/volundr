@@ -3,13 +3,13 @@
 import pytest
 
 from volundr.adapters.outbound.contributors.core import CoreSessionContributor
-from volundr.domain.models import Session
+from volundr.domain.models import GitSource, Session
 from volundr.domain.ports import SessionContext
 
 
 @pytest.fixture
 def session():
-    return Session(name="test-session", model="claude-sonnet-4-20250514", repo="", branch="main")
+    return Session(name="test-session", model="claude-sonnet-4-20250514", source=GitSource())
 
 
 class TestCoreSessionContributor:

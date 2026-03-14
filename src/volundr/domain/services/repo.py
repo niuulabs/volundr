@@ -57,7 +57,8 @@ class RepoService:
         ]
 
     async def list_repos(
-        self, user_id: str | None = None,
+        self,
+        user_id: str | None = None,
     ) -> dict[str, list[RepoInfo]]:
         """List repositories, optionally scoped to a user.
 
@@ -70,12 +71,15 @@ class RepoService:
         return await self._git_registry.list_configured_repos()
 
     async def list_branches(
-        self, repo_url: str, user_id: str | None = None,
+        self,
+        repo_url: str,
+        user_id: str | None = None,
     ) -> list[str]:
         """List branches, preferring the user's credentials if available."""
         if user_id and self._user_integration:
             provider = await self._user_integration.find_git_provider_for(
-                repo_url, user_id,
+                repo_url,
+                user_id,
             )
             if provider:
                 return await provider.list_branches(repo_url)
@@ -83,7 +87,8 @@ class RepoService:
         return await self._git_registry.list_branches(repo_url)
 
     async def _list_repos_for_user(
-        self, user_id: str,
+        self,
+        user_id: str,
     ) -> dict[str, list[RepoInfo]]:
         """Query shared + user providers concurrently, group by provider."""
         providers = await self._user_integration.get_git_providers(user_id)

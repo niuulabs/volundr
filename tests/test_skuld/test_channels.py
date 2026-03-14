@@ -431,9 +431,7 @@ class TestTelegramChannelMocked:
         update.message.reply_text = AsyncMock()
         await channel._cmd_interrupt(update, None)
         on_message.assert_called_once_with({"type": "interrupt"})
-        update.message.reply_text.assert_called_once_with(
-            "[interrupt] Interrupt signal sent"
-        )
+        update.message.reply_text.assert_called_once_with("[interrupt] Interrupt signal sent")
 
     @pytest.mark.asyncio
     async def test_cmd_interrupt_no_callback(self, channel):
@@ -454,9 +452,7 @@ class TestTelegramChannelMocked:
         update.message.reply_text = AsyncMock()
         await channel._cmd_model(update, None)
         on_message.assert_called_once_with({"type": "set_model", "model": "gpt-4"})
-        update.message.reply_text.assert_called_once_with(
-            "[model] Switching to gpt-4"
-        )
+        update.message.reply_text.assert_called_once_with("[model] Switching to gpt-4")
 
     @pytest.mark.asyncio
     async def test_cmd_model_no_name(self, channel):
@@ -465,9 +461,7 @@ class TestTelegramChannelMocked:
         update.message.text = "/model"
         update.message.reply_text = AsyncMock()
         await channel._cmd_model(update, None)
-        update.message.reply_text.assert_called_once_with(
-            "Usage: /model <model_name>"
-        )
+        update.message.reply_text.assert_called_once_with("Usage: /model <model_name>")
 
     @pytest.mark.asyncio
     async def test_cmd_model_invalid_chat(self, channel):
@@ -485,9 +479,7 @@ class TestTelegramChannelMocked:
         update.effective_chat.id = 12345
         update.message.text = "hello bot"
         await channel._handle_text_message(update, None)
-        on_message.assert_called_once_with(
-            {"type": "message", "content": "hello bot"}
-        )
+        on_message.assert_called_once_with({"type": "message", "content": "hello bot"})
 
     @pytest.mark.asyncio
     async def test_handle_text_message_empty(self, channel):
@@ -590,14 +582,13 @@ class TestTelegramChannelMocked:
     @pytest.mark.asyncio
     async def test_send_permission_request_with_command(self, channel):
         import volundr.skuld.channels as ch_mod
+
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
         ch_mod.InlineKeyboardMarkup = MagicMock()
         ch_mod.InlineKeyboardButton = MagicMock()
         try:
-            await channel.send_permission_request(
-                "req-1", "Bash", {"command": "ls -la"}
-            )
+            await channel.send_permission_request("req-1", "Bash", {"command": "ls -la"})
             channel._bot.send_message.assert_called_once()
         finally:
             ch_mod.HAS_TELEGRAM = orig_has
@@ -605,14 +596,13 @@ class TestTelegramChannelMocked:
     @pytest.mark.asyncio
     async def test_send_permission_request_with_file_path(self, channel):
         import volundr.skuld.channels as ch_mod
+
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
         ch_mod.InlineKeyboardMarkup = MagicMock()
         ch_mod.InlineKeyboardButton = MagicMock()
         try:
-            await channel.send_permission_request(
-                "req-2", "Read", {"file_path": "foo.py"}
-            )
+            await channel.send_permission_request("req-2", "Read", {"file_path": "foo.py"})
             channel._bot.send_message.assert_called_once()
         finally:
             ch_mod.HAS_TELEGRAM = orig_has
@@ -620,14 +610,13 @@ class TestTelegramChannelMocked:
     @pytest.mark.asyncio
     async def test_send_permission_request_no_detail(self, channel):
         import volundr.skuld.channels as ch_mod
+
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
         ch_mod.InlineKeyboardMarkup = MagicMock()
         ch_mod.InlineKeyboardButton = MagicMock()
         try:
-            await channel.send_permission_request(
-                "req-3", "Custom", {"other": "data"}
-            )
+            await channel.send_permission_request("req-3", "Custom", {"other": "data"})
             channel._bot.send_message.assert_called_once()
         finally:
             ch_mod.HAS_TELEGRAM = orig_has
@@ -635,15 +624,14 @@ class TestTelegramChannelMocked:
     @pytest.mark.asyncio
     async def test_send_permission_request_error(self, channel):
         import volundr.skuld.channels as ch_mod
+
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
         ch_mod.InlineKeyboardMarkup = MagicMock()
         ch_mod.InlineKeyboardButton = MagicMock()
         channel._bot.send_message = AsyncMock(side_effect=Exception("API fail"))
         try:
-            await channel.send_permission_request(
-                "req-4", "Bash", {"command": "rm -rf /"}
-            )
+            await channel.send_permission_request("req-4", "Bash", {"command": "rm -rf /"})
         finally:
             ch_mod.HAS_TELEGRAM = orig_has
 

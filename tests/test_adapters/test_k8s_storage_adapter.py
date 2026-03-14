@@ -175,7 +175,9 @@ class TestCreateSessionWorkspace:
         mock_core_api.create_namespaced_persistent_volume_claim = AsyncMock()
 
         await adapter.create_session_workspace(
-            "s1", user_id="u1", tenant_id="t1",
+            "s1",
+            user_id="u1",
+            tenant_id="t1",
         )
 
         call_kwargs = mock_core_api.create_namespaced_persistent_volume_claim.call_args

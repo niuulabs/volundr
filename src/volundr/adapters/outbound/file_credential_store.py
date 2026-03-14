@@ -150,9 +150,7 @@ class FileCredentialStore(CredentialStorePort):
             existing_entry = file_data["metadata"].get(name)
             cred_id = existing_entry["id"] if existing_entry else str(uuid4())
             created_at = (
-                datetime.fromisoformat(existing_entry["created_at"])
-                if existing_entry
-                else now
+                datetime.fromisoformat(existing_entry["created_at"]) if existing_entry else now
             )
 
             credential = StoredCredential(
@@ -220,10 +218,7 @@ class FileCredentialStore(CredentialStorePort):
     ) -> list[StoredCredential]:
         path = self._owner_path(owner_type, owner_id)
         file_data = self._read_file(path)
-        results = [
-            self._row_to_credential(entry)
-            for entry in file_data["metadata"].values()
-        ]
+        results = [self._row_to_credential(entry) for entry in file_data["metadata"].values()]
         if secret_type is not None:
             results = [c for c in results if c.secret_type == secret_type]
         return sorted(results, key=lambda c: c.name)

@@ -89,18 +89,12 @@ class FluxPodManager(PodManager):
     def _chat_endpoint(self, session_name: str, session_id: str = "") -> str:
         if self._gateway_domain:
             return f"wss://{self._gateway_domain}/s/{session_id}/session"
-        return (
-            f"{self._chat_scheme}://{self._session_host(session_name)}"
-            f"{self._chat_path}"
-        )
+        return f"{self._chat_scheme}://{self._session_host(session_name)}{self._chat_path}"
 
     def _code_endpoint(self, session_name: str, session_id: str = "") -> str:
         if self._gateway_domain:
             return f"https://{self._gateway_domain}/s/{session_id}/"
-        return (
-            f"{self._code_scheme}://{self._session_host(session_name)}"
-            f"{self._code_path}"
-        )
+        return f"{self._code_scheme}://{self._session_host(session_name)}{self._code_path}"
 
     def _build_helmrelease(self, name: str, values: dict) -> dict:
         """Build a HelmRelease CR manifest."""

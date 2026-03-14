@@ -41,8 +41,10 @@ class TestAllowAllIdentityAdapter:
 
         adapter = self._make_adapter(user_repo)
         principal = Principal(
-            user_id="dev-user", email="dev@localhost",
-            tenant_id="default", roles=["volundr:admin"],
+            user_id="dev-user",
+            email="dev@localhost",
+            tenant_id="default",
+            roles=["volundr:admin"],
         )
 
         user = await adapter.get_or_provision_user(principal)
@@ -57,8 +59,10 @@ class TestAllowAllIdentityAdapter:
 
         adapter = self._make_adapter(user_repo)
         principal = Principal(
-            user_id="dev-user", email="dev@localhost",
-            tenant_id="default", roles=["volundr:admin"],
+            user_id="dev-user",
+            email="dev@localhost",
+            tenant_id="default",
+            roles=["volundr:admin"],
         )
 
         user = await adapter.get_or_provision_user(principal)

@@ -246,20 +246,14 @@ def create_profiles_router(
         updated = ForgeProfile(
             name=data.name if data.name is not None else existing.name,
             description=(
-                data.description
-                if data.description is not None
-                else existing.description
+                data.description if data.description is not None else existing.description
             ),
             workload_type=(
-                data.workload_type
-                if data.workload_type is not None
-                else existing.workload_type
+                data.workload_type if data.workload_type is not None else existing.workload_type
             ),
             model=data.model if data.model is not None else existing.model,
             system_prompt=(
-                data.system_prompt
-                if data.system_prompt is not None
-                else existing.system_prompt
+                data.system_prompt if data.system_prompt is not None else existing.system_prompt
             ),
             resource_config=(
                 data.resource_config
@@ -267,15 +261,9 @@ def create_profiles_router(
                 else existing.resource_config
             ),
             mcp_servers=(
-                data.mcp_servers
-                if data.mcp_servers is not None
-                else existing.mcp_servers
+                data.mcp_servers if data.mcp_servers is not None else existing.mcp_servers
             ),
-            env_vars=(
-                data.env_vars
-                if data.env_vars is not None
-                else existing.env_vars
-            ),
+            env_vars=(data.env_vars if data.env_vars is not None else existing.env_vars),
             env_secret_refs=(
                 data.env_secret_refs
                 if data.env_secret_refs is not None
@@ -286,11 +274,7 @@ def create_profiles_router(
                 if data.workload_config is not None
                 else existing.workload_config
             ),
-            is_default=(
-                data.is_default
-                if data.is_default is not None
-                else existing.is_default
-            ),
+            is_default=(data.is_default if data.is_default is not None else existing.is_default),
         )
 
         try:

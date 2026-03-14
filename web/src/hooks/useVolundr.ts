@@ -7,6 +7,7 @@ import type {
   VolundrMessage,
   VolundrLog,
   SessionChronicle,
+  SessionSource,
   PullRequest,
   VolundrPreset,
   VolundrTemplate,
@@ -33,8 +34,7 @@ interface UseVolundrResult {
   markSessionRunning: (id: string) => void;
   startSession: (config: {
     name: string;
-    repo: string;
-    branch: string;
+    source: SessionSource;
     model: string;
     templateName?: string;
     taskType?: string;
@@ -43,6 +43,7 @@ interface UseVolundrResult {
     workspaceId?: string;
     credentialNames?: string[];
     integrationIds?: string[];
+    resourceConfig?: Record<string, string | undefined>;
   }) => Promise<VolundrSession>;
   connectSession: (config: { name: string; hostname: string }) => Promise<VolundrSession>;
   stopSession: (sessionId: string) => Promise<void>;
@@ -210,8 +211,7 @@ export function useVolundr(): UseVolundrResult {
   const startSession = useCallback(
     async (config: {
       name: string;
-      repo: string;
-      branch: string;
+      source: SessionSource;
       model: string;
       templateName?: string;
       taskType?: string;
@@ -220,6 +220,7 @@ export function useVolundr(): UseVolundrResult {
       workspaceId?: string;
       credentialNames?: string[];
       integrationIds?: string[];
+      resourceConfig?: Record<string, string | undefined>;
     }) => {
       return volundrService.startSession(config);
     },

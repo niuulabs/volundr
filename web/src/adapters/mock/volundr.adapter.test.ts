@@ -22,8 +22,8 @@ describe('MockVolundrService', () => {
 
       expect(session.id).toBeDefined();
       expect(session.name).toBeDefined();
-      expect(session.repo).toBeDefined();
-      expect(session.branch).toBeDefined();
+      expect(session.source).toBeDefined();
+      expect(session.source.type).toBeDefined();
       expect(session.status).toBeDefined();
       expect(session.model).toBeDefined();
       expect(session.lastActive).toBeDefined();
@@ -122,8 +122,7 @@ describe('MockVolundrService', () => {
 
       await service.startSession({
         name: 'test-session',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -137,8 +136,7 @@ describe('MockVolundrService', () => {
 
       await service.startSession({
         name: 'test-session',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -153,15 +151,13 @@ describe('MockVolundrService', () => {
 
       const newSession = await service.startSession({
         name: 'test-session',
-        repo: 'test/repo',
-        branch: 'feature/test',
+        source: { type: 'git', repo: 'test/repo', branch: 'feature/test' },
         model: 'claude-opus',
       });
 
       expect(newSession.id).toBeDefined();
       expect(newSession.name).toBe('test-session');
-      expect(newSession.repo).toBe('test/repo');
-      expect(newSession.branch).toBe('feature/test');
+      expect(newSession.source).toEqual({ type: 'git', repo: 'test/repo', branch: 'feature/test' });
       expect(newSession.model).toBe('claude-opus');
       expect(newSession.status).toBe('starting');
 
@@ -174,8 +170,7 @@ describe('MockVolundrService', () => {
 
       await service.startSession({
         name: 'test-session',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -316,8 +311,7 @@ describe('MockVolundrService', () => {
 
       const session = await service.startSession({
         name: 'delete-provisioning',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -365,8 +359,7 @@ describe('MockVolundrService', () => {
 
       const session = await service.startSession({
         name: 'auto-transition-test',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -392,8 +385,7 @@ describe('MockVolundrService', () => {
 
       const session = await service.startSession({
         name: 'stop-provisioning-test',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -424,8 +416,7 @@ describe('MockVolundrService', () => {
 
       await service.startSession({
         name: 'notify-test',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -445,8 +436,7 @@ describe('MockVolundrService', () => {
 
       const session = await service.startSession({
         name: 'delete-before-transition',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'test-model',
       });
 
@@ -529,10 +519,10 @@ describe('MockVolundrService', () => {
 
       expect(session.name).toBe('test-skuld');
       expect(session.hostname).toBe('skuld-01.local');
-      expect(session.source).toBe('manual');
+      expect(session.origin).toBe('manual');
       expect(session.status).toBe('starting');
       expect(session.id).toMatch(/^manual-/);
-      expect(session.repo).toBe('');
+      expect(session.source).toEqual({ type: 'git', repo: '', branch: '' });
       expect(session.model).toBe('external');
     });
 
@@ -650,8 +640,7 @@ describe('MockVolundrService', () => {
     it('creates message array for new session', async () => {
       const newSession = await service.startSession({
         name: 'empty',
-        repo: 'test',
-        branch: 'main',
+        source: { type: 'git', repo: 'test', branch: 'main' },
         model: 'test',
       });
 
@@ -690,8 +679,7 @@ describe('MockVolundrService', () => {
     it('returns empty array for session with no messages', async () => {
       const newSession = await service.startSession({
         name: 'empty',
-        repo: 'test',
-        branch: 'main',
+        source: { type: 'git', repo: 'test', branch: 'main' },
         model: 'test',
       });
 
@@ -710,8 +698,7 @@ describe('MockVolundrService', () => {
     it('returns empty array for session with no logs', async () => {
       const newSession = await service.startSession({
         name: 'empty',
-        repo: 'test',
-        branch: 'main',
+        source: { type: 'git', repo: 'test', branch: 'main' },
         model: 'test',
       });
 
@@ -798,8 +785,7 @@ describe('MockVolundrService', () => {
 
       await service.startSession({
         name: 'test',
-        repo: 'test',
-        branch: 'main',
+        source: { type: 'git', repo: 'test', branch: 'main' },
         model: 'test',
       });
 
@@ -815,8 +801,7 @@ describe('MockVolundrService', () => {
 
       await service.startSession({
         name: 'test',
-        repo: 'test',
-        branch: 'main',
+        source: { type: 'git', repo: 'test', branch: 'main' },
         model: 'test',
       });
 
@@ -907,7 +892,7 @@ describe('MockVolundrService', () => {
       expect(pr.status).toBe('open');
       expect(pr.ciStatus).toBe('pending');
       expect(pr.number).toBeGreaterThan(0);
-      expect(pr.sourceBranch).toBe(session.branch);
+      expect(pr.sourceBranch).toBe(session.source.type === 'git' ? session.source.branch : 'main');
     });
 
     it('creates a PR with auto-generated title when none provided', async () => {
@@ -1275,8 +1260,7 @@ describe('MockVolundrService', () => {
 
       const session = await service.startSession({
         name: 'test-with-issue',
-        repo: 'test/repo',
-        branch: 'feature/niu-44',
+        source: { type: 'git', repo: 'test/repo', branch: 'feature/niu-44' },
         model: 'claude-opus',
         linearIssue: issue,
       });
@@ -1288,8 +1272,7 @@ describe('MockVolundrService', () => {
     it('creates session without Linear issue when not provided', async () => {
       const session = await service.startSession({
         name: 'test-no-issue',
-        repo: 'test/repo',
-        branch: 'main',
+        source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'claude-opus',
       });
 
@@ -1396,6 +1379,22 @@ describe('MockVolundrService', () => {
       const hasDir = entries.some(e => e.type === 'directory');
       expect(hasFile).toBe(true);
       expect(hasDir).toBe(true);
+    });
+  });
+
+  describe('getClusterResources', () => {
+    it('returns resource types including cpu, memory, and gpu', async () => {
+      const result = await service.getClusterResources();
+      expect(result.resourceTypes.length).toBeGreaterThanOrEqual(3);
+      const names = result.resourceTypes.map(rt => rt.name);
+      expect(names).toContain('cpu');
+      expect(names).toContain('memory');
+      expect(names).toContain('gpu');
+    });
+
+    it('returns empty nodes array', async () => {
+      const result = await service.getClusterResources();
+      expect(result.nodes).toEqual([]);
     });
   });
 });

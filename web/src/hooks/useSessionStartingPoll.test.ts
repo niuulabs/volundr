@@ -288,4 +288,47 @@ describe('useSessionProbe', () => {
 
     expect(onReady).not.toHaveBeenCalled();
   });
+
+  it('does not create WebSocket when cancelled before retry fires', () => {
+    const { unmount } = renderHook(() =>
+      useSessionProbe({
+        url: 'wss://host/session',
+        enabled: true,
+        onReady: vi.fn(),
+      })
+    );
+
+    expect(mockInstances).toHaveLength(1);
+
+    // Trigger error to schedule retry timer
+    act(() => {
+      mockInstances[0].onerror?.(new Event('error'));
+    });
+
+    // Unmount sets cancelled = true
+    unmount();
+
+    // When the retry timer fires, probe() should return early due to cancelled
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    // No new WebSocket created
+    expect(mockInstances).toHaveLength(1);
+  });
+
+  it('appends token with & when url already has query params', () => {
+    mockGetAccessToken.mockReturnValue('tok');
+
+    renderHook(() =>
+      useSessionProbe({
+        url: 'wss://host/session?foo=bar',
+        enabled: true,
+        onReady: vi.fn(),
+      })
+    );
+
+    expect(mockInstances).toHaveLength(1);
+    expect(mockInstances[0].url).toBe('wss://host/session?foo=bar&access_token=tok');
+  });
 });

@@ -92,7 +92,8 @@ class TestInMemoryIntegrationRepository:
         assert retrieved.adapter == sample_connection.adapter
 
     async def test_get_not_found(
-        self, integration_repo: InMemoryIntegrationRepository,
+        self,
+        integration_repo: InMemoryIntegrationRepository,
     ):
         result = await integration_repo.get_connection("nonexistent")
         assert result is None
@@ -117,7 +118,8 @@ class TestInMemoryIntegrationRepository:
         await integration_repo.save_connection(sample_connection)
 
         connections = await integration_repo.list_connections(
-            "user-1", "issue_tracker",
+            "user-1",
+            "issue_tracker",
         )
         assert len(connections) == 1
 
@@ -143,7 +145,8 @@ class TestInMemoryIntegrationRepository:
         assert result is None
 
     async def test_delete_nonexistent(
-        self, integration_repo: InMemoryIntegrationRepository,
+        self,
+        integration_repo: InMemoryIntegrationRepository,
     ):
         # Should not raise
         await integration_repo.delete_connection("nonexistent")
@@ -201,16 +204,22 @@ class TestTrackerServiceWithFactory:
         )
 
         tracker = InMemoryIssueTracker()
-        tracker.add_issue(TrackerIssue(
-            id="i1", identifier="T-1", title="Test",
-            status="Open", url="https://example.com",
-        ))
+        tracker.add_issue(
+            TrackerIssue(
+                id="i1",
+                identifier="T-1",
+                title="Test",
+                status="Open",
+                url="https://example.com",
+            )
+        )
         mapping_repo = InMemoryMappingRepository()
         integration_repo = InMemoryIntegrationRepository()
         mock_factory = AsyncMock(spec=TrackerFactory)
 
         service = TrackerService(
-            tracker, mapping_repo,
+            tracker,
+            mapping_repo,
             integration_repo=integration_repo,
             tracker_factory=mock_factory,
         )
@@ -243,18 +252,24 @@ class TestTrackerServiceWithFactory:
         await integration_repo.save_connection(conn)
 
         mock_tracker = AsyncMock()
-        mock_tracker.search_issues = AsyncMock(return_value=[
-            TrackerIssue(
-                id="i2", identifier="U-1", title="User Issue",
-                status="Open", url="https://example.com",
-            ),
-        ])
+        mock_tracker.search_issues = AsyncMock(
+            return_value=[
+                TrackerIssue(
+                    id="i2",
+                    identifier="U-1",
+                    title="User Issue",
+                    status="Open",
+                    url="https://example.com",
+                ),
+            ]
+        )
 
         mock_factory = AsyncMock(spec=TrackerFactory)
         mock_factory.create = AsyncMock(return_value=mock_tracker)
 
         service = TrackerService(
-            None, mapping_repo,
+            None,
+            mapping_repo,
             integration_repo=integration_repo,
             tracker_factory=mock_factory,
         )
@@ -273,7 +288,8 @@ class TestJiraAdapterUnit:
 
     def test_provider_name(self):
         adapter = JiraAdapter(
-            api_token="token", email="test@test.com",
+            api_token="token",
+            email="test@test.com",
             site_url="https://test.atlassian.net",
         )
         assert adapter.provider_name == "jira"

@@ -70,6 +70,8 @@ const mockService = {
   listWorkspaces: vi.fn().mockResolvedValue([]),
   getCredentials: vi.fn().mockResolvedValue([]),
   getIntegrations: vi.fn().mockResolvedValue([]),
+  getFeatures: vi.fn().mockResolvedValue({ localMountsEnabled: false }),
+  getClusterResources: vi.fn().mockResolvedValue({ resourceTypes: [], nodes: [] }),
 } as unknown as import('@/ports').IVolundrService;
 
 const defaultProps = {
@@ -222,8 +224,29 @@ describe('LaunchWizard', () => {
         expect.objectContaining({
           name: 'test-session',
           model: 'claude-sonnet',
-          repo: 'https://github.com/org/repo.git',
+          source: { type: 'git', repo: 'https://github.com/org/repo.git', branch: 'develop' },
           terminalRestricted: false,
+        })
+      );
+    });
+
+    it('includes resourceConfig when resource fields are set', async () => {
+      render(<LaunchWizard {...defaultProps} />);
+      fireEvent.click(screen.getByText('Standard'));
+      fireEvent.change(screen.getByPlaceholderText('e.g. feature-auth-refactor'), {
+        target: { value: 'test-session' },
+      });
+      // Open advanced config and set CPU
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      const cpuInput = screen.getByPlaceholderText('e.g. 4');
+      fireEvent.change(cpuInput, { target: { value: '8' } });
+      // Go to step 3 and launch
+      fireEvent.click(screen.getByText('Next'));
+      fireEvent.click(screen.getByText('Launch Session'));
+
+      expect(defaultProps.onLaunch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceConfig: expect.objectContaining({ cpu: '8' }),
         })
       );
     });

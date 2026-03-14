@@ -36,7 +36,10 @@ class TestTenantServiceCreate:
         tenant_repo = AsyncMock()
         tenant_repo.get_by_path.return_value = None
         tenant_repo.create.return_value = Tenant(
-            id="root", path="root", name="Root", tier=TenantTier.DEVELOPER,
+            id="root",
+            path="root",
+            name="Root",
+            tier=TenantTier.DEVELOPER,
         )
 
         service = self._make_service(tenant_repo)
@@ -52,13 +55,17 @@ class TestTenantServiceCreate:
         tenant_repo.get.return_value = parent
         tenant_repo.get_by_path.return_value = None
         tenant_repo.create.return_value = Tenant(
-            id="child", path="parent.child", name="Child",
+            id="child",
+            path="parent.child",
+            name="Child",
             parent_id="parent",
         )
 
         service = self._make_service(tenant_repo)
         tenant = await service.create_tenant(
-            name="Child", tenant_id="child", parent_id="parent",
+            name="Child",
+            tenant_id="child",
+            parent_id="parent",
         )
 
         assert tenant.path == "parent.child"
@@ -67,7 +74,9 @@ class TestTenantServiceCreate:
     async def test_create_tenant_duplicate_path_raises(self):
         tenant_repo = AsyncMock()
         tenant_repo.get_by_path.return_value = Tenant(
-            id="existing", path="existing", name="Existing",
+            id="existing",
+            path="existing",
+            name="Existing",
         )
 
         service = self._make_service(tenant_repo)
@@ -83,7 +92,9 @@ class TestTenantServiceCreate:
 
         with pytest.raises(TenantNotFoundError):
             await service.create_tenant(
-                name="Child", tenant_id="child", parent_id="nonexistent",
+                name="Child",
+                tenant_id="child",
+                parent_id="nonexistent",
             )
 
 
@@ -140,8 +151,11 @@ class TestTenantServiceEnsureDefault:
         tenant_repo.get.return_value = None
         tenant_repo.get_by_path.return_value = None
         created = Tenant(
-            id="default", path="default", name="Default",
-            max_sessions=100, max_storage_gb=500,
+            id="default",
+            path="default",
+            name="Default",
+            max_sessions=100,
+            max_storage_gb=500,
         )
         tenant_repo.create.return_value = created
 

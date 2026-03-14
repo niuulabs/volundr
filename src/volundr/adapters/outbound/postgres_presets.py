@@ -168,12 +168,8 @@ class PostgresPresetRepository(PresetRepository):
             terminal_sidecar=json.loads(row["terminal_sidecar"])
             if isinstance(row["terminal_sidecar"], str)
             else row["terminal_sidecar"],
-            skills=json.loads(row["skills"])
-            if isinstance(row["skills"], str)
-            else row["skills"],
-            rules=json.loads(row["rules"])
-            if isinstance(row["rules"], str)
-            else row["rules"],
+            skills=json.loads(row["skills"]) if isinstance(row["skills"], str) else row["skills"],
+            rules=json.loads(row["rules"]) if isinstance(row["rules"], str) else row["rules"],
             env_vars=json.loads(row["env_vars"])
             if isinstance(row["env_vars"], str)
             else row["env_vars"],

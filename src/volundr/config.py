@@ -33,6 +33,29 @@ CONFIG_PATHS = [
 ]
 
 
+class LocalMountsConfig(BaseModel):
+    """Configuration for local filesystem mount support."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable local path mounts as session workspace sources.",
+    )
+    allow_root_mount: bool = Field(
+        default=False,
+        description="Allow mounting the root filesystem (/). Requires enabled=true.",
+    )
+    allowed_prefixes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Restrict mountable host paths to these prefixes. Empty = allow all when enabled."
+        ),
+    )
+    default_read_only: bool = Field(
+        default=True,
+        description="Default read_only flag for new mount mappings.",
+    )
+
+
 class ProvisioningConfig(BaseModel):
     """Configuration for the session provisioning readiness polling."""
 
@@ -457,6 +480,34 @@ class SecretInjectionConfig(BaseModel):
     )
 
 
+class ResourceProviderConfig(BaseModel):
+    """Dynamic resource provider adapter configuration.
+
+    The ``adapter`` key is a fully-qualified class path.  All other
+    fields in ``kwargs`` are forwarded to the constructor.
+
+    Example YAML::
+
+        resource_provider:
+          adapter: "volundr.adapters.outbound.k8s_resource_provider.K8sResourceProvider"
+          kwargs:
+            namespace: "volundr-sessions"
+    """
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.static_resource_provider.StaticResourceProvider",
+        description="Fully-qualified class path for the ResourceProvider adapter.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to the adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of kwarg names to env var names holding secret values.",
+    )
+
+
 class StorageConfig(BaseModel):
     """Dynamic storage adapter configuration.
 
@@ -543,7 +594,11 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             config_schema={
                 "properties": {
                     "name": {"label": "Display Name", "type": "string"},
-                    "base_url": {"label": "API URL", "type": "url", "default": "https://api.github.com"},
+                    "base_url": {
+                        "label": "API URL",
+                        "type": "url",
+                        "default": "https://api.github.com",
+                    },
                     "orgs": {"label": "Organizations", "type": "string[]"},
                 },
             },
@@ -570,7 +625,11 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             config_schema={
                 "properties": {
                     "name": {"label": "Display Name", "type": "string"},
-                    "base_url": {"label": "Instance URL", "type": "url", "default": "https://gitlab.com"},
+                    "base_url": {
+                        "label": "Instance URL",
+                        "type": "url",
+                        "default": "https://gitlab.com",
+                    },
                     "groups": {"label": "Groups", "type": "string[]"},
                 },
             },
@@ -649,12 +708,8 @@ class AuthDiscoveryConfig(BaseModel):
     """
 
     issuer: str = Field(default="", description="OIDC issuer URL")
-    cli_client_id: str = Field(
-        default="volundr-cli", description="OIDC client ID for CLI clients"
-    )
-    scopes: str = Field(
-        default="openid profile email", description="OIDC scopes"
-    )
+    cli_client_id: str = Field(default="volundr-cli", description="OIDC client ID for CLI clients")
+    scopes: str = Field(default="openid profile email", description="OIDC scopes")
 
 
 class LinearConfig(BaseModel):
@@ -704,11 +759,13 @@ class Settings(BaseSettings):
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     secret_injection: SecretInjectionConfig = Field(default_factory=SecretInjectionConfig)
+    resource_provider: ResourceProviderConfig = Field(default_factory=ResourceProviderConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
+    local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)

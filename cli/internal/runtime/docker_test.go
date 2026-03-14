@@ -12,7 +12,7 @@ import (
 
 func TestRenderComposeTemplate_WithAnthropicKey(t *testing.T) {
 	data := composeData{
-		APIImage:        "ghcr.io/niuu/volundr-api:latest",
+		APIImage:        "ghcr.io/niuulabs/volundr-api:latest",
 		APIPort:         18080,
 		DBHost:          "host.docker.internal",
 		DBPort:          5433,
@@ -31,7 +31,7 @@ func TestRenderComposeTemplate_WithAnthropicKey(t *testing.T) {
 
 	// Verify key parts of the rendered template.
 	checks := []string{
-		`image: ghcr.io/niuu/volundr-api:latest`,
+		`image: ghcr.io/niuulabs/volundr-api:latest`,
 		`"127.0.0.1:18080:8080"`,
 		`DATABASE__HOST: "host.docker.internal"`,
 		`DATABASE__PORT: "5433"`,
@@ -55,7 +55,7 @@ func TestRenderComposeTemplate_WithAnthropicKey(t *testing.T) {
 
 func TestRenderComposeTemplate_WithoutAnthropicKey(t *testing.T) {
 	data := composeData{
-		APIImage:        "ghcr.io/niuu/volundr-api:v1.0.0",
+		APIImage:        "ghcr.io/niuulabs/volundr-api:v1.0.0",
 		APIPort:         18080,
 		DBHost:          "db.example.com",
 		DBPort:          5432,
@@ -76,7 +76,7 @@ func TestRenderComposeTemplate_WithoutAnthropicKey(t *testing.T) {
 		t.Errorf("expected no ANTHROPIC_API_KEY when key is empty, got:\n%s", result)
 	}
 
-	if !strings.Contains(result, "image: ghcr.io/niuu/volundr-api:v1.0.0") {
+	if !strings.Contains(result, "image: ghcr.io/niuulabs/volundr-api:v1.0.0") {
 		t.Errorf("expected custom API image, got:\n%s", result)
 	}
 

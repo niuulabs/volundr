@@ -13,6 +13,7 @@ from volundr.adapters.outbound.flux import (
     FluxPodManager,
 )
 from volundr.domain.models import (
+    GitSource,
     Session,
     SessionStatus,
 )
@@ -24,8 +25,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/org/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/org/repo", branch="main"),
     )
 
 
@@ -53,8 +53,6 @@ def pod_manager() -> FluxPodManager:
 def mock_api():
     api = AsyncMock()
     return api
-
-
 
 
 class TestFluxPodManagerStart:
@@ -277,9 +275,7 @@ class TestFluxPodManagerGatewayEndpoints:
         assert pm._chat_endpoint("my-session", sid) == (
             "wss://gateway.example.com/s/abc-123/session"
         )
-        assert pm._code_endpoint("my-session", sid) == (
-            "https://gateway.example.com/s/abc-123/"
-        )
+        assert pm._code_endpoint("my-session", sid) == ("https://gateway.example.com/s/abc-123/")
 
     async def test_start_returns_path_based_endpoints(
         self,
@@ -304,7 +300,9 @@ class TestFluxPodManagerSpecValues:
     """Tests for spec values pass-through to Skuld Helm values."""
 
     async def test_spec_values_passed_to_helmrelease(
-        self, sample_session: Session, mock_api,
+        self,
+        sample_session: Session,
+        mock_api,
     ):
         pm = FluxPodManager(
             namespace="test-ns",
@@ -326,8 +324,58 @@ class TestFluxPodManagerSpecValues:
         assert body["spec"]["values"]["gateway"]["name"] == "my-gw"
         assert body["spec"]["values"]["git"]["repoUrl"] == "https://github.com/org/repo"
 
+    async def test_resource_overrides_reach_devrunner_values(
+        self,
+        sample_session: Session,
+        mock_api,
+    ):
+        """Verify user resource config flows through to devrunner Helm values."""
+        pm = FluxPodManager(
+            namespace="test-ns",
+            base_domain="volundr.example.com",
+            session_defaults={
+                "localServices": {
+                    "devrunner": {
+                        "resources": {
+                            "requests": {"memory": "512Mi", "cpu": "100m"},
+                            "limits": {"memory": "4Gi", "cpu": "2000m"},
+                        }
+                    }
+                },
+            },
+        )
+        spec = make_spec(
+            localServices={
+                "devrunner": {
+                    "resources": {
+                        "requests": {"cpu": "8", "memory": "32Gi"},
+                        "limits": {"cpu": "8", "memory": "32Gi", "nvidia.com/gpu": "4"},
+                    }
+                }
+            },
+            nodeSelector={"nvidia.com/gpu.product": "H100"},
+            tolerations=[{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
+            runtimeClassName="nvidia",
+        )
+        with patch.object(pm, "_get_api", return_value=mock_api):
+            await pm.start(sample_session, spec)
+
+        body = mock_api.create_namespaced_custom_object.call_args[1]["body"]
+        values = body["spec"]["values"]
+        # Devrunner resources should be overridden
+        dr = values["localServices"]["devrunner"]["resources"]
+        assert dr["requests"]["cpu"] == "8"
+        assert dr["requests"]["memory"] == "32Gi"
+        assert dr["limits"]["nvidia.com/gpu"] == "4"
+        # Pod-level scheduling
+        assert values["nodeSelector"]["nvidia.com/gpu.product"] == "H100"
+        assert len(values["tolerations"]) == 1
+        assert values["runtimeClassName"] == "nvidia"
+
     async def test_empty_spec_uses_only_defaults(
-        self, sample_session: Session, mock_api,
+        self,
+        sample_session: Session,
+        mock_api,
     ):
         pm = FluxPodManager(
             namespace="test-ns",

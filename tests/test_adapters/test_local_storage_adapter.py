@@ -49,9 +49,7 @@ async def test_provision_user_storage_idempotent(
 # ------------------------------------------------------------------
 
 
-async def test_create_session_workspace(
-    adapter: LocalStorageAdapter, tmp_path: Path
-) -> None:
+async def test_create_session_workspace(adapter: LocalStorageAdapter, tmp_path: Path) -> None:
     ref = await adapter.create_session_workspace("sess-1", "user-1", "tenant-1")
     ws_dir = tmp_path / "workspaces" / "sess-1"
     assert ws_dir.is_dir()
@@ -79,9 +77,7 @@ async def test_create_session_workspace_returns_pvcref_with_path(
 # ------------------------------------------------------------------
 
 
-async def test_archive_session_workspace(
-    adapter: LocalStorageAdapter, tmp_path: Path
-) -> None:
+async def test_archive_session_workspace(adapter: LocalStorageAdapter, tmp_path: Path) -> None:
     await adapter.create_session_workspace("sess-1", "user-1", "tenant-1")
     await adapter.archive_session_workspace("sess-1")
     meta_path = tmp_path / "workspaces" / "sess-1" / ".volundr-meta.json"
@@ -94,9 +90,7 @@ async def test_archive_session_workspace(
 # ------------------------------------------------------------------
 
 
-async def test_delete_workspace_removes_dir(
-    adapter: LocalStorageAdapter, tmp_path: Path
-) -> None:
+async def test_delete_workspace_removes_dir(adapter: LocalStorageAdapter, tmp_path: Path) -> None:
     await adapter.create_session_workspace("sess-1", "user-1")
     ws_dir = tmp_path / "workspaces" / "sess-1"
     assert ws_dir.exists()
@@ -125,9 +119,7 @@ async def test_list_workspaces_by_user(adapter: LocalStorageAdapter) -> None:
     await adapter.create_session_workspace("s1", "u1")
     await adapter.create_session_workspace("s2", "u2")
     await adapter.create_session_workspace("s3", "u1")
-    entries = [
-        e for e in adapter._session_workspaces.values() if e.user_id == "u1"
-    ]
+    entries = [e for e in adapter._session_workspaces.values() if e.user_id == "u1"]
     assert len(entries) == 2
 
 
@@ -136,15 +128,9 @@ async def test_list_workspaces_by_status(adapter: LocalStorageAdapter) -> None:
     await adapter.create_session_workspace("s2", "u1")
     await adapter.archive_session_workspace("s1")
     archived = [
-        e
-        for e in adapter._session_workspaces.values()
-        if e.status == WorkspaceStatus.ARCHIVED
+        e for e in adapter._session_workspaces.values() if e.status == WorkspaceStatus.ARCHIVED
     ]
-    active = [
-        e
-        for e in adapter._session_workspaces.values()
-        if e.status == WorkspaceStatus.ACTIVE
-    ]
+    active = [e for e in adapter._session_workspaces.values() if e.status == WorkspaceStatus.ACTIVE]
     assert len(archived) == 1
     assert len(active) == 1
 

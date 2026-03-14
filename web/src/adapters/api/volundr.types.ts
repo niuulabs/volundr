@@ -19,12 +19,19 @@ export type ApiSessionStatus =
 /**
  * Session response from API
  */
+export interface ApiSessionSource {
+  type: 'git' | 'local_mount';
+  repo?: string;
+  branch?: string;
+  paths?: Array<{ host_path: string; mount_path: string; read_only: boolean }>;
+  node_selector?: Record<string, string>;
+}
+
 export interface ApiSessionResponse {
   id: string;
   name: string;
   model: string;
-  repo: string;
-  branch: string;
+  source: ApiSessionSource;
   status: ApiSessionStatus;
   chat_endpoint: string | null;
   code_endpoint: string | null;
@@ -83,14 +90,44 @@ export interface ApiTenantResponse {
 export interface ApiSessionCreate {
   name: string;
   model: string;
-  repo: string;
-  branch: string;
+  source: ApiSessionSource;
   template_name?: string | null;
   task_type?: string | null;
   terminal_restricted?: boolean;
   workspace_id?: string | null;
   credential_names?: string[];
   integration_ids?: string[];
+  resource_config?: Record<string, string | undefined>;
+}
+
+/**
+ * Resource type from cluster discovery
+ */
+export interface ApiResourceType {
+  name: string;
+  resource_key: string;
+  display_name: string;
+  unit: string;
+  category: string;
+}
+
+/**
+ * Node resource summary from cluster discovery
+ */
+export interface ApiNodeResourceSummary {
+  name: string;
+  labels: Record<string, string>;
+  allocatable: Record<string, string>;
+  allocated: Record<string, string>;
+  available: Record<string, string>;
+}
+
+/**
+ * Cluster resource discovery response
+ */
+export interface ApiClusterResourceInfo {
+  resource_types: ApiResourceType[];
+  nodes: ApiNodeResourceSummary[];
 }
 
 /**
@@ -199,8 +236,7 @@ export interface SSESessionPayload {
   id: string;
   name: string;
   model: string;
-  repo: string;
-  branch: string;
+  source: ApiSessionSource;
   status: ApiSessionStatus;
   chat_endpoint: string | null;
   code_endpoint: string | null;

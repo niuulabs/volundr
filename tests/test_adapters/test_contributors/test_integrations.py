@@ -7,6 +7,7 @@ import pytest
 
 from volundr.adapters.outbound.contributors.integrations import IntegrationContributor
 from volundr.domain.models import (
+    GitSource,
     IntegrationConnection,
     IntegrationDefinition,
     MCPServerSpec,
@@ -22,8 +23,7 @@ def session():
     return Session(
         name="test",
         model="claude",
-        repo="",
-        branch="main",
+        source=GitSource(repo="", branch="main"),
         owner_id="user-1",
     )
 

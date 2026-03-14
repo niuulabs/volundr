@@ -115,7 +115,10 @@ class CerbosAuthorizationAdapter(AuthorizationPort):
         return False
 
     def _parse_batch_results(
-        self, data: dict, resources: list[Resource], action: str,
+        self,
+        data: dict,
+        resources: list[Resource],
+        action: str,
     ) -> list[Resource]:
         allowed_ids: set[str] = set()
         for result in data.get("results", []):

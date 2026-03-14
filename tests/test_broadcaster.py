@@ -10,6 +10,7 @@ import pytest
 from volundr.adapters.outbound.broadcaster import InMemoryEventBroadcaster
 from volundr.domain.models import (
     EventType,
+    GitSource,
     RealtimeEvent,
     Session,
     SessionStatus,
@@ -30,8 +31,7 @@ def sample_session() -> Session:
         id=uuid4(),
         name="Test Session",
         model="claude-sonnet-4-20250514",
-        repo="https://github.com/test/repo",
-        branch="main",
+        source=GitSource(repo="https://github.com/test/repo", branch="main"),
         status=SessionStatus.RUNNING,
     )
 

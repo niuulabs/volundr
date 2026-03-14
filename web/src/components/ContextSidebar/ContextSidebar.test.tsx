@@ -37,8 +37,7 @@ const mockModelConfig: ModelConfigData = {
   model: 'claude-sonnet',
   taskType: 'Skuld Claude',
   taskDescription: 'Interactive Claude Code CLI session',
-  repo: 'org/repo',
-  branch: 'feature/thermal',
+  source: { type: 'git', repo: 'org/repo', branch: 'feature/thermal' },
 };
 
 describe('ContextSidebar', () => {

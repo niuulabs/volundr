@@ -183,6 +183,18 @@ data:
       secret_kwargs_env: {}
       {{- end }}
 
+    resource_provider:
+      adapter: {{ .Values.resourceProvider.adapter | quote }}
+      kwargs: {{ .Values.resourceProvider.kwargs | toJson }}
+      {{- if .Values.resourceProvider.secretKwargs }}
+      secret_kwargs_env:
+        {{- range .Values.resourceProvider.secretKwargs }}
+        {{ .kwarg }}: RESOURCE_PROVIDER_SK_{{ .kwarg | upper }}
+        {{- end }}
+      {{- else }}
+      secret_kwargs_env: {}
+      {{- end }}
+
     identity:
       adapter: {{ .Values.identity.adapter | quote }}
       kwargs: {{ .Values.identity.kwargs | toJson }}

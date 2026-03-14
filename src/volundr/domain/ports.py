@@ -16,6 +16,7 @@ from uuid import UUID
 from volundr.domain.models import (
     Chronicle,
     CIStatus,
+    ClusterResourceInfo,
     ForgeProfile,
     GitProviderType,
     IntegrationConnection,
@@ -50,6 +51,7 @@ from volundr.domain.models import (
     TokenUsageRecord,
     TrackerConnectionStatus,
     TrackerIssue,
+    TranslatedResources,
     User,
     Workspace,
     WorkspaceStatus,
@@ -1367,9 +1369,50 @@ class SecretInjectionPort(ABC):
         ...
 
 
+class ResourceProvider(ABC):
+    """Port for discovering, validating, and translating cluster resources.
+
+    Adapters may query the K8s API (device-plugin or DRA) or return
+    static resource types for dev/test environments.
+    """
+
+    @abstractmethod
+    async def discover(self) -> ClusterResourceInfo:
+        """Discover available resource types and cluster capacity."""
+        ...
+
+    @abstractmethod
+    def translate(self, resource_config: dict) -> TranslatedResources:
+        """Translate user-friendly resource config to K8s-native primitives.
+
+        Args:
+            resource_config: User-friendly format, e.g.
+                {"cpu": "4", "memory": "8Gi", "gpu": "1", "gpu_type": "A100"}
+
+        Returns:
+            TranslatedResources with requests, limits, nodeSelector,
+            tolerations, and runtimeClassName.
+        """
+        ...
+
+    @abstractmethod
+    def validate(
+        self,
+        resource_config: dict,
+        cluster_info: ClusterResourceInfo | None = None,
+    ) -> list[str]:
+        """Validate resource config, optionally against cluster capacity.
+
+        Returns:
+            List of validation error messages (empty = valid).
+        """
+        ...
+
+
 @dataclass(frozen=True)
 class SessionContext:
     """Read-only context for contributors."""
+
     principal: Principal | None = None
     template_name: str | None = None
     profile_name: str | None = None
@@ -1377,11 +1420,13 @@ class SessionContext:
     credential_names: tuple[str, ...] = ()
     integration_ids: tuple[str, ...] = ()
     integration_connections: tuple[IntegrationConnection, ...] = ()
+    resource_config: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class SessionContribution:
     """Output from a single contributor."""
+
     values: dict[str, Any] = field(default_factory=dict)
     pod_spec: PodSpecAdditions | None = None
 
@@ -1399,7 +1444,9 @@ class SessionContributor(ABC):
 
     @abstractmethod
     async def contribute(
-        self, session: Session, context: SessionContext,
+        self,
+        session: Session,
+        context: SessionContext,
     ) -> SessionContribution: ...
 
     async def cleanup(self, session: Session, context: SessionContext) -> None:
