@@ -1365,10 +1365,7 @@ export class ApiVolundrService implements IVolundrService {
     if (data.storage) {
       body.storage = { home_enabled: data.storage.homeEnabled };
     }
-    const response = await api.put<{ storage: { home_enabled: boolean } }>(
-      '/admin/settings',
-      body
-    );
+    const response = await api.put<{ storage: { home_enabled: boolean } }>('/admin/settings', body);
     return {
       storage: { homeEnabled: response.storage.home_enabled },
     };

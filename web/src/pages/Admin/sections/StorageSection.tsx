@@ -123,10 +123,7 @@ export function StorageSection({ service }: StorageSectionProps) {
             </div>
             <button
               type="button"
-              className={cn(
-                styles.toggle,
-                adminSettings.storage.homeEnabled && styles.toggleOn
-              )}
+              className={cn(styles.toggle, adminSettings.storage.homeEnabled && styles.toggleOn)}
               onClick={handleToggleHomeEnabled}
               disabled={settingsToggling}
               aria-label="Toggle persistent home directories"
