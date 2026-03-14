@@ -1,10 +1,10 @@
 module github.com/niuulabs/volundr/cli
 
-go 1.24.2
+go 1.25.0
 
 require (
 	charm.land/bubbletea/v2 v2.0.2
-	charm.land/lipgloss/v2 v2.0.0
+	charm.land/lipgloss/v2 v2.0.2
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/charmbracelet/x/vt v0.0.0-20260309091332-e8ca31595cc4
 	github.com/fergusstrange/embedded-postgres v1.33.0
@@ -49,7 +49,7 @@ require (
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
