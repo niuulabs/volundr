@@ -131,6 +131,107 @@ func TestApp_Update_PageNavigation(t *testing.T) {
 	}
 }
 
+func TestApp_Update_InputCaptured_SuppressesQ(t *testing.T) {
+	app := NewApp("")
+	app.Ready = true
+	app.InputCaptured = true
+
+	// 'q' should NOT quit when input is captured.
+	app, cmd := app.Update(tea.KeyPressMsg{Code: 'q'})
+	if cmd != nil {
+		t.Error("expected no quit command when input is captured")
+	}
+	_ = app
+}
+
+func TestApp_Update_InputCaptured_SuppressesHelp(t *testing.T) {
+	app := NewApp("")
+	app.Ready = true
+	app.InputCaptured = true
+
+	// '?' should NOT toggle help when input is captured.
+	app, _ = app.Update(tea.KeyPressMsg{Code: '?'})
+	if app.ShowHelp {
+		t.Error("expected help to stay hidden when input is captured")
+	}
+}
+
+func TestApp_Update_InputCaptured_SuppressesSidebar(t *testing.T) {
+	app := NewApp("")
+	app.Ready = true
+	app.InputCaptured = true
+
+	// '[' should NOT toggle sidebar when input is captured.
+	before := app.ShowSidebar
+	app, _ = app.Update(tea.KeyPressMsg{Code: '['})
+	if app.ShowSidebar != before {
+		t.Error("expected sidebar unchanged when input is captured")
+	}
+}
+
+func TestApp_Update_InputCaptured_SuppressesNavigation(t *testing.T) {
+	app := NewApp("")
+	app.Ready = true
+	app.InputCaptured = true
+	app.ActivePage = PageSessions
+
+	// '3' should NOT navigate when input is captured.
+	app, _ = app.Update(tea.KeyPressMsg{Code: '3'})
+	if app.ActivePage != PageSessions {
+		t.Error("expected page unchanged when input is captured")
+	}
+}
+
+func TestApp_Update_InputCaptured_CtrlCStillQuits(t *testing.T) {
+	app := NewApp("")
+	app.Ready = true
+	app.InputCaptured = true
+
+	// ctrl+c should ALWAYS quit.
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Error("expected quit command for ctrl+c even when input is captured")
+	}
+}
+
+func TestApp_Update_InputCaptured_EscClosesHelp(t *testing.T) {
+	app := NewApp("")
+	app.InputCaptured = true
+	app.ShowHelp = true
+
+	// Esc should ALWAYS close help, even when input is captured.
+	app, _ = app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if app.ShowHelp {
+		t.Error("expected help closed after Esc, even when input is captured")
+	}
+}
+
+func TestApp_Update_AltNavigation(t *testing.T) {
+	app := NewApp("")
+	app.Ready = true
+	app.InputCaptured = true // should still work
+
+	tests := []struct {
+		key  rune
+		page Page
+	}{
+		{'1', PageSessions},
+		{'2', PageChat},
+		{'3', PageTerminal},
+		{'4', PageDiffs},
+		{'5', PageChronicles},
+		{'6', PageSettings},
+		{'7', PageAdmin},
+	}
+
+	for _, tt := range tests {
+		app, _ = app.Update(tea.KeyPressMsg{Code: tt.key, Mod: tea.ModAlt})
+		if app.ActivePage != tt.page {
+			t.Errorf("alt+%q: expected page %v, got %v", string(tt.key), tt.page, app.ActivePage)
+		}
+	}
+}
+
 func TestApp_View_NotReady(t *testing.T) {
 	app := NewApp("")
 	view := app.View()
@@ -203,6 +304,44 @@ func TestIsNavigationKey_Valid(t *testing.T) {
 		if page != tt.page {
 			t.Errorf("key %q: expected page %v, got %v", string(tt.key), tt.page, page)
 		}
+	}
+}
+
+func TestIsAltNavigationKey_Valid(t *testing.T) {
+	tests := []struct {
+		key  rune
+		page Page
+	}{
+		{'1', PageSessions},
+		{'2', PageChat},
+		{'3', PageTerminal},
+		{'4', PageDiffs},
+		{'5', PageChronicles},
+		{'6', PageSettings},
+		{'7', PageAdmin},
+	}
+
+	for _, tt := range tests {
+		page, ok := IsAltNavigationKey(tea.KeyPressMsg{Code: tt.key, Mod: tea.ModAlt})
+		if !ok {
+			t.Errorf("expected alt+%q to be alt navigation key", string(tt.key))
+		}
+		if page != tt.page {
+			t.Errorf("alt+%q: expected page %v, got %v", string(tt.key), tt.page, page)
+		}
+	}
+}
+
+func TestIsAltNavigationKey_Invalid(t *testing.T) {
+	// Plain number should NOT match alt nav.
+	_, ok := IsAltNavigationKey(tea.KeyPressMsg{Code: '1'})
+	if ok {
+		t.Error("expected plain '1' to not be an alt navigation key")
+	}
+
+	_, ok = IsAltNavigationKey(tea.KeyPressMsg{Code: 'a', Mod: tea.ModAlt})
+	if ok {
+		t.Error("expected alt+a to not be an alt navigation key")
 	}
 }
 

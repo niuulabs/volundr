@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -269,21 +270,51 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	}
 
-	// When terminal page is active, intercept most keys and forward to PTY.
-	// Esc returns focus to app-level navigation so the user can switch pages.
+	// When terminal page is active, route keys based on insert/normal mode.
+	// In insert mode: all keys go to the terminal (PTY) except ctrl+],
+	// ctrl+t/n/p/w/f, f11, and alt+N which the terminal handles internally.
+	// In normal mode: keys fall through to the app layer for navigation.
 	if m.app.ActivePage == tuipkg.PageTerminal {
+		if _, ok := msg.(tea.KeyMsg); ok {
+			wasInsert := m.terminal.InsertMode()
+
+			// Send to the terminal page first — it handles mode
+			// switching (ctrl+], i) and PTY forwarding internally.
+			m.terminal, cmd = m.terminal.Update(msg)
+			cmds = appendCmd(cmds, cmd)
+
+			// If the terminal consumed the key (insert mode, or mode
+			// just changed), stop here. Only let keys fall through to
+			// the app layer when we were already in normal mode and
+			// the mode didn't change (i.e. a navigation key).
+			if m.terminal.InsertMode() || wasInsert != m.terminal.InsertMode() {
+				return m, tea.Batch(cmds...)
+			}
+		}
+	}
+
+	// When chat input is active, capture all keys for the input field.
+	// Only Esc, Ctrl+C, F11/Ctrl+F, and Alt+N fall through to the app.
+	if m.app.ActivePage == tuipkg.PageChat && m.chat.InputActive() {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			key := keyMsg.String()
-			// Let these keys through to the app layer:
 			switch {
-			case key == "f11", key == "ctrl+f",
-				key == "?", key == "esc", key == "[":
-				// fall through to app
-			case len(key) == 1 && key >= "1" && key <= "7":
-				// number keys for page navigation
+			case key == "ctrl+c":
+				// Let through to app (quit).
+			case key == "esc":
+				// Esc deactivates input; send to chat then fall through to app.
+				m.chat, cmd = m.chat.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			case key == "f11", key == "ctrl+f":
+				// Let through to app layer (fullscreen toggle).
+			case strings.HasPrefix(key, "alt+"):
+				// alt+number navigation — fall through to app
 			default:
-				// Forward everything else (including ctrl+c) to the terminal.
-				m.terminal, cmd = m.terminal.Update(msg)
+				// Forward directly to chat page (printable keys, enter,
+				// backspace, numbers, q, ?, [, etc.).
+				m.chat, cmd = m.chat.Update(msg)
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
@@ -292,32 +323,50 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// When chat input is active, intercept printable keys so they go to the
-	// input field instead of being swallowed by the app (e.g., "?" opening help).
-	if m.app.ActivePage == tuipkg.PageChat && m.chat.InputActive() {
+	// When sessions search is active, capture keys for the search field.
+	if m.app.ActivePage == tuipkg.PageSessions && m.sessions.Searching() {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			key := keyMsg.String()
 			switch {
-			case key == "ctrl+c", key == "esc":
-				// Esc deactivates input, let it through to chat then app.
-				m.chat, cmd = m.chat.Update(msg)
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-				// Fall through to app layer too.
-			case key == "f11", key == "ctrl+f":
-				// Let through to app layer (fullscreen toggle).
-			case len(key) == 1 && key >= "1" && key <= "7":
-				// Number keys for page navigation — let through to app layer.
+			case key == "ctrl+c":
+				// Let through to app (quit).
+			case strings.HasPrefix(key, "alt+"):
+				// alt+number navigation — fall through to app
 			default:
-				// Forward directly to chat page (printable keys, enter, backspace, etc.).
-				m.chat, cmd = m.chat.Update(msg)
+				// Forward to sessions page (handles esc/enter to exit search).
+				m.sessions, cmd = m.sessions.Update(msg)
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 				return m, tea.Batch(cmds...)
 			}
 		}
+	}
+
+	// When settings editor is active, capture keys for the edit field.
+	if m.app.ActivePage == tuipkg.PageSettings && m.settings.Editing() {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			key := keyMsg.String()
+			switch {
+			case key == "ctrl+c":
+				// Let through to app (quit).
+			case strings.HasPrefix(key, "alt+"):
+				// alt+number navigation — fall through to app
+			default:
+				// Forward to settings page (handles esc/enter to exit edit).
+				m.settings, cmd = m.settings.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+	}
+
+	// Set InputCaptured for KeyMsg so the app layer suppresses global
+	// keybindings (q, ?, [, 1-7) when a text input is active.
+	if _, ok := msg.(tea.KeyMsg); ok {
+		m.app.InputCaptured = m.isInputCaptured()
 	}
 
 	// Update the root app first (handles global keys, window resize)
@@ -410,6 +459,22 @@ func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model
 	return m, tea.Batch(cmds...)
 }
 
+// isInputCaptured returns true when the active page has a text input that
+// should suppress global keybindings (q, ?, [, 1-7).
+func (m tuiModel) isInputCaptured() bool {
+	switch m.app.ActivePage {
+	case tuipkg.PageTerminal:
+		return m.terminal.InsertMode()
+	case tuipkg.PageChat:
+		return m.chat.InputActive()
+	case tuipkg.PageSessions:
+		return m.sessions.Searching()
+	case tuipkg.PageSettings:
+		return m.settings.Editing()
+	}
+	return false
+}
+
 func (m tuiModel) View() tea.View {
 	v := tea.View{AltScreen: true}
 
@@ -459,6 +524,14 @@ func (m tuiModel) View() tea.View {
 
 	v.Content = fullView
 	return v
+}
+
+// appendCmd appends a non-nil command to a slice.
+func appendCmd(cmds []tea.Cmd, cmd tea.Cmd) []tea.Cmd {
+	if cmd != nil {
+		return append(cmds, cmd)
+	}
+	return cmds
 }
 
 // debugTUI enables TUI message logging. Set VOLUNDR_TUI_DEBUG=1 to enable.

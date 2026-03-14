@@ -14,7 +14,6 @@ import (
 	"strings"
 	"text/template"
 
-
 	"github.com/niuulabs/volundr/cli/internal/config"
 	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
@@ -102,18 +101,18 @@ type k3sComposeData struct {
 
 // k3sAPIConfig represents the Python API config file structure for k3s mode.
 type k3sAPIConfig struct {
-	Database             map[string]interface{}   `yaml:"database"`
-	PodManager           map[string]interface{}   `yaml:"pod_manager"`
-	CredentialStore      map[string]interface{}   `yaml:"credential_store"`
-	Storage              map[string]interface{}   `yaml:"storage"`
-	SecretInjection      map[string]interface{}   `yaml:"secret_injection"`
-	Identity             map[string]interface{}   `yaml:"identity"`
-	Authorization        map[string]interface{}   `yaml:"authorization"`
-	Gateway              map[string]interface{}   `yaml:"gateway"`
-	ResourceProvider     map[string]interface{}   `yaml:"resource_provider,omitempty"`
-	Git                  map[string]interface{}   `yaml:"git,omitempty"`
-	LocalMounts          map[string]interface{}   `yaml:"local_mounts,omitempty"`
-	SessionContributors  []map[string]interface{} `yaml:"session_contributors,omitempty"`
+	Database            map[string]interface{}   `yaml:"database"`
+	PodManager          map[string]interface{}   `yaml:"pod_manager"`
+	CredentialStore     map[string]interface{}   `yaml:"credential_store"`
+	Storage             map[string]interface{}   `yaml:"storage"`
+	SecretInjection     map[string]interface{}   `yaml:"secret_injection"`
+	Identity            map[string]interface{}   `yaml:"identity"`
+	Authorization       map[string]interface{}   `yaml:"authorization"`
+	Gateway             map[string]interface{}   `yaml:"gateway"`
+	ResourceProvider    map[string]interface{}   `yaml:"resource_provider,omitempty"`
+	Git                 map[string]interface{}   `yaml:"git,omitempty"`
+	LocalMounts         map[string]interface{}   `yaml:"local_mounts,omitempty"`
+	SessionContributors []map[string]interface{} `yaml:"session_contributors,omitempty"`
 }
 
 // K3sRuntime manages the Volundr stack using k3s/k3d for Kubernetes
@@ -1022,9 +1021,9 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	// Pass through local_mounts config if enabled.
 	if cfg.LocalMounts.Enabled {
 		apiCfg.LocalMounts = map[string]interface{}{
-			"enabled":          cfg.LocalMounts.Enabled,
-			"allow_root_mount": cfg.LocalMounts.AllowRootMount,
-			"allowed_prefixes": cfg.LocalMounts.AllowedPrefixes,
+			"enabled":           cfg.LocalMounts.Enabled,
+			"allow_root_mount":  cfg.LocalMounts.AllowRootMount,
+			"allowed_prefixes":  cfg.LocalMounts.AllowedPrefixes,
 			"default_read_only": cfg.LocalMounts.DefaultReadOnly,
 		}
 	}

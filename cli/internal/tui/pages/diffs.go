@@ -318,11 +318,11 @@ func (d DiffsPage) renderFileTree(width, height int) string {
 			items = append(items, lipgloss.NewStyle().
 				Background(theme.BgTertiary).
 				Foreground(theme.AccentAmber).
-				Width(width - 2).
+				Width(width-2).
 				Render(line))
 		} else {
 			items = append(items, lipgloss.NewStyle().
-				Width(width - 2).
+				Width(width-2).
 				Render(line))
 		}
 	}

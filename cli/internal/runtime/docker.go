@@ -74,18 +74,18 @@ type composeData struct {
 
 // dockerAPIConfig represents the Python API config file structure for Docker mode.
 type dockerAPIConfig struct {
-	Database             map[string]interface{}   `yaml:"database"`
-	PodManager           map[string]interface{}   `yaml:"pod_manager"`
-	CredentialStore      map[string]interface{}   `yaml:"credential_store"`
-	Storage              map[string]interface{}   `yaml:"storage"`
-	SecretInjection      map[string]interface{}   `yaml:"secret_injection"`
-	Git                  map[string]interface{}   `yaml:"git,omitempty"`
-	Identity             map[string]interface{}   `yaml:"identity"`
-	Authorization        map[string]interface{}   `yaml:"authorization"`
-	Gateway              map[string]interface{}   `yaml:"gateway"`
-	ResourceProvider     map[string]interface{}   `yaml:"resource_provider,omitempty"`
-	LocalMounts          map[string]interface{}   `yaml:"local_mounts,omitempty"`
-	SessionContributors  []map[string]interface{} `yaml:"session_contributors,omitempty"`
+	Database            map[string]interface{}   `yaml:"database"`
+	PodManager          map[string]interface{}   `yaml:"pod_manager"`
+	CredentialStore     map[string]interface{}   `yaml:"credential_store"`
+	Storage             map[string]interface{}   `yaml:"storage"`
+	SecretInjection     map[string]interface{}   `yaml:"secret_injection"`
+	Git                 map[string]interface{}   `yaml:"git,omitempty"`
+	Identity            map[string]interface{}   `yaml:"identity"`
+	Authorization       map[string]interface{}   `yaml:"authorization"`
+	Gateway             map[string]interface{}   `yaml:"gateway"`
+	ResourceProvider    map[string]interface{}   `yaml:"resource_provider,omitempty"`
+	LocalMounts         map[string]interface{}   `yaml:"local_mounts,omitempty"`
+	SessionContributors []map[string]interface{} `yaml:"session_contributors,omitempty"`
 }
 
 // dockerAPIInternalPort is the host port the API container binds to.
@@ -475,17 +475,17 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 		PodManager: map[string]interface{}{
 			"adapter": "volundr.adapters.outbound.docker_pod_manager.DockerPodManager",
 			"kwargs": map[string]interface{}{
-				"network":            dockerImageOrDefault(cfg.Docker.Network, "volundr-net"),
-				"skuld_image":        dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuulabs/skuld:latest"),
-				"code_server_image":  dockerImageOrDefault(cfg.Docker.CodeServerImage, "ghcr.io/niuulabs/code-server:latest"),
-				"ttyd_image":         dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuulabs/ttyd:latest"),
-				"compose_dir":        containerStoragePath + "/sessions",
-				"gateway_domain":     "",
-				"db_host":            dbHost,
-				"db_port":            cfg.Database.Port,
-				"db_user":            cfg.Database.User,
-				"db_password":        cfg.Database.Password,
-				"db_name":            cfg.Database.Name,
+				"network":           dockerImageOrDefault(cfg.Docker.Network, "volundr-net"),
+				"skuld_image":       dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuulabs/skuld:latest"),
+				"code_server_image": dockerImageOrDefault(cfg.Docker.CodeServerImage, "ghcr.io/niuulabs/code-server:latest"),
+				"ttyd_image":        dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuulabs/ttyd:latest"),
+				"compose_dir":       containerStoragePath + "/sessions",
+				"gateway_domain":    "",
+				"db_host":           dbHost,
+				"db_port":           cfg.Database.Port,
+				"db_user":           cfg.Database.User,
+				"db_password":       cfg.Database.Password,
+				"db_name":           cfg.Database.Name,
 			},
 		},
 		CredentialStore: map[string]interface{}{

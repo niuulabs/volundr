@@ -13,15 +13,15 @@ import (
 
 // Realm represents an infrastructure realm (Kubernetes namespace/cluster).
 type Realm struct {
-	Name      string
-	Status    string
-	Cluster   string
-	Pods      int
-	MaxPods   int
-	CPUUsage  string
-	MemUsage  string
-	GPUs      int
-	Region    string
+	Name     string
+	Status   string
+	Cluster  string
+	Pods     int
+	MaxPods  int
+	CPUUsage string
+	MemUsage string
+	GPUs     int
+	Region   string
 }
 
 // RealmsPage displays an infrastructure grid with health status.
@@ -146,13 +146,13 @@ func (r RealmsPage) renderRealmCard(realm Realm, selected bool) string {
 	if selected {
 		return lipgloss.NewStyle().
 			Background(theme.BgTertiary).
-			Width(r.width - 6).
+			Width(r.width-6).
 			Padding(0, 1).
 			Render(content)
 	}
 
 	return lipgloss.NewStyle().
-		Width(r.width - 6).
+		Width(r.width-6).
 		Padding(0, 1).
 		Render(content)
 }

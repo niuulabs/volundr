@@ -3,8 +3,8 @@ package components
 import (
 	"testing"
 
-	tui "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/remote"
+	tui "github.com/niuulabs/volundr/cli/internal/tui"
 )
 
 // --- StatusBadge tests ---

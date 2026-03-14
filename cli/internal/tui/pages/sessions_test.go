@@ -5,8 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/niuulabs/volundr/cli/internal/api"
-	tui "github.com/niuulabs/volundr/cli/internal/tui"
 	"github.com/niuulabs/volundr/cli/internal/remote"
+	tui "github.com/niuulabs/volundr/cli/internal/tui"
 )
 
 func TestNewSessionsPage_NilPool(t *testing.T) {
@@ -456,10 +456,10 @@ func TestSessionsPage_Update_SearchMode(t *testing.T) {
 	}
 
 	// Type "auth"
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'a'})
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'u'})
-	page, _ = page.Update(tea.KeyPressMsg{Code: 't'})
-	page, _ = page.Update(tea.KeyPressMsg{Code: 'h'})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'u', Text: "u"})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
 	if page.search != "auth" {
 		t.Errorf("expected search %q, got %q", "auth", page.search)
 	}
@@ -504,6 +504,17 @@ func TestSessionsPage_Update_ContextCycle(t *testing.T) {
 	page := SessionsPage{filter: "all"}
 	page, _ = page.Update(tea.KeyPressMsg{Code: 'c'})
 	// Should not panic with nil pool
+}
+
+func TestSessionsPage_Searching(t *testing.T) {
+	page := NewSessionsPage(nil)
+	if page.Searching() {
+		t.Error("expected not searching initially")
+	}
+	page.searching = true
+	if !page.Searching() {
+		t.Error("expected searching after setting flag")
+	}
 }
 
 func TestSessionsPage_View_Searching(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 type Page int
 
 const (
-	PageSessions    Page = iota // Sessions list and detail
+	PageSessions   Page = iota // Sessions list and detail
 	PageChat                   // Chat interface
 	PageTerminal               // Remote terminal
 	PageDiffs                  // Git diff viewer
@@ -65,6 +65,29 @@ func IsNavigationKey(msg tea.KeyMsg) (Page, bool) {
 	case "6":
 		return PageSettings, true
 	case "7":
+		return PageAdmin, true
+	}
+	return 0, false
+}
+
+// IsAltNavigationKey checks if a key message is an alt+number page navigation
+// shortcut. These work even when input is captured (e.g. terminal PTY, chat
+// input, search, settings edit).
+func IsAltNavigationKey(msg tea.KeyMsg) (Page, bool) {
+	switch msg.String() {
+	case "alt+1":
+		return PageSessions, true
+	case "alt+2":
+		return PageChat, true
+	case "alt+3":
+		return PageTerminal, true
+	case "alt+4":
+		return PageDiffs, true
+	case "alt+5":
+		return PageChronicles, true
+	case "alt+6":
+		return PageSettings, true
+	case "alt+7":
 		return PageAdmin, true
 	}
 	return 0, false

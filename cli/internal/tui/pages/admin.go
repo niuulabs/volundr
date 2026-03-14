@@ -15,7 +15,7 @@ import (
 type AdminTab int
 
 const (
-	AdminUsers    AdminTab = iota
+	AdminUsers AdminTab = iota
 	AdminTenants
 	AdminStats
 )
@@ -210,7 +210,7 @@ func (a AdminPage) renderUsers() string {
 		if i == a.cursor {
 			rows = append(rows, lipgloss.NewStyle().
 				Background(theme.BgTertiary).
-				Width(a.width - 6).
+				Width(a.width-6).
 				Render(row))
 		} else {
 			rows = append(rows, row)
@@ -261,7 +261,7 @@ func (a AdminPage) renderTenants() string {
 		if i == a.cursor {
 			rows = append(rows, lipgloss.NewStyle().
 				Background(theme.BgTertiary).
-				Width(a.width - 6).
+				Width(a.width-6).
 				Render(row))
 		} else {
 			rows = append(rows, row)

@@ -36,12 +36,12 @@ func (s Sidebar) View() string {
 		Foreground(theme.AccentAmber).
 		Background(theme.BgTertiary).
 		Bold(true).
-		Width(s.Width - 4).
+		Width(s.Width-4).
 		Padding(0, 1)
 
 	itemStyle := lipgloss.NewStyle().
 		Foreground(theme.TextSecondary).
-		Width(s.Width - 4).
+		Width(s.Width-4).
 		Padding(0, 1)
 
 	dimKeyStyle := lipgloss.NewStyle().
@@ -117,7 +117,7 @@ func (s Sidebar) viewCollapsed() string {
 	items = append(items, lipgloss.NewStyle().
 		Foreground(theme.AccentAmber).
 		Bold(true).
-		Width(collapsedWidth - 2).
+		Width(collapsedWidth-2).
 		Align(lipgloss.Center).
 		Render("⚒"))
 	items = append(items, "")
