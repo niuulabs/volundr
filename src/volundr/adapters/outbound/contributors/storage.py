@@ -43,6 +43,7 @@ class StorageContributor(SessionContributor):
         values: dict[str, Any] = {}
         if home_pvc:
             values["homeVolume"] = {
+                "enabled": True,
                 "existingClaim": home_pvc,
                 "mountPath": self._storage.home_mount_path,
             }

@@ -38,6 +38,7 @@ class TestStorageContributor:
 
         c = StorageContributor(storage=storage)
         result = await c.contribute(session, SessionContext())
+        assert result.values["homeVolume"]["enabled"] is True
         assert result.values["homeVolume"]["existingClaim"] == "home-pvc"
         assert result.values["persistence"]["existingClaim"] == "ws-pvc"
 
@@ -57,6 +58,7 @@ class TestStorageContributor:
         c = StorageContributor(storage=storage)
         result = await c.contribute(session, SessionContext())
         assert result.values["persistence"]["existingClaim"] == "existing-ws"
+        assert result.values["homeVolume"]["enabled"] is True
         assert result.values["homeVolume"]["existingClaim"] == "home-pvc"
         storage.create_session_workspace.assert_not_called()
 

@@ -29,7 +29,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN npm install -g @openai/codex
 
 # Create app user
-RUN useradd -m -s /bin/bash skuld
+RUN useradd -m -s /bin/bash -u 1000 skuld
 
 # Set up Python virtual environment
 ENV VIRTUAL_ENV=/opt/venv

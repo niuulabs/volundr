@@ -193,6 +193,7 @@ class DirectK8sPodManager(PodManager):
         db_password: str = "",
         db_name: str = "volundr",
         storage_path: str = "",
+        home_mount_path: str = "/volundr/home",
         poll_interval: float = DEFAULT_POLL_INTERVAL,
         readiness_timeout: float = DEFAULT_READINESS_TIMEOUT,
         **_extra: object,
@@ -213,6 +214,7 @@ class DirectK8sPodManager(PodManager):
         self._db_password = db_password
         self._db_name = db_name
         self._storage_path = storage_path
+        self._home_mount_path = home_mount_path
         self._poll_interval = poll_interval
         self._readiness_timeout = readiness_timeout
         self._credential_store: CredentialStorePort | None = None
@@ -521,7 +523,9 @@ fi
                     "name": "skuld",
                     "image": self._skuld_image,
                     "ports": [{"containerPort": 8081, "name": "broker"}],
-                    "env": env_vars,
+                    "env": env_vars + [
+                        {"name": "HOME", "value": self._home_mount_path},
+                    ],
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
@@ -540,6 +544,9 @@ fi
                         "--disable-telemetry",
                         f"/volundr/sessions/{session.id}/workspace",
                     ],
+                    "env": [
+                        {"name": "HOME", "value": self._home_mount_path},
+                    ],
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
@@ -553,7 +560,7 @@ fi
                     "env": [
                         {"name": "SESSION_ID", "value": str(session.id)},
                         {"name": "TERMINAL_PORT", "value": "7681"},
-                        {"name": "HOME", "value": "/volundr/home"},
+                        {"name": "HOME", "value": self._home_mount_path},
                     ],
                     "securityContext": {
                         "runAsUser": 1000,
