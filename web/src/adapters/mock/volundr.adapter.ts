@@ -30,6 +30,8 @@ import type {
   WorkspaceStatus,
   VolundrMember,
   VolundrProvisioningResult,
+  AdminSettings,
+  AdminStorageSettings,
 } from '@/models';
 import { isSessionActive } from '@/models';
 import {
@@ -199,7 +201,7 @@ export class MockVolundrService implements IVolundrService {
 
     const created: VolundrPreset = {
       ...preset,
-      id: `preset-${Math.random().toString(36).substring(2, 10)}`,
+      id: `preset-${crypto.randomUUID().substring(0, 8)}`,
       createdAt: now,
       updatedAt: now,
     };
@@ -263,7 +265,7 @@ export class MockVolundrService implements IVolundrService {
     resourceConfig?: Record<string, string | undefined>;
   }): Promise<VolundrSession> {
     const newSession: VolundrSession = {
-      id: `forge-${Math.random().toString(36).substring(2, 10)}`,
+      id: `forge-${crypto.randomUUID().substring(0, 8)}`,
       name: config.name,
       source: config.source,
       status: 'starting',
@@ -286,7 +288,7 @@ export class MockVolundrService implements IVolundrService {
 
   async connectSession(config: { name: string; hostname: string }): Promise<VolundrSession> {
     const newSession: VolundrSession = {
-      id: `manual-${Math.random().toString(36).substring(2, 10)}`,
+      id: `manual-${crypto.randomUUID().substring(0, 8)}`,
       name: config.name,
       source: { type: 'git', repo: '', branch: '' },
       status: 'starting',
@@ -609,7 +611,7 @@ export class MockVolundrService implements IVolundrService {
     const session = this.sessions.find(s => s.id === sessionId);
     const sessionRepo = session?.source.type === 'git' ? session.source.repo : '';
     const repo = mockVolundrRepos.find(r => r.url.includes(sessionRepo));
-    const prNumber = Math.floor(Math.random() * 200) + 100;
+    const prNumber = (parseInt(crypto.randomUUID().substring(0, 4), 16) % 200) + 100;
 
     const pr: PullRequest = {
       number: prNumber,
@@ -946,7 +948,7 @@ export class MockVolundrService implements IVolundrService {
     const now = new Date().toISOString();
     const created: IntegrationConnection = {
       ...connection,
-      id: `int-${Math.random().toString(36).substring(2, 8)}`,
+      id: `int-${crypto.randomUUID().substring(0, 6)}`,
       createdAt: now,
       updatedAt: now,
     };
@@ -1135,6 +1137,14 @@ export class MockVolundrService implements IVolundrService {
     if (ws) {
       ws.status = 'deleted';
     }
+  }
+
+  async getAdminSettings(): Promise<AdminSettings> {
+    return { storage: { homeEnabled: true } };
+  }
+
+  async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
+    return { storage: { homeEnabled: data.storage?.homeEnabled ?? true } };
   }
 
   private notifySubscribers(): void {

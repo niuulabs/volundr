@@ -286,6 +286,8 @@ spec:
             - name: SESSION_ID
               value: {{ .Values.session.id | quote }}
             {{- if .Values.homeVolume.enabled }}
+            - name: HOME
+              value: {{ .Values.homeVolume.mountPath | quote }}
             {{- if eq (toString .Values.broker.cliType) "codex" }}
             - name: CODEX_HOME
               value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"

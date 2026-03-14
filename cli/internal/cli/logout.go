@@ -12,7 +12,7 @@ var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Clear stored authentication tokens",
 	Long:  "Remove access token, refresh token, and token expiry from the local config file.",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)

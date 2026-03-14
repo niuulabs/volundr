@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from volundr.adapters.inbound.auth import extract_principal, require_role
@@ -22,38 +22,69 @@ class CredentialCreate(BaseModel):
         min_length=1,
         max_length=100,
         pattern=r"^[a-z0-9_-]+$",
+        description="Credential name (lowercase alphanumeric, hyphens, underscores)",
+        examples=["my-api-key"],
     )
-    secret_type: str = Field(default="generic")
-    data: dict[str, str]
-    metadata: dict[str, str] | None = None
+    secret_type: str = Field(
+        default="generic",
+        description="Secret type (api_key, oauth_token, git_credential, etc.)",
+        examples=["api_key"],
+    )
+    data: dict[str, str] = Field(
+        description="Key-value pairs of secret data",
+        examples=[{"token": "sk-abc123"}],
+    )
+    metadata: dict[str, str] | None = Field(
+        default=None,
+        description="Optional metadata labels for the credential",
+        examples=[{"environment": "production"}],
+    )
 
 
 class CredentialResponse(BaseModel):
     """Response model for a credential (metadata only, NEVER values)."""
 
-    id: str
-    name: str
-    secret_type: str
-    keys: list[str]
-    metadata: dict
-    created_at: str
-    updated_at: str
+    id: str = Field(description="Unique credential identifier", examples=["a1b2c3d4"])
+    name: str = Field(description="Credential name", examples=["my-api-key"])
+    secret_type: str = Field(description="Secret type classification", examples=["api_key"])
+    keys: list[str] = Field(
+        description="List of secret data key names", examples=[["token", "secret"]]
+    )
+    metadata: dict = Field(
+        description="Credential metadata labels", examples=[{"environment": "production"}]
+    )
+    created_at: str = Field(
+        description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
+    updated_at: str = Field(
+        description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
 
 
 class CredentialListResponse(BaseModel):
     """Response model for listing credentials."""
 
-    credentials: list[CredentialResponse]
+    credentials: list[CredentialResponse] = Field(
+        description="List of credential metadata entries (values are never included)",
+    )
 
 
 class SecretTypeInfoResponse(BaseModel):
     """Response model for a secret type definition."""
 
-    type: str
-    label: str
-    description: str
-    fields: list[dict]
-    default_mount_type: str
+    type: str = Field(description="Secret type identifier", examples=["api_key"])
+    label: str = Field(description="Human-readable label", examples=["API Key"])
+    description: str = Field(
+        description="Description of the secret type", examples=["Token-based API authentication"]
+    )
+    fields: list[dict] = Field(
+        description="Required fields for this secret type",
+        examples=[[{"name": "token", "required": True}]],
+    )
+    default_mount_type: str = Field(
+        description="Default mount type (env_file, file, template)",
+        examples=["env_file"],
+    )
 
 
 def create_credentials_router(
@@ -97,7 +128,10 @@ def create_credentials_router(
         response_model=CredentialListResponse,
     )
     async def list_credentials(
-        secret_type: str | None = Query(None),
+        secret_type: str | None = Query(
+            None,
+            description="Filter by secret type (api_key, oauth_token, etc.)",
+        ),
         principal: Principal = Depends(extract_principal),
     ):
         """List the current user's credentials (metadata only)."""
@@ -112,7 +146,7 @@ def create_credentials_router(
         response_model=CredentialResponse,
     )
     async def get_credential(
-        name: str,
+        name: str = Path(description="Credential name to retrieve"),
         principal: Principal = Depends(extract_principal),
     ):
         """Get a credential's metadata by name."""
@@ -164,7 +198,7 @@ def create_credentials_router(
         status_code=status.HTTP_204_NO_CONTENT,
     )
     async def delete_credential(
-        name: str,
+        name: str = Path(description="Credential name to delete"),
         principal: Principal = Depends(extract_principal),
     ):
         """Delete a credential for the current user."""
@@ -185,7 +219,10 @@ def create_credentials_router(
         response_model=CredentialListResponse,
     )
     async def list_tenant_credentials(
-        secret_type: str | None = Query(None),
+        secret_type: str | None = Query(
+            None,
+            description="Filter by secret type (api_key, oauth_token, etc.)",
+        ),
         principal: Principal = Depends(
             require_role("volundr:admin"),
         ),
@@ -239,7 +276,7 @@ def create_credentials_router(
         status_code=status.HTTP_204_NO_CONTENT,
     )
     async def delete_tenant_credential(
-        name: str,
+        name: str = Path(description="Tenant credential name to delete"),
         principal: Principal = Depends(
             require_role("volundr:admin"),
         ),

@@ -15,6 +15,7 @@ import (
 // WSState represents the WebSocket connection state.
 type WSState int
 
+// WSState constants for WebSocket connection lifecycle.
 const (
 	WSDisconnected WSState = iota
 	WSConnecting
@@ -111,7 +112,7 @@ func NewWSClient(baseURL, token string) *WSClient {
 }
 
 // Connect establishes a WebSocket connection.
-// pathOrURL can be a relative path (appended to baseURL with Bearer auth)
+// PathOrURL can be a relative path (appended to baseURL with Bearer auth)
 // or a full ws(s):// URL (used as-is with access_token query param).
 func (w *WSClient) Connect(pathOrURL string) error {
 	w.mu.Lock()
@@ -119,21 +120,21 @@ func (w *WSClient) Connect(pathOrURL string) error {
 
 	w.setState(WSConnecting)
 
-	var url string
+	var endpoint string
 	header := http.Header{}
 
 	if strings.HasPrefix(pathOrURL, "ws://") || strings.HasPrefix(pathOrURL, "wss://") {
 		// Full URL — append token as query param (session-pod style auth).
-		url = appendAccessToken(pathOrURL, w.token)
+		endpoint = appendAccessToken(pathOrURL, w.token)
 	} else {
 		// Relative path — use base URL with Bearer header.
-		url = w.baseURL + pathOrURL
+		endpoint = w.baseURL + pathOrURL
 		if w.token != "" {
 			header.Set("Authorization", "Bearer "+w.token)
 		}
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	conn, _, err := websocket.DefaultDialer.Dial(endpoint, header) //nolint:bodyclose // WebSocket upgrade response has no body to close
 	if err != nil {
 		w.setState(WSDisconnected)
 		return fmt.Errorf("WebSocket dial failed: %w", err)
@@ -293,10 +294,10 @@ func (s WSState) String() string {
 var debugWS = os.Getenv("VOLUNDR_WS_DEBUG") == "1"
 
 func debugLogWS(data []byte) {
-	f, err := os.OpenFile("/tmp/volundr-ws-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("/tmp/volundr-ws-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // debug log in /tmp, not sensitive
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, _ = fmt.Fprintf(f, "--- FRAME ---\n%s\n", data)
 }

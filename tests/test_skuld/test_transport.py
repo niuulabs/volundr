@@ -115,8 +115,10 @@ class TestSubprocessTransport:
     async def test_send_message_spawns_process(self, transport):
         """Test send_message spawns claude with correct args."""
         responses = [
-            b'{"type": "content_block_delta", "index": 0,'
-            b' "delta": {"type": "text_delta", "text": "Hello"}}\n',
+            (
+                b'{"type": "content_block_delta", "index": 0,'
+                b' "delta": {"type": "text_delta", "text": "Hello"}}\n'
+            ),
             b'{"type": "result", "result": "Hello", "session_id": "sess-123"}\n',
         ]
         mock_stdout = AsyncMock()

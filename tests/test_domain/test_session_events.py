@@ -98,4 +98,4 @@ class TestSessionEvent:
             event.sequence = 99  # type: ignore
             assert False, "Should have raised"
         except AttributeError:
-            pass
+            pass  # Expected: frozen dataclass should reject mutation

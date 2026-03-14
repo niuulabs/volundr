@@ -69,10 +69,10 @@ type legacyConfig struct {
 func Load() (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
-		return DefaultConfig(), nil
+		return DefaultConfig(), nil //nolint:nilerr // gracefully return defaults when config path cannot be determined
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path comes from ConfigPath(), a trusted location
 	if err != nil {
 		if os.IsNotExist(err) {
 			return DefaultConfig(), nil
@@ -143,7 +143,7 @@ func (c *Config) Save() error {
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
@@ -152,7 +152,7 @@ func (c *Config) Save() error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 

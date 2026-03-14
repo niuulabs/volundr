@@ -1,3 +1,4 @@
+// Package pages provides the individual page models for the TUI.
 package pages
 
 import (
@@ -51,9 +52,9 @@ func NewSessionsPage(pool *tui.ClientPool) SessionsPage {
 		// Fall back to demo data for when no contexts are configured.
 		demos := demoSessions()
 		clusterSessions := make([]tui.ClusterSession, len(demos))
-		for i, s := range demos {
+		for i := range demos {
 			clusterSessions[i] = tui.ClusterSession{
-				Session:     s,
+				Session:     demos[i],
 				ContextKey:  "demo",
 				ContextName: "demo",
 			}
@@ -73,7 +74,7 @@ func NewSessionsPage(pool *tui.ClientPool) SessionsPage {
 }
 
 // Init fetches sessions from the API.
-func (s SessionsPage) Init() tea.Cmd {
+func (s SessionsPage) Init() tea.Cmd { //nolint:gocritic // value receiver needed for page interface consistency
 	if s.pool == nil {
 		return nil
 	}
@@ -81,7 +82,7 @@ func (s SessionsPage) Init() tea.Cmd {
 }
 
 // Update handles messages for the sessions page.
-func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
+func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	switch msg := msg.(type) {
 	case tui.AllSessionsLoadedMsg:
 		s.sessions = msg.Sessions
@@ -145,18 +146,18 @@ func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) {
 }
 
 // handleSearchInput processes keystrokes in search mode.
-func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) {
+func (s SessionsPage) handleSearchInput(msg tea.KeyMsg) (SessionsPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	switch msg.String() {
 	case "enter", "esc":
 		s.searching = false
 	case "backspace":
-		if len(s.search) > 0 {
+		if s.search != "" {
 			s.search = s.search[:len(s.search)-1]
 		}
 	case "space":
 		s.search += " "
 	default:
-		if text := msg.Key().Text; len(text) > 0 {
+		if text := msg.Key().Text; text != "" {
 			s.search += text
 		}
 	}
@@ -212,23 +213,23 @@ func (s *SessionsPage) cycleFilter(dir int) {
 // applyFilter filters sessions by status, context, and search term.
 func (s *SessionsPage) applyFilter() {
 	s.filtered = nil
-	for _, sess := range s.sessions {
-		if s.filter != "all" && sess.Status != s.filter {
+	for i := range s.sessions {
+		if s.filter != "all" && s.sessions[i].Status != s.filter {
 			continue
 		}
-		if s.contextFilter != "" && sess.ContextKey != s.contextFilter {
+		if s.contextFilter != "" && s.sessions[i].ContextKey != s.contextFilter {
 			continue
 		}
 		if s.search != "" {
 			lower := strings.ToLower(s.search)
-			if !strings.Contains(strings.ToLower(sess.Name), lower) &&
-				!strings.Contains(strings.ToLower(sess.Repo), lower) &&
-				!strings.Contains(strings.ToLower(sess.Model), lower) &&
-				!strings.Contains(strings.ToLower(sess.ContextName), lower) {
+			if !strings.Contains(strings.ToLower(s.sessions[i].Name), lower) &&
+				!strings.Contains(strings.ToLower(s.sessions[i].Repo), lower) &&
+				!strings.Contains(strings.ToLower(s.sessions[i].Model), lower) &&
+				!strings.Contains(strings.ToLower(s.sessions[i].ContextName), lower) {
 				continue
 			}
 		}
-		s.filtered = append(s.filtered, sess)
+		s.filtered = append(s.filtered, s.sessions[i])
 	}
 	if s.cursor >= len(s.filtered) {
 		s.cursor = max(0, len(s.filtered)-1)
@@ -236,7 +237,7 @@ func (s *SessionsPage) applyFilter() {
 }
 
 // SelectedSession returns the currently selected session, or nil if none.
-func (s SessionsPage) SelectedSession() *tui.ClusterSession {
+func (s SessionsPage) SelectedSession() *tui.ClusterSession { //nolint:gocritic // value receiver needed for page interface consistency
 	if len(s.filtered) == 0 {
 		return nil
 	}
@@ -248,7 +249,7 @@ func (s SessionsPage) SelectedSession() *tui.ClusterSession {
 }
 
 // Searching returns whether the search input is active.
-func (s SessionsPage) Searching() bool {
+func (s SessionsPage) Searching() bool { //nolint:gocritic // value receiver needed for page interface consistency
 	return s.searching
 }
 
@@ -259,7 +260,7 @@ func (s *SessionsPage) SetSize(w, h int) {
 }
 
 // View renders the sessions page.
-func (s SessionsPage) View() string {
+func (s SessionsPage) View() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	titleStyle := lipgloss.NewStyle().
@@ -285,8 +286,8 @@ func (s SessionsPage) View() string {
 	stopped := 0
 	errored := 0
 	totalTokens := 0
-	for _, sess := range s.sessions {
-		switch sess.Status {
+	for i := range s.sessions {
+		switch s.sessions[i].Status {
 		case "running":
 			running++
 		case "stopped":
@@ -294,7 +295,7 @@ func (s SessionsPage) View() string {
 		case "error":
 			errored++
 		}
-		totalTokens += sess.TokensUsed
+		totalTokens += s.sessions[i].TokensUsed
 	}
 	_ = errored
 
@@ -350,8 +351,8 @@ func (s SessionsPage) View() string {
 
 	// Session list
 	var rows []string
-	for i, sess := range s.filtered {
-		rows = append(rows, s.renderSessionCard(sess, i == s.cursor))
+	for i := range s.filtered {
+		rows = append(rows, s.renderSessionCard(s.filtered[i], i == s.cursor))
 	}
 
 	if len(rows) == 0 && !s.loading {
@@ -364,22 +365,20 @@ func (s SessionsPage) View() string {
 	sessionList := strings.Join(rows, "\n")
 
 	// Compose the full page
-	var parts []string
-	parts = append(parts, titleStyle.Render("◉ Sessions"))
-	parts = append(parts, cards)
-	parts = append(parts, "")
-	parts = append(parts, tabs.View())
+	parts := []string{
+		titleStyle.Render("◉ Sessions"),
+		cards,
+		"",
+		tabs.View(),
+	}
 	if contextLine != "" {
 		parts = append(parts, contextLine)
 	}
 	if searchBar != "" {
 		parts = append(parts, searchBar)
 	}
-	for _, el := range errorLines {
-		parts = append(parts, el)
-	}
-	parts = append(parts, "")
-	parts = append(parts, sessionList)
+	parts = append(parts, errorLines...)
+	parts = append(parts, "", sessionList)
 
 	return lipgloss.NewStyle().
 		Padding(1, 2).
@@ -389,7 +388,7 @@ func (s SessionsPage) View() string {
 }
 
 // renderSessionCard renders a single session as a card row.
-func (s SessionsPage) renderSessionCard(sess tui.ClusterSession, selected bool) string {
+func (s SessionsPage) renderSessionCard(sess tui.ClusterSession, selected bool) string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	badge := components.NewStatusBadge(sess.Status)
@@ -481,9 +480,9 @@ func fetchAllSessions(pool *tui.ClientPool) tea.Cmd {
 				errors[r.key] = r.err
 				continue
 			}
-			for _, s := range r.sessions {
+			for i := range r.sessions {
 				allSessions = append(allSessions, tui.ClusterSession{
-					Session:     s,
+					Session:     r.sessions[i],
 					ContextKey:  r.key,
 					ContextName: r.name,
 				})
@@ -510,7 +509,7 @@ func filterIndex(filter string) int {
 }
 
 // selectedSession returns the session under the cursor, or nil.
-func (s SessionsPage) selectedSession() *api.Session {
+func (s SessionsPage) selectedSession() *api.Session { //nolint:gocritic // value receiver needed for page interface consistency
 	if s.cursor < 0 || s.cursor >= len(s.filtered) {
 		return nil
 	}
@@ -520,7 +519,7 @@ func (s SessionsPage) selectedSession() *api.Session {
 
 // doAction performs a session action (start/stop/delete) asynchronously.
 // Uses the first connected client from the pool.
-func (s SessionsPage) doAction(action string) tea.Cmd {
+func (s SessionsPage) doAction(action string) tea.Cmd { //nolint:gocritic // value receiver needed for page interface consistency
 	sess := s.selectedSession()
 	if sess == nil || s.pool == nil {
 		return nil

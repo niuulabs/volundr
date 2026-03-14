@@ -1,37 +1,34 @@
 package runtime
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"text/template"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
-	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	// k3sConfigFileName is the generated API config file name for k3s mode.
+	// K3s config file name for API configuration.
 	k3sConfigFileName = "k3s-config.yaml"
-	// k3sDefaultNamespace is the default Kubernetes namespace for Volundr.
+	// Default Kubernetes namespace for Volundr.
 	k3sDefaultNamespace = "volundr"
-	// k3sClusterName is the k3d cluster name.
+	// K3d cluster name.
 	k3sClusterName = "volundr"
-	// k3sLoadBalancerHTTPPort is the HTTP port exposed by the k3d load balancer.
+	// HTTP port exposed by the k3d load balancer.
 	k3sLoadBalancerHTTPPort = "80:80@loadbalancer"
-	// k3sLoadBalancerHTTPSPort is the HTTPS port exposed by the k3d load balancer.
+	// HTTPS port exposed by the k3d load balancer.
 	k3sLoadBalancerHTTPSPort = "443:443@loadbalancer"
-	// k3sAPIInternalPort is the host port the API listens on in k3s mode.
+	// Host port the API listens on in k3s mode.
 	k3sAPIInternalPort = 18080
 )
 
@@ -118,7 +115,7 @@ type k3sAPIConfig struct {
 // K3sRuntime manages the Volundr stack using k3s/k3d for Kubernetes
 // workloads with a Docker container for the API and embedded PostgreSQL.
 type K3sRuntime struct {
-	pg       *postgres.EmbeddedPostgres
+	pg       postgresProvider
 	proxyRtr *proxy.Router
 }
 
@@ -168,7 +165,7 @@ func (r *K3sRuntime) Init(ctx context.Context, cfg *config.Config) error {
 
 	// Verify helm is available, offer to install if not.
 	fmt.Print("  Helm            ... ")
-	if _, err := exec.Command("helm", "version", "--short").CombinedOutput(); err != nil {
+	if _, err := execCommandContext(ctx, "helm", "version", "--short").CombinedOutput(); err != nil {
 		fmt.Println("not found")
 		if err := r.offerInstallHelm(); err != nil {
 			return err
@@ -194,7 +191,7 @@ func (r *K3sRuntime) Init(ctx context.Context, cfg *config.Config) error {
 	// Test embedded postgres if in embedded mode.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Println("  Downloading PostgreSQL binary...")
-		pg := postgres.New(cfg)
+		pg := newPostgres(cfg)
 		if err := pg.Start(ctx); err != nil {
 			return fmt.Errorf("test embedded postgres: %w", err)
 		}
@@ -216,7 +213,7 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	// Start embedded PostgreSQL if configured.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Print("  PostgreSQL    ... ")
-		r.pg = postgres.New(cfg)
+		r.pg = newPostgres(cfg)
 		if err := r.pg.Start(ctx); err != nil {
 			fmt.Println("failed")
 			return fmt.Errorf("start embedded postgres: %w", err)
@@ -321,7 +318,7 @@ func (r *K3sRuntime) Down(_ context.Context) error {
 
 	// Delete session pods/resources in the namespace (by label).
 	kcPath := hostKubeconfigPath()
-	if out, err := exec.Command(
+	if out, err := execCommandContext(context.Background(), //nolint:gosec // arguments from trusted internal config
 		"kubectl", "delete", "all",
 		"--selector", "app.kubernetes.io/managed-by=volundr",
 		"--namespace", namespace,
@@ -337,7 +334,7 @@ func (r *K3sRuntime) Down(_ context.Context) error {
 	if cfgDir, dirErr := config.ConfigDir(); dirErr == nil {
 		composePath := filepath.Join(cfgDir, k3sComposeFileName)
 		if _, statErr := os.Stat(composePath); statErr == nil {
-			if out, composeErr := exec.Command(
+			if out, composeErr := execCommand( //nolint:gosec // arguments from trusted internal config
 				"docker", "compose",
 				"-f", composePath,
 				"-p", "volundr-k3s",
@@ -390,20 +387,20 @@ func (r *K3sRuntime) Status(_ context.Context) (*StackStatus, error) {
 
 	// Try to load state file for detailed status.
 	stateFilePath := filepath.Join(cfgDir, StateFile)
-	data, err := os.ReadFile(stateFilePath)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
 		status.Services = []ServiceStatus{
 			{Name: "volundr", State: StateRunning},
 		}
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is missing
 	}
 
-	var services []ServiceStatus
+	var services []ServiceStatus //nolint:prealloc // populated by json.Unmarshal, capacity unknown
 	if err := json.Unmarshal(data, &services); err != nil {
 		status.Services = []ServiceStatus{
 			{Name: "volundr", State: StateRunning},
 		}
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is corrupt
 	}
 
 	// Query k8s pod states and merge.
@@ -423,7 +420,7 @@ func (r *K3sRuntime) Logs(_ context.Context, service string, follow bool) (io.Re
 			return nil, fmt.Errorf("get config dir: %w", err)
 		}
 		logPath := filepath.Join(cfgDir, "logs", service+".log")
-		f, err := os.Open(logPath)
+		f, err := os.Open(logPath) //nolint:gosec // path derived from trusted config directory
 		if err != nil {
 			return nil, fmt.Errorf("open log file for %s: %w", service, err)
 		}
@@ -444,7 +441,7 @@ func (r *K3sRuntime) Logs(_ context.Context, service string, follow bool) (io.Re
 	// Use label selector to find pods for the service.
 	args = append(args, "-l", fmt.Sprintf("app.kubernetes.io/name=%s", service))
 
-	cmd := exec.Command("kubectl", args...)
+	cmd := execCommand("kubectl", args...) //nolint:gosec // arguments from trusted internal config
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("get stdout pipe: %w", err)
@@ -466,13 +463,13 @@ func (r *K3sRuntime) detectProvider(cfg *config.Config) string {
 	}
 
 	// Check if k3d is available.
-	if err := exec.Command("k3d", "version").Run(); err == nil {
+	if err := execCommandContext(context.Background(), "k3d", "version").Run(); err == nil {
 		return "k3d"
 	}
 
 	// Check if native k3s is available (Linux only).
 	if runtime.GOOS == "linux" {
-		if err := exec.Command("k3s", "--version").Run(); err == nil {
+		if err := execCommandContext(context.Background(), "k3s", "--version").Run(); err == nil {
 			return "native"
 		}
 	}
@@ -485,7 +482,7 @@ func (r *K3sRuntime) initK3d(ctx context.Context, cfg *config.Config) error {
 	fmt.Print("  k3d            ... ")
 
 	// Check if k3d is installed.
-	if out, err := exec.Command("k3d", "version").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "k3d", "version").CombinedOutput(); err != nil {
 		fmt.Println("not found")
 		return fmt.Errorf("k3d is not installed: %w\n%s", err, out)
 	}
@@ -493,7 +490,7 @@ func (r *K3sRuntime) initK3d(ctx context.Context, cfg *config.Config) error {
 
 	// Check if cluster already exists.
 	fmt.Print("  k3d cluster    ... ")
-	out, err := exec.Command("k3d", "cluster", "list", "-o", "json").CombinedOutput()
+	out, err := execCommandContext(ctx, "k3d", "cluster", "list", "-o", "json").CombinedOutput()
 	if err != nil {
 		fmt.Println("failed")
 		return fmt.Errorf("list k3d clusters: %w\n%s", err, out)
@@ -529,7 +526,7 @@ func (r *K3sRuntime) initK3d(ctx context.Context, cfg *config.Config) error {
 
 	fmt.Print("  Creating k3d cluster ... ")
 
-	createOut, err := exec.CommandContext(ctx,
+	createOut, err := execCommandContext(ctx, //nolint:gosec // arguments from trusted internal config
 		"k3d", createArgs...,
 	).CombinedOutput()
 	if err != nil {
@@ -558,13 +555,13 @@ func (r *K3sRuntime) initNativeK3s(cfg *config.Config) error {
 		defaultKC = env
 	}
 	kcPath := hostKubeconfigPath()
-	if data, err := os.ReadFile(defaultKC); err == nil {
-		if writeErr := os.WriteFile(kcPath, data, 0o600); writeErr != nil {
+	if data, err := os.ReadFile(defaultKC); err == nil { //nolint:gosec // path from known kubeconfig location or KUBECONFIG env
+		if writeErr := os.WriteFile(kcPath, data, 0o600); writeErr != nil { //nolint:gosec // path derived from trusted config directory
 			return fmt.Errorf("write kubeconfig: %w", writeErr)
 		}
 	}
 
-	out, err := exec.Command("kubectl", "get", "nodes", "--kubeconfig", kcPath).CombinedOutput()
+	out, err := execCommand("kubectl", "get", "nodes", "--kubeconfig", kcPath).CombinedOutput() //nolint:gosec // kubeconfig path from trusted config
 	if err != nil {
 		fmt.Println("not reachable")
 		return fmt.Errorf("k3s cluster not reachable. Ensure k3s is running: %w\n%s", err, out)
@@ -579,8 +576,8 @@ func (r *K3sRuntime) initNativeK3s(cfg *config.Config) error {
 	return nil
 }
 
-// promptK3dLocalMountPrefixes asks the user which host paths to mount
-// into the k3d node during cluster creation. k3d runs k3s inside Docker,
+// PromptK3dLocalMountPrefixes asks the user which host paths to mount
+// into the k3d node during cluster creation. K3d runs k3s inside Docker,
 // so host directories must be explicitly bind-mounted into the node
 // before pods can use them via hostPath volumes.
 //
@@ -613,7 +610,7 @@ func (r *K3sRuntime) promptK3dLocalMountPrefixes(cfg *config.Config) []string {
 		fmt.Print("  Root path: ")
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := stdinBufReader
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(answer)
 
@@ -658,7 +655,7 @@ func (r *K3sRuntime) saveConfig(cfg *config.Config) {
 // promptYesNo asks the user a yes/no question and returns true for yes.
 func promptYesNo(prompt string) bool {
 	fmt.Printf("%s [y/N]: ", prompt)
-	reader := bufio.NewReader(os.Stdin)
+	reader := stdinBufReader
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	return answer == "y" || answer == "yes"
@@ -685,7 +682,7 @@ func (r *K3sRuntime) offerInstallation(ctx context.Context, cfg *config.Config) 
 // offerInstallK3dDarwin offers to install k3d via Homebrew on macOS.
 func (r *K3sRuntime) offerInstallK3dDarwin(ctx context.Context, cfg *config.Config) error {
 	// Check if Homebrew is available.
-	if _, err := exec.Command("brew", "--version").CombinedOutput(); err != nil {
+	if _, err := execCommandContext(ctx, "brew", "--version").CombinedOutput(); err != nil {
 		fmt.Println("  Homebrew is not installed. Install k3d manually:")
 		fmt.Println("    curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash")
 		if !promptYesNo("  Run the install script now?") {
@@ -699,7 +696,7 @@ func (r *K3sRuntime) offerInstallK3dDarwin(ctx context.Context, cfg *config.Conf
 	}
 
 	fmt.Print("  Installing k3d  ... ")
-	out, err := exec.CommandContext(ctx, "brew", "install", "k3d").CombinedOutput()
+	out, err := execCommandContext(ctx, "brew", "install", "k3d").CombinedOutput()
 	if err != nil {
 		fmt.Println("failed")
 		return fmt.Errorf("brew install k3d: %w\n%s", err, out)
@@ -718,7 +715,7 @@ func (r *K3sRuntime) offerInstallLinux(ctx context.Context, cfg *config.Config) 
 	fmt.Println()
 	fmt.Print("  Choose [1/2]: ")
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := stdinBufReader
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -746,7 +743,7 @@ func (r *K3sRuntime) offerInstallK3dLinux(ctx context.Context, cfg *config.Confi
 // installK3dScript installs k3d using the official install script.
 func (r *K3sRuntime) installK3dScript(ctx context.Context) error {
 	fmt.Print("  Installing k3d  ... ")
-	cmd := exec.CommandContext(ctx, "bash", "-c",
+	cmd := execCommandContext(ctx, "bash", "-c",
 		"curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash",
 	)
 	out, err := cmd.CombinedOutput()
@@ -765,7 +762,7 @@ func (r *K3sRuntime) offerInstallNativeK3s(ctx context.Context, cfg *config.Conf
 	}
 
 	fmt.Print("  Installing k3s  ... ")
-	cmd := exec.CommandContext(ctx, "bash", "-c",
+	cmd := execCommandContext(ctx, "bash", "-c",
 		"curl -sfL https://get.k3s.io | sh -",
 	)
 	out, err := cmd.CombinedOutput()
@@ -780,14 +777,14 @@ func (r *K3sRuntime) offerInstallNativeK3s(ctx context.Context, cfg *config.Conf
 
 // offerInstallHelm offers to install Helm interactively.
 func (r *K3sRuntime) offerInstallHelm() error {
-	switch runtime.GOOS {
-	case "darwin":
-		if _, err := exec.Command("brew", "--version").CombinedOutput(); err == nil {
+	ctx := context.Background()
+	if runtime.GOOS == "darwin" {
+		if _, err := execCommandContext(ctx, "brew", "--version").CombinedOutput(); err == nil {
 			if !promptYesNo("  Install Helm via Homebrew? (brew install helm)") {
 				return fmt.Errorf("helm is required. Install: https://helm.sh/docs/intro/install/")
 			}
 			fmt.Print("  Installing Helm ... ")
-			out, err := exec.Command("brew", "install", "helm").CombinedOutput()
+			out, err := execCommandContext(ctx, "brew", "install", "helm").CombinedOutput()
 			if err != nil {
 				fmt.Println("failed")
 				return fmt.Errorf("brew install helm: %w\n%s", err, out)
@@ -803,7 +800,7 @@ func (r *K3sRuntime) offerInstallHelm() error {
 	}
 
 	fmt.Print("  Installing Helm ... ")
-	cmd := exec.Command("bash", "-c",
+	cmd := execCommandContext(ctx, "bash", "-c",
 		"curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash",
 	)
 	out, err := cmd.CombinedOutput()
@@ -820,11 +817,11 @@ func (r *K3sRuntime) ensureNamespace(namespace string) error {
 	kcPath := hostKubeconfigPath()
 
 	// Check if namespace exists.
-	if err := exec.Command("kubectl", "get", "namespace", namespace, "--kubeconfig", kcPath).Run(); err == nil {
+	if err := execCommand("kubectl", "get", "namespace", namespace, "--kubeconfig", kcPath).Run(); err == nil { //nolint:gosec // arguments from trusted internal config
 		return nil
 	}
 
-	out, err := exec.Command("kubectl", "create", "namespace", namespace, "--kubeconfig", kcPath).CombinedOutput()
+	out, err := execCommand("kubectl", "create", "namespace", namespace, "--kubeconfig", kcPath).CombinedOutput() //nolint:gosec // arguments from trusted internal config
 	if err != nil {
 		// Ignore "already exists" errors.
 		if strings.Contains(string(out), "already exists") {
@@ -876,23 +873,24 @@ func (r *K3sRuntime) ensureK8sSecrets(cfg *config.Config, namespace string) erro
 // upsertSecret creates or replaces a Kubernetes Opaque secret.
 func (r *K3sRuntime) upsertSecret(kubeconfig, namespace, name string, data map[string]string) error {
 	// Delete existing secret (ignore errors if it doesn't exist).
-	_ = exec.Command(
+	_ = execCommand( //nolint:gosec // arguments from trusted internal config
 		"kubectl", "delete", "secret", name,
 		"--namespace", namespace,
 		"--kubeconfig", kubeconfig,
 		"--ignore-not-found",
 	).Run()
 
-	args := []string{
+	args := make([]string, 0, 8+len(data))
+	args = append(args,
 		"create", "secret", "generic", name,
 		"--namespace", namespace,
 		"--kubeconfig", kubeconfig,
-	}
+	)
 	for k, v := range data {
 		args = append(args, fmt.Sprintf("--from-literal=%s=%s", k, v))
 	}
 
-	out, err := exec.Command("kubectl", args...).CombinedOutput()
+	out, err := execCommand("kubectl", args...).CombinedOutput() //nolint:gosec // arguments from trusted internal config
 	if err != nil {
 		return fmt.Errorf("kubectl create secret: %w\n%s", err, out)
 	}
@@ -902,12 +900,13 @@ func (r *K3sRuntime) upsertSecret(kubeconfig, namespace, name string, data map[s
 
 // ensureClusterRunning makes sure the k3s/k3d cluster is up.
 func (r *K3sRuntime) ensureClusterRunning(cfg *config.Config) error {
+	ctx := context.Background()
 	provider := r.detectProvider(cfg)
 
 	switch provider {
 	case "k3d":
 		// Check if cluster is running.
-		out, err := exec.Command("k3d", "cluster", "list", "-o", "json").CombinedOutput()
+		out, err := execCommandContext(ctx, "k3d", "cluster", "list", "-o", "json").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("list k3d clusters: %w\n%s", err, out)
 		}
@@ -915,7 +914,7 @@ func (r *K3sRuntime) ensureClusterRunning(cfg *config.Config) error {
 		// If cluster exists but isn't running, start it.
 		if strings.Contains(string(out), k3sClusterName) {
 			// Try to start it (no-op if already running).
-			startOut, err := exec.Command("k3d", "cluster", "start", k3sClusterName).CombinedOutput()
+			startOut, err := execCommandContext(ctx, "k3d", "cluster", "start", k3sClusterName).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("start k3d cluster: %w\n%s", err, startOut)
 			}
@@ -930,7 +929,7 @@ func (r *K3sRuntime) ensureClusterRunning(cfg *config.Config) error {
 
 	case "native":
 		// Check if nodes are ready.
-		out, err := exec.Command("kubectl", "get", "nodes", "--kubeconfig", hostKubeconfigPath()).CombinedOutput()
+		out, err := execCommandContext(ctx, "kubectl", "get", "nodes", "--kubeconfig", hostKubeconfigPath()).CombinedOutput() //nolint:gosec // kubeconfig path from trusted config
 		if err != nil {
 			return fmt.Errorf("k3s cluster not reachable: %w\n%s", err, out)
 		}
@@ -997,7 +996,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 		Storage: map[string]interface{}{
 			"adapter": "volundr.adapters.outbound.local_storage_adapter.LocalStorageAdapter",
 			"kwargs": map[string]interface{}{
-				"base_dir": cfgDir,
+				"base_dir": k3sNodeStoragePath + "/data",
 			},
 		},
 		SecretInjection: map[string]interface{}{
@@ -1041,6 +1040,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	// Wire up session contributors.
 	// LocalMountContributor is auto-wired by Python main.py from local_mounts config.
 	apiCfg.SessionContributors = []map[string]interface{}{
+		{"adapter": "volundr.adapters.outbound.contributors.storage.StorageContributor"},
 		{"adapter": "volundr.adapters.outbound.contributors.git.GitContributor"},
 		{"adapter": "volundr.adapters.outbound.contributors.resource.ResourceContributor"},
 	}
@@ -1051,7 +1051,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	}
 
 	configPath := filepath.Join(cfgDir, k3sConfigFileName)
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
 		return "", fmt.Errorf("write k3s config: %w", err)
 	}
 
@@ -1100,12 +1100,12 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 	}
 
 	composePath := filepath.Join(cfgDir, k3sComposeFileName)
-	if err := os.WriteFile(composePath, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(composePath, buf.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("write compose file: %w", err)
 	}
 
 	// Start the container.
-	out, err := exec.Command(
+	out, err := execCommand( //nolint:gosec // arguments from trusted internal config
 		"docker", "compose",
 		"-f", composePath,
 		"-p", "volundr-k3s",
@@ -1122,7 +1122,7 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 // volundr config directory for use by kubectl/helm on the host.
 // This avoids touching ~/.kube/config.
 func (r *K3sRuntime) writeHostKubeconfig() error {
-	out, err := exec.Command(
+	out, err := execCommandContext(context.Background(),
 		"k3d", "kubeconfig", "get", k3sClusterName,
 	).CombinedOutput()
 	if err != nil {
@@ -1144,10 +1144,10 @@ func (r *K3sRuntime) writeHostKubeconfig() error {
 func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
 	// Read the host kubeconfig (already written during init or refreshed).
 	kcPath := hostKubeconfigPath()
-	data, err := os.ReadFile(kcPath)
+	data, err := os.ReadFile(kcPath) //nolint:gosec // path from trusted kubeconfig location
 	if err != nil {
 		// Fall back to fetching from k3d directly.
-		out, fetchErr := exec.Command(
+		out, fetchErr := execCommandContext(context.Background(),
 			"k3d", "kubeconfig", "get", k3sClusterName,
 		).CombinedOutput()
 		if fetchErr != nil {
@@ -1168,19 +1168,21 @@ func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
 	for _, prefix := range []string{
 		"https://0.0.0.0:", "https://127.0.0.1:", "https://localhost:",
 	} {
-		if idx := strings.Index(kubeconfig, prefix); idx >= 0 {
-			end := strings.Index(kubeconfig[idx+len(prefix):], "\n")
-			if end < 0 {
-				end = len(kubeconfig[idx+len(prefix):])
-			}
-			old := kubeconfig[idx : idx+len(prefix)+end]
-			kubeconfig = strings.Replace(kubeconfig, old, serverDNS, 1)
-			break
+		idx := strings.Index(kubeconfig, prefix)
+		if idx < 0 {
+			continue
 		}
+		end := strings.Index(kubeconfig[idx+len(prefix):], "\n")
+		if end < 0 {
+			end = len(kubeconfig[idx+len(prefix):])
+		}
+		old := kubeconfig[idx : idx+len(prefix)+end]
+		kubeconfig = strings.Replace(kubeconfig, old, serverDNS, 1)
+		break
 	}
 
-	kubeconfigPath := filepath.Join(cfgDir, k3sDockerKubeconfigFile)
-	if err := os.WriteFile(kubeconfigPath, []byte(kubeconfig), 0o600); err != nil {
+	kubeconfigPath := filepath.Join(cfgDir, k3sDockerKubeconfigFile)                //nolint:gosec // path derived from trusted config directory
+	if err := os.WriteFile(kubeconfigPath, []byte(kubeconfig), 0o600); err != nil { //nolint:gosec // path derived from trusted config directory
 		return "", fmt.Errorf("write docker kubeconfig: %w", err)
 	}
 
@@ -1217,7 +1219,7 @@ func (r *K3sRuntime) queryK8sPodStates() []ServiceStatus {
 		namespace = resolveNamespace(loadedCfg)
 	}
 
-	out, err := exec.Command(
+	out, err := execCommandContext(context.Background(), //nolint:gosec // arguments from trusted internal config
 		"kubectl", "get", "pods",
 		"--namespace", namespace,
 		"--kubeconfig", hostKubeconfigPath(),

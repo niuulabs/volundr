@@ -294,8 +294,7 @@ class DockerPodManager(PodManager):
             )
             if not cred_data:
                 logger.warning(
-                    "Secret %r not found for session %s",
-                    secret_name,
+                    "Secret not found for session %s",
                     session.id,
                 )
                 continue

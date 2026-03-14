@@ -212,6 +212,7 @@ class DirectK8sPodManager(PodManager):
         db_password: str = "",
         db_name: str = "volundr",
         storage_path: str = "",
+        home_mount_path: str = "/volundr/home",
         poll_interval: float = DEFAULT_POLL_INTERVAL,
         readiness_timeout: float = DEFAULT_READINESS_TIMEOUT,
         **_extra: object,
@@ -233,6 +234,7 @@ class DirectK8sPodManager(PodManager):
         self._db_password = db_password
         self._db_name = db_name
         self._storage_path = storage_path
+        self._home_mount_path = home_mount_path
         self._poll_interval = poll_interval
         self._readiness_timeout = readiness_timeout
         self._credential_store: CredentialStorePort | None = None
@@ -368,6 +370,26 @@ class DirectK8sPodManager(PodManager):
             },
         }
 
+    def _build_home_volume(self, claim: str) -> dict[str, Any]:
+        """Build the home volume spec.
+
+        When the claim is an absolute path (from LocalStorageAdapter), uses
+        a hostPath volume.  Otherwise treats it as a PVC claimName.
+        """
+        if claim.startswith("/"):
+            return {
+                "name": "home",
+                "hostPath": {
+                    "path": claim,
+                    "type": "DirectoryOrCreate",
+                },
+            }
+
+        return {
+            "name": "home",
+            "persistentVolumeClaim": {"claimName": claim},
+        }
+
     def _build_init_containers(
         self,
         session: Session,
@@ -378,7 +400,17 @@ class DirectK8sPodManager(PodManager):
             {
                 "name": "init-permissions",
                 "image": "busybox:latest",
-                "command": ["sh", "-c", "chown -R 1000:1000 /volundr"],
+                "command": [
+                    "sh",
+                    "-c",
+                    (
+                        "chown -R 1000:1000 /volundr 2>/tmp/chown.err; rc=$?; "
+                        "if [ -s /tmp/chown.err ]; then "
+                        "grep -v 'Invalid argument' /tmp/chown.err >&2; "
+                        "if grep -qv 'Invalid argument' /tmp/chown.err; then exit $rc; fi; "
+                        "fi"
+                    ),
+                ],
                 "volumeMounts": [
                     {"name": "workspace", "mountPath": "/volundr"},
                 ],
@@ -513,6 +545,24 @@ fi
         tolerations = spec.values.get("tolerations", [])
         runtime_class_name = spec.values.get("runtimeClassName")
 
+        # Home volume from StorageContributor
+        home_vol = spec.values.get("homeVolume", {})
+        home_enabled = home_vol.get("enabled", False)
+        home_mount = home_vol.get("mountPath", self._home_mount_path)
+        home_claim = home_vol.get("existingClaim", "")
+
+        if home_enabled and home_claim:
+            home_volume = self._build_home_volume(home_claim)
+            volumes.append(home_volume)
+            workload_mounts = workload_mounts + [
+                {"name": "home", "mountPath": home_mount},
+            ]
+
+        # HOME env var — set when home volume is mounted
+        home_env: list[dict[str, str]] = []
+        if home_enabled:
+            home_env = [{"name": "HOME", "value": home_mount}]
+
         pod_spec: dict[str, Any] = {
             "hostname": session.name,
             "terminationGracePeriodSeconds": 30,
@@ -541,7 +591,7 @@ fi
                     "name": "skuld",
                     "image": self._skuld_image,
                     "ports": [{"containerPort": 8081, "name": "broker"}],
-                    "env": env_vars,
+                    "env": env_vars + home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
@@ -560,6 +610,7 @@ fi
                         "--disable-telemetry",
                         f"/volundr/sessions/{session.id}/workspace",
                     ],
+                    "env": home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
@@ -594,8 +645,8 @@ fi
                     "env": [
                         {"name": "SESSION_ID", "value": str(session.id)},
                         {"name": "TERMINAL_PORT", "value": "7681"},
-                        {"name": "HOME", "value": "/volundr/home"},
-                    ],
+                    ]
+                    + home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
 from volundr.domain.models import MCPServerConfig, SecretInfo
@@ -24,12 +24,28 @@ logger = logging.getLogger(__name__)
 class MCPServerResponse(BaseModel):
     """Response model for an available MCP server configuration."""
 
-    name: str
-    type: str
-    command: str | None = None
-    url: str | None = None
-    args: list[str] = Field(default_factory=list)
-    description: str = ""
+    name: str = Field(description="MCP server name", examples=["linear-mcp"])
+    type: str = Field(description="Server type (stdio or sse)", examples=["stdio"])
+    command: str | None = Field(
+        default=None,
+        description="Command to launch (stdio servers)",
+        examples=["npx"],
+    )
+    url: str | None = Field(
+        default=None,
+        description="Server URL (SSE servers)",
+        examples=["http://localhost:3000/sse"],
+    )
+    args: list[str] = Field(
+        default_factory=list,
+        description="Command-line arguments",
+        examples=[["@linear/mcp-server"]],
+    )
+    description: str = Field(
+        default="",
+        description="Server description",
+        examples=["Linear issue tracker MCP server"],
+    )
 
     @classmethod
     def from_config(cls, cfg: MCPServerConfig) -> MCPServerResponse:
@@ -47,8 +63,10 @@ class MCPServerResponse(BaseModel):
 class SecretResponse(BaseModel):
     """Response model for a Kubernetes secret (metadata only, no values)."""
 
-    name: str
-    keys: list[str]
+    name: str = Field(description="Kubernetes secret name", examples=["my-api-secret"])
+    keys: list[str] = Field(
+        description="List of data key names in the secret", examples=[["token", "secret"]]
+    )
 
     @classmethod
     def from_info(cls, info: SecretInfo) -> SecretResponse:
@@ -59,14 +77,27 @@ class SecretResponse(BaseModel):
 class SecretCreateRequest(BaseModel):
     """Request model for creating a Kubernetes secret."""
 
-    name: str = Field(..., min_length=1, max_length=253)
-    data: dict[str, str] = Field(..., min_length=1)
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=253,
+        description="Kubernetes secret name (DNS-compatible)",
+        examples=["my-api-secret"],
+    )
+    data: dict[str, str] = Field(
+        ...,
+        min_length=1,
+        description="Key-value pairs of secret data",
+        examples=[{"token": "sk-abc123"}],
+    )
 
 
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str
+    detail: str = Field(
+        description="Human-readable error message", examples=["Secret not found: my-secret"]
+    )
 
 
 # --- Router factory ---
@@ -97,7 +128,9 @@ def create_secrets_router(
         responses={404: {"model": ErrorResponse}},
         tags=["MCP Servers"],
     )
-    async def get_mcp_server(server_name: str) -> MCPServerResponse:
+    async def get_mcp_server(
+        server_name: str = Path(description="MCP server name to retrieve"),
+    ) -> MCPServerResponse:
         """Get an MCP server configuration by name."""
         server = mcp_provider.get(server_name)
         if server is None:
@@ -125,7 +158,9 @@ def create_secrets_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Secrets"],
     )
-    async def get_secret(secret_name: str) -> SecretResponse:
+    async def get_secret(
+        secret_name: str = Path(description="Kubernetes secret name to retrieve"),
+    ) -> SecretResponse:
         """Get a Kubernetes secret's metadata by name."""
         secret = await secret_manager.get(secret_name)
         if secret is None:

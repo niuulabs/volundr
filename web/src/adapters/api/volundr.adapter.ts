@@ -37,6 +37,8 @@ import type {
   WorkspaceStatus,
   VolundrMember,
   VolundrProvisioningResult,
+  AdminSettings,
+  AdminStorageSettings,
 } from '@/models';
 import { createApiClient, ApiClientError, getAccessToken } from './client';
 import type {
@@ -1349,6 +1351,24 @@ export class ApiVolundrService implements IVolundrService {
   async deleteWorkspace(id: string): Promise<void> {
     // id is the session_id — the backend identifies workspaces by session
     await api.delete(`/workspaces/${id}`);
+  }
+
+  async getAdminSettings(): Promise<AdminSettings> {
+    const response = await api.get<{ storage: { home_enabled: boolean } }>('/admin/settings');
+    return {
+      storage: { homeEnabled: response.storage.home_enabled },
+    };
+  }
+
+  async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
+    const body: Record<string, unknown> = {};
+    if (data.storage) {
+      body.storage = { home_enabled: data.storage.homeEnabled };
+    }
+    const response = await api.put<{ storage: { home_enabled: boolean } }>('/admin/settings', body);
+    return {
+      storage: { homeEnabled: response.storage.home_enabled },
+    };
   }
 
   private mapWorkspace(w: ApiWorkspaceResponse): VolundrWorkspace {

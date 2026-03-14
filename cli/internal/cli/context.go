@@ -49,7 +49,7 @@ Example:
   volundr context add prod --server https://volundr.prod.example.com --name "Production"
   volundr context add local --server http://127.0.0.1:8080`,
 	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
@@ -92,7 +92,7 @@ type contextListEntry struct {
 var contextListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all cluster contexts",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
@@ -108,13 +108,13 @@ var contextListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "KEY\tNAME\tSERVER\tAUTH")
+		_, _ = fmt.Fprintln(w, "KEY\tNAME\tSERVER\tAUTH")
 		for key, ctx := range cfg.Contexts {
 			authStatus := "no"
 			if ctx.Token != "" {
 				authStatus = "yes"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", key, ctx.Name, ctx.Server, authStatus)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", key, ctx.Name, ctx.Server, authStatus)
 		}
 		return w.Flush()
 	},
@@ -144,7 +144,7 @@ var contextRemoveCmd = &cobra.Command{
 	Use:   "remove <key>",
 	Short: "Remove a cluster context",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
@@ -168,7 +168,7 @@ var contextRenameCmd = &cobra.Command{
 	Use:   "rename <old-key> <new-key>",
 	Short: "Rename a cluster context",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)

@@ -225,6 +225,36 @@ class TestFluxPodManagerStatus:
         assert result == SessionStatus.STARTING
 
 
+class TestFluxPodManagerWaitForReady:
+    async def test_wait_returns_immediately_when_running(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        mock_api.get_namespaced_custom_object.return_value = {
+            "status": {
+                "conditions": [{"type": "Ready", "status": "True"}],
+            },
+        }
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            result = await pod_manager.wait_for_ready(sample_session, timeout=10)
+
+        assert result == SessionStatus.RUNNING
+
+    async def test_wait_returns_immediately_when_failed(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        mock_api.get_namespaced_custom_object.return_value = {
+            "status": {
+                "conditions": [
+                    {"type": "Ready", "status": "False", "reason": "InstallFailed"},
+                ],
+            },
+        }
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            result = await pod_manager.wait_for_ready(sample_session, timeout=10)
+
+        assert result == SessionStatus.FAILED
+
+
 class TestFluxPodManagerClose:
     async def test_close_when_no_client(self, pod_manager: FluxPodManager):
         await pod_manager.close()

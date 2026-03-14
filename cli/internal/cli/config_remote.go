@@ -22,16 +22,11 @@ Global keys: theme
 Context keys (require --context): server, token, issuer, client-id`,
 }
 
-// globalConfigKeys are keys that live at the top level of Config.
-var globalConfigKeys = map[string]bool{
-	"theme": true,
-}
-
 var configGetCmd = &cobra.Command{
 	Use:   "get <key>",
 	Short: "Get a configuration value",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
@@ -65,7 +60,7 @@ var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a configuration value",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)

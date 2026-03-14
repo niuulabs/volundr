@@ -46,8 +46,7 @@ func (r RealmsPage) Init() tea.Cmd {
 
 // Update handles messages for the realms page.
 func (r RealmsPage) Update(msg tea.Msg) (RealmsPage, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if r.cursor > 0 {
@@ -96,9 +95,9 @@ func (r RealmsPage) View() string {
 	})
 
 	// Realm grid
-	var rows []string
-	for i, realm := range r.realms {
-		rows = append(rows, r.renderRealmCard(realm, i == r.cursor))
+	rows := make([]string, 0, len(r.realms))
+	for i := range r.realms {
+		rows = append(rows, r.renderRealmCard(&r.realms[i], i == r.cursor))
 	}
 
 	grid := strings.Join(rows, "\n")
@@ -117,7 +116,7 @@ func (r RealmsPage) View() string {
 }
 
 // renderRealmCard renders a single realm as a card.
-func (r RealmsPage) renderRealmCard(realm Realm, selected bool) string {
+func (r RealmsPage) renderRealmCard(realm *Realm, selected bool) string {
 	theme := tui.DefaultTheme
 
 	badge := components.NewStatusBadge(realm.Status)
@@ -158,11 +157,11 @@ func (r RealmsPage) renderRealmCard(realm Realm, selected bool) string {
 }
 
 // renderBar renders a simple progress bar.
-func renderBar(current, max, width int, fillColor, emptyColor color.Color) string {
-	if max == 0 {
+func renderBar(current, capacity, width int, fillColor, emptyColor color.Color) string {
+	if capacity == 0 {
 		return strings.Repeat("░", width)
 	}
-	filled := width * current / max
+	filled := width * current / capacity
 	if filled > width {
 		filled = width
 	}

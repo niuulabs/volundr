@@ -45,14 +45,48 @@ extra_css:
 nav:
   - Home: index.md
   - Getting Started:
+      - Quick Start: getting-started/quick-start.md
       - Installation: getting-started/installation.md
+      - Your First Session: getting-started/first-session.md
       - Configuration: getting-started/configuration.md
       - Running: getting-started/running.md
+  - User Guide:
+      - Sessions: user-guide/sessions.md
+      - Templates & Profiles: user-guide/templates.md
+      - Presets: user-guide/presets.md
+      - Chronicles: user-guide/chronicles.md
+      - Git Workflows: user-guide/git-workflows.md
+      - Credentials & Secrets: user-guide/credentials.md
+      - Integrations: user-guide/integrations.md
+      - Web UI: user-guide/web-ui.md
+      - CLI Reference: user-guide/cli.md
+  - Installation Guide:
+      - Overview: installation/overview.md
+      - Local Development (k3d): installation/local-k3d.md
+      - Single-Node (k3s): installation/single-node.md
+      - Production Kubernetes: installation/kubernetes.md
+      - Helm Values Reference: installation/helm-reference.md
+      - Production Checklist: installation/production.md
+  - Configuration:
+      - Overview: configuration/overview.md
+      - Dynamic Adapters: configuration/adapters.md
+      - Git Providers: configuration/git.md
+      - Identity & Auth: configuration/identity.md
+      - Secret Management: configuration/secrets.md
+      - Storage: configuration/storage.md
+      - Event Pipeline: configuration/events.md
+      - Session Contributors: configuration/contributors.md
+      - Session Gateway: configuration/gateway.md
+      - Issue Trackers: configuration/trackers.md
+  - Setup Guide:
+      - AI-Agent Setup: setup/agent-guide.md
   - Architecture:
       - Overview: architecture/overview.md
-      - Hexagonal Design: architecture/hexagonal.md
       - Components: architecture/components.md
+      - Session Lifecycle: architecture/session-lifecycle.md
+      - Hexagonal Design: architecture/hexagonal.md
   - API Reference:
+      - OpenAPI Spec: api/openapi.md
       - Sessions: api/sessions.md
       - Chronicles: api/chronicles.md
       - Git Workflows: api/git.md
@@ -65,21 +99,6 @@ nav:
       - Events: api/events.md
       - Integrations: api/integrations.md
       - Issue Tracker: api/tracker.md
-  - Backends:
-      - Database: backends/database.md
-      - Git Providers: backends/git.md
-      - Secret Management: backends/secrets.md
-      - Credential Stores: backends/credentials.md
-      - Event Sinks: backends/events.md
-      - Storage: backends/storage.md
-      - Authorization: backends/authorization.md
-      - Identity: backends/identity.md
-      - Issue Trackers: backends/trackers.md
-  - Web UI: web-ui/index.md
-  - Deployment:
-      - Helm: deployment/helm.md
-      - Migrations: deployment/migrations.md
-      - Production: deployment/production.md
   - Contributing:
       - Development: contributing/development.md
       - Code Style: contributing/code-style.md

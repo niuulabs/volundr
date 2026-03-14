@@ -86,7 +86,7 @@ func TestConfigMigration(t *testing.T) {
 
 	// Write an old-format config.
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestConfigMigration(t *testing.T) {
 token: old-token
 theme: dark
 `
-	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestConfigMigrationPreservesAllFields(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
@@ -165,7 +165,7 @@ issuer: https://idp.example.com
 client_id: my-client-id
 theme: light
 `
-	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -192,7 +192,7 @@ theme: light
 		"ClientID":     ctx.ClientID,
 		"Name":         ctx.Name,
 	}
-	expected := map[string]string{
+	expected := map[string]string{ //nolint:gosec // test fixture, not real credentials
 		"Server":       "https://full.example.com",
 		"Token":        "my-token",
 		"RefreshToken": "my-refresh",
@@ -310,7 +310,7 @@ func TestGetContext(t *testing.T) {
 
 func TestClearTokens(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.Contexts["prod"] = &Context{
+	cfg.Contexts["prod"] = &Context{ //nolint:gosec // test fixture, not real credentials
 		Name:         "prod",
 		Server:       "https://prod.example.com",
 		Token:        "my-token",
@@ -440,12 +440,12 @@ func TestLoadInvalidYAML(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
 	// Write invalid YAML.
-	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(":::invalid"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(":::invalid"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -490,7 +490,7 @@ func TestMigrationEmptyThemeDefaultsToDark(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
@@ -498,7 +498,7 @@ func TestMigrationEmptyThemeDefaultsToDark(t *testing.T) {
 	oldConfig := `server: https://notheme.example.com
 token: tok
 `
-	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -517,14 +517,14 @@ func TestLoadNewFormatWithNilContexts(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
 	// New format but contexts key absent.
 	newConfig := `theme: dark
 `
-	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(newConfig), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(newConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 

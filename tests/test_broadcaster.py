@@ -137,7 +137,7 @@ class TestInMemoryEventBroadcaster:
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task was intentionally cancelled
 
         # Give time for cleanup
         await asyncio.sleep(0.01)

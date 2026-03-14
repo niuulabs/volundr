@@ -61,14 +61,14 @@ func TestListSessions(t *testing.T) {
 		if r.URL.Path != "/api/v1/volundr/sessions" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
-		if r.Method != "GET" {
+		if r.Method != http.MethodGet {
 			t.Errorf("unexpected method %q", r.Method)
 		}
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("unexpected auth header %q", r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(sessions)
+		_ = json.NewEncoder(w).Encode(sessions)
 	}))
 	defer srv.Close()
 
@@ -89,9 +89,9 @@ func TestListSessions(t *testing.T) {
 }
 
 func TestListSessions_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer srv.Close()
 
@@ -110,7 +110,7 @@ func TestGetSession(t *testing.T) {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(session)
+		_ = json.NewEncoder(w).Encode(session)
 	}))
 	defer srv.Close()
 
@@ -129,7 +129,7 @@ func TestGetSession(t *testing.T) {
 
 func TestCreateSession(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
+		if r.Method != http.MethodPost {
 			t.Errorf("unexpected method %q", r.Method)
 		}
 		if r.URL.Path != "/api/v1/volundr/sessions" {
@@ -137,19 +137,19 @@ func TestCreateSession(t *testing.T) {
 		}
 
 		var create SessionCreate
-		json.NewDecoder(r.Body).Decode(&create)
+		_ = json.NewDecoder(r.Body).Decode(&create)
 		if create.Name != "new-session" {
 			t.Errorf("expected name %q, got %q", "new-session", create.Name)
 		}
 
 		resp := Session{ID: "new-id", Name: create.Name, Status: "creating"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer srv.Close()
 
 	c := NewClient(srv.URL, "tok")
-	got, err := c.CreateSession(SessionCreate{Name: "new-session", Model: "claude"})
+	got, err := c.CreateSession(&SessionCreate{Name: "new-session", Model: "claude"})
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -160,14 +160,14 @@ func TestCreateSession(t *testing.T) {
 
 func TestStartSession(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
+		if r.Method != http.MethodPost {
 			t.Errorf("unexpected method %q", r.Method)
 		}
 		if r.URL.Path != "/api/v1/volundr/sessions/s1/start" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
@@ -183,7 +183,7 @@ func TestStopSession(t *testing.T) {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
@@ -195,14 +195,14 @@ func TestStopSession(t *testing.T) {
 
 func TestDeleteSession(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
+		if r.Method != http.MethodDelete {
 			t.Errorf("unexpected method %q", r.Method)
 		}
 		if r.URL.Path != "/api/v1/volundr/sessions/s1" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
@@ -222,7 +222,7 @@ func TestListModels(t *testing.T) {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(models)
+		_ = json.NewEncoder(w).Encode(models)
 	}))
 	defer srv.Close()
 
@@ -247,7 +247,7 @@ func TestGetStats(t *testing.T) {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(stats)
+		_ = json.NewEncoder(w).Encode(stats)
 	}))
 	defer srv.Close()
 
@@ -277,7 +277,7 @@ func TestGetAuthConfig(t *testing.T) {
 			t.Error("GetAuthConfig should not send Authorization header")
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(authResp)
+		_ = json.NewEncoder(w).Encode(authResp)
 	}))
 	defer srv.Close()
 
@@ -301,7 +301,7 @@ func TestAuthHeader(t *testing.T) {
 			t.Errorf("expected Bearer auth header, got %q", auth)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`[]`))
+		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer srv.Close()
 
@@ -316,7 +316,7 @@ func TestAuthHeader_Empty(t *testing.T) {
 			t.Errorf("expected no auth header, got %q", auth)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`[]`))
+		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer srv.Close()
 
@@ -415,9 +415,9 @@ func TestEnsureValidToken_MissingClientID(t *testing.T) {
 }
 
 func TestDecodeResponse_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte("forbidden"))
+		_, _ = w.Write([]byte("forbidden"))
 	}))
 	defer srv.Close()
 
@@ -429,9 +429,9 @@ func TestDecodeResponse_Error(t *testing.T) {
 }
 
 func TestDecodeResponse_InvalidJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("not valid json"))
+		_, _ = w.Write([]byte("not valid json"))
 	}))
 	defer srv.Close()
 
@@ -457,9 +457,9 @@ func TestBaseURL_Accessor(t *testing.T) {
 }
 
 func TestStartSession_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("session not found"))
+		_, _ = w.Write([]byte("session not found"))
 	}))
 	defer srv.Close()
 
@@ -471,9 +471,9 @@ func TestStartSession_Error(t *testing.T) {
 }
 
 func TestStopSession_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("already stopped"))
+		_, _ = w.Write([]byte("already stopped"))
 	}))
 	defer srv.Close()
 
@@ -485,9 +485,9 @@ func TestStopSession_Error(t *testing.T) {
 }
 
 func TestDeleteSession_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, _ = w.Write([]byte("not found"))
 	}))
 	defer srv.Close()
 
@@ -508,7 +508,7 @@ func TestListChronicles(t *testing.T) {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(chronicles)
+		_ = json.NewEncoder(w).Encode(chronicles)
 	}))
 	defer srv.Close()
 
@@ -540,7 +540,7 @@ func TestGetTimeline(t *testing.T) {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer srv.Close()
 
@@ -554,7 +554,7 @@ func TestGetTimeline(t *testing.T) {
 	}
 }
 
-// --- WebSocket client tests ---
+// WebSocket client tests.
 
 func TestNewWSClient(t *testing.T) {
 	ws := NewWSClient("http://localhost:8000", "my-token")
@@ -649,7 +649,7 @@ func TestWSClient_Connect_InvalidURL(t *testing.T) {
 	}
 }
 
-// --- Terminal WebSocket client tests ---
+// Terminal WebSocket client tests.
 
 func TestNewTerminalWSClient(t *testing.T) {
 	tw := NewTerminalWSClient("http://localhost:8000", "tok")
@@ -725,7 +725,7 @@ func TestTerminalWSClient_Connect_InvalidURL(t *testing.T) {
 	}
 }
 
-// --- SSE client tests ---
+// SSE client tests.
 
 func TestNewSSEClient(t *testing.T) {
 	sse := NewSSEClient("http://localhost:8000", "my-token")
@@ -740,7 +740,7 @@ func TestNewSSEClient(t *testing.T) {
 	}
 }
 
-func TestSSEClient_Close_Idempotent(t *testing.T) {
+func TestSSEClient_Close_Idempotent(_ *testing.T) {
 	sse := NewSSEClient("http://localhost", "tok")
 	// Close without ever connecting should not panic.
 	sse.Close()
@@ -749,7 +749,7 @@ func TestSSEClient_Close_Idempotent(t *testing.T) {
 }
 
 func TestSSEClient_Connect_NonOK(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -775,7 +775,7 @@ func TestSSEClient_Connect_ParsesEvents(t *testing.T) {
 		if !ok {
 			t.Fatal("server does not support flushing")
 		}
-		fmt.Fprintf(w, "id: 1\nevent: update\ndata: hello world\n\n")
+		_, _ = fmt.Fprintf(w, "id: 1\nevent: update\ndata: hello world\n\n")
 		flusher.Flush()
 	}))
 	defer srv.Close()
@@ -810,11 +810,11 @@ func TestSSEClient_Connect_ParsesEvents(t *testing.T) {
 }
 
 func TestSSEClient_Connect_MultilineData(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		flusher, _ := w.(http.Flusher)
-		fmt.Fprintf(w, "data: line one\ndata: line two\n\n")
+		_, _ = fmt.Fprintf(w, "data: line one\ndata: line two\n\n")
 		flusher.Flush()
 	}))
 	defer srv.Close()
@@ -860,7 +860,7 @@ func TestSSEClient_Connect_NoAuthHeader(t *testing.T) {
 	sse.Close()
 }
 
-// --- do() method edge cases ---
+// HTTP do() method edge cases.
 
 func TestDo_ContentTypeJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -868,7 +868,7 @@ func TestDo_ContentTypeJSON(t *testing.T) {
 			t.Errorf("expected Content-Type application/json, got %q", r.Header.Get("Content-Type"))
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[]`))
+		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer srv.Close()
 
@@ -877,18 +877,18 @@ func TestDo_ContentTypeJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestDo_WithBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]string
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		if body["key"] != "value" {
 			t.Errorf("expected body key=value, got %v", body)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
@@ -897,13 +897,13 @@ func TestDo_WithBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestGetAuthConfig_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, _ = w.Write([]byte("not found"))
 	}))
 	defer srv.Close()
 
@@ -915,9 +915,9 @@ func TestGetAuthConfig_Error(t *testing.T) {
 }
 
 func TestGetSession_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, _ = w.Write([]byte("not found"))
 	}))
 	defer srv.Close()
 
@@ -929,14 +929,14 @@ func TestGetSession_Error(t *testing.T) {
 }
 
 func TestCreateSession_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("invalid"))
+		_, _ = w.Write([]byte("invalid"))
 	}))
 	defer srv.Close()
 
 	c := NewClient(srv.URL, "tok")
-	_, err := c.CreateSession(SessionCreate{Name: "test"})
+	_, err := c.CreateSession(&SessionCreate{Name: "test"})
 	if err == nil {
 		t.Fatal("expected error for 400")
 	}

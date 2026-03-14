@@ -6,12 +6,14 @@ import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from importlib.metadata import metadata
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from volundr.adapters.inbound.rest import create_router
+from volundr.adapters.inbound.rest_admin_settings import create_admin_settings_router
 from volundr.adapters.inbound.rest_credentials import create_credentials_router
 from volundr.adapters.inbound.rest_events import create_events_router
 from volundr.adapters.inbound.rest_git import create_git_router
@@ -356,10 +358,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Configure logging from settings
     configure_logging(settings.logging)
 
+    _meta = metadata("volundr")
+
     app = FastAPI(
         title="Volundr",
-        description="Self-hosted Claude Code session manager",
-        version="0.1.0",
+        description=_meta["Summary"],
+        version=_meta["Version"],
         openapi_tags=[
             {
                 "name": "Sessions",
@@ -423,6 +427,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Store settings for lifespan access
     app.state.settings = settings
+    app.state.admin_settings = {
+        "storage": {"home_enabled": True},
+    }
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -510,6 +517,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 profile_provider=profile_provider,
                 git_registry=git_registry,
                 storage=storage_adapter,
+                admin_settings=app.state.admin_settings,
                 gateway=gateway_adapter,
                 secret_injection=secret_injection,
                 credential_store=credential_store,
@@ -606,6 +614,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Tenant and identity management
             tenants_router = create_tenants_router(tenant_service)
             app.include_router(tenants_router)
+
+            # Admin settings (config-driven, runtime-toggleable)
+            admin_settings_router = create_admin_settings_router()
+            app.include_router(admin_settings_router)
 
             # Credential management (reuses credential_store created above)
             credential_service = CredentialService(
@@ -762,7 +774,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 try:
                     await background_task
                 except asyncio.CancelledError:
-                    pass
+                    pass  # Expected: task cancellation during shutdown
                 await event_ingestion.close_all()
                 if linear_adapter is not None:
                     await linear_adapter.close()

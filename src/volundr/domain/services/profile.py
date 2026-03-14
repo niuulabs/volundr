@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import re
 
 from volundr.domain.models import ForgeProfile, SessionStatus
 from volundr.domain.ports import MutableProfileProvider, ProfileProvider, SessionRepository
-
-logger = logging.getLogger(__name__)
 
 
 class ProfileNotFoundError(Exception):

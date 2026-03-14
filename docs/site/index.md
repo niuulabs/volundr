@@ -13,7 +13,7 @@ hide:
 <div class="hero-buttons">
   <a href="getting-started/installation/" class="primary">Get started</a>
   <a href="architecture/overview/" class="secondary">Architecture</a>
-  <a href="api/sessions/" class="secondary">API reference</a>
+  <a href="api/openapi/" class="secondary">API reference</a>
 </div>
 
 </div>
@@ -86,7 +86,7 @@ Issue trackers (Linear, Jira), MCP servers, SSE streaming, and event pipelines t
 |-----------|------|
 | <span class="component-name">Volundr API</span> | FastAPI/Python backend — session CRUD, workspace provisioning, git integration, secret management, multi-tenant access control |
 | <span class="component-name">Skuld</span> | WebSocket broker — connects the browser UI to AI coding agents running inside session pods |
-| <span class="component-name">Hlidskjalf</span> | React web UI — session management, chronicles, diffs, terminal access, and admin |
+| <span class="component-name">Web UI</span> | React web UI — session management, chronicles, diffs, terminal access, and admin |
 
 ## Tech stack
 
@@ -160,7 +160,9 @@ Each session provides a complete workspace with an integrated terminal and a ful
 
 ## Quick links
 
-- [Installation](getting-started/installation.md) — get up and running
-- [Configuration reference](getting-started/configuration.md) — all YAML options
-- [Helm deployment](deployment/helm.md) — production setup on Kubernetes
+- [Quick start](getting-started/quick-start.md) — get running in 5 minutes
+- [Installation guide](installation/overview.md) — deployment options and setup
+- [User guide](user-guide/sessions.md) — sessions, templates, chronicles, CLI
+- [Configuration](configuration/overview.md) — adapters, identity, secrets, storage
+- [API reference](api/openapi.md) — interactive OpenAPI documentation
 - [Contributing](contributing/development.md) — development workflow

@@ -16,6 +16,7 @@ import (
 // EventType classifies a chronicle timeline event.
 type EventType string
 
+// EventType constants for chronicle timeline events.
 const (
 	EventSession  EventType = "session"
 	EventMessage  EventType = "message"
@@ -53,7 +54,6 @@ type ChroniclesPage struct {
 	commits   []api.TimelineCommit
 	filtered  []ChronicleEvent
 	cursor    int
-	scrollPos int
 	filter    string // "all", "session", "message", "file", "git", "terminal", "error"
 	loading   bool
 	loadErr   error
@@ -75,7 +75,7 @@ func NewChroniclesPage(client *api.Client) ChroniclesPage {
 }
 
 // SetSession loads the timeline for the given session.
-func (c *ChroniclesPage) SetSession(sess api.Session) tea.Cmd {
+func (c *ChroniclesPage) SetSession(sess api.Session) tea.Cmd { //nolint:gocritic // hugeParam acceptable for API type
 	c.sessionID = sess.ID
 	c.loading = true
 	c.loadErr = nil
@@ -95,12 +95,12 @@ func (c *ChroniclesPage) SetSession(sess api.Session) tea.Cmd {
 }
 
 // Init does not load data on startup — chronicles require a session selection.
-func (c ChroniclesPage) Init() tea.Cmd {
+func (c ChroniclesPage) Init() tea.Cmd { //nolint:gocritic // value receiver needed for page interface consistency
 	return nil
 }
 
 // Update handles messages for the chronicles page.
-func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) {
+func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	switch msg := msg.(type) {
 	case TimelineLoadedMsg:
 		c.loading = false
@@ -146,7 +146,7 @@ func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) {
 
 // timelineEventsFromAPI converts API timeline events to display events.
 func timelineEventsFromAPI(events []api.TimelineEvent) []ChronicleEvent {
-	var result []ChronicleEvent
+	result := make([]ChronicleEvent, 0, len(events))
 	for _, ev := range events {
 		eventType := mapEventType(ev.Type)
 
@@ -224,7 +224,7 @@ func (c *ChroniclesPage) SetSize(w, h int) {
 }
 
 // View renders the chronicles page with a beautiful timeline layout.
-func (c ChroniclesPage) View() string {
+func (c ChroniclesPage) View() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	titleStyle := lipgloss.NewStyle().
@@ -268,17 +268,18 @@ func (c ChroniclesPage) View() string {
 	timelineHeight := c.height - 12
 	var timeline string
 
-	if c.loading {
+	switch {
+	case c.loading:
 		timeline = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Padding(2, 0).
 			Render("  Loading timeline...")
-	} else if c.loadErr != nil {
+	case c.loadErr != nil:
 		timeline = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
 			Padding(2, 0).
 			Render(fmt.Sprintf("  Error: %v  (r to retry)", c.loadErr))
-	} else {
+	default:
 		timeline = c.renderTimeline(timelineHeight)
 	}
 
@@ -298,7 +299,7 @@ func (c ChroniclesPage) View() string {
 }
 
 // renderTimeline renders the scrollable timeline of events.
-func (c ChroniclesPage) renderTimeline(maxHeight int) string {
+func (c ChroniclesPage) renderTimeline(maxHeight int) string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	if len(c.filtered) == 0 {
@@ -344,7 +345,7 @@ func (c ChroniclesPage) renderTimeline(maxHeight int) string {
 }
 
 // renderTimelineEntry renders a single timeline event with the vertical timeline connector.
-func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool) string {
+func (c ChroniclesPage) renderTimelineEntry(event ChronicleEvent, selected bool) string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	icon, clr := eventTypeStyle(event.Type)
@@ -431,7 +432,7 @@ func formatElapsed(seconds int) string {
 		return fmt.Sprintf("%dm%02ds", m, s)
 	}
 	h := m / 60
-	m = m % 60
+	m %= 60
 	return fmt.Sprintf("%dh%02dm", h, m)
 }
 
@@ -456,7 +457,7 @@ func eventTypeStyle(t EventType) (string, color.Color) {
 }
 
 // countByType returns event counts grouped by type.
-func (c ChroniclesPage) countByType() map[string]int {
+func (c ChroniclesPage) countByType() map[string]int { //nolint:gocritic // value receiver needed for page interface consistency
 	counts := make(map[string]int)
 	for _, e := range c.events {
 		counts[string(e.Type)]++
@@ -465,7 +466,7 @@ func (c ChroniclesPage) countByType() map[string]int {
 }
 
 // filterTabIndex maps the current filter to a tab index.
-func (c ChroniclesPage) filterTabIndex() int {
+func (c ChroniclesPage) filterTabIndex() int { //nolint:gocritic // value receiver needed for page interface consistency
 	for i, f := range chronicleFilters {
 		if c.filter == f {
 			return i

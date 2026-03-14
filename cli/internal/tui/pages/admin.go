@@ -14,6 +14,7 @@ import (
 // AdminTab represents a tab in the admin panel.
 type AdminTab int
 
+// AdminTab constants for admin panel tabs.
 const (
 	AdminUsers AdminTab = iota
 	AdminTenants
@@ -52,7 +53,7 @@ func NewAdminPage(client *api.Client) AdminPage {
 }
 
 // Init fetches admin data from the API.
-func (a AdminPage) Init() tea.Cmd {
+func (a AdminPage) Init() tea.Cmd { //nolint:gocritic // value receiver needed for page interface consistency
 	if a.client == nil {
 		return nil
 	}
@@ -78,7 +79,7 @@ func (a AdminPage) Init() tea.Cmd {
 }
 
 // Update handles messages for the admin page.
-func (a AdminPage) Update(msg tea.Msg) (AdminPage, tea.Cmd) {
+func (a AdminPage) Update(msg tea.Msg) (AdminPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	switch msg := msg.(type) {
 	case AdminDataLoadedMsg:
 		a.loading = false
@@ -120,7 +121,7 @@ func (a *AdminPage) SetSize(w, h int) {
 }
 
 // View renders the admin page.
-func (a AdminPage) View() string {
+func (a AdminPage) View() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	titleStyle := lipgloss.NewStyle().
@@ -134,15 +135,16 @@ func (a AdminPage) View() string {
 	}
 
 	var content string
-	if a.loading {
+	switch {
+	case a.loading:
 		content = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Render("  Loading admin data...")
-	} else if a.loadErr != nil {
+	case a.loadErr != nil:
 		content = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
 			Render(fmt.Sprintf("  Error: %v  (r to retry)", a.loadErr))
-	} else {
+	default:
 		switch a.tab {
 		case AdminUsers:
 			content = a.renderUsers()
@@ -167,7 +169,7 @@ func (a AdminPage) View() string {
 }
 
 // renderUsers renders the users table.
-func (a AdminPage) renderUsers() string {
+func (a AdminPage) renderUsers() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	if len(a.users) == 0 {
@@ -191,9 +193,7 @@ func (a AdminPage) renderUsers() string {
 		Foreground(theme.BorderSubtle).
 		Render("  " + strings.Repeat("─", a.width-8))
 
-	var rows []string
-	rows = append(rows, header)
-	rows = append(rows, separator)
+	rows := []string{header, separator}
 
 	for i, user := range a.users {
 		nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true)
@@ -221,7 +221,7 @@ func (a AdminPage) renderUsers() string {
 }
 
 // renderTenants renders the tenants table.
-func (a AdminPage) renderTenants() string {
+func (a AdminPage) renderTenants() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	if len(a.tenants) == 0 {
@@ -244,9 +244,7 @@ func (a AdminPage) renderTenants() string {
 		Foreground(theme.BorderSubtle).
 		Render("  " + strings.Repeat("─", a.width-8))
 
-	var rows []string
-	rows = append(rows, header)
-	rows = append(rows, separator)
+	rows := []string{header, separator}
 
 	for i, tenant := range a.tenants {
 		nameStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true)
@@ -272,7 +270,7 @@ func (a AdminPage) renderTenants() string {
 }
 
 // renderStats renders the stats/dashboard view.
-func (a AdminPage) renderStats() string {
+func (a AdminPage) renderStats() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	if a.stats == nil {
@@ -290,11 +288,12 @@ func (a AdminPage) renderStats() string {
 	})
 
 	// Token breakdown
-	var breakdown []string
-	breakdown = append(breakdown, "")
-	breakdown = append(breakdown, lipgloss.NewStyle().
-		Foreground(theme.TextPrimary).Bold(true).Render("  Token Breakdown"))
-	breakdown = append(breakdown, "")
+	breakdown := make([]string, 0, 5) //nolint:mnd // preallocated capacity for known breakdown items
+	breakdown = append(breakdown,
+		"",
+		lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true).Render("  Token Breakdown"),
+		"",
+	)
 
 	localPct := 0
 	if s.TokensToday > 0 {
@@ -324,4 +323,4 @@ func (a AdminPage) renderStats() string {
 	)
 }
 
-// renderBar is defined in realms.go.
+// See realms.go for renderBar definition.

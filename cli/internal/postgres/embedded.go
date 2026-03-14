@@ -52,7 +52,7 @@ func (e *EmbeddedPostgres) Start(_ context.Context) error {
 
 	e.pg = embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
-			Port(uint32(e.config.Database.Port)).
+			Port(uint32(e.config.Database.Port)). //nolint:gosec // port is a valid TCP port number (0-65535)
 			Database(e.config.Database.Name).
 			Username(e.config.Database.User).
 			Password(e.config.Database.Password).
@@ -80,20 +80,29 @@ func (e *EmbeddedPostgres) Stop() error {
 }
 
 // RunMigrations applies all pending up migrations from the given directory.
-func (e *EmbeddedPostgres) RunMigrations(ctx context.Context, migrationsDir string) (int, error) {
+func (e *EmbeddedPostgres) RunMigrations(ctx context.Context, migrationsDir string) (applied int, err error) {
 	dsn := e.config.DSN()
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return 0, fmt.Errorf("open database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if cerr := db.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close database: %w", cerr)
+		}
+	}()
 
+	return runMigrationsWithDB(ctx, db, migrationsDir)
+}
+
+// runMigrationsWithDB applies all pending up migrations using the provided database connection.
+func runMigrationsWithDB(ctx context.Context, db *sql.DB, migrationsDir string) (int, error) {
 	if err := db.PingContext(ctx); err != nil {
 		return 0, fmt.Errorf("ping database: %w", err)
 	}
 
 	// Create migrations tracking table.
-	_, err = db.ExecContext(ctx, `
+	_, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ DEFAULT NOW()
@@ -127,7 +136,7 @@ func (e *EmbeddedPostgres) RunMigrations(ctx context.Context, migrationsDir stri
 		}
 
 		// Read and execute migration.
-		sqlBytes, err := os.ReadFile(filepath.Join(migrationsDir, f))
+		sqlBytes, err := os.ReadFile(filepath.Join(migrationsDir, f)) //nolint:gosec // migration files from trusted local directory
 		if err != nil {
 			return applied, fmt.Errorf("read migration %s: %w", f, err)
 		}
@@ -182,7 +191,7 @@ func findMigrationFiles(dir string) ([]string, error) {
 }
 
 // extractVersion extracts the version identifier from a migration filename.
-// e.g., "000001_initial_schema.up.sql" -> "000001_initial_schema"
+// Example: "000001_initial_schema.up.sql" -> "000001_initial_schema".
 func extractVersion(filename string) string {
 	return strings.TrimSuffix(filename, ".up.sql")
 }

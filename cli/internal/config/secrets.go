@@ -53,7 +53,7 @@ func SaveCredentials(creds *Credentials, passphrase string) error {
 }
 
 // SaveCredentialsTo encrypts and saves credentials to the given path.
-func SaveCredentialsTo(creds *Credentials, passphrase string, path string) error {
+func SaveCredentialsTo(creds *Credentials, passphrase, path string) error {
 	plaintext, err := json.Marshal(creds)
 	if err != nil {
 		return fmt.Errorf("marshal credentials: %w", err)
@@ -84,7 +84,9 @@ func SaveCredentialsTo(creds *Credentials, passphrase string, path string) error
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
 
 	// File format: [32-byte salt][nonce + ciphertext]
-	output := append(salt, ciphertext...)
+	output := make([]byte, 0, SaltSize+len(ciphertext))
+	output = append(output, salt...)
+	output = append(output, ciphertext...)
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -108,8 +110,8 @@ func LoadCredentials(passphrase string) (*Credentials, error) {
 }
 
 // LoadCredentialsFrom decrypts and loads credentials from the given path.
-func LoadCredentialsFrom(passphrase string, path string) (*Credentials, error) {
-	data, err := os.ReadFile(path)
+func LoadCredentialsFrom(passphrase, path string) (*Credentials, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // path comes from CredentialsPath() or caller-provided location
 	if err != nil {
 		return nil, fmt.Errorf("read credentials file: %w", err)
 	}

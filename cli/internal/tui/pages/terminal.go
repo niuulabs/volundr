@@ -108,7 +108,7 @@ func NewTerminalPage(serverURL string, client *api.Client, pool *tui.ClientPool)
 }
 
 // Init initializes the terminal page and starts listening for async messages.
-func (t TerminalPage) Init() tea.Cmd {
+func (t TerminalPage) Init() tea.Cmd { //nolint:gocritic // value receiver needed for page interface consistency
 	return tea.Batch(
 		t.waitForOutput(),
 		t.waitForConn(),
@@ -116,7 +116,7 @@ func (t TerminalPage) Init() tea.Cmd {
 }
 
 // waitForOutput returns a command that waits for terminal output messages.
-func (t TerminalPage) waitForOutput() tea.Cmd {
+func (t TerminalPage) waitForOutput() tea.Cmd { //nolint:gocritic // value receiver needed for page interface consistency
 	ch := t.outputCh
 	return func() tea.Msg {
 		return <-ch
@@ -124,7 +124,7 @@ func (t TerminalPage) waitForOutput() tea.Cmd {
 }
 
 // waitForConn returns a command that waits for connection state messages.
-func (t TerminalPage) waitForConn() tea.Cmd {
+func (t TerminalPage) waitForConn() tea.Cmd { //nolint:gocritic // value receiver needed for page interface consistency
 	ch := t.connCh
 	return func() tea.Msg {
 		return <-ch
@@ -132,7 +132,7 @@ func (t TerminalPage) waitForConn() tea.Cmd {
 }
 
 // Update handles messages for the terminal page.
-func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) {
+func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	switch msg := msg.(type) {
 	case TerminalOutputMsg:
 		// New PTY output was written to the vt emulator; re-render.
@@ -182,7 +182,7 @@ func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) {
 }
 
 // handleKey processes keyboard input.
-func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
+func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	key := msg.Key().Keystroke()
 
 	// Ctrl+] always toggles between insert and normal mode (like the
@@ -260,7 +260,7 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) {
 // ConnectSessionOnCluster creates a new terminal tab using the specified cluster's
 // server and token. This is used when launching a terminal from a multi-cluster
 // session selection.
-func (t *TerminalPage) ConnectSessionOnCluster(sess api.Session, contextKey string) {
+func (t *TerminalPage) ConnectSessionOnCluster(sess api.Session, contextKey string) { //nolint:gocritic // hugeParam acceptable for API type
 	if t.pool == nil {
 		t.ConnectSession(sess)
 		return
@@ -279,7 +279,7 @@ func (t *TerminalPage) ConnectSessionOnCluster(sess api.Session, contextKey stri
 // It uses the session's CodeEndpoint to connect directly to the session pod.
 // If CodeEndpoint is empty, it falls back to the control-plane proxy.
 // Any existing tabs are closed first to prevent goroutine leaks.
-func (t *TerminalPage) ConnectSession(sess api.Session) {
+func (t *TerminalPage) ConnectSession(sess api.Session) { //nolint:gocritic // hugeParam acceptable for API type
 	// Detach callbacks and close asynchronously to avoid deadlock —
 	// Close() fires OnStateChange which calls p.Send() and blocks
 	// when called from inside Update().
@@ -306,7 +306,7 @@ func (t *TerminalPage) ConnectSession(sess api.Session) {
 // ConnectCliSession creates a new terminal tab connected to a persistent CLI session.
 // It derives the WebSocket URL from the Volundr session's chat or code endpoint
 // and connects to /terminal/ws/{terminalId} on the session pod via devrunner.
-func (t *TerminalPage) ConnectCliSession(sess api.Session, sessionName string) {
+func (t *TerminalPage) ConnectCliSession(sess api.Session, sessionName string) { //nolint:gocritic // hugeParam acceptable for API type
 	// Close existing tabs to prevent goroutine leaks.
 	for _, tab := range t.tabs {
 		if tab.ws != nil {
@@ -332,7 +332,7 @@ func (t *TerminalPage) ConnectCliSession(sess api.Session, sessionName string) {
 
 // ConnectCliSessionOnCluster creates a terminal tab for a CLI session using
 // the specified cluster's server and token.
-func (t *TerminalPage) ConnectCliSessionOnCluster(sess api.Session, contextKey, sessionName string) {
+func (t *TerminalPage) ConnectCliSessionOnCluster(sess api.Session, contextKey, sessionName string) { //nolint:gocritic // hugeParam acceptable for API type
 	if t.pool == nil {
 		t.ConnectCliSession(sess, sessionName)
 		return
@@ -348,7 +348,7 @@ func (t *TerminalPage) ConnectCliSessionOnCluster(sess api.Session, contextKey, 
 }
 
 // connectCliSessionWith creates a terminal tab connected to a CLI session WebSocket.
-func (t *TerminalPage) connectCliSessionWith(sess api.Session, serverURL, token, sessionName string) {
+func (t *TerminalPage) connectCliSessionWith(sess api.Session, _, token, sessionName string) { //nolint:gocritic // hugeParam acceptable for API type
 	t.activeSession = &sess
 	t.activeToken = token
 
@@ -361,7 +361,7 @@ func (t *TerminalPage) connectCliSessionWith(sess api.Session, serverURL, token,
 
 // connectSessionWith discovers existing terminal sessions (or spawns one) and
 // sends a message back to the Update loop to create tabs synchronously.
-func (t *TerminalPage) connectSessionWith(sess api.Session, serverURL, token string) {
+func (t *TerminalPage) connectSessionWith(sess api.Session, _, token string) { //nolint:gocritic // hugeParam acceptable for API type
 	// Store session context so ctrl+t can spawn additional tabs.
 	t.activeSession = &sess
 	t.activeToken = token
@@ -549,6 +549,8 @@ func (t *TerminalPage) connectTab(index int) {
 			case connCh <- TerminalDisconnectedMsg{TabIndex: index}:
 			default:
 			}
+		case api.WSConnecting, api.WSReconnecting:
+			// Transitional states, no action needed.
 		}
 	}
 
@@ -657,7 +659,7 @@ func (t *TerminalPage) Close() {
 }
 
 // InsertMode returns whether the terminal is in insert mode (keys go to PTY).
-func (t TerminalPage) InsertMode() bool {
+func (t TerminalPage) InsertMode() bool { //nolint:gocritic // value receiver needed for page interface consistency
 	return t.insertMode
 }
 
@@ -691,7 +693,7 @@ func (t *TerminalPage) resizeAllEmulators() {
 }
 
 // termDimensions returns the width and height available for the vt emulator.
-func (t TerminalPage) termDimensions() (int, int) {
+func (t TerminalPage) termDimensions() (int, int) { //nolint:gocritic // value receiver needed for page interface consistency
 	if t.width == 0 || t.height == 0 {
 		return defaultTermWidth, defaultTermHeight
 	}
@@ -715,7 +717,7 @@ func (t TerminalPage) termDimensions() (int, int) {
 }
 
 // View renders the terminal page.
-func (t TerminalPage) View() string {
+func (t TerminalPage) View() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	// No tabs: show empty state
@@ -765,7 +767,7 @@ func (t TerminalPage) View() string {
 }
 
 // renderEmptyState renders the view when no terminals are open.
-func (t TerminalPage) renderEmptyState() string {
+func (t TerminalPage) renderEmptyState() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
 	titleStyle := lipgloss.NewStyle().
@@ -803,7 +805,7 @@ func (t TerminalPage) renderEmptyState() string {
 }
 
 // renderFullScreen renders the terminal in full-screen mode.
-func (t TerminalPage) renderFullScreen(tab *terminalTab) string {
+func (t TerminalPage) renderFullScreen(tab *terminalTab) string { //nolint:gocritic // value receiver needed for page interface consistency
 	tab.mu.Lock()
 	content := tab.emulator.Render()
 	tab.mu.Unlock()
@@ -816,9 +818,9 @@ func (t TerminalPage) renderFullScreen(tab *terminalTab) string {
 }
 
 // renderTabBar renders the tab strip at the top of the terminal.
-func (t TerminalPage) renderTabBar() string {
+func (t TerminalPage) renderTabBar() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
-	var tabs []string
+	tabs := make([]string, 0, len(t.tabs))
 
 	for i, tab := range t.tabs {
 		tab.mu.Lock()
@@ -868,7 +870,7 @@ func keyToBytes(msg tea.KeyMsg) []byte {
 	// If the key has printable text and no modifier (or only Shift), return it directly.
 	// Shift is included because Kitty keyboard protocol explicitly reports Shift
 	// for uppercase letters, but the text already contains the shifted character.
-	if text := msg.Key().Text; len(text) > 0 && (msg.Key().Mod == 0 || msg.Key().Mod == tea.ModShift) {
+	if text := msg.Key().Text; text != "" && (msg.Key().Mod == 0 || msg.Key().Mod == tea.ModShift) {
 		return []byte(text)
 	}
 

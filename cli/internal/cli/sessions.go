@@ -36,7 +36,7 @@ var sessionsCmd = &cobra.Command{
 var sessionsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all sessions",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		client, err := newAPIClient()
 		if err != nil {
 			return err
@@ -57,9 +57,9 @@ var sessionsListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tSTATUS\tMODEL\tREPO\tBRANCH\tTOKENS")
+		_, _ = fmt.Fprintln(w, "ID\tNAME\tSTATUS\tMODEL\tREPO\tBRANCH\tTOKENS")
 		for _, s := range sessions {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%d\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%d\n",
 				s.ID[:8], s.Name, s.Status, s.Model, s.Repo, s.Branch, s.TokensUsed)
 		}
 		return w.Flush()
@@ -69,7 +69,7 @@ var sessionsListCmd = &cobra.Command{
 var sessionsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new session",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		client, err := newAPIClient()
 		if err != nil {
 			return err
@@ -80,7 +80,7 @@ var sessionsCreateCmd = &cobra.Command{
 		model, _ := cmd.Flags().GetString("model")
 		branch, _ := cmd.Flags().GetString("branch")
 
-		session, err := client.CreateSession(api.SessionCreate{
+		session, err := client.CreateSession(&api.SessionCreate{
 			Name:   name,
 			Repo:   repo,
 			Model:  model,
@@ -103,7 +103,7 @@ var sessionsStartCmd = &cobra.Command{
 	Use:   "start <session-id>",
 	Short: "Start a stopped session",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		client, err := newAPIClient()
 		if err != nil {
 			return err
@@ -122,7 +122,7 @@ var sessionsStopCmd = &cobra.Command{
 	Use:   "stop <session-id>",
 	Short: "Stop a running session",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		client, err := newAPIClient()
 		if err != nil {
 			return err
@@ -141,7 +141,7 @@ var sessionsDeleteCmd = &cobra.Command{
 	Use:   "delete <session-id>",
 	Short: "Delete a session",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		client, err := newAPIClient()
 		if err != nil {
 			return err

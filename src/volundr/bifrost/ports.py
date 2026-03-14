@@ -26,7 +26,6 @@ class UpstreamProvider(ABC):
 
         Returns ``(status_code, response_headers, response_body)``.
         """
-        ...
 
     @abstractmethod
     async def stream_forward(
@@ -40,12 +39,10 @@ class UpstreamProvider(ABC):
         where *chunk_iterator* yields raw bytes (SSE events) as they
         arrive from the upstream.
         """
-        ...
 
     @abstractmethod
     async def close(self) -> None:
         """Release resources (HTTP client, connection pool)."""
-        ...
 
 
 class Synapse(ABC):
@@ -66,7 +63,6 @@ class Synapse(ABC):
         Must never block the caller.  If the transport is unavailable
         or a subscriber handler fails, the error is swallowed.
         """
-        ...
 
     @abstractmethod
     async def subscribe(
@@ -75,9 +71,7 @@ class Synapse(ABC):
         handler: Callable[[SynapseEnvelope], Awaitable[None]],
     ) -> None:
         """Register *handler* to receive messages on *topic*."""
-        ...
 
     @abstractmethod
     async def close(self) -> None:
         """Shut down transport and release resources."""
-        ...

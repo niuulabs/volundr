@@ -28,7 +28,7 @@ func CheckNotRunning() error {
 	}
 
 	pidPath := filepath.Join(cfgDir, PIDFile)
-	data, err := os.ReadFile(pidPath)
+	data, err := os.ReadFile(pidPath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -40,19 +40,19 @@ func CheckNotRunning() error {
 	if err != nil {
 		// Invalid PID file, remove it.
 		_ = os.Remove(pidPath)
-		return nil
+		return nil //nolint:nilerr // corrupt PID file means no instance running
 	}
 
 	proc, err := os.FindProcess(pid)
 	if err != nil {
 		_ = os.Remove(pidPath)
-		return nil
+		return nil //nolint:nilerr // process not found means no instance running
 	}
 
 	if err := proc.Signal(syscall.Signal(0)); err != nil {
 		// Process is dead, clean up stale PID file.
 		_ = os.Remove(pidPath)
-		return nil
+		return nil //nolint:nilerr // signal failure means process is dead
 	}
 
 	return fmt.Errorf("volundr is already running (PID %d)", pid)
@@ -66,7 +66,7 @@ func WritePIDFile() error {
 	}
 
 	pidPath := filepath.Join(cfgDir, PIDFile)
-	return os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o644)
+	return os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o600)
 }
 
 // RemovePIDFile removes the PID file.
@@ -91,7 +91,7 @@ func WriteStateFile(services []ServiceStatus) error {
 	}
 
 	stateFilePath := filepath.Join(cfgDir, StateFile)
-	return os.WriteFile(stateFilePath, data, 0o644)
+	return os.WriteFile(stateFilePath, data, 0o600)
 }
 
 // RemoveStateFile removes the state file.

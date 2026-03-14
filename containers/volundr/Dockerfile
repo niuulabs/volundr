@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:d1e2e92c075e5ca139d51a140fff46f84315c0fdce203eab2807c7e495eff4f9
 
 LABEL org.opencontainers.image.title="volundr"
 LABEL org.opencontainers.image.description="Volundr — self-hosted AI-native development platform"
@@ -19,13 +19,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (LTS)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+# Install Node.js 24 LTS (pinned keyring + apt source instead of curl|bash)
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    -o /usr/share/keyrings/nodesource.asc \
+    && echo "deb [signed-by=/usr/share/keyrings/nodesource.asc] https://deb.nodesource.com/node_24.x nodistro main" \
+    > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally via npm (same method as skuld pod)
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code@2.1.76
 
 # Create app user
 RUN useradd -m -s /bin/bash volundr
@@ -36,7 +39,7 @@ RUN python3.12 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install build dependencies
-RUN pip install --no-cache-dir hatchling
+RUN pip install --no-cache-dir hatchling==1.29.0
 
 # Copy volundr package and install
 COPY pyproject.toml README.md /app/

@@ -225,3 +225,6 @@ package-lock.json
 uv.lock
 
 .old
+cli/coverage.out
+cli/coverage_test.out
+docs/site/openapi.json

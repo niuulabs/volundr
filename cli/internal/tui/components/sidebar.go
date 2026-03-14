@@ -113,14 +113,15 @@ func (s Sidebar) viewCollapsed() string {
 		Width(collapsedWidth - 2).
 		Align(lipgloss.Center)
 
-	var items []string
-	items = append(items, lipgloss.NewStyle().
-		Foreground(theme.AccentAmber).
-		Bold(true).
-		Width(collapsedWidth-2).
-		Align(lipgloss.Center).
-		Render("⚒"))
-	items = append(items, "")
+	items := []string{
+		lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Bold(true).
+			Width(collapsedWidth - 2).
+			Align(lipgloss.Center).
+			Render("⚒"),
+		"",
+	}
 
 	for _, page := range tui.PageOrder {
 		info := tui.Pages[page]

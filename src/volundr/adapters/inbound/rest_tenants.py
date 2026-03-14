@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from volundr.adapters.inbound.auth import extract_principal, require_role
@@ -21,25 +21,49 @@ logger = logging.getLogger(__name__)
 class TenantCreate(BaseModel):
     """Request model for creating a tenant."""
 
-    name: str = Field(..., min_length=1, max_length=255)
-    tenant_id: str | None = Field(default=None, max_length=100)
-    parent_id: str | None = Field(default=None, max_length=100)
-    tier: str = Field(default="developer")
-    max_sessions: int = Field(default=5, ge=1)
-    max_storage_gb: int = Field(default=50, ge=1)
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Human-readable tenant name",
+    )
+    tenant_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Custom tenant ID (auto-generated if omitted)",
+    )
+    parent_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Parent tenant ID for hierarchy",
+    )
+    tier: str = Field(
+        default="developer",
+        description="Tenant tier (developer, team, enterprise)",
+    )
+    max_sessions: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum concurrent sessions allowed",
+    )
+    max_storage_gb: int = Field(
+        default=50,
+        ge=1,
+        description="Maximum storage quota in GB",
+    )
 
 
 class TenantResponse(BaseModel):
     """Response model for a tenant."""
 
-    id: str
-    path: str
-    name: str
-    parent_id: str | None
-    tier: str
-    max_sessions: int
-    max_storage_gb: int
-    created_at: str | None
+    id: str = Field(description="Unique tenant identifier")
+    path: str = Field(description="Materialized tenant hierarchy path")
+    name: str = Field(description="Tenant display name")
+    parent_id: str | None = Field(description="Parent tenant ID")
+    tier: str = Field(description="Tenant tier classification")
+    max_sessions: int = Field(description="Maximum concurrent sessions")
+    max_storage_gb: int = Field(description="Maximum storage quota in GB")
+    created_at: str | None = Field(description="ISO 8601 creation timestamp")
 
     @classmethod
     def from_tenant(cls, t) -> TenantResponse:
@@ -59,47 +83,77 @@ class TenantResponse(BaseModel):
 class TenantUpdate(BaseModel):
     """Request model for updating tenant settings."""
 
-    max_sessions: int | None = None
-    max_storage_gb: int | None = None
-    tier: str | None = None
+    max_sessions: int | None = Field(
+        default=None,
+        description="New maximum concurrent sessions",
+    )
+    max_storage_gb: int | None = Field(
+        default=None,
+        description="New maximum storage quota in GB",
+    )
+    tier: str | None = Field(
+        default=None,
+        description="New tenant tier classification",
+    )
 
 
 class MemberCreate(BaseModel):
     """Request model for adding a tenant member."""
 
-    user_id: str
-    role: str = Field(default="volundr:developer")
+    user_id: str = Field(
+        ...,
+        description="ID of the user to add",
+    )
+    role: str = Field(
+        default="volundr:developer",
+        description="Role to assign (e.g. volundr:admin)",
+    )
 
 
 class MemberResponse(BaseModel):
     """Response model for a tenant member."""
 
-    user_id: str
-    tenant_id: str
-    role: str
-    granted_at: str | None
+    user_id: str = Field(description="User identifier")
+    tenant_id: str = Field(description="Tenant identifier")
+    role: str = Field(description="Assigned role")
+    granted_at: str | None = Field(
+        description="ISO 8601 timestamp of role grant",
+    )
 
 
 class UserResponse(BaseModel):
     """Response model for a user."""
 
-    id: str
-    email: str
-    display_name: str
-    status: str
-    home_pvc: str | None = None
-    created_at: str | None
+    id: str = Field(description="Unique user identifier")
+    email: str = Field(description="User email address")
+    display_name: str = Field(
+        description="Human-readable display name",
+    )
+    status: str = Field(description="Account status")
+    home_pvc: str | None = Field(
+        default=None,
+        description="Kubernetes PVC name for home storage",
+    )
+    created_at: str | None = Field(
+        description="ISO 8601 creation timestamp",
+    )
 
 
 class MeResponse(BaseModel):
     """Response model for the current user."""
 
-    user_id: str
-    email: str
-    tenant_id: str
-    roles: list[str]
-    display_name: str
-    status: str
+    user_id: str = Field(description="Current user identifier")
+    email: str = Field(description="Current user email")
+    tenant_id: str = Field(
+        description="Tenant the user belongs to",
+    )
+    roles: list[str] = Field(
+        description="Roles assigned to the user",
+    )
+    display_name: str = Field(
+        description="Human-readable display name",
+    )
+    status: str = Field(description="Account status")
 
 
 def create_tenants_router(tenant_service: TenantService) -> APIRouter:
@@ -138,7 +192,10 @@ def create_tenants_router(tenant_service: TenantService) -> APIRouter:
 
     @router.get("/tenants", response_model=list[TenantResponse])
     async def list_tenants(
-        parent_id: str | None = None,
+        parent_id: str | None = Query(
+            default=None,
+            description="Filter by parent tenant ID",
+        ),
         _: Principal = Depends(extract_principal),
     ):
         """List tenants."""

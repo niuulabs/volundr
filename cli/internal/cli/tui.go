@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,7 +23,7 @@ var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Launch the interactive TUI",
 	Long:  "Launch the full-screen terminal user interface for Volundr.",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		return runTUI()
 	},
 }
@@ -125,7 +126,7 @@ func newTUIModel(cfg *remote.Config, pool *tuipkg.ClientPool, sender *tuipkg.Pro
 	}
 }
 
-func (m tuiModel) Init() tea.Cmd {
+func (m tuiModel) Init() tea.Cmd { //nolint:gocritic // tea.Model interface requires value receiver
 	// Use the first connected client for the ping.
 	var pingClient *api.Client
 	connected := m.pool.ConnectedClients()
@@ -167,9 +168,13 @@ func (m tuiModel) Init() tea.Cmd {
 func quickPing(client *api.Client) error {
 	// Try unauthenticated health endpoint with a short timeout.
 	hc := &http.Client{Timeout: 3 * time.Second}
-	resp, err := hc.Get(client.BaseURL() + "/health")
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL()+"/health", http.NoBody)
+	if err != nil {
+		return client.Ping()
+	}
+	resp, err := hc.Do(req)
 	if err == nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode < 500 {
 			return nil
 		}
@@ -178,7 +183,7 @@ func quickPing(client *api.Client) error {
 	return client.Ping()
 }
 
-func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:gocritic // tea.Model interface requires value receiver
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
@@ -200,7 +205,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Always forward async data messages to the right page,
 	// regardless of which page is active or whether help is showing.
-	switch msg.(type) {
+	switch typedMsg := msg.(type) {
 	case pages.TerminalOutputMsg, pages.TerminalConnectedMsg, pages.TerminalDisconnectedMsg,
 		pages.TerminalSessionsLoadedMsg, pages.TerminalSpawnedMsg:
 		m.terminal, cmd = m.terminal.Update(msg)
@@ -258,7 +263,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case pages.SessionSelectedMsg:
-		return m.handleSessionSelected(msg.(pages.SessionSelectedMsg))
+		return m.handleSessionSelected(typedMsg)
 	}
 
 	// Always forward AllSessionsLoadedMsg to the sessions page.
@@ -426,7 +431,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleSessionSelected wires up all pages when a session is selected.
-func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model, tea.Cmd) {
+func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model, tea.Cmd) { //nolint:gocritic // called from Update which requires value receiver
 	sess := msg.Session
 	m.activeSession = &sess
 
@@ -461,7 +466,7 @@ func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model
 
 // isInputCaptured returns true when the active page has a text input that
 // should suppress global keybindings (q, ?, [, 1-7).
-func (m tuiModel) isInputCaptured() bool {
+func (m tuiModel) isInputCaptured() bool { //nolint:gocritic // called from Update which requires value receiver
 	switch m.app.ActivePage {
 	case tuipkg.PageTerminal:
 		return m.terminal.InsertMode()
@@ -471,11 +476,13 @@ func (m tuiModel) isInputCaptured() bool {
 		return m.sessions.Searching()
 	case tuipkg.PageSettings:
 		return m.settings.Editing()
+	case tuipkg.PageDiffs, tuipkg.PageChronicles, tuipkg.PageAdmin:
+		return false
 	}
 	return false
 }
 
-func (m tuiModel) View() tea.View {
+func (m tuiModel) View() tea.View { //nolint:gocritic // tea.Model interface requires value receiver
 	v := tea.View{AltScreen: true}
 
 	if !m.app.Ready {
@@ -539,16 +546,15 @@ var debugTUI = os.Getenv("VOLUNDR_TUI_DEBUG") == "1"
 
 func debugLogMsg(msg tea.Msg) {
 	// Skip high-frequency noise.
-	switch msg.(type) {
-	case tea.WindowSizeMsg:
+	if _, ok := msg.(tea.WindowSizeMsg); ok {
 		return
 	}
 
-	f, err := os.OpenFile("/tmp/volundr-tui-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("/tmp/volundr-tui-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // debug log in /tmp, not sensitive
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts := time.Now().Format("15:04:05.000")
 	_, _ = fmt.Fprintf(f, "%s [%T] %+v\n", ts, msg, msg)

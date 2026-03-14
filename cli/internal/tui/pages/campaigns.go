@@ -51,8 +51,7 @@ func (c CampaignsPage) Init() tea.Cmd {
 
 // Update handles messages for the campaigns page.
 func (c CampaignsPage) Update(msg tea.Msg) (CampaignsPage, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if c.cursor > 0 {
@@ -100,7 +99,7 @@ func (c CampaignsPage) View() string {
 
 	var content string
 	if c.expanded && len(c.campaigns) > 0 {
-		content = c.renderDetail(c.campaigns[c.cursor])
+		content = c.renderDetail(&c.campaigns[c.cursor])
 	} else {
 		content = c.renderList()
 	}
@@ -164,7 +163,7 @@ func (c CampaignsPage) renderList() string {
 }
 
 // renderDetail renders the expanded detail view for a campaign.
-func (c CampaignsPage) renderDetail(camp Campaign) string {
+func (c CampaignsPage) renderDetail(camp *Campaign) string {
 	theme := tui.DefaultTheme
 
 	nameStyle := lipgloss.NewStyle().Foreground(theme.AccentCyan).Bold(true)
@@ -172,21 +171,23 @@ func (c CampaignsPage) renderDetail(camp Campaign) string {
 	labelStyle := lipgloss.NewStyle().Foreground(theme.TextMuted).Width(12)
 	valueStyle := lipgloss.NewStyle().Foreground(theme.TextPrimary)
 
-	var lines []string
-	lines = append(lines, nameStyle.Render(camp.Name))
-	lines = append(lines, descStyle.Render(camp.Description))
-	lines = append(lines, "")
-	lines = append(lines, fmt.Sprintf("  %s %s",
-		labelStyle.Render("Status:"),
-		components.NewStatusBadge(camp.Status).View()))
-	lines = append(lines, fmt.Sprintf("  %s %s",
-		labelStyle.Render("Progress:"),
-		valueStyle.Render(fmt.Sprintf("%d%%", camp.Progress))))
-	lines = append(lines, fmt.Sprintf("  %s %s",
-		labelStyle.Render("Sessions:"),
-		valueStyle.Render(fmt.Sprintf("%d", camp.Sessions))))
-	lines = append(lines, "")
-	lines = append(lines, lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true).Render("  Phases:"))
+	lines := make([]string, 0, 8+len(camp.Phases))
+	lines = append(lines,
+		nameStyle.Render(camp.Name),
+		descStyle.Render(camp.Description),
+		"",
+		fmt.Sprintf("  %s %s",
+			labelStyle.Render("Status:"),
+			components.NewStatusBadge(camp.Status).View()),
+		fmt.Sprintf("  %s %s",
+			labelStyle.Render("Progress:"),
+			valueStyle.Render(fmt.Sprintf("%d%%", camp.Progress))),
+		fmt.Sprintf("  %s %s",
+			labelStyle.Render("Sessions:"),
+			valueStyle.Render(fmt.Sprintf("%d", camp.Sessions))),
+		"",
+		lipgloss.NewStyle().Foreground(theme.TextPrimary).Bold(true).Render("  Phases:"),
+	)
 
 	for _, phase := range camp.Phases {
 		phaseBadge := components.NewStatusBadge(phase.Status)
