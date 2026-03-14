@@ -380,7 +380,15 @@ class DirectK8sPodManager(PodManager):
             {
                 "name": "init-permissions",
                 "image": "busybox:latest",
-                "command": ["sh", "-c", "chown -R 1000:1000 /volundr"],
+                "command": [
+                    "sh",
+                    "-c",
+                    "chown -R 1000:1000 /volundr 2>/tmp/chown.err; rc=$?; "
+                    "if [ -s /tmp/chown.err ]; then "
+                    "grep -v 'Invalid argument' /tmp/chown.err >&2; "
+                    "if grep -qv 'Invalid argument' /tmp/chown.err; then exit $rc; fi; "
+                    "fi",
+                ],
                 "volumeMounts": [
                     {"name": "workspace", "mountPath": "/volundr"},
                 ],
