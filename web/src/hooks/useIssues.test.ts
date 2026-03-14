@@ -108,4 +108,17 @@ describe('useIssues', () => {
 
     expect(issue).toBeNull();
   });
+
+  it('getIssue returns null on network error', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('network error'));
+
+    const { result } = renderHook(() => useIssues());
+
+    let issue;
+    await act(async () => {
+      issue = await result.current.getIssue('NIU-99');
+    });
+
+    expect(issue).toBeNull();
+  });
 });
