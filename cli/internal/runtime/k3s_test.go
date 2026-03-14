@@ -2407,3 +2407,240 @@ func TestEnsureClusterRunning_K3dClusterNotFound(t *testing.T) {
 		t.Errorf("expected 'not found' error, got: %v", err)
 	}
 }
+
+func TestK3sRuntime_Up_EmbeddedDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a kubeconfig so resolveKubeconfig works.
+	kubeconfigPath := filepath.Join(volundrDir, k3sHostKubeconfigFile)
+	if err := os.WriteFile(kubeconfigPath, []byte("apiVersion: v1\nkind: Config\nclusters:\n- cluster:\n    server: https://127.0.0.1:6443\n  name: k3d-volundr\n"), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+
+	// Mock: cluster list contains "volundr", all commands succeed.
+	withMockExec(t, `MOCK_RESPONSE=volundr`)
+	withMockPostgres(t, &fakePostgres{migrationsN: 2})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0},
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Host:     "localhost",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+			DataDir:  filepath.Join(volundrDir, "data", "pg"),
+		},
+		K3s: config.K3sConfig{
+			Provider: "k3d",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := r.Up(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+
+	// Verify PID file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); err != nil {
+		t.Error("expected PID file to be written")
+	}
+
+	cancel()
+}
+
+func TestK3sRuntime_Up_EmbeddedDB_StartFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockPostgres(t, &fakePostgres{startErr: fmt.Errorf("pg start failed")})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when postgres start fails")
+	}
+	if !strings.Contains(err.Error(), "start embedded postgres") {
+		t.Errorf("expected 'start embedded postgres' error, got: %v", err)
+	}
+}
+
+func TestK3sRuntime_Up_EmbeddedDB_MigrationFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Create a migrations dir so findMigrationsDir finds it.
+	migDir := filepath.Join(tmpDir, "migrations")
+	if err := os.MkdirAll(migDir, 0o700); err != nil {
+		t.Fatalf("create migrations dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	withMockExec(t)
+	withMockPostgres(t, &fakePostgres{migrationsErr: fmt.Errorf("migration failed")})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when migrations fail")
+	}
+	if !strings.Contains(err.Error(), "run migrations") {
+		t.Errorf("expected 'run migrations' error, got: %v", err)
+	}
+}
+
+func TestK3sRuntime_Init_EmbeddedDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockExec(t)
+	withMockPostgres(t, &fakePostgres{})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+		K3s: config.K3sConfig{
+			Provider: "k3d",
+		},
+	}
+
+	err := r.Init(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+}
+
+func TestK3sRuntime_Init_EmbeddedDB_StartFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockExec(t)
+	withMockPostgres(t, &fakePostgres{startErr: fmt.Errorf("pg start failed")})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+		K3s: config.K3sConfig{
+			Provider: "k3d",
+		},
+	}
+
+	err := r.Init(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when postgres start fails")
+	}
+	if !strings.Contains(err.Error(), "test embedded postgres") {
+		t.Errorf("expected 'test embedded postgres' error, got: %v", err)
+	}
+}
+
+func TestK3sRuntime_Init_EmbeddedDB_StopFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockExec(t)
+	withMockPostgres(t, &fakePostgres{stopErr: fmt.Errorf("stop failed")})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+		K3s: config.K3sConfig{
+			Provider: "k3d",
+		},
+	}
+
+	err := r.Init(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when postgres stop fails")
+	}
+	if !strings.Contains(err.Error(), "stop test postgres") {
+		t.Errorf("expected 'stop test postgres' error, got: %v", err)
+	}
+}
+
+func TestK3sRuntime_Down_WithPostgres(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	r.pg = &fakePostgres{}
+
+	err := r.Down(context.Background())
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+}
+
+func TestK3sRuntime_Down_WithPostgresStopFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	r.pg = &fakePostgres{stopErr: fmt.Errorf("stop failed")}
+
+	err := r.Down(context.Background())
+	if err == nil {
+		t.Fatal("expected error when postgres stop fails")
+	}
+	if !strings.Contains(err.Error(), "stop postgres") {
+		t.Errorf("expected 'stop postgres' error, got: %v", err)
+	}
+}
