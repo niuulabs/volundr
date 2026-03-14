@@ -75,6 +75,14 @@ class TestConstructor:
         assert pod_manager._db_port == 5433
         assert pod_manager._db_password == "testpass"
 
+    def test_custom_home_mount_path(self) -> None:
+        pm = DirectK8sPodManager(home_mount_path="/custom/home")
+        assert pm._home_mount_path == "/custom/home"
+
+    def test_default_home_mount_path(self) -> None:
+        pm = DirectK8sPodManager()
+        assert pm._home_mount_path == "/volundr/home"
+
     def test_extra_kwargs_ignored(self) -> None:
         pm = DirectK8sPodManager(
             namespace="test",
@@ -230,6 +238,13 @@ class TestManifests:
         env_dict = {e["name"]: e["value"] for e in skuld["env"] if "value" in e}
         assert env_dict["SESSION_ID"] == str(sample_session.id)
         assert env_dict["DATABASE__HOST"] == "host.k3d.internal"
+        assert env_dict["HOME"] == "/volundr/home"
+
+        # Check HOME is set on all workload containers.
+        for name in ("code-server", "devrunner"):
+            container = next(c for c in containers if c["name"] == name)
+            cenv = {e["name"]: e["value"] for e in container["env"] if "value" in e}
+            assert cenv["HOME"] == "/volundr/home"
 
     def test_build_service_manifest(
         self,

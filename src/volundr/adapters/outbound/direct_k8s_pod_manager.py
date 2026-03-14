@@ -523,7 +523,8 @@ fi
                     "name": "skuld",
                     "image": self._skuld_image,
                     "ports": [{"containerPort": 8081, "name": "broker"}],
-                    "env": env_vars + [
+                    "env": env_vars
+                    + [
                         {"name": "HOME", "value": self._home_mount_path},
                     ],
                     "securityContext": {
