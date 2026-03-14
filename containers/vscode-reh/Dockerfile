@@ -7,9 +7,19 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
-    jq \
+    grep \
     && rm -rf /var/lib/apt/lists/*
+
+# Detect architecture: map Docker TARGETARCH to VS Code REH arch names
+ARG TARGETARCH
+RUN echo "Building for TARGETARCH=${TARGETARCH}" && \
+    case "${TARGETARCH}" in \
+      amd64) echo "linux-x64" > /tmp/reh-arch ;; \
+      arm64) echo "linux-arm64" > /tmp/reh-arch ;; \
+      *)     echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac
 
 WORKDIR /build
 
@@ -20,7 +30,8 @@ RUN npm ci --ignore-scripts
 
 # Download the REH binary matching the npm package commit
 COPY containers/skuld/download-reh.sh ./download-reh.sh
-RUN chmod +x ./download-reh.sh && ./download-reh.sh /opt/vscode-reh
+RUN chmod +x ./download-reh.sh && \
+    ARCH=$(cat /tmp/reh-arch) ./download-reh.sh /opt/vscode-reh
 
 # ---------------------------------------------------------------------------
 # Runtime — minimal image with just the REH binary
