@@ -158,3 +158,34 @@ class TestEventIngestionService:
             await service.ingest(_make_event(sequence=i))
 
         assert len(sink._events) == 5
+
+    async def test_flush_all_continues_on_failure(self):
+        """A failing flush should not prevent other sinks from flushing."""
+
+        class FailingFlushSink(FakeEventSink):
+            async def flush(self) -> None:
+                raise RuntimeError("flush exploded")
+
+        failing = FailingFlushSink(name="failing")
+        good = FakeEventSink(name="good")
+        service = EventIngestionService(sinks=[failing, good])
+
+        await service.flush_all()
+
+        assert good._flushed
+
+    async def test_close_all_continues_on_failure(self):
+        """A failing close should not prevent other sinks from closing."""
+
+        class FailingCloseSink(FakeEventSink):
+            async def close(self) -> None:
+                raise RuntimeError("close exploded")
+
+        failing = FailingCloseSink(name="failing")
+        good = FakeEventSink(name="good")
+        service = EventIngestionService(sinks=[failing, good])
+
+        await service.close_all()
+
+        assert good._flushed
+        assert good._closed

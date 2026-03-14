@@ -93,7 +93,7 @@ class TestReportTokenUsageEndpoint:
         """Test successful token usage report."""
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(session_repository.create(running_session))
+        asyncio.run(session_repository.create(running_session))
 
         response = client.post(
             f"/api/v1/volundr/sessions/{running_session.id}/usage",
@@ -120,7 +120,7 @@ class TestReportTokenUsageEndpoint:
         """Test reporting usage with local provider."""
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(session_repository.create(running_session))
+        asyncio.run(session_repository.create(running_session))
 
         response = client.post(
             f"/api/v1/volundr/sessions/{running_session.id}/usage",
@@ -167,7 +167,7 @@ class TestReportTokenUsageEndpoint:
             source=GitSource(repo="https://github.com/test/repo", branch="main"),
             status=SessionStatus.STOPPED,
         )
-        asyncio.get_event_loop().run_until_complete(session_repository.create(stopped_session))
+        asyncio.run(session_repository.create(stopped_session))
 
         response = client.post(
             f"/api/v1/volundr/sessions/{stopped_session.id}/usage",
@@ -189,7 +189,7 @@ class TestReportTokenUsageEndpoint:
         """Test reporting usage with invalid provider."""
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(session_repository.create(running_session))
+        asyncio.run(session_repository.create(running_session))
 
         response = client.post(
             f"/api/v1/volundr/sessions/{running_session.id}/usage",
@@ -211,7 +211,7 @@ class TestReportTokenUsageEndpoint:
         """Test reporting usage with zero tokens fails validation."""
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(session_repository.create(running_session))
+        asyncio.run(session_repository.create(running_session))
 
         response = client.post(
             f"/api/v1/volundr/sessions/{running_session.id}/usage",
@@ -233,7 +233,7 @@ class TestReportTokenUsageEndpoint:
         """Test reporting usage with negative tokens fails validation."""
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(session_repository.create(running_session))
+        asyncio.run(session_repository.create(running_session))
 
         response = client.post(
             f"/api/v1/volundr/sessions/{running_session.id}/usage",
@@ -273,7 +273,7 @@ class TestReportUsageWithPricing:
             source=GitSource(repo="https://github.com/test/repo", branch="main"),
             status=SessionStatus.RUNNING,
         )
-        asyncio.get_event_loop().run_until_complete(session_repository.create(running_session))
+        asyncio.run(session_repository.create(running_session))
 
         response = client.post(
             f"/api/v1/volundr/sessions/{running_session.id}/usage",

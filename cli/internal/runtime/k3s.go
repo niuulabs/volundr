@@ -979,6 +979,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 				"storage_path":      k3sNodeStoragePath,
 				"skuld_image":       cfg.Docker.SkuldImage,
 				"code_server_image": cfg.Docker.CodeServerImage,
+				"reh_image":         cfg.Docker.RehImage,
 				"devrunner_image":   cfg.Docker.TtydImage,
 				"db_host":           "host.k3d.internal",
 				"db_port":           cfg.Database.Port,

@@ -2,16 +2,9 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { Code, RotateCcw } from 'lucide-react';
 import { cn } from '@/utils';
 import { getAccessToken } from '@/adapters/api/client';
-import {
-  createBearerWebSocketFactory,
-  VSCODE_REH_PROTOCOL,
-} from '@/utils/bearerWebSocketFactory';
+import { createBearerWebSocketFactory, VSCODE_REH_PROTOCOL } from '@/utils/bearerWebSocketFactory';
 import { ApiEditorAdapter } from '@/adapters/api/editor.adapter';
-import {
-  isInitialized,
-  getInitializedSessionId,
-  markInitialized,
-} from './editorState';
+import { isInitialized, getInitializedSessionId, markInitialized } from './editorState';
 import styles from './EditorPanel.module.css';
 
 export interface EditorPanelProps {
@@ -34,9 +27,27 @@ const editorService = new ApiEditorAdapter();
  * VS Code REH server in the session pod. All WebSocket connections
  * use subprotocol bearer auth via the custom WebSocket factory.
  *
- * CONSTRAINT: `initialize()` can only be called once per page load.
- * If the session changes after initialization, the user must reload
- * the page. This is a fundamental VS Code architecture limitation.
+ * ## Session switching constraint
+ *
+ * VS Code's `initialize()` registers global services (file system,
+ * extension host, terminal mux) that cannot be torn down or
+ * re-created. Calling it a second time throws. This is upstream VS
+ * Code architecture, not a limitation of @codingame/monaco-vscode-api.
+ *
+ * Two strategies exist for handling session switches:
+ *
+ * 1. **Page reload** (current implementation) — detect that the
+ *    `sessionId` changed after init and prompt the user to reload.
+ *    Simple, no extra iframes, works today.
+ *
+ * 2. **iframe isolation** — render the workbench inside an iframe so
+ *    each session gets its own JS context. CodinGame documents this
+ *    as a supported pattern. Adds complexity (postMessage bridge for
+ *    auth tokens, theme sync) but avoids a full page reload.
+ *
+ * We use strategy 1 for the spike. Strategy 2 can be adopted in a
+ * follow-up ticket if seamless session switching becomes a
+ * requirement.
  */
 export function EditorPanel({ hostname, sessionId, className }: EditorPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -161,20 +172,14 @@ export function EditorPanel({ hostname, sessionId, className }: EditorPanelProps
         <div className={styles.emptyState}>
           <Code className={styles.emptyIcon} />
           <p>Failed to initialize editor</p>
-          {errorMessage && (
-            <p>{errorMessage}</p>
-          )}
+          {errorMessage && <p>{errorMessage}</p>}
         </div>
       </div>
     );
   }
 
   const statusLabel =
-    status === 'initializing'
-      ? 'Connecting...'
-      : status === 'connected'
-        ? 'Connected'
-        : 'Idle';
+    status === 'initializing' ? 'Connecting...' : status === 'connected' ? 'Connected' : 'Idle';
 
   const statusDotClass =
     status === 'initializing'

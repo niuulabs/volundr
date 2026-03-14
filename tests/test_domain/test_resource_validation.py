@@ -1,6 +1,5 @@
 """Tests for resource validation edge cases."""
 
-
 from volundr.adapters.outbound.k8s_resource_provider import K8sResourceProvider
 from volundr.adapters.outbound.static_resource_provider import validate_resource_config
 from volundr.domain.models import (
@@ -49,9 +48,7 @@ class TestValidationEdgeCases:
 class TestK8sResourceProviderValidation:
     """Cluster-aware validation via K8sResourceProvider."""
 
-    def _make_cluster_info(
-        self, gpu_count: int = 0, gpu_product: str = ""
-    ) -> ClusterResourceInfo:
+    def _make_cluster_info(self, gpu_count: int = 0, gpu_product: str = "") -> ClusterResourceInfo:
         labels = {}
         allocatable = {}
         if gpu_count > 0:

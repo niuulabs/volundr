@@ -478,6 +478,7 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 				"network":           dockerImageOrDefault(cfg.Docker.Network, "volundr-net"),
 				"skuld_image":       dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuulabs/skuld:latest"),
 				"code_server_image": dockerImageOrDefault(cfg.Docker.CodeServerImage, "ghcr.io/niuulabs/code-server:latest"),
+				"reh_image":         dockerImageOrDefault(cfg.Docker.RehImage, "ghcr.io/niuulabs/vscode-reh:latest"),
 				"ttyd_image":        dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuulabs/ttyd:latest"),
 				"compose_dir":       containerStoragePath + "/sessions",
 				"gateway_domain":    "",

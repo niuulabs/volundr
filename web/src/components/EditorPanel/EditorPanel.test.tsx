@@ -71,15 +71,13 @@ describe('EditorPanel', () => {
   });
 
   it('calls initialize with correct service overrides', async () => {
-    render(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
+    render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
       expect(mockInitialize).toHaveBeenCalledTimes(1);
     });
 
-    const [services, _container, config] = mockInitialize.mock.calls[0];
+    const [services, , config] = mockInitialize.mock.calls[0];
 
     expect(services).toEqual(
       expect.objectContaining({
@@ -95,9 +93,7 @@ describe('EditorPanel', () => {
   });
 
   it('shows status bar with Connected after successful init', async () => {
-    render(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
+    render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
       expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -109,9 +105,7 @@ describe('EditorPanel', () => {
   it('shows error state when initialize fails', async () => {
     mockInitialize.mockRejectedValueOnce(new Error('Failed to load workbench'));
 
-    render(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
+    render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
       expect(screen.getByText('Failed to initialize editor')).toBeInTheDocument();
@@ -121,9 +115,7 @@ describe('EditorPanel', () => {
   });
 
   it('shows session-changed state when sessionId differs from initialized session', async () => {
-    const { unmount } = render(
-      <EditorPanel hostname="pod-1.example.com" sessionId="session-1" />
-    );
+    const { unmount } = render(<EditorPanel hostname="pod-1.example.com" sessionId="session-1" />);
 
     await waitFor(() => {
       expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -131,9 +123,7 @@ describe('EditorPanel', () => {
 
     unmount();
 
-    render(
-      <EditorPanel hostname="pod-2.example.com" sessionId="session-2" />
-    );
+    render(<EditorPanel hostname="pod-2.example.com" sessionId="session-2" />);
 
     await waitFor(() => {
       expect(
@@ -145,17 +135,13 @@ describe('EditorPanel', () => {
   });
 
   it('does not re-initialize when same session re-renders', async () => {
-    const { rerender } = render(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
+    const { rerender } = render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
       expect(mockInitialize).toHaveBeenCalledTimes(1);
     });
 
-    rerender(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
+    rerender(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
       expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -193,9 +179,7 @@ describe('EditorPanel', () => {
     }
     vi.stubGlobal('WebSocket', MockWebSocket);
 
-    render(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
+    render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
       expect(mockInitialize).toHaveBeenCalledTimes(1);
@@ -216,9 +200,7 @@ describe('EditorPanel', () => {
   it('handles non-Error thrown from initialize', async () => {
     mockInitialize.mockRejectedValueOnce('string error');
 
-    render(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
+    render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
       expect(screen.getByText('Failed to initialize editor')).toBeInTheDocument();

@@ -38,7 +38,7 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
       - uses: actions/checkout@v4
 
@@ -78,7 +78,7 @@ jobs:
       id-token: write
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -126,7 +126,7 @@ jobs:
       packages: read
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
       - uses: actions/checkout@v4
 

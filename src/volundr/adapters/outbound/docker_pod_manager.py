@@ -59,6 +59,7 @@ class DockerPodManager(PodManager):
         network: str = "volundr-net",
         skuld_image: str = "ghcr.io/niuulabs/skuld:latest",
         code_server_image: str = "ghcr.io/niuulabs/code-server:latest",
+        reh_image: str = "ghcr.io/niuulabs/vscode-reh:latest",
         ttyd_image: str = "ghcr.io/niuulabs/ttyd:latest",
         compose_dir: str = "~/.volundr/sessions",
         gateway_domain: str | None = None,
@@ -73,6 +74,7 @@ class DockerPodManager(PodManager):
         self._network = network
         self._skuld_image = skuld_image
         self._code_server_image = code_server_image
+        self._reh_image = reh_image
         self._ttyd_image = ttyd_image
         self._compose_dir = Path(compose_dir).expanduser()
         self._gateway_domain = gateway_domain
@@ -195,6 +197,11 @@ class DockerPodManager(PodManager):
                 },
                 "code-server": {
                     "image": self._code_server_image,
+                    "networks": [self._network],
+                    "volumes": volumes,
+                },
+                "vscode-reh": {
+                    "image": self._reh_image,
                     "networks": [self._network],
                     "volumes": volumes,
                 },

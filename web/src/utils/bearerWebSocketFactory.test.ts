@@ -90,9 +90,7 @@ describe('bearerWebSocketFactory', () => {
 
       expect(protocols).toHaveLength(2);
       expect(protocols[0]).toBe(VSCODE_REH_PROTOCOL);
-      expect(protocols[1]).toMatch(
-        new RegExp(`^${BEARER_PROTOCOL_PREFIX}\\.`)
-      );
+      expect(protocols[1]).toMatch(new RegExp(`^${BEARER_PROTOCOL_PREFIX}\\.`));
     });
 
     it('should base64url-encode the token in the bearer protocol', () => {
