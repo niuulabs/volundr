@@ -60,6 +60,16 @@ class TestTranslateResourceConfig:
         assert result.limits == {"nvidia.com/gpu": "2"}
         assert result.node_selector == {"nvidia.com/gpu.product": "A100"}
 
+    def test_bare_memory_number_gets_gi_suffix(self):
+        result = translate_resource_config({"memory": "4"})
+        assert result.requests == {"memory": "4Gi"}
+        assert result.limits == {"memory": "4Gi"}
+
+    def test_bare_memory_integer_gets_gi_suffix(self):
+        result = translate_resource_config({"memory": 8})
+        assert result.requests == {"memory": "8Gi"}
+        assert result.limits == {"memory": "8Gi"}
+
     def test_full_config(self):
         result = translate_resource_config(
             {
@@ -102,9 +112,16 @@ class TestValidateResourceConfig:
         assert len(errors) == 1
         assert "memory" in errors[0]
 
-    def test_valid_memory_numeric(self):
+    def test_bare_memory_numeric_warns(self):
         errors = validate_resource_config({"memory": "1073741824"})
-        assert errors == []
+        assert len(errors) == 1
+        assert "no unit suffix" in errors[0]
+        assert "1073741824Gi" in errors[0]
+
+    def test_bare_memory_small_number_warns(self):
+        errors = validate_resource_config({"memory": "4"})
+        assert len(errors) == 1
+        assert "no unit suffix" in errors[0]
 
     def test_invalid_gpu(self):
         errors = validate_resource_config({"gpu": "1.5"})
