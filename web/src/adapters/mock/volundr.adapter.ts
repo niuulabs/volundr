@@ -30,6 +30,8 @@ import type {
   WorkspaceStatus,
   VolundrMember,
   VolundrProvisioningResult,
+  AdminSettings,
+  AdminStorageSettings,
 } from '@/models';
 import { isSessionActive } from '@/models';
 import {
@@ -1135,6 +1137,14 @@ export class MockVolundrService implements IVolundrService {
     if (ws) {
       ws.status = 'deleted';
     }
+  }
+
+  async getAdminSettings(): Promise<AdminSettings> {
+    return { storage: { homeEnabled: true } };
+  }
+
+  async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
+    return { storage: { homeEnabled: data.storage?.homeEnabled ?? true } };
   }
 
   private notifySubscribers(): void {
