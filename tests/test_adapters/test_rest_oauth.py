@@ -146,6 +146,57 @@ class TestCallback:
         assert resp.status_code == 400
         assert "Invalid or expired" in resp.json()["detail"]
 
+    def test_successful_callback_stores_credential_and_connection(self):
+        from unittest.mock import patch as _patch
+
+        defn = _make_definition(slug="linear")
+        clients = {
+            "linear": OAuthClientConfig(
+                client_id="cid", client_secret="csec",
+            ),
+        }
+        app, credential_store, integration_repo = _make_app(
+            definitions=[defn], clients=clients,
+        )
+        client = TestClient(app, raise_server_exceptions=False)
+
+        # Step 1: call authorize to create pending state
+        auth_resp = client.get(
+            f"{PREFIX}/linear/authorize", headers=AUTH,
+        )
+        assert auth_resp.status_code == 200
+        url = auth_resp.json()["url"]
+
+        # Extract state from the URL
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(url)
+        state = parse_qs(parsed.query)["state"][0]
+
+        # Step 2: mock the token exchange and call callback
+        mock_exchange = AsyncMock(
+            return_value={"api_key": "oauth-tok-123"},
+        )
+        with _patch.object(
+            __import__(
+                "volundr.adapters.outbound.oauth2_provider",
+                fromlist=["OAuth2Provider"],
+            ).OAuth2Provider,
+            "exchange_code",
+            mock_exchange,
+        ):
+            cb_resp = client.get(
+                f"{PREFIX}/callback?code=auth-code&state={state}",
+            )
+
+        assert cb_resp.status_code == 200
+        assert "Connected to Linear" in cb_resp.text
+        credential_store.store.assert_called_once()
+        store_kwargs = credential_store.store.call_args
+        assert store_kwargs[1]["name"] == "linear-oauth-token"
+        assert store_kwargs[1]["data"] == {"api_key": "oauth-tok-123"}
+        integration_repo.save_connection.assert_called_once()
+
 
 class TestDisconnect:
     def test_404_for_missing_connection(self):
