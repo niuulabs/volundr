@@ -697,6 +697,17 @@ authDiscovery:
   # -- OIDC scopes
   scopes: "openid profile email"
 
+# OAuth integration configuration
+oauth:
+  # -- Base URL for OAuth redirect callbacks (e.g. https://volundr.example.com)
+  redirectBaseUrl: ""
+  # -- Per-integration OAuth client credentials
+  # clients:
+  #   linear:
+  #     clientId: ""
+  #     clientSecret: ""
+  clients: {}
+
 # Application configuration
 config:
   # -- Log level (debug, info, warning, error)

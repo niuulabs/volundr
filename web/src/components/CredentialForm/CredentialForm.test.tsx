@@ -16,6 +16,8 @@ const mockEntry: CatalogEntry = {
   },
   config_schema: {},
   mcp_server: null,
+  auth_type: 'api_key',
+  oauth_scopes: [],
 };
 
 const mockEntryWithConfig: CatalogEntry = {
@@ -36,6 +38,8 @@ const mockEntryWithConfig: CatalogEntry = {
     properties: { url: { type: 'string' } },
   },
   mcp_server: null,
+  auth_type: 'api_key',
+  oauth_scopes: [],
 };
 
 describe('CredentialForm', () => {

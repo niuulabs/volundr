@@ -16,7 +16,7 @@ from volundr.domain.models import (
     IntegrationType,
     Principal,
 )
-from volundr.domain.ports import IntegrationRepository
+from volundr.domain.ports import CredentialStorePort, IntegrationRepository
 from volundr.domain.services.integration_registry import IntegrationRegistry
 from volundr.domain.services.tracker_factory import TrackerFactory
 
@@ -170,6 +170,16 @@ class CatalogEntryResponse(BaseModel):
         default=None,
         description="MCP server spec if this integration provides one",
     )
+    auth_type: str = Field(
+        default="api_key",
+        description="Authentication type (api_key, oauth2_authorization_code)",
+        examples=["api_key"],
+    )
+    oauth_scopes: list[str] = Field(
+        default_factory=list,
+        description="OAuth scopes if auth_type is OAuth",
+        examples=[["read", "write"]],
+    )
 
     @classmethod
     def from_definition(
@@ -185,6 +195,9 @@ class CatalogEntryResponse(BaseModel):
                 args=list(defn.mcp_server.args),
                 env_from_credentials=dict(defn.mcp_server.env_from_credentials),
             )
+        oauth_scopes: list[str] = []
+        if defn.oauth is not None:
+            oauth_scopes = list(defn.oauth.scopes)
         return cls(
             slug=defn.slug,
             name=defn.name,
@@ -195,6 +208,8 @@ class CatalogEntryResponse(BaseModel):
             credential_schema=defn.credential_schema,
             config_schema=defn.config_schema,
             mcp_server=mcp,
+            auth_type=defn.auth_type,
+            oauth_scopes=oauth_scopes,
         )
 
 
@@ -227,6 +242,7 @@ def create_integrations_router(
     integration_repo: IntegrationRepository,
     tracker_factory: TrackerFactory,
     registry: IntegrationRegistry | None = None,
+    credential_store: CredentialStorePort | None = None,
 ) -> APIRouter:
     """Create FastAPI router for integration management endpoints."""
     router = APIRouter(
@@ -320,6 +336,7 @@ def create_integrations_router(
             enabled=data.enabled if data.enabled is not None else existing.enabled,
             created_at=existing.created_at,
             updated_at=now,
+            slug=existing.slug,
         )
         saved = await integration_repo.save_connection(updated)
         return IntegrationResponse.from_connection(saved)
@@ -358,13 +375,46 @@ def create_integrations_router(
             )
 
         try:
-            adapter = await tracker_factory.create(existing)
-            conn_status = await adapter.check_connection()
+            if existing.integration_type == IntegrationType.ISSUE_TRACKER:
+                adapter = await tracker_factory.create(existing)
+                conn_status = await adapter.check_connection()
+                return IntegrationTestResult(
+                    success=conn_status.connected,
+                    provider=conn_status.provider,
+                    workspace=conn_status.workspace,
+                    user=conn_status.user,
+                )
+
+            if existing.integration_type in (
+                IntegrationType.SOURCE_CONTROL,
+                IntegrationType.AI_PROVIDER,
+            ):
+                if credential_store is None:
+                    return IntegrationTestResult(
+                        success=False,
+                        provider=existing.adapter.rsplit(".", 1)[-1],
+                        error="Credential store not configured",
+                    )
+                cred_value = await credential_store.get_value(
+                    "user",
+                    principal.user_id,
+                    existing.credential_name,
+                )
+                if cred_value is None:
+                    return IntegrationTestResult(
+                        success=False,
+                        provider=existing.adapter.rsplit(".", 1)[-1],
+                        error="Credential not found",
+                    )
+                return IntegrationTestResult(
+                    success=True,
+                    provider=existing.adapter.rsplit(".", 1)[-1],
+                )
+
             return IntegrationTestResult(
-                success=conn_status.connected,
-                provider=conn_status.provider,
-                workspace=conn_status.workspace,
-                user=conn_status.user,
+                success=False,
+                provider=existing.adapter.rsplit(".", 1)[-1],
+                error=f"Test not supported for integration type: {existing.integration_type}",
             )
         except Exception as exc:
             logger.exception("Integration test failed for %s", connection_id)

@@ -29,6 +29,8 @@ const mockCatalog: CatalogEntry[] = [
       args: ['-y', '@anthropic-ai/linear-mcp-server'],
       env_from_credentials: { LINEAR_API_KEY: 'api_key' },
     },
+    auth_type: 'api_key',
+    oauth_scopes: [],
   },
   {
     slug: 'github',
@@ -40,6 +42,8 @@ const mockCatalog: CatalogEntry[] = [
     credential_schema: { required: ['token'], properties: { token: { type: 'string' } } },
     config_schema: {},
     mcp_server: null,
+    auth_type: 'api_key',
+    oauth_scopes: [],
   },
 ];
 

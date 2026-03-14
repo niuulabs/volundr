@@ -43,6 +43,8 @@ export interface CatalogEntry {
     properties?: Record<string, { type: string }>;
   };
   mcp_server: MCPServerSpec | null;
+  auth_type: string;
+  oauth_scopes: string[];
 }
 
 export interface TrackerProviderOption {

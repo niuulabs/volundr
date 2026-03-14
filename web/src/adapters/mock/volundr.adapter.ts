@@ -884,6 +884,8 @@ export class MockVolundrService implements IVolundrService {
         args: ['-y', '@anthropic-ai/linear-mcp-server'],
         env_from_credentials: { LINEAR_API_KEY: 'api_key' },
       },
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
     {
       slug: 'github',
@@ -903,6 +905,8 @@ export class MockVolundrService implements IVolundrService {
         args: ['-y', '@modelcontextprotocol/server-github'],
         env_from_credentials: { GITHUB_PERSONAL_ACCESS_TOKEN: 'personal_access_token' },
       },
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
     {
       slug: 'telegram',
@@ -917,6 +921,8 @@ export class MockVolundrService implements IVolundrService {
       },
       config_schema: {},
       mcp_server: null,
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
   ];
 

@@ -114,6 +114,8 @@ class SessionService:
         preset_id: UUID | None = None,
         principal: Principal | None = None,
         workspace_id: UUID | None = None,
+        tracker_issue_id: str | None = None,
+        issue_tracker_url: str | None = None,
     ) -> Session:
         """Create a new session.
 
@@ -184,6 +186,8 @@ class SessionService:
             owner_id=principal.user_id if principal else None,
             tenant_id=principal.tenant_id if principal else None,
             workspace_id=workspace_id,
+            tracker_issue_id=tracker_issue_id,
+            issue_tracker_url=issue_tracker_url,
         )
         created = await self._repository.create(session)
 
