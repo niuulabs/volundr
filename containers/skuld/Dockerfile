@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:d1e2e92c075e5ca139d51a140fff46f84315c0fdce203eab2807c7e495eff4f9
 
 LABEL org.opencontainers.image.title="skuld"
 LABEL org.opencontainers.image.description="Skuld — remote AI coding session broker (Claude Code)"
@@ -27,7 +27,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally via npm
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code@2.1.76
 
 # Create app user with UID 1000 (matches helm chart runAsUser)
 RUN existing=$(getent passwd 1000 | cut -d: -f1) && \
@@ -40,7 +40,7 @@ RUN python3.12 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install build dependencies
-RUN pip install --no-cache-dir hatchling
+RUN pip install --no-cache-dir hatchling==1.29.0
 
 # Copy volundr package and install
 COPY pyproject.toml README.md /app/

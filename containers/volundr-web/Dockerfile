@@ -1,5 +1,5 @@
 # Stage 1: Build the Volundr web UI
-FROM node:22-alpine AS build
+FROM node:25-alpine@sha256:5209bcaca9836eb3448b650396213dbe9d9a34d31840c2ae1f206cb2986a8543 AS build
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY web/ .
 RUN npm run build
 
 # Stage 2: Serve with nginx
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0
 
 LABEL org.opencontainers.image.title="volundr-web"
 LABEL org.opencontainers.image.description="Volundr Web — AI-native development platform UI"
