@@ -391,6 +391,45 @@ jobs:
           docker manifest push "${IMAGE}:${PR_TAG}"
 
   # ---------------------------------------------------------------------------
+  # Security — container vulnerability scanning
+  # ---------------------------------------------------------------------------
+  scan-containers:
+    name: "Scan: ${{ matrix.container }}"
+    needs: [changes, merge-container-manifests]
+    if: needs.changes.outputs.has_containers == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+    strategy:
+      matrix:
+        container: ${{ fromJson(needs.changes.outputs.container-names) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan container with Trivy
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}
+          format: sarif
+          output: trivy-${{ matrix.container }}.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.container)) != ''
+        with:
+          sarif_file: trivy-${{ matrix.container }}.sarif
+          category: trivy-${{ matrix.container }}
+
+  # ---------------------------------------------------------------------------
   # Security (always runs)
   # ---------------------------------------------------------------------------
   dependency-review:
