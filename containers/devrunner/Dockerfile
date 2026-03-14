@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:6a27522252aef8432841f224d9baaa6e9fce07b07584154fa0b9a96603af7456
 
 LABEL org.opencontainers.image.title="devrunner"
 LABEL org.opencontainers.image.description="Devrunner — sandboxed development runtime"
@@ -33,10 +33,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally via npm (same method as skuld pod)
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code@2.1.76
 
 # Install OpenAI Codex CLI
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex@0.114.0
 
 # Install PostgreSQL 16
 RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
@@ -49,13 +49,13 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg ma
 
 # Common Python packages for web dev
 RUN pip install --no-cache-dir \
-    uvicorn \
-    fastapi \
-    flask \
-    gunicorn \
-    psycopg2-binary \
-    pyyaml \
-    aiohttp
+    uvicorn==0.41.0 \
+    fastapi==0.135.1 \
+    flask==3.1.3 \
+    gunicorn==25.1.0 \
+    psycopg2-binary==2.9.11 \
+    pyyaml==6.0.3 \
+    aiohttp==3.13.3
 
 # Install Homebrew dependencies (so users can brew install without root)
 RUN apt-get update && apt-get install -y --no-install-recommends \

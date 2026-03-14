@@ -9,7 +9,7 @@ cd "$CLAUDE_PROJECT_DIR"
 # Check if pre-commit is installed
 if ! command -v pre-commit &> /dev/null; then
     echo "Installing pre-commit..."
-    pip install pre-commit --quiet
+    pip install pre-commit==4.5.1 --quiet
 fi
 
 # Check if hooks are installed in the repo
