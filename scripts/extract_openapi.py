@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from importlib.metadata import metadata
 from unittest.mock import MagicMock
 
 from fastapi import FastAPI
@@ -34,10 +35,12 @@ from volundr.adapters.inbound.rest_tracker import create_tracker_router
 
 def build_openapi_app() -> FastAPI:
     """Build a FastAPI app with all routers for OpenAPI extraction."""
+    _meta = metadata("volundr")
+
     app = FastAPI(
-        title="Volundr",
-        description="Self-hosted Claude Code session manager",
-        version="0.1.0",
+        title=_meta["Name"],
+        description=_meta["Summary"],
+        version=_meta["Version"],
         openapi_tags=[
             {
                 "name": "Sessions",

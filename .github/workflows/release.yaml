@@ -290,6 +290,9 @@ jobs:
           cat charts/skuld/Chart.yaml
           cat charts/volundr/Chart.yaml
 
+          # Update pyproject.toml
+          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
       - name: Package Helm charts
         run: |
           helm package charts/skuld -d .helm-packages/

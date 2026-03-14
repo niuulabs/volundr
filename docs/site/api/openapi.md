@@ -4,39 +4,21 @@ hide:
   - toc
 ---
 
-# OpenAPI Specification
+# API Reference
 
 Interactive API documentation generated from the Volundr source code.
 
-<div id="swagger-ui"></div>
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
-<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  SwaggerUIBundle({
-    url: '../openapi.json',
-    dom_id: '#swagger-ui',
-    presets: [SwaggerUIBundle.presets.apis],
-    layout: 'BaseLayout',
-    deepLinking: true,
-    defaultModelsExpandDepth: 1,
-    docExpansion: 'list',
-    filter: true,
-  });
-});
-</script>
+<script
+  id="api-reference"
+  data-url="../openapi.json"
+  data-configuration='{"theme":"dark","layout":"modern","hideDownloadButton":false}'
+></script>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 
 <style>
-  /* Match MkDocs Material dark theme */
-  .swagger-ui { font-family: var(--md-text-font-family, inherit); }
-  .swagger-ui .topbar { display: none; }
-  [data-md-color-scheme="slate"] .swagger-ui {
-    filter: invert(88%) hue-rotate(180deg);
-  }
-  [data-md-color-scheme="slate"] .swagger-ui .model-example {
-    filter: invert(100%) hue-rotate(180deg);
-  }
+  /* Let Scalar fill the content area */
+  .md-content__inner { padding: 0 !important; max-width: 100% !important; }
+  .md-content { max-width: 100% !important; }
 </style>
 
 !!! info "Download"

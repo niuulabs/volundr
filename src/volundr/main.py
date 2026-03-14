@@ -8,6 +8,8 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from importlib.metadata import metadata
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -357,10 +359,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Configure logging from settings
     configure_logging(settings.logging)
 
+    _meta = metadata("volundr")
+
     app = FastAPI(
-        title="Volundr",
-        description="Self-hosted Claude Code session manager",
-        version="0.1.0",
+        title=_meta["Name"],
+        description=_meta["Summary"],
+        version=_meta["Version"],
         openapi_tags=[
             {
                 "name": "Sessions",
