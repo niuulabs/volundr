@@ -17,7 +17,7 @@ Self-hosted remote development platform on Kubernetes or Docker. Manages session
 
 ```
 ┌──────────────────┐     ┌────────────────────┐
-│   Hlidskjalf UI  │────▶│   Volundr API      │
+│   Volundr UI     │────▶│   Volundr API      │
 │   (React/Vite)   │     │   (FastAPI)         │
 └──────────────────┘     └────────┬───────────┘
                                   │
@@ -34,7 +34,7 @@ Self-hosted remote development platform on Kubernetes or Docker. Manages session
 
 - **Volundr API** — session CRUD, workspace provisioning, git integration, secret management, tenant hierarchy, event pipeline. FastAPI on asyncpg (raw SQL, no ORM).
 - **Skuld** — WebSocket broker that connects the UI to AI coding agents inside session pods. Supports SDK and subprocess transport modes.
-- **Hlidskjalf** — React web UI for session management, chronicles, diffs, terminal access, and admin. CSS Modules with design tokens.
+- **Web UI** — React web UI for session management, chronicles, diffs, terminal access, and admin. CSS Modules with design tokens.
 
 Each session launches a pod group on Kubernetes. Chat traffic flows directly from the UI through Skuld — Volundr is not in the data path.
 

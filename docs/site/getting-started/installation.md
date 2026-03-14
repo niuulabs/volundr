@@ -1,31 +1,64 @@
 # Installation
 
+Three ways to install Volundr, from simplest to most production-ready.
+
+---
+
 ## Prerequisites
 
-- Python 3.11+ (3.12 recommended)
-- PostgreSQL 12+
-- Node.js 22+ (for the web UI)
-- Kubernetes 1.24+ and Helm 3.8+ (for deployment)
+Not all prerequisites apply to every method. Check the table for your path.
 
-## Backend
+| Prerequisite | CLI Binary | From Source | Kubernetes |
+|-------------|:---:|:---:|:---:|
+| Python 3.11+ (3.12 recommended) | -- | Yes | -- |
+| PostgreSQL 12+ | Bundled (embedded mode) | Yes | Helm chart handles it |
+| Node.js 22+ | -- | Only for web UI dev | -- |
+| Kubernetes 1.24+ | -- | -- | Yes |
+| Helm 3.8+ | -- | -- | Yes |
+| [uv](https://docs.astral.sh/uv/) package manager | -- | Yes | -- |
 
-Volundr uses [uv](https://docs.astral.sh/uv/) for dependency management.
+---
+
+## Method 1: CLI Binary
+
+The fastest path. Download a pre-built binary, answer a few questions, and you're running.
 
 ```bash
-# Clone the repository
+# Download
+curl -fsSL https://get.volundr.dev | sh
+
+# Initialize (interactive wizard)
+volundr init
+
+# Start everything
+volundr up
+```
+
+`volundr init` walks you through runtime selection, API keys, database mode, and GitHub configuration. `volundr up` starts PostgreSQL (if you chose embedded mode), the API server, and a reverse proxy.
+
+Open [http://localhost:8080](http://localhost:8080).
+
+See the [Quick Start](quick-start.md) for a step-by-step walkthrough.
+
+---
+
+## Method 2: From Source
+
+For developers contributing to Volundr.
+
+### Clone and install
+
+```bash
 git clone https://github.com/niuulabs/volundr.git
 cd volundr
 
-# Install core dependencies
+# Install dependencies
 uv sync --dev
-
-# Or install with all optional extras
-uv sync --all-extras --dev
 ```
 
 ### Optional extras
 
-Install only the extras you need:
+Install only what you need:
 
 ```bash
 uv sync --extra rabbitmq   # RabbitMQ event sink (aio-pika)
@@ -34,19 +67,16 @@ uv sync --extra k8s        # Kubernetes client (kubernetes-asyncio)
 uv sync --extra otel       # OpenTelemetry export (traces + metrics)
 ```
 
-## Web UI
+Or install everything:
 
 ```bash
-cd web
-npm install
+uv sync --all-extras --dev
 ```
 
-## Database
-
-Volundr needs a PostgreSQL database. Tables are auto-created on startup for development.
+### Set up the database
 
 ```bash
-# Create the database
+# Local PostgreSQL
 createdb volundr
 
 # Or via Docker
@@ -58,12 +88,75 @@ docker run -d --name volundr-pg \
   postgres:16
 ```
 
-## Configuration
+Tables are auto-created on startup in development mode.
 
-Copy the example config and edit it:
+### Configure and run
 
 ```bash
 cp config.yaml.example config.yaml
+# Edit config.yaml with your settings
+
+uv run volundr
 ```
 
-See [Configuration](configuration.md) for the full reference.
+### Web UI (optional)
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+---
+
+## Method 3: Kubernetes (Helm)
+
+For production deployments. This is how Volundr is meant to run.
+
+```bash
+helm repo add volundr https://charts.volundr.dev
+helm repo update
+
+helm install volundr volundr/volundr \
+  --namespace volundr --create-namespace \
+  --values your-values.yaml
+```
+
+Minimum `values.yaml`:
+
+```yaml
+anthropic:
+  apiKey: sk-ant-...
+
+github:
+  token: ghp_...
+
+postgresql:
+  auth:
+    password: a-real-password
+```
+
+See the [Helm Deployment Guide](../deployment/helm.md) for the full reference: ingress configuration, resource limits, persistent storage, TLS, and production hardening.
+
+---
+
+## Verifying the installation
+
+Regardless of method, you can verify things are working:
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# API version
+curl http://localhost:8080/api/v1/version
+```
+
+---
+
+## Next steps
+
+- [Quick Start](quick-start.md) -- get running in 5 minutes
+- [First Session](first-session.md) -- create your first AI coding session
+- [Configuration](configuration.md) -- full configuration reference
+- [Helm Deployment](../deployment/helm.md) -- production Kubernetes deployment
