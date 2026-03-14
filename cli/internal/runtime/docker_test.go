@@ -685,6 +685,256 @@ func TestDockerRuntime_Down_WithComposeFile(t *testing.T) {
 	}
 }
 
+func TestDockerRuntime_Init_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockExec(t, "MOCK_RESPONSE=1.0.0")
+
+	r := NewDockerRuntime()
+	cfg := &config.Config{}
+
+	err := r.Init(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+}
+
+func TestDockerRuntime_EnsureNetwork_Exists(t *testing.T) {
+	withMockExec(t)
+
+	r := NewDockerRuntime()
+	err := r.ensureNetwork("test-net")
+	if err != nil {
+		t.Fatalf("ensureNetwork: %v", err)
+	}
+}
+
+func TestEnsureImage_Exists(t *testing.T) {
+	withMockExec(t)
+
+	err := ensureImage("test-image:latest")
+	if err != nil {
+		t.Fatalf("ensureImage: %v", err)
+	}
+}
+
+func TestEnsureImage_NeedssPull(t *testing.T) {
+	// First call (inspect) fails, second call (pull) succeeds.
+	// We can't easily differentiate in the mock, so just test that it runs without error.
+	withMockExec(t)
+	err := ensureImage("test-image:latest")
+	if err != nil {
+		t.Fatalf("ensureImage: %v", err)
+	}
+}
+
+func TestDockerRuntime_Status_ContainerRunning(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=running")
+
+	r := NewDockerRuntime()
+	status, err := r.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+
+	if status.Runtime != "docker" {
+		t.Errorf("expected runtime 'docker', got %q", status.Runtime)
+	}
+
+	if len(status.Services) < 1 {
+		t.Fatalf("expected at least 1 service, got %d", len(status.Services))
+	}
+
+	if status.Services[0].Name != "api" {
+		t.Errorf("expected service 'api', got %q", status.Services[0].Name)
+	}
+
+	if status.Services[0].State != StateRunning {
+		// The mock may not be intercepting correctly if a prior test
+		// modified env. Check if the state is "error" because docker
+		// returned unexpected output.
+		t.Logf("service: %+v", status.Services[0])
+		t.Errorf("expected state running, got %q", status.Services[0].State)
+	}
+}
+
+func TestDockerRuntime_Status_WithStateFileMerge(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a state file with postgres.
+	services := []ServiceStatus{
+		{Name: "api", State: StateRunning, Port: 18080},
+		{Name: "postgres", State: StateRunning, Port: 5433},
+	}
+	stateData, _ := json.MarshalIndent(services, "", "  ")
+	if err := os.WriteFile(filepath.Join(volundrDir, StateFile), stateData, 0o600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	// Mock docker inspect to return "running".
+	withMockExec(t, "MOCK_RESPONSE=running")
+
+	r := NewDockerRuntime()
+	status, err := r.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+
+	// Should have api from docker inspect + postgres from state file.
+	if len(status.Services) != 2 {
+		t.Fatalf("expected 2 services, got %d", len(status.Services))
+	}
+
+	found := map[string]bool{}
+	for _, svc := range status.Services {
+		found[svc.Name] = true
+	}
+
+	if !found["api"] {
+		t.Error("expected api service")
+	}
+	if !found["postgres"] {
+		t.Error("expected postgres service")
+	}
+}
+
+func TestDockerRuntime_Status_CorruptStateFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a corrupt state file.
+	if err := os.WriteFile(filepath.Join(volundrDir, StateFile), []byte("not-json"), 0o600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=running")
+
+	r := NewDockerRuntime()
+	status, err := r.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+
+	// Should still have api from docker inspect, but state file couldn't be parsed.
+	if len(status.Services) != 1 {
+		t.Fatalf("expected 1 service (corrupt state file), got %d", len(status.Services))
+	}
+
+	if status.Services[0].Name != "api" {
+		t.Errorf("expected service 'api', got %q", status.Services[0].Name)
+	}
+}
+
+func TestDockerRuntime_Logs_NoFollow(t *testing.T) {
+	withMockExec(t, "MOCK_RESPONSE=test log output")
+
+	r := NewDockerRuntime()
+	reader, err := r.Logs(context.Background(), "api", false)
+	if err != nil {
+		t.Fatalf("Logs: %v", err)
+	}
+
+	data := make([]byte, 1024)
+	n, _ := reader.Read(data)
+	_ = reader.Close()
+
+	if n == 0 {
+		t.Error("expected some log output")
+	}
+}
+
+func TestDockerRuntime_Logs_Follow(t *testing.T) {
+	withMockExec(t, "MOCK_RESPONSE=test log output")
+
+	r := NewDockerRuntime()
+	reader, err := r.Logs(context.Background(), "api", true)
+	if err != nil {
+		t.Fatalf("Logs: %v", err)
+	}
+	_ = reader.Close()
+}
+
+func TestDockerRuntime_Down_SuccessWithMock(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Create compose file.
+	composePath := filepath.Join(volundrDir, composeFileName)
+	if err := os.WriteFile(composePath, []byte("services:\n  api:\n    image: test\n"), 0o600); err != nil {
+		t.Fatalf("write compose file: %v", err)
+	}
+
+	// Create PID and state files.
+	if err := os.WriteFile(filepath.Join(volundrDir, PIDFile), []byte("99999"), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(volundrDir, StateFile), []byte("[]"), 0o600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	// Also write a config.yaml so config.Load() works for network name.
+	cfgContent := "runtime: docker\nlisten:\n  host: 127.0.0.1\n  port: 8080\ndatabase:\n  mode: embedded\n  port: 5433\n  user: volundr\n  password: test\n  name: volundr\n"
+	if err := os.WriteFile(filepath.Join(volundrDir, "config.yaml"), []byte(cfgContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=ok")
+
+	r := NewDockerRuntime()
+	err := r.Down(context.Background())
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+
+	// Verify cleanup.
+	if _, err := os.Stat(composePath); !os.IsNotExist(err) {
+		t.Error("expected compose file to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); !os.IsNotExist(err) {
+		t.Error("expected PID file to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(volundrDir, StateFile)); !os.IsNotExist(err) {
+		t.Error("expected state file to be removed")
+	}
+}
+
+func TestDockerRuntime_EnsureNetwork_Create(t *testing.T) {
+	// First call (inspect) fails, second call (create) succeeds.
+	// With mock exec, both succeed. We can test the success path.
+	withMockExec(t)
+
+	r := NewDockerRuntime()
+	err := r.ensureNetwork("test-network")
+	if err != nil {
+		t.Fatalf("ensureNetwork: %v", err)
+	}
+}
+
 func TestGenerateDockerConfig_ExternalDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)

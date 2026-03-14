@@ -21,9 +21,9 @@ func TestBuildGitConfig_EnabledWithInstances(t *testing.T) {
 	cfg.Git.GitHub.Enabled = true
 	cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{
 		{ //nolint:gosec // G101: test fixture, not real credentials
-			Name:    "main",
-			BaseURL: "https://github.com",
-			Token:   "ghp_test123",
+			Name:     "main",
+			BaseURL:  "https://github.com",
+			Token:    "ghp_test123",
 			TokenEnv: "GITHUB_TOKEN",
 			Orgs:     []string{"niuulabs", "other-org"},
 		},

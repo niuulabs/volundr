@@ -61,7 +61,7 @@ func (t *TerminalWSClient) Connect(pathOrURL string) error {
 		}
 	}
 
-	conn, resp, err := websocket.DefaultDialer.Dial(url, header)
+	conn, resp, err := websocket.DefaultDialer.Dial(url, header) //nolint:bodyclose // WebSocket upgrade; resp body read for status only
 	if err != nil {
 		t.setState(WSDisconnected)
 		status := 0

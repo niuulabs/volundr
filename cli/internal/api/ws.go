@@ -134,7 +134,7 @@ func (w *WSClient) Connect(pathOrURL string) error {
 		}
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	conn, _, err := websocket.DefaultDialer.Dial(url, header) //nolint:bodyclose // WebSocket upgrade response has no body to close
 	if err != nil {
 		w.setState(WSDisconnected)
 		return fmt.Errorf("WebSocket dial failed: %w", err)

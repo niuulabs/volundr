@@ -141,6 +141,26 @@ func TestSessionsCmd_Alias(t *testing.T) {
 	}
 }
 
+func TestExecute_Version(t *testing.T) {
+	// Execute with "version" should succeed.
+	rootCmd.SetArgs([]string{"version", "--json"})
+	defer rootCmd.SetArgs(nil)
+
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute version: %v", err)
+	}
+}
+
+func TestExecute_UnknownCommand(t *testing.T) {
+	rootCmd.SetArgs([]string{"nonexistent-command"})
+	defer rootCmd.SetArgs(nil)
+
+	err := Execute()
+	if err == nil {
+		t.Fatal("expected error for unknown command")
+	}
+}
+
 func TestConfigCmd_HasSubcommands(t *testing.T) {
 	subcmds := configCmd.Commands()
 	expected := map[string]bool{

@@ -169,9 +169,9 @@ func TestSessionsCreate(t *testing.T) {
 
 	// Set flags via the command's flag set.
 	_ = sessionsCreateCmd.Flags().Set("name", "new-session")      //nolint:errcheck // test
-	_ = sessionsCreateCmd.Flags().Set("repo", "org/repo")        //nolint:errcheck // test
+	_ = sessionsCreateCmd.Flags().Set("repo", "org/repo")         //nolint:errcheck // test
 	_ = sessionsCreateCmd.Flags().Set("model", "claude-sonnet-4") //nolint:errcheck // test
-	_ = sessionsCreateCmd.Flags().Set("branch", "main")          //nolint:errcheck // test
+	_ = sessionsCreateCmd.Flags().Set("branch", "main")           //nolint:errcheck // test
 
 	if err := sessionsCreateCmd.RunE(sessionsCreateCmd, nil); err != nil {
 		t.Fatalf("sessions create: %v", err)
@@ -200,7 +200,7 @@ func TestSessionsCreate_JSON(t *testing.T) {
 	jsonOutput = true
 	defer func() { jsonOutput = oldJSON }()
 
-	sessionsCreateCmd.Flags().Set("name", "new-session") //nolint:errcheck // test
+	_ = sessionsCreateCmd.Flags().Set("name", "new-session") //nolint:errcheck // test
 
 	old := os.Stdout
 	r, w, _ := os.Pipe()

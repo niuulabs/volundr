@@ -273,7 +273,7 @@ func TestHandlerAPIProxy(t *testing.T) {
 	// Create a fake API backend.
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"path":%q}`, r.URL.Path)
+		_, _ = fmt.Fprintf(w, `{"path":%q}`, r.URL.Path) //nolint:gosec // test handler, no real XSS risk
 	}))
 	defer backend.Close()
 
@@ -317,7 +317,7 @@ func TestHandlerSessionProxy(t *testing.T) {
 	// Create a fake session backend.
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		_, _ = fmt.Fprintf(w, "session:%s", r.URL.Path)
+		_, _ = fmt.Fprintf(w, "session:%s", r.URL.Path) //nolint:gosec // test handler, no real XSS risk
 	}))
 	defer backend.Close()
 
@@ -383,7 +383,7 @@ func TestHandlerRewriteSkipsNonTextContent(t *testing.T) {
 
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		fmt.Fprintf(w, "binary data with %s inside", internalHost)
+		_, _ = fmt.Fprintf(w, "binary data with %s inside", internalHost)
 	}))
 	defer backend.Close()
 
@@ -410,7 +410,7 @@ func TestHandlerRewriteWithTextContentType(t *testing.T) {
 
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `<a href="http://%s/page">link</a>`, internalHost)
+		_, _ = fmt.Fprintf(w, `<a href="http://%s/page">link</a>`, internalHost)
 	}))
 	defer backend.Close()
 
@@ -440,7 +440,7 @@ func TestHandlerRewriteNoHostHeader(t *testing.T) {
 
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"url":"http://%s/api"}`, internalHost)
+		_, _ = fmt.Fprintf(w, `{"url":"http://%s/api"}`, internalHost)
 	}))
 	defer backend.Close()
 
@@ -544,7 +544,7 @@ func TestHandlerNoRewriteHostsDoesNotModifyResponse(t *testing.T) {
 
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"url":"http://%s/api"}`, internalHost)
+		_, _ = fmt.Fprintf(w, `{"url":"http://%s/api"}`, internalHost)
 	}))
 	defer backend.Close()
 

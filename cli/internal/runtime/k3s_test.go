@@ -165,7 +165,7 @@ func TestGenerateK3sConfig(t *testing.T) {
 	}
 
 	// Read and parse.
-	data, err := os.ReadFile(configPath) //nolint:gosec // test file path
+	data, err := os.ReadFile(configPath) //nolint:gosec // test file path from t.TempDir() //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read config file: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestGenerateK3sConfig_DefaultKubeconfig(t *testing.T) {
 		t.Fatalf("generateK3sConfig: %v", err)
 	}
 
-	data, err := os.ReadFile(configPath) //nolint:gosec // test file path
+	data, err := os.ReadFile(configPath) //nolint:gosec // test file path from t.TempDir() //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read config file: %v", err)
 	}
@@ -491,7 +491,7 @@ func TestK3sRuntime_WriteStateFile_ExternalDB(t *testing.T) {
 	}
 
 	stateFilePath := filepath.Join(volundrDir, StateFile)
-	data, err := os.ReadFile(stateFilePath)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path from t.TempDir()
 	if err != nil {
 		t.Fatalf("read state file: %v", err)
 	}
@@ -646,7 +646,7 @@ func TestGenerateK3sConfig_WithGit(t *testing.T) {
 		t.Fatalf("generateK3sConfig: %v", err)
 	}
 
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) //nolint:gosec // test file path from t.TempDir()
 	if err != nil {
 		t.Fatalf("read config file: %v", err)
 	}
@@ -693,7 +693,7 @@ func TestGenerateK3sConfig_WithLocalMounts(t *testing.T) {
 		t.Fatalf("generateK3sConfig: %v", err)
 	}
 
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) //nolint:gosec // test file path from t.TempDir()
 	if err != nil {
 		t.Fatalf("read config file: %v", err)
 	}
@@ -1019,6 +1019,369 @@ func TestK3sRuntime_SaveConfig(t *testing.T) {
 	configPath := filepath.Join(cfgDir, config.DefaultConfigFile)
 	if _, err := os.Stat(configPath); err != nil {
 		t.Errorf("expected config file to be written: %v", err)
+	}
+}
+
+func TestK3sRuntime_EnsureNamespace_Exists(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	err := r.ensureNamespace("test-ns")
+	if err != nil {
+		t.Fatalf("ensureNamespace: %v", err)
+	}
+}
+
+func TestK3sRuntime_EnsureClusterRunning_K3d(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t, `MOCK_RESPONSE=[{"name":"volundr"}]`)
+
+	kcPath := filepath.Join(volundrDir, k3sHostKubeconfigFile)
+	if err := os.WriteFile(kcPath, []byte("apiVersion: v1\nclusters: []\n"), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{}
+	cfg.K3s.Provider = "k3d"
+
+	err := r.ensureClusterRunning(cfg)
+	if err != nil {
+		t.Fatalf("ensureClusterRunning: %v", err)
+	}
+}
+
+func TestK3sRuntime_EnsureClusterRunning_Native(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=node1 Ready")
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{}
+	cfg.K3s.Provider = "native"
+
+	err := r.ensureClusterRunning(cfg)
+	if err != nil {
+		t.Fatalf("ensureClusterRunning: %v", err)
+	}
+}
+
+func TestK3sRuntime_EnsureClusterRunning_NoProvider(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PATH", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExecFail(t)
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{}
+	cfg.K3s.Provider = ""
+
+	err := r.ensureClusterRunning(cfg)
+	if err == nil {
+		t.Fatal("expected error when no provider available")
+	}
+}
+
+func TestK3sRuntime_Logs_KubeService(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=pod log output")
+
+	r := NewK3sRuntime()
+	reader, err := r.Logs(context.Background(), "skuld", false)
+	if err != nil {
+		t.Fatalf("Logs: %v", err)
+	}
+	data := make([]byte, 1024)
+	n, _ := reader.Read(data)
+	_ = reader.Close()
+
+	if n == 0 {
+		t.Error("expected some log output")
+	}
+}
+
+func TestK3sRuntime_Logs_KubeServiceFollow(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=follow output")
+
+	r := NewK3sRuntime()
+	reader, err := r.Logs(context.Background(), "skuld", true)
+	if err != nil {
+		t.Fatalf("Logs: %v", err)
+	}
+	_ = reader.Close()
+}
+
+func TestK3sRuntime_Down_WithMock(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	composePath := filepath.Join(volundrDir, k3sComposeFileName)
+	if err := os.WriteFile(composePath, []byte("services:\n  api:\n    image: test\n"), 0o600); err != nil {
+		t.Fatalf("write compose file: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(volundrDir, PIDFile), []byte("99999"), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(volundrDir, StateFile), []byte("[]"), 0o600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	cfgContent := "runtime: k3s\nlisten:\n  host: 127.0.0.1\n  port: 8080\ndatabase:\n  mode: embedded\n  port: 5433\n  user: volundr\n  password: test\n  name: volundr\n"
+	if err := os.WriteFile(filepath.Join(volundrDir, "config.yaml"), []byte(cfgContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=ok")
+
+	r := NewK3sRuntime()
+	err := r.Down(context.Background())
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+
+	if _, err := os.Stat(composePath); !os.IsNotExist(err) {
+		t.Error("expected compose file to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); !os.IsNotExist(err) {
+		t.Error("expected PID file to be removed")
+	}
+}
+
+func TestK3sRuntime_EnsureK8sSecrets_WithTokens(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Anthropic: config.AnthropicConfig{APIKey: "sk-test"},
+		Git: config.GitConfig{
+			GitHub: config.GitHubConfig{ //nolint:gosec // G101: test fixture, not real credentials
+				Enabled:    true,
+				CloneToken: "ghp_clone_test",
+			},
+		},
+	}
+
+	err := r.ensureK8sSecrets(cfg, "test-ns")
+	if err != nil {
+		t.Fatalf("ensureK8sSecrets: %v", err)
+	}
+}
+
+func TestK3sRuntime_EnsureK8sSecrets_FallbackToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Git: config.GitConfig{
+			GitHub: config.GitHubConfig{
+				Enabled: true,
+				Instances: []config.GitHubInstanceConfig{
+					{Name: "main", Token: "ghp_instance_token"}, //nolint:gosec // test fixture
+				},
+			},
+		},
+	}
+
+	err := r.ensureK8sSecrets(cfg, "test-ns")
+	if err != nil {
+		t.Fatalf("ensureK8sSecrets: %v", err)
+	}
+}
+
+func TestK3sRuntime_EnsureK8sSecrets_NoSecrets(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{}
+
+	err := r.ensureK8sSecrets(cfg, "test-ns")
+	if err != nil {
+		t.Fatalf("ensureK8sSecrets: %v", err)
+	}
+}
+
+func TestK3sRuntime_WriteHostKubeconfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t, "MOCK_RESPONSE=apiVersion: v1\nclusters: []\n")
+
+	r := NewK3sRuntime()
+	err := r.writeHostKubeconfig()
+	if err != nil {
+		t.Fatalf("writeHostKubeconfig: %v", err)
+	}
+
+	kcPath := filepath.Join(volundrDir, k3sHostKubeconfigFile)
+	if _, err := os.Stat(kcPath); err != nil {
+		t.Fatalf("kubeconfig not written: %v", err)
+	}
+}
+
+func TestK3sRuntime_StartAPIContainer(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	kcPath := filepath.Join(volundrDir, k3sHostKubeconfigFile)
+	if err := os.WriteFile(kcPath, []byte("apiVersion: v1\nclusters:\n- cluster:\n    server: https://127.0.0.1:6443\n"), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+
+	k3sCfgPath := filepath.Join(volundrDir, k3sConfigFileName)
+	if err := os.WriteFile(k3sCfgPath, []byte("database:\n  host: localhost\n"), 0o600); err != nil {
+		t.Fatalf("write k3s config: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Host:     "localhost",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+		},
+	}
+
+	err := r.startAPIContainer(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("startAPIContainer: %v", err)
+	}
+
+	composePath := filepath.Join(volundrDir, k3sComposeFileName)
+	if _, err := os.Stat(composePath); err != nil {
+		t.Fatalf("compose file not written: %v", err)
+	}
+}
+
+func TestK3sRuntime_QueryK8sPodStates_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	podListJSON := `{"items":[{"metadata":{"name":"skuld-abc","labels":{"app.kubernetes.io/name":"skuld"}},"status":{"phase":"Running"}},{"metadata":{"name":"code-server-xyz","labels":{}},"status":{"phase":"Pending"}}]}`
+	withMockExec(t, "MOCK_RESPONSE="+podListJSON)
+
+	r := NewK3sRuntime()
+	services := r.queryK8sPodStates()
+
+	if len(services) != 2 {
+		t.Fatalf("expected 2 services, got %d", len(services))
+	}
+
+	if services[0].Name != "skuld-abc" {
+		t.Errorf("expected first pod name 'skuld-abc', got %q", services[0].Name)
+	}
+	if services[0].State != StateRunning {
+		t.Errorf("expected first pod running, got %q", services[0].State)
+	}
+}
+
+func TestK3sRuntime_QueryK8sPodStates_Failure(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExecFail(t)
+
+	r := NewK3sRuntime()
+	services := r.queryK8sPodStates()
+
+	if services != nil {
+		t.Errorf("expected nil services on failure, got %v", services)
 	}
 }
 

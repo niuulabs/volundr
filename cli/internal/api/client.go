@@ -348,7 +348,7 @@ func decodeResponse[T any](resp *http.Response) (T, error) {
 
 // ListSessions returns all sessions for the current user.
 func (c *Client) ListSessions() ([]Session, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/sessions", nil) //nolint:bodyclose // closed in decodeResponse
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/sessions", nil) //nolint:bodyclose // closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +357,7 @@ func (c *Client) ListSessions() ([]Session, error) {
 
 // GetSession returns a single session by ID.
 func (c *Client) GetSession(id string) (*Session, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/sessions/"+id, nil) //nolint:bodyclose // closed in decodeResponsePtr
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/sessions/"+id, nil) //nolint:bodyclose // closed in decodeResponsePtr
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +444,7 @@ func (c *Client) ListModels() ([]ModelInfo, error) {
 
 // GetStats returns aggregate statistics.
 func (c *Client) GetStats() (*StatsResponse, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/stats", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/stats", nil) //nolint:bodyclose // body closed in decodeResponsePtr->decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +462,7 @@ func decodeResponsePtr[T any](resp *http.Response) (*T, error) {
 
 // GetMe returns the current authenticated user's profile.
 func (c *Client) GetMe() (*UserProfile, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/me", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/me", nil) //nolint:bodyclose // body closed in decodeResponsePtr->decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +471,7 @@ func (c *Client) GetMe() (*UserProfile, error) {
 
 // ListUsers returns all users (admin only).
 func (c *Client) ListUsers() ([]UserInfo, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/users", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/users", nil) //nolint:bodyclose // body closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -480,7 +480,7 @@ func (c *Client) ListUsers() ([]UserInfo, error) {
 
 // ListTenants returns all tenants.
 func (c *Client) ListTenants() ([]Tenant, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/tenants", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/tenants", nil) //nolint:bodyclose // body closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +489,7 @@ func (c *Client) ListTenants() ([]Tenant, error) {
 
 // ListIntegrationCatalog returns all available integration definitions.
 func (c *Client) ListIntegrationCatalog() ([]IntegrationCatalogEntry, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/integrations/catalog", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/integrations/catalog", nil) //nolint:bodyclose // body closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -498,7 +498,7 @@ func (c *Client) ListIntegrationCatalog() ([]IntegrationCatalogEntry, error) {
 
 // ListIntegrations returns the current user's integration connections.
 func (c *Client) ListIntegrations() ([]IntegrationConnection, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/integrations", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/integrations", nil) //nolint:bodyclose // body closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +521,7 @@ func (c *Client) TestIntegration(connectionID string) error {
 
 // ListAdminWorkspaces returns all workspaces (admin only).
 func (c *Client) ListAdminWorkspaces() ([]AdminWorkspace, error) {
-	resp, err := c.do("GET", "/api/v1/volundr/admin/workspaces", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/admin/workspaces", nil) //nolint:bodyclose // body closed in decodeResponse
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +530,7 @@ func (c *Client) ListAdminWorkspaces() ([]AdminWorkspace, error) {
 
 // Ping checks if the server is reachable by hitting the stats endpoint.
 func (c *Client) Ping() error {
-	resp, err := c.do("GET", "/api/v1/volundr/stats", nil)
+	resp, err := c.do(http.MethodGet, "/api/v1/volundr/stats", nil)
 	if err != nil {
 		return err
 	}
@@ -560,7 +560,7 @@ func (c *Client) GetAuthConfig() (*AuthDiscoveryResponse, error) {
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) //nolint:bodyclose // body closed in decodeResponsePtr->decodeResponse
 	if err != nil {
 		return nil, fmt.Errorf("contacting server: %w", err)
 	}

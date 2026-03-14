@@ -160,7 +160,7 @@ func TestNewTUIModel_WithServer(t *testing.T) {
 	}
 }
 
-func TestTUIModel_Init_NoPool(t *testing.T) {
+func TestTUIModel_Init_NoPool(_ *testing.T) {
 	m := newTestTUIModel()
 	cmd := m.Init()
 	// With empty pool, Init should still return a batch cmd (pages init).
@@ -308,7 +308,7 @@ func TestTUIModel_IsInputCaptured_AllPages(t *testing.T) {
 	}{
 		{"sessions", tuipkg.PageSessions, false},
 		{"chat", tuipkg.PageChat, true},         // inputActive defaults to true
-		{"terminal", tuipkg.PageTerminal, true},  // insertMode defaults to true
+		{"terminal", tuipkg.PageTerminal, true}, // insertMode defaults to true
 		{"diffs", tuipkg.PageDiffs, false},
 		{"chronicles", tuipkg.PageChronicles, false},
 		{"settings", tuipkg.PageSettings, false},
@@ -529,6 +529,185 @@ func TestTUIModel_Update_ChatStreamEvent(t *testing.T) {
 func TestTUIModel_Update_ChatDisconnectedMsg(t *testing.T) {
 	m := newTestTUIModel()
 	msg := pages.ChatDisconnectedMsg{}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_TerminalPage_KeyMsg(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageTerminal
+	// Terminal defaults to insert mode, so key messages should be consumed.
+	msg := tea.KeyPressMsg{Code: 'a'}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_ChatPage_InputActive_RegularKey(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageChat
+	// Chat defaults to inputActive=true, so keys should go to chat.
+	msg := tea.KeyPressMsg{Code: 'h'}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_ChatPage_InputActive_CtrlC(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageChat
+	// Ctrl+C should fall through to app layer.
+	msg := tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_ChatPage_InputActive_Esc(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageChat
+	// Esc should deactivate input and fall through.
+	msg := tea.KeyPressMsg{Code: tea.KeyEscape}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_ChatPage_InputActive_F11(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageChat
+	// F11 should fall through to app (fullscreen toggle).
+	msg := tea.KeyPressMsg{Code: tea.KeyF11}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_ChatPage_InputActive_AltKey(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageChat
+	// Alt+number should fall through to app for navigation.
+	msg := tea.KeyPressMsg{Code: '1', Mod: tea.ModAlt}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_ChatPage_InputActive_CtrlF(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageChat
+	// ctrl+f should fall through (fullscreen toggle).
+	msg := tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_SessionsPage_NotSearching_KeyMsg(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageSessions
+	// Not searching, so keys should fall through normally.
+	msg := tea.KeyPressMsg{Code: 'j'}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_SettingsPage_KeyMsg(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageSettings
+	// Settings not editing, keys should fall through.
+	msg := tea.KeyPressMsg{Code: 'j'}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_DiffsPage_KeyMsg(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageDiffs
+	msg := tea.KeyPressMsg{Code: 'j'}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_ChroniclesPage_KeyMsg(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageChronicles
+	msg := tea.KeyPressMsg{Code: 'j'}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_AdminPage_KeyMsg(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageAdmin
+	msg := tea.KeyPressMsg{Code: 'j'}
+	result, _ := m.Update(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+}
+
+func TestTUIModel_Update_TerminalPage_NonKeyMsg(t *testing.T) {
+	m := newTestTUIModel()
+	m.app.Ready = true
+	m.app.Width = 120
+	m.app.Height = 40
+	m.app.ActivePage = tuipkg.PageTerminal
+	// Non-key messages should be forwarded normally.
+	msg := tea.WindowSizeMsg{Width: 80, Height: 24}
 	result, _ := m.Update(msg)
 	if result == nil {
 		t.Error("expected non-nil result")

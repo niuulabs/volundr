@@ -371,7 +371,7 @@ func TestRunMigrationsWithDB_NoMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -403,7 +403,7 @@ func TestRunMigrationsWithDB_AppliesNewMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -459,7 +459,7 @@ func TestRunMigrationsWithDB_SkipsAlreadyApplied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -505,7 +505,7 @@ func TestRunMigrationsWithDB_CheckVersionError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -542,7 +542,7 @@ func TestRunMigrationsWithDB_ReadMigrationFileError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -577,7 +577,7 @@ func TestRunMigrationsWithDB_BeginTxError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -613,7 +613,7 @@ func TestRunMigrationsWithDB_ExecMigrationError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -652,7 +652,7 @@ func TestRunMigrationsWithDB_RecordMigrationError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -694,7 +694,7 @@ func TestRunMigrationsWithDB_CommitError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -736,7 +736,7 @@ func TestRunMigrationsWithDB_AllAlreadyApplied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
@@ -771,7 +771,7 @@ func TestRunMigrationsWithDB_PartialApplyOnError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectPing()
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").

@@ -18,7 +18,7 @@ func TestTokenStillValid_TableDriven(t *testing.T) {
 	}{
 		{
 			name:     "empty token",
-			ctx:      &remote.Context{Token: "", TokenExpiry: "2099-01-01T00:00:00Z"},
+			ctx:      &remote.Context{Token: "", TokenExpiry: "2099-01-01T00:00:00Z"}, //nolint:gosec // G101: test fixture, not real credentials
 			expected: false,
 		},
 		{
@@ -263,6 +263,187 @@ func TestSortedContextKeys_TableDriven(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLoginAllContexts_AllSkipped_ValidTokens(t *testing.T) {
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["a"] = &remote.Context{
+		Name:        "a",
+		Server:      "https://a.example.com",
+		Token:       "tok-a",
+		TokenExpiry: time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+	}
+	cfg.Contexts["b"] = &remote.Context{
+		Name:        "b",
+		Server:      "https://b.example.com",
+		Token:       "tok-b",
+		TokenExpiry: time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+	}
+	setupTestConfig(t, cfg)
+
+	oldForce := loginForce
+	loginForce = false
+	defer func() { loginForce = oldForce }()
+
+	// All tokens are valid, so all contexts should be skipped.
+	err := loginAllContexts(cfg)
+	if err != nil {
+		t.Fatalf("loginAllContexts: %v", err)
+	}
+}
+
+func TestLoginAllContexts_SkipNoServer(t *testing.T) {
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["a"] = &remote.Context{
+		Name:   "a",
+		Server: "",
+	}
+	setupTestConfig(t, cfg)
+
+	oldForce := loginForce
+	loginForce = false
+	defer func() { loginForce = oldForce }()
+
+	err := loginAllContexts(cfg)
+	if err != nil {
+		t.Fatalf("loginAllContexts: %v", err)
+	}
+}
+
+func TestLoginAllContexts_SkipNoAuth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["a"] = &remote.Context{
+		Name:   "a",
+		Server: srv.URL,
+	}
+	setupTestConfig(t, cfg)
+
+	oldForce := loginForce
+	oldIssuer := loginIssuer
+	oldClientID := loginClientID
+	loginForce = false
+	loginIssuer = ""
+	loginClientID = ""
+	defer func() {
+		loginForce = oldForce
+		loginIssuer = oldIssuer
+		loginClientID = oldClientID
+	}()
+
+	err := loginAllContexts(cfg)
+	if err != nil {
+		t.Fatalf("loginAllContexts: %v", err)
+	}
+}
+
+func TestLoginAllContexts_MixedSkippedAndNoAuth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["valid"] = &remote.Context{
+		Name:        "valid",
+		Server:      "https://valid.example.com",
+		Token:       "tok",
+		TokenExpiry: time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+	}
+	cfg.Contexts["no-server"] = &remote.Context{
+		Name:   "no-server",
+		Server: "",
+	}
+	cfg.Contexts["no-auth"] = &remote.Context{
+		Name:   "no-auth",
+		Server: srv.URL,
+	}
+	setupTestConfig(t, cfg)
+
+	oldForce := loginForce
+	oldIssuer := loginIssuer
+	oldClientID := loginClientID
+	loginForce = false
+	loginIssuer = ""
+	loginClientID = ""
+	defer func() {
+		loginForce = oldForce
+		loginIssuer = oldIssuer
+		loginClientID = oldClientID
+	}()
+
+	err := loginAllContexts(cfg)
+	if err != nil {
+		t.Fatalf("loginAllContexts: %v", err)
+	}
+}
+
+func TestLoginCmd_MultipleContexts_CallsLoginAll(t *testing.T) {
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["a"] = &remote.Context{
+		Name:        "a",
+		Server:      "https://a.example.com",
+		Token:       "tok-a",
+		TokenExpiry: time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+	}
+	cfg.Contexts["b"] = &remote.Context{
+		Name:        "b",
+		Server:      "https://b.example.com",
+		Token:       "tok-b",
+		TokenExpiry: time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+	}
+	setupTestConfig(t, cfg)
+
+	oldCtx := cfgContext
+	oldForce := loginForce
+	cfgContext = ""
+	loginForce = false
+	defer func() {
+		cfgContext = oldCtx
+		loginForce = oldForce
+	}()
+
+	// With multiple contexts and no --context flag, login should try all.
+	err := loginCmd.RunE(loginCmd, nil)
+	if err != nil {
+		t.Fatalf("login (multi-context): %v", err)
+	}
+}
+
+func TestLoginCmd_SingleContext_NoIssuer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["default"] = &remote.Context{
+		Name:   "default",
+		Server: srv.URL,
+	}
+	setupTestConfig(t, cfg)
+
+	oldCtx := cfgContext
+	oldIssuer := loginIssuer
+	oldClientID := loginClientID
+	cfgContext = ""
+	loginIssuer = ""
+	loginClientID = ""
+	defer func() {
+		cfgContext = oldCtx
+		loginIssuer = oldIssuer
+		loginClientID = oldClientID
+	}()
+
+	// Single context but no issuer discoverable -> loginSingleContext should fail.
+	err := loginCmd.RunE(loginCmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no auth config available")
 	}
 }
 

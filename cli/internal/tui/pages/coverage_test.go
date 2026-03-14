@@ -195,13 +195,13 @@ func TestChatPage_HandleStreamEvent_SystemNull(t *testing.T) {
 	}
 }
 
-func TestChatPage_FinalizeStreaming_NoStream(t *testing.T) {
+func TestChatPage_FinalizeStreaming_NoStream(_ *testing.T) {
 	page := NewChatPage(nil, nil)
 	page.streamingIdx = -1
 	page.finalizeStreaming() // should not panic
 }
 
-func TestChatPage_FinalizeStreaming_OutOfBounds(t *testing.T) {
+func TestChatPage_FinalizeStreaming_OutOfBounds(_ *testing.T) {
 	page := NewChatPage(nil, nil)
 	page.streamingIdx = 5
 	page.finalizeStreaming() // should not panic
@@ -488,7 +488,7 @@ func TestRenderMarkdown(t *testing.T) {
 	}
 }
 
-func TestRenderMarkdown_Empty(t *testing.T) {
+func TestRenderMarkdown_Empty(_ *testing.T) {
 	result := renderMarkdown("", 80)
 	// Should not panic and return something.
 	_ = result
@@ -1490,7 +1490,7 @@ func TestSessionsPage_Update_SessionActionDoneError(t *testing.T) {
 	}
 }
 
-func TestSessionsPage_Update_SessionActionDoneSuccess(t *testing.T) {
+func TestSessionsPage_Update_SessionActionDoneSuccess(_ *testing.T) {
 	page := SessionsPage{filter: "all"}
 	page, cmd := page.Update(SessionActionDoneMsg{Action: "stop"})
 	// Without pool, Init returns nil.
@@ -1717,7 +1717,7 @@ func TestTerminalPage_CloseTab(t *testing.T) {
 	}
 }
 
-func TestTerminalPage_CloseTab_OutOfBounds(t *testing.T) {
+func TestTerminalPage_CloseTab_OutOfBounds(_ *testing.T) {
 	page := NewTerminalPage("", nil, nil)
 	page.closeTab(-1) // should not panic
 	page.closeTab(5)  // should not panic
@@ -1904,7 +1904,7 @@ func TestTerminalPage_RenderTabBar(t *testing.T) {
 	}
 }
 
-func TestTerminalPage_ResizeAllEmulators(t *testing.T) {
+func TestTerminalPage_ResizeAllEmulators(_ *testing.T) {
 	page := NewTerminalPage("http://localhost", nil, nil)
 	page.width = 120
 	page.height = 40
@@ -1965,9 +1965,9 @@ func TestTerminalPage_Update_TerminalConnectedMsg(t *testing.T) {
 	}
 }
 
-func TestTerminalPage_Update_TerminalConnectedMsg_OutOfBounds(t *testing.T) {
+func TestTerminalPage_Update_TerminalConnectedMsg_OutOfBounds(_ *testing.T) {
 	page := NewTerminalPage("", nil, nil)
-	page, _ = page.Update(TerminalConnectedMsg{TabIndex: 5})
+	_, _ = page.Update(TerminalConnectedMsg{TabIndex: 5})
 	// Should not panic.
 }
 
@@ -2184,7 +2184,7 @@ func TestKeyToBytes_FunctionKeys_Extended(t *testing.T) {
 	}
 }
 
-func TestKeyToBytes_Unknown(t *testing.T) {
+func TestKeyToBytes_Unknown(_ *testing.T) {
 	// Multi-rune key that doesn't match anything should return nil.
 	msg := tea.KeyPressMsg{Code: tea.KeyF11} // f11 is not in the switch
 	got := keyToBytes(msg)
@@ -2290,7 +2290,7 @@ func TestChroniclesPage_Update_RefreshWithSessionID(t *testing.T) {
 
 func TestChroniclesPage_Update_RefreshWithoutSessionID(t *testing.T) {
 	page := NewChroniclesPage(nil)
-	page, cmd := page.Update(tea.KeyPressMsg{Code: 'r'})
+	_, cmd := page.Update(tea.KeyPressMsg{Code: 'r'})
 	if cmd != nil {
 		t.Error("expected nil cmd for 'r' without sessionID")
 	}
@@ -2314,7 +2314,7 @@ func TestDiffsPage_Update_Refresh(t *testing.T) {
 
 func TestDiffsPage_Update_RefreshNoSession(t *testing.T) {
 	page := NewDiffsPage(nil)
-	page, cmd := page.Update(tea.KeyPressMsg{Code: 'r'})
+	_, cmd := page.Update(tea.KeyPressMsg{Code: 'r'})
 	if cmd != nil {
 		t.Error("expected nil cmd for 'r' without session")
 	}
@@ -2352,7 +2352,7 @@ func TestTerminalPage_ConnectSession_NoCodeEndpoint(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestTerminalPage_ConnectSession_CleansOldTabs(t *testing.T) {
+func TestTerminalPage_ConnectSession_CleansOldTabs(_ *testing.T) {
 	page := NewTerminalPage("http://localhost", nil, nil)
 	page.width = 80
 	page.height = 24
@@ -2460,12 +2460,12 @@ func TestTerminalPage_ConnectCliSessionOnCluster_MissingEntry(t *testing.T) {
 	page.Close()
 }
 
-func TestTerminalPage_SpawnNewTab_NoSession(t *testing.T) {
+func TestTerminalPage_SpawnNewTab_NoSession(_ *testing.T) {
 	page := NewTerminalPage("", nil, nil)
 	page.spawnNewTab() // should not panic with nil activeSession
 }
 
-func TestTerminalPage_ConnectTab_OutOfBounds(t *testing.T) {
+func TestTerminalPage_ConnectTab_OutOfBounds(_ *testing.T) {
 	page := NewTerminalPage("", nil, nil)
 	page.connectTab(-1) // should not panic
 	page.connectTab(5)  // should not panic
