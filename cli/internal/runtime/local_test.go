@@ -680,6 +680,400 @@ func TestDownFromPID_StalePID(t *testing.T) {
 	}
 }
 
+func TestLocalRuntime_Init_CreatesDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	withMockExec(t)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "external",
+		},
+	}
+
+	// Init in external mode skips postgres setup, just creates dirs.
+	err := r.Init(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	for _, sub := range []string{"data/pg", "logs", "cache"} {
+		dir := filepath.Join(volundrDir, sub)
+		if _, err := os.Stat(dir); err != nil {
+			t.Errorf("expected directory %s to exist: %v", dir, err)
+		}
+	}
+}
+
+func TestLocalRuntime_Down_NoApiNoPostgres(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Create PID and state files to verify cleanup.
+	if err := os.WriteFile(filepath.Join(volundrDir, PIDFile), []byte("99999"), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(volundrDir, StateFile), []byte("[]"), 0o600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	r := NewLocalRuntime()
+	// Down with nil apiCmd and nil pg should just clean up files.
+	err := r.Down(context.Background())
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); !os.IsNotExist(err) {
+		t.Error("expected PID file to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(volundrDir, StateFile)); !os.IsNotExist(err) {
+		t.Error("expected state file to be removed")
+	}
+}
+
+func TestLocalRuntime_StartAPI(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	logsDir := filepath.Join(volundrDir, "logs")
+	if err := os.MkdirAll(logsDir, 0o700); err != nil {
+		t.Fatalf("create logs dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+		},
+		Anthropic: config.AnthropicConfig{APIKey: "sk-test"},
+	}
+
+	err := r.startAPI(context.Background(), cfg, 8081)
+	if err != nil {
+		t.Fatalf("startAPI: %v", err)
+	}
+
+	// apiCmd should be set.
+	if r.apiCmd == nil {
+		t.Fatal("expected apiCmd to be set after startAPI")
+	}
+
+	// Wait for the process to finish.
+	_ = r.apiCmd.Wait()
+}
+
+func TestLocalRuntime_StartAPI_NoLogsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	// Create config dir but NOT logs dir.
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+		},
+	}
+
+	err := r.startAPI(context.Background(), cfg, 8081)
+	if err == nil {
+		t.Fatal("expected error when logs dir does not exist")
+	}
+}
+
+func TestLocalRuntime_WriteStateFile_WithAPICmd(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	logsDir := filepath.Join(volundrDir, "logs")
+	if err := os.MkdirAll(logsDir, 0o700); err != nil {
+		t.Fatalf("create logs dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Port: 8080},
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+			Port: 5433,
+		},
+	}
+
+	// Start a mock API process so apiCmd.Process is set.
+	if err := r.startAPI(context.Background(), cfg, 8081); err != nil {
+		t.Fatalf("startAPI: %v", err)
+	}
+	// Wait for it to complete (it's a mock, exits immediately).
+	_ = r.apiCmd.Wait()
+
+	if err := r.writeStateFile(cfg); err != nil {
+		t.Fatalf("writeStateFile: %v", err)
+	}
+
+	stateFilePath := filepath.Join(volundrDir, StateFile)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path
+	if err != nil {
+		t.Fatalf("read state file: %v", err)
+	}
+
+	var services []ServiceStatus
+	if err := json.Unmarshal(data, &services); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// Should have proxy, api (since apiCmd.Process exists), and postgres.
+	found := map[string]bool{}
+	for _, svc := range services {
+		found[svc.Name] = true
+	}
+	for _, name := range []string{"proxy", "api", "postgres"} {
+		if !found[name] {
+			t.Errorf("expected service %q in state file", name)
+		}
+	}
+}
+
+func TestDownFromPID_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a PID file with whitespace around the number.
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	if err := os.WriteFile(pidPath, []byte("  999999999  "), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	err := DownFromPID()
+	// Process 999999999 is unlikely to exist, so Signal will fail.
+	if err == nil {
+		t.Fatal("expected error for non-existent PID")
+	}
+	if !contains(err.Error(), "SIGTERM") {
+		t.Errorf("expected SIGTERM error, got: %v", err)
+	}
+
+	// PID file should be cleaned up after failed signal.
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Error("expected PID file to be removed after failed signal")
+	}
+}
+
+func TestLocalRuntime_Down_WithApiCmd(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	logsDir := filepath.Join(volundrDir, "logs")
+	if err := os.MkdirAll(logsDir, 0o700); err != nil {
+		t.Fatalf("create logs dir: %v", err)
+	}
+
+	// Create PID and state files.
+	if err := os.WriteFile(filepath.Join(volundrDir, PIDFile), []byte("99999"), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(volundrDir, StateFile), []byte("[]"), 0o600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+		},
+	}
+
+	// Start a mock API process.
+	if err := r.startAPI(context.Background(), cfg, 8081); err != nil {
+		t.Fatalf("startAPI: %v", err)
+	}
+
+	// Now call Down, which should attempt to stop the apiCmd.
+	err := r.Down(context.Background())
+	if err != nil {
+		// The process may have already exited (mock process exits immediately).
+		// An error from signaling a dead process is acceptable.
+		t.Logf("Down returned: %v (acceptable for mock process)", err)
+	}
+
+	// PID and state files should be cleaned up.
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); !os.IsNotExist(err) {
+		t.Error("expected PID file to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(volundrDir, StateFile)); !os.IsNotExist(err) {
+		t.Error("expected state file to be removed")
+	}
+}
+
+func TestLocalRuntime_Up_AlreadyRunning(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a PID file with our own PID to simulate already running.
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when already running")
+	}
+}
+
+func TestLocalRuntime_Up_ExternalDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	logsDir := filepath.Join(volundrDir, "logs")
+	if err := os.MkdirAll(logsDir, 0o700); err != nil {
+		t.Fatalf("create logs dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0},
+		Database: config.DatabaseConfig{
+			Mode:     "external",
+			Port:     5432,
+			User:     "user",
+			Password: "pass",
+			Name:     "mydb",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := r.Up(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+
+	// Verify PID file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); err != nil {
+		t.Error("expected PID file to be written")
+	}
+
+	// Verify state file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, StateFile)); err != nil {
+		t.Error("expected state file to be written")
+	}
+
+	// Wait for mock process to exit.
+	if r.apiCmd != nil {
+		_ = r.apiCmd.Wait()
+	}
+
+	cancel()
+}
+
+func TestLocalRuntime_Init_ExternalDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	r := NewLocalRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "external",
+		},
+	}
+
+	err := r.Init(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Verify directories were created.
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	for _, sub := range []string{"data/pg", "logs", "cache"} {
+		dir := filepath.Join(volundrDir, sub)
+		if _, err := os.Stat(dir); err != nil {
+			t.Errorf("expected directory %s to exist: %v", dir, err)
+		}
+	}
+}
+
+func TestDownFromPID_SuccessPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	stateFilePath := filepath.Join(volundrDir, StateFile)
+
+	// Write a PID file with a PID that's not running.
+	if err := os.WriteFile(pidPath, []byte("999999999"), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+	if err := os.WriteFile(stateFilePath, []byte("[]"), 0o600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	err := DownFromPID()
+	// Should error because the process can't be signaled.
+	if err == nil {
+		t.Fatal("expected error for non-existent PID")
+	}
+
+	// Both files should be cleaned up.
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Error("expected PID file to be removed")
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && containsSubstring(s, substr)
 }

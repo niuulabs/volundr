@@ -199,6 +199,37 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 	}
 }
 
+func TestRemoveStateFile_NoFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Removing a non-existent state file should return an error.
+	err := RemoveStateFile()
+	if err == nil {
+		t.Error("expected error when removing non-existent state file")
+	}
+}
+
+func TestRemovePIDFile_NoFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	err := RemovePIDFile()
+	if err == nil {
+		t.Error("expected error when removing non-existent PID file")
+	}
+}
+
 func TestRemoveStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)

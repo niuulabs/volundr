@@ -6,7 +6,7 @@ import logging
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -130,6 +130,17 @@ class SessionUpdate(BaseModel):
         description="Issue tracker identifier to link",
     )
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "name": "fix-auth-bug-v2",
+                "model": "claude-sonnet-4-20250514",
+                "branch": "fix/auth-bypass",
+                "tracker_issue_id": "PROJ-1234",
+            },
+        },
+    }
+
 
 class SessionStart(BaseModel):
     """Request model for (re)starting a session."""
@@ -138,6 +149,14 @@ class SessionStart(BaseModel):
         default=None, max_length=255,
         description="Forge profile name to use when starting",
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "profile_name": "default",
+            },
+        },
+    }
 
 
 class SessionResponse(BaseModel):
@@ -326,6 +345,20 @@ class BrokerChronicleReport(BaseModel):
         description="Session duration in seconds",
     )
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "summary": "Fixed JWT validation bypass in auth middleware",
+                "key_changes": [
+                    "Fixed token expiry check in jwt_validator.py",
+                    "Added regression test for expired tokens",
+                ],
+                "unfinished_work": "Refresh token rotation not yet implemented",
+                "duration_seconds": 1800,
+            },
+        },
+    }
+
 
 class ChronicleCreate(BaseModel):
     """Request model for creating a chronicle from a session."""
@@ -333,6 +366,14 @@ class ChronicleCreate(BaseModel):
     session_id: UUID = Field(
         description="Session ID to create a chronicle entry for",
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            },
+        },
+    }
 
 
 class ChronicleUpdate(BaseModel):
@@ -358,6 +399,17 @@ class ChronicleUpdate(BaseModel):
         default=None,
         description="New chronicle status (draft or complete)",
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "summary": "Fixed JWT validation bypass in auth middleware",
+                "key_changes": ["Fixed token expiry check", "Added regression test"],
+                "tags": ["bugfix", "security"],
+                "status": "complete",
+            },
+        },
+    }
 
 
 class ChronicleResponse(BaseModel):
@@ -881,7 +933,7 @@ def create_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Sessions"],
     )
-    async def get_session(request: Request, session_id: UUID) -> SessionResponse:
+    async def get_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
         """Get a session by ID."""
         session = await service.get_session(session_id)
         if session is None:
@@ -909,8 +961,8 @@ def create_router(
     )
     async def update_session(
         request: Request,
-        session_id: UUID,
-        data: SessionUpdate,
+        session_id: UUID = Path(description="Unique session identifier"),
+        data: SessionUpdate = ...,
     ) -> SessionResponse:
         """Update a session."""
         principal = await _optional_principal(request)
@@ -941,7 +993,7 @@ def create_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Sessions"],
     )
-    async def delete_session(request: Request, session_id: UUID) -> None:
+    async def delete_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> None:
         """Delete a session."""
         principal = await _optional_principal(request)
         try:
@@ -968,7 +1020,7 @@ def create_router(
     )
     async def start_session(
         request: Request,
-        session_id: UUID,
+        session_id: UUID = Path(description="Unique session identifier"),
         data: SessionStart | None = None,
     ) -> SessionResponse:
         """Restart a session's pods.
@@ -1010,7 +1062,7 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def stop_session(request: Request, session_id: UUID) -> SessionResponse:
+    async def stop_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
         """Stop a session's pods."""
         principal = await _optional_principal(request)
         try:
@@ -1041,7 +1093,7 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def archive_session(request: Request, session_id: UUID) -> SessionResponse:
+    async def archive_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
         """Archive a session. Stops pod if running."""
         principal = await _optional_principal(request)
         try:
@@ -1075,7 +1127,7 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def restore_session(request: Request, session_id: UUID) -> SessionResponse:
+    async def restore_session(request: Request, session_id: UUID = Path(description="Unique session identifier")) -> SessionResponse:
         """Restore an archived session to stopped state."""
         principal = await _optional_principal(request)
         try:
@@ -1140,7 +1192,7 @@ def create_router(
         },
         tags=["Sessions"],
     )
-    async def report_token_usage(session_id: UUID, data: TokenUsageReport) -> TokenUsageResponse:
+    async def report_token_usage(session_id: UUID = Path(description="Unique session identifier"), data: TokenUsageReport = ...) -> TokenUsageResponse:
         """Report token usage for a session."""
         if token_service is None:
             raise HTTPException(
@@ -1188,7 +1240,7 @@ def create_router(
         tags=["Sessions"],
     )
     async def get_session_logs(
-        session_id: UUID,
+        session_id: UUID = Path(description="Unique session identifier"),
         lines: int = Query(
             default=100, ge=1, le=2000,
             description="Number of log lines to retrieve",
@@ -1254,7 +1306,7 @@ def create_router(
         tags=["Sessions"],
     )
     async def get_session_diff(
-        session_id: UUID,
+        session_id: UUID = Path(description="Unique session identifier"),
         file: str | None = Query(
             default=None,
             description="File path relative to workspace (optional)",
@@ -1339,7 +1391,7 @@ def create_router(
         tags=["Sessions"],
     )
     async def list_session_files(
-        session_id: UUID,
+        session_id: UUID = Path(description="Unique session identifier"),
         path: str = Query(
             default="",
             description="Relative directory path within the workspace",
@@ -1513,7 +1565,7 @@ def create_router(
         },
         tags=["Chronicles"],
     )
-    async def report_chronicle(session_id: UUID, data: BrokerChronicleReport) -> ChronicleResponse:
+    async def report_chronicle(session_id: UUID = Path(description="Unique session identifier"), data: BrokerChronicleReport = ...) -> ChronicleResponse:
         """Ingest chronicle data reported by the Skuld broker at shutdown.
 
         Creates a new DRAFT chronicle or enriches an existing one.
@@ -1610,7 +1662,7 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def get_chronicle(chronicle_id: UUID) -> ChronicleResponse:
+    async def get_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> ChronicleResponse:
         """Get a chronicle by ID."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1631,7 +1683,7 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def update_chronicle(chronicle_id: UUID, data: ChronicleUpdate) -> ChronicleResponse:
+    async def update_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier"), data: ChronicleUpdate = ...) -> ChronicleResponse:
         """Update a chronicle's mutable fields."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1660,7 +1712,7 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def delete_chronicle(chronicle_id: UUID) -> None:
+    async def delete_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> None:
         """Delete a chronicle."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1680,7 +1732,7 @@ def create_router(
         responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def reforge_chronicle(chronicle_id: UUID) -> SessionResponse:
+    async def reforge_chronicle(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> SessionResponse:
         """Relaunch a session from a chronicle entry."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1702,7 +1754,7 @@ def create_router(
         responses={503: {"model": ErrorResponse}},
         tags=["Chronicles"],
     )
-    async def get_chronicle_chain(chronicle_id: UUID) -> list[ChronicleResponse]:
+    async def get_chronicle_chain(chronicle_id: UUID = Path(description="Unique chronicle identifier")) -> list[ChronicleResponse]:
         """Get the full reforge chain for a chronicle."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1721,7 +1773,7 @@ def create_router(
         },
         tags=["Chronicles"],
     )
-    async def get_session_chronicle(session_id: UUID) -> ChronicleResponse:
+    async def get_session_chronicle(session_id: UUID = Path(description="Unique session identifier")) -> ChronicleResponse:
         """Get the most recent chronicle for a session."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1747,7 +1799,7 @@ def create_router(
         },
         tags=["Timeline"],
     )
-    async def get_timeline(session_id: UUID) -> TimelineResponseModel:
+    async def get_timeline(session_id: UUID = Path(description="Session identifier for timeline lookup")) -> TimelineResponseModel:
         """Get the event timeline for a session's chronicle."""
         if chronicle_service is None:
             raise HTTPException(
@@ -1802,7 +1854,7 @@ def create_router(
         tags=["Timeline"],
     )
     async def add_timeline_event(
-        session_id: UUID, data: TimelineEventCreate
+        session_id: UUID = Path(description="Session identifier for timeline lookup"), data: TimelineEventCreate = ...
     ) -> TimelineEventResponse:
         """Add a timeline event for a session's chronicle."""
         if chronicle_service is None:
@@ -1873,7 +1925,7 @@ def create_router(
     )
     async def get_chronicle_diff(
         request: Request,
-        session_id: UUID,
+        session_id: UUID = Path(description="Session identifier for diff lookup"),
         file: str = Query(
             ...,
             description="File path relative to workspace",
@@ -1974,8 +2026,8 @@ def create_router(
         tags=["Workspaces"],
     )
     async def delete_workspace(
-        session_id: UUID,
         request: Request,
+        session_id: UUID = Path(description="Session identifier whose workspace to delete"),
     ):
         """Delete a workspace PVC by session ID."""
         principal = await _optional_principal(request)

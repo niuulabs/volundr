@@ -21,39 +21,53 @@ logger = logging.getLogger(__name__)
 class EventIngestRequest(BaseModel):
     """Single event submission from a Skuld pod."""
 
-    session_id: UUID = Field(description="Session this event belongs to")
+    session_id: UUID = Field(
+        description="Session this event belongs to",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
     event_type: str = Field(
         ..., min_length=1,
         description="Event type (e.g. message_user, file_modified)",
+        examples=["message_user"],
     )
-    timestamp: datetime = Field(description="When the event occurred")
+    timestamp: datetime = Field(
+        description="When the event occurred",
+        examples=["2025-01-15T10:30:00Z"],
+    )
     data: dict = Field(
         default_factory=dict,
         description="Event-type-specific payload",
+        examples=[{"content": "Hello"}],
     )
     sequence: int = Field(
         ..., ge=0,
         description="Monotonic event sequence number",
+        examples=[0],
     )
     tokens_in: int | None = Field(
         default=None, ge=0,
         description="Input tokens (token_usage events)",
+        examples=[150],
     )
     tokens_out: int | None = Field(
         default=None, ge=0,
         description="Output tokens (token_usage events)",
+        examples=[75],
     )
     cost: float | None = Field(
         default=None, ge=0,
         description="Cost in USD (token_usage events)",
+        examples=[0.0025],
     )
     duration_ms: int | None = Field(
         default=None, ge=0,
         description="Duration in milliseconds (tool/terminal events)",
+        examples=[1200],
     )
     model: str | None = Field(
         default=None, max_length=100,
         description="LLM model identifier (token_usage events)",
+        examples=["claude-sonnet-4-20250514"],
     )
 
 
@@ -62,33 +76,39 @@ class EventBatchRequest(BaseModel):
 
     events: list[EventIngestRequest] = Field(
         ..., min_length=1, max_length=500,
-        description="List of events to ingest (1-500)",
+        description="List of events to ingest (max 500 per batch)",
     )
 
 
 class SessionEventResponse(BaseModel):
     """Response model for a session event."""
 
-    id: UUID = Field(description="Unique event identifier")
-    session_id: UUID = Field(description="Session this event belongs to")
-    event_type: str = Field(description="Event type")
-    timestamp: str = Field(description="ISO 8601 event timestamp")
-    data: dict = Field(description="Event-type-specific payload")
-    sequence: int = Field(description="Monotonic sequence number")
+    id: UUID = Field(
+        description="Unique event identifier",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
+    session_id: UUID = Field(
+        description="Session this event belongs to",
+        examples=["660e8400-e29b-41d4-a716-446655440000"],
+    )
+    event_type: str = Field(description="Event type", examples=["message_user"])
+    timestamp: str = Field(description="ISO 8601 event timestamp", examples=["2025-01-15T10:30:00Z"])
+    data: dict = Field(description="Event-type-specific payload", examples=[{"content": "Hello"}])
+    sequence: int = Field(description="Monotonic sequence number", examples=[0])
     tokens_in: int | None = Field(
-        default=None, description="Input tokens consumed",
+        default=None, description="Input tokens consumed", examples=[150],
     )
     tokens_out: int | None = Field(
-        default=None, description="Output tokens generated",
+        default=None, description="Output tokens generated", examples=[75],
     )
     cost: float | None = Field(
-        default=None, description="Cost in USD",
+        default=None, description="Cost in USD", examples=[0.0025],
     )
     duration_ms: int | None = Field(
-        default=None, description="Duration in milliseconds",
+        default=None, description="Duration in milliseconds", examples=[1200],
     )
     model: str | None = Field(
-        default=None, description="LLM model identifier",
+        default=None, description="LLM model identifier", examples=["claude-sonnet-4-20250514"],
     )
 
     @classmethod
@@ -113,6 +133,7 @@ class SinkHealthResponse(BaseModel):
 
     sinks: dict[str, bool] = Field(
         description="Map of sink name to healthy status",
+        examples=[{"postgres": True, "websocket": True}],
     )
 
 
@@ -199,7 +220,7 @@ def create_events_router(
         tags=["Events"],
     )
     async def get_session_events(
-        session_id: UUID,
+        session_id: UUID = Path(description="Session UUID to query events for"),
         event_type: str | None = Query(
             default=None,
             description="Filter by event type (e.g. message_user)",
@@ -246,7 +267,9 @@ def create_events_router(
         response_model=dict[str, int],
         tags=["Events"],
     )
-    async def get_event_counts(session_id: UUID) -> dict[str, int]:
+    async def get_event_counts(
+        session_id: UUID = Path(description="Session UUID to get event counts for"),
+    ) -> dict[str, int]:
         """Get event type counts for a session."""
         return await event_repository.get_event_counts(session_id)
 
@@ -256,7 +279,7 @@ def create_events_router(
         tags=["Events"],
     )
     async def get_token_timeline(
-        session_id: UUID,
+        session_id: UUID = Path(description="Session UUID to get token timeline for"),
         bucket_seconds: int = Query(
             default=300, ge=60, le=3600,
             description="Time bucket size in seconds for aggregation",

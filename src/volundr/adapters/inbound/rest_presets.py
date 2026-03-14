@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from volundr.domain.models import Preset
@@ -81,6 +81,20 @@ class PresetCreate(BaseModel):
         default_factory=dict,
         description="Additional workload-specific configuration",
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "name": "claude-heavy",
+                "description": "High-resource preset for complex tasks",
+                "cli_tool": "claude",
+                "workload_type": "session",
+                "model": "claude-sonnet-4-20250514",
+                "resource_config": {"cpu": "4", "memory": "8Gi"},
+                "is_default": False,
+            },
+        },
+    }
 
 
 class PresetUpdate(BaseModel):
@@ -216,7 +230,7 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
         responses={404: {"model": ErrorResponse}},
         tags=["Presets"],
     )
-    async def get_preset(preset_id: UUID) -> PresetResponse:
+    async def get_preset(preset_id: UUID = Path(description="Unique preset identifier")) -> PresetResponse:
         """Get a preset by ID."""
         try:
             preset = await preset_service.get_preset(preset_id)
@@ -267,7 +281,7 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
         responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
         tags=["Presets"],
     )
-    async def update_preset(preset_id: UUID, data: PresetUpdate) -> PresetResponse:
+    async def update_preset(preset_id: UUID = Path(description="Unique preset identifier"), data: PresetUpdate = ...) -> PresetResponse:
         """Update a preset."""
         try:
             updates = data.model_dump(exclude_unset=True)
@@ -290,7 +304,7 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
         responses={404: {"model": ErrorResponse}},
         tags=["Presets"],
     )
-    async def delete_preset(preset_id: UUID) -> None:
+    async def delete_preset(preset_id: UUID = Path(description="Unique preset identifier")) -> None:
         """Delete a preset."""
         try:
             await preset_service.delete_preset(preset_id)

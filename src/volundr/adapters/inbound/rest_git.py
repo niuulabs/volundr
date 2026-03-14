@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from volundr.domain.models import PullRequest
@@ -34,6 +34,16 @@ class PRCreateRequest(BaseModel):
         default="main",
         description="Target branch for the pull request",
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "title": "fix: resolve JWT validation bypass",
+                "target_branch": "main",
+            },
+        },
+    }
 
 
 class PRMergeRequest(BaseModel):
@@ -224,7 +234,7 @@ def create_git_router(
         tags=["Repositories"],
     )
     async def get_pr(
-        pr_number: int,
+        pr_number: int = Path(description="Pull request number"),
         repo_url: str = Query(..., description="Repository URL"),
     ) -> PullRequestResponse:
         """Get a pull request by number."""
@@ -252,8 +262,8 @@ def create_git_router(
         tags=["Repositories"],
     )
     async def merge_pr(
-        pr_number: int,
-        request: PRMergeRequest,
+        pr_number: int = Path(description="Pull request number"),
+        request: PRMergeRequest = ...,
         repo_url: str = Query(..., description="Repository URL"),
     ) -> MergeResultResponse:
         """Merge a pull request."""
@@ -277,7 +287,7 @@ def create_git_router(
         tags=["Repositories"],
     )
     async def get_ci_status(
-        pr_number: int,
+        pr_number: int = Path(description="Pull request number"),
         repo_url: str = Query(..., description="Repository URL"),
         branch: str = Query(..., description="Branch name"),
     ) -> CIStatusResponse:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from volundr.domain.models import (
@@ -100,6 +100,19 @@ class ProfileCreateRequest(BaseModel):
         default=False,
         description="Whether this is the default profile",
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "name": "gpu-heavy",
+                "description": "Profile for GPU-intensive workloads",
+                "workload_type": "session",
+                "model": "claude-sonnet-4-20250514",
+                "resource_config": {"cpu": "4", "memory": "16Gi", "gpu": "1"},
+                "is_default": False,
+            },
+        },
+    }
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -225,7 +238,7 @@ def create_profiles_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Profiles"],
     )
-    async def get_profile(profile_name: str) -> ProfileResponse:
+    async def get_profile(profile_name: str = Path(description="Profile name to retrieve")) -> ProfileResponse:
         """Get a forge profile by name."""
         profile = profile_service.get_profile(profile_name)
         if profile is None:
@@ -289,8 +302,8 @@ def create_profiles_router(
         tags=["Profiles"],
     )
     async def update_profile(
-        profile_name: str,
-        data: ProfileUpdateRequest,
+        profile_name: str = Path(description="Profile name to update"),
+        data: ProfileUpdateRequest = ...,
     ) -> ProfileResponse:
         """Update an existing forge profile."""
         existing = profile_service.get_profile(profile_name)
@@ -362,7 +375,7 @@ def create_profiles_router(
         },
         tags=["Profiles"],
     )
-    async def delete_profile(profile_name: str) -> None:
+    async def delete_profile(profile_name: str = Path(description="Profile name to delete")) -> None:
         """Delete a forge profile."""
         try:
             await profile_service.delete_profile(profile_name)
@@ -405,7 +418,7 @@ def create_profiles_router(
         responses={404: {"model": ErrorResponse}},
         tags=["Templates"],
     )
-    async def get_template(template_name: str) -> TemplateResponse:
+    async def get_template(template_name: str = Path(description="Template name to retrieve")) -> TemplateResponse:
         """Get a workspace template by name (loaded from configuration)."""
         template = template_service.get_template(template_name)
         if template is None:

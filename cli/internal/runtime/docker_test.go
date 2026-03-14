@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -932,6 +933,300 @@ func TestDockerRuntime_EnsureNetwork_Create(t *testing.T) {
 	err := r.ensureNetwork("test-network")
 	if err != nil {
 		t.Fatalf("ensureNetwork: %v", err)
+	}
+}
+
+func TestDockerRuntime_EnsureNetwork_CreateFail(t *testing.T) {
+	withMockExecFail(t)
+
+	r := NewDockerRuntime()
+	err := r.ensureNetwork("test-net")
+	if err == nil {
+		t.Fatal("expected error when network create fails")
+	}
+	if !strings.Contains(err.Error(), "create network") {
+		t.Errorf("expected 'create network' error, got: %v", err)
+	}
+}
+
+func TestEnsureImage_PullFail(t *testing.T) {
+	withMockExecFail(t)
+
+	err := ensureImage("test-image:latest")
+	if err == nil {
+		t.Fatal("expected error when image inspect and pull both fail")
+	}
+	if !strings.Contains(err.Error(), "pull image") {
+		t.Errorf("expected 'pull image' error, got: %v", err)
+	}
+}
+
+func TestDockerRuntime_Init_ComposeNotAvailable(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	// First call succeeds (docker version), second fails (docker compose version).
+	// With simple mock, all calls use the same behavior, so we use MOCK_COMMANDS.
+	withMockExec(t, `MOCK_COMMANDS=compose version:::`, `MOCK_EXIT_CODE=1`)
+
+	r := NewDockerRuntime()
+	cfg := &config.Config{}
+
+	// With MOCK_EXIT_CODE=1 set, all commands fail.
+	err := r.Init(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when docker compose not available")
+	}
+}
+
+func TestDockerRuntime_Down_NetworkNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Mock returns "not found" for network rm command.
+	withMockExec(t, "MOCK_RESPONSE=not found")
+
+	r := NewDockerRuntime()
+	err := r.Down(context.Background())
+	// Should succeed without error since "not found" is ignored.
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+}
+
+func TestDockerRuntime_Up_ExternalDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExec(t)
+
+	r := NewDockerRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0}, // port 0 to avoid binding conflicts
+		Database: config.DatabaseConfig{
+			Mode:     "external",
+			Host:     "db.example.com",
+			Port:     5432,
+			User:     "user",
+			Password: "pass",
+			Name:     "mydb",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := r.Up(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+
+	// Verify PID file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); err != nil {
+		t.Error("expected PID file to be written")
+	}
+
+	// Verify state file was written.
+	stateFilePath := filepath.Join(volundrDir, StateFile)
+	if _, err := os.Stat(stateFilePath); err != nil {
+		t.Error("expected state file to be written")
+	}
+
+	// Verify compose file was written.
+	composePath := filepath.Join(volundrDir, composeFileName)
+	if _, err := os.Stat(composePath); err != nil {
+		t.Error("expected compose file to be written")
+	}
+
+	// Verify docker config was written.
+	configPath := filepath.Join(volundrDir, dockerConfigFileName)
+	if _, err := os.Stat(configPath); err != nil {
+		t.Error("expected docker config to be written")
+	}
+
+	// Cancel context to stop the proxy goroutine.
+	cancel()
+}
+
+func TestDockerRuntime_Up_AlreadyRunning(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write a PID file with our own PID to simulate already running.
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	r := NewDockerRuntime()
+	cfg := &config.Config{}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when already running")
+	}
+	if !strings.Contains(err.Error(), "already running") {
+		t.Errorf("expected 'already running' error, got: %v", err)
+	}
+}
+
+func TestDockerRuntime_Up_NetworkFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	withMockExecFail(t)
+
+	r := NewDockerRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "external",
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when network creation fails")
+	}
+	if !strings.Contains(err.Error(), "docker network") {
+		t.Errorf("expected docker network error, got: %v", err)
+	}
+}
+
+func TestDockerRuntime_Logs_StartFail(t *testing.T) {
+	// Use an invalid command to trigger Start error.
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PATH", tmpDir) // no docker available
+
+	r := NewDockerRuntime()
+	_, err := r.Logs(context.Background(), "api", false)
+	if err == nil {
+		t.Fatal("expected error when docker is not available")
+	}
+}
+
+func TestDockerRuntime_Init_ImageEnsureFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	// Use MOCK_COMMANDS: docker version succeeds, compose version succeeds, image inspect fails, pull fails.
+	withMockExec(t, `MOCK_COMMANDS=docker version:::1.0|||compose version:::1.0|||image inspect:::|||pull:::`)
+
+	r := NewDockerRuntime()
+	cfg := &config.Config{
+		Docker: config.DockerConfig{
+			APIImage: "custom-image:v1",
+		},
+	}
+
+	// With the mock returning empty for image inspect and pull, both succeed (exit 0).
+	err := r.Init(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+}
+
+func TestBuildGitConfig(t *testing.T) {
+	cfg := &config.Config{
+		Git: config.GitConfig{
+			GitHub: config.GitHubConfig{
+				Enabled: true,
+				Instances: []config.GitHubInstanceConfig{
+					{
+						Name:     "main",
+						BaseURL:  "https://github.com",
+						Token:    "ghp_test",
+						TokenEnv: "GITHUB_TOKEN",
+						Orgs:     []string{"org1", "org2"},
+					},
+					{
+						Name:    "secondary",
+						BaseURL: "https://github.example.com",
+					},
+				},
+			},
+		},
+	}
+
+	result := buildGitConfig(cfg)
+
+	gh, ok := result["github"]
+	if !ok {
+		t.Fatal("expected github key")
+	}
+
+	ghMap, ok := gh.(map[string]interface{})
+	if !ok {
+		t.Fatal("expected github to be a map")
+	}
+
+	if ghMap["enabled"] != true {
+		t.Error("expected enabled to be true")
+	}
+
+	instances, ok := ghMap["instances"].([]map[string]interface{})
+	if !ok {
+		t.Fatal("expected instances to be a slice of maps")
+	}
+
+	if len(instances) != 2 {
+		t.Fatalf("expected 2 instances, got %d", len(instances))
+	}
+
+	if instances[0]["token"] != "ghp_test" {
+		t.Errorf("expected token ghp_test, got %v", instances[0]["token"])
+	}
+
+	if instances[0]["token_env"] != "GITHUB_TOKEN" {
+		t.Errorf("expected token_env GITHUB_TOKEN, got %v", instances[0]["token_env"])
+	}
+
+	orgs, ok := instances[0]["orgs"].([]string)
+	if !ok {
+		t.Fatal("expected orgs to be a string slice")
+	}
+	if len(orgs) != 2 {
+		t.Errorf("expected 2 orgs, got %d", len(orgs))
+	}
+
+	// Second instance should not have token or token_env.
+	if _, hasToken := instances[1]["token"]; hasToken {
+		t.Error("did not expect token on secondary instance")
+	}
+}
+
+func TestBuildGitConfig_NotEnabled(t *testing.T) {
+	cfg := &config.Config{
+		Git: config.GitConfig{
+			GitHub: config.GitHubConfig{
+				Enabled: false,
+			},
+		},
+	}
+
+	result := buildGitConfig(cfg)
+	if _, ok := result["github"]; ok {
+		t.Error("expected no github key when not enabled")
 	}
 }
 

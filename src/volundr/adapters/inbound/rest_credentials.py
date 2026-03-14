@@ -23,51 +23,57 @@ class CredentialCreate(BaseModel):
         max_length=100,
         pattern=r"^[a-z0-9_-]+$",
         description="Credential name (lowercase alphanumeric, hyphens, underscores)",
+        examples=["my-api-key"],
     )
     secret_type: str = Field(
         default="generic",
         description="Secret type (api_key, oauth_token, git_credential, etc.)",
+        examples=["api_key"],
     )
     data: dict[str, str] = Field(
         description="Key-value pairs of secret data",
+        examples=[{"token": "sk-abc123"}],
     )
     metadata: dict[str, str] | None = Field(
         default=None,
         description="Optional metadata labels for the credential",
+        examples=[{"environment": "production"}],
     )
 
 
 class CredentialResponse(BaseModel):
     """Response model for a credential (metadata only, NEVER values)."""
 
-    id: str = Field(description="Unique credential identifier")
-    name: str = Field(description="Credential name")
-    secret_type: str = Field(description="Secret type classification")
-    keys: list[str] = Field(description="List of secret data key names")
-    metadata: dict = Field(description="Credential metadata labels")
-    created_at: str = Field(description="ISO 8601 creation timestamp")
-    updated_at: str = Field(description="ISO 8601 last update timestamp")
+    id: str = Field(description="Unique credential identifier", examples=["a1b2c3d4"])
+    name: str = Field(description="Credential name", examples=["my-api-key"])
+    secret_type: str = Field(description="Secret type classification", examples=["api_key"])
+    keys: list[str] = Field(description="List of secret data key names", examples=[["token", "secret"]])
+    metadata: dict = Field(description="Credential metadata labels", examples=[{"environment": "production"}])
+    created_at: str = Field(description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"])
+    updated_at: str = Field(description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"])
 
 
 class CredentialListResponse(BaseModel):
     """Response model for listing credentials."""
 
     credentials: list[CredentialResponse] = Field(
-        description="List of credential metadata entries",
+        description="List of credential metadata entries (values are never included)",
     )
 
 
 class SecretTypeInfoResponse(BaseModel):
     """Response model for a secret type definition."""
 
-    type: str = Field(description="Secret type identifier")
-    label: str = Field(description="Human-readable label")
-    description: str = Field(description="Description of the secret type")
+    type: str = Field(description="Secret type identifier", examples=["api_key"])
+    label: str = Field(description="Human-readable label", examples=["API Key"])
+    description: str = Field(description="Description of the secret type", examples=["Token-based API authentication"])
     fields: list[dict] = Field(
         description="Required fields for this secret type",
+        examples=[[{"name": "token", "required": True}]],
     )
     default_mount_type: str = Field(
         description="Default mount type (env_file, file, template)",
+        examples=["env_file"],
     )
 
 
