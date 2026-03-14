@@ -518,6 +518,7 @@ class StorageConfig(BaseModel):
 
         storage:
           adapter: "volundr.adapters.outbound.k8s_storage_adapter.K8sStorageAdapter"
+          home_enabled: true
           kwargs:
             namespace: "volundr-sessions"
             home_storage_class: "volundr-home"
@@ -526,6 +527,10 @@ class StorageConfig(BaseModel):
     adapter: str = Field(
         default="volundr.adapters.outbound.k8s_storage.InMemoryStorageAdapter",
         description="Fully-qualified class path for the StoragePort adapter.",
+    )
+    home_enabled: bool = Field(
+        default=True,
+        description="Enable persistent home directories for sessions.",
     )
     kwargs: dict[str, Any] = Field(
         default_factory=dict,

@@ -19,6 +19,75 @@
   }
 }
 
+/* ─── Settings Panel ─── */
+.settingsPanel {
+  padding: var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.settingInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.settingLabel {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.settingDescription {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  max-width: 480px;
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  border: none;
+  background-color: var(--color-bg-elevated);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease;
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggleOn {
+  background-color: var(--color-accent-emerald);
+}
+
+.toggleKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-text-primary);
+  transition: transform 0.2s ease;
+}
+
+.toggleOn .toggleKnob {
+  transform: translateX(20px);
+}
+
 /* ─── Summary Cards ─── */
 .summaryCards {
   display: grid;

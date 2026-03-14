@@ -68,6 +68,28 @@ class TestStorageContributor:
         await c.cleanup(session, SessionContext())
         storage.archive_session_workspace.assert_called_once_with(str(session.id))
 
+    async def test_home_disabled_skips_provisioning(self, session):
+        storage = AsyncMock()
+        storage.create_session_workspace.return_value = PVCRef(name="ws-pvc")
+        storage.get_workspace_by_session.return_value = None
+
+        c = StorageContributor(storage=storage, home_enabled=False)
+        result = await c.contribute(session, SessionContext())
+        assert "homeVolume" not in result.values
+        assert result.values["persistence"]["existingClaim"] == "ws-pvc"
+        storage.provision_user_storage.assert_not_called()
+
+    async def test_admin_settings_override(self, session):
+        storage = AsyncMock()
+        storage.create_session_workspace.return_value = PVCRef(name="ws-pvc")
+        storage.get_workspace_by_session.return_value = None
+
+        admin_settings = {"storage": {"home_enabled": False}}
+        c = StorageContributor(storage=storage, home_enabled=True, admin_settings=admin_settings)
+        result = await c.contribute(session, SessionContext())
+        assert "homeVolume" not in result.values
+        storage.provision_user_storage.assert_not_called()
+
     async def test_cleanup_noop_without_storage(self, session):
         c = StorageContributor()
         await c.cleanup(session, SessionContext())  # Should not raise

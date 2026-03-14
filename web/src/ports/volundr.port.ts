@@ -36,6 +36,8 @@ import type {
   VolundrMember,
   VolundrProvisioningResult,
   SessionSource,
+  AdminSettings,
+  AdminStorageSettings,
 } from '@/models';
 
 /**
@@ -475,4 +477,16 @@ export interface IVolundrService {
    * Delete a workspace
    */
   deleteWorkspace(id: string): Promise<void>;
+
+  // Admin settings
+
+  /**
+   * Get admin settings (admin only)
+   */
+  getAdminSettings(): Promise<AdminSettings>;
+
+  /**
+   * Update admin settings (admin only)
+   */
+  updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings>;
 }

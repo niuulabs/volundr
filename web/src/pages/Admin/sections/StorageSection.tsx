@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { HardDrive } from 'lucide-react';
-import type { VolundrWorkspace, WorkspaceStatus } from '@/models';
+import type { VolundrWorkspace, WorkspaceStatus, AdminSettings } from '@/models';
 import type { IVolundrService } from '@/ports';
 import { cn } from '@/utils/classnames';
 import styles from './StorageSection.module.css';
@@ -25,6 +25,8 @@ export function StorageSection({ service }: StorageSectionProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [deleteTarget, setDeleteTarget] = useState<VolundrWorkspace | null>(null);
+  const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
+  const [settingsToggling, setSettingsToggling] = useState(false);
 
   const loadWorkspaces = useCallback(async () => {
     setLoading(true);
@@ -36,9 +38,34 @@ export function StorageSection({ service }: StorageSectionProps) {
     }
   }, [service]);
 
+  const loadSettings = useCallback(async () => {
+    try {
+      const settings = await service.getAdminSettings();
+      setAdminSettings(settings);
+    } catch {
+      // Settings endpoint may not be available in all environments
+    }
+  }, [service]);
+
   useEffect(() => {
     loadWorkspaces();
-  }, [loadWorkspaces]);
+    loadSettings();
+  }, [loadWorkspaces, loadSettings]);
+
+  const handleToggleHomeEnabled = useCallback(async () => {
+    if (!adminSettings) {
+      return;
+    }
+    setSettingsToggling(true);
+    try {
+      const updated = await service.updateAdminSettings({
+        storage: { homeEnabled: !adminSettings.storage.homeEnabled },
+      });
+      setAdminSettings(updated);
+    } finally {
+      setSettingsToggling(false);
+    }
+  }, [service, adminSettings]);
 
   const handleRestore = useCallback(
     async (id: string) => {
@@ -83,6 +110,33 @@ export function StorageSection({ service }: StorageSectionProps) {
 
   return (
     <div className={styles.section}>
+      {/* Settings */}
+      {adminSettings && (
+        <div className={styles.settingsPanel}>
+          <div className={styles.settingRow}>
+            <div className={styles.settingInfo}>
+              <span className={styles.settingLabel}>Persistent home directories</span>
+              <span className={styles.settingDescription}>
+                Mount a persistent volume as $HOME for each session. Preserves dotfiles, shell
+                history, and CLI credentials across sessions.
+              </span>
+            </div>
+            <button
+              type="button"
+              className={cn(
+                styles.toggle,
+                adminSettings.storage.homeEnabled && styles.toggleOn
+              )}
+              onClick={handleToggleHomeEnabled}
+              disabled={settingsToggling}
+              aria-label="Toggle persistent home directories"
+            >
+              <span className={styles.toggleKnob} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div className={styles.summaryCards}>
         <div className={styles.summaryCard}>

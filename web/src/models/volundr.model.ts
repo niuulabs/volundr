@@ -376,6 +376,14 @@ export interface VolundrWorkspace {
   archivedAt?: string;
 }
 
+export interface AdminStorageSettings {
+  homeEnabled: boolean;
+}
+
+export interface AdminSettings {
+  storage: AdminStorageSettings;
+}
+
 // Types merged from forgeProfile.model.ts
 export type McpServerType = 'stdio' | 'sse' | 'http';
 

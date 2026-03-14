@@ -123,6 +123,8 @@ export type {
   RuleConfig,
   WorkspaceStatus,
   VolundrWorkspace,
+  AdminSettings,
+  AdminStorageSettings,
 } from './volundr.model';
 
 export { TASK_TYPES } from './volundr.model';
