@@ -548,7 +548,7 @@ func debugLogMsg(msg tea.Msg) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ts := time.Now().Format("15:04:05.000")
 	_, _ = fmt.Fprintf(f, "%s [%T] %+v\n", ts, msg, msg)

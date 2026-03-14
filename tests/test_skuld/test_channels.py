@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import sys
+
 from volundr.skuld.channels import (
     ChannelRegistry,
     MessageChannel,
@@ -581,7 +583,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_with_command(self, channel):
-        import volundr.skuld.channels as ch_mod
+        ch_mod = sys.modules["volundr.skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
@@ -595,7 +597,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_with_file_path(self, channel):
-        import volundr.skuld.channels as ch_mod
+        ch_mod = sys.modules["volundr.skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
@@ -609,7 +611,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_no_detail(self, channel):
-        import volundr.skuld.channels as ch_mod
+        ch_mod = sys.modules["volundr.skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
@@ -623,7 +625,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_error(self, channel):
-        import volundr.skuld.channels as ch_mod
+        ch_mod = sys.modules["volundr.skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True

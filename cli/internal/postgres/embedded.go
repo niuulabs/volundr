@@ -80,13 +80,17 @@ func (e *EmbeddedPostgres) Stop() error {
 }
 
 // RunMigrations applies all pending up migrations from the given directory.
-func (e *EmbeddedPostgres) RunMigrations(ctx context.Context, migrationsDir string) (int, error) {
+func (e *EmbeddedPostgres) RunMigrations(ctx context.Context, migrationsDir string) (applied int, err error) {
 	dsn := e.config.DSN()
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return 0, fmt.Errorf("open database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if cerr := db.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close database: %w", cerr)
+		}
+	}()
 
 	if err := db.PingContext(ctx); err != nil {
 		return 0, fmt.Errorf("ping database: %w", err)
@@ -109,7 +113,7 @@ func (e *EmbeddedPostgres) RunMigrations(ctx context.Context, migrationsDir stri
 		return 0, fmt.Errorf("find migration files: %w", err)
 	}
 
-	applied := 0
+	applied = 0
 	for _, f := range files {
 		version := extractVersion(f)
 

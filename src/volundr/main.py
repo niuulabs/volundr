@@ -771,7 +771,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 try:
                     await background_task
                 except asyncio.CancelledError:
-                    pass
+                    pass  # Expected: task cancellation during shutdown
                 await event_ingestion.close_all()
                 if linear_adapter is not None:
                     await linear_adapter.close()

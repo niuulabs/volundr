@@ -297,6 +297,6 @@ func debugLogWS(data []byte) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, _ = fmt.Fprintf(f, "--- FRAME ---\n%s\n", data)
 }

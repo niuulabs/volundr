@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -149,7 +150,7 @@ func (c *OIDCClient) AuthorizationCodeFlow(ctx context.Context, clientID string,
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 			desc := r.URL.Query().Get("error_description")
-			fmt.Fprintf(w, "<html><body><h1>Login failed</h1><p>%s: %s</p></body></html>", errMsg, desc)
+			fmt.Fprintf(w, "<html><body><h1>Login failed</h1><p>%s: %s</p></body></html>", html.EscapeString(errMsg), html.EscapeString(desc))
 			resultCh <- callbackResult{err: fmt.Errorf("authorization error: %s — %s", errMsg, desc)}
 			return
 		}

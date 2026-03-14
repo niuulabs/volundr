@@ -309,12 +309,12 @@ class TerminalServer:
         try:
             os.close(handle.master_fd)
         except OSError:
-            pass
+            pass  # Expected: fd may already be closed
         try:
             os.kill(handle.child_pid, signal.SIGTERM)
             os.waitpid(handle.child_pid, 0)
         except (ProcessLookupError, ChildProcessError, OSError):
-            pass
+            pass  # Expected: child process may already have exited
 
     def _kill_session(self, terminal_id: str) -> bool:
         """Kill a tmux window by terminal ID."""
@@ -462,7 +462,7 @@ class TerminalServer:
                         if shell in CLI_COMMANDS:
                             return shell
         except FileNotFoundError:
-            pass
+            pass  # Expected: prefs file may not exist yet, fall back to default
         return "zsh"
 
     @staticmethod
@@ -494,7 +494,7 @@ class TerminalServer:
                     stat = os.stat(full_path)
                     entry["size"] = stat.st_size
                 except OSError:
-                    pass
+                    pass  # Expected: file may have been removed between checks
             dotfiles.append(entry)
         return web.json_response({"dotfiles": dotfiles, "homeDir": home_dir})
 
@@ -677,9 +677,9 @@ class TerminalServer:
                     )
                 )
         except (OSError, ConnectionResetError):
-            pass
+            pass  # Expected: PTY fd closed or WebSocket connection dropped
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during shutdown
 
     @staticmethod
     def _blocking_read(fd: int) -> bytes | None:

@@ -313,7 +313,7 @@ class TestGitHubInstance:
             instance.name = "Changed"
             assert False, "Should have raised an error"
         except AttributeError:
-            pass
+            pass  # Expected: frozen dataclass should reject mutation
 
     def test_instance_orgs_default_empty(self):
         """GitHubInstance orgs defaults to empty tuple."""
@@ -368,7 +368,7 @@ class TestGitLabInstance:
             instance.name = "Changed"
             assert False, "Should have raised an error"
         except AttributeError:
-            pass
+            pass  # Expected: frozen dataclass should reject mutation
 
     def test_instance_orgs_default_empty(self):
         """GitLabInstance orgs defaults to empty tuple."""

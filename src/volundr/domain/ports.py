@@ -74,12 +74,10 @@ class SessionRepository(ABC):
     @abstractmethod
     async def create(self, session: Session) -> Session:
         """Persist a new session."""
-        ...
 
     @abstractmethod
     async def get(self, session_id: UUID) -> Session | None:
         """Retrieve a session by ID. Returns None if not found."""
-        ...
 
     @abstractmethod
     async def list(
@@ -89,17 +87,14 @@ class SessionRepository(ABC):
         owner_id: str | None = None,
     ) -> list[Session]:
         """Retrieve sessions, filtered by status/tenant/owner."""
-        ...
 
     @abstractmethod
     async def update(self, session: Session) -> Session:
         """Update an existing session."""
-        ...
 
     @abstractmethod
     async def delete(self, session_id: UUID) -> bool:
         """Delete a session. Returns True if deleted, False if not found."""
-        ...
 
 
 class ChronicleRepository(ABC):
@@ -108,17 +103,14 @@ class ChronicleRepository(ABC):
     @abstractmethod
     async def create(self, chronicle: Chronicle) -> Chronicle:
         """Persist a new chronicle."""
-        ...
 
     @abstractmethod
     async def get(self, chronicle_id: UUID) -> Chronicle | None:
         """Retrieve a chronicle by ID. Returns None if not found."""
-        ...
 
     @abstractmethod
     async def get_by_session(self, session_id: UUID) -> Chronicle | None:
         """Retrieve the most recent chronicle for a session."""
-        ...
 
     @abstractmethod
     async def list(
@@ -131,17 +123,14 @@ class ChronicleRepository(ABC):
         offset: int = 0,
     ) -> list[Chronicle]:
         """Retrieve chronicles with optional filters."""
-        ...
 
     @abstractmethod
     async def update(self, chronicle: Chronicle) -> Chronicle:
         """Update an existing chronicle."""
-        ...
 
     @abstractmethod
     async def delete(self, chronicle_id: UUID) -> bool:
         """Delete a chronicle. Returns True if deleted, False if not found."""
-        ...
 
     @abstractmethod
     async def get_chain(self, chronicle_id: UUID) -> list[Chronicle]:
@@ -150,7 +139,6 @@ class ChronicleRepository(ABC):
         Walks the parent_chronicle_id links to build the full chain,
         ordered from oldest ancestor to the given chronicle.
         """
-        ...
 
 
 class TimelineRepository(ABC):
@@ -159,22 +147,18 @@ class TimelineRepository(ABC):
     @abstractmethod
     async def add_event(self, event: TimelineEvent) -> TimelineEvent:
         """Persist a new timeline event."""
-        ...
 
     @abstractmethod
     async def get_events(self, chronicle_id: UUID) -> list[TimelineEvent]:
         """Retrieve all timeline events for a chronicle, ordered by t."""
-        ...
 
     @abstractmethod
     async def get_events_by_session(self, session_id: UUID) -> list[TimelineEvent]:
         """Retrieve all timeline events for a session, ordered by t."""
-        ...
 
     @abstractmethod
     async def delete_by_chronicle(self, chronicle_id: UUID) -> int:
         """Delete all timeline events for a chronicle. Returns count deleted."""
-        ...
 
 
 class PodManager(ABC):
@@ -195,7 +179,6 @@ class PodManager(ABC):
         Returns:
             PodStartResult containing chat_endpoint, code_endpoint, and pod_name.
         """
-        ...
 
     @abstractmethod
     async def stop(self, session: Session) -> bool:
@@ -204,12 +187,10 @@ class PodManager(ABC):
         Returns:
             True if stopped successfully.
         """
-        ...
 
     @abstractmethod
     async def status(self, session: Session) -> SessionStatus:
         """Get the current status of session pods."""
-        ...
 
     @abstractmethod
     async def wait_for_ready(self, session: Session, timeout: float) -> SessionStatus:
@@ -218,7 +199,6 @@ class PodManager(ABC):
         Returns RUNNING if ready, FAILED if failed/timeout.
         Each adapter implements this optimally for its backend.
         """
-        ...
 
 
 class StatsRepository(ABC):
@@ -231,7 +211,6 @@ class StatsRepository(ABC):
         Returns:
             Stats containing session counts, token usage, and cost for today.
         """
-        ...
 
 
 class TokenTracker(ABC):
@@ -258,7 +237,6 @@ class TokenTracker(ABC):
         Returns:
             The created TokenUsageRecord.
         """
-        ...
 
     @abstractmethod
     async def get_session_usage(self, session_id: UUID) -> int:
@@ -270,7 +248,6 @@ class TokenTracker(ABC):
         Returns:
             Total tokens used by the session.
         """
-        ...
 
 
 class PricingProvider(ABC):
@@ -286,7 +263,6 @@ class PricingProvider(ABC):
         Returns:
             Price per million tokens in USD, or None if model not found or free.
         """
-        ...
 
     @abstractmethod
     def list_models(self) -> list[Model]:
@@ -295,7 +271,6 @@ class PricingProvider(ABC):
         Returns:
             List of available models.
         """
-        ...
 
 
 class GitProvider(ABC):
@@ -310,7 +285,6 @@ class GitProvider(ABC):
     @abstractmethod
     def provider_type(self) -> GitProviderType:
         """Return the type of this git provider."""
-        ...
 
     @property
     @abstractmethod
@@ -319,13 +293,11 @@ class GitProvider(ABC):
 
         Examples: 'GitHub', 'GitLab', 'GitLab (self-hosted)'
         """
-        ...
 
     @property
     @abstractmethod
     def orgs(self) -> tuple[str, ...]:
         """Return the configured organizations/groups for this provider."""
-        ...
 
     @abstractmethod
     def supports(self, repo_url: str) -> bool:
@@ -337,7 +309,6 @@ class GitProvider(ABC):
         Returns:
             True if this provider can handle the URL.
         """
-        ...
 
     @abstractmethod
     async def validate_repo(self, repo_url: str) -> bool:
@@ -349,7 +320,6 @@ class GitProvider(ABC):
         Returns:
             True if the repository exists and is accessible.
         """
-        ...
 
     @abstractmethod
     def parse_repo(self, repo_url: str) -> RepoInfo | None:
@@ -361,7 +331,6 @@ class GitProvider(ABC):
         Returns:
             RepoInfo if the URL can be parsed, None otherwise.
         """
-        ...
 
     @abstractmethod
     def get_clone_url(self, repo_url: str) -> str | None:
@@ -373,7 +342,6 @@ class GitProvider(ABC):
         Returns:
             Authenticated clone URL, or None if not supported.
         """
-        ...
 
     @abstractmethod
     async def list_repos(self, org: str) -> list[RepoInfo]:
@@ -385,7 +353,6 @@ class GitProvider(ABC):
         Returns:
             List of repositories in the organization.
         """
-        ...
 
     @abstractmethod
     async def list_branches(self, repo_url: str) -> list[str]:
@@ -401,7 +368,6 @@ class GitProvider(ABC):
             GitAuthError: If authentication fails.
             GitRepoNotFoundError: If the repository is not found.
         """
-        ...
 
 
 class GitAuthError(Exception):
@@ -426,7 +392,6 @@ class EventBroadcaster(ABC):
         Args:
             event: The event to broadcast.
         """
-        ...
 
     @abstractmethod
     async def subscribe(self) -> AsyncGenerator[RealtimeEvent, None]:
@@ -437,7 +402,6 @@ class EventBroadcaster(ABC):
             The generator should be used in an async for loop and will
             continue yielding events until the subscription is cancelled.
         """
-        ...
 
 
 class ProfileProvider(ABC):
@@ -450,17 +414,14 @@ class ProfileProvider(ABC):
     @abstractmethod
     def get(self, name: str) -> ForgeProfile | None:
         """Retrieve a profile by name. Returns None if not found."""
-        ...
 
     @abstractmethod
     def list(self, workload_type: str | None = None) -> list[ForgeProfile]:
         """Retrieve profiles, optionally filtered by workload type."""
-        ...
 
     @abstractmethod
     def get_default(self, workload_type: str) -> ForgeProfile | None:
         """Retrieve the default profile for a workload type."""
-        ...
 
 
 class MutableProfileProvider(ProfileProvider):
@@ -469,17 +430,14 @@ class MutableProfileProvider(ProfileProvider):
     @abstractmethod
     async def create(self, profile: ForgeProfile) -> ForgeProfile:
         """Create a new profile. Raises ValueError if name already exists."""
-        ...
 
     @abstractmethod
     async def update(self, name: str, profile: ForgeProfile) -> ForgeProfile:
         """Update an existing profile. Raises ValueError if not found."""
-        ...
 
     @abstractmethod
     async def delete(self, name: str) -> bool:
         """Delete a profile by name. Returns True if deleted."""
-        ...
 
 
 class TemplateProvider(ABC):
@@ -492,12 +450,10 @@ class TemplateProvider(ABC):
     @abstractmethod
     def get(self, name: str) -> WorkspaceTemplate | None:
         """Retrieve a template by name. Returns None if not found."""
-        ...
 
     @abstractmethod
     def list(self, workload_type: str | None = None) -> list[WorkspaceTemplate]:
         """Retrieve templates, optionally filtered by workload type."""
-        ...
 
 
 class EventSink(ABC):
@@ -512,34 +468,28 @@ class EventSink(ABC):
     @abstractmethod
     async def emit(self, event: SessionEvent) -> None:
         """Emit a single event to this sink."""
-        ...
 
     @abstractmethod
     async def emit_batch(self, events: list[SessionEvent]) -> None:
         """Emit a batch of events."""
-        ...
 
     @abstractmethod
     async def flush(self) -> None:
         """Flush any buffered events. Called on graceful shutdown."""
-        ...
 
     @abstractmethod
     async def close(self) -> None:
         """Release resources (connections, channels, exporters)."""
-        ...
 
     @property
     @abstractmethod
     def sink_name(self) -> str:
         """Human-readable sink name for logging/metrics."""
-        ...
 
     @property
     @abstractmethod
     def healthy(self) -> bool:
         """Whether this sink is currently accepting events."""
-        ...
 
 
 class SessionEventRepository(ABC):
@@ -556,7 +506,6 @@ class SessionEventRepository(ABC):
         offset: int = 0,
     ) -> list[SessionEvent]:
         """Retrieve events for a session with optional filters."""
-        ...
 
     @abstractmethod
     async def get_event_counts(
@@ -564,7 +513,6 @@ class SessionEventRepository(ABC):
         session_id: UUID,
     ) -> dict[str, int]:
         """Get event type counts for a session."""
-        ...
 
     @abstractmethod
     async def get_token_timeline(
@@ -573,12 +521,10 @@ class SessionEventRepository(ABC):
         bucket_seconds: int = 300,
     ) -> list[dict]:
         """Get token usage bucketed over time."""
-        ...
 
     @abstractmethod
     async def delete_by_session(self, session_id: UUID) -> int:
         """Delete all events for a session. Returns count deleted."""
-        ...
 
 
 class GitWorkflowProvider(ABC):
@@ -605,7 +551,6 @@ class GitWorkflowProvider(ABC):
         Returns:
             True if created successfully.
         """
-        ...
 
     @abstractmethod
     async def create_pull_request(
@@ -630,7 +575,6 @@ class GitWorkflowProvider(ABC):
         Returns:
             The created PullRequest.
         """
-        ...
 
     @abstractmethod
     async def get_pull_request(self, repo_url: str, pr_number: int) -> PullRequest | None:
@@ -643,7 +587,6 @@ class GitWorkflowProvider(ABC):
         Returns:
             PullRequest if found, None otherwise.
         """
-        ...
 
     @abstractmethod
     async def list_pull_requests(self, repo_url: str, status: str = "open") -> list[PullRequest]:
@@ -656,7 +599,6 @@ class GitWorkflowProvider(ABC):
         Returns:
             List of matching pull requests.
         """
-        ...
 
     @abstractmethod
     async def merge_pull_request(
@@ -675,7 +617,6 @@ class GitWorkflowProvider(ABC):
         Returns:
             True if merged successfully.
         """
-        ...
 
     @abstractmethod
     async def get_ci_status(self, repo_url: str, branch: str) -> CIStatus:
@@ -688,7 +629,6 @@ class GitWorkflowProvider(ABC):
         Returns:
             The CI status.
         """
-        ...
 
 
 class SavedPromptRepository(ABC):
@@ -697,12 +637,10 @@ class SavedPromptRepository(ABC):
     @abstractmethod
     async def create(self, prompt: SavedPrompt) -> SavedPrompt:
         """Persist a new saved prompt."""
-        ...
 
     @abstractmethod
     async def get(self, prompt_id: UUID) -> SavedPrompt | None:
         """Retrieve a saved prompt by ID."""
-        ...
 
     @abstractmethod
     async def list(
@@ -711,22 +649,18 @@ class SavedPromptRepository(ABC):
         repo: str | None = None,
     ) -> list[SavedPrompt]:
         """List saved prompts with optional scope/repo filter."""
-        ...
 
     @abstractmethod
     async def update(self, prompt: SavedPrompt) -> SavedPrompt:
         """Update an existing saved prompt."""
-        ...
 
     @abstractmethod
     async def delete(self, prompt_id: UUID) -> bool:
         """Delete a saved prompt. Returns True if deleted."""
-        ...
 
     @abstractmethod
     async def search(self, query: str) -> list[SavedPrompt]:
         """Search prompts by name and content (case-insensitive)."""
-        ...
 
 
 class PresetRepository(ABC):
@@ -735,17 +669,14 @@ class PresetRepository(ABC):
     @abstractmethod
     async def create(self, preset: Preset) -> Preset:
         """Persist a new preset."""
-        ...
 
     @abstractmethod
     async def get(self, preset_id: UUID) -> Preset | None:
         """Retrieve a preset by ID. Returns None if not found."""
-        ...
 
     @abstractmethod
     async def get_by_name(self, name: str) -> Preset | None:
         """Retrieve a preset by name. Returns None if not found."""
-        ...
 
     @abstractmethod
     async def list(
@@ -754,22 +685,18 @@ class PresetRepository(ABC):
         is_default: bool | None = None,
     ) -> list[Preset]:
         """List presets with optional filters."""
-        ...
 
     @abstractmethod
     async def update(self, preset: Preset) -> Preset:
         """Update an existing preset."""
-        ...
 
     @abstractmethod
     async def delete(self, preset_id: UUID) -> bool:
         """Delete a preset. Returns True if deleted."""
-        ...
 
     @abstractmethod
     async def clear_default(self, cli_tool: str) -> None:
         """Clear the is_default flag for all presets with the given cli_tool."""
-        ...
 
 
 class MCPServerProvider(ABC):
@@ -778,12 +705,10 @@ class MCPServerProvider(ABC):
     @abstractmethod
     def list(self) -> list[MCPServerConfig]:
         """Return all available MCP server configurations."""
-        ...
 
     @abstractmethod
     def get(self, name: str) -> MCPServerConfig | None:
         """Return a specific MCP server config by name."""
-        ...
 
 
 class SecretManager(ABC):
@@ -792,12 +717,10 @@ class SecretManager(ABC):
     @abstractmethod
     async def list(self) -> list[SecretInfo]:
         """List available secrets (filtered by label selector)."""
-        ...
 
     @abstractmethod
     async def get(self, name: str) -> SecretInfo | None:
         """Get a specific secret's metadata by name."""
-        ...
 
     @abstractmethod
     async def create(self, name: str, data: dict[str, str]) -> SecretInfo:
@@ -807,7 +730,6 @@ class SecretManager(ABC):
             SecretAlreadyExistsError: If a secret with this name already exists.
             SecretValidationError: If the name is invalid.
         """
-        ...
 
 
 class SecretAlreadyExistsError(Exception):
@@ -828,12 +750,10 @@ class IssueTrackerProvider(ABC):
     @abstractmethod
     def provider_name(self) -> str:
         """Return the name of this provider (e.g., 'linear', 'jira')."""
-        ...
 
     @abstractmethod
     async def check_connection(self) -> TrackerConnectionStatus:
         """Check the connection status to the issue tracker."""
-        ...
 
     @abstractmethod
     async def search_issues(
@@ -842,7 +762,6 @@ class IssueTrackerProvider(ABC):
         project_id: str | None = None,
     ) -> list[TrackerIssue]:
         """Search issues by query string."""
-        ...
 
     @abstractmethod
     async def get_recent_issues(
@@ -851,12 +770,10 @@ class IssueTrackerProvider(ABC):
         limit: int = 10,
     ) -> list[TrackerIssue]:
         """Get recent issues for a project."""
-        ...
 
     @abstractmethod
     async def get_issue(self, issue_id: str) -> TrackerIssue | None:
         """Get a single issue by ID or identifier."""
-        ...
 
     @abstractmethod
     async def update_issue_status(
@@ -865,7 +782,6 @@ class IssueTrackerProvider(ABC):
         status: str,
     ) -> TrackerIssue:
         """Update the status of an issue."""
-        ...
 
 
 class IntegrationRepository(ABC):
@@ -878,12 +794,10 @@ class IntegrationRepository(ABC):
         integration_type: IntegrationType | None = None,
     ) -> list[IntegrationConnection]:
         """List connections for a user, optionally filtered by type."""
-        ...
 
     @abstractmethod
     async def get_connection(self, connection_id: str) -> IntegrationConnection | None:
         """Get a single connection by ID."""
-        ...
 
     @abstractmethod
     async def save_connection(
@@ -891,12 +805,10 @@ class IntegrationRepository(ABC):
         connection: IntegrationConnection,
     ) -> IntegrationConnection:
         """Create or update a connection."""
-        ...
 
     @abstractmethod
     async def delete_connection(self, connection_id: str) -> None:
         """Delete a connection by ID."""
-        ...
 
 
 class ProjectMappingRepository(ABC):
@@ -905,22 +817,18 @@ class ProjectMappingRepository(ABC):
     @abstractmethod
     async def create(self, mapping: ProjectMapping) -> ProjectMapping:
         """Persist a new project mapping."""
-        ...
 
     @abstractmethod
     async def list(self) -> list[ProjectMapping]:
         """Retrieve all project mappings."""
-        ...
 
     @abstractmethod
     async def get_by_repo(self, repo_url: str) -> ProjectMapping | None:
         """Retrieve a mapping by repo URL."""
-        ...
 
     @abstractmethod
     async def delete(self, mapping_id: UUID) -> bool:
         """Delete a mapping. Returns True if deleted."""
-        ...
 
 
 class TenantRepository(ABC):
@@ -929,37 +837,30 @@ class TenantRepository(ABC):
     @abstractmethod
     async def create(self, tenant: Tenant) -> Tenant:
         """Persist a new tenant."""
-        ...
 
     @abstractmethod
     async def get(self, tenant_id: str) -> Tenant | None:
         """Retrieve a tenant by ID."""
-        ...
 
     @abstractmethod
     async def get_by_path(self, path: str) -> Tenant | None:
         """Retrieve a tenant by its materialized path."""
-        ...
 
     @abstractmethod
     async def list(self, parent_id: str | None = None) -> list[Tenant]:
         """List tenants, optionally filtered by parent."""
-        ...
 
     @abstractmethod
     async def get_ancestors(self, path: str) -> list[Tenant]:
         """Get all ancestors of a tenant path (root first)."""
-        ...
 
     @abstractmethod
     async def update(self, tenant: Tenant) -> Tenant:
         """Update a tenant."""
-        ...
 
     @abstractmethod
     async def delete(self, tenant_id: str) -> bool:
         """Delete a tenant. Returns True if deleted."""
-        ...
 
 
 class UserRepository(ABC):
@@ -968,52 +869,42 @@ class UserRepository(ABC):
     @abstractmethod
     async def create(self, user: User) -> User:
         """Persist a new user."""
-        ...
 
     @abstractmethod
     async def get(self, user_id: str) -> User | None:
         """Retrieve a user by ID (IDP sub)."""
-        ...
 
     @abstractmethod
     async def get_by_email(self, email: str) -> User | None:
         """Retrieve a user by email."""
-        ...
 
     @abstractmethod
     async def list(self) -> list[User]:
         """List all users."""
-        ...
 
     @abstractmethod
     async def update(self, user: User) -> User:
         """Update a user."""
-        ...
 
     @abstractmethod
     async def delete(self, user_id: str) -> bool:
         """Delete a user. Returns True if deleted."""
-        ...
 
     @abstractmethod
     async def add_membership(self, membership: TenantMembership) -> TenantMembership:
         """Add a user to a tenant with a role."""
-        ...
 
     @abstractmethod
     async def get_memberships(self, user_id: str) -> list[TenantMembership]:
         """Get all tenant memberships for a user."""
-        ...
 
     @abstractmethod
     async def get_members(self, tenant_id: str) -> list[TenantMembership]:
         """Get all members of a tenant."""
-        ...
 
     @abstractmethod
     async def remove_membership(self, user_id: str, tenant_id: str) -> bool:
         """Remove a user from a tenant. Returns True if removed."""
-        ...
 
 
 class IdentityPort(ABC):
@@ -1026,7 +917,6 @@ class IdentityPort(ABC):
         Raises:
             InvalidTokenError: If the token is invalid or expired.
         """
-        ...
 
     @abstractmethod
     async def get_or_provision_user(self, principal: Principal) -> User:
@@ -1035,7 +925,6 @@ class IdentityPort(ABC):
         Raises:
             UserProvisioningError: If provisioning fails.
         """
-        ...
 
 
 class InvalidTokenError(Exception):
@@ -1066,7 +955,6 @@ class AuthorizationPort(ABC):
         resource: Resource,
     ) -> bool:
         """Check if a principal is allowed to perform an action on a resource."""
-        ...
 
     @abstractmethod
     async def filter_allowed(
@@ -1076,7 +964,6 @@ class AuthorizationPort(ABC):
         resources: list[Resource],
     ) -> list[Resource]:
         """Filter a list of resources to only those the principal can access."""
-        ...
 
 
 class SecretRepository(ABC):
@@ -1089,7 +976,6 @@ class SecretRepository(ABC):
         data: dict[str, str],
     ) -> None:
         """Store a credential at the given path."""
-        ...
 
     @abstractmethod
     async def get_credential(
@@ -1100,12 +986,10 @@ class SecretRepository(ABC):
 
         Returns None if not found.
         """
-        ...
 
     @abstractmethod
     async def delete_credential(self, path: str) -> bool:
         """Delete a credential at the given path."""
-        ...
 
     @abstractmethod
     async def list_credentials(
@@ -1113,7 +997,6 @@ class SecretRepository(ABC):
         path_prefix: str,
     ) -> list[str]:
         """List credential keys under a path prefix."""
-        ...
 
     @abstractmethod
     async def provision_user(
@@ -1125,12 +1008,10 @@ class SecretRepository(ABC):
 
         Called during JIT user provisioning (NIU-97).
         """
-        ...
 
     @abstractmethod
     async def deprovision_user(self, user_id: str) -> None:
         """Remove OpenBao policy and K8s auth role for a user."""
-        ...
 
     @abstractmethod
     async def create_session_secrets(
@@ -1140,7 +1021,6 @@ class SecretRepository(ABC):
         mounts: list[SecretMountSpec],
     ) -> None:
         """Create ephemeral session secrets and Vault Agent config."""
-        ...
 
     @abstractmethod
     async def delete_session_secrets(
@@ -1148,7 +1028,6 @@ class SecretRepository(ABC):
         session_id: str,
     ) -> None:
         """Delete ephemeral session secrets."""
-        ...
 
 
 class StoragePort(ABC):
@@ -1169,7 +1048,6 @@ class StoragePort(ABC):
         quota: StorageQuota,
     ) -> PVCRef:
         """Create a home PVC for a user. Idempotent."""
-        ...
 
     @abstractmethod
     async def create_session_workspace(
@@ -1180,7 +1058,6 @@ class StoragePort(ABC):
         workspace_gb: int | None = None,
     ) -> PVCRef:
         """Create a workspace PVC for a session."""
-        ...
 
     @abstractmethod
     async def archive_session_workspace(
@@ -1188,7 +1065,6 @@ class StoragePort(ABC):
         session_id: str,
     ) -> None:
         """Archive a session's workspace PVC (soft delete)."""
-        ...
 
     @abstractmethod
     async def delete_workspace(
@@ -1196,7 +1072,6 @@ class StoragePort(ABC):
         session_id: str,
     ) -> None:
         """Permanently delete a session's workspace PVC (explicit user action only)."""
-        ...
 
     @abstractmethod
     async def get_user_storage_usage(
@@ -1204,7 +1079,6 @@ class StoragePort(ABC):
         user_id: str,
     ) -> int:
         """Get total storage in GB currently in use by a user."""
-        ...
 
     @abstractmethod
     async def deprovision_user_storage(
@@ -1212,7 +1086,6 @@ class StoragePort(ABC):
         user_id: str,
     ) -> None:
         """Delete a user's home PVC."""
-        ...
 
     async def list_workspaces(
         self,
@@ -1254,7 +1127,6 @@ class GatewayPort(ABC):
             JWT/auth config needed by Skuld's HTTPRoute template.
             Empty dict when gateway routing is not configured.
         """
-        ...
 
 
 class CredentialStorePort(ABC):
@@ -1271,7 +1143,6 @@ class CredentialStorePort(ABC):
         metadata: dict | None = None,
     ) -> StoredCredential:
         """Store a credential. Overwrites if name already exists."""
-        ...
 
     @abstractmethod
     async def get(
@@ -1281,7 +1152,6 @@ class CredentialStorePort(ABC):
         name: str,
     ) -> StoredCredential | None:
         """Get credential metadata by name. Returns None if not found."""
-        ...
 
     @abstractmethod
     async def get_value(
@@ -1291,7 +1161,6 @@ class CredentialStorePort(ABC):
         name: str,
     ) -> dict[str, str] | None:
         """Get credential secret data by name. Returns None if not found."""
-        ...
 
     @abstractmethod
     async def delete(
@@ -1301,7 +1170,6 @@ class CredentialStorePort(ABC):
         name: str,
     ) -> None:
         """Delete a credential. No-op if not found."""
-        ...
 
     @abstractmethod
     async def list(
@@ -1311,12 +1179,10 @@ class CredentialStorePort(ABC):
         secret_type: SecretType | None = None,
     ) -> list[StoredCredential]:
         """List credentials for an owner, optionally filtered by type."""
-        ...
 
     @abstractmethod
     async def health_check(self) -> bool:
         """Check if the credential store backend is reachable."""
-        ...
 
 
 class SecretMountStrategy(ABC):
@@ -1325,7 +1191,6 @@ class SecretMountStrategy(ABC):
     @abstractmethod
     def secret_type(self) -> SecretType:
         """Return the secret type this strategy handles."""
-        ...
 
     @abstractmethod
     def default_mount_spec(
@@ -1334,12 +1199,10 @@ class SecretMountStrategy(ABC):
         secret_data: dict,
     ) -> SecretMountSpec:
         """Return the default mount spec for this secret type."""
-        ...
 
     @abstractmethod
     def validate(self, secret_data: dict) -> list[str]:
         """Validate secret data. Returns list of error messages (empty = valid)."""
-        ...
 
 
 class SecretInjectionPort(ABC):
@@ -1356,17 +1219,14 @@ class SecretInjectionPort(ABC):
         session_id: str,
     ) -> PodSpecAdditions:
         """Return pod spec contributions for secret injection."""
-        ...
 
     @abstractmethod
     async def provision_user(self, user_id: str) -> None:
         """Create backend resources for a new user."""
-        ...
 
     @abstractmethod
     async def deprovision_user(self, user_id: str) -> None:
         """Clean up backend resources for a removed user."""
-        ...
 
 
 class ResourceProvider(ABC):
@@ -1379,7 +1239,6 @@ class ResourceProvider(ABC):
     @abstractmethod
     async def discover(self) -> ClusterResourceInfo:
         """Discover available resource types and cluster capacity."""
-        ...
 
     @abstractmethod
     def translate(self, resource_config: dict) -> TranslatedResources:
@@ -1393,7 +1252,6 @@ class ResourceProvider(ABC):
             TranslatedResources with requests, limits, nodeSelector,
             tolerations, and runtimeClassName.
         """
-        ...
 
     @abstractmethod
     def validate(
@@ -1406,7 +1264,6 @@ class ResourceProvider(ABC):
         Returns:
             List of validation error messages (empty = valid).
         """
-        ...
 
 
 @dataclass(frozen=True)

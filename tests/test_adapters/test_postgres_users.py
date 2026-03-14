@@ -121,13 +121,15 @@ class TestUserDelete:
         repo, pool = _make_repo()
         pool.execute.return_value = "DELETE 1"
 
-        assert await repo.delete("u1") is True
+        result = await repo.delete("u1")
+        assert result is True
 
     async def test_delete_not_found(self):
         repo, pool = _make_repo()
         pool.execute.return_value = "DELETE 0"
 
-        assert await repo.delete("missing") is False
+        result = await repo.delete("missing")
+        assert result is False
 
 
 class TestMemberships:
@@ -158,10 +160,12 @@ class TestMemberships:
         repo, pool = _make_repo()
         pool.execute.return_value = "DELETE 1"
 
-        assert await repo.remove_membership("u1", "t1") is True
+        result = await repo.remove_membership("u1", "t1")
+        assert result is True
 
     async def test_remove_membership_not_found(self):
         repo, pool = _make_repo()
         pool.execute.return_value = "DELETE 0"
 
-        assert await repo.remove_membership("u1", "t1") is False
+        result = await repo.remove_membership("u1", "t1")
+        assert result is False

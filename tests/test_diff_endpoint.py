@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 import respx
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import ASGITransport, AsyncClient, ConnectError, Response
 
 from volundr.adapters.inbound.rest import create_router
 from volundr.domain.models import GitSource, Session, SessionStatus
@@ -202,10 +202,8 @@ class TestDiffEndpoint:
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        import httpx
-
         respx.get("https://test-session.example.com/api/diff").mock(
-            side_effect=httpx.ConnectError("Connection refused")
+            side_effect=ConnectError("Connection refused")
         )
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -377,10 +375,8 @@ class TestChronicleDiffEndpoint:
         service = SessionService(repository=repository, pod_manager=pod_manager)
         app = _make_app(service)
 
-        import httpx
-
         respx.get("https://test-session.example.com/api/diff").mock(
-            side_effect=httpx.ConnectError("Connection refused")
+            side_effect=ConnectError("Connection refused")
         )
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

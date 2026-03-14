@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from volundr.adapters.outbound.k8s_resource_provider import K8sResourceProvider
+import volundr.adapters.outbound.k8s_resource_provider as k8s_mod
 from volundr.adapters.outbound.static_resource_provider import (
     StaticResourceProvider,
     translate_resource_config,
@@ -148,7 +148,7 @@ class TestK8sResourceProviderKubeconfig:
     @pytest.mark.asyncio
     async def test_kubeconfig_kwarg_triggers_load_kube_config(self):
         """When kubeconfig is provided, load_kube_config(config_file=...) is called."""
-        provider = K8sResourceProvider(kubeconfig="/path/to/kubeconfig")
+        provider = k8s_mod.K8sResourceProvider(kubeconfig="/path/to/kubeconfig")
 
         # Directly test via mocking kubernetes_asyncio imports
         mock_config = AsyncMock()
@@ -168,10 +168,8 @@ class TestK8sResourceProviderKubeconfig:
             # Re-import to pick up mocked modules
             import importlib
 
-            import volundr.adapters.outbound.k8s_resource_provider as mod
-
-            importlib.reload(mod)
-            provider = mod.K8sResourceProvider(kubeconfig="/path/to/kubeconfig")
+            importlib.reload(k8s_mod)
+            provider = k8s_mod.K8sResourceProvider(kubeconfig="/path/to/kubeconfig")
             info = await provider.discover()
 
             mock_config.load_kube_config.assert_called_once_with(config_file="/path/to/kubeconfig")
@@ -197,10 +195,8 @@ class TestK8sResourceProviderKubeconfig:
         ):
             import importlib
 
-            import volundr.adapters.outbound.k8s_resource_provider as mod
-
-            importlib.reload(mod)
-            provider = mod.K8sResourceProvider()
+            importlib.reload(k8s_mod)
+            provider = k8s_mod.K8sResourceProvider()
             info = await provider.discover()
 
             mock_config.load_incluster_config.assert_called_once()
@@ -230,10 +226,8 @@ class TestK8sResourceProviderKubeconfig:
         ):
             import importlib
 
-            import volundr.adapters.outbound.k8s_resource_provider as mod
-
-            importlib.reload(mod)
-            provider = mod.K8sResourceProvider()
+            importlib.reload(k8s_mod)
+            provider = k8s_mod.K8sResourceProvider()
             info = await provider.discover()
 
             mock_config.load_incluster_config.assert_called_once()
@@ -243,7 +237,7 @@ class TestK8sResourceProviderKubeconfig:
     @pytest.mark.asyncio
     async def test_all_failures_fall_back_to_static_types(self):
         """When all config loading fails, return static resource types."""
-        provider = K8sResourceProvider(kubeconfig="/nonexistent/path")
+        provider = k8s_mod.K8sResourceProvider(kubeconfig="/nonexistent/path")
 
         # The discover method catches all exceptions and falls back
         info = await provider.discover()
