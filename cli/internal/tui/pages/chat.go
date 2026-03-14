@@ -267,9 +267,9 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) { //nolint:gocritic //
 				c.scrollPos = 0
 			}
 		case "G":
-			c.scrollPos = 0
+			c.scrollPos = 0 // G = jump to bottom (latest messages)
 		case "g":
-			c.scrollPos = 999999
+			c.scrollPos = 999999 // g = jump to top (oldest messages)
 		}
 	}
 	return c, nil

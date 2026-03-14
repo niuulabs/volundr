@@ -21,3 +21,13 @@ type ClusterStatusMsg struct {
 	Status     ClusterStatus
 	Error      error
 }
+
+// PaletteNavigateMsg requests navigation to a specific page from the palette.
+type PaletteNavigateMsg struct {
+	Page Page
+}
+
+// PaletteActionMsg requests execution of a named action from the palette.
+type PaletteActionMsg struct {
+	Action string
+}

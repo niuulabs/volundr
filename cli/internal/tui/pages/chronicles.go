@@ -54,7 +54,10 @@ type ChroniclesPage struct {
 	commits   []api.TimelineCommit
 	filtered  []ChronicleEvent
 	cursor    int
+	scrollPos int
 	filter    string // "all", "session", "message", "file", "git", "terminal", "error"
+	search    string
+	searching bool
 	loading   bool
 	loadErr   error
 	noSession bool
@@ -116,6 +119,10 @@ func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) { //nolint
 		c.applyFilter()
 		return c, nil
 	case tea.KeyMsg:
+		if c.searching {
+			return c.handleSearchInput(msg)
+		}
+
 		switch msg.String() {
 		case "up", "k":
 			if c.cursor > 0 {
@@ -125,6 +132,19 @@ func (c ChroniclesPage) Update(msg tea.Msg) (ChroniclesPage, tea.Cmd) { //nolint
 			if c.cursor < len(c.filtered)-1 {
 				c.cursor++
 			}
+		case "J":
+			c.scrollPos++
+		case "K":
+			if c.scrollPos > 0 {
+				c.scrollPos--
+			}
+		case "G":
+			c.cursor = max(0, len(c.filtered)-1)
+		case "g":
+			c.cursor = 0
+		case "/":
+			c.searching = true
+			c.search = ""
 		case "tab":
 			c.cycleFilter(1)
 		case "shift+tab":
@@ -204,13 +224,48 @@ func (c *ChroniclesPage) cycleFilter(dir int) {
 	c.applyFilter()
 }
 
-// applyFilter filters events by type.
+// handleSearchInput processes keystrokes in search mode.
+func (c ChroniclesPage) handleSearchInput(msg tea.KeyMsg) (ChroniclesPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
+	switch msg.String() {
+	case "enter", "esc":
+		c.searching = false
+	case "backspace":
+		if c.search != "" {
+			c.search = c.search[:len(c.search)-1]
+		}
+	case "space":
+		c.search += " "
+	default:
+		if text := msg.Key().Text; text != "" {
+			c.search += text
+		}
+	}
+	c.applyFilter()
+	return c, nil
+}
+
+// Searching returns whether the search input is active.
+func (c ChroniclesPage) Searching() bool { //nolint:gocritic // value receiver needed for page interface consistency
+	return c.searching
+}
+
+// applyFilter filters events by type and search term.
 func (c *ChroniclesPage) applyFilter() {
 	c.filtered = nil
+	lower := strings.ToLower(c.search)
 	for _, e := range c.events {
-		if c.filter == "all" || string(e.Type) == c.filter {
-			c.filtered = append(c.filtered, e)
+		if c.filter != "all" && string(e.Type) != c.filter {
+			continue
 		}
+		if c.search != "" {
+			if !strings.Contains(strings.ToLower(e.Label), lower) &&
+				!strings.Contains(strings.ToLower(e.Action), lower) &&
+				!strings.Contains(strings.ToLower(string(e.Type)), lower) &&
+				!strings.Contains(strings.ToLower(e.Hash), lower) {
+				continue
+			}
+		}
+		c.filtered = append(c.filtered, e)
 	}
 	if c.cursor >= len(c.filtered) {
 		c.cursor = max(0, len(c.filtered)-1)
@@ -264,8 +319,23 @@ func (c ChroniclesPage) View() string { //nolint:gocritic // value receiver need
 		Width:     c.width,
 	}
 
+	// Search bar
+	var searchBar string
+	if c.searching {
+		searchBar = lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Render("/ " + c.search + "\u2588")
+	} else if c.search != "" {
+		searchBar = lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render("Filter: " + c.search + "  (/ to edit)")
+	}
+
 	// Timeline
 	timelineHeight := c.height - 12
+	if searchBar != "" {
+		timelineHeight--
+	}
 	var timeline string
 
 	switch {
@@ -283,19 +353,23 @@ func (c ChroniclesPage) View() string { //nolint:gocritic // value receiver need
 		timeline = c.renderTimeline(timelineHeight)
 	}
 
+	parts := []string{
+		titleStyle.Render("◷ Chronicles"),
+		"",
+		cards,
+		"",
+		tabs.View(),
+	}
+	if searchBar != "" {
+		parts = append(parts, searchBar)
+	}
+	parts = append(parts, "", timeline)
+
 	return lipgloss.NewStyle().
 		Width(c.width).
 		Height(c.height).
 		Padding(1, 2).
-		Render(lipgloss.JoinVertical(lipgloss.Left,
-			titleStyle.Render("◷ Chronicles"),
-			"",
-			cards,
-			"",
-			tabs.View(),
-			"",
-			timeline,
-		))
+		Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
 }
 
 // renderTimeline renders the scrollable timeline of events.
