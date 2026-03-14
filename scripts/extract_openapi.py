@@ -38,7 +38,7 @@ def build_openapi_app() -> FastAPI:
     _meta = metadata("volundr")
 
     app = FastAPI(
-        title=_meta["Name"],
+        title="Volundr",
         description=_meta["Summary"],
         version=_meta["Version"],
         openapi_tags=[

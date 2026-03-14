@@ -6,9 +6,8 @@ import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
-
 from importlib.metadata import metadata
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -362,7 +361,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _meta = metadata("volundr")
 
     app = FastAPI(
-        title=_meta["Name"],
+        title="Volundr",
         description=_meta["Summary"],
         version=_meta["Version"],
         openapi_tags=[
