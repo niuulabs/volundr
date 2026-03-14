@@ -25,11 +25,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install oh-my-zsh system-wide (users get a copy via init-home.sh)
-RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-zsh
+# Pinned to a specific commit for reproducibility
+RUN git clone https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-zsh \
+    && cd /usr/share/oh-my-zsh && git checkout 8df5c1b18b1393dc5046c729094f897bd3636a9b \
+    && rm -rf .git
 
-# Install Node.js 24 LTS
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
+# Install Node.js 24 LTS (pinned keyring + apt source instead of curl|bash)
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" \
+    > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally via npm (same method as skuld pod)
