@@ -5,7 +5,8 @@
 # Usage: ./download-reh.sh [output-dir]
 #
 # The commit hash is read from the installed npm package to ensure
-# client and server are from the same VS Code build.
+# client and server are from the same VS Code build. If the pinned
+# commit's REH binary is unavailable, falls back to the latest stable.
 
 set -euo pipefail
 
@@ -33,11 +34,24 @@ echo "Output:         $OUTPUT_DIR"
 
 mkdir -p "$OUTPUT_DIR"
 
-# Download from Microsoft's official update endpoint
-URL="https://update.code.visualstudio.com/commit:${COMMIT}/server-${ARCH}/stable"
-echo "Downloading from: $URL"
+# Try the pinned commit first, fall back to latest stable if unavailable.
+# The OSS commit embedded in @codingame packages may not have a matching
+# REH binary on Microsoft's update server — only official VS Code release
+# commits are guaranteed to be available.
+COMMIT_URL="https://update.code.visualstudio.com/commit:${COMMIT}/server-${ARCH}/stable"
+LATEST_URL="https://update.code.visualstudio.com/latest/server-${ARCH}/stable"
 
-curl -fsSL "$URL" | tar -xz -C "$OUTPUT_DIR" --strip-components=1
+echo "Trying pinned commit: $COMMIT_URL"
+if curl -fsSL "$COMMIT_URL" -o /tmp/reh.tar.gz 2>/dev/null; then
+  echo "Downloaded REH for pinned commit"
+else
+  echo "WARN: Pinned commit not available, falling back to latest stable"
+  echo "Downloading from: $LATEST_URL"
+  curl -fsSL "$LATEST_URL" -o /tmp/reh.tar.gz
+fi
+
+tar -xz -C "$OUTPUT_DIR" --strip-components=1 -f /tmp/reh.tar.gz
+rm -f /tmp/reh.tar.gz
 
 echo "REH server installed to $OUTPUT_DIR"
 echo "Start with: $OUTPUT_DIR/bin/code-server-oss --host 0.0.0.0 --port 8445 --without-connection-token"
