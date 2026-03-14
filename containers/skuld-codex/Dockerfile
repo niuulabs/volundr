@@ -28,8 +28,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Install OpenAI Codex CLI
 RUN npm install -g @openai/codex
 
-# Create app user
-RUN useradd -m -s /bin/bash skuld
+# Create app user with UID 1000 (matches helm chart runAsUser)
+RUN existing=$(getent passwd 1000 | cut -d: -f1) && \
+    [ -n "$existing" ] && userdel -r "$existing" || true && \
+    useradd -m -s /bin/bash -u 1000 skuld
 
 # Set up Python virtual environment
 ENV VIRTUAL_ENV=/opt/venv
