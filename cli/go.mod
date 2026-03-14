@@ -3,7 +3,7 @@ module github.com/niuulabs/volundr/cli
 go 1.24.2
 
 require (
-	charm.land/bubbletea/v2 v2.0.1
+	charm.land/bubbletea/v2 v2.0.2
 	charm.land/lipgloss/v2 v2.0.0
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/charmbracelet/x/vt v0.0.0-20260309091332-e8ca31595cc4
