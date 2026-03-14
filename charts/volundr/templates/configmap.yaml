@@ -173,6 +173,7 @@ data:
 
     storage:
       adapter: {{ .Values.storageAdapter.adapter | quote }}
+      home_enabled: {{ .Values.storage.home.enabled }}
       kwargs: {{ .Values.storageAdapter.kwargs | toJson }}
       {{- if .Values.storageAdapter.secretKwargs }}
       secret_kwargs_env:
