@@ -33,8 +33,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user matching the session pod UID
-RUN useradd -m -u 1000 -s /bin/bash coder
+# Reuse the existing ubuntu user (UID 1000) that ships with ubuntu:24.04,
+# renaming it to 'coder' for clarity in ps/top output.
+RUN usermod -l coder -d /home/coder -m ubuntu && groupmod -n coder ubuntu
 
 COPY --from=fetch /opt/vscode-reh /opt/vscode-reh
 
