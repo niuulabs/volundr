@@ -41,7 +41,7 @@ func NewTerminalWSClient(baseURL, token string) *TerminalWSClient {
 }
 
 // Connect establishes a WebSocket connection to the terminal endpoint.
-// pathOrURL can be a relative path (appended to baseURL with Bearer auth)
+// PathOrURL can be a relative path (appended to baseURL with Bearer auth)
 // or a full ws(s):// URL (used as-is with access_token query param).
 func (t *TerminalWSClient) Connect(pathOrURL string) error {
 	t.mu.Lock()

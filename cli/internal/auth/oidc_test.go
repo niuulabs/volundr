@@ -646,7 +646,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 				go func() {
 					time.Sleep(50 * time.Millisecond)
 					callbackURL := fmt.Sprintf("%s?code=%s", redirectURI, code)
-					req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, callbackURL, nil) //nolint:gosec // test URL from httptest server
+					req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, callbackURL, http.NoBody) //nolint:gosec // test URL from httptest server
 					if err != nil {
 						return
 					}
@@ -683,7 +683,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		openBrowser := func(authURL string) error {
 			// Simulate browser: parse the auth URL and call it, which triggers
 			// the authorize handler to simulate the callback.
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, authURL, nil) //nolint:gosec // test URL
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, authURL, http.NoBody) //nolint:gosec // test URL
 			if err != nil {
 				return err
 			}
@@ -721,7 +721,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 			go func() {
 				time.Sleep(50 * time.Millisecond)
 				callbackURL := fmt.Sprintf("%s?error=access_denied&error_description=User+denied+access", redirectURI)
-				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, callbackURL, nil) //nolint:gosec // test URL
+				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, callbackURL, http.NoBody) //nolint:gosec // test URL
 				if err != nil {
 					return
 				}
@@ -756,7 +756,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 			redirectURI := parsed.Query().Get("redirect_uri")
 			go func() {
 				time.Sleep(50 * time.Millisecond)
-				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, redirectURI, nil) //nolint:gosec // test URL
+				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, redirectURI, http.NoBody) //nolint:gosec // test URL
 				if err != nil {
 					return
 				}

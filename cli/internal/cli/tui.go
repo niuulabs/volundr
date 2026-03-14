@@ -126,7 +126,7 @@ func newTUIModel(cfg *remote.Config, pool *tuipkg.ClientPool, sender *tuipkg.Pro
 	}
 }
 
-func (m tuiModel) Init() tea.Cmd {
+func (m tuiModel) Init() tea.Cmd { //nolint:gocritic // tea.Model interface requires value receiver
 	// Use the first connected client for the ping.
 	var pingClient *api.Client
 	connected := m.pool.ConnectedClients()
@@ -168,7 +168,7 @@ func (m tuiModel) Init() tea.Cmd {
 func quickPing(client *api.Client) error {
 	// Try unauthenticated health endpoint with a short timeout.
 	hc := &http.Client{Timeout: 3 * time.Second}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL()+"/health", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL()+"/health", http.NoBody)
 	if err != nil {
 		return client.Ping()
 	}
@@ -183,7 +183,7 @@ func quickPing(client *api.Client) error {
 	return client.Ping()
 }
 
-func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:gocritic // tea.Model interface requires value receiver
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
@@ -431,7 +431,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleSessionSelected wires up all pages when a session is selected.
-func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model, tea.Cmd) {
+func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model, tea.Cmd) { //nolint:gocritic // called from Update which requires value receiver
 	sess := msg.Session
 	m.activeSession = &sess
 
@@ -466,7 +466,7 @@ func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model
 
 // isInputCaptured returns true when the active page has a text input that
 // should suppress global keybindings (q, ?, [, 1-7).
-func (m tuiModel) isInputCaptured() bool {
+func (m tuiModel) isInputCaptured() bool { //nolint:gocritic // called from Update which requires value receiver
 	switch m.app.ActivePage {
 	case tuipkg.PageTerminal:
 		return m.terminal.InsertMode()
@@ -482,7 +482,7 @@ func (m tuiModel) isInputCaptured() bool {
 	return false
 }
 
-func (m tuiModel) View() tea.View {
+func (m tuiModel) View() tea.View { //nolint:gocritic // tea.Model interface requires value receiver
 	v := tea.View{AltScreen: true}
 
 	if !m.app.Ready {
@@ -550,7 +550,7 @@ func debugLogMsg(msg tea.Msg) {
 		return
 	}
 
-	f, err := os.OpenFile("/tmp/volundr-tui-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) //nolint:gosec // debug log in /tmp, not sensitive
+	f, err := os.OpenFile("/tmp/volundr-tui-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // debug log in /tmp, not sensitive
 	if err != nil {
 		return
 	}

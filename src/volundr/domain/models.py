@@ -223,8 +223,16 @@ class GitSource(BaseModel):
     """Git repository workspace source."""
 
     type: Literal["git"] = "git"
-    repo: str = Field(default="", max_length=500)
-    branch: str = Field(default="main", max_length=255)
+    repo: str = Field(
+        default="",
+        max_length=500,
+        description="Git repository URL or shorthand (e.g. github.com/org/repo)",
+    )
+    branch: str = Field(
+        default="main",
+        max_length=255,
+        description="Git branch to checkout",
+    )
 
     model_config = {"frozen": False}
 
@@ -232,9 +240,20 @@ class GitSource(BaseModel):
 class MountMapping(BaseModel):
     """A single host-to-container path mapping."""
 
-    host_path: str = Field(..., min_length=1)
-    mount_path: str = Field(..., min_length=1)
-    read_only: bool = True
+    host_path: str = Field(
+        ...,
+        min_length=1,
+        description="Absolute path on the host node filesystem",
+    )
+    mount_path: str = Field(
+        ...,
+        min_length=1,
+        description="Absolute path inside the session container",
+    )
+    read_only: bool = Field(
+        default=True,
+        description="Whether the mount is read-only",
+    )
 
     model_config = {"frozen": False}
 
@@ -243,8 +262,14 @@ class LocalMountSource(BaseModel):
     """Local filesystem mount workspace source."""
 
     type: Literal["local_mount"] = "local_mount"
-    paths: list[MountMapping] = Field(min_length=1)
-    node_selector: dict[str, str] = Field(default_factory=dict)
+    paths: list[MountMapping] = Field(
+        min_length=1,
+        description="Host-to-container path mappings for the workspace",
+    )
+    node_selector: dict[str, str] = Field(
+        default_factory=dict,
+        description="Kubernetes node selector labels to schedule on a specific node",
+    )
 
     model_config = {"frozen": False}
 
@@ -258,26 +283,86 @@ SessionSource = Annotated[
 class Session(BaseModel):
     """A Claude Code coding session."""
 
-    id: UUID = Field(default_factory=uuid4)
-    name: str = Field(..., min_length=1, max_length=255)
-    model: str = Field(default="", max_length=100)
-    source: SessionSource = Field(default_factory=GitSource)
-    status: SessionStatus = Field(default=SessionStatus.CREATED)
-    chat_endpoint: str | None = Field(default=None)
-    code_endpoint: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    last_active: datetime | None = Field(default=None)
-    message_count: int = Field(default=0, ge=0)
-    tokens_used: int = Field(default=0, ge=0)
-    pod_name: str | None = Field(default=None)
-    error: str | None = Field(default=None)
-    tracker_issue_id: str | None = Field(default=None)
-    preset_id: UUID | None = Field(default=None)
-    archived_at: datetime | None = Field(default=None)
-    owner_id: str | None = Field(default=None)
-    tenant_id: str | None = Field(default=None)
-    workspace_id: UUID | None = Field(default=None)
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique session identifier",
+    )
+    name: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Human-readable session name",
+    )
+    model: str = Field(
+        default="", max_length=100,
+        description="LLM model identifier used by the session",
+    )
+    source: SessionSource = Field(
+        default_factory=GitSource,
+        description="Workspace source configuration (git or local mount)",
+    )
+    status: SessionStatus = Field(
+        default=SessionStatus.CREATED,
+        description="Current lifecycle status of the session",
+    )
+    chat_endpoint: str | None = Field(
+        default=None,
+        description="URL for the Skuld chat proxy when running",
+    )
+    code_endpoint: str | None = Field(
+        default=None,
+        description="URL for the code-server IDE when running",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when the session was created",
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of the last session update",
+    )
+    last_active: datetime | None = Field(
+        default=None,
+        description="Timestamp of the last activity",
+    )
+    message_count: int = Field(
+        default=0, ge=0,
+        description="Total number of chat messages exchanged",
+    )
+    tokens_used: int = Field(
+        default=0, ge=0,
+        description="Total token count consumed by the session",
+    )
+    pod_name: str | None = Field(
+        default=None,
+        description="Kubernetes pod name when the session is running",
+    )
+    error: str | None = Field(
+        default=None,
+        description="Error message if the session is in a failed state",
+    )
+    tracker_issue_id: str | None = Field(
+        default=None,
+        description="Linked issue tracker issue identifier",
+    )
+    preset_id: UUID | None = Field(
+        default=None,
+        description="Preset used to configure this session",
+    )
+    archived_at: datetime | None = Field(
+        default=None,
+        description="Timestamp when the session was archived",
+    )
+    owner_id: str | None = Field(
+        default=None,
+        description="User ID of the session owner (IDP sub claim)",
+    )
+    tenant_id: str | None = Field(
+        default=None,
+        description="Tenant ID for multi-tenant isolation",
+    )
+    workspace_id: UUID | None = Field(
+        default=None,
+        description="Workspace PVC identifier for storage isolation",
+    )
 
     model_config = {"frozen": False}
 
@@ -432,24 +517,78 @@ class ChronicleStatus(StrEnum):
 class Chronicle(BaseModel):
     """A chronicle entry capturing session metadata for continuity."""
 
-    id: UUID = Field(default_factory=uuid4)
-    session_id: UUID | None = None
-    status: ChronicleStatus = Field(default=ChronicleStatus.DRAFT)
-    project: str = Field(..., min_length=1, max_length=255)
-    repo: str = Field(..., min_length=1, max_length=500)
-    branch: str = Field(..., min_length=1, max_length=255)
-    model: str = Field(..., min_length=1, max_length=100)
-    config_snapshot: dict = Field(default_factory=dict)
-    summary: str | None = Field(default=None)
-    key_changes: list[str] = Field(default_factory=list)
-    unfinished_work: str | None = Field(default=None)
-    token_usage: int = Field(default=0, ge=0)
-    cost: Decimal | None = Field(default=None)
-    duration_seconds: int | None = Field(default=None, ge=0)
-    tags: list[str] = Field(default_factory=list)
-    parent_chronicle_id: UUID | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique chronicle identifier",
+    )
+    session_id: UUID | None = Field(
+        default=None,
+        description="Session that produced this chronicle entry",
+    )
+    status: ChronicleStatus = Field(
+        default=ChronicleStatus.DRAFT,
+        description="Whether the chronicle is draft or complete",
+    )
+    project: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Project name derived from the repository",
+    )
+    repo: str = Field(
+        ..., min_length=1, max_length=500,
+        description="Git repository URL",
+    )
+    branch: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Git branch used during the session",
+    )
+    model: str = Field(
+        ..., min_length=1, max_length=100,
+        description="LLM model used during the session",
+    )
+    config_snapshot: dict = Field(
+        default_factory=dict,
+        description="Snapshot of the session configuration at creation time",
+    )
+    summary: str | None = Field(
+        default=None,
+        description="AI-generated summary of what was accomplished",
+    )
+    key_changes: list[str] = Field(
+        default_factory=list,
+        description="List of significant changes made during the session",
+    )
+    unfinished_work: str | None = Field(
+        default=None,
+        description="Description of work left incomplete for the next session",
+    )
+    token_usage: int = Field(
+        default=0, ge=0,
+        description="Total tokens consumed during the session",
+    )
+    cost: Decimal | None = Field(
+        default=None,
+        description="Estimated cost in USD for cloud model usage",
+    )
+    duration_seconds: int | None = Field(
+        default=None, ge=0,
+        description="Wall-clock duration of the session in seconds",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="User-defined tags for categorization and filtering",
+    )
+    parent_chronicle_id: UUID | None = Field(
+        default=None,
+        description="Parent chronicle ID for reforge chains",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when the chronicle was created",
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of the last chronicle update",
+    )
 
     model_config = {"frozen": False}
 
@@ -575,14 +714,38 @@ class PromptScope(StrEnum):
 class SavedPrompt(BaseModel):
     """A reusable saved prompt."""
 
-    id: UUID = Field(default_factory=uuid4)
-    name: str = Field(..., min_length=1, max_length=255)
-    content: str = Field(..., min_length=1)
-    scope: PromptScope = Field(default=PromptScope.GLOBAL)
-    project_repo: str | None = Field(default=None, max_length=500)
-    tags: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique prompt identifier",
+    )
+    name: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Human-readable prompt name",
+    )
+    content: str = Field(
+        ..., min_length=1,
+        description="The prompt text content",
+    )
+    scope: PromptScope = Field(
+        default=PromptScope.GLOBAL,
+        description="Visibility scope: global or project-specific",
+    )
+    project_repo: str | None = Field(
+        default=None, max_length=500,
+        description="Repository URL when scope is project",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Tags for categorization and search",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when the prompt was created",
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of the last prompt update",
+    )
 
     model_config = {"frozen": False}
 
@@ -590,14 +753,31 @@ class SavedPrompt(BaseModel):
 class TrackerIssue(BaseModel):
     """Issue from an external issue tracker (Linear, Jira, GitHub Issues, etc.)."""
 
-    id: str
-    identifier: str  # e.g., "NIU-57"
-    title: str
-    status: str
-    assignee: str | None = None
-    labels: list[str] = Field(default_factory=list)
-    priority: int = 0
-    url: str
+    id: str = Field(
+        description="Internal issue ID from the tracker backend",
+    )
+    identifier: str = Field(
+        description="Human-readable issue identifier (e.g. NIU-57)",
+    )
+    title: str = Field(description="Issue title")
+    status: str = Field(
+        description="Current issue status (e.g. In Progress, Done)",
+    )
+    assignee: str | None = Field(
+        default=None,
+        description="Display name of the assigned user",
+    )
+    labels: list[str] = Field(
+        default_factory=list,
+        description="Labels attached to the issue",
+    )
+    priority: int = Field(
+        default=0,
+        description="Priority level (0=none, 1=urgent, 4=low)",
+    )
+    url: str = Field(
+        description="Web URL to view the issue in the tracker",
+    )
 
     model_config = {"frozen": False}
 
@@ -605,11 +785,20 @@ class TrackerIssue(BaseModel):
 class ProjectMapping(BaseModel):
     """Maps a git repo URL to an issue tracker project."""
 
-    id: UUID = Field(default_factory=uuid4)
-    repo_url: str
-    project_id: str
-    project_name: str = ""
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique mapping identifier",
+    )
+    repo_url: str = Field(description="Git repository URL to map")
+    project_id: str = Field(description="Issue tracker project ID")
+    project_name: str = Field(
+        default="",
+        description="Human-readable project name",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when the mapping was created",
+    )
 
     model_config = {"frozen": False}
 
@@ -617,10 +806,20 @@ class ProjectMapping(BaseModel):
 class TrackerConnectionStatus(BaseModel):
     """Connection status for an issue tracker."""
 
-    connected: bool
-    provider: str  # "linear", "jira", etc.
-    workspace: str | None = None
-    user: str | None = None
+    connected: bool = Field(
+        description="Whether the tracker connection is active",
+    )
+    provider: str = Field(
+        description="Tracker provider name (e.g. linear, jira)",
+    )
+    workspace: str | None = Field(
+        default=None,
+        description="Workspace or organization name in the tracker",
+    )
+    user: str | None = Field(
+        default=None,
+        description="Authenticated user display name",
+    )
 
     model_config = {"frozen": False}
 
@@ -877,18 +1076,54 @@ class ForgeProfile(BaseModel):
     The Helm chart for the target task_type gives these values meaning.
     """
 
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(default="")
-    workload_type: str = Field(default="session")
-    model: str | None = Field(default=None, max_length=100)
-    system_prompt: str | None = Field(default=None)
-    resource_config: dict = Field(default_factory=dict)
-    mcp_servers: list[dict] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    env_secret_refs: list[str] = Field(default_factory=list)
-    workload_config: dict = Field(default_factory=dict)
-    is_default: bool = Field(default=False)
-    session_definition: str | None = Field(default=None)
+    name: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Profile name used as a reference key",
+    )
+    description: str = Field(
+        default="",
+        description="Human-readable description of the profile",
+    )
+    workload_type: str = Field(
+        default="session",
+        description="Workload type this profile targets",
+    )
+    model: str | None = Field(
+        default=None, max_length=100,
+        description="Default LLM model identifier",
+    )
+    system_prompt: str | None = Field(
+        default=None,
+        description="System prompt injected into the LLM context",
+    )
+    resource_config: dict = Field(
+        default_factory=dict,
+        description="Resource allocation config (cpu, memory, gpu)",
+    )
+    mcp_servers: list[dict] = Field(
+        default_factory=list,
+        description="MCP server configurations to attach",
+    )
+    env_vars: dict[str, str] = Field(
+        default_factory=dict,
+        description="Environment variables for the session pod",
+    )
+    env_secret_refs: list[str] = Field(
+        default_factory=list,
+        description="K8s secret names to mount as env vars",
+    )
+    workload_config: dict = Field(
+        default_factory=dict,
+        description="Additional workload-specific configuration",
+    )
+    is_default: bool = Field(
+        default=False,
+        description="Whether this is the default profile",
+    )
+    session_definition: str | None = Field(
+        default=None,
+        description="Skuld session definition CRD name to use",
+    )
 
     model_config = {"frozen": False}
 
@@ -900,24 +1135,78 @@ class Preset(BaseModel):
     independently from workspace templates (which are CRD/config-driven).
     """
 
-    id: UUID = Field(default_factory=uuid4)
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(default="")
-    is_default: bool = Field(default=False)
-    cli_tool: str = Field(default="")
-    workload_type: str = Field(default="session")
-    model: str | None = Field(default=None, max_length=100)
-    system_prompt: str | None = Field(default=None)
-    resource_config: dict = Field(default_factory=dict)
-    mcp_servers: list[dict] = Field(default_factory=list)
-    terminal_sidecar: dict = Field(default_factory=dict)
-    skills: list[dict] = Field(default_factory=list)
-    rules: list[dict] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    env_secret_refs: list[str] = Field(default_factory=list)
-    workload_config: dict = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique preset identifier",
+    )
+    name: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Human-readable preset name",
+    )
+    description: str = Field(
+        default="",
+        description="Description of the preset purpose",
+    )
+    is_default: bool = Field(
+        default=False,
+        description="Whether this is the default preset for its CLI tool",
+    )
+    cli_tool: str = Field(
+        default="",
+        description="CLI tool this preset targets (e.g. claude, aider)",
+    )
+    workload_type: str = Field(
+        default="session",
+        description="Workload type (e.g. session)",
+    )
+    model: str | None = Field(
+        default=None, max_length=100,
+        description="Default LLM model identifier",
+    )
+    system_prompt: str | None = Field(
+        default=None,
+        description="System prompt injected into the LLM context",
+    )
+    resource_config: dict = Field(
+        default_factory=dict,
+        description="Resource allocation config (cpu, memory, gpu)",
+    )
+    mcp_servers: list[dict] = Field(
+        default_factory=list,
+        description="MCP server configurations to attach",
+    )
+    terminal_sidecar: dict = Field(
+        default_factory=dict,
+        description="Terminal sidecar container configuration",
+    )
+    skills: list[dict] = Field(
+        default_factory=list,
+        description="Skill definitions available to the session",
+    )
+    rules: list[dict] = Field(
+        default_factory=list,
+        description="Rule definitions for session behavior",
+    )
+    env_vars: dict[str, str] = Field(
+        default_factory=dict,
+        description="Environment variables for the session pod",
+    )
+    env_secret_refs: list[str] = Field(
+        default_factory=list,
+        description="K8s secret names to mount as env vars",
+    )
+    workload_config: dict = Field(
+        default_factory=dict,
+        description="Additional workload-specific configuration",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when the preset was created",
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of the last preset update",
+    )
 
     model_config = {"frozen": False}
 
@@ -931,23 +1220,68 @@ class WorkspaceTemplate(BaseModel):
     launch a session.
     """
 
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(default="")
+    name: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Template name used as a reference key",
+    )
+    description: str = Field(
+        default="",
+        description="Human-readable description of the template",
+    )
     # Workspace config
-    repos: list[dict] = Field(default_factory=list)
-    setup_scripts: list[str] = Field(default_factory=list)
-    workspace_layout: dict = Field(default_factory=dict)
-    is_default: bool = Field(default=False)
+    repos: list[dict] = Field(
+        default_factory=list,
+        description="Git repositories to clone into the workspace",
+    )
+    setup_scripts: list[str] = Field(
+        default_factory=list,
+        description="Shell scripts to run during workspace setup",
+    )
+    workspace_layout: dict = Field(
+        default_factory=dict,
+        description="Directory layout configuration",
+    )
+    is_default: bool = Field(
+        default=False,
+        description="Whether this is the default template",
+    )
     # Runtime config (merged from ForgeProfile)
-    workload_type: str = Field(default="session")
-    model: str | None = Field(default=None, max_length=100)
-    system_prompt: str | None = Field(default=None)
-    resource_config: dict = Field(default_factory=dict)
-    mcp_servers: list[dict] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    env_secret_refs: list[str] = Field(default_factory=list)
-    workload_config: dict = Field(default_factory=dict)
-    session_definition: str | None = Field(default=None)
+    workload_type: str = Field(
+        default="session",
+        description="Workload type (e.g. session)",
+    )
+    model: str | None = Field(
+        default=None, max_length=100,
+        description="Default LLM model identifier",
+    )
+    system_prompt: str | None = Field(
+        default=None,
+        description="System prompt injected into the LLM context",
+    )
+    resource_config: dict = Field(
+        default_factory=dict,
+        description="Resource allocation config (cpu, memory, gpu)",
+    )
+    mcp_servers: list[dict] = Field(
+        default_factory=list,
+        description="MCP server configurations to attach",
+    )
+    env_vars: dict[str, str] = Field(
+        default_factory=dict,
+        description="Environment variables for the session pod",
+    )
+    env_secret_refs: list[str] = Field(
+        default_factory=list,
+        description="K8s secret names to mount as env vars",
+    )
+    workload_config: dict = Field(
+        default_factory=dict,
+        description="Additional workload-specific configuration",
+    )
+    session_definition: str | None = Field(
+        default=None,
+        description="Skuld session definition CRD name to use",
+    )
 
     model_config = {"frozen": False}
 

@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -20,17 +19,17 @@ import (
 )
 
 const (
-	// k3sConfigFileName is the generated API config file name for k3s mode.
+	// K3s config file name for API configuration.
 	k3sConfigFileName = "k3s-config.yaml"
-	// k3sDefaultNamespace is the default Kubernetes namespace for Volundr.
+	// Default Kubernetes namespace for Volundr.
 	k3sDefaultNamespace = "volundr"
-	// k3sClusterName is the k3d cluster name.
+	// K3d cluster name.
 	k3sClusterName = "volundr"
-	// k3sLoadBalancerHTTPPort is the HTTP port exposed by the k3d load balancer.
+	// HTTP port exposed by the k3d load balancer.
 	k3sLoadBalancerHTTPPort = "80:80@loadbalancer"
-	// k3sLoadBalancerHTTPSPort is the HTTPS port exposed by the k3d load balancer.
+	// HTTPS port exposed by the k3d load balancer.
 	k3sLoadBalancerHTTPSPort = "443:443@loadbalancer"
-	// k3sAPIInternalPort is the host port the API listens on in k3s mode.
+	// Host port the API listens on in k3s mode.
 	k3sAPIInternalPort = 18080
 )
 
@@ -578,8 +577,8 @@ func (r *K3sRuntime) initNativeK3s(cfg *config.Config) error {
 	return nil
 }
 
-// promptK3dLocalMountPrefixes asks the user which host paths to mount
-// into the k3d node during cluster creation. k3d runs k3s inside Docker,
+// PromptK3dLocalMountPrefixes asks the user which host paths to mount
+// into the k3d node during cluster creation. K3d runs k3s inside Docker,
 // so host directories must be explicitly bind-mounted into the node
 // before pods can use them via hostPath volumes.
 //
@@ -612,7 +611,7 @@ func (r *K3sRuntime) promptK3dLocalMountPrefixes(cfg *config.Config) []string {
 		fmt.Print("  Root path: ")
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := stdinBufReader
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(answer)
 
@@ -657,7 +656,7 @@ func (r *K3sRuntime) saveConfig(cfg *config.Config) {
 // promptYesNo asks the user a yes/no question and returns true for yes.
 func promptYesNo(prompt string) bool {
 	fmt.Printf("%s [y/N]: ", prompt)
-	reader := bufio.NewReader(os.Stdin)
+	reader := stdinBufReader
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	return answer == "y" || answer == "yes"
@@ -717,7 +716,7 @@ func (r *K3sRuntime) offerInstallLinux(ctx context.Context, cfg *config.Config) 
 	fmt.Println()
 	fmt.Print("  Choose [1/2]: ")
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := stdinBufReader
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -1169,15 +1168,17 @@ func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
 	for _, prefix := range []string{
 		"https://0.0.0.0:", "https://127.0.0.1:", "https://localhost:",
 	} {
-		if idx := strings.Index(kubeconfig, prefix); idx >= 0 {
-			end := strings.Index(kubeconfig[idx+len(prefix):], "\n")
-			if end < 0 {
-				end = len(kubeconfig[idx+len(prefix):])
-			}
-			old := kubeconfig[idx : idx+len(prefix)+end]
-			kubeconfig = strings.Replace(kubeconfig, old, serverDNS, 1)
-			break
+		idx := strings.Index(kubeconfig, prefix)
+		if idx < 0 {
+			continue
 		}
+		end := strings.Index(kubeconfig[idx+len(prefix):], "\n")
+		if end < 0 {
+			end = len(kubeconfig[idx+len(prefix):])
+		}
+		old := kubeconfig[idx : idx+len(prefix)+end]
+		kubeconfig = strings.Replace(kubeconfig, old, serverDNS, 1)
+		break
 	}
 
 	kubeconfigPath := filepath.Join(cfgDir, k3sDockerKubeconfigFile)                //nolint:gosec // path derived from trusted config directory

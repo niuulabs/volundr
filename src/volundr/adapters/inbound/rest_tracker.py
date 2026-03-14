@@ -24,14 +24,24 @@ logger = logging.getLogger(__name__)
 class IssueResponse(BaseModel):
     """Response model for a tracker issue."""
 
-    id: str
-    identifier: str
-    title: str
-    status: str
-    assignee: str | None
-    labels: list[str]
-    priority: int
-    url: str
+    id: str = Field(description="Unique issue identifier")
+    identifier: str = Field(
+        description="Human-readable issue key (e.g. PROJ-123)",
+    )
+    title: str = Field(description="Issue title")
+    status: str = Field(
+        description="Current issue status (e.g. In Progress)",
+    )
+    assignee: str | None = Field(
+        description="Assigned user, if any",
+    )
+    labels: list[str] = Field(
+        description="Labels attached to the issue",
+    )
+    priority: int = Field(
+        description="Priority level (lower is higher priority)",
+    )
+    url: str = Field(description="URL to the issue in the tracker")
 
     @classmethod
     def from_issue(cls, issue: TrackerIssue) -> IssueResponse:
@@ -51,10 +61,18 @@ class IssueResponse(BaseModel):
 class StatusResponse(BaseModel):
     """Response model for tracker connection status."""
 
-    connected: bool
-    provider: str
-    workspace: str | None
-    user: str | None
+    connected: bool = Field(
+        description="Whether the tracker is connected",
+    )
+    provider: str = Field(
+        description="Tracker provider name (e.g. linear)",
+    )
+    workspace: str | None = Field(
+        description="Connected workspace or organization",
+    )
+    user: str | None = Field(
+        description="Authenticated tracker user",
+    )
 
     @classmethod
     def from_status(cls, s: TrackerConnectionStatus) -> StatusResponse:
@@ -70,25 +88,43 @@ class StatusResponse(BaseModel):
 class IssueStatusUpdate(BaseModel):
     """Request model for updating an issue's status."""
 
-    status: str = Field(..., min_length=1)
+    status: str = Field(
+        ..., min_length=1,
+        description="New status value for the issue",
+    )
 
 
 class MappingCreate(BaseModel):
     """Request model for creating a project mapping."""
 
-    repo_url: str = Field(..., min_length=1, max_length=500)
-    project_id: str = Field(..., min_length=1)
-    project_name: str = Field(default="")
+    repo_url: str = Field(
+        ..., min_length=1, max_length=500,
+        description="Git repository URL to map",
+    )
+    project_id: str = Field(
+        ..., min_length=1,
+        description="Tracker project identifier",
+    )
+    project_name: str = Field(
+        default="",
+        description="Human-readable project name",
+    )
 
 
 class MappingResponse(BaseModel):
     """Response model for a project mapping."""
 
-    id: UUID
-    repo_url: str
-    project_id: str
-    project_name: str
-    created_at: str
+    id: UUID = Field(description="Unique mapping identifier")
+    repo_url: str = Field(description="Mapped git repository URL")
+    project_id: str = Field(
+        description="Tracker project identifier",
+    )
+    project_name: str = Field(
+        description="Human-readable project name",
+    )
+    created_at: str = Field(
+        description="ISO 8601 creation timestamp",
+    )
 
     @classmethod
     def from_mapping(cls, m: ProjectMapping) -> MappingResponse:
@@ -105,7 +141,9 @@ class MappingResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str
+    detail: str = Field(
+        description="Human-readable error message",
+    )
 
 
 # --- Router factory ---
@@ -131,8 +169,14 @@ def create_tracker_router(tracker_service: TrackerService) -> APIRouter:
         tags=["Issue Tracker"],
     )
     async def search_issues(
-        q: str = Query(..., min_length=1),
-        project_id: str | None = Query(default=None),
+        q: str = Query(
+            ..., min_length=1,
+            description="Search query string",
+        ),
+        project_id: str | None = Query(
+            default=None,
+            description="Filter by tracker project ID",
+        ),
     ) -> list[IssueResponse]:
         """Search issues by query string."""
         issues = await tracker_service.search_issues(
@@ -147,8 +191,13 @@ def create_tracker_router(tracker_service: TrackerService) -> APIRouter:
         tags=["Issue Tracker"],
     )
     async def get_recent_issues(
-        project_id: str = Query(...),
-        limit: int = Query(default=10, ge=1, le=100),
+        project_id: str = Query(
+            ..., description="Tracker project ID",
+        ),
+        limit: int = Query(
+            default=10, ge=1, le=100,
+            description="Maximum number of issues to return",
+        ),
     ) -> list[IssueResponse]:
         """Get recent issues for a project."""
         issues = await tracker_service.get_recent_issues(

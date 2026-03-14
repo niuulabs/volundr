@@ -26,7 +26,7 @@ func TestRenderComposeTemplate_WithAnthropicKey(t *testing.T) {
 		StorageDir:      "/home/user/.volundr",
 	}
 
-	result, err := renderComposeTemplate(data)
+	result, err := renderComposeTemplate(&data)
 	if err != nil {
 		t.Fatalf("renderComposeTemplate: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestRenderComposeTemplate_WithoutAnthropicKey(t *testing.T) {
 		StorageDir:      "/home/user/.volundr",
 	}
 
-	result, err := renderComposeTemplate(data)
+	result, err := renderComposeTemplate(&data)
 	if err != nil {
 		t.Fatalf("renderComposeTemplate: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestBuildComposeData_EmbeddedMode(t *testing.T) {
 		t.Error("expected StorageDir to be set")
 	}
 
-	result, err := renderComposeTemplate(data)
+	result, err := renderComposeTemplate(&data)
 	if err != nil {
 		t.Fatalf("renderComposeTemplate: %v", err)
 	}

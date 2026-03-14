@@ -76,8 +76,8 @@ func (c *OIDCClient) Discover() (*OIDCDiscovery, error) {
 		return c.discovery, nil
 	}
 
-	url := c.issuer + "/.well-known/openid-configuration"
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	endpoint := c.issuer + "/.well-known/openid-configuration"
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating discovery request: %w", err)
 	}
@@ -331,7 +331,7 @@ func (c *OIDCClient) Userinfo(accessToken string) (*UserinfoResponse, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, disc.UserinfoEndpoint, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, disc.UserinfoEndpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating userinfo request: %w", err)
 	}

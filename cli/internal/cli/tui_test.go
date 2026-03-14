@@ -223,7 +223,7 @@ func TestTUIModel_View_HelpOverlay(t *testing.T) {
 }
 
 func TestTUIModel_View_AllPages(t *testing.T) {
-	pages := []tuipkg.Page{
+	pageList := []tuipkg.Page{
 		tuipkg.PageSessions,
 		tuipkg.PageChat,
 		tuipkg.PageTerminal,
@@ -233,7 +233,7 @@ func TestTUIModel_View_AllPages(t *testing.T) {
 		tuipkg.PageAdmin,
 	}
 
-	for _, page := range pages {
+	for _, page := range pageList {
 		t.Run(fmt.Sprintf("page_%d", page), func(t *testing.T) {
 			m := newTestTUIModel()
 			m.app.Ready = true
@@ -328,7 +328,7 @@ func TestTUIModel_IsInputCaptured_AllPages(t *testing.T) {
 }
 
 func TestTUIModel_Update_ForwardsToActivePage(t *testing.T) {
-	pages := []tuipkg.Page{
+	pageList := []tuipkg.Page{
 		tuipkg.PageSessions,
 		tuipkg.PageChat,
 		tuipkg.PageDiffs,
@@ -337,7 +337,7 @@ func TestTUIModel_Update_ForwardsToActivePage(t *testing.T) {
 		tuipkg.PageAdmin,
 	}
 
-	for _, page := range pages {
+	for _, page := range pageList {
 		t.Run(fmt.Sprintf("page_%d", page), func(t *testing.T) {
 			m := newTestTUIModel()
 			m.app.Ready = true
@@ -355,7 +355,7 @@ func TestTUIModel_Update_ForwardsToActivePage(t *testing.T) {
 	}
 }
 
-// --- Update message routing tests ---
+// Update message routing tests.
 
 func TestTUIModel_Update_TerminalOutputMsg(t *testing.T) {
 	m := newTestTUIModel()

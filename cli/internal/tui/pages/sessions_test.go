@@ -251,7 +251,7 @@ func TestSessionsPage_View_NoSessions(t *testing.T) {
 	}
 }
 
-// --- Helper function tests ---
+// Helper function tests.
 
 func TestFilterIndex(t *testing.T) {
 	tests := []struct {
@@ -373,7 +373,7 @@ func TestCycleContextFilter_MultipleContexts(t *testing.T) {
 	}
 }
 
-// --- Update key navigation tests ---
+// Update key navigation tests.
 
 func TestSessionsPage_Update_CursorNavigation(t *testing.T) {
 	sessions := []tui.ClusterSession{

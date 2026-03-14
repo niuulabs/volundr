@@ -365,7 +365,7 @@ func (c *Client) GetSession(id string) (*Session, error) {
 }
 
 // CreateSession creates a new session.
-func (c *Client) CreateSession(create SessionCreate) (*Session, error) {
+func (c *Client) CreateSession(create *SessionCreate) (*Session, error) {
 	resp, err := c.do("POST", "/api/v1/volundr/sessions", create) //nolint:bodyclose // closed in decodeResponsePtr
 	if err != nil {
 		return nil, err
@@ -553,7 +553,7 @@ type AuthDiscoveryResponse struct {
 // This endpoint is unauthenticated, so no Bearer token is sent.
 func (c *Client) GetAuthConfig() (*AuthDiscoveryResponse, error) {
 	url := c.baseURL + "/api/v1/volundr/auth/config"
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}

@@ -80,7 +80,7 @@ var sessionsCreateCmd = &cobra.Command{
 		model, _ := cmd.Flags().GetString("model")
 		branch, _ := cmd.Flags().GetString("branch")
 
-		session, err := client.CreateSession(api.SessionCreate{
+		session, err := client.CreateSession(&api.SessionCreate{
 			Name:   name,
 			Repo:   repo,
 			Model:  model,

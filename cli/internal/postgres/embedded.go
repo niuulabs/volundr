@@ -191,7 +191,7 @@ func findMigrationFiles(dir string) ([]string, error) {
 }
 
 // extractVersion extracts the version identifier from a migration filename.
-// e.g., "000001_initial_schema.up.sql" -> "000001_initial_schema".
+// Example: "000001_initial_schema.up.sql" -> "000001_initial_schema".
 func extractVersion(filename string) string {
 	return strings.TrimSuffix(filename, ".up.sql")
 }

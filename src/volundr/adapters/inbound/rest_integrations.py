@@ -29,34 +29,66 @@ logger = logging.getLogger(__name__)
 class IntegrationCreateRequest(BaseModel):
     """Request model for creating an integration connection."""
 
-    integration_type: str = Field(..., min_length=1, max_length=50)
-    adapter: str = Field(..., min_length=1, max_length=500)
-    credential_name: str = Field(..., min_length=1, max_length=253)
-    config: dict[str, str] = Field(default_factory=dict)
-    enabled: bool = Field(default=True)
-    slug: str = Field(default="", max_length=100)
+    integration_type: str = Field(
+        ..., min_length=1, max_length=50,
+        description="Integration category (source_control, issue_tracker, etc.)",
+    )
+    adapter: str = Field(
+        ..., min_length=1, max_length=500,
+        description="Fully-qualified adapter class path",
+    )
+    credential_name: str = Field(
+        ..., min_length=1, max_length=253,
+        description="Stored credential name for authentication",
+    )
+    config: dict[str, str] = Field(
+        default_factory=dict,
+        description="Adapter-specific configuration key-value pairs",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether the integration is active",
+    )
+    slug: str = Field(
+        default="", max_length=100,
+        description="Catalog entry slug (references IntegrationDefinition)",
+    )
 
 
 class IntegrationUpdateRequest(BaseModel):
     """Request model for updating an integration connection."""
 
-    credential_name: str | None = Field(default=None, max_length=253)
-    config: dict[str, str] | None = None
-    enabled: bool | None = None
+    credential_name: str | None = Field(
+        default=None, max_length=253,
+        description="New credential name (null to keep current)",
+    )
+    config: dict[str, str] | None = Field(
+        default=None,
+        description="New adapter config (null to keep current)",
+    )
+    enabled: bool | None = Field(
+        default=None,
+        description="New enabled status (null to keep current)",
+    )
 
 
 class IntegrationResponse(BaseModel):
     """Response model for an integration connection."""
 
-    id: str
-    integration_type: str
-    adapter: str
-    credential_name: str
-    config: dict[str, str]
-    enabled: bool
-    created_at: str
-    updated_at: str
-    slug: str = ""
+    id: str = Field(description="Unique connection identifier")
+    integration_type: str = Field(description="Integration category")
+    adapter: str = Field(description="Fully-qualified adapter class path")
+    credential_name: str = Field(description="Stored credential name")
+    config: dict[str, str] = Field(
+        description="Adapter-specific configuration",
+    )
+    enabled: bool = Field(description="Whether the integration is active")
+    created_at: str = Field(description="ISO 8601 creation timestamp")
+    updated_at: str = Field(description="ISO 8601 last update timestamp")
+    slug: str = Field(
+        default="",
+        description="Catalog entry slug",
+    )
 
     @classmethod
     def from_connection(cls, conn: IntegrationConnection) -> IntegrationResponse:
@@ -77,24 +109,33 @@ class IntegrationResponse(BaseModel):
 class MCPServerSpecResponse(BaseModel):
     """Response model for an MCP server spec."""
 
-    name: str
-    command: str
-    args: list[str]
-    env_from_credentials: dict[str, str]
+    name: str = Field(description="MCP server name")
+    command: str = Field(description="Command to launch the server")
+    args: list[str] = Field(description="Command-line arguments")
+    env_from_credentials: dict[str, str] = Field(
+        description="Map of env var name to credential field name",
+    )
 
 
 class CatalogEntryResponse(BaseModel):
     """Response model for a single catalog entry."""
 
-    slug: str
-    name: str
-    description: str
-    integration_type: str
-    adapter: str
-    icon: str
-    credential_schema: dict
-    config_schema: dict
-    mcp_server: MCPServerSpecResponse | None = None
+    slug: str = Field(description="Unique integration identifier")
+    name: str = Field(description="Human-readable integration name")
+    description: str = Field(description="Integration description")
+    integration_type: str = Field(description="Integration category")
+    adapter: str = Field(description="Fully-qualified adapter class path")
+    icon: str = Field(description="Icon identifier for the UI")
+    credential_schema: dict = Field(
+        description="JSON Schema for required credentials",
+    )
+    config_schema: dict = Field(
+        description="JSON Schema for adapter configuration",
+    )
+    mcp_server: MCPServerSpecResponse | None = Field(
+        default=None,
+        description="MCP server spec if this integration provides one",
+    )
 
     @classmethod
     def from_definition(
@@ -126,11 +167,17 @@ class CatalogEntryResponse(BaseModel):
 class IntegrationTestResult(BaseModel):
     """Response model for testing an integration connection."""
 
-    success: bool
-    provider: str
-    workspace: str | None = None
-    user: str | None = None
-    error: str | None = None
+    success: bool = Field(description="Whether the test connection succeeded")
+    provider: str = Field(description="Provider name")
+    workspace: str | None = Field(
+        default=None, description="Workspace name if connected",
+    )
+    user: str | None = Field(
+        default=None, description="Authenticated user if connected",
+    )
+    error: str | None = Field(
+        default=None, description="Error message if test failed",
+    )
 
 
 # --- Router factory ---

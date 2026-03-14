@@ -445,7 +445,7 @@ func TestTerminalWSClient_Connect_ErrorIncludes_Debug(t *testing.T) {
 }
 
 func containsSubstring(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsCheck(s, sub))
+	return len(s) >= len(sub) && (s == sub || s != "" && containsCheck(s, sub))
 }
 
 func containsCheck(s, sub string) bool {

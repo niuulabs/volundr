@@ -24,64 +24,138 @@ logger = logging.getLogger(__name__)
 class PresetCreate(BaseModel):
     """Request model for creating a preset."""
 
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(default="")
-    is_default: bool = Field(default=False)
-    cli_tool: str = Field(default="")
-    workload_type: str = Field(default="session")
-    model: str | None = Field(default=None, max_length=100)
-    system_prompt: str | None = Field(default=None)
-    resource_config: dict = Field(default_factory=dict)
-    mcp_servers: list[dict] = Field(default_factory=list)
-    terminal_sidecar: dict = Field(default_factory=dict)
-    skills: list[dict] = Field(default_factory=list)
-    rules: list[dict] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    env_secret_refs: list[str] = Field(default_factory=list)
-    workload_config: dict = Field(default_factory=dict)
+    name: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Human-readable preset name",
+    )
+    description: str = Field(
+        default="", description="Description of the preset purpose",
+    )
+    is_default: bool = Field(
+        default=False,
+        description="Whether this is the default preset for its CLI tool",
+    )
+    cli_tool: str = Field(
+        default="",
+        description="CLI tool this preset targets (e.g. claude, aider)",
+    )
+    workload_type: str = Field(
+        default="session", description="Workload type (e.g. session)",
+    )
+    model: str | None = Field(
+        default=None, max_length=100,
+        description="Default LLM model identifier",
+    )
+    system_prompt: str | None = Field(
+        default=None, description="System prompt for the LLM",
+    )
+    resource_config: dict = Field(
+        default_factory=dict,
+        description="Resource allocation (cpu, memory, gpu)",
+    )
+    mcp_servers: list[dict] = Field(
+        default_factory=list,
+        description="MCP server configurations to attach",
+    )
+    terminal_sidecar: dict = Field(
+        default_factory=dict,
+        description="Terminal sidecar container config",
+    )
+    skills: list[dict] = Field(
+        default_factory=list,
+        description="Skill definitions for the session",
+    )
+    rules: list[dict] = Field(
+        default_factory=list,
+        description="Rule definitions for session behavior",
+    )
+    env_vars: dict[str, str] = Field(
+        default_factory=dict,
+        description="Environment variables for the session pod",
+    )
+    env_secret_refs: list[str] = Field(
+        default_factory=list,
+        description="K8s secret names to mount as env vars",
+    )
+    workload_config: dict = Field(
+        default_factory=dict,
+        description="Additional workload-specific configuration",
+    )
 
 
 class PresetUpdate(BaseModel):
     """Request model for updating a preset (all fields optional)."""
 
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    description: str | None = Field(default=None)
-    is_default: bool | None = Field(default=None)
-    cli_tool: str | None = Field(default=None)
-    workload_type: str | None = Field(default=None)
-    model: str | None = Field(default=None, max_length=100)
-    system_prompt: str | None = Field(default=None)
-    resource_config: dict | None = Field(default=None)
-    mcp_servers: list[dict] | None = Field(default=None)
-    terminal_sidecar: dict | None = Field(default=None)
-    skills: list[dict] | None = Field(default=None)
-    rules: list[dict] | None = Field(default=None)
-    env_vars: dict[str, str] | None = Field(default=None)
-    env_secret_refs: list[str] | None = Field(default=None)
-    workload_config: dict | None = Field(default=None)
+    name: str | None = Field(
+        default=None, min_length=1, max_length=255,
+        description="New preset name",
+    )
+    description: str | None = Field(
+        default=None, description="New description",
+    )
+    is_default: bool | None = Field(
+        default=None, description="New default flag",
+    )
+    cli_tool: str | None = Field(
+        default=None, description="New CLI tool target",
+    )
+    workload_type: str | None = Field(
+        default=None, description="New workload type",
+    )
+    model: str | None = Field(
+        default=None, max_length=100,
+        description="New LLM model identifier",
+    )
+    system_prompt: str | None = Field(
+        default=None, description="New system prompt",
+    )
+    resource_config: dict | None = Field(
+        default=None, description="New resource config",
+    )
+    mcp_servers: list[dict] | None = Field(
+        default=None, description="New MCP server list",
+    )
+    terminal_sidecar: dict | None = Field(
+        default=None, description="New terminal sidecar config",
+    )
+    skills: list[dict] | None = Field(
+        default=None, description="New skill definitions",
+    )
+    rules: list[dict] | None = Field(
+        default=None, description="New rule definitions",
+    )
+    env_vars: dict[str, str] | None = Field(
+        default=None, description="New environment variables",
+    )
+    env_secret_refs: list[str] | None = Field(
+        default=None, description="New K8s secret references",
+    )
+    workload_config: dict | None = Field(
+        default=None, description="New workload config",
+    )
 
 
 class PresetResponse(BaseModel):
     """Response model for a preset."""
 
-    id: UUID
-    name: str
-    description: str
-    is_default: bool
-    cli_tool: str
-    workload_type: str
-    model: str | None
-    system_prompt: str | None
-    resource_config: dict
-    mcp_servers: list[dict]
-    terminal_sidecar: dict
-    skills: list[dict]
-    rules: list[dict]
-    env_vars: dict[str, str]
-    env_secret_refs: list[str]
-    workload_config: dict
-    created_at: str
-    updated_at: str
+    id: UUID = Field(description="Unique preset identifier")
+    name: str = Field(description="Preset name")
+    description: str = Field(description="Preset description")
+    is_default: bool = Field(description="Whether this is the default preset")
+    cli_tool: str = Field(description="CLI tool target")
+    workload_type: str = Field(description="Workload type")
+    model: str | None = Field(description="LLM model identifier")
+    system_prompt: str | None = Field(description="System prompt")
+    resource_config: dict = Field(description="Resource allocation config")
+    mcp_servers: list[dict] = Field(description="MCP server configurations")
+    terminal_sidecar: dict = Field(description="Terminal sidecar config")
+    skills: list[dict] = Field(description="Skill definitions")
+    rules: list[dict] = Field(description="Rule definitions")
+    env_vars: dict[str, str] = Field(description="Environment variables")
+    env_secret_refs: list[str] = Field(description="K8s secret references")
+    workload_config: dict = Field(description="Workload-specific config")
+    created_at: str = Field(description="ISO 8601 creation timestamp")
+    updated_at: str = Field(description="ISO 8601 last update timestamp")
 
     @classmethod
     def from_preset(cls, preset: Preset) -> PresetResponse:
@@ -111,7 +185,7 @@ class PresetResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str
+    detail: str = Field(description="Human-readable error message")
 
 
 # --- Router factory ---
@@ -123,8 +197,14 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
 
     @router.get("/presets", response_model=list[PresetResponse], tags=["Presets"])
     async def list_presets(
-        cli_tool: str | None = Query(default=None),
-        is_default: bool | None = Query(default=None),
+        cli_tool: str | None = Query(
+            default=None,
+            description="Filter by CLI tool (e.g. claude, aider)",
+        ),
+        is_default: bool | None = Query(
+            default=None,
+            description="Filter by default flag",
+        ),
     ) -> list[PresetResponse]:
         """List presets with optional filters."""
         presets = await preset_service.list_presets(cli_tool=cli_tool, is_default=is_default)

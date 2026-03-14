@@ -19,13 +19,13 @@ import (
 )
 
 const (
-	// dockerProject is the Docker Compose project name.
+	// Docker Compose project name.
 	dockerProject = "volundr"
-	// composeFileName is the generated compose file name.
+	// Generated compose file name.
 	composeFileName = "docker-compose.volundr.yaml"
-	// dockerConfigFileName is the generated API config file name.
+	// Generated API config file name.
 	dockerConfigFileName = "docker-config.yaml"
-	// containerStoragePath is the mount point for storage inside the API container.
+	// Mount point for storage inside the API container.
 	containerStoragePath = "/volundr-storage"
 )
 
@@ -180,7 +180,7 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	composePath := filepath.Join(cfgDir, composeFileName)
 	data := r.buildComposeData(cfg)
 
-	composeContent, err := renderComposeTemplate(data)
+	composeContent, err := renderComposeTemplate(&data)
 	if err != nil {
 		return fmt.Errorf("render compose template: %w", err)
 	}
@@ -571,7 +571,7 @@ func (r *DockerRuntime) buildServiceStatuses(cfg *config.Config) []ServiceStatus
 }
 
 // renderComposeTemplate renders the compose template with the given data.
-func renderComposeTemplate(data composeData) (string, error) {
+func renderComposeTemplate(data *composeData) (string, error) {
 	var buf bytes.Buffer
 	if err := composeTemplate.Execute(&buf, data); err != nil {
 		return "", err

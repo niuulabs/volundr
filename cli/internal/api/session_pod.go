@@ -19,7 +19,7 @@ type SessionPodClient struct {
 }
 
 // NewSessionPodClient creates a client for a session pod's REST API.
-// codeEndpoint is the session's CodeEndpoint field.
+// The codeEndpoint is the session's CodeEndpoint field.
 func NewSessionPodClient(codeEndpoint, token string) *SessionPodClient {
 	return &SessionPodClient{
 		baseURL: strings.TrimRight(codeEndpoint, "/"),
@@ -322,7 +322,7 @@ func (s *SessionPodClient) KillCliSession(terminalID string) error {
 }
 
 // CliSessionWSURL builds the WebSocket URL for attaching to a terminal session.
-// codeEndpoint is the session's HTTPS code_endpoint.
+// CodeEndpoint is the session's HTTPS code_endpoint.
 func CliSessionWSURL(codeEndpoint, terminalID string) string {
 	base := strings.TrimRight(codeEndpoint, "/")
 	base = strings.Replace(base, "https://", "wss://", 1)

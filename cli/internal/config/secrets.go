@@ -53,7 +53,7 @@ func SaveCredentials(creds *Credentials, passphrase string) error {
 }
 
 // SaveCredentialsTo encrypts and saves credentials to the given path.
-func SaveCredentialsTo(creds *Credentials, passphrase string, path string) error {
+func SaveCredentialsTo(creds *Credentials, passphrase, path string) error {
 	plaintext, err := json.Marshal(creds)
 	if err != nil {
 		return fmt.Errorf("marshal credentials: %w", err)
@@ -110,7 +110,7 @@ func LoadCredentials(passphrase string) (*Credentials, error) {
 }
 
 // LoadCredentialsFrom decrypts and loads credentials from the given path.
-func LoadCredentialsFrom(passphrase string, path string) (*Credentials, error) {
+func LoadCredentialsFrom(passphrase, path string) (*Credentials, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path comes from CredentialsPath() or caller-provided location
 	if err != nil {
 		return nil, fmt.Errorf("read credentials file: %w", err)

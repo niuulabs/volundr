@@ -149,7 +149,7 @@ func TestCreateSession(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(srv.URL, "tok")
-	got, err := c.CreateSession(SessionCreate{Name: "new-session", Model: "claude"})
+	got, err := c.CreateSession(&SessionCreate{Name: "new-session", Model: "claude"})
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -554,7 +554,7 @@ func TestGetTimeline(t *testing.T) {
 	}
 }
 
-// --- WebSocket client tests ---
+// WebSocket client tests.
 
 func TestNewWSClient(t *testing.T) {
 	ws := NewWSClient("http://localhost:8000", "my-token")
@@ -649,7 +649,7 @@ func TestWSClient_Connect_InvalidURL(t *testing.T) {
 	}
 }
 
-// --- Terminal WebSocket client tests ---
+// Terminal WebSocket client tests.
 
 func TestNewTerminalWSClient(t *testing.T) {
 	tw := NewTerminalWSClient("http://localhost:8000", "tok")
@@ -725,7 +725,7 @@ func TestTerminalWSClient_Connect_InvalidURL(t *testing.T) {
 	}
 }
 
-// --- SSE client tests ---
+// SSE client tests.
 
 func TestNewSSEClient(t *testing.T) {
 	sse := NewSSEClient("http://localhost:8000", "my-token")
@@ -860,7 +860,7 @@ func TestSSEClient_Connect_NoAuthHeader(t *testing.T) {
 	sse.Close()
 }
 
-// --- do() method edge cases ---
+// HTTP do() method edge cases.
 
 func TestDo_ContentTypeJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -936,7 +936,7 @@ func TestCreateSession_Error(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(srv.URL, "tok")
-	_, err := c.CreateSession(SessionCreate{Name: "test"})
+	_, err := c.CreateSession(&SessionCreate{Name: "test"})
 	if err == nil {
 		t.Fatal("expected error for 400")
 	}

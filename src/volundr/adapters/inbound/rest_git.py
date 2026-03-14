@@ -23,26 +23,46 @@ logger = logging.getLogger(__name__)
 class PRCreateRequest(BaseModel):
     """Request to create a PR from a session."""
 
-    session_id: UUID
-    title: str | None = None
-    target_branch: str = "main"
+    session_id: UUID = Field(
+        description="Session ID to create a pull request from",
+    )
+    title: str | None = Field(
+        default=None,
+        description="PR title (auto-generated from session if omitted)",
+    )
+    target_branch: str = Field(
+        default="main",
+        description="Target branch for the pull request",
+    )
 
 
 class PRMergeRequest(BaseModel):
     """Request to merge a PR."""
 
-    merge_method: str = "squash"
+    merge_method: str = Field(
+        default="squash",
+        description="Merge method: merge, squash, or rebase",
+    )
 
 
 class ConfidenceRequest(BaseModel):
     """Request to calculate merge confidence."""
 
-    tests_pass: bool
-    coverage_delta: float = Field(default=0.0)
-    lines_changed: int
-    files_changed: int
-    has_dependency_changes: bool = False
-    change_categories: list[str] = Field(default_factory=list)
+    tests_pass: bool = Field(description="Whether all tests pass")
+    coverage_delta: float = Field(
+        default=0.0,
+        description="Change in code coverage percentage",
+    )
+    lines_changed: int = Field(description="Total lines changed")
+    files_changed: int = Field(description="Total files changed")
+    has_dependency_changes: bool = Field(
+        default=False,
+        description="Whether dependency files were modified",
+    )
+    change_categories: list[str] = Field(
+        default_factory=list,
+        description="Categories of changes (e.g. bugfix, feature)",
+    )
 
 
 # --- Response models ---
@@ -51,19 +71,31 @@ class ConfidenceRequest(BaseModel):
 class PullRequestResponse(BaseModel):
     """Response model for a pull request."""
 
-    number: int
-    title: str
-    url: str
-    repo_url: str
-    provider: str
-    source_branch: str
-    target_branch: str
-    status: str
-    description: str | None = None
-    ci_status: str | None = None
-    review_status: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    number: int = Field(description="PR number")
+    title: str = Field(description="PR title")
+    url: str = Field(description="Web URL for the pull request")
+    repo_url: str = Field(description="Repository URL")
+    provider: str = Field(description="Git provider (github, gitlab)")
+    source_branch: str = Field(description="Source branch name")
+    target_branch: str = Field(description="Target branch name")
+    status: str = Field(description="PR status (open, merged, closed)")
+    description: str | None = Field(
+        default=None, description="PR body/description",
+    )
+    ci_status: str | None = Field(
+        default=None,
+        description="CI pipeline status (passing, failing, pending)",
+    )
+    review_status: str | None = Field(
+        default=None,
+        description="Review status (approved, changes_requested, pending)",
+    )
+    created_at: str | None = Field(
+        default=None, description="ISO 8601 creation timestamp",
+    )
+    updated_at: str | None = Field(
+        default=None, description="ISO 8601 last update timestamp",
+    )
 
     @classmethod
     def from_pull_request(cls, pr: PullRequest) -> PullRequestResponse:
@@ -88,28 +120,34 @@ class PullRequestResponse(BaseModel):
 class MergeConfidenceResponse(BaseModel):
     """Response model for merge confidence scoring."""
 
-    score: float
-    factors: dict[str, float]
-    action: str
-    reason: str
+    score: float = Field(description="Confidence score from 0.0 to 1.0")
+    factors: dict[str, float] = Field(
+        description="Individual factor scores contributing to confidence",
+    )
+    action: str = Field(
+        description="Recommended action (auto_merge, notify_then_merge, require_approval)",
+    )
+    reason: str = Field(description="Human-readable rationale")
 
 
 class CIStatusResponse(BaseModel):
     """Response model for CI status."""
 
-    status: str
+    status: str = Field(
+        description="CI status (passing, failing, pending, unknown)",
+    )
 
 
 class MergeResultResponse(BaseModel):
     """Response model for merge result."""
 
-    merged: bool
+    merged: bool = Field(description="Whether the PR was successfully merged")
 
 
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str
+    detail: str = Field(description="Human-readable error message")
 
 
 # --- Router factory ---

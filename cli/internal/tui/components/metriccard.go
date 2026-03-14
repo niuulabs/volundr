@@ -18,12 +18,12 @@ type MetricCard struct {
 }
 
 // NewMetricCard creates a new MetricCard.
-func NewMetricCard(label, value, icon string, color color.Color) MetricCard {
+func NewMetricCard(label, value, icon string, clr color.Color) MetricCard {
 	return MetricCard{
 		Label: label,
 		Value: value,
 		Icon:  icon,
-		Color: color,
+		Color: clr,
 		Width: 20,
 	}
 }

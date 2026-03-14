@@ -28,17 +28,17 @@ logger = logging.getLogger(__name__)
 class ProfileResponse(BaseModel):
     """Response model for a forge profile."""
 
-    name: str
-    description: str
-    workload_type: str
-    model: str | None
-    system_prompt: str | None
-    resource_config: dict
-    mcp_servers: list[dict]
-    env_vars: dict[str, str]
-    env_secret_refs: list[str]
-    workload_config: dict
-    is_default: bool
+    name: str = Field(description="Profile name")
+    description: str = Field(description="Profile description")
+    workload_type: str = Field(description="Workload type")
+    model: str | None = Field(description="Default LLM model identifier")
+    system_prompt: str | None = Field(description="System prompt")
+    resource_config: dict = Field(description="Resource allocation config")
+    mcp_servers: list[dict] = Field(description="MCP server configurations")
+    env_vars: dict[str, str] = Field(description="Environment variables")
+    env_secret_refs: list[str] = Field(description="K8s secret references")
+    workload_config: dict = Field(description="Workload-specific config")
+    is_default: bool = Field(description="Whether this is the default")
 
     @classmethod
     def from_profile(cls, profile: ForgeProfile) -> ProfileResponse:
@@ -61,54 +61,108 @@ class ProfileResponse(BaseModel):
 class ProfileCreateRequest(BaseModel):
     """Request model for creating a forge profile."""
 
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(default="")
-    workload_type: str = Field(default="session")
-    model: str | None = Field(default=None, max_length=100)
-    system_prompt: str | None = Field(default=None)
-    resource_config: dict = Field(default_factory=dict)
-    mcp_servers: list[dict] = Field(default_factory=list)
-    env_vars: dict[str, str] = Field(default_factory=dict)
-    env_secret_refs: list[str] = Field(default_factory=list)
-    workload_config: dict = Field(default_factory=dict)
-    is_default: bool = Field(default=False)
+    name: str = Field(
+        ..., min_length=1, max_length=255,
+        description="Profile name",
+    )
+    description: str = Field(default="", description="Profile description")
+    workload_type: str = Field(
+        default="session", description="Workload type",
+    )
+    model: str | None = Field(
+        default=None, max_length=100,
+        description="Default LLM model identifier",
+    )
+    system_prompt: str | None = Field(
+        default=None, description="System prompt for the LLM",
+    )
+    resource_config: dict = Field(
+        default_factory=dict,
+        description="Resource allocation (cpu, memory, gpu)",
+    )
+    mcp_servers: list[dict] = Field(
+        default_factory=list,
+        description="MCP server configurations",
+    )
+    env_vars: dict[str, str] = Field(
+        default_factory=dict,
+        description="Environment variables for the session pod",
+    )
+    env_secret_refs: list[str] = Field(
+        default_factory=list,
+        description="K8s secret names to mount as env vars",
+    )
+    workload_config: dict = Field(
+        default_factory=dict,
+        description="Additional workload-specific config",
+    )
+    is_default: bool = Field(
+        default=False,
+        description="Whether this is the default profile",
+    )
 
 
 class ProfileUpdateRequest(BaseModel):
     """Request model for updating a forge profile."""
 
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    description: str | None = Field(default=None)
-    workload_type: str | None = Field(default=None)
-    model: str | None = Field(default=None, max_length=100)
-    system_prompt: str | None = Field(default=None)
-    resource_config: dict | None = Field(default=None)
-    mcp_servers: list[dict] | None = Field(default=None)
-    env_vars: dict[str, str] | None = Field(default=None)
-    env_secret_refs: list[str] | None = Field(default=None)
-    workload_config: dict | None = Field(default=None)
-    is_default: bool | None = Field(default=None)
+    name: str | None = Field(
+        default=None, min_length=1, max_length=255,
+        description="New profile name",
+    )
+    description: str | None = Field(
+        default=None, description="New description",
+    )
+    workload_type: str | None = Field(
+        default=None, description="New workload type",
+    )
+    model: str | None = Field(
+        default=None, max_length=100,
+        description="New LLM model identifier",
+    )
+    system_prompt: str | None = Field(
+        default=None, description="New system prompt",
+    )
+    resource_config: dict | None = Field(
+        default=None, description="New resource config",
+    )
+    mcp_servers: list[dict] | None = Field(
+        default=None, description="New MCP server list",
+    )
+    env_vars: dict[str, str] | None = Field(
+        default=None, description="New environment variables",
+    )
+    env_secret_refs: list[str] | None = Field(
+        default=None, description="New K8s secret references",
+    )
+    workload_config: dict | None = Field(
+        default=None, description="New workload config",
+    )
+    is_default: bool | None = Field(
+        default=None, description="New default flag",
+    )
 
 
 class TemplateResponse(BaseModel):
     """Response model for a workspace template (unified blueprint)."""
 
-    name: str
-    description: str
-    repos: list[dict]
-    setup_scripts: list[str]
-    workspace_layout: dict
-    is_default: bool
+    name: str = Field(description="Template name")
+    description: str = Field(description="Template description")
+    repos: list[dict] = Field(description="Git repos to clone")
+    setup_scripts: list[str] = Field(description="Setup shell scripts")
+    workspace_layout: dict = Field(description="Directory layout config")
+    is_default: bool = Field(description="Whether this is the default")
     # Runtime config (merged from profile)
-    workload_type: str
-    model: str | None
-    system_prompt: str | None
-    resource_config: dict
-    mcp_servers: list[dict]
-    env_vars: dict[str, str]
-    env_secret_refs: list[str]
-    workload_config: dict
-    session_definition: str | None = None
+    workload_type: str = Field(description="Workload type")
+    model: str | None = Field(description="Default LLM model identifier")
+    system_prompt: str | None = Field(description="System prompt")
+    resource_config: dict = Field(description="Resource allocation config")
+    mcp_servers: list[dict] = Field(description="MCP server configurations")
+    env_vars: dict[str, str] = Field(description="Environment variables")
+    env_secret_refs: list[str] = Field(description="K8s secret references")
+    workload_config: dict = Field(description="Workload-specific config")
+    session_definition: str | None = Field(
+        default=None, description="Skuld session definition CRD name",
+    )
 
     @classmethod
     def from_template(cls, template: WorkspaceTemplate) -> TemplateResponse:
@@ -135,7 +189,7 @@ class TemplateResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str
+    detail: str = Field(description="Human-readable error message")
 
 
 # --- Router factory ---
@@ -156,7 +210,10 @@ def create_profiles_router(
         tags=["Profiles"],
     )
     async def list_profiles(
-        workload_type: str | None = Query(default=None),
+        workload_type: str | None = Query(
+            default=None,
+            description="Filter by workload type (e.g. session)",
+        ),
     ) -> list[ProfileResponse]:
         """List all forge profiles."""
         profiles = profile_service.list_profiles(workload_type=workload_type)
@@ -333,7 +390,10 @@ def create_profiles_router(
         tags=["Templates"],
     )
     async def list_templates(
-        workload_type: str | None = Query(default=None),
+        workload_type: str | None = Query(
+            default=None,
+            description="Filter by workload type (e.g. session)",
+        ),
     ) -> list[TemplateResponse]:
         """List all workspace templates (loaded from configuration)."""
         templates = template_service.list_templates(workload_type=workload_type)

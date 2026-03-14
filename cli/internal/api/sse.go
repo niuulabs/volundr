@@ -43,7 +43,7 @@ func NewSSEClient(baseURL, token string) *SSEClient {
 // Connect starts listening for events on the given path.
 func (s *SSEClient) Connect(path string) error {
 	url := s.baseURL + path
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("creating SSE request: %w", err)
 	}

@@ -9,9 +9,7 @@ import (
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 )
 
-// =====================
-// Settings page tests
-// =====================
+// Settings page tests.
 
 func TestNewSettingsPage(t *testing.T) {
 	page := NewSettingsPage(nil, nil)
@@ -125,9 +123,7 @@ func TestMaskToken(t *testing.T) {
 	}
 }
 
-// =====================
-// Terminal page tests
-// =====================
+// Terminal page tests.
 
 func TestNewTerminalPage(t *testing.T) {
 	page := NewTerminalPage("http://localhost:8000", nil, nil)
@@ -271,9 +267,7 @@ func TestKeyToBytes_FunctionKeys(t *testing.T) {
 	}
 }
 
-// =====================
-// Chat page tests
-// =====================
+// Chat page tests.
 
 func TestNewChatPage(t *testing.T) {
 	page := NewChatPage(nil, nil)
@@ -391,9 +385,7 @@ func TestWrapText(t *testing.T) {
 	}
 }
 
-// =====================
-// Chronicles page tests
-// =====================
+// Chronicles page tests.
 
 func TestNewChroniclesPage(t *testing.T) {
 	page := NewChroniclesPage(nil)
@@ -508,9 +500,7 @@ func TestEventTypeStyle(t *testing.T) {
 	}
 }
 
-// =====================
-// Diffs page tests
-// =====================
+// Diffs page tests.
 
 func TestNewDiffsPage(t *testing.T) {
 	page := NewDiffsPage(nil)
@@ -584,9 +574,7 @@ func TestTruncatePath(t *testing.T) {
 	}
 }
 
-// =====================
-// Realms page tests
-// =====================
+// Realms page tests.
 
 func TestNewRealmsPage(t *testing.T) {
 	page := NewRealmsPage()
@@ -669,9 +657,7 @@ func TestDemoRealms(t *testing.T) {
 	}
 }
 
-// =====================
-// Admin page tests
-// =====================
+// Admin page tests.
 
 func TestNewAdminPage(t *testing.T) {
 	page := NewAdminPage(nil)
@@ -749,9 +735,7 @@ func TestAdminPage_View_AllTabs(t *testing.T) {
 	}
 }
 
-// =====================
-// Campaigns page tests
-// =====================
+// Campaigns page tests.
 
 func TestNewCampaignsPage(t *testing.T) {
 	page := NewCampaignsPage()
@@ -850,9 +834,7 @@ func TestDemoCampaigns(t *testing.T) {
 	}
 }
 
-// =====================
-// Helpers
-// =====================
+// Helpers.
 
 // makeKeyMsg creates a KeyPressMsg from a key string.
 // For special keys, use the appropriate tea.Key* constant.
@@ -905,11 +887,9 @@ func makeKeyMsg(key string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{}
 }
 
-// =====================
-// Additional coverage tests
-// =====================
+// Additional coverage tests.
 
-// --- Terminal Init, Update, handleKey ---
+// Terminal Init, Update, handleKey.
 
 func TestTerminalPage_Init(t *testing.T) {
 	page := NewTerminalPage("http://localhost", nil, nil)
@@ -970,7 +950,7 @@ func TestTerminalPage_HandleKey_NoTabs(_ *testing.T) {
 	// Should not panic with 0 tabs.
 }
 
-// --- Chronicles SetSize ---
+// Chronicles SetSize.
 
 func TestChroniclesPage_SetSize(t *testing.T) {
 	page := NewChroniclesPage(nil)
@@ -980,7 +960,7 @@ func TestChroniclesPage_SetSize(t *testing.T) {
 	}
 }
 
-// --- Chat scroll ---
+// Chat scroll.
 
 func TestChatPage_Update_Scroll(t *testing.T) {
 	page := NewChatPage(nil, nil)
@@ -1000,7 +980,7 @@ func TestChatPage_Update_Scroll(t *testing.T) {
 	}
 }
 
-// --- Campaigns cursor boundary ---
+// Campaigns cursor boundary.
 
 func TestCampaignsPage_Update_CursorBoundary(t *testing.T) {
 	page := NewCampaignsPage()
@@ -1020,7 +1000,7 @@ func TestCampaignsPage_Update_CursorBoundary(t *testing.T) {
 	}
 }
 
-// --- Realms cursor boundary ---
+// Realms cursor boundary.
 
 func TestRealmsPage_Update_CursorBoundary(t *testing.T) {
 	page := NewRealmsPage()
@@ -1040,7 +1020,7 @@ func TestRealmsPage_Update_CursorBoundary(t *testing.T) {
 	}
 }
 
-// --- Settings section cycle full ---
+// Settings section cycle full.
 
 func TestSettingsPage_Update_FullSectionCycle(t *testing.T) {
 	page := NewSettingsPage(nil, nil)
@@ -1064,7 +1044,7 @@ func TestSettingsPage_Update_FullSectionCycle(t *testing.T) {
 	}
 }
 
-// --- renderTimeline empty filter ---
+// RenderTimeline empty filter.
 
 func TestChroniclesPage_View_FilteredEmpty(t *testing.T) {
 	page := NewChroniclesPage(nil)
@@ -1080,7 +1060,7 @@ func TestChroniclesPage_View_FilteredEmpty(t *testing.T) {
 	}
 }
 
-// --- Admin rendering with cursor on different rows ---
+// Admin rendering with cursor on different rows.
 
 func TestAdminPage_View_UsersCursor(t *testing.T) {
 	page := NewAdminPage(nil)

@@ -150,7 +150,7 @@ func TestStartRuntimeDirError(t *testing.T) {
 	}
 }
 
-// --- findMigrationFiles tests ---
+// FindMigrationFiles tests.
 
 func TestFindMigrationFiles(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -261,7 +261,7 @@ func TestFindMigrationFilesSortsCorrectly(t *testing.T) {
 	}
 }
 
-// --- extractVersion tests ---
+// ExtractVersion tests.
 
 func TestExtractVersion(t *testing.T) {
 	tests := []struct {
@@ -285,7 +285,7 @@ func TestExtractVersion(t *testing.T) {
 	}
 }
 
-// --- runMigrationsWithDB tests ---
+// RunMigrationsWithDB tests.
 
 func TestRunMigrationsWithDB_PingError(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
@@ -811,7 +811,7 @@ func TestRunMigrationsWithDB_PartialApplyOnError(t *testing.T) {
 	}
 }
 
-// --- RunMigrations (public method) tests ---
+// RunMigrations (public method) tests.
 
 func TestRunMigrations_OpenDatabaseError(t *testing.T) {
 	cfg := &config.Config{

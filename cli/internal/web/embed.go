@@ -32,7 +32,7 @@ type OIDCConfig struct {
 // Handler returns an http.Handler that serves the embedded web UI
 // and a dynamic /config.json endpoint.
 //
-// cfg may be nil, in which case /config.json returns { "apiBaseUrl": "" }.
+// Cfg may be nil, in which case /config.json returns { "apiBaseUrl": "" }.
 func Handler(cfg *RuntimeConfig) http.Handler {
 	if cfg == nil {
 		cfg = &RuntimeConfig{APIBaseURL: ""}

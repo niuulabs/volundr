@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -16,6 +17,12 @@ func TestHelperProcess(_ *testing.T) {
 		return
 	}
 
+	// Suppress coverage/test framework output that would contaminate CombinedOutput.
+	devNull, err := os.Open(os.DevNull)
+	if err == nil {
+		os.Stderr = devNull
+	}
+
 	args := os.Args
 	// Find the "--" separator.
 	idx := -1
@@ -26,6 +33,9 @@ func TestHelperProcess(_ *testing.T) {
 		}
 	}
 	if idx < 0 || idx+1 >= len(args) {
+		if devNull != nil {
+			_ = devNull.Close()
+		}
 		os.Exit(1)
 	}
 	cmd := args[idx+1:]
@@ -43,7 +53,7 @@ func TestHelperProcess(_ *testing.T) {
 	}
 
 	// Default: check MOCK_COMMANDS for command-specific responses.
-	// Format: "cmd1:response1;cmd2:response2"
+	// Format: "cmd1:response1;cmd2:response2".
 	mockCommands := os.Getenv("MOCK_COMMANDS")
 	if mockCommands != "" {
 		cmdStr := strings.Join(cmd, " ")
@@ -117,5 +127,15 @@ func withMockExecFail(t *testing.T) {
 	t.Cleanup(func() {
 		execCommandContext = origCtx
 		execCommand = origCmd
+	})
+}
+
+// withMockStdin replaces stdinBufReader with a reader backed by the given string.
+func withMockStdin(t *testing.T, input string) {
+	t.Helper()
+	orig := stdinBufReader
+	stdinBufReader = bufio.NewReader(strings.NewReader(input))
+	t.Cleanup(func() {
+		stdinBufReader = orig
 	})
 }

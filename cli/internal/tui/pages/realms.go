@@ -96,8 +96,8 @@ func (r RealmsPage) View() string {
 
 	// Realm grid
 	rows := make([]string, 0, len(r.realms))
-	for i, realm := range r.realms {
-		rows = append(rows, r.renderRealmCard(realm, i == r.cursor))
+	for i := range r.realms {
+		rows = append(rows, r.renderRealmCard(&r.realms[i], i == r.cursor))
 	}
 
 	grid := strings.Join(rows, "\n")
@@ -116,7 +116,7 @@ func (r RealmsPage) View() string {
 }
 
 // renderRealmCard renders a single realm as a card.
-func (r RealmsPage) renderRealmCard(realm Realm, selected bool) string {
+func (r RealmsPage) renderRealmCard(realm *Realm, selected bool) string {
 	theme := tui.DefaultTheme
 
 	badge := components.NewStatusBadge(realm.Status)

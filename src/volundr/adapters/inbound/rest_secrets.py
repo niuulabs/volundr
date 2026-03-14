@@ -24,12 +24,20 @@ logger = logging.getLogger(__name__)
 class MCPServerResponse(BaseModel):
     """Response model for an available MCP server configuration."""
 
-    name: str
-    type: str
-    command: str | None = None
-    url: str | None = None
-    args: list[str] = Field(default_factory=list)
-    description: str = ""
+    name: str = Field(description="MCP server name")
+    type: str = Field(description="Server type (stdio or sse)")
+    command: str | None = Field(
+        default=None, description="Command to launch (stdio servers)",
+    )
+    url: str | None = Field(
+        default=None, description="Server URL (SSE servers)",
+    )
+    args: list[str] = Field(
+        default_factory=list, description="Command-line arguments",
+    )
+    description: str = Field(
+        default="", description="Server description",
+    )
 
     @classmethod
     def from_config(cls, cfg: MCPServerConfig) -> MCPServerResponse:
@@ -47,8 +55,8 @@ class MCPServerResponse(BaseModel):
 class SecretResponse(BaseModel):
     """Response model for a Kubernetes secret (metadata only, no values)."""
 
-    name: str
-    keys: list[str]
+    name: str = Field(description="Kubernetes secret name")
+    keys: list[str] = Field(description="List of data key names in the secret")
 
     @classmethod
     def from_info(cls, info: SecretInfo) -> SecretResponse:
@@ -59,14 +67,20 @@ class SecretResponse(BaseModel):
 class SecretCreateRequest(BaseModel):
     """Request model for creating a Kubernetes secret."""
 
-    name: str = Field(..., min_length=1, max_length=253)
-    data: dict[str, str] = Field(..., min_length=1)
+    name: str = Field(
+        ..., min_length=1, max_length=253,
+        description="Kubernetes secret name (DNS-compatible)",
+    )
+    data: dict[str, str] = Field(
+        ..., min_length=1,
+        description="Key-value pairs of secret data",
+    )
 
 
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str
+    detail: str = Field(description="Human-readable error message")
 
 
 # --- Router factory ---

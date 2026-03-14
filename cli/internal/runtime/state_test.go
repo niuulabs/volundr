@@ -77,6 +77,43 @@ func TestCheckNotRunning_InvalidPIDFile(t *testing.T) {
 	}
 }
 
+func TestCheckNotRunning_RunningProcess(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write PID file with our own PID (always running).
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	err := CheckNotRunning()
+	if err == nil {
+		t.Fatal("expected error when process is running")
+	}
+	if !containsStr(err.Error(), "already running") {
+		t.Errorf("expected 'already running' error, got: %v", err)
+	}
+}
+
+func containsStr(s, sub string) bool {
+	return len(s) >= len(sub) && strContains(s, sub)
+}
+
+func strContains(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
 func TestWritePIDFile_RemovePIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)

@@ -12,9 +12,7 @@ import (
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 )
 
-// =============================================================================
 // Chat page: handleStreamEvent, finalizeStreaming, View with session, etc.
-// =============================================================================
 
 func TestChatPage_HandleStreamEvent_Assistant(t *testing.T) {
 	page := NewChatPage(nil, nil)
@@ -436,9 +434,7 @@ func TestChatPage_Update_GAndg(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Chat helpers: stripOSC, friendlyConnError, renderMarkdown
-// =============================================================================
+// Chat helpers: stripOSC, friendlyConnError, renderMarkdown.
 
 func TestStripOSC(t *testing.T) {
 	tests := []struct {
@@ -494,10 +490,8 @@ func TestRenderMarkdown_Empty(_ *testing.T) {
 	_ = result
 }
 
-// =============================================================================
 // Chronicles page: timelineEventsFromAPI, mapEventType, cycleFilter,
-// formatElapsed, renderTimeline, renderTimelineEntry
-// =============================================================================
+// formatElapsed, renderTimeline, renderTimelineEntry.
 
 func TestTimelineEventsFromAPI(t *testing.T) {
 	tokens := 500
@@ -725,9 +719,7 @@ func TestChroniclesPage_RenderTimeline_WithScroll(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Diffs page: Update messages, View states, render methods
-// =============================================================================
+// Diffs page: Update messages, View states, render methods.
 
 func TestDiffsPage_Update_DiffFilesLoaded(t *testing.T) {
 	page := NewDiffsPage(nil)
@@ -877,9 +869,7 @@ func TestDiffsPage_View_NoFiles(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Settings page: editing, profile, integrations, appearance, renderSettingRows
-// =============================================================================
+// Settings page: editing, profile, integrations, appearance, renderSettingRows.
 
 func TestNewSettingsPage_WithConfig(t *testing.T) {
 	cfg := remote.DefaultConfig()
@@ -1216,9 +1206,7 @@ func TestSettingsPage_View_Appearance(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Admin page: Update messages, render with data
-// =============================================================================
+// Admin page: Update messages, render with data.
 
 func TestAdminPage_Update_DataLoaded(t *testing.T) {
 	page := NewAdminPage(nil)
@@ -1375,9 +1363,7 @@ func TestAdminPage_Update_Refresh(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Terminal page: InsertMode, View with activeSession, handleKey more paths
-// =============================================================================
+// Terminal page: InsertMode, View with activeSession, handleKey more paths.
 
 func TestTerminalPage_InsertMode(t *testing.T) {
 	page := NewTerminalPage("", nil, nil)
@@ -1440,10 +1426,8 @@ func TestTerminalPage_HandleKey_CtrlF(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // Sessions page: selectedSession, doAction, SessionActionDoneMsg,
-// shift+tab, enter key
-// =============================================================================
+// shift+tab, enter key.
 
 func TestSessionsPage_selectedSession(t *testing.T) {
 	sessions := []tui.ClusterSession{
@@ -1609,9 +1593,7 @@ func TestSessionsPage_View_WithLoadErrors(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Realms page: renderRealmCard selected/unselected
-// =============================================================================
+// Realms page: renderRealmCard selected/unselected.
 
 func TestRealmsPage_View_SelectedCard(t *testing.T) {
 	page := NewRealmsPage()
@@ -1624,9 +1606,7 @@ func TestRealmsPage_View_SelectedCard(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Campaigns page: renderDetail
-// =============================================================================
+// Campaigns page: renderDetail.
 
 func TestCampaignsPage_View_DetailSelected(t *testing.T) {
 	page := NewCampaignsPage()
@@ -1640,10 +1620,8 @@ func TestCampaignsPage_View_DetailSelected(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // Terminal page: createTab, closeTab, handleSessionsLoaded, handleSpawned,
-// View with tabs, renderTabBar, renderFullScreen, Update messages, keyToBytes
-// =============================================================================
+// View with tabs, renderTabBar, renderFullScreen, Update messages, keyToBytes.
 
 func TestTerminalPage_CreateTab(t *testing.T) {
 	page := NewTerminalPage("http://localhost", nil, nil)
@@ -2102,9 +2080,7 @@ func TestTerminalPage_HandleKey_NormalModeIgnoresKeys(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Additional keyToBytes coverage
-// =============================================================================
+// Additional keyToBytes coverage.
 
 func TestKeyToBytes_MoreSpecialKeys(t *testing.T) {
 	tests := []struct {
@@ -2192,9 +2168,7 @@ func TestKeyToBytes_Unknown(_ *testing.T) {
 	_ = got
 }
 
-// =============================================================================
-// Chat: renderMessages with scroll, many messages
-// =============================================================================
+// Chat: renderMessages with scroll, many messages.
 
 func TestChatPage_View_WithManyMessages(t *testing.T) {
 	page := NewChatPage(nil, nil)
@@ -2210,8 +2184,7 @@ func TestChatPage_View_WithManyMessages(t *testing.T) {
 			Content:   "Test message with some content to fill space",
 			Timestamp: time.Now(),
 			Status:    "complete",
-		})
-		page.messages = append(page.messages, ChatMessage{
+		}, ChatMessage{
 			Role:      "assistant",
 			Content:   "Response with some markdown **bold** content",
 			Timestamp: time.Now(),
@@ -2233,9 +2206,7 @@ func TestChatPage_View_WithManyMessages(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Diffs: loadDiffContent
-// =============================================================================
+// Diffs: loadDiffContent.
 
 func TestDiffsPage_LoadDiffContent_OutOfBounds(t *testing.T) {
 	page := NewDiffsPage(nil)
@@ -2271,9 +2242,7 @@ func TestDiffsPage_LoadDiffContent_NoPodClient(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Chronicles: Update 'r' key for refresh
-// =============================================================================
+// Chronicles: Update r key for refresh.
 
 func TestChroniclesPage_Update_RefreshWithSessionID(t *testing.T) {
 	page := NewChroniclesPage(nil)
@@ -2296,9 +2265,7 @@ func TestChroniclesPage_Update_RefreshWithoutSessionID(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Diffs: Update 'r' refresh
-// =============================================================================
+// Diffs: Update r refresh.
 
 func TestDiffsPage_Update_Refresh(t *testing.T) {
 	page := NewDiffsPage(nil)
@@ -2320,9 +2287,7 @@ func TestDiffsPage_Update_RefreshNoSession(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Settings: Update 'r' refresh
-// =============================================================================
+// Settings: Update r refresh.
 
 func TestSettingsPage_Update_Refresh(t *testing.T) {
 	page := NewSettingsPage(nil, nil)
@@ -2332,10 +2297,8 @@ func TestSettingsPage_Update_Refresh(t *testing.T) {
 	}
 }
 
-// =============================================================================
 // Terminal: ConnectSession, ConnectSessionOnCluster, ConnectCliSession,
-// ConnectCliSessionOnCluster, connectTab, spawnNewTab
-// =============================================================================
+// ConnectCliSessionOnCluster, connectTab, spawnNewTab.
 
 func TestTerminalPage_ConnectSession_NoCodeEndpoint(t *testing.T) {
 	page := NewTerminalPage("http://localhost", nil, nil)
@@ -2518,9 +2481,7 @@ func TestTerminalPage_HandleSessionsLoaded_ClearsOldTabs(t *testing.T) {
 	page.Close()
 }
 
-// =============================================================================
-// Chat: Init is a no-op (returns nil)
-// =============================================================================
+// Chat: Init is a no-op (returns nil).
 
 func TestChatPage_Init(t *testing.T) {
 	page := NewChatPage(nil, nil)
@@ -2530,9 +2491,7 @@ func TestChatPage_Init(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Diffs: SetSession
-// =============================================================================
+// Diffs: SetSession.
 
 func TestDiffsPage_SetSession_NoCodeEndpoint(t *testing.T) {
 	page := NewDiffsPage(nil)
@@ -2556,9 +2515,7 @@ func TestDiffsPage_SetSession_WithCodeEndpoint(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Chronicles: SetSession
-// =============================================================================
+// Chronicles: SetSession.
 
 func TestChroniclesPage_SetSession(t *testing.T) {
 	page := NewChroniclesPage(nil)

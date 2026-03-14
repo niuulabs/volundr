@@ -30,7 +30,7 @@ func setupTestConfig(t *testing.T, cfg *remote.Config) {
 	}
 }
 
-// --- Context command tests ---
+// Context command tests.
 
 func TestContextAdd(t *testing.T) {
 	setupTestConfig(t, nil)
@@ -263,7 +263,7 @@ func TestContextRename_NotFound(t *testing.T) {
 	}
 }
 
-// --- Login helper tests ---
+// Login helper tests.
 
 func TestTokenStillValid_NoToken(t *testing.T) {
 	rctx := &remote.Context{Token: "", TokenExpiry: "2099-01-01T00:00:00Z"} //nolint:gosec // test fixture, not real credentials
@@ -479,7 +479,7 @@ func TestTryAuthDiscovery_EmptyIssuerResponse(t *testing.T) {
 	}
 }
 
-// --- Config get/set tests ---
+// Config get/set tests.
 
 func TestConfigGet_Theme(t *testing.T) {
 	cfg := remote.DefaultConfig()
@@ -577,7 +577,7 @@ func TestConfigSet_UnknownKey(t *testing.T) {
 	}
 }
 
-// --- Logout tests ---
+// Logout tests.
 
 func TestLogout(t *testing.T) {
 	cfg := remote.DefaultConfig()
@@ -630,7 +630,7 @@ func TestLogout_NoContext(t *testing.T) {
 	}
 }
 
-// --- formatDuration tests ---
+// FormatDuration tests.
 
 func TestFormatDuration_Expired(t *testing.T) {
 	got := formatDuration(-5 * time.Minute)
@@ -667,7 +667,7 @@ func TestFormatDuration_HoursAndMinutes(t *testing.T) {
 	}
 }
 
-// --- getContextValue / setContextValue tests ---
+// GetContextValue / setContextValue tests.
 
 func TestGetContextValue_AllKeys(t *testing.T) {
 	ctx := &remote.Context{ //nolint:gosec // test fixture, not real credentials
@@ -742,7 +742,7 @@ func TestSetContextValue_Unknown(t *testing.T) {
 	}
 }
 
-// --- newAPIClient tests ---
+// NewAPIClient tests.
 
 func TestNewAPIClient_SingleContext(t *testing.T) {
 	cfg := remote.DefaultConfig()
