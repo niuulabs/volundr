@@ -105,7 +105,9 @@ def translate_resource_config(resource_config: dict) -> TranslatedResources:
                 )
                 mem_str = f"{mem_str}Gi"
             except (ValueError, TypeError):
-                pass
+                # Non-numeric, non-suffixed value — leave as-is for
+                # downstream validation to reject.
+                logger.warning("Memory value '%s' is not a valid number or K8s quantity", mem_str)
         requests["memory"] = mem_str
         limits["memory"] = mem_str
 
@@ -153,7 +155,8 @@ def validate_resource_config(resource_config: dict) -> list[str]:
                 float(mem_str)
                 # Bare number — warn but don't block (translate auto-appends Gi)
                 errors.append(
-                    f"memory value '{memory}' has no unit suffix — will be interpreted as {memory}Gi"
+                    f"memory value '{memory}' has no unit suffix"
+                    f" — will be interpreted as {memory}Gi"
                     " (use Ki, Mi, Gi, or Ti suffix to be explicit)"
                 )
             except (ValueError, TypeError):
