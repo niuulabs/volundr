@@ -1,3 +1,4 @@
+// Package components provides reusable TUI component widgets.
 package components
 
 import (
@@ -83,7 +84,7 @@ func (h Header) View() string {
 		statusDot = lipgloss.NewStyle().
 			Foreground(theme.AccentRed).
 			Render("●")
-	default: // HeaderConnecting
+	case HeaderConnecting:
 		statusDot = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Render("◌")

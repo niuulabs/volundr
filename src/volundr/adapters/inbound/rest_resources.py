@@ -13,28 +13,50 @@ logger = logging.getLogger(__name__)
 class ResourceTypeResponse(BaseModel):
     """A discoverable resource type."""
 
-    name: str
-    resource_key: str
-    display_name: str
-    unit: str
-    category: str
+    name: str = Field(description="Resource type name (e.g. gpu)")
+    resource_key: str = Field(
+        description="K8s resource key (e.g. nvidia.com/gpu)",
+    )
+    display_name: str = Field(description="Human-readable display name")
+    unit: str = Field(description="Unit of measurement (e.g. cores, GiB)")
+    category: str = Field(
+        description="Category: compute, accelerator, or custom",
+    )
 
 
 class NodeResourceSummaryResponse(BaseModel):
     """Resource availability for a node."""
 
-    name: str
-    labels: dict[str, str] = Field(default_factory=dict)
-    allocatable: dict[str, str] = Field(default_factory=dict)
-    allocated: dict[str, str] = Field(default_factory=dict)
-    available: dict[str, str] = Field(default_factory=dict)
+    name: str = Field(description="Kubernetes node name")
+    labels: dict[str, str] = Field(
+        default_factory=dict,
+        description="Node labels",
+    )
+    allocatable: dict[str, str] = Field(
+        default_factory=dict,
+        description="Total allocatable resources on the node",
+    )
+    allocated: dict[str, str] = Field(
+        default_factory=dict,
+        description="Currently allocated resources",
+    )
+    available: dict[str, str] = Field(
+        default_factory=dict,
+        description="Available (unallocated) resources",
+    )
 
 
 class ClusterResourceInfoResponse(BaseModel):
     """Cluster resource discovery response."""
 
-    resource_types: list[ResourceTypeResponse] = Field(default_factory=list)
-    nodes: list[NodeResourceSummaryResponse] = Field(default_factory=list)
+    resource_types: list[ResourceTypeResponse] = Field(
+        default_factory=list,
+        description="Discovered resource types in the cluster",
+    )
+    nodes: list[NodeResourceSummaryResponse] = Field(
+        default_factory=list,
+        description="Per-node resource availability",
+    )
 
 
 def create_resources_router(

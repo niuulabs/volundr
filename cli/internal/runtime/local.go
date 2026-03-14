@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
-	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
 )
 
@@ -27,7 +26,7 @@ const (
 
 // LocalRuntime manages the Volundr stack as local processes.
 type LocalRuntime struct {
-	pg       *postgres.EmbeddedPostgres
+	pg       postgresProvider
 	apiCmd   *exec.Cmd
 	proxyRtr *proxy.Router
 }
@@ -59,7 +58,7 @@ func (r *LocalRuntime) Init(ctx context.Context, cfg *config.Config) error {
 	// Test that embedded postgres can start if in embedded mode.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Println("  Downloading PostgreSQL binary...")
-		pg := postgres.New(cfg)
+		pg := newPostgres(cfg)
 		if err := pg.Start(ctx); err != nil {
 			return fmt.Errorf("test embedded postgres: %w", err)
 		}
@@ -82,7 +81,7 @@ func (r *LocalRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	// Start embedded PostgreSQL if configured.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Print("  PostgreSQL    ... ")
-		r.pg = postgres.New(cfg)
+		r.pg = newPostgres(cfg)
 		if err := r.pg.Start(ctx); err != nil {
 			fmt.Println("failed")
 			return fmt.Errorf("start embedded postgres: %w", err)
@@ -189,7 +188,7 @@ func DownFromPID() error {
 	}
 
 	pidPath := filepath.Join(cfgDir, PIDFile)
-	data, err := os.ReadFile(pidPath)
+	data, err := os.ReadFile(pidPath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("no running instance found (no PID file)")
@@ -259,12 +258,12 @@ func (r *LocalRuntime) Status(_ context.Context) (*StackStatus, error) {
 
 	// Try to load state file for detailed status.
 	stateFilePath := filepath.Join(cfgDir, StateFile)
-	data, err := os.ReadFile(stateFilePath)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
 		status.Services = []ServiceStatus{
 			{Name: "volundr", State: StateRunning},
 		}
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is missing
 	}
 
 	var services []ServiceStatus
@@ -272,7 +271,7 @@ func (r *LocalRuntime) Status(_ context.Context) (*StackStatus, error) {
 		status.Services = []ServiceStatus{
 			{Name: "volundr", State: StateRunning},
 		}
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is corrupt
 	}
 
 	status.Services = services
@@ -287,7 +286,7 @@ func (r *LocalRuntime) Logs(_ context.Context, service string, _ bool) (io.ReadC
 	}
 
 	logPath := filepath.Join(cfgDir, "logs", service+".log")
-	f, err := os.Open(logPath)
+	f, err := os.Open(logPath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
 		return nil, fmt.Errorf("open log file for %s: %w", service, err)
 	}
@@ -306,7 +305,7 @@ func StatusFromStateFile() (*StackStatus, error) {
 	}
 
 	pidPath := filepath.Join(cfgDir, PIDFile)
-	pidData, err := os.ReadFile(pidPath)
+	pidData, err := os.ReadFile(pidPath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
 		if os.IsNotExist(err) {
 			status.Services = []ServiceStatus{
@@ -328,18 +327,18 @@ func StatusFromStateFile() (*StackStatus, error) {
 				status.Services = []ServiceStatus{
 					{Name: "volundr", State: StateStopped},
 				}
-				return status, nil
+				return status, nil //nolint:nilerr // signal failure means process is dead, report stopped status
 			}
 		}
 	}
 
 	stateFilePath := filepath.Join(cfgDir, StateFile)
-	data, err := os.ReadFile(stateFilePath)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
 		status.Services = []ServiceStatus{
 			{Name: "volundr", State: StateRunning, PID: pid},
 		}
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is missing
 	}
 
 	var services []ServiceStatus
@@ -347,7 +346,7 @@ func StatusFromStateFile() (*StackStatus, error) {
 		status.Services = []ServiceStatus{
 			{Name: "volundr", State: StateRunning, PID: pid},
 		}
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is corrupt
 	}
 
 	status.Services = services
@@ -360,16 +359,16 @@ func (r *LocalRuntime) startAPI(ctx context.Context, cfg *config.Config, port in
 		return fmt.Errorf("get config dir: %w", err)
 	}
 
-	logFile, err := os.OpenFile(
+	logFile, err := os.OpenFile( //nolint:gosec // path derived from trusted config directory
 		filepath.Join(cfgDir, "logs", "api.log"),
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
-		0o644,
+		0o600,
 	)
 	if err != nil {
 		return fmt.Errorf("open API log file: %w", err)
 	}
 
-	r.apiCmd = exec.CommandContext(ctx,
+	r.apiCmd = execCommandContext(ctx, //nolint:gosec // port is an integer from trusted config
 		"python3", "-m", "uvicorn",
 		"volundr.main:app",
 		"--host", "127.0.0.1",
@@ -381,7 +380,7 @@ func (r *LocalRuntime) startAPI(ctx context.Context, cfg *config.Config, port in
 
 	// Set environment variables.
 	r.apiCmd.Env = append(os.Environ(),
-		fmt.Sprintf("DATABASE__HOST=127.0.0.1"),
+		"DATABASE__HOST=127.0.0.1",
 		fmt.Sprintf("DATABASE__PORT=%d", cfg.Database.Port),
 		fmt.Sprintf("DATABASE__USER=%s", cfg.Database.User),
 		fmt.Sprintf("DATABASE__PASSWORD=%s", cfg.Database.Password),
@@ -395,7 +394,7 @@ func (r *LocalRuntime) startAPI(ctx context.Context, cfg *config.Config, port in
 	}
 
 	if err := r.apiCmd.Start(); err != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		return fmt.Errorf("start uvicorn: %w", err)
 	}
 

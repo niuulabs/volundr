@@ -48,24 +48,20 @@ class MessageChannel(ABC):
     @abstractmethod
     async def send_event(self, event: dict) -> None:
         """Send a CLI event to this channel."""
-        ...
 
     @abstractmethod
     async def close(self) -> None:
         """Close this channel and release resources."""
-        ...
 
     @property
     @abstractmethod
     def channel_type(self) -> str:
         """Return channel type identifier (e.g., 'browser', 'telegram')."""
-        ...
 
     @property
     @abstractmethod
     def is_open(self) -> bool:
         """Return True if the channel is open and can accept events."""
-        ...
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +100,7 @@ class WebSocketChannel(MessageChannel):
         try:
             await self._ws.close()
         except Exception:
-            pass
+            logger.debug("Error closing WebSocket channel", exc_info=True)
 
     @property
     def channel_type(self) -> str:
@@ -542,7 +538,7 @@ class ChannelRegistry:
         try:
             self._channels.remove(channel)
         except ValueError:
-            pass
+            pass  # Expected: channel may have already been removed
         logger.info(
             "Channel removed: type=%s, total=%d",
             channel.channel_type,
@@ -580,7 +576,11 @@ class ChannelRegistry:
             try:
                 await channel.close()
             except Exception:
-                pass
+                logger.debug(
+                    "Error closing channel during close_all: type=%s",
+                    channel.channel_type,
+                    exc_info=True,
+                )
         self._channels.clear()
 
     @property

@@ -18,12 +18,12 @@ type MetricCard struct {
 }
 
 // NewMetricCard creates a new MetricCard.
-func NewMetricCard(label, value, icon string, color color.Color) MetricCard {
+func NewMetricCard(label, value, icon string, clr color.Color) MetricCard {
 	return MetricCard{
 		Label: label,
 		Value: value,
 		Icon:  icon,
-		Color: color,
+		Color: clr,
 		Width: 20,
 	}
 }
@@ -58,7 +58,7 @@ func (m MetricCard) View() string {
 
 // MetricRow renders a horizontal row of metric cards.
 func MetricRow(cards []MetricCard) string {
-	var rendered []string
+	rendered := make([]string, 0, len(cards))
 	for _, card := range cards {
 		rendered = append(rendered, card.View())
 	}

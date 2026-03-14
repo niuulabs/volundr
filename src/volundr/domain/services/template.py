@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import logging
-
 from volundr.domain.models import WorkspaceTemplate
 from volundr.domain.ports import TemplateProvider
-
-logger = logging.getLogger(__name__)
 
 
 class WorkspaceTemplateService:

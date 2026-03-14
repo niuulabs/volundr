@@ -227,7 +227,7 @@ class FarmPodManager(PodManager):
         # with each value being a list of tasks.
         data = response.json()
         task_count = 0
-        for group_key, task_group in data.items():
+        for _group_key, task_group in data.items():
             for task in task_group:
                 task_count += 1
                 task_args = task.get("task_args", {})

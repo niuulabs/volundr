@@ -44,17 +44,14 @@ class CLITransport(ABC):
     @abstractmethod
     async def start(self) -> None:
         """Initialize the transport."""
-        ...
 
     @abstractmethod
     async def stop(self) -> None:
         """Shut down the transport and clean up."""
-        ...
 
     @abstractmethod
     async def send_message(self, content: str) -> None:
         """Send a user message to Claude Code."""
-        ...
 
     async def send_control_response(self, request_id: str, response: dict) -> None:
         """Respond to a CLI-initiated control_request (e.g. can_use_tool).
@@ -72,19 +69,16 @@ class CLITransport(ABC):
     @abstractmethod
     def session_id(self) -> str | None:
         """The CLI's session ID (for resume)."""
-        ...
 
     @property
     @abstractmethod
     def last_result(self) -> dict | None:
         """The most recent result event (for usage reporting)."""
-        ...
 
     @property
     @abstractmethod
     def is_alive(self) -> bool:
         """Whether the transport is connected and operational."""
-        ...
 
     @property
     def supports_cli_websocket(self) -> bool:
@@ -624,7 +618,7 @@ class SdkWebSocketTransport(CLITransport):
                 if self._cli_ws:
                     await self._send_to_cli({"type": "keep_alive"})
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: keepalive loop cancelled during shutdown
 
     async def wait_for_cli_disconnect(self) -> None:
         """Block until the CLI WebSocket disconnects."""

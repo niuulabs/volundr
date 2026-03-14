@@ -1168,7 +1168,7 @@ class Broker:
             try:
                 await websocket.send_json({"type": "error", "content": str(e)})
             except Exception:
-                pass
+                logger.debug("Failed to send error response to WebSocket", exc_info=True)
         finally:
             self._channels.remove(channel)
             remaining = self._channels.count

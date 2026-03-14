@@ -37,10 +37,10 @@ for specific operations.`,
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		// --home flag takes precedence over VOLUNDR_HOME env var.
 		if homeFlag != "" {
-			os.Setenv(config.EnvHome, homeFlag)
+			_ = os.Setenv(config.EnvHome, homeFlag)
 		}
 	},
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		// No subcommand given — launch the TUI.
 		return runTUI()
 	},

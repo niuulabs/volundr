@@ -79,9 +79,10 @@ func (h HelpOverlay) View(termWidth, termHeight int) string {
 		Bold(true).
 		MarginTop(1)
 
-	var lines []string
-	lines = append(lines, titleStyle.Render("⚒ Volundr Keybindings"))
-	lines = append(lines, "")
+	lines := []string{
+		titleStyle.Render("⚒ Volundr Keybindings"),
+		"",
+	}
 
 	for _, b := range h.Bindings {
 		if b.Key == "" && b.Desc == "" {
@@ -99,8 +100,7 @@ func (h HelpOverlay) View(termWidth, termHeight int) string {
 		))
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, lipgloss.NewStyle().
+	lines = append(lines, "", lipgloss.NewStyle().
 		Foreground(theme.TextMuted).
 		Align(lipgloss.Center).
 		Render("Press ? or Esc to close"))

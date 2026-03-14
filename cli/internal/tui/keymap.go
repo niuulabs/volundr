@@ -7,6 +7,7 @@ import (
 // Page represents a navigable page in the TUI.
 type Page int
 
+// Page constants for TUI navigation.
 const (
 	PageSessions   Page = iota // Sessions list and detail
 	PageChat                   // Chat interface

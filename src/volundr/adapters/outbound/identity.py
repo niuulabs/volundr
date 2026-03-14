@@ -39,7 +39,7 @@ def _parse_roles_header(raw: str) -> list[str]:
         if isinstance(parsed, list):
             return [str(r) for r in parsed]
     except Exception:
-        pass
+        pass  # Expected: not base64/JSON, fall back to comma-separated parsing
 
     # Fall back to comma-separated plain text
     return [r.strip() for r in raw.split(",") if r.strip()]

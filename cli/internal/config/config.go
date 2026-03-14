@@ -119,7 +119,7 @@ type AnthropicConfig struct {
 
 // ConfigDir returns the path to the volundr config directory.
 // It checks VOLUNDR_HOME first, falling back to ~/.volundr.
-func ConfigDir() (string, error) {
+func ConfigDir() (string, error) { //nolint:revive // used as config.ConfigDir externally
 	if dir := os.Getenv(EnvHome); dir != "" {
 		return dir, nil
 	}
@@ -131,7 +131,7 @@ func ConfigDir() (string, error) {
 }
 
 // ConfigPath returns the path to the config file.
-func ConfigPath() (string, error) {
+func ConfigPath() (string, error) { //nolint:revive // used as config.ConfigPath externally
 	dir, err := ConfigDir()
 	if err != nil {
 		return "", err
@@ -195,7 +195,7 @@ func Load() (*Config, error) {
 
 // LoadFrom reads a config file from the given path.
 func LoadFrom(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path comes from ConfigPath() or caller-provided config location
 	if err != nil {
 		return nil, fmt.Errorf("read config file %s: %w", path, err)
 	}

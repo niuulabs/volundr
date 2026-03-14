@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from volundr.domain.models import PromptScope, SavedPrompt
@@ -20,34 +20,72 @@ logger = logging.getLogger(__name__)
 class PromptCreate(BaseModel):
     """Request model for creating a saved prompt."""
 
-    name: str = Field(..., min_length=1, max_length=255)
-    content: str = Field(..., min_length=1)
-    scope: PromptScope = Field(default=PromptScope.GLOBAL)
-    project_repo: str | None = Field(default=None, max_length=500)
-    tags: list[str] = Field(default_factory=list)
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Human-readable prompt name",
+    )
+    content: str = Field(
+        ...,
+        min_length=1,
+        description="The prompt text content",
+    )
+    scope: PromptScope = Field(
+        default=PromptScope.GLOBAL,
+        description="Visibility scope: global or project",
+    )
+    project_repo: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Repository URL when scope is project",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Tags for categorization and search",
+    )
 
 
 class PromptUpdate(BaseModel):
     """Request model for updating a saved prompt."""
 
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    content: str | None = Field(default=None, min_length=1)
-    scope: PromptScope | None = Field(default=None)
-    project_repo: str | None = Field(default=None, max_length=500)
-    tags: list[str] | None = Field(default=None)
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="New prompt name",
+    )
+    content: str | None = Field(
+        default=None,
+        min_length=1,
+        description="New prompt content",
+    )
+    scope: PromptScope | None = Field(
+        default=None,
+        description="New visibility scope",
+    )
+    project_repo: str | None = Field(
+        default=None,
+        max_length=500,
+        description="New repository URL for project scope",
+    )
+    tags: list[str] | None = Field(
+        default=None,
+        description="New tags list",
+    )
 
 
 class PromptResponse(BaseModel):
     """Response model for a saved prompt."""
 
-    id: UUID
-    name: str
-    content: str
-    scope: PromptScope
-    project_repo: str | None
-    tags: list[str]
-    created_at: str
-    updated_at: str
+    id: UUID = Field(description="Unique prompt identifier")
+    name: str = Field(description="Prompt name")
+    content: str = Field(description="The prompt text content")
+    scope: PromptScope = Field(description="Visibility scope")
+    project_repo: str | None = Field(description="Scoped repository URL")
+    tags: list[str] = Field(description="Tags for categorization")
+    created_at: str = Field(description="ISO 8601 creation timestamp")
+    updated_at: str = Field(description="ISO 8601 last update timestamp")
 
     @classmethod
     def from_prompt(cls, prompt: SavedPrompt) -> PromptResponse:
@@ -67,7 +105,7 @@ class PromptResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Response model for errors."""
 
-    detail: str
+    detail: str = Field(description="Human-readable error message")
 
 
 # --- Router factory ---
@@ -79,8 +117,14 @@ def create_prompts_router(prompt_service: PromptService) -> APIRouter:
 
     @router.get("/prompts", response_model=list[PromptResponse], tags=["Prompts"])
     async def list_prompts(
-        scope: PromptScope | None = Query(default=None),
-        repo: str | None = Query(default=None),
+        scope: PromptScope | None = Query(
+            default=None,
+            description="Filter by scope (global or project)",
+        ),
+        repo: str | None = Query(
+            default=None,
+            description="Filter by repository URL",
+        ),
     ) -> list[PromptResponse]:
         """List saved prompts with optional scope/repo filter."""
         prompts = await prompt_service.list_prompts(scope=scope, repo=repo)
@@ -109,7 +153,10 @@ def create_prompts_router(prompt_service: PromptService) -> APIRouter:
         responses={404: {"model": ErrorResponse}},
         tags=["Prompts"],
     )
-    async def update_prompt(prompt_id: UUID, data: PromptUpdate) -> PromptResponse:
+    async def update_prompt(
+        prompt_id: UUID = Path(description="Unique identifier of the prompt to update"),
+        data: PromptUpdate = ...,
+    ) -> PromptResponse:
         """Update a saved prompt."""
         try:
             prompt = await prompt_service.update_prompt(
@@ -133,7 +180,9 @@ def create_prompts_router(prompt_service: PromptService) -> APIRouter:
         responses={404: {"model": ErrorResponse}},
         tags=["Prompts"],
     )
-    async def delete_prompt(prompt_id: UUID) -> None:
+    async def delete_prompt(
+        prompt_id: UUID = Path(description="Unique identifier of the prompt to delete"),
+    ) -> None:
         """Delete a saved prompt."""
         try:
             await prompt_service.delete_prompt(prompt_id)
@@ -149,7 +198,11 @@ def create_prompts_router(prompt_service: PromptService) -> APIRouter:
         tags=["Prompts"],
     )
     async def search_prompts(
-        q: str = Query(..., min_length=1),
+        q: str = Query(
+            ...,
+            min_length=1,
+            description="Search query to match against prompt name and content",
+        ),
     ) -> list[PromptResponse]:
         """Search saved prompts by name and content."""
         prompts = await prompt_service.search_prompts(q)

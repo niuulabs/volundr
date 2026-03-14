@@ -36,7 +36,7 @@ func TestCheckNotRunning_StalePIDFile(t *testing.T) {
 
 	// Write a PID file with a PID that's very unlikely to be running.
 	pidPath := filepath.Join(volundrDir, PIDFile)
-	if err := os.WriteFile(pidPath, []byte("999999999"), 0o644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("999999999"), 0o600); err != nil {
 		t.Fatalf("write stale PID file: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestCheckNotRunning_InvalidPIDFile(t *testing.T) {
 
 	// Write an invalid PID file.
 	pidPath := filepath.Join(volundrDir, PIDFile)
-	if err := os.WriteFile(pidPath, []byte("not-a-number"), 0o644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("not-a-number"), 0o600); err != nil {
 		t.Fatalf("write invalid PID file: %v", err)
 	}
 
@@ -75,6 +75,43 @@ func TestCheckNotRunning_InvalidPIDFile(t *testing.T) {
 	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
 		t.Error("expected invalid PID file to be removed")
 	}
+}
+
+func TestCheckNotRunning_RunningProcess(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Write PID file with our own PID (always running).
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	err := CheckNotRunning()
+	if err == nil {
+		t.Fatal("expected error when process is running")
+	}
+	if !containsStr(err.Error(), "already running") {
+		t.Errorf("expected 'already running' error, got: %v", err)
+	}
+}
+
+func containsStr(s, sub string) bool {
+	return len(s) >= len(sub) && strContains(s, sub)
+}
+
+func strContains(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
 
 func TestWritePIDFile_RemovePIDFile(t *testing.T) {
@@ -93,7 +130,7 @@ func TestWritePIDFile_RemovePIDFile(t *testing.T) {
 
 	// Verify the file was written with the current PID.
 	pidPath := filepath.Join(volundrDir, PIDFile)
-	data, err := os.ReadFile(pidPath)
+	data, err := os.ReadFile(pidPath) //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read PID file: %v", err)
 	}
@@ -139,7 +176,7 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 
 	// Read it back.
 	stateFilePath := filepath.Join(volundrDir, StateFile)
-	data, err := os.ReadFile(stateFilePath)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read state file: %v", err)
 	}
@@ -159,6 +196,37 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 
 	if readBack[1].Name != "postgres" || readBack[1].State != StateRunning || readBack[1].Port != 5433 {
 		t.Errorf("unexpected postgres service: %+v", readBack[1])
+	}
+}
+
+func TestRemoveStateFile_NoFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Removing a non-existent state file should return an error.
+	err := RemoveStateFile()
+	if err == nil {
+		t.Error("expected error when removing non-existent state file")
+	}
+}
+
+func TestRemovePIDFile_NoFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	err := RemovePIDFile()
+	if err == nil {
+		t.Error("expected error when removing non-existent PID file")
 	}
 }
 

@@ -13,7 +13,7 @@ hide:
 <div class="hero-buttons">
   <a href="getting-started/installation/" class="primary">Get started</a>
   <a href="architecture/overview/" class="secondary">Architecture</a>
-  <a href="api/sessions/" class="secondary">API reference</a>
+  <a href="api/openapi/" class="secondary">API reference</a>
 </div>
 
 </div>
@@ -162,5 +162,6 @@ Each session provides a complete workspace with an integrated terminal and a ful
 
 - [Installation](getting-started/installation.md) — get up and running
 - [Configuration reference](getting-started/configuration.md) — all YAML options
+- [API reference](api/openapi.md) — interactive OpenAPI documentation
 - [Helm deployment](deployment/helm.md) — production setup on Kubernetes
 - [Contributing](contributing/development.md) — development workflow

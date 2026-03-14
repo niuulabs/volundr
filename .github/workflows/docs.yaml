@@ -6,11 +6,15 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "src/volundr/adapters/inbound/rest*.py"
+      - "scripts/extract_openapi.py"
   push:
     branches: [main]
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "src/volundr/adapters/inbound/rest*.py"
+      - "scripts/extract_openapi.py"
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -33,8 +37,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install MkDocs
-        run: pip install mkdocs-material==9.7.5
+      - name: Install dependencies
+        run: |
+          pip install mkdocs-material==9.7.5
+          pip install uv
+
+      - name: Generate OpenAPI spec
+        run: uv run --extra dev python scripts/extract_openapi.py -o docs/site/openapi.json
 
       - name: Build site
         run: mkdocs build --strict --site-dir _site

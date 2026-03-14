@@ -7,7 +7,7 @@ import (
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 )
 
-// --- StatusBadge tests ---
+// StatusBadge tests.
 
 func TestNewStatusBadge(t *testing.T) {
 	badge := NewStatusBadge("running")
@@ -32,7 +32,7 @@ func TestStatusBadge_View_AllStatuses(t *testing.T) {
 	}
 }
 
-// --- MetricCard tests ---
+// MetricCard tests.
 
 func TestNewMetricCard(t *testing.T) {
 	theme := tui.DefaultTheme
@@ -72,13 +72,13 @@ func TestMetricRow(t *testing.T) {
 	}
 }
 
-func TestMetricRow_Empty(t *testing.T) {
+func TestMetricRow_Empty(_ *testing.T) {
 	view := MetricRow(nil)
 	// Should not panic.
 	_ = view
 }
 
-// --- Header tests ---
+// Header tests.
 
 func TestNewHeader(t *testing.T) {
 	h := NewHeader("https://prod.example.com")
@@ -145,7 +145,7 @@ func TestHeader_View_WithPoolSummary(t *testing.T) {
 	}
 }
 
-// --- Tabs tests ---
+// Tabs tests.
 
 func TestNewTabs(t *testing.T) {
 	tabs := NewTabs([]string{"A", "B", "C"})
@@ -169,13 +169,13 @@ func TestTabs_View(t *testing.T) {
 	}
 }
 
-func TestTabs_View_Empty(t *testing.T) {
+func TestTabs_View_Empty(_ *testing.T) {
 	tabs := Tabs{Width: 80}
 	view := tabs.View()
 	_ = view // should not panic
 }
 
-// --- Sidebar tests ---
+// Sidebar tests.
 
 func TestNewSidebar(t *testing.T) {
 	sb := NewSidebar()
@@ -216,7 +216,7 @@ func TestSidebar_View_Collapsed(t *testing.T) {
 	}
 }
 
-// --- Modal tests ---
+// Modal tests.
 
 func TestNewModal(t *testing.T) {
 	m := NewModal("Test Modal")
@@ -249,7 +249,7 @@ func TestModal_View_Visible(t *testing.T) {
 	}
 }
 
-// --- HelpOverlay tests ---
+// HelpOverlay tests.
 
 func TestNewHelpOverlay(t *testing.T) {
 	h := NewHelpOverlay()
@@ -296,7 +296,7 @@ func TestHelpOverlay_View_Visible(t *testing.T) {
 	}
 }
 
-// --- helper for tests ---
+// Helper for tests.
 
 func configWithContexts() *tui.ClientPool {
 	cfg := remote.DefaultConfig()

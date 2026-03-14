@@ -13,22 +13,19 @@ import (
 	"text/template"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
-	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	// dockerProject is the Docker Compose project name.
+	// Docker Compose project name.
 	dockerProject = "volundr"
-	// composeFileName is the generated compose file name.
+	// Generated compose file name.
 	composeFileName = "docker-compose.volundr.yaml"
-	// dockerConfigFileName is the generated API config file name.
+	// Generated API config file name.
 	dockerConfigFileName = "docker-config.yaml"
-	// containerStoragePath is the mount point for storage inside the API container.
+	// Mount point for storage inside the API container.
 	containerStoragePath = "/volundr-storage"
-	// containerConfigPath is the config file path inside the API container.
-	containerConfigPath = "/etc/volundr/config.yaml"
 )
 
 // composeTemplate is the Docker Compose template for the API service.
@@ -95,7 +92,7 @@ const dockerAPIInternalPort = 18080
 
 // DockerRuntime manages the Volundr stack using Docker containers.
 type DockerRuntime struct {
-	pg       *postgres.EmbeddedPostgres
+	pg       postgresProvider
 	proxyRtr *proxy.Router
 }
 
@@ -105,14 +102,14 @@ func NewDockerRuntime() *DockerRuntime {
 }
 
 // Init verifies Docker is available and pulls required images.
-func (r *DockerRuntime) Init(_ context.Context, cfg *config.Config) error {
+func (r *DockerRuntime) Init(ctx context.Context, cfg *config.Config) error {
 	// Verify docker CLI is available.
-	if out, err := exec.Command("docker", "version", "--format", "{{.Server.Version}}").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}").CombinedOutput(); err != nil {
 		return fmt.Errorf("docker is not available: %w\n%s", err, out)
 	}
 
 	// Verify docker compose is available.
-	if out, err := exec.Command("docker", "compose", "version", "--short").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "docker", "compose", "version", "--short").CombinedOutput(); err != nil {
 		return fmt.Errorf("docker compose is not available: %w\n%s", err, out)
 	}
 
@@ -134,7 +131,7 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	// Start embedded PostgreSQL on the host if configured.
 	if cfg.Database.Mode == "embedded" {
 		fmt.Print("  PostgreSQL    ... ")
-		r.pg = postgres.New(cfg)
+		r.pg = newPostgres(cfg)
 		if err := r.pg.Start(ctx); err != nil {
 			fmt.Println("failed")
 			return fmt.Errorf("start embedded postgres: %w", err)
@@ -182,18 +179,18 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	composePath := filepath.Join(cfgDir, composeFileName)
 	data := r.buildComposeData(cfg)
 
-	composeContent, err := renderComposeTemplate(data)
+	composeContent, err := renderComposeTemplate(&data)
 	if err != nil {
 		return fmt.Errorf("render compose template: %w", err)
 	}
 
-	if err := os.WriteFile(composePath, []byte(composeContent), 0o644); err != nil {
+	if err := os.WriteFile(composePath, []byte(composeContent), 0o600); err != nil {
 		return fmt.Errorf("write compose file: %w", err)
 	}
 
 	// Start the API container via docker compose.
 	fmt.Print("  Volundr API   ... ")
-	out, err := exec.Command(
+	out, err := execCommandContext(ctx, //nolint:gosec // arguments from trusted internal config
 		"docker", "compose",
 		"-f", composePath,
 		"-p", dockerProject,
@@ -238,7 +235,7 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 }
 
 // Down stops all Docker services and cleans up.
-func (r *DockerRuntime) Down(_ context.Context) error {
+func (r *DockerRuntime) Down(ctx context.Context) error {
 	var errs []string
 
 	// Stop containers via docker compose.
@@ -248,7 +245,7 @@ func (r *DockerRuntime) Down(_ context.Context) error {
 	} else {
 		composePath := filepath.Join(cfgDir, composeFileName)
 		if _, statErr := os.Stat(composePath); statErr == nil {
-			if out, err := exec.Command(
+			if out, err := execCommandContext(ctx, //nolint:gosec // arguments are from trusted internal config
 				"docker", "compose",
 				"-f", composePath,
 				"-p", dockerProject,
@@ -259,7 +256,7 @@ func (r *DockerRuntime) Down(_ context.Context) error {
 			_ = os.Remove(composePath)
 		} else {
 			// Fallback: try project-only down.
-			if out, err := exec.Command(
+			if out, err := execCommandContext(ctx,
 				"docker", "compose",
 				"-p", dockerProject,
 				"down",
@@ -275,7 +272,7 @@ func (r *DockerRuntime) Down(_ context.Context) error {
 	if loadedCfg, loadErr := config.Load(); loadErr == nil && loadedCfg.Docker.Network != "" {
 		networkName = loadedCfg.Docker.Network
 	}
-	if out, err := exec.Command("docker", "network", "rm", networkName).CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "docker", "network", "rm", networkName).CombinedOutput(); err != nil {
 		// Ignore errors if network doesn't exist.
 		if !strings.Contains(string(out), "not found") {
 			errs = append(errs, fmt.Sprintf("remove docker network: %v", err))
@@ -301,13 +298,13 @@ func (r *DockerRuntime) Down(_ context.Context) error {
 }
 
 // Status returns the state of each service by inspecting Docker containers.
-func (r *DockerRuntime) Status(_ context.Context) (*StackStatus, error) {
+func (r *DockerRuntime) Status(ctx context.Context) (*StackStatus, error) {
 	status := &StackStatus{
 		Runtime: "docker",
 	}
 
 	// Inspect the API container.
-	out, err := exec.Command(
+	out, err := execCommandContext(ctx,
 		"docker", "inspect",
 		"--format", "{{.State.Status}}",
 		dockerProject+"-api-1",
@@ -316,7 +313,7 @@ func (r *DockerRuntime) Status(_ context.Context) (*StackStatus, error) {
 		status.Services = []ServiceStatus{
 			{Name: "api", State: StateStopped},
 		}
-		return status, nil
+		return status, nil //nolint:nilerr // container not found means service is stopped
 	}
 
 	containerState := strings.TrimSpace(string(out))
@@ -329,18 +326,18 @@ func (r *DockerRuntime) Status(_ context.Context) (*StackStatus, error) {
 	// If we have a state file, merge in additional services (e.g. postgres).
 	cfgDir, err := config.ConfigDir()
 	if err != nil {
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when config dir is unavailable
 	}
 
 	stateFilePath := filepath.Join(cfgDir, StateFile)
-	data, err := os.ReadFile(stateFilePath)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // path derived from trusted config directory
 	if err != nil {
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is missing
 	}
 
 	var savedServices []ServiceStatus
 	if err := json.Unmarshal(data, &savedServices); err != nil {
-		return status, nil
+		return status, nil //nolint:nilerr // return partial status when state file is corrupt
 	}
 
 	// Add non-api services from state file (e.g. postgres).
@@ -354,14 +351,14 @@ func (r *DockerRuntime) Status(_ context.Context) (*StackStatus, error) {
 }
 
 // Logs streams logs for a Docker service.
-func (r *DockerRuntime) Logs(_ context.Context, service string, follow bool) (io.ReadCloser, error) {
+func (r *DockerRuntime) Logs(ctx context.Context, service string, follow bool) (io.ReadCloser, error) {
 	args := []string{"logs"}
 	if follow {
 		args = append(args, "-f")
 	}
 	args = append(args, dockerProject+"-"+service+"-1")
 
-	cmd := exec.Command("docker", args...)
+	cmd := execCommandContext(ctx, "docker", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -391,13 +388,14 @@ func (c *cmdReadCloser) Close() error {
 
 // ensureNetwork creates the Docker network if it doesn't already exist.
 func (r *DockerRuntime) ensureNetwork(network string) error {
+	ctx := context.Background()
 	// Check if network exists.
-	if err := exec.Command("docker", "network", "inspect", network).Run(); err == nil {
+	if err := execCommandContext(ctx, "docker", "network", "inspect", network).Run(); err == nil { //nolint:gosec // network name from trusted config
 		return nil
 	}
 
 	// Create the network.
-	out, err := exec.Command("docker", "network", "create", network).CombinedOutput()
+	out, err := execCommandContext(ctx, "docker", "network", "create", network).CombinedOutput() //nolint:gosec // network name from trusted config
 	if err != nil {
 		return fmt.Errorf("create network %s: %w\n%s", network, err, out)
 	}
@@ -407,13 +405,13 @@ func (r *DockerRuntime) ensureNetwork(network string) error {
 // ensureImage checks if a Docker image exists locally, and pulls it if not.
 func ensureImage(image string) error {
 	// Check if image exists locally.
-	if err := exec.Command("docker", "image", "inspect", image).Run(); err == nil {
+	if err := execCommandContext(context.Background(), "docker", "image", "inspect", image).Run(); err == nil { //nolint:gosec // image name from trusted config
 		fmt.Printf("  %s ... ok (local)\n", image)
 		return nil
 	}
 
 	fmt.Printf("  Pulling %s ...\n", image)
-	if out, err := exec.Command("docker", "pull", image).CombinedOutput(); err != nil {
+	if out, err := execCommandContext(context.Background(), "docker", "pull", image).CombinedOutput(); err != nil { //nolint:gosec // image name from trusted config
 		return fmt.Errorf("pull image %s: %w\n%s", image, err, out)
 	}
 	fmt.Printf("  %s ... ok\n", image)
@@ -547,7 +545,7 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 	}
 
 	configPath := filepath.Join(cfgDir, dockerConfigFileName)
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
 		return "", fmt.Errorf("write docker config: %w", err)
 	}
 
@@ -572,7 +570,7 @@ func (r *DockerRuntime) buildServiceStatuses(cfg *config.Config) []ServiceStatus
 }
 
 // renderComposeTemplate renders the compose template with the given data.
-func renderComposeTemplate(data composeData) (string, error) {
+func renderComposeTemplate(data *composeData) (string, error) {
 	var buf bytes.Buffer
 	if err := composeTemplate.Execute(&buf, data); err != nil {
 		return "", err

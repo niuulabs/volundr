@@ -280,7 +280,7 @@ func TestApp_ContentHeight(t *testing.T) {
 	}
 }
 
-// --- Keymap tests ---
+// Keymap tests.
 
 func TestIsNavigationKey_Valid(t *testing.T) {
 	tests := []struct {
@@ -385,7 +385,7 @@ func TestPageOrder_MatchesPageCount(t *testing.T) {
 	}
 }
 
-// --- Theme tests ---
+// Theme tests.
 
 func TestDefaultTheme_ColorsNonNil(t *testing.T) {
 	theme := DefaultTheme
@@ -437,7 +437,7 @@ func TestDefaultTheme_ColorsNonNil(t *testing.T) {
 	}
 }
 
-func TestThemeStyles_NotZeroValue(t *testing.T) {
+func TestThemeStyles_NotZeroValue(_ *testing.T) {
 	// Just verify the package-level styles can be accessed without panic.
 	_ = SidebarStyle.Render("test")
 	_ = SidebarActiveStyle.Render("test")
@@ -460,7 +460,7 @@ func TestThemeStyles_NotZeroValue(t *testing.T) {
 	_ = DimBorderStyle.Render("test")
 }
 
-// --- Messages tests ---
+// Messages tests.
 
 func TestClusterSession_Fields(t *testing.T) {
 	cs := ClusterSession{
@@ -511,7 +511,7 @@ func TestClusterStatusMsg_Fields(t *testing.T) {
 	}
 }
 
-// --- ContextAccentColors test ---
+// ContextAccentColors test.
 
 func TestContextAccentColors_NonEmpty(t *testing.T) {
 	if len(ContextAccentColors) == 0 {
@@ -524,7 +524,7 @@ func TestContextAccentColors_NonEmpty(t *testing.T) {
 	}
 }
 
-// --- HammerLogo ---
+// HammerLogo test.
 
 func TestHammerLogo_NonEmpty(t *testing.T) {
 	if HammerLogo == "" {

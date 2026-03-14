@@ -89,7 +89,7 @@ class TestOtelSpanEmission:
     """Tests for span creation with gen_ai.* attributes."""
 
     async def test_message_assistant_creates_chat_span(self):
-        sink, tracer, span, _ = _make_sink()
+        sink, tracer, _span, _ = _make_sink()
         event = _make_event()
 
         await sink.emit(event)
@@ -196,7 +196,7 @@ class TestOtelSpanEmission:
         span.set_status.assert_called_once()
 
     async def test_git_commit_maps_correctly(self):
-        sink, tracer, span, _ = _make_sink()
+        sink, _tracer, span, _ = _make_sink()
         event = _make_event(
             event_type=SessionEventType.GIT_COMMIT,
             data={"hash": "abc123", "message": "fix bug"},

@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from volundr.domain.models import SessionEvent, SessionEventType
@@ -21,38 +21,116 @@ logger = logging.getLogger(__name__)
 class EventIngestRequest(BaseModel):
     """Single event submission from a Skuld pod."""
 
-    session_id: UUID
-    event_type: str = Field(..., min_length=1)
-    timestamp: datetime
-    data: dict = Field(default_factory=dict)
-    sequence: int = Field(..., ge=0)
-    tokens_in: int | None = Field(default=None, ge=0)
-    tokens_out: int | None = Field(default=None, ge=0)
-    cost: float | None = Field(default=None, ge=0)
-    duration_ms: int | None = Field(default=None, ge=0)
-    model: str | None = Field(default=None, max_length=100)
+    session_id: UUID = Field(
+        description="Session this event belongs to",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
+    event_type: str = Field(
+        ...,
+        min_length=1,
+        description="Event type (e.g. message_user, file_modified)",
+        examples=["message_user"],
+    )
+    timestamp: datetime = Field(
+        description="When the event occurred",
+        examples=["2025-01-15T10:30:00Z"],
+    )
+    data: dict = Field(
+        default_factory=dict,
+        description="Event-type-specific payload",
+        examples=[{"content": "Hello"}],
+    )
+    sequence: int = Field(
+        ...,
+        ge=0,
+        description="Monotonic event sequence number",
+        examples=[0],
+    )
+    tokens_in: int | None = Field(
+        default=None,
+        ge=0,
+        description="Input tokens (token_usage events)",
+        examples=[150],
+    )
+    tokens_out: int | None = Field(
+        default=None,
+        ge=0,
+        description="Output tokens (token_usage events)",
+        examples=[75],
+    )
+    cost: float | None = Field(
+        default=None,
+        ge=0,
+        description="Cost in USD (token_usage events)",
+        examples=[0.0025],
+    )
+    duration_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Duration in milliseconds (tool/terminal events)",
+        examples=[1200],
+    )
+    model: str | None = Field(
+        default=None,
+        max_length=100,
+        description="LLM model identifier (token_usage events)",
+        examples=["claude-sonnet-4-20250514"],
+    )
 
 
 class EventBatchRequest(BaseModel):
     """Batch event submission."""
 
-    events: list[EventIngestRequest] = Field(..., min_length=1, max_length=500)
+    events: list[EventIngestRequest] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="List of events to ingest (max 500 per batch)",
+    )
 
 
 class SessionEventResponse(BaseModel):
     """Response model for a session event."""
 
-    id: UUID
-    session_id: UUID
-    event_type: str
-    timestamp: str
-    data: dict
-    sequence: int
-    tokens_in: int | None = None
-    tokens_out: int | None = None
-    cost: float | None = None
-    duration_ms: int | None = None
-    model: str | None = None
+    id: UUID = Field(
+        description="Unique event identifier",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
+    session_id: UUID = Field(
+        description="Session this event belongs to",
+        examples=["660e8400-e29b-41d4-a716-446655440000"],
+    )
+    event_type: str = Field(description="Event type", examples=["message_user"])
+    timestamp: str = Field(
+        description="ISO 8601 event timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
+    data: dict = Field(description="Event-type-specific payload", examples=[{"content": "Hello"}])
+    sequence: int = Field(description="Monotonic sequence number", examples=[0])
+    tokens_in: int | None = Field(
+        default=None,
+        description="Input tokens consumed",
+        examples=[150],
+    )
+    tokens_out: int | None = Field(
+        default=None,
+        description="Output tokens generated",
+        examples=[75],
+    )
+    cost: float | None = Field(
+        default=None,
+        description="Cost in USD",
+        examples=[0.0025],
+    )
+    duration_ms: int | None = Field(
+        default=None,
+        description="Duration in milliseconds",
+        examples=[1200],
+    )
+    model: str | None = Field(
+        default=None,
+        description="LLM model identifier",
+        examples=["claude-sonnet-4-20250514"],
+    )
 
     @classmethod
     def from_event(cls, event: SessionEvent) -> "SessionEventResponse":
@@ -74,7 +152,10 @@ class SessionEventResponse(BaseModel):
 class SinkHealthResponse(BaseModel):
     """Health status of all event sinks."""
 
-    sinks: dict[str, bool]
+    sinks: dict[str, bool] = Field(
+        description="Map of sink name to healthy status",
+        examples=[{"postgres": True, "websocket": True}],
+    )
 
 
 # -- Router factory -----------------------------------------------------------
@@ -160,12 +241,30 @@ def create_events_router(
         tags=["Events"],
     )
     async def get_session_events(
-        session_id: UUID,
-        event_type: str | None = Query(default=None),
-        after: datetime | None = Query(default=None),
-        before: datetime | None = Query(default=None),
-        limit: int = Query(default=200, ge=1, le=2000),
-        offset: int = Query(default=0, ge=0),
+        session_id: UUID = Path(description="Session UUID to query events for"),
+        event_type: str | None = Query(
+            default=None,
+            description="Filter by event type (e.g. message_user)",
+        ),
+        after: datetime | None = Query(
+            default=None,
+            description="Return events after this ISO 8601 timestamp",
+        ),
+        before: datetime | None = Query(
+            default=None,
+            description="Return events before this ISO 8601 timestamp",
+        ),
+        limit: int = Query(
+            default=200,
+            ge=1,
+            le=2000,
+            description="Maximum number of events to return",
+        ),
+        offset: int = Query(
+            default=0,
+            ge=0,
+            description="Number of events to skip for pagination",
+        ),
     ) -> list[SessionEventResponse]:
         """Query events for a session."""
         types = None
@@ -192,7 +291,9 @@ def create_events_router(
         response_model=dict[str, int],
         tags=["Events"],
     )
-    async def get_event_counts(session_id: UUID) -> dict[str, int]:
+    async def get_event_counts(
+        session_id: UUID = Path(description="Session UUID to get event counts for"),
+    ) -> dict[str, int]:
         """Get event type counts for a session."""
         return await event_repository.get_event_counts(session_id)
 
@@ -202,8 +303,13 @@ def create_events_router(
         tags=["Events"],
     )
     async def get_token_timeline(
-        session_id: UUID,
-        bucket_seconds: int = Query(default=300, ge=60, le=3600),
+        session_id: UUID = Path(description="Session UUID to get token timeline for"),
+        bucket_seconds: int = Query(
+            default=300,
+            ge=60,
+            le=3600,
+            description="Time bucket size in seconds for aggregation",
+        ),
     ) -> list[dict]:
         """Get token burn timeline for a session."""
         return await event_repository.get_token_timeline(session_id, bucket_seconds)

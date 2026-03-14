@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,7 +19,7 @@ type SessionPodClient struct {
 }
 
 // NewSessionPodClient creates a client for a session pod's REST API.
-// codeEndpoint is the session's CodeEndpoint field.
+// The codeEndpoint is the session's CodeEndpoint field.
 func NewSessionPodClient(codeEndpoint, token string) *SessionPodClient {
 	return &SessionPodClient{
 		baseURL: strings.TrimRight(codeEndpoint, "/"),
@@ -87,6 +88,8 @@ type FileEntry struct {
 }
 
 // do executes an HTTP request to the session pod with token auth.
+//
+//nolint:unparam // method is always GET today but kept for API symmetry with doWithBody.
 func (s *SessionPodClient) do(method, path string) (*http.Response, error) {
 	return s.doWithBody(method, path, nil)
 }
@@ -104,7 +107,7 @@ func (s *SessionPodClient) doWithBody(method, path string, body any) (*http.Resp
 		bodyReader = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequestWithContext(context.Background(), method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -133,7 +136,7 @@ func (s *SessionPodClient) GetDiffFiles(base string) ([]DiffFileEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -156,7 +159,7 @@ func (s *SessionPodClient) GetFileDiff(base, filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -200,7 +203,7 @@ func (s *SessionPodClient) GetConversationHistory() ([]ConversationTurn, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -225,7 +228,7 @@ func (s *SessionPodClient) ListFiles(dirPath string) ([]FileEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -268,7 +271,7 @@ func (s *SessionPodClient) ListCliSessions() (*CliSessionList, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -288,7 +291,7 @@ func (s *SessionPodClient) CreateCliSession(req CreateCliSessionRequest) (*CliSe
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -309,7 +312,7 @@ func (s *SessionPodClient) KillCliSession(terminalID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -319,7 +322,7 @@ func (s *SessionPodClient) KillCliSession(terminalID string) error {
 }
 
 // CliSessionWSURL builds the WebSocket URL for attaching to a terminal session.
-// codeEndpoint is the session's HTTPS code_endpoint.
+// CodeEndpoint is the session's HTTPS code_endpoint.
 func CliSessionWSURL(codeEndpoint, terminalID string) string {
 	base := strings.TrimRight(codeEndpoint, "/")
 	base = strings.Replace(base, "https://", "wss://", 1)

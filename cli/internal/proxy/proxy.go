@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/niuulabs/volundr/cli/internal/web"
 )
@@ -154,8 +155,9 @@ func (r *Router) Handler() http.Handler {
 // ListenAndServe starts the proxy server.
 func (r *Router) ListenAndServe(ctx context.Context, addr string) error {
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: r.Handler(),
+		Addr:              addr,
+		Handler:           r.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {

@@ -52,7 +52,7 @@ configured Volundr server. You can override with --issuer and --client-id.
 
 By default, opens a browser for the Authorization Code flow with PKCE.
 Use --device for environments without a browser (e.g. remote servers).`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		cfg, err := remote.Load()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
@@ -356,13 +356,14 @@ func tryAuthDiscovery(rctx *remote.Context) *api.AuthDiscoveryResponse {
 func openBrowser(url string) error {
 	var cmd *exec.Cmd
 
+	ctx := context.Background()
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.CommandContext(ctx, "open", url) //nolint:gosec // URL is constructed from trusted OIDC config
 	case "linux":
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.CommandContext(ctx, "xdg-open", url) //nolint:gosec // URL is constructed from trusted OIDC config
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", url) //nolint:gosec // URL is constructed from trusted OIDC config
 	default:
 		return fmt.Errorf("unsupported platform %s — open this URL manually:\n  %s", runtime.GOOS, url)
 	}

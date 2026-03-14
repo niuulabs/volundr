@@ -68,7 +68,7 @@ class InMemoryEventBroadcaster(EventBroadcaster):
                         try:
                             queue.get_nowait()
                         except asyncio.QueueEmpty:
-                            pass
+                            pass  # Expected: race between full() check and get_nowait()
                     queue.put_nowait(event)
                 except Exception:
                     # Queue is broken, mark for removal

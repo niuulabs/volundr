@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -75,12 +76,16 @@ func (c *OIDCClient) Discover() (*OIDCDiscovery, error) {
 		return c.discovery, nil
 	}
 
-	url := c.issuer + "/.well-known/openid-configuration"
-	resp, err := c.httpClient.Get(url)
+	endpoint := c.issuer + "/.well-known/openid-configuration"
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("creating discovery request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching discovery document: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -115,7 +120,8 @@ func (c *OIDCClient) AuthorizationCodeFlow(ctx context.Context, clientID string,
 	challenge := CodeChallenge(verifier)
 
 	// Start a local listener on a random port.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	listener, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, "", fmt.Errorf("starting local listener: %w", err)
 	}
@@ -125,7 +131,7 @@ func (c *OIDCClient) AuthorizationCodeFlow(ctx context.Context, clientID string,
 	// Build the authorization URL.
 	authURL, err := url.Parse(disc.AuthorizationEndpoint)
 	if err != nil {
-		listener.Close()
+		_ = listener.Close()
 		return nil, "", fmt.Errorf("parsing authorization endpoint: %w", err)
 	}
 
@@ -149,28 +155,28 @@ func (c *OIDCClient) AuthorizationCodeFlow(ctx context.Context, clientID string,
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 			desc := r.URL.Query().Get("error_description")
-			fmt.Fprintf(w, "<html><body><h1>Login failed</h1><p>%s: %s</p></body></html>", errMsg, desc)
+			_, _ = fmt.Fprintf(w, "<html><body><h1>Login failed</h1><p>%s: %s</p></body></html>", html.EscapeString(errMsg), html.EscapeString(desc))
 			resultCh <- callbackResult{err: fmt.Errorf("authorization error: %s — %s", errMsg, desc)}
 			return
 		}
 
 		code := r.URL.Query().Get("code")
 		if code == "" {
-			fmt.Fprint(w, "<html><body><h1>Login failed</h1><p>No authorization code received.</p></body></html>")
+			_, _ = fmt.Fprint(w, "<html><body><h1>Login failed</h1><p>No authorization code received.</p></body></html>")
 			resultCh <- callbackResult{err: fmt.Errorf("no authorization code in callback")}
 			return
 		}
 
-		fmt.Fprint(w, "<html><body><h1>Login successful!</h1><p>You can close this tab and return to the terminal.</p></body></html>")
+		_, _ = fmt.Fprint(w, "<html><body><h1>Login successful!</h1><p>You can close this tab and return to the terminal.</p></body></html>")
 		resultCh <- callbackResult{code: code}
 	})
 
-	server := &http.Server{Handler: mux}
-	go server.Serve(listener)
+	server := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	go func() { _ = server.Serve(listener) }()
 
 	// Open the browser.
 	if err := openBrowser(authURL.String()); err != nil {
-		server.Close()
+		_ = server.Close()
 		return nil, "", fmt.Errorf("opening browser: %w", err)
 	}
 
@@ -179,11 +185,11 @@ func (c *OIDCClient) AuthorizationCodeFlow(ctx context.Context, clientID string,
 	select {
 	case result = <-resultCh:
 	case <-ctx.Done():
-		server.Close()
+		_ = server.Close()
 		return nil, "", ctx.Err()
 	}
 
-	server.Close()
+	_ = server.Close()
 
 	if result.err != nil {
 		return nil, "", result.err
@@ -235,11 +241,16 @@ func (c *OIDCClient) DeviceCodeFlow(ctx context.Context, clientID string, displa
 		"scope":     {"openid profile email offline_access"},
 	}
 
-	resp, err := c.httpClient.PostForm(disc.DeviceAuthEndpoint, data)
+	deviceReq, err := http.NewRequestWithContext(ctx, http.MethodPost, disc.DeviceAuthEndpoint, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("creating device code request: %w", err)
+	}
+	deviceReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := c.httpClient.Do(deviceReq)
 	if err != nil {
 		return nil, fmt.Errorf("requesting device code: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -320,7 +331,7 @@ func (c *OIDCClient) Userinfo(accessToken string) (*UserinfoResponse, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", disc.UserinfoEndpoint, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, disc.UserinfoEndpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating userinfo request: %w", err)
 	}
@@ -330,7 +341,7 @@ func (c *OIDCClient) Userinfo(accessToken string) (*UserinfoResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("calling userinfo endpoint: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -347,11 +358,16 @@ func (c *OIDCClient) Userinfo(accessToken string) (*UserinfoResponse, error) {
 
 // postToken sends a POST request to the token endpoint and decodes the response.
 func (c *OIDCClient) postToken(endpoint string, data url.Values) (*TokenResponse, error) {
-	resp, err := c.httpClient.PostForm(endpoint, data)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("creating token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

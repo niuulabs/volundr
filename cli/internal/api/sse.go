@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -42,7 +43,7 @@ func NewSSEClient(baseURL, token string) *SSEClient {
 // Connect starts listening for events on the given path.
 func (s *SSEClient) Connect(path string) error {
 	url := s.baseURL + path
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("creating SSE request: %w", err)
 	}
@@ -59,7 +60,7 @@ func (s *SSEClient) Connect(path string) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return fmt.Errorf("SSE server returned HTTP %d", resp.StatusCode)
 	}
 
@@ -83,7 +84,7 @@ func (s *SSEClient) Close() {
 
 // readLoop reads events from the SSE stream.
 func (s *SSEClient) readLoop(resp *http.Response) {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	scanner := bufio.NewScanner(resp.Body)
 	var event SSEEvent
@@ -108,16 +109,17 @@ func (s *SSEClient) readLoop(resp *http.Response) {
 			continue
 		}
 
-		// Parse SSE field
-		if strings.HasPrefix(line, "data: ") {
+		// Parse SSE field.
+		switch {
+		case strings.HasPrefix(line, "data: "):
 			data := strings.TrimPrefix(line, "data: ")
 			if event.Data != "" {
 				event.Data += "\n"
 			}
 			event.Data += data
-		} else if strings.HasPrefix(line, "event: ") {
+		case strings.HasPrefix(line, "event: "):
 			event.Event = strings.TrimPrefix(line, "event: ")
-		} else if strings.HasPrefix(line, "id: ") {
+		case strings.HasPrefix(line, "id: "):
 			event.ID = strings.TrimPrefix(line, "id: ")
 		}
 	}

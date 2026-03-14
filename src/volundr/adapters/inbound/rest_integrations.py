@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
 from volundr.adapters.inbound.auth import extract_principal
@@ -29,34 +29,92 @@ logger = logging.getLogger(__name__)
 class IntegrationCreateRequest(BaseModel):
     """Request model for creating an integration connection."""
 
-    integration_type: str = Field(..., min_length=1, max_length=50)
-    adapter: str = Field(..., min_length=1, max_length=500)
-    credential_name: str = Field(..., min_length=1, max_length=253)
-    config: dict[str, str] = Field(default_factory=dict)
-    enabled: bool = Field(default=True)
-    slug: str = Field(default="", max_length=100)
+    integration_type: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Integration category (source_control, issue_tracker, etc.)",
+        examples=["issue_tracker"],
+    )
+    adapter: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Fully-qualified adapter class path",
+        examples=["volundr.adapters.trackers.linear.LinearAdapter"],
+    )
+    credential_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=253,
+        description="Stored credential name for authentication",
+        examples=["linear-api-key"],
+    )
+    config: dict[str, str] = Field(
+        default_factory=dict,
+        description="Adapter-specific configuration key-value pairs",
+        examples=[{"team_id": "TEAM-1"}],
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether the integration is active",
+        examples=[True],
+    )
+    slug: str = Field(
+        default="",
+        max_length=100,
+        description="Catalog entry slug (references IntegrationDefinition)",
+        examples=["linear"],
+    )
 
 
 class IntegrationUpdateRequest(BaseModel):
     """Request model for updating an integration connection."""
 
-    credential_name: str | None = Field(default=None, max_length=253)
-    config: dict[str, str] | None = None
-    enabled: bool | None = None
+    credential_name: str | None = Field(
+        default=None,
+        max_length=253,
+        description="New credential name (null to keep current)",
+        examples=["linear-api-key"],
+    )
+    config: dict[str, str] | None = Field(
+        default=None,
+        description="New adapter config (null to keep current)",
+        examples=[{"team_id": "TEAM-2"}],
+    )
+    enabled: bool | None = Field(
+        default=None,
+        description="New enabled status (null to keep current)",
+        examples=[True],
+    )
 
 
 class IntegrationResponse(BaseModel):
     """Response model for an integration connection."""
 
-    id: str
-    integration_type: str
-    adapter: str
-    credential_name: str
-    config: dict[str, str]
-    enabled: bool
-    created_at: str
-    updated_at: str
-    slug: str = ""
+    id: str = Field(description="Unique connection identifier", examples=["a1b2c3d4"])
+    integration_type: str = Field(description="Integration category", examples=["issue_tracker"])
+    adapter: str = Field(
+        description="Fully-qualified adapter class path",
+        examples=["volundr.adapters.trackers.linear.LinearAdapter"],
+    )
+    credential_name: str = Field(description="Stored credential name", examples=["linear-api-key"])
+    config: dict[str, str] = Field(
+        description="Adapter-specific configuration",
+        examples=[{"team_id": "TEAM-1"}],
+    )
+    enabled: bool = Field(description="Whether the integration is active", examples=[True])
+    created_at: str = Field(
+        description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
+    updated_at: str = Field(
+        description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"]
+    )
+    slug: str = Field(
+        default="",
+        description="Catalog entry slug",
+        examples=["linear"],
+    )
 
     @classmethod
     def from_connection(cls, conn: IntegrationConnection) -> IntegrationResponse:
@@ -77,24 +135,41 @@ class IntegrationResponse(BaseModel):
 class MCPServerSpecResponse(BaseModel):
     """Response model for an MCP server spec."""
 
-    name: str
-    command: str
-    args: list[str]
-    env_from_credentials: dict[str, str]
+    name: str = Field(description="MCP server name", examples=["linear-mcp"])
+    command: str = Field(description="Command to launch the server", examples=["npx"])
+    args: list[str] = Field(description="Command-line arguments", examples=[["@linear/mcp-server"]])
+    env_from_credentials: dict[str, str] = Field(
+        description="Map of env var name to credential field name",
+        examples=[{"LINEAR_API_KEY": "token"}],
+    )
 
 
 class CatalogEntryResponse(BaseModel):
     """Response model for a single catalog entry."""
 
-    slug: str
-    name: str
-    description: str
-    integration_type: str
-    adapter: str
-    icon: str
-    credential_schema: dict
-    config_schema: dict
-    mcp_server: MCPServerSpecResponse | None = None
+    slug: str = Field(description="Unique integration identifier", examples=["linear"])
+    name: str = Field(description="Human-readable integration name", examples=["Linear"])
+    description: str = Field(
+        description="Integration description", examples=["Issue tracking with Linear"]
+    )
+    integration_type: str = Field(description="Integration category", examples=["issue_tracker"])
+    adapter: str = Field(
+        description="Fully-qualified adapter class path",
+        examples=["volundr.adapters.trackers.linear.LinearAdapter"],
+    )
+    icon: str = Field(description="Icon identifier for the UI", examples=["linear"])
+    credential_schema: dict = Field(
+        description="JSON Schema for required credentials",
+        examples=[{"type": "object", "properties": {"token": {"type": "string"}}}],
+    )
+    config_schema: dict = Field(
+        description="JSON Schema for adapter configuration",
+        examples=[{"type": "object", "properties": {"team_id": {"type": "string"}}}],
+    )
+    mcp_server: MCPServerSpecResponse | None = Field(
+        default=None,
+        description="MCP server spec if this integration provides one",
+    )
 
     @classmethod
     def from_definition(
@@ -126,11 +201,23 @@ class CatalogEntryResponse(BaseModel):
 class IntegrationTestResult(BaseModel):
     """Response model for testing an integration connection."""
 
-    success: bool
-    provider: str
-    workspace: str | None = None
-    user: str | None = None
-    error: str | None = None
+    success: bool = Field(description="Whether the test connection succeeded", examples=[True])
+    provider: str = Field(description="Provider name", examples=["Linear"])
+    workspace: str | None = Field(
+        default=None,
+        description="Workspace name if connected",
+        examples=["My Workspace"],
+    )
+    user: str | None = Field(
+        default=None,
+        description="Authenticated user if connected",
+        examples=["user@example.com"],
+    )
+    error: str | None = Field(
+        default=None,
+        description="Error message if test failed",
+        examples=[None],
+    )
 
 
 # --- Router factory ---
@@ -206,8 +293,8 @@ def create_integrations_router(
         response_model=IntegrationResponse,
     )
     async def update_integration(
-        connection_id: str,
         data: IntegrationUpdateRequest,
+        connection_id: str = Path(description="Integration connection UUID to update"),
         principal: Principal = Depends(extract_principal),
     ) -> IntegrationResponse:
         """Update an integration connection."""
@@ -242,7 +329,7 @@ def create_integrations_router(
         status_code=status.HTTP_204_NO_CONTENT,
     )
     async def delete_integration(
-        connection_id: str,
+        connection_id: str = Path(description="Integration connection UUID to delete"),
         principal: Principal = Depends(extract_principal),
     ) -> None:
         """Delete an integration connection."""
@@ -259,7 +346,7 @@ def create_integrations_router(
         response_model=IntegrationTestResult,
     )
     async def test_integration(
-        connection_id: str,
+        connection_id: str = Path(description="Integration connection UUID to test"),
         principal: Principal = Depends(extract_principal),
     ) -> IntegrationTestResult:
         """Test an integration connection by instantiating the adapter."""
