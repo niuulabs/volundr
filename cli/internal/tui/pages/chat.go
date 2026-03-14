@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/color"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/niuulabs/volundr/cli/internal/api"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
+	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
 
 // ChatStreamEventMsg carries an incoming stream event from the WS.
@@ -64,16 +66,39 @@ type ChatPage struct {
 	// Streaming state: tracks the in-flight assistant message
 	streamingIdx  int    // index into messages, -1 when not streaming
 	streamingText string // accumulated text for current stream
+
+	// Mention/autocomplete menus
+	fileMention    components.MentionMenu // '@' trigger
+	commandMention components.MentionMenu // '/' trigger
+	issueMention   components.MentionMenu // '!' trigger
+	cachedFiles    []api.FileEntry        // cached file list from session pod
+	fileListPath   string                 // path used for cached file list
+
+	// Available slash commands (populated from static list for now).
+	availableCommands []components.MentionItem
 }
 
 // NewChatPage creates a new chat page.
 func NewChatPage(client *api.Client, sender *tui.ProgramSender) ChatPage {
 	return ChatPage{
-		model:        "claude-sonnet-4",
-		inputActive:  true,
-		client:       client,
-		sender:       sender,
-		streamingIdx: -1,
+		model:          "claude-sonnet-4",
+		inputActive:    true,
+		client:         client,
+		sender:         sender,
+		streamingIdx:   -1,
+		fileMention:    components.NewMentionMenu('@'),
+		commandMention: components.NewMentionMenu('/'),
+		issueMention:   components.NewMentionMenu('!'),
+		availableCommands: []components.MentionItem{
+			{Label: "help", Value: "/help ", Detail: "Show help", Icon: "\u25b6", Category: "command"},
+			{Label: "clear", Value: "/clear ", Detail: "Clear chat", Icon: "\u25b6", Category: "command"},
+			{Label: "reset", Value: "/reset ", Detail: "Reset session", Icon: "\u25b6", Category: "command"},
+			{Label: "status", Value: "/status ", Detail: "Session status", Icon: "\u25b6", Category: "command"},
+			{Label: "diff", Value: "/diff ", Detail: "Show changes", Icon: "\u25b6", Category: "command"},
+			{Label: "commit", Value: "/commit ", Detail: "Commit changes", Icon: "\u26a1", Category: "skill"},
+			{Label: "review", Value: "/review ", Detail: "Code review", Icon: "\u26a1", Category: "skill"},
+			{Label: "test", Value: "/test ", Detail: "Run tests", Icon: "\u26a1", Category: "skill"},
+		},
 	}
 }
 
@@ -200,25 +225,53 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) { //nolint:gocritic //
 		}
 		return c, nil
 
+	case tui.FilesLoadedMsg:
+		if msg.Err != nil {
+			c.fileMention.Loading = false
+			return c, nil
+		}
+		c.cachedFiles = msg.Files
+		c.fileListPath = msg.Path
+		c.updateFileMentionItems()
+		return c, nil
+
 	case tea.KeyMsg:
 		key := msg.String()
 
 		// Tab toggles focus between input and scroll mode.
 		if key == "tab" {
+			c.closeMentionMenus()
 			c.inputActive = !c.inputActive
 			break
 		}
 
-		// Esc always deactivates input (switches to scroll mode).
+		// Esc closes any open mention menu first, then deactivates input.
 		if key == "esc" {
+			if c.anyMentionActive() {
+				c.closeMentionMenus()
+				break
+			}
 			c.inputActive = false
 			break
 		}
 
 		// When input is active, route keys to the text field.
 		if c.inputActive {
+			// If a mention menu is active, intercept navigation keys.
+			if c.anyMentionActive() {
+				handled, cmd := c.handleMentionKey(key, msg)
+				if handled {
+					return c, cmd
+				}
+			}
+
 			switch key {
 			case "enter":
+				// If a mention menu is active, select the item instead of sending.
+				if c.anyMentionActive() {
+					c.acceptMentionSelection()
+					return c, nil
+				}
 				if c.input != "" {
 					userMsg := ChatMessage{
 						Role:      "user",
@@ -237,12 +290,15 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) { //nolint:gocritic //
 			case "backspace":
 				if c.input != "" {
 					c.input = c.input[:len(c.input)-1]
+					c.updateMentionFromInput()
 				}
 			case "space":
 				c.input += " "
+				c.closeMentionMenus()
 			default:
 				if text := msg.Key().Text; text != "" {
 					c.input += text
+					c.handleTriggerOrUpdateMention(text)
 				}
 			}
 			break
@@ -616,16 +672,21 @@ func (c ChatPage) renderMessage(msg ChatMessage) string { //nolint:gocritic // v
 		// Render assistant messages as markdown with glamour.
 		renderedContent = renderMarkdown(msg.Content, maxWidth)
 	} else {
+		content := wrapText(msg.Content, maxWidth)
+		// Apply mention highlighting for user messages.
+		if msg.Role == "user" {
+			content = highlightMentions(content)
+		}
 		renderedContent = lipgloss.NewStyle().
 			Foreground(theme.TextPrimary).
 			PaddingLeft(2).
-			Render(wrapText(msg.Content, maxWidth))
+			Render(content)
 	}
 
 	return header + "\n" + renderedContent
 }
 
-// renderInput renders the chat input area.
+// renderInput renders the chat input area with any active mention dropdown.
 func (c ChatPage) renderInput() string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
 
@@ -639,23 +700,328 @@ func (c ChatPage) renderInput() string { //nolint:gocritic // value receiver nee
 	prompt := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#d97706")).
 		Bold(true).
-		Render("▸ ")
+		Render("\u25b8 ")
 
 	cursor := ""
 	if c.inputActive {
 		cursor = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#d97706")).
-			Render("█")
+			Render("\u2588")
 	}
 
-	inputContent := prompt + c.input + cursor
+	// Apply mention highlighting to the input text while typing.
+	displayInput := highlightMentions(c.input)
+	inputContent := prompt + displayInput + cursor
 
-	return lipgloss.NewStyle().
+	inputBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Width(c.width-6).
 		Padding(0, 1).
 		Render(inputContent)
+
+	// Render mention dropdown above the input box if active.
+	menuWidth := c.width - 8
+	var dropdown string
+	switch {
+	case c.fileMention.IsActive():
+		dropdown = c.fileMention.View(menuWidth)
+	case c.commandMention.IsActive():
+		dropdown = c.commandMention.View(menuWidth)
+	case c.issueMention.IsActive():
+		dropdown = c.issueMention.View(menuWidth)
+	}
+
+	if dropdown != "" {
+		return dropdown + "\n" + inputBox
+	}
+	return inputBox
+}
+
+// --- Mention menu helpers ---
+
+// anyMentionActive returns true if any mention menu is open.
+func (c *ChatPage) anyMentionActive() bool {
+	return c.fileMention.IsActive() || c.commandMention.IsActive() || c.issueMention.IsActive()
+}
+
+// closeMentionMenus closes all open mention menus.
+func (c *ChatPage) closeMentionMenus() {
+	c.fileMention.Close()
+	c.commandMention.Close()
+	c.issueMention.Close()
+}
+
+// activeMentionMenu returns a pointer to the currently active menu, or nil.
+func (c *ChatPage) activeMentionMenu() *components.MentionMenu {
+	if c.fileMention.IsActive() {
+		return &c.fileMention
+	}
+	if c.commandMention.IsActive() {
+		return &c.commandMention
+	}
+	if c.issueMention.IsActive() {
+		return &c.issueMention
+	}
+	return nil
+}
+
+// handleMentionKey processes navigation keys when a mention menu is active.
+// Returns true if the key was consumed by the menu.
+func (c *ChatPage) handleMentionKey(key string, _ tea.KeyMsg) (bool, tea.Cmd) {
+	menu := c.activeMentionMenu()
+	if menu == nil {
+		return false, nil
+	}
+
+	switch key {
+	case "up":
+		menu.MoveUp()
+		return true, nil
+	case "down":
+		menu.MoveDown()
+		return true, nil
+	case "tab":
+		// Tab accepts selection (same as enter in menu context).
+		c.acceptMentionSelection()
+		return true, nil
+	}
+	return false, nil
+}
+
+// acceptMentionSelection inserts the selected mention item into the input.
+func (c *ChatPage) acceptMentionSelection() {
+	menu := c.activeMentionMenu()
+	if menu == nil {
+		return
+	}
+
+	item := menu.SelectedItem()
+	if item == nil {
+		c.closeMentionMenus()
+		return
+	}
+
+	// For file mentions: if the item is a directory, drill into it.
+	if menu.Trigger == '@' && item.Category == "directory" {
+		c.input = c.inputBeforeTrigger('@') + "@" + item.Value
+		c.fileMention.SetQuery(item.Value)
+		c.fileMention.Loading = true
+		c.fetchFiles(item.Value)
+		return
+	}
+
+	// Replace from trigger to end with the selected value.
+	prefix := c.inputBeforeTrigger(menu.Trigger)
+	c.input = prefix + item.Value
+	c.closeMentionMenus()
+}
+
+// inputBeforeTrigger returns the portion of input before the last trigger character.
+func (c *ChatPage) inputBeforeTrigger(trigger rune) string {
+	triggerStr := string(trigger)
+	idx := strings.LastIndex(c.input, triggerStr)
+	if idx < 0 {
+		return c.input
+	}
+	return c.input[:idx]
+}
+
+// queryAfterTrigger returns the text typed after the last trigger character.
+func (c *ChatPage) queryAfterTrigger(trigger rune) string {
+	triggerStr := string(trigger)
+	idx := strings.LastIndex(c.input, triggerStr)
+	if idx < 0 {
+		return ""
+	}
+	return c.input[idx+len(triggerStr):]
+}
+
+// handleTriggerOrUpdateMention checks for trigger characters or updates an active menu.
+func (c *ChatPage) handleTriggerOrUpdateMention(text string) {
+	// Check for trigger characters.
+	if text == "@" && !c.fileMention.IsActive() {
+		c.closeMentionMenus()
+		c.fileMention.Open()
+		c.fileMention.Loading = true
+		c.fetchFiles("")
+		return
+	}
+
+	if text == "/" && !c.commandMention.IsActive() && c.isInputAtSlashPosition() {
+		c.closeMentionMenus()
+		c.commandMention.Open()
+		c.commandMention.SetItems(c.availableCommands)
+		return
+	}
+
+	if text == "!" && !c.issueMention.IsActive() {
+		c.closeMentionMenus()
+		c.issueMention.Open()
+		// Stub: show placeholder since there's no backend endpoint yet.
+		c.issueMention.SetItems([]components.MentionItem{
+			{Label: "Issue search coming soon", Value: "!", Detail: "", Icon: "\U0001f516", Category: "placeholder"},
+		})
+		return
+	}
+
+	// Update active menu query.
+	c.updateMentionFromInput()
+}
+
+// isInputAtSlashPosition returns true if the `/` trigger is at the start of the input.
+func (c *ChatPage) isInputAtSlashPosition() bool {
+	// The `/` was already appended to c.input, so check if it starts with `/`.
+	trimmed := strings.TrimSpace(c.input)
+	return trimmed == "/" || strings.HasPrefix(trimmed, "/")
+}
+
+// updateMentionFromInput re-filters the active mention menu based on current input.
+func (c *ChatPage) updateMentionFromInput() {
+	if c.fileMention.IsActive() {
+		query := c.queryAfterTrigger('@')
+		// Check if the trigger was deleted.
+		if !strings.Contains(c.input, "@") {
+			c.fileMention.Close()
+			return
+		}
+		c.fileMention.SetQuery(query)
+		c.updateFileMentionItems()
+		return
+	}
+
+	if c.commandMention.IsActive() {
+		query := c.queryAfterTrigger('/')
+		if !strings.Contains(c.input, "/") {
+			c.commandMention.Close()
+			return
+		}
+		c.commandMention.SetQuery(query)
+		c.filterCommandItems(query)
+		return
+	}
+
+	if c.issueMention.IsActive() {
+		if !strings.Contains(c.input, "!") {
+			c.issueMention.Close()
+			return
+		}
+		query := c.queryAfterTrigger('!')
+		c.issueMention.SetQuery(query)
+		// Stub: attempt to search issues (graceful 404 handling).
+		c.searchIssues(query)
+	}
+}
+
+// updateFileMentionItems filters the cached file list based on the current query.
+func (c *ChatPage) updateFileMentionItems() {
+	query := c.fileMention.Query
+
+	var items []components.MentionItem
+	for _, f := range c.cachedFiles {
+		if !components.FuzzyMatch(f.Name, query) {
+			continue
+		}
+		icon := "\U0001f4c4" // file icon
+		category := "file"
+		value := "@" + f.Path
+		if f.IsDir {
+			icon = "\U0001f4c1" // directory icon
+			category = "directory"
+			value = f.Path + "/"
+		}
+		items = append(items, components.MentionItem{
+			Label:    f.Name,
+			Value:    value,
+			Detail:   f.Path,
+			Icon:     icon,
+			Category: category,
+		})
+	}
+
+	c.fileMention.SetItems(items)
+}
+
+// filterCommandItems filters the available commands by the query.
+func (c *ChatPage) filterCommandItems(query string) {
+	var items []components.MentionItem
+	for _, cmd := range c.availableCommands {
+		if components.FuzzyMatch(cmd.Label, query) {
+			items = append(items, cmd)
+		}
+	}
+	c.commandMention.SetItems(items)
+}
+
+// fetchFiles starts an async file listing from the session pod.
+func (c *ChatPage) fetchFiles(dirPath string) {
+	if c.session == nil || c.session.CodeEndpoint == "" {
+		c.fileMention.Loading = false
+		return
+	}
+
+	token := ""
+	if c.client != nil {
+		token = c.client.Token()
+	}
+	podClient := api.NewSessionPodClient(c.session.CodeEndpoint, token)
+	sender := c.sender
+
+	go func() {
+		files, err := podClient.ListFiles(dirPath)
+		sender.Send(tui.FilesLoadedMsg{Files: files, Path: dirPath, Err: err})
+	}()
+}
+
+// searchIssues is a stub for future issue search integration.
+// It attempts to call the issues search endpoint and gracefully handles errors.
+func (c *ChatPage) searchIssues(query string) {
+	// TODO: When the backend issues search endpoint exists, fetch here.
+	// For now, show a placeholder.
+	if query == "" {
+		c.issueMention.SetItems([]components.MentionItem{
+			{Label: "Type an issue ID or keyword...", Value: "!", Detail: "", Icon: "\U0001f516", Category: "placeholder"},
+		})
+		return
+	}
+	c.issueMention.SetItems([]components.MentionItem{
+		{Label: "Issue search coming soon", Value: "!" + query, Detail: "No backend endpoint yet", Icon: "\U0001f516", Category: "placeholder"},
+	})
+}
+
+// --- Mention syntax highlighting in messages ---
+
+// mentionPatterns matches @file, /command, and !ISSUE references in message text.
+var (
+	fileRefPattern    = regexp.MustCompile(`@[\w./_-]+`)
+	issueRefPattern   = regexp.MustCompile(`![A-Z]+-\d+`)
+	commandRefPattern = regexp.MustCompile(`^/\w+`)
+)
+
+// highlightMentions applies inline color to mention references in a message.
+func highlightMentions(text string) string {
+	theme := tui.DefaultTheme
+	cyanStyle := lipgloss.NewStyle().Foreground(theme.AccentCyan)
+	purpleStyle := lipgloss.NewStyle().Foreground(theme.AccentPurple)
+	amberStyle := lipgloss.NewStyle().Foreground(theme.AccentAmber)
+
+	// Apply highlights: issue refs first (most specific), then file refs, then commands.
+	text = issueRefPattern.ReplaceAllStringFunc(text, func(match string) string {
+		return purpleStyle.Render(match)
+	})
+	text = fileRefPattern.ReplaceAllStringFunc(text, func(match string) string {
+		return cyanStyle.Render(match)
+	})
+	// Command refs only at line start.
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "/") {
+			lines[i] = commandRefPattern.ReplaceAllStringFunc(line, func(match string) string {
+				return amberStyle.Render(match)
+			})
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // chatStyleConfig is a clean, subdued dark style for rendering chat markdown.
