@@ -638,7 +638,8 @@ sessionContributors:
     kwargs: {}
     secretKwargs: []
   - adapter: "volundr.adapters.outbound.contributors.storage.StorageContributor"
-    kwargs: {}
+    kwargs:
+      home_enabled: true
     secretKwargs: []
   - adapter: "volundr.adapters.outbound.contributors.gateway.GatewayContributor"
     kwargs: {}

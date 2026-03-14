@@ -425,7 +425,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Store settings for lifespan access
     app.state.settings = settings
     app.state.admin_settings = {
-        "storage": {"home_enabled": settings.storage.home_enabled},
+        "storage": {"home_enabled": True},
     }
 
     @asynccontextmanager
@@ -514,7 +514,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 profile_provider=profile_provider,
                 git_registry=git_registry,
                 storage=storage_adapter,
-                home_enabled=settings.storage.home_enabled,
                 admin_settings=app.state.admin_settings,
                 gateway=gateway_adapter,
                 secret_injection=secret_injection,
