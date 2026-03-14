@@ -350,6 +350,26 @@ class DirectK8sPodManager(PodManager):
             },
         }
 
+    def _build_home_volume(self, claim: str) -> dict[str, Any]:
+        """Build the home volume spec.
+
+        When the claim is an absolute path (from LocalStorageAdapter), uses
+        a hostPath volume.  Otherwise treats it as a PVC claimName.
+        """
+        if claim.startswith("/"):
+            return {
+                "name": "home",
+                "hostPath": {
+                    "path": claim,
+                    "type": "DirectoryOrCreate",
+                },
+            }
+
+        return {
+            "name": "home",
+            "persistentVolumeClaim": {"claimName": claim},
+        }
+
     def _build_init_containers(
         self,
         session: Session,
@@ -502,12 +522,8 @@ fi
         home_claim = home_vol.get("existingClaim", "")
 
         if home_enabled and home_claim:
-            volumes.append(
-                {
-                    "name": "home",
-                    "persistentVolumeClaim": {"claimName": home_claim},
-                }
-            )
+            home_volume = self._build_home_volume(home_claim)
+            volumes.append(home_volume)
             workload_mounts = workload_mounts + [
                 {"name": "home", "mountPath": home_mount},
             ]

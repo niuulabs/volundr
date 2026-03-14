@@ -996,7 +996,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 		Storage: map[string]interface{}{
 			"adapter": "volundr.adapters.outbound.local_storage_adapter.LocalStorageAdapter",
 			"kwargs": map[string]interface{}{
-				"base_dir": cfgDir,
+				"base_dir": k3sNodeStoragePath + "/data",
 			},
 		},
 		SecretInjection: map[string]interface{}{
@@ -1040,6 +1040,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	// Wire up session contributors.
 	// LocalMountContributor is auto-wired by Python main.py from local_mounts config.
 	apiCfg.SessionContributors = []map[string]interface{}{
+		{"adapter": "volundr.adapters.outbound.contributors.storage.StorageContributor"},
 		{"adapter": "volundr.adapters.outbound.contributors.git.GitContributor"},
 		{"adapter": "volundr.adapters.outbound.contributors.resource.ResourceContributor"},
 	}
