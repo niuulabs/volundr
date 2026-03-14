@@ -238,13 +238,41 @@ class TestManifests:
         env_dict = {e["name"]: e["value"] for e in skuld["env"] if "value" in e}
         assert env_dict["SESSION_ID"] == str(sample_session.id)
         assert env_dict["DATABASE__HOST"] == "host.k3d.internal"
-        assert env_dict["HOME"] == "/volundr/home"
 
-        # Check HOME is set on all workload containers.
-        for name in ("code-server", "devrunner"):
+        # Without homeVolume in spec, HOME should not be set
+        assert "HOME" not in env_dict
+
+    def test_build_deployment_with_home_volume(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(
+            homeVolume={
+                "enabled": True,
+                "existingClaim": "volundr-user-home",
+                "mountPath": "/volundr/home",
+            },
+        )
+        manifest = pod_manager._build_deployment_manifest(sample_session, spec)
+        containers = manifest["spec"]["template"]["spec"]["containers"]
+
+        # Check HOME is set on all workload containers
+        for name in ("skuld", "code-server", "devrunner"):
             container = next(c for c in containers if c["name"] == name)
             cenv = {e["name"]: e["value"] for e in container["env"] if "value" in e}
             assert cenv["HOME"] == "/volundr/home"
+
+        # Check home PVC volume is added
+        volumes = manifest["spec"]["template"]["spec"]["volumes"]
+        home_vol = next((v for v in volumes if v["name"] == "home"), None)
+        assert home_vol is not None
+        assert home_vol["persistentVolumeClaim"]["claimName"] == "volundr-user-home"
+
+        # Check home mount is added to workload containers
+        skuld = next(c for c in containers if c["name"] == "skuld")
+        mount_names = [m["name"] for m in skuld["volumeMounts"]]
+        assert "home" in mount_names
 
     def test_build_service_manifest(
         self,

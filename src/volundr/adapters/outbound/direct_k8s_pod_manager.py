@@ -495,6 +495,28 @@ fi
         tolerations = spec.values.get("tolerations", [])
         runtime_class_name = spec.values.get("runtimeClassName")
 
+        # Home volume from StorageContributor
+        home_vol = spec.values.get("homeVolume", {})
+        home_enabled = home_vol.get("enabled", False)
+        home_mount = home_vol.get("mountPath", self._home_mount_path)
+        home_claim = home_vol.get("existingClaim", "")
+
+        if home_enabled and home_claim:
+            volumes.append(
+                {
+                    "name": "home",
+                    "persistentVolumeClaim": {"claimName": home_claim},
+                }
+            )
+            workload_mounts = workload_mounts + [
+                {"name": "home", "mountPath": home_mount},
+            ]
+
+        # HOME env var — set when home volume is mounted
+        home_env: list[dict[str, str]] = []
+        if home_enabled:
+            home_env = [{"name": "HOME", "value": home_mount}]
+
         pod_spec: dict[str, Any] = {
             "hostname": session.name,
             "terminationGracePeriodSeconds": 30,
@@ -523,10 +545,7 @@ fi
                     "name": "skuld",
                     "image": self._skuld_image,
                     "ports": [{"containerPort": 8081, "name": "broker"}],
-                    "env": env_vars
-                    + [
-                        {"name": "HOME", "value": self._home_mount_path},
-                    ],
+                    "env": env_vars + home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
@@ -545,9 +564,7 @@ fi
                         "--disable-telemetry",
                         f"/volundr/sessions/{session.id}/workspace",
                     ],
-                    "env": [
-                        {"name": "HOME", "value": self._home_mount_path},
-                    ],
+                    "env": home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
@@ -561,8 +578,8 @@ fi
                     "env": [
                         {"name": "SESSION_ID", "value": str(session.id)},
                         {"name": "TERMINAL_PORT", "value": "7681"},
-                        {"name": "HOME", "value": self._home_mount_path},
-                    ],
+                    ]
+                    + home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
