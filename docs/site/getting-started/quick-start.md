@@ -10,9 +10,13 @@ The fastest way to try Volundr. No Kubernetes required.
 
 ### 1. Download the CLI
 
+Grab the latest binary from [GitHub Releases](https://github.com/niuulabs/volundr/releases):
+
 ```bash
 # macOS / Linux
-curl -fsSL https://get.volundr.dev | sh
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/volundr-$(uname -s)-$(uname -m) -o volundr
+chmod +x volundr
+sudo mv volundr /usr/local/bin/
 ```
 
 ### 2. Initialize

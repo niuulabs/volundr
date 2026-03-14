@@ -24,8 +24,11 @@ Not all prerequisites apply to every method. Check the table for your path.
 The fastest path. Download a pre-built binary, answer a few questions, and you're running.
 
 ```bash
-# Download
-curl -fsSL https://get.volundr.dev | sh
+# Download from GitHub releases
+# https://github.com/niuulabs/volundr/releases
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/volundr-$(uname -s)-$(uname -m) -o volundr
+chmod +x volundr
+sudo mv volundr /usr/local/bin/
 
 # Initialize (interactive wizard)
 volundr init

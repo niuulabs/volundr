@@ -46,14 +46,45 @@ kubectl create secret generic github-token \
 
 ## Step 2: Database
 
-Use an external PostgreSQL instance. Cloud-managed databases (RDS, Cloud SQL, Azure Database) are recommended for production.
+Use a dedicated PostgreSQL instance. For production, the [CloudNativePG](https://cloudnative-pg.io/) operator (CNCF project) is the recommended way to run PostgreSQL on Kubernetes.
+
+```bash
+# Install CloudNativePG operator
+kubectl apply --server-side -f \
+  https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.1.yaml
+```
+
+Create a PostgreSQL cluster:
+
+```yaml
+# postgres-cluster.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: volundr-pg
+  namespace: volundr
+spec:
+  instances: 2
+  storage:
+    size: 10Gi
+  bootstrap:
+    initdb:
+      database: volundr
+      owner: volundr
+```
+
+```bash
+kubectl apply -f postgres-cluster.yaml
+```
+
+Then point Volundr at it:
 
 ```yaml
 # values-production.yaml
 database:
   external:
     enabled: true
-    host: postgres.example.com
+    host: volundr-pg-rw.volundr.svc.cluster.local
     port: 5432
   existingSecret: volundr-db
 ```
