@@ -116,6 +116,10 @@ func (s SessionsPage) Update(msg tea.Msg) (SessionsPage, tea.Cmd) { //nolint:goc
 			if s.cursor < len(s.filtered)-1 {
 				s.cursor++
 			}
+		case "G":
+			s.cursor = max(0, len(s.filtered)-1)
+		case "g":
+			s.cursor = 0
 		case "enter":
 			if sess := s.selectedSession(); sess != nil {
 				return s, func() tea.Msg { return SessionSelectedMsg{Session: *sess} }

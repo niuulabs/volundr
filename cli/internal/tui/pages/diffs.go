@@ -36,8 +36,11 @@ type DiffFile struct {
 // DiffsPage displays a file tree and diff viewer.
 type DiffsPage struct {
 	files     []DiffFile
+	filtered  []int // indices into files that match the search
 	cursor    int
 	scrollPos int
+	search    string
+	searching bool
 	loading   bool
 	loadErr   error
 	width     int
@@ -106,9 +109,10 @@ func (d DiffsPage) Update(msg tea.Msg) (DiffsPage, tea.Cmd) { //nolint:gocritic 
 				Deletions: f.Deletions,
 			})
 		}
+		d.applySearch()
 		// Load diff content for the first file.
-		if len(d.files) > 0 {
-			return d, d.loadDiffContent(0)
+		if len(d.filteredFiles()) > 0 {
+			return d, d.loadDiffContent(d.actualIndex(0))
 		}
 		return d, nil
 
@@ -124,18 +128,35 @@ func (d DiffsPage) Update(msg tea.Msg) (DiffsPage, tea.Cmd) { //nolint:gocritic 
 		return d, nil
 
 	case tea.KeyMsg:
+		if d.searching {
+			return d.handleSearchInput(msg)
+		}
+
+		filtered := d.filteredFiles()
 		switch msg.String() {
 		case "up", "k":
 			if d.cursor > 0 {
 				d.cursor--
 				d.scrollPos = 0
-				return d, d.loadDiffContent(d.cursor)
+				return d, d.loadDiffContent(d.actualIndex(d.cursor))
 			}
 		case "down", "j":
-			if d.cursor < len(d.files)-1 {
+			if d.cursor < len(filtered)-1 {
 				d.cursor++
 				d.scrollPos = 0
-				return d, d.loadDiffContent(d.cursor)
+				return d, d.loadDiffContent(d.actualIndex(d.cursor))
+			}
+		case "G":
+			if len(filtered) > 0 {
+				d.cursor = len(filtered) - 1
+				d.scrollPos = 0
+				return d, d.loadDiffContent(d.actualIndex(d.cursor))
+			}
+		case "g":
+			if len(filtered) > 0 {
+				d.cursor = 0
+				d.scrollPos = 0
+				return d, d.loadDiffContent(d.actualIndex(d.cursor))
 			}
 		case "J":
 			d.scrollPos++
@@ -143,6 +164,9 @@ func (d DiffsPage) Update(msg tea.Msg) (DiffsPage, tea.Cmd) { //nolint:gocritic 
 			if d.scrollPos > 0 {
 				d.scrollPos--
 			}
+		case "/":
+			d.searching = true
+			d.search = ""
 		case "r":
 			if d.session != nil {
 				cmd := d.SetSession(*d.session)
@@ -224,11 +248,26 @@ func (d DiffsPage) View() string { //nolint:gocritic // value receiver needed fo
 			))
 	}
 
+	// Search bar
+	var searchBar string
+	if d.searching {
+		searchBar = lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Render("/ " + d.search + "\u2588")
+	} else if d.search != "" {
+		searchBar = lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Render("Filter: " + d.search + "  (/ to edit)")
+	}
+
 	// Split: file tree (left) and diff viewer (right)
 	// Reserve space: title(1) + margin(1) + stats(1) + blank(1) + content + blank(1) + hints(1) + padding(2)
 	treeWidth := 35
 	diffWidth := d.width - treeWidth - 8
 	paneHeight := d.height - 9
+	if searchBar != "" {
+		paneHeight--
+	}
 
 	tree := d.renderFileTree(treeWidth, paneHeight)
 	diff := d.renderDiffView(diffWidth, paneHeight)
@@ -250,37 +289,41 @@ func (d DiffsPage) View() string { //nolint:gocritic // value receiver needed fo
 
 	// Navigation hints
 	hintStyle := lipgloss.NewStyle().Foreground(theme.TextMuted)
-	hints := hintStyle.Render("  ↑/↓ select file  J/K scroll diff  r refresh")
+	hints := hintStyle.Render("  j/k select  G/g bottom/top  J/K scroll diff  / search  r refresh")
 
 	// Scroll position indicator
+	filtered := d.filteredFiles()
 	var scrollInfo string
-	if d.cursor >= 0 && d.cursor < len(d.files) {
-		file := d.files[d.cursor]
+	if d.cursor >= 0 && d.cursor < len(filtered) {
+		file := filtered[d.cursor]
 		if file.Diff != "" {
 			totalLines := len(strings.Split(file.Diff, "\n"))
 			scrollInfo = hintStyle.Render(fmt.Sprintf("  line %d/%d", d.scrollPos+1, totalLines))
 		}
 	}
 
+	parts := []string{
+		titleStyle.Render("◧ Diffs"),
+		stats,
+	}
+	if searchBar != "" {
+		parts = append(parts, searchBar)
+	}
+	parts = append(parts, "", content, "", hints+scrollInfo)
+
 	return lipgloss.NewStyle().
 		Width(d.width).
 		Height(d.height).
 		Padding(1, 2).
-		Render(lipgloss.JoinVertical(lipgloss.Left,
-			titleStyle.Render("◧ Diffs"),
-			stats,
-			"",
-			content,
-			"",
-			hints+scrollInfo,
-		))
+		Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
 }
 
 // renderFileTree renders the file tree sidebar.
 func (d DiffsPage) renderFileTree(width, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
+	filtered := d.filteredFiles()
 
-	if len(d.files) == 0 {
+	if len(filtered) == 0 {
 		return lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(theme.BorderSubtle).
@@ -292,7 +335,7 @@ func (d DiffsPage) renderFileTree(width, height int) string { //nolint:gocritic 
 	}
 
 	var items []string
-	for i, f := range d.files {
+	for i, f := range filtered {
 		var statusColor color.Color
 		switch f.Status {
 		case "M":
@@ -341,8 +384,9 @@ func (d DiffsPage) renderFileTree(width, height int) string { //nolint:gocritic 
 // renderDiffView renders the diff content for the selected file.
 func (d DiffsPage) renderDiffView(width, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
 	theme := tui.DefaultTheme
+	filtered := d.filteredFiles()
 
-	if len(d.files) == 0 {
+	if len(filtered) == 0 {
 		return lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(theme.BorderSubtle).
@@ -351,7 +395,7 @@ func (d DiffsPage) renderDiffView(width, height int) string { //nolint:gocritic 
 			Render(lipgloss.NewStyle().Foreground(theme.TextMuted).Render("  No file selected"))
 	}
 
-	file := d.files[d.cursor]
+	file := filtered[d.cursor]
 
 	if file.Diff == "" {
 		return lipgloss.NewStyle().
@@ -404,6 +448,71 @@ func (d DiffsPage) renderDiffView(width, height int) string { //nolint:gocritic 
 		Height(height).
 		Padding(0, 1).
 		Render(content)
+}
+
+// handleSearchInput processes keystrokes in search mode.
+func (d DiffsPage) handleSearchInput(msg tea.KeyMsg) (DiffsPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
+	switch msg.String() {
+	case "enter", "esc":
+		d.searching = false
+	case "backspace":
+		if d.search != "" {
+			d.search = d.search[:len(d.search)-1]
+		}
+	case "space":
+		d.search += " "
+	default:
+		if text := msg.Key().Text; text != "" {
+			d.search += text
+		}
+	}
+	d.applySearch()
+	return d, nil
+}
+
+// Searching returns whether the search input is active.
+func (d DiffsPage) Searching() bool { //nolint:gocritic // value receiver needed for page interface consistency
+	return d.searching
+}
+
+// applySearch rebuilds the filtered index list based on the search term.
+func (d *DiffsPage) applySearch() {
+	d.filtered = nil
+	lower := strings.ToLower(d.search)
+	for i, f := range d.files {
+		if d.search != "" && !strings.Contains(strings.ToLower(f.Path), lower) {
+			continue
+		}
+		d.filtered = append(d.filtered, i)
+	}
+	if d.cursor >= len(d.filtered) {
+		d.cursor = max(0, len(d.filtered)-1)
+	}
+}
+
+// filteredFiles returns the DiffFile entries matching the current search.
+func (d DiffsPage) filteredFiles() []DiffFile { //nolint:gocritic // value receiver needed for page interface consistency
+	if len(d.filtered) == 0 && d.search == "" {
+		return d.files
+	}
+	result := make([]DiffFile, 0, len(d.filtered))
+	for _, idx := range d.filtered {
+		if idx < len(d.files) {
+			result = append(result, d.files[idx])
+		}
+	}
+	return result
+}
+
+// actualIndex maps a filtered cursor position to the real files index.
+func (d DiffsPage) actualIndex(cursor int) int { //nolint:gocritic // value receiver needed for page interface consistency
+	if d.search == "" || len(d.filtered) == 0 {
+		return cursor
+	}
+	if cursor < 0 || cursor >= len(d.filtered) {
+		return cursor
+	}
+	return d.filtered[cursor]
 }
 
 // truncatePath shortens a file path to fit within the given width.

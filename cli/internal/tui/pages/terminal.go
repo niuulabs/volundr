@@ -58,6 +58,14 @@ type terminalTab struct {
 	connState  string
 	connErr    error
 	mu         sync.Mutex
+
+	// history keeps rendered screen snapshots for scrollback.
+	// On each output event, the current screen lines are appended
+	// (deduplicating against the previous snapshot). This allows
+	// scrolling even when the emulator is in alternate screen mode
+	// (tmux), where the native scrollback buffer is unavailable.
+	history    []string
+	lastRender string // previous Render() output for dedup
 }
 
 // TerminalPage implements a full remote PTY terminal via WebSocket and x/vt.
@@ -78,9 +86,13 @@ type TerminalPage struct {
 	activeToken   string
 
 	// insertMode tracks whether keystrokes are forwarded to the PTY (true)
-	// or handled as navigation commands (false). Ctrl+] exits insert mode,
+	// or handled as navigation commands (false). Esc exits insert mode,
 	// i re-enters it — mirroring the chat page's input/scroll modes.
 	insertMode bool
+
+	// scrollPos tracks scroll offset in normal mode. 0 = live view (bottom),
+	// >0 = scrolled up into scrollback history. Mirrors chat page behavior.
+	scrollPos int
 }
 
 // defaultTermWidth and defaultTermHeight are initial vt emulator dimensions
@@ -89,6 +101,9 @@ const (
 	defaultTermWidth  = 80
 	defaultTermHeight = 24
 )
+
+// scrollbackMaxLines is the number of scrollback lines retained per terminal tab.
+const scrollbackMaxLines = 10000
 
 // NewTerminalPage creates a new terminal page.
 func NewTerminalPage(serverURL string, client *api.Client, pool *tui.ClientPool) TerminalPage {
@@ -103,7 +118,7 @@ func NewTerminalPage(serverURL string, client *api.Client, pool *tui.ClientPool)
 		pool:       pool,
 		outputCh:   outputCh,
 		connCh:     connCh,
-		insertMode: true,
+		insertMode: false,
 	}
 }
 
@@ -135,7 +150,13 @@ func (t TerminalPage) waitForConn() tea.Cmd { //nolint:gocritic // value receive
 func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	switch msg := msg.(type) {
 	case TerminalOutputMsg:
-		// New PTY output was written to the vt emulator; re-render.
+		// Capture rendered lines into scrollback history.
+		if msg.TabIndex >= 0 && msg.TabIndex < len(t.tabs) {
+			tab := t.tabs[msg.TabIndex]
+			tab.mu.Lock()
+			t.captureHistory(tab)
+			tab.mu.Unlock()
+		}
 		return t, t.waitForOutput()
 
 	case TerminalConnectedMsg:
@@ -183,10 +204,15 @@ func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) { //nolint:goc
 
 // handleKey processes keyboard input.
 func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
-	key := msg.Key().Keystroke()
+	key := msg.String()
 
-	// Ctrl+] always toggles between insert and normal mode (like the
-	// classic telnet escape character). Works regardless of current mode.
+	// Esc always exits insert mode (consistent with chat page).
+	if key == "esc" && t.insertMode {
+		t.insertMode = false
+		return t, nil
+	}
+
+	// Ctrl+] toggles between insert and normal mode (classic telnet escape).
 	// Match both "ctrl+]" (Kitty protocol) and raw 0x1D (legacy terminals).
 	if key == "ctrl+]" || msg.Key().Code == 0x1D {
 		t.insertMode = !t.insertMode
@@ -220,14 +246,54 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //noli
 		return t, nil
 	}
 
-	// --- Normal mode: navigation keys, i to re-enter insert mode ---
+	// --- Normal mode ---
 	if !t.insertMode {
-		// i enters insert mode (like vim / chat page).
-		if key == "i" {
+		switch key {
+		case "i":
 			t.insertMode = true
+			t.scrollPos = 0 // snap to live view on insert
+		case "up", "k":
+			t.scrollPos++
+			t.clampScroll()
+		case "down", "j":
+			t.scrollPos--
+			if t.scrollPos < 0 {
+				t.scrollPos = 0
+			}
+		case "pgup":
+			_, h := t.termDimensions()
+			t.scrollPos += h / 2
+			t.clampScroll()
+		case "pgdown":
+			_, h := t.termDimensions()
+			t.scrollPos -= h / 2
+			if t.scrollPos < 0 {
+				t.scrollPos = 0
+			}
+		case "G":
+			t.scrollPos = 0 // jump to bottom (live view)
+		case "g":
+			if len(t.tabs) > 0 {
+				tab := t.tabs[t.activeTab]
+				tab.mu.Lock()
+				t.scrollPos = len(tab.history)
+				tab.mu.Unlock()
+			}
+		// Tab navigation consistent with other pages
+		case "tab":
+			if len(t.tabs) > 1 {
+				t.activeTab = (t.activeTab + 1) % len(t.tabs)
+				t.connectTab(t.activeTab)
+				t.scrollPos = 0
+			}
+		case "shift+tab":
+			if len(t.tabs) > 1 {
+				t.activeTab = (t.activeTab - 1 + len(t.tabs)) % len(t.tabs)
+				t.connectTab(t.activeTab)
+				t.scrollPos = 0
+			}
 		}
-		// All other keys are ignored in normal mode; they fall through
-		// to the app layer in tui.go for page navigation (1-7, q, ?, [).
+		// All other keys fall through to the app layer for page nav (1-7, q, ?, [).
 		return t, nil
 	}
 
@@ -461,12 +527,15 @@ func (t *TerminalPage) handleSpawned(s api.CliSession) {
 func (t *TerminalPage) createTab(sessionID, label, terminalID, wsURL string) {
 	w, h := t.termDimensions()
 
+	emu := vt.NewEmulator(w, h)
+	emu.SetScrollbackSize(scrollbackMaxLines)
+
 	tab := &terminalTab{
 		label:      label,
 		terminalID: terminalID,
 		sessionID:  sessionID,
 		wsURL:      wsURL,
-		emulator:   vt.NewEmulator(w, h),
+		emulator:   emu,
 		connState:  connStatusDisconnected,
 	}
 
@@ -735,35 +804,106 @@ func (t TerminalPage) View() string { //nolint:gocritic // value receiver needed
 	// Tab bar
 	tabBar := t.renderTabBar()
 
-	// Terminal content from vt emulator
+	termW, termH := t.termDimensions()
+
+	// Terminal content: live view or scrollback
 	tab.mu.Lock()
-	content := tab.emulator.Render()
+	var content string
+	if t.scrollPos > 0 {
+		content = t.renderScrollback(tab, termW, termH)
+	} else {
+		content = tab.emulator.Render()
+	}
 	tab.mu.Unlock()
 
-	termW, termH := t.termDimensions()
 	termStyle := lipgloss.NewStyle().
 		Width(termW).
 		Height(termH)
 
-	var helpText string
-	if t.insertMode {
-		modeTag := lipgloss.NewStyle().Foreground(theme.AccentEmerald).Bold(true).Render("INSERT")
-		helpText = fmt.Sprintf("  %s  ctrl+]: normal mode  ctrl+t: new  ctrl+w: close  ctrl+n/p: tabs  ctrl+f: fullscreen", modeTag)
-	} else {
-		modeTag := lipgloss.NewStyle().Foreground(theme.AccentAmber).Bold(true).Render("NORMAL")
-		helpText = fmt.Sprintf("  %s  i: insert  1-7: navigate  q: quit  ?: help  [: sidebar  ctrl+]: insert mode", modeTag)
+	// Scroll indicator when scrolled up
+	var scrollHint string
+	if t.scrollPos > 0 {
+		scrollHint = lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Render(fmt.Sprintf("  ↑ scrolled up %d lines (G to return to live)", t.scrollPos))
 	}
-	helpText = lipgloss.NewStyle().Foreground(theme.TextMuted).Render(helpText)
+
+	elements := []string{tabBar, termStyle.Render(content)}
+	if scrollHint != "" {
+		elements = append(elements, scrollHint)
+	}
 
 	return lipgloss.NewStyle().
 		Width(t.width).
 		Height(t.height).
 		Padding(0, 1).
-		Render(lipgloss.JoinVertical(lipgloss.Left,
-			tabBar,
-			termStyle.Render(content),
-			helpText,
-		))
+		Render(lipgloss.JoinVertical(lipgloss.Left, elements...))
+}
+
+// captureHistory appends new lines from the current render to the tab's
+// history buffer. Compares against lastRender to avoid duplicating the same
+// screen. Must be called with tab.mu held.
+func (t TerminalPage) captureHistory(tab *terminalTab) { //nolint:gocritic // value receiver
+	rendered := tab.emulator.Render()
+	if rendered == tab.lastRender {
+		return
+	}
+
+	lines := strings.Split(rendered, "\n")
+
+	// Append current screen lines to scrollback history.
+	// Whether this is the first render or a subsequent one, the
+	// behavior is the same: accumulate lines and let scroll handle dedup.
+	tab.history = append(tab.history, lines...)
+
+	tab.lastRender = rendered
+
+	// Cap history size.
+	if len(tab.history) > scrollbackMaxLines {
+		excess := len(tab.history) - scrollbackMaxLines
+		tab.history = tab.history[excess:]
+	}
+}
+
+// renderScrollback renders from the history buffer at the current scroll offset.
+// Must be called with tab.mu held.
+func (t TerminalPage) renderScrollback(tab *terminalTab, _, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
+	if len(tab.history) == 0 {
+		return tab.emulator.Render()
+	}
+
+	totalLines := len(tab.history)
+
+	// scrollPos is lines scrolled up from the bottom.
+	end := totalLines - t.scrollPos
+	if end > totalLines {
+		end = totalLines
+	}
+	if end < 0 {
+		end = 0
+	}
+	start := end - height
+	if start < 0 {
+		start = 0
+	}
+
+	visible := tab.history[start:end]
+	return strings.Join(visible, "\n")
+}
+
+// clampScroll ensures scrollPos doesn't exceed available history.
+func (t *TerminalPage) clampScroll() {
+	if len(t.tabs) == 0 {
+		t.scrollPos = 0
+		return
+	}
+	tab := t.tabs[t.activeTab]
+	tab.mu.Lock()
+	maxPos := len(tab.history)
+	tab.mu.Unlock()
+	if t.scrollPos > maxPos {
+		t.scrollPos = maxPos
+	}
 }
 
 // renderEmptyState renders the view when no terminals are open.
