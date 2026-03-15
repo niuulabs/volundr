@@ -110,16 +110,15 @@ func (f Footer) chatHints() []FooterHint {
 	if f.Mode == tui.ModeInsert {
 		return []FooterHint{
 			{Key: "Enter", Desc: "send"},
-			{Key: "Esc", Desc: "exit"},
-			{Key: "Tab", Desc: "toggle focus"},
+			{Key: "Esc", Desc: "normal"},
+			{Key: "@", Desc: "file"},
+			{Key: "!", Desc: "issue"},
 		}
 	}
 	return []FooterHint{
 		{Key: "i", Desc: "insert"},
 		{Key: "j/k", Desc: "scroll"},
-		{Key: "G", Desc: "bottom"},
-		{Key: "g", Desc: "top"},
-		{Key: "Tab", Desc: "toggle focus"},
+		{Key: "G/g", Desc: "bottom/top"},
 		{Key: "Ctrl+K", Desc: "command"},
 	}
 }
@@ -136,10 +135,10 @@ func (f Footer) terminalHints() []FooterHint {
 	}
 	return []FooterHint{
 		{Key: "i", Desc: "insert"},
+		{Key: "j/k", Desc: "scroll"},
+		{Key: "G/g", Desc: "bottom/top"},
 		{Key: "Tab", Desc: "switch tab"},
 		{Key: "Ctrl+t", Desc: "new tab"},
-		{Key: "Ctrl+w", Desc: "close"},
-		{Key: "Ctrl+f", Desc: "fullscreen"},
 		{Key: "Ctrl+K", Desc: "command"},
 	}
 }

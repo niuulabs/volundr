@@ -78,9 +78,13 @@ type TerminalPage struct {
 	activeToken   string
 
 	// insertMode tracks whether keystrokes are forwarded to the PTY (true)
-	// or handled as navigation commands (false). Ctrl+] exits insert mode,
+	// or handled as navigation commands (false). Esc exits insert mode,
 	// i re-enters it — mirroring the chat page's input/scroll modes.
 	insertMode bool
+
+	// scrollPos tracks scroll offset in normal mode. 0 = live view (bottom),
+	// >0 = scrolled up into scrollback history. Mirrors chat page behavior.
+	scrollPos int
 }
 
 // defaultTermWidth and defaultTermHeight are initial vt emulator dimensions
@@ -230,16 +234,44 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //noli
 		switch key {
 		case "i":
 			t.insertMode = true
+			t.scrollPos = 0 // snap to live view on insert
+		case "up", "k":
+			t.scrollPos++
+		case "down", "j":
+			t.scrollPos--
+			if t.scrollPos < 0 {
+				t.scrollPos = 0
+			}
+		case "pgup":
+			_, h := t.termDimensions()
+			t.scrollPos += h / 2
+		case "pgdown":
+			_, h := t.termDimensions()
+			t.scrollPos -= h / 2
+			if t.scrollPos < 0 {
+				t.scrollPos = 0
+			}
+		case "G":
+			t.scrollPos = 0 // jump to bottom (live view)
+		case "g":
+			if len(t.tabs) > 0 {
+				tab := t.tabs[t.activeTab]
+				tab.mu.Lock()
+				t.scrollPos = tab.emulator.ScrollbackLen()
+				tab.mu.Unlock()
+			}
 		// Tab navigation consistent with other pages
 		case "tab":
 			if len(t.tabs) > 1 {
 				t.activeTab = (t.activeTab + 1) % len(t.tabs)
 				t.connectTab(t.activeTab)
+				t.scrollPos = 0
 			}
 		case "shift+tab":
 			if len(t.tabs) > 1 {
 				t.activeTab = (t.activeTab - 1 + len(t.tabs)) % len(t.tabs)
 				t.connectTab(t.activeTab)
+				t.scrollPos = 0
 			}
 		}
 		// All other keys fall through to the app layer for page nav (1-7, q, ?, [).
@@ -750,35 +782,80 @@ func (t TerminalPage) View() string { //nolint:gocritic // value receiver needed
 	// Tab bar
 	tabBar := t.renderTabBar()
 
-	// Terminal content from vt emulator
+	termW, termH := t.termDimensions()
+
+	// Terminal content: live view or scrollback
 	tab.mu.Lock()
-	content := tab.emulator.Render()
+	var content string
+	if t.scrollPos > 0 {
+		content = t.renderScrollback(tab, termW, termH)
+	} else {
+		content = tab.emulator.Render()
+	}
 	tab.mu.Unlock()
 
-	termW, termH := t.termDimensions()
 	termStyle := lipgloss.NewStyle().
 		Width(termW).
 		Height(termH)
 
-	var helpText string
-	if t.insertMode {
-		modeTag := lipgloss.NewStyle().Foreground(theme.AccentEmerald).Bold(true).Render("INSERT")
-		helpText = fmt.Sprintf("  %s  Esc: normal  ctrl+t: new tab  ctrl+w: close  ctrl+n/p: tabs  ctrl+f: fullscreen", modeTag)
-	} else {
-		modeTag := lipgloss.NewStyle().Foreground(theme.AccentCyan).Bold(true).Render("NORMAL")
-		helpText = fmt.Sprintf("  %s  i: insert  Tab/⇧Tab: switch tab  ctrl+t: new  ctrl+w: close  ctrl+f: fullscreen", modeTag)
+	// Scroll indicator when scrolled up
+	var scrollHint string
+	if t.scrollPos > 0 {
+		scrollHint = lipgloss.NewStyle().
+			Foreground(theme.AccentAmber).
+			Render(fmt.Sprintf("  ↑ scrolled up %d lines (G to return to live)", t.scrollPos))
 	}
-	helpText = lipgloss.NewStyle().Foreground(theme.TextMuted).Render(helpText)
+
+	elements := []string{tabBar, termStyle.Render(content)}
+	if scrollHint != "" {
+		elements = append(elements, scrollHint)
+	}
 
 	return lipgloss.NewStyle().
 		Width(t.width).
 		Height(t.height).
 		Padding(0, 1).
-		Render(lipgloss.JoinVertical(lipgloss.Left,
-			tabBar,
-			termStyle.Render(content),
-			helpText,
-		))
+		Render(lipgloss.JoinVertical(lipgloss.Left, elements...))
+}
+
+// renderScrollback renders the terminal scrollback buffer at the current scroll
+// position. Must be called with tab.mu held.
+func (t TerminalPage) renderScrollback(tab *terminalTab, width, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
+	sbLen := tab.emulator.ScrollbackLen()
+	if sbLen == 0 {
+		return tab.emulator.Render()
+	}
+
+	// Clamp scrollPos to available scrollback.
+	if t.scrollPos > sbLen {
+		t.scrollPos = sbLen
+	}
+
+	// Collect lines: scrollback lines + current screen lines.
+	// We want to show `height` lines ending at (total - scrollPos).
+	sb := tab.emulator.Scrollback()
+	screenLines := strings.Split(tab.emulator.Render(), "\n")
+
+	// Build combined line list: scrollback (oldest first) + screen lines.
+	allLines := make([]string, 0, sbLen+len(screenLines))
+	for i := 0; i < sbLen; i++ {
+		line := sb.Line(i)
+		allLines = append(allLines, line.String())
+	}
+	allLines = append(allLines, screenLines...)
+
+	totalLines := len(allLines)
+	end := totalLines - t.scrollPos
+	if end < 0 {
+		end = 0
+	}
+	start := end - height
+	if start < 0 {
+		start = 0
+	}
+
+	visible := allLines[start:end]
+	return strings.Join(visible, "\n")
 }
 
 // renderEmptyState renders the view when no terminals are open.
