@@ -4,7 +4,10 @@ package runtime
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
 )
@@ -73,6 +76,54 @@ func buildGitConfig(cfg *config.Config) map[string]interface{} {
 	}
 
 	return git
+}
+
+// containerUID and containerGID are the user/group IDs of the volundr
+// user inside the API container image.
+const (
+	containerUID = 1001
+	containerGID = 1001
+)
+
+// ensureContainerStorageDirs creates directories that the API container
+// writes to and chowns them to the container user (UID 1001). The config
+// dir itself needs 0o755 so the container can traverse to its mounted files.
+func ensureContainerStorageDirs(cfgDir string) error {
+	// Config dir must be traversable by the container user.
+	if err := os.Chmod(cfgDir, 0o755); err != nil {
+		return fmt.Errorf("chmod config dir: %w", err)
+	}
+
+	// Directories the container writes to — owned by the container user
+	// with 0o755 so only that user can write. If chown fails (e.g. not
+	// running as root), fall back to 0o777.
+	//
+	// data/ is included because the API creates subdirs like data/home/
+	// at runtime. data/pg/ (Postgres) is host-side and already exists
+	// with 0o700 — chown won't recurse into it.
+	writableDirs := []string{
+		filepath.Join(cfgDir, "data"),
+		filepath.Join(cfgDir, "data", "workspaces"),
+		filepath.Join(cfgDir, "sessions"),
+		filepath.Join(cfgDir, "user-credentials"),
+	}
+	for _, dir := range writableDirs {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("create directory %s: %w", dir, err)
+		}
+		if err := os.Chown(dir, containerUID, containerGID); err != nil {
+			// Not root — can't chown, use world-writable as fallback.
+			if err := os.Chmod(dir, 0o777); err != nil { //nolint:gosec // fallback when chown unavailable
+				return fmt.Errorf("chmod directory %s: %w", dir, err)
+			}
+		} else {
+			if err := os.Chmod(dir, 0o755); err != nil {
+				return fmt.Errorf("chmod directory %s: %w", dir, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // Runtime manages the Volundr stack lifecycle.
