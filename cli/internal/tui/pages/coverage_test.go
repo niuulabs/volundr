@@ -2796,9 +2796,9 @@ func TestTerminalPage_HandleKey_CtrlBracket(t *testing.T) {
 	}
 }
 
-// =====================================================
+// Section.
 // Chat: mention trigger detection, mention key handling, highlight
-// =====================================================
+// Section.
 
 func TestChatPage_HandleTriggerOrUpdateMention_At(t *testing.T) {
 	page := NewChatPage(nil, nil)
@@ -3219,9 +3219,9 @@ func TestHighlightMentions(t *testing.T) {
 	}
 }
 
-// =====================================================
+// Section.
 // Admin: search, filtering, maxCursor
-// =====================================================
+// Section.
 
 func TestAdminPage_Searching(t *testing.T) {
 	page := NewAdminPage(nil)
@@ -3464,9 +3464,9 @@ func TestAdminPage_View_SearchBar(t *testing.T) {
 	}
 }
 
-// =====================================================
+// Section.
 // Chronicles: search, Searching()
-// =====================================================
+// Section.
 
 func TestChroniclesPage_Searching(t *testing.T) {
 	page := NewChroniclesPage(nil)
@@ -3533,9 +3533,9 @@ func TestChroniclesPage_SearchActivation(t *testing.T) {
 	}
 }
 
-// =====================================================
+// Section.
 // Diffs: search, Searching()
-// =====================================================
+// Section.
 
 func TestDiffsPage_Searching(t *testing.T) {
 	page := NewDiffsPage(nil)
@@ -3581,9 +3581,9 @@ func TestDiffsPage_SearchActivation(t *testing.T) {
 	}
 }
 
-// =====================================================
+// Section.
 // Settings: maxCursor coverage
-// =====================================================
+// Section.
 
 func TestSettingsPage_MaxCursor(t *testing.T) {
 	page := NewSettingsPage(nil, nil)
@@ -3597,9 +3597,9 @@ func TestSettingsPage_MaxCursor(t *testing.T) {
 	}
 }
 
-// =====================================================
+// Section.
 // Terminal: View with scroll, tab navigation
-// =====================================================
+// Section.
 
 func TestTerminalPage_View_WithScroll(t *testing.T) {
 	page := NewTerminalPage("", nil, nil)
@@ -3658,9 +3658,9 @@ func TestTerminalPage_HandleKey_TabNavigation(t *testing.T) {
 	_ = emu2.Close()
 }
 
-// =====================================================
+// Section.
 // Chat: Update with FilesLoadedMsg, mention menus in Update
-// =====================================================
+// Section.
 
 func TestChatPage_Update_FilesLoadedMsg(t *testing.T) {
 	page := NewChatPage(nil, nil)
