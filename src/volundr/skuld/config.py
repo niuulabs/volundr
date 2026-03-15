@@ -90,6 +90,8 @@ class SkuldSettings(BaseSettings):
     service_user_id: str = Field(default="skuld-broker")
     service_tenant_id: str = Field(default="default")
     persistence_mount_path: str = Field(default="/volundr/sessions")
+    chronicle_watcher_enabled: bool = Field(default=True)
+    chronicle_watcher_debounce_ms: int = Field(default=500)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
     @model_validator(mode="after")
