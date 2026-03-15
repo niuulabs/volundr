@@ -29,6 +29,9 @@ type App struct {
 	// true, global keybindings (q, ?, [, 1-7) are suppressed so keystrokes
 	// reach the input field. Alt+1-7 navigation always works.
 	InputCaptured bool
+
+	// Mode tracks the current interaction mode for the mode indicator.
+	Mode Mode
 }
 
 // NewApp creates a new root TUI application model.
@@ -131,5 +134,5 @@ func (a App) ContentWidth() int {
 
 // ContentHeight returns the height available for the main content area.
 func (a App) ContentHeight() int {
-	return a.Height - 2 // header bar
+	return a.Height - 3 // header bar + footer bar
 }
