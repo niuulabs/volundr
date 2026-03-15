@@ -94,6 +94,9 @@ const (
 	defaultTermHeight = 24
 )
 
+// scrollbackMaxLines is the number of scrollback lines retained per terminal tab.
+const scrollbackMaxLines = 10000
+
 // NewTerminalPage creates a new terminal page.
 func NewTerminalPage(serverURL string, client *api.Client, pool *tui.ClientPool) TerminalPage {
 	outputCh := make(chan TerminalOutputMsg, 256)
@@ -237,6 +240,7 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //noli
 			t.scrollPos = 0 // snap to live view on insert
 		case "up", "k":
 			t.scrollPos++
+			t.clampScroll()
 		case "down", "j":
 			t.scrollPos--
 			if t.scrollPos < 0 {
@@ -245,6 +249,7 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //noli
 		case "pgup":
 			_, h := t.termDimensions()
 			t.scrollPos += h / 2
+			t.clampScroll()
 		case "pgdown":
 			_, h := t.termDimensions()
 			t.scrollPos -= h / 2
@@ -254,10 +259,11 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //noli
 		case "G":
 			t.scrollPos = 0 // jump to bottom (live view)
 		case "g":
+			t.clampScroll() // clamp sets to max if over; we set high first
 			if len(t.tabs) > 0 {
 				tab := t.tabs[t.activeTab]
 				tab.mu.Lock()
-				t.scrollPos = tab.emulator.ScrollbackLen()
+				t.scrollPos = t.maxScrollback(tab)
 				tab.mu.Unlock()
 			}
 		// Tab navigation consistent with other pages
@@ -508,12 +514,15 @@ func (t *TerminalPage) handleSpawned(s api.CliSession) {
 func (t *TerminalPage) createTab(sessionID, label, terminalID, wsURL string) {
 	w, h := t.termDimensions()
 
+	emu := vt.NewEmulator(w, h)
+	emu.SetScrollbackSize(scrollbackMaxLines)
+
 	tab := &terminalTab{
 		label:      label,
 		terminalID: terminalID,
 		sessionID:  sessionID,
 		wsURL:      wsURL,
-		emulator:   vt.NewEmulator(w, h),
+		emulator:   emu,
 		connState:  connStatusDisconnected,
 	}
 
@@ -820,32 +829,36 @@ func (t TerminalPage) View() string { //nolint:gocritic // value receiver needed
 
 // renderScrollback renders the terminal scrollback buffer at the current scroll
 // position. Must be called with tab.mu held.
-func (t TerminalPage) renderScrollback(tab *terminalTab, width, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
-	sbLen := tab.emulator.ScrollbackLen()
-	if sbLen == 0 {
-		return tab.emulator.Render()
-	}
-
-	// Clamp scrollPos to available scrollback.
-	if t.scrollPos > sbLen {
-		t.scrollPos = sbLen
-	}
-
-	// Collect lines: scrollback lines + current screen lines.
-	// We want to show `height` lines ending at (total - scrollPos).
+func (t TerminalPage) renderScrollback(tab *terminalTab, _, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
 	sb := tab.emulator.Scrollback()
 	screenLines := strings.Split(tab.emulator.Render(), "\n")
 
 	// Build combined line list: scrollback (oldest first) + screen lines.
-	allLines := make([]string, 0, sbLen+len(screenLines))
-	for i := 0; i < sbLen; i++ {
-		line := sb.Line(i)
-		allLines = append(allLines, line.String())
+	var allLines []string
+	if sb != nil {
+		sbLen := sb.Len()
+		allLines = make([]string, 0, sbLen+len(screenLines))
+		for i := 0; i < sbLen; i++ {
+			line := sb.Line(i)
+			if line != nil {
+				allLines = append(allLines, line.String())
+			} else {
+				allLines = append(allLines, "")
+			}
+		}
+	} else {
+		allLines = make([]string, 0, len(screenLines))
 	}
 	allLines = append(allLines, screenLines...)
 
 	totalLines := len(allLines)
+
+	// scrollPos is the number of lines scrolled up from the bottom.
+	// end is the index of the last visible line + 1.
 	end := totalLines - t.scrollPos
+	if end > totalLines {
+		end = totalLines
+	}
 	if end < 0 {
 		end = 0
 	}
@@ -856,6 +869,32 @@ func (t TerminalPage) renderScrollback(tab *terminalTab, width, height int) stri
 
 	visible := allLines[start:end]
 	return strings.Join(visible, "\n")
+}
+
+// clampScroll ensures scrollPos doesn't exceed available scrollback.
+func (t *TerminalPage) clampScroll() {
+	if len(t.tabs) == 0 {
+		t.scrollPos = 0
+		return
+	}
+	tab := t.tabs[t.activeTab]
+	tab.mu.Lock()
+	max := t.maxScrollback(tab)
+	tab.mu.Unlock()
+	if t.scrollPos > max {
+		t.scrollPos = max
+	}
+}
+
+// maxScrollback returns the total scrollable lines for the active tab.
+// Must be called with tab.mu held.
+func (t TerminalPage) maxScrollback(tab *terminalTab) int { //nolint:gocritic // value receiver
+	screenLines := strings.Count(tab.emulator.Render(), "\n")
+	sb := tab.emulator.Scrollback()
+	if sb == nil {
+		return screenLines
+	}
+	return sb.Len() + screenLines
 }
 
 // renderEmptyState renders the view when no terminals are open.
