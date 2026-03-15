@@ -124,7 +124,7 @@ class TestFileTailing:
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown
 
         assert len(reported) >= 1
         assert reported[0]["type"] == "file"
@@ -215,7 +215,7 @@ class TestFileTailing:
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown
 
         # Should only see new.py, not old.py
         labels = [e["label"] for e in reported]
@@ -255,7 +255,7 @@ class TestFileTailing:
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown
 
         state = _load_state(tmp_path / ".chronicle-watcher-state.json")
         assert "session.jsonl" in state
@@ -581,7 +581,7 @@ class TestPollDirectory:
         try:
             await poll_task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown
 
         # Cancel tail tasks too
         for t in watcher._tail_tasks.values():
@@ -609,7 +609,7 @@ class TestPollDirectory:
         try:
             await poll_task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown
 
 
 # ---------------------------------------------------------------------------
@@ -698,7 +698,7 @@ class TestTailEdgeCases:
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown
 
         # Should have processed the valid line
         assert len(reported) >= 1
@@ -733,7 +733,7 @@ class TestTailEdgeCases:
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown
 
         assert watcher._state.get("uuid_track.jsonl", {}).get("last_uuid") == "unique-id-123"
 
@@ -762,4 +762,4 @@ class TestTailEdgeCases:
         try:
             await new_task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: task cancelled during test teardown

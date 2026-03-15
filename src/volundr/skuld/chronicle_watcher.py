@@ -102,7 +102,7 @@ class ChronicleWatcher:
             try:
                 await self._watch_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Watcher task cancelled during shutdown")
 
         for task in self._tail_tasks.values():
             task.cancel()
@@ -154,7 +154,7 @@ class ChronicleWatcher:
                     continue
                 self._ensure_tail(self._watch_dir / filename)
         except asyncio.CancelledError:
-            pass
+            logger.debug("Directory watch cancelled during shutdown")
         finally:
             proc.kill()
             await proc.wait()
@@ -253,7 +253,7 @@ class ChronicleWatcher:
                     _save_state(self._state_path, self._state)
 
         except asyncio.CancelledError:
-            pass
+            logger.debug("Tail task cancelled for %s", name)
         finally:
             # Flush remaining events
             if batch:
