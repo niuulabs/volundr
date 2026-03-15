@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -1335,6 +1336,132 @@ func TestLocalRuntime_Up_StartAPIFail(t *testing.T) {
 	if !contains(err.Error(), "start API") {
 		t.Errorf("expected 'start API' error, got: %v", err)
 	}
+}
+
+func TestRunMigrationsAuto_FilesystemFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a migrations directory.
+	migDir := filepath.Join(tmpDir, "migrations")
+	if err := os.MkdirAll(migDir, 0o700); err != nil {
+		t.Fatalf("create migrations dir: %v", err)
+	}
+	// Create a migration file so findMigrationsDir finds something.
+	if err := os.WriteFile(filepath.Join(migDir, "000001_init.up.sql"), []byte("-- test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	fp := &fakePostgres{migrationsN: 1}
+	applied, source, err := runMigrationsAuto(context.Background(), fp)
+	if err != nil {
+		t.Fatalf("runMigrationsAuto: %v", err)
+	}
+	if applied != 1 {
+		t.Errorf("expected 1 applied, got %d", applied)
+	}
+	// source should be an absolute path (not "embedded").
+	if source == "" || source == "embedded" {
+		t.Errorf("expected filesystem path as source, got %q", source)
+	}
+}
+
+func TestRunMigrationsAuto_NoMigrationsFound(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	fp := &fakePostgres{}
+	applied, source, err := runMigrationsAuto(context.Background(), fp)
+	if err != nil {
+		t.Fatalf("runMigrationsAuto: %v", err)
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if source != "" {
+		t.Errorf("expected empty source, got %q", source)
+	}
+}
+
+func TestRunMigrationsAuto_FilesystemError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a migrations directory.
+	migDir := filepath.Join(tmpDir, "migrations")
+	if err := os.MkdirAll(migDir, 0o700); err != nil {
+		t.Fatalf("create migrations dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	fp := &fakePostgres{migrationsErr: fmt.Errorf("migration failed")}
+	_, _, err := runMigrationsAuto(context.Background(), fp)
+	if err == nil {
+		t.Fatal("expected error from migrations")
+	}
+}
+
+func TestDownFromPID_SuccessWithRunningProcess(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Start a sleep process that we can signal.
+	cmd := exec.CommandContext(context.Background(), "sleep", "60") //nolint:gosec // test process
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start sleep process: %v", err)
+	}
+	pid := cmd.Process.Pid
+
+	// Write PID file with the sleep process PID.
+	pidPath := filepath.Join(volundrDir, PIDFile)
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0o600); err != nil {
+		_ = cmd.Process.Kill()
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	// Write state file that should be cleaned up.
+	stateFilePath := filepath.Join(volundrDir, StateFile)
+	if err := os.WriteFile(stateFilePath, []byte("[]"), 0o600); err != nil {
+		_ = cmd.Process.Kill()
+		t.Fatalf("write state file: %v", err)
+	}
+
+	err := DownFromPID()
+	if err != nil {
+		t.Fatalf("DownFromPID: %v", err)
+	}
+
+	// PID file should be cleaned up.
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Error("expected PID file to be removed")
+	}
+
+	// State file should be cleaned up.
+	if _, err := os.Stat(stateFilePath); !os.IsNotExist(err) {
+		t.Error("expected state file to be removed")
+	}
+
+	// Clean up: the process was signaled, wait for it.
+	_ = cmd.Wait()
 }
 
 func contains(s, substr string) bool {

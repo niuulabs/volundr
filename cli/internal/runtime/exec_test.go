@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"strings"
@@ -143,6 +144,9 @@ type fakePostgres struct {
 func (f *fakePostgres) Start(_ context.Context) error { return f.startErr }
 func (f *fakePostgres) Stop() error                   { return f.stopErr }
 func (f *fakePostgres) RunMigrations(_ context.Context, _ string) (int, error) {
+	return f.migrationsN, f.migrationsErr
+}
+func (f *fakePostgres) RunMigrationsFS(_ context.Context, _ fs.FS) (int, error) {
 	return f.migrationsN, f.migrationsErr
 }
 
