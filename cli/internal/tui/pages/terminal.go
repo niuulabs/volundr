@@ -851,17 +851,10 @@ func (t TerminalPage) captureHistory(tab *terminalTab) { //nolint:gocritic // va
 
 	lines := strings.Split(rendered, "\n")
 
-	if tab.lastRender == "" {
-		// First render — store all lines.
-		tab.history = append(tab.history, lines...)
-	} else {
-		// Find new lines by comparing with the previous render.
-		// The terminal typically adds lines at the bottom, so
-		// append the new screen content and let scroll handle dedup.
-		// Simple approach: just replace with full history + current screen.
-		// We keep the old history and append current screen lines.
-		tab.history = append(tab.history, lines...)
-	}
+	// Append current screen lines to scrollback history.
+	// Whether this is the first render or a subsequent one, the
+	// behavior is the same: accumulate lines and let scroll handle dedup.
+	tab.history = append(tab.history, lines...)
 
 	tab.lastRender = rendered
 
@@ -906,10 +899,10 @@ func (t *TerminalPage) clampScroll() {
 	}
 	tab := t.tabs[t.activeTab]
 	tab.mu.Lock()
-	max := len(tab.history)
+	maxPos := len(tab.history)
 	tab.mu.Unlock()
-	if t.scrollPos > max {
-		t.scrollPos = max
+	if t.scrollPos > maxPos {
+		t.scrollPos = maxPos
 	}
 }
 

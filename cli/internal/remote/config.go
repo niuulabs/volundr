@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	// envHome is the environment variable that overrides the config directory.
+	// Environment variable that overrides the config directory.
 	envHome = "VOLUNDR_HOME"
-	// remotesFile is the config file name within VOLUNDR_HOME.
+	// Config file name within VOLUNDR_HOME.
 	remotesFile = "remotes.yaml"
-	// legacyDir is the fallback directory when VOLUNDR_HOME is not set.
+	// Fallback directory when VOLUNDR_HOME is not set.
 	legacyDir = ".config/volundr"
-	// legacyFile is the config file name in the legacy directory.
+	// Config file name in the legacy directory.
 	legacyFile = "config.yaml"
 )
 

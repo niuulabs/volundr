@@ -215,6 +215,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:gocritic /
 				// Synthesize an 'r' key press to the active page.
 				// Pages already handle 'r' for refresh.
 			}
+		case components.PaletteSession:
+			// Session palette items are handled by navigating to the session.
+			// Currently a no-op until session selection is wired up.
 		}
 		m.updateMode()
 		return m, nil

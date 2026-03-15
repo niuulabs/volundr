@@ -289,12 +289,6 @@ func (p Palette) View(termWidth, termHeight int) string { //nolint:gocritic // v
 		Width(paletteWidth).
 		Render(content)
 
-	// Place at top-center (like VS Code)
-	topOffset := termHeight / 5
-	if topOffset < 2 {
-		topOffset = 2
-	}
-
 	return lipgloss.Place(
 		termWidth, termHeight,
 		lipgloss.Center, lipgloss.Top,

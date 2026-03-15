@@ -203,7 +203,7 @@ func (m MentionMenu) View(width int) string {
 
 		// Truncate if needed.
 		maxLabel := labelWidth
-		if len(detail) > 0 {
+		if detail != "" {
 			maxLabel -= len(detail) + 1
 		}
 		if maxLabel < 0 {

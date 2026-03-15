@@ -62,7 +62,7 @@ func NewHeaderWithPool(pool *tui.ClientPool) Header {
 }
 
 // View renders the header bar.
-func (h Header) View() string {
+func (h *Header) View() string {
 	theme := tui.DefaultTheme
 
 	logoStyle := lipgloss.NewStyle().

@@ -229,6 +229,8 @@ func (a AdminPage) maxCursor() int { //nolint:gocritic // value receiver needed 
 		return max(0, len(a.filteredUsers())-1)
 	case AdminTenants:
 		return max(0, len(a.filteredTenants())-1)
+	case AdminStats:
+		return 0
 	}
 	return 0
 }

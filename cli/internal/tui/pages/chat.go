@@ -259,9 +259,8 @@ func (c ChatPage) Update(msg tea.Msg) (ChatPage, tea.Cmd) { //nolint:gocritic //
 		if c.inputActive {
 			// If a mention menu is active, intercept navigation keys.
 			if c.anyMentionActive() {
-				handled, cmd := c.handleMentionKey(key, msg)
-				if handled {
-					return c, cmd
+				if c.handleMentionKey(key, msg) {
+					return c, nil
 				}
 			}
 
@@ -742,7 +741,7 @@ func (c ChatPage) renderInput() string { //nolint:gocritic // value receiver nee
 	return inputBox
 }
 
-// --- Mention menu helpers ---
+// --- Mention menu helpers. ---
 
 // anyMentionActive returns true if any mention menu is open.
 func (c *ChatPage) anyMentionActive() bool {
@@ -772,25 +771,25 @@ func (c *ChatPage) activeMentionMenu() *components.MentionMenu {
 
 // handleMentionKey processes navigation keys when a mention menu is active.
 // Returns true if the key was consumed by the menu.
-func (c *ChatPage) handleMentionKey(key string, _ tea.KeyMsg) (bool, tea.Cmd) {
+func (c *ChatPage) handleMentionKey(key string, _ tea.KeyMsg) bool {
 	menu := c.activeMentionMenu()
 	if menu == nil {
-		return false, nil
+		return false
 	}
 
 	switch key {
 	case "up":
 		menu.MoveUp()
-		return true, nil
+		return true
 	case "down":
 		menu.MoveDown()
-		return true, nil
+		return true
 	case "tab":
 		// Tab accepts selection (same as enter in menu context).
 		c.acceptMentionSelection()
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 // acceptMentionSelection inserts the selected mention item into the input.
@@ -993,11 +992,11 @@ func (c *ChatPage) searchIssues(query string) {
 	})
 }
 
-// --- Mention syntax highlighting in messages ---
+// --- Mention syntax highlighting in messages. ---
 
 // mentionPatterns matches @file, /command, and !ISSUE references in message text.
 var (
-	fileRefPattern    = regexp.MustCompile(`@[\w./_-]+`)
+	fileRefPattern    = regexp.MustCompile(`@[a-zA-Z0-9_./_-]+`)
 	issueRefPattern   = regexp.MustCompile(`![A-Z]+-\d+`)
 	commandRefPattern = regexp.MustCompile(`^/\w+`)
 )

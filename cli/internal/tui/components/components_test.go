@@ -3,6 +3,7 @@ package components
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/niuulabs/volundr/cli/internal/remote"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
 )
@@ -492,6 +493,481 @@ func TestFuzzyMatch(t *testing.T) {
 		got := FuzzyMatch(tt.text, tt.query)
 		if got != tt.want {
 			t.Errorf("FuzzyMatch(%q, %q) = %v, want %v", tt.text, tt.query, got, tt.want)
+		}
+	}
+}
+
+// Palette tests.
+
+func TestNewPalette(t *testing.T) {
+	p := NewPalette()
+	if p.Visible {
+		t.Error("expected not visible by default")
+	}
+}
+
+func TestPalette_OpenClose(t *testing.T) {
+	p := NewPalette()
+	items := DefaultPaletteItems()
+	p.Open(items, 80, 24)
+	if !p.Visible {
+		t.Error("expected visible after Open")
+	}
+	if len(p.matched) != len(items) {
+		t.Errorf("expected %d matched, got %d", len(items), len(p.matched))
+	}
+	p.Close()
+	if p.Visible {
+		t.Error("expected not visible after Close")
+	}
+	if p.query != "" {
+		t.Error("expected empty query after Close")
+	}
+}
+
+func TestPalette_Update_Esc(t *testing.T) {
+	p := NewPalette()
+	p.Open(DefaultPaletteItems(), 80, 24)
+	cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if p.Visible {
+		t.Error("expected closed after Esc")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for dismiss")
+	}
+	msg := cmd()
+	if _, ok := msg.(PaletteDismissedMsg); !ok {
+		t.Errorf("expected PaletteDismissedMsg, got %T", msg)
+	}
+}
+
+func TestPalette_Update_Enter(t *testing.T) {
+	p := NewPalette()
+	items := DefaultPaletteItems()
+	p.Open(items, 80, 24)
+	cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for select")
+	}
+	msg := cmd()
+	sel, ok := msg.(PaletteSelectedMsg)
+	if !ok {
+		t.Fatalf("expected PaletteSelectedMsg, got %T", msg)
+	}
+	if sel.Item.Label != items[0].Label {
+		t.Errorf("expected first item, got %q", sel.Item.Label)
+	}
+}
+
+func TestPalette_Update_EnterEmpty(t *testing.T) {
+	p := NewPalette()
+	p.Open(nil, 80, 24)
+	p.query = "zzzzz"
+	p.applyFilter()
+	cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd != nil {
+		t.Error("expected nil cmd when no matches")
+	}
+}
+
+func TestPalette_Update_Navigation(t *testing.T) {
+	p := NewPalette()
+	items := DefaultPaletteItems()
+	p.Open(items, 80, 24)
+
+	// Move down
+	p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if p.cursor != 1 {
+		t.Errorf("expected cursor 1, got %d", p.cursor)
+	}
+
+	// Move up
+	p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if p.cursor != 0 {
+		t.Errorf("expected cursor 0, got %d", p.cursor)
+	}
+
+	// Can't go below 0
+	p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if p.cursor != 0 {
+		t.Errorf("expected cursor 0, got %d", p.cursor)
+	}
+}
+
+func TestPalette_Update_NavigationWithJK(t *testing.T) {
+	p := NewPalette()
+	p.Open(DefaultPaletteItems(), 80, 24)
+
+	// j navigates when query is empty
+	p.Update(tea.KeyPressMsg{Code: 'j'})
+	if p.cursor != 1 {
+		t.Errorf("expected cursor 1 after j, got %d", p.cursor)
+	}
+
+	// k navigates when query is empty
+	p.Update(tea.KeyPressMsg{Code: 'k'})
+	if p.cursor != 0 {
+		t.Errorf("expected cursor 0 after k, got %d", p.cursor)
+	}
+
+	// j with query types instead of navigating
+	p.query = "x"
+	p.Update(tea.KeyPressMsg{Code: 'j'})
+	if p.query != "xj" {
+		t.Errorf("expected query 'xj', got %q", p.query)
+	}
+
+	// k with query types instead of navigating
+	p.Update(tea.KeyPressMsg{Code: 'k'})
+	if p.query != "xjk" {
+		t.Errorf("expected query 'xjk', got %q", p.query)
+	}
+}
+
+func TestPalette_Update_Typing(t *testing.T) {
+	p := NewPalette()
+	p.Open(DefaultPaletteItems(), 80, 24)
+
+	p.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	if p.query != "s" {
+		t.Errorf("expected query 's', got %q", p.query)
+	}
+
+	// Backspace
+	p.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if p.query != "" {
+		t.Errorf("expected empty query, got %q", p.query)
+	}
+
+	// Backspace on empty
+	p.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if p.query != "" {
+		t.Errorf("expected empty query still, got %q", p.query)
+	}
+
+	// Space
+	p.Update(tea.KeyPressMsg{Code: ' '})
+	if p.query != " " {
+		t.Errorf("expected space, got %q", p.query)
+	}
+}
+
+func TestPalette_FuzzyFilter(t *testing.T) {
+	p := NewPalette()
+	items := []PaletteItem{
+		{Label: "Sessions", Type: PalettePage},
+		{Label: "Chat", Type: PalettePage},
+		{Label: "Quit", Desc: "Exit Volundr", Type: PaletteAction},
+	}
+	p.Open(items, 80, 24)
+
+	p.query = "ses"
+	p.applyFilter()
+	if len(p.matched) != 1 {
+		t.Errorf("expected 1 match for 'ses', got %d", len(p.matched))
+	}
+
+	p.query = "xit"
+	p.applyFilter()
+	if len(p.matched) != 1 {
+		t.Errorf("expected 1 match for 'xit' (desc match), got %d", len(p.matched))
+	}
+
+	p.query = ""
+	p.applyFilter()
+	if len(p.matched) != len(items) {
+		t.Errorf("expected all items with empty query, got %d", len(p.matched))
+	}
+}
+
+func TestPalette_FuzzyMatchFunc(t *testing.T) {
+	tests := []struct {
+		query, target string
+		want          bool
+	}{
+		{"ses", "Sessions", true},
+		{"chat", "Chat", true},
+		{"sx", "Sessions", false},
+		{"", "anything", true},
+		{"qt", "Quit", true},
+	}
+	for _, tt := range tests {
+		got := fuzzyMatch(tt.query, tt.target)
+		if got != tt.want {
+			t.Errorf("fuzzyMatch(%q, %q) = %v, want %v", tt.query, tt.target, got, tt.want)
+		}
+	}
+}
+
+func TestPalette_View_Hidden(t *testing.T) {
+	p := NewPalette()
+	if p.View(80, 24) != "" {
+		t.Error("expected empty view when hidden")
+	}
+}
+
+func TestPalette_View_Visible(t *testing.T) {
+	p := NewPalette()
+	p.Open(DefaultPaletteItems(), 80, 24)
+	view := p.View(80, 24)
+	if view == "" {
+		t.Error("expected non-empty view when visible")
+	}
+}
+
+func TestPalette_View_NoMatches(t *testing.T) {
+	p := NewPalette()
+	p.Open(DefaultPaletteItems(), 80, 24)
+	p.query = "zzzzzzzzz"
+	p.applyFilter()
+	view := p.View(80, 24)
+	if view == "" {
+		t.Error("expected non-empty view with no matches message")
+	}
+}
+
+func TestPalette_View_NarrowTerminal(t *testing.T) {
+	p := NewPalette()
+	p.Open(DefaultPaletteItems(), 30, 10)
+	view := p.View(30, 10)
+	if view == "" {
+		t.Error("expected non-empty view on narrow terminal")
+	}
+}
+
+func TestPalette_View_ManyItems(t *testing.T) {
+	p := NewPalette()
+	items := make([]PaletteItem, 20)
+	for i := range items {
+		items[i] = PaletteItem{Label: "item", Type: PaletteAction, Icon: "x"}
+	}
+	p.Open(items, 80, 24)
+	view := p.View(80, 24)
+	if view == "" {
+		t.Error("expected non-empty view with many items")
+	}
+}
+
+func TestPalette_View_SectionHeaders(t *testing.T) {
+	p := NewPalette()
+	items := []PaletteItem{
+		{Label: "sess", Type: PaletteSession, Icon: "s"},
+		{Label: "page", Type: PalettePage, Icon: "p"},
+		{Label: "act", Type: PaletteAction, Icon: "a"},
+	}
+	p.Open(items, 80, 24)
+	view := p.View(80, 24)
+	if view == "" {
+		t.Error("expected non-empty view with section headers")
+	}
+}
+
+func TestPalette_IconColor(t *testing.T) {
+	p := NewPalette()
+	for _, pt := range []PaletteResultType{PaletteSession, PalettePage, PaletteAction} {
+		c := p.iconColor(pt)
+		if c == nil {
+			t.Errorf("expected non-nil color for type %d", pt)
+		}
+	}
+	// Unknown type
+	c := p.iconColor(PaletteResultType(99))
+	if c == nil {
+		t.Error("expected non-nil fallback color")
+	}
+}
+
+func TestDefaultPaletteItems(t *testing.T) {
+	items := DefaultPaletteItems()
+	if len(items) == 0 {
+		t.Error("expected non-empty default palette items")
+	}
+	// Check we have both pages and actions.
+	hasPage := false
+	hasAction := false
+	for _, item := range items {
+		if item.Type == PalettePage {
+			hasPage = true
+		}
+		if item.Type == PaletteAction {
+			hasAction = true
+		}
+	}
+	if !hasPage {
+		t.Error("expected page items in defaults")
+	}
+	if !hasAction {
+		t.Error("expected action items in defaults")
+	}
+}
+
+// Footer tests.
+
+func TestNewFooter(t *testing.T) {
+	f := NewFooter()
+	if f.Width != 0 {
+		t.Errorf("expected width 0, got %d", f.Width)
+	}
+}
+
+func TestFooter_View_AllPages(t *testing.T) {
+	pages := []tui.Page{
+		tui.PageSessions, tui.PageChat, tui.PageTerminal,
+		tui.PageDiffs, tui.PageChronicles, tui.PageSettings, tui.PageAdmin,
+	}
+	for _, page := range pages {
+		f := Footer{Width: 80, Page: page, Mode: tui.ModeNormal}
+		view := f.View()
+		if view == "" {
+			t.Errorf("expected non-empty footer view for page %v", page)
+		}
+	}
+}
+
+func TestFooter_View_ModeCommand(t *testing.T) {
+	f := Footer{Width: 80, Page: tui.PageSessions, Mode: tui.ModeCommand}
+	view := f.View()
+	if view == "" {
+		t.Error("expected non-empty footer view in command mode")
+	}
+}
+
+func TestFooter_View_ModeSearch(t *testing.T) {
+	f := Footer{Width: 80, Page: tui.PageSessions, Mode: tui.ModeSearch}
+	view := f.View()
+	if view == "" {
+		t.Error("expected non-empty footer view in search mode")
+	}
+}
+
+func TestFooter_View_ModeInsert_Chat(t *testing.T) {
+	f := Footer{Width: 80, Page: tui.PageChat, Mode: tui.ModeInsert}
+	view := f.View()
+	if view == "" {
+		t.Error("expected non-empty footer view in insert mode for chat")
+	}
+}
+
+func TestFooter_View_ModeInsert_Terminal(t *testing.T) {
+	f := Footer{Width: 80, Page: tui.PageTerminal, Mode: tui.ModeInsert}
+	view := f.View()
+	if view == "" {
+		t.Error("expected non-empty footer view in insert mode for terminal")
+	}
+}
+
+func TestFooter_View_ModeInsert_Settings(t *testing.T) {
+	f := Footer{Width: 80, Page: tui.PageSettings, Mode: tui.ModeInsert}
+	view := f.View()
+	if view == "" {
+		t.Error("expected non-empty footer view in insert mode for settings")
+	}
+}
+
+func TestFooter_View_DefaultPage(t *testing.T) {
+	// A page that doesn't match any known page should fall through to default.
+	f := Footer{Width: 80, Page: tui.Page(99), Mode: tui.ModeNormal}
+	view := f.View()
+	if view == "" {
+		t.Error("expected non-empty footer view for unknown page")
+	}
+}
+
+func TestFooter_HintsForContext(t *testing.T) {
+	tests := []struct {
+		page tui.Page
+		mode tui.Mode
+		min  int // Minimum expected hints.
+	}{
+		{tui.PageSessions, tui.ModeNormal, 5},
+		{tui.PageChat, tui.ModeNormal, 3},
+		{tui.PageChat, tui.ModeInsert, 3},
+		{tui.PageTerminal, tui.ModeNormal, 5},
+		{tui.PageTerminal, tui.ModeInsert, 4},
+		{tui.PageDiffs, tui.ModeNormal, 5},
+		{tui.PageChronicles, tui.ModeNormal, 5},
+		{tui.PageSettings, tui.ModeNormal, 2},
+		{tui.PageSettings, tui.ModeInsert, 2},
+		{tui.PageAdmin, tui.ModeNormal, 5},
+		{tui.PageSessions, tui.ModeCommand, 3},
+		{tui.PageSessions, tui.ModeSearch, 3},
+	}
+	for _, tt := range tests {
+		f := Footer{Page: tt.page, Mode: tt.mode}
+		hints := f.hintsForContext()
+		if len(hints) < tt.min {
+			t.Errorf("page=%v mode=%v: expected >= %d hints, got %d", tt.page, tt.mode, tt.min, len(hints))
+		}
+	}
+}
+
+// MentionMenu additional tests.
+
+func TestMentionMenu_SetQuery(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	m.SetQuery("test")
+	if m.Query != "test" {
+		t.Errorf("expected query 'test', got %q", m.Query)
+	}
+}
+
+func TestMentionMenu_View_Scrolling(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	// Create more items than MaxVisible
+	items := make([]MentionItem, 15)
+	for i := range items {
+		items[i] = MentionItem{Label: "item", Value: "v", Icon: "F"}
+	}
+	m.SetItems(items)
+	m.Selected = 12 // Select near the end
+	view := m.View(60)
+	if view == "" {
+		t.Error("expected non-empty view with scrolling")
+	}
+}
+
+func TestMentionMenu_View_DetailTruncation(t *testing.T) {
+	m := NewMentionMenu('@')
+	m.Open()
+	m.SetItems([]MentionItem{
+		{Label: "a-very-long-filename-that-needs-truncation.go", Value: "v", Detail: "some/very/long/path/detail", Icon: "F"},
+	})
+	view := m.View(40)
+	if view == "" {
+		t.Error("expected non-empty view with truncation")
+	}
+}
+
+// Header additional test for pointer receiver.
+
+func TestHeader_View_AllStates(t *testing.T) {
+	for _, state := range []HeaderState{HeaderConnecting, HeaderConnected, HeaderDisconnected} {
+		h := &Header{
+			Title:     "Volundr",
+			ServerURL: "https://test.com",
+			Width:     80,
+			State:     state,
+		}
+		view := h.View()
+		if view == "" {
+			t.Errorf("expected non-empty view for state %d", state)
+		}
+	}
+}
+
+func TestHeader_View_AllModes(t *testing.T) {
+	for _, mode := range []tui.Mode{tui.ModeNormal, tui.ModeInsert, tui.ModeSearch, tui.ModeCommand} {
+		h := &Header{
+			Title:     "Volundr",
+			ServerURL: "https://test.com",
+			Width:     80,
+			Mode:      mode,
+		}
+		view := h.View()
+		if view == "" {
+			t.Errorf("expected non-empty view for mode %v", mode)
 		}
 	}
 }

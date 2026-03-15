@@ -40,7 +40,7 @@ func (f Footer) View() string {
 	sepStyle := lipgloss.NewStyle().
 		Foreground(theme.BorderSubtle)
 
-	var parts []string
+	parts := make([]string, 0, len(hints))
 	for _, h := range hints {
 		parts = append(parts, keyStyle.Render(h.Key)+" "+descStyle.Render(h.Desc))
 	}
