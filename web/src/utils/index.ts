@@ -18,3 +18,4 @@ export {
   formatHumanBytes,
   formatResourceValue,
 } from './k8sQuantity';
+export { validateSessionName } from './sessionName';

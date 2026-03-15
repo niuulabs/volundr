@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from volundr.domain.models import Session, SessionSpec, SessionStatus
@@ -544,7 +545,7 @@ fi
             home_env = [{"name": "HOME", "value": home_mount}]
 
         pod_spec: dict[str, Any] = {
-            "hostname": session.name,
+            "hostname": re.sub(r"[^a-z0-9-]", "-", session.name.lower()).strip("-")[:63] or "session",
             "terminationGracePeriodSeconds": 30,
             "securityContext": {
                 "fsGroup": 1000,

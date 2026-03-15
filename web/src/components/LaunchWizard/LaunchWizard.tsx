@@ -11,6 +11,7 @@ import type {
   MountMapping,
 } from '@/models';
 import type { IVolundrService } from '@/ports';
+import { validateSessionName } from '@/utils/sessionName';
 import { WizardStepper } from './WizardStepper';
 import { TemplateStep, BLANK_TEMPLATE } from './steps/TemplateStep';
 import { ConfigureStep } from './steps/ConfigureStep';
@@ -199,7 +200,11 @@ export function LaunchWizard(props: LaunchWizardProps) {
       : state.mountPaths.some(p => p.host_path && p.mount_path));
 
   const canProceedToStep3 =
-    state !== null && state.name.trim() !== '' && hasValidSource && state.model !== '';
+    state !== null &&
+    state.name.trim() !== '' &&
+    !validateSessionName(state.name.trim()) &&
+    hasValidSource &&
+    state.model !== '';
 
   const canLaunch = canProceedToStep3 && !isLaunching;
 

@@ -3,12 +3,13 @@
 import asyncio
 import json
 import logging
+import re
 from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from volundr.adapters.inbound.auth import require_role
 from volundr.domain.models import (
@@ -46,15 +47,47 @@ from volundr.domain.services import (
 logger = logging.getLogger(__name__)
 
 
+_RFC1123_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+
+
 class SessionCreate(BaseModel):
     """Request model for creating a session."""
 
     name: str = Field(
         ...,
         min_length=1,
-        max_length=255,
-        description="Human-readable session name",
+        max_length=63,
+        description="Session name (RFC 1123 label: lowercase alphanumeric and hyphens, "
+        "must start and end with alphanumeric, max 63 characters)",
     )
+
+    @field_validator("name")
+    @classmethod
+    def validate_rfc1123(cls, v: str) -> str:
+        """Validate session name is a valid RFC 1123 DNS label."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Session name must not be empty")
+        if len(v) > 63:
+            raise ValueError(
+                "Session name must be at most 63 characters (RFC 1123 hostname limit)"
+            )
+        if v != v.lower():
+            raise ValueError(
+                "Session name must be lowercase — uppercase characters are not allowed"
+            )
+        if " " in v:
+            raise ValueError("Session name must not contain spaces — use hyphens instead")
+        if v.startswith("-"):
+            raise ValueError("Session name must start with a letter or digit, not a hyphen")
+        if v.endswith("-"):
+            raise ValueError("Session name must end with a letter or digit, not a hyphen")
+        if not _RFC1123_RE.match(v):
+            raise ValueError(
+                "Session name may only contain lowercase letters (a-z), digits (0-9), "
+                "and hyphens (-)"
+            )
+        return v
     model: str = Field(
         default="",
         max_length=100,
@@ -121,9 +154,17 @@ class SessionUpdate(BaseModel):
     name: str | None = Field(
         default=None,
         min_length=1,
-        max_length=255,
-        description="New session name",
+        max_length=63,
+        description="New session name (RFC 1123 label)",
     )
+
+    @field_validator("name")
+    @classmethod
+    def validate_rfc1123(cls, v: str | None) -> str | None:
+        """Validate session name is a valid RFC 1123 DNS label."""
+        if v is None:
+            return v
+        return SessionCreate.validate_rfc1123(v)
     model: str | None = Field(
         default=None,
         min_length=1,

@@ -141,7 +141,7 @@ class TestSessionEndpoints:
         response = client.post(
             "/api/v1/volundr/sessions",
             json={
-                "name": "Test Session",
+                "name": "test-session",
                 "model": "claude-sonnet-4-20250514",
                 "repo": "https://github.com/test/repo",
                 "branch": "main",
@@ -150,7 +150,7 @@ class TestSessionEndpoints:
 
         assert response.status_code == 201
         data = response.json()
-        assert data["name"] == "Test Session"
+        assert data["name"] == "test-session"
         assert data["status"] == "provisioning"
 
         # Verify events were published (created + updated for starting + updated for provisioning)
@@ -175,7 +175,7 @@ class TestSessionEndpoints:
         create_response = client.post(
             "/api/v1/volundr/sessions",
             json={
-                "name": "Test Session",
+                "name": "test-session",
                 "model": "claude-sonnet-4-20250514",
                 "repo": "https://github.com/test/repo",
                 "branch": "main",
@@ -189,11 +189,11 @@ class TestSessionEndpoints:
         # Update session
         response = client.put(
             f"/api/v1/volundr/sessions/{session_id}",
-            json={"name": "Updated Name"},
+            json={"name": "updated-name"},
         )
 
         assert response.status_code == 200
-        assert response.json()["name"] == "Updated Name"
+        assert response.json()["name"] == "updated-name"
 
         # Verify event was published
         assert len(mock_broadcaster.session_updated_events) == 1
@@ -204,7 +204,7 @@ class TestSessionEndpoints:
         create_response = client.post(
             "/api/v1/volundr/sessions",
             json={
-                "name": "Test Session",
+                "name": "test-session",
                 "model": "claude-sonnet-4-20250514",
                 "repo": "https://github.com/test/repo",
                 "branch": "main",
