@@ -24,7 +24,7 @@ Völundr is a self-hosted Claude Code session manager. Users create sessions, pi
 │                          VÖLUNDR                                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   Hlidskjalf UI ──────► Volundr (API) ───────► Farm (ITaaS)    │
+│   Volundr UI ──────► Volundr (API) ───────► Farm (ITaaS)    │
 │      ✅ DONE                🔨 WIP                ✅ DONE       │
 │                                 │                               │
 │                                 │     Flux/Fleet + Helm         │
@@ -98,7 +98,7 @@ Volundr returns the chat endpoint URL when starting a session. UI connects direc
 
 ---
 
-## Hlidskjalf UI Integration
+## Volundr UI Integration
 
 ### Design Decisions
 
@@ -654,4 +654,4 @@ GET    /health                               - Health check
 
 ---
 
-*Völundr Implementation Roadmap v2.0 — Hlidskjalf UI Integration*
+*Völundr Implementation Roadmap v2.0 — Volundr UI Integration*

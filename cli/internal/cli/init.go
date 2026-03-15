@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	goruntime "runtime"
 	"strings"
 	"unicode"
 
@@ -28,7 +30,7 @@ func init() {
 }
 
 func runInit(_ *cobra.Command, _ []string) error {
-	fmt.Println("Volundr - Self-hosted Claude Code session manager")
+	fmt.Println("Volundr - Self-hosted AI development environment")
 	fmt.Println()
 
 	// Check if already initialized.
@@ -66,6 +68,41 @@ func runInit(_ *cobra.Command, _ []string) error {
 			cfg.Runtime = runtimeStr
 		}
 	}
+
+	// Preflight checks for container runtimes.
+	if cfg.Runtime == "docker" || cfg.Runtime == "k3s" {
+		fmt.Println()
+		fmt.Println("Checking prerequisites...")
+
+		if err := checkCommand("kubectl", "version", "--client"); err != nil {
+			return fmt.Errorf("kubectl is required but not found in PATH.\n\nInstall instructions:\n%s",
+				installInstructions("kubectl"))
+		}
+		fmt.Println("  kubectl  ... ok")
+
+		if err := checkCommand("helm", "version"); err != nil {
+			return fmt.Errorf("helm is required but not found in PATH.\n\nInstall instructions:\n%s",
+				installInstructions("helm"))
+		}
+		fmt.Println("  helm     ... ok")
+		fmt.Println()
+	}
+
+	// Prompt for listen host.
+	fmt.Print("Listen on [localhost/all/IP address] (localhost): ")
+	listenAnswer, _ := reader.ReadString('\n')
+	listenAnswer = strings.TrimSpace(listenAnswer)
+	switch strings.ToLower(listenAnswer) {
+	case "", "localhost":
+		fmt.Println("  Binding to localhost only (127.0.0.1)")
+	case "all", "all interfaces":
+		cfg.Listen.Host = "0.0.0.0"
+		fmt.Println("  Binding to all interfaces (0.0.0.0)")
+	default:
+		cfg.Listen.Host = listenAnswer
+		fmt.Printf("  Binding to %s\n", listenAnswer)
+	}
+	fmt.Println()
 
 	// Prompt for Anthropic API key.
 	fmt.Print("Anthropic API key: ")
@@ -233,6 +270,49 @@ func isEnvVarName(s string) bool {
 		}
 	}
 	return true
+}
+
+// checkCommand verifies that a command is available on PATH.
+func checkCommand(name string, args ...string) error {
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // arguments are hardcoded string literals from callers
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Run()
+}
+
+// installInstructions returns platform-specific install instructions for a tool.
+func installInstructions(tool string) string {
+	return installInstructionsForOS(tool, goruntime.GOOS, goruntime.GOARCH)
+}
+
+// installInstructionsForOS returns install instructions for a tool on the given OS/arch.
+func installInstructionsForOS(tool, goos, goarch string) string {
+	switch tool {
+	case "kubectl":
+		switch goos {
+		case "darwin":
+			return "  brew install kubectl\n  or: https://kubernetes.io/docs/tasks/tools/install-kubectl-macos/"
+		case "linux":
+			return "  curl -LO \"https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/" + goarch + "/kubectl\"\n" +
+				"  chmod +x kubectl && sudo mv kubectl /usr/local/bin/\n" +
+				"  or: https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/"
+		default:
+			return "  https://kubernetes.io/docs/tasks/tools/"
+		}
+	case "helm":
+		switch goos {
+		case "darwin":
+			return "  brew install helm\n  or: https://helm.sh/docs/intro/install/"
+		case "linux":
+			return "  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash\n" +
+				"  or: https://helm.sh/docs/intro/install/"
+		default:
+			return "  https://helm.sh/docs/intro/install/"
+		}
+	default:
+		return ""
+	}
 }
 
 // machinePassphrase generates a deterministic passphrase from machine identity.

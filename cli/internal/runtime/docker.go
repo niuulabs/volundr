@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"text/template"
 
@@ -47,6 +48,12 @@ var composeTemplate = template.Must(template.New("compose").Parse(`services:
       - "{{.ConfigPath}}:/etc/volundr/config.yaml:ro"
       - "{{.StorageDir}}:/volundr-storage"
       - "/var/run/docker.sock:/var/run/docker.sock"
+{{- if .ExtraHosts}}
+    extra_hosts:
+{{- range .ExtraHosts}}
+      - "{{.}}"
+{{- end}}
+{{- end}}
     networks:
       - volundr-net
 
@@ -67,6 +74,7 @@ type composeData struct {
 	AnthropicAPIKey string
 	ConfigPath      string
 	StorageDir      string
+	ExtraHosts      []string
 }
 
 // dockerAPIConfig represents the Python API config file structure for Docker mode.
@@ -114,7 +122,7 @@ func (r *DockerRuntime) Init(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// Ensure required images are available (pull if not present locally).
-	apiImage := dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr-api:latest")
+	apiImage := dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr:latest")
 	if err := ensureImage(apiImage); err != nil {
 		return err
 	}
@@ -140,17 +148,25 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 
 		// Run migrations.
 		fmt.Print("  Migrations    ... ")
-		migrationsDir := findMigrationsDir()
-		if migrationsDir != "" {
-			applied, err := r.pg.RunMigrations(ctx, migrationsDir)
-			if err != nil {
-				fmt.Println("failed")
-				return fmt.Errorf("run migrations: %w", err)
-			}
-			fmt.Printf("applied (%d migrations)\n", applied)
-		} else {
-			fmt.Println("skipped (no migrations directory found)")
+		applied, source, err := runMigrationsAuto(ctx, r.pg)
+		if err != nil {
+			fmt.Println("failed")
+			return fmt.Errorf("run migrations: %w", err)
 		}
+		if source != "" {
+			fmt.Printf("applied (%d migrations, source: %s)\n", applied, source)
+		} else {
+			fmt.Println("skipped (no migrations found)")
+		}
+	}
+
+	// Ensure storage directories are accessible by the container user.
+	cfgDirForStorage, err := config.ConfigDir()
+	if err != nil {
+		return fmt.Errorf("get config dir: %w", err)
+	}
+	if err := ensureContainerStorageDirs(cfgDirForStorage); err != nil {
+		return fmt.Errorf("ensure container storage dirs: %w", err)
 	}
 
 	// Create the Docker network if it doesn't exist.
@@ -184,7 +200,7 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("render compose template: %w", err)
 	}
 
-	if err := os.WriteFile(composePath, []byte(composeContent), 0o600); err != nil {
+	if err := os.WriteFile(composePath, []byte(composeContent), 0o644); err != nil { //nolint:gosec // compose file must be readable by container user
 		return fmt.Errorf("write compose file: %w", err)
 	}
 
@@ -435,8 +451,8 @@ func (r *DockerRuntime) buildComposeData(cfg *config.Config) composeData {
 
 	cfgDir, _ := config.ConfigDir()
 
-	return composeData{
-		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr-api:latest"),
+	data := composeData{
+		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr:latest"),
 		APIPort:         dockerAPIInternalPort,
 		DBHost:          dbHost,
 		DBPort:          cfg.Database.Port,
@@ -447,6 +463,14 @@ func (r *DockerRuntime) buildComposeData(cfg *config.Config) composeData {
 		ConfigPath:      filepath.Join(cfgDir, dockerConfigFileName),
 		StorageDir:      cfgDir,
 	}
+
+	// On Linux, host.docker.internal doesn't resolve by default
+	// (Docker Desktop feature only). Add extra_hosts mapping.
+	if goruntime.GOOS == "linux" {
+		data.ExtraHosts = []string{"host.docker.internal:host-gateway"}
+	}
+
+	return data
 }
 
 // generateDockerConfig creates a config.yaml for the Python API in Docker mode.
@@ -476,7 +500,7 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 				"network":           dockerImageOrDefault(cfg.Docker.Network, "volundr-net"),
 				"skuld_image":       dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuulabs/skuld:latest"),
 				"code_server_image": dockerImageOrDefault(cfg.Docker.CodeServerImage, "ghcr.io/niuulabs/code-server:latest"),
-				"ttyd_image":        dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuulabs/ttyd:latest"),
+				"ttyd_image":        dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuulabs/devrunner:latest"),
 				"compose_dir":       containerStoragePath + "/sessions",
 				"gateway_domain":    "",
 				"db_host":           dbHost,
@@ -545,7 +569,7 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 	}
 
 	configPath := filepath.Join(cfgDir, dockerConfigFileName)
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+	if err := os.WriteFile(configPath, data, 0o644); err != nil { //nolint:gosec // config must be readable by container user
 		return "", fmt.Errorf("write docker config: %w", err)
 	}
 

@@ -170,10 +170,10 @@ func DefaultConfig() (*Config, error) {
 		},
 		Anthropic: AnthropicConfig{},
 		Docker: DockerConfig{
-			APIImage:        "ghcr.io/niuulabs/volundr-api:latest",
+			APIImage:        "ghcr.io/niuulabs/volundr:latest",
 			SkuldImage:      "ghcr.io/niuulabs/skuld:latest",
 			CodeServerImage: "codercom/code-server:latest",
-			TtydImage:       "ghcr.io/niuulabs/ttyd:latest",
+			TtydImage:       "ghcr.io/niuulabs/devrunner:latest",
 			Network:         "volundr-net",
 		},
 		K3s: K3sConfig{

@@ -543,7 +543,7 @@ func TestHostKubeconfigPath(t *testing.T) {
 
 func TestRenderK3sComposeTemplate(t *testing.T) {
 	data := k3sComposeData{
-		APIImage:        "ghcr.io/niuulabs/volundr-api:latest",
+		APIImage:        "ghcr.io/niuulabs/volundr:latest",
 		ContainerName:   "volundr-k3s-api",
 		APIPort:         18080,
 		DBHost:          "host.docker.internal",
@@ -566,7 +566,7 @@ func TestRenderK3sComposeTemplate(t *testing.T) {
 	result := buf.String()
 
 	checks := []string{
-		`image: ghcr.io/niuulabs/volundr-api:latest`,
+		`image: ghcr.io/niuulabs/volundr:latest`,
 		`container_name: volundr-k3s-api`,
 		`"127.0.0.1:18080:8080"`,
 		`DATABASE__HOST: "host.docker.internal"`,
@@ -587,7 +587,7 @@ func TestRenderK3sComposeTemplate(t *testing.T) {
 
 func TestRenderK3sComposeTemplate_WithoutAnthropicKey(t *testing.T) {
 	data := k3sComposeData{
-		APIImage:        "ghcr.io/niuulabs/volundr-api:latest",
+		APIImage:        "ghcr.io/niuulabs/volundr:latest",
 		ContainerName:   "volundr-k3s-api",
 		APIPort:         18080,
 		DBHost:          "host.docker.internal",

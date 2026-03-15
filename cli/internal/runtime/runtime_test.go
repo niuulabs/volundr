@@ -1,6 +1,9 @@
 package runtime
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
@@ -117,6 +120,75 @@ func TestBuildGitConfig_EnabledNoInstances(t *testing.T) {
 
 	if _, ok := ghMap["instances"]; ok {
 		t.Error("expected no instances key when instances is nil")
+	}
+}
+
+func TestEnsureContainerStorageDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := ensureContainerStorageDirs(tmpDir)
+	if err != nil {
+		t.Fatalf("ensureContainerStorageDirs: %v", err)
+	}
+
+	// Verify all expected directories were created.
+	expectedDirs := []string{
+		filepath.Join(tmpDir, "data"),
+		filepath.Join(tmpDir, "data", "workspaces"),
+		filepath.Join(tmpDir, "sessions"),
+		filepath.Join(tmpDir, "user-credentials"),
+	}
+
+	for _, dir := range expectedDirs {
+		info, err := os.Stat(dir)
+		if err != nil {
+			t.Errorf("expected directory %s to exist: %v", dir, err)
+			continue
+		}
+		if !info.IsDir() {
+			t.Errorf("expected %s to be a directory", dir)
+		}
+	}
+}
+
+func TestEnsureContainerStorageDirs_ChmodCfgDirError(t *testing.T) {
+	// Use a path that doesn't exist so Chmod fails.
+	err := ensureContainerStorageDirs("/nonexistent/dir/that/does/not/exist")
+	if err == nil {
+		t.Fatal("expected error for non-existent config dir")
+	}
+	if !strings.Contains(err.Error(), "chmod config dir") {
+		t.Errorf("expected 'chmod config dir' in error, got %q", err.Error())
+	}
+}
+
+func TestEnsureContainerStorageDirs_MkdirError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a file where a directory should be, so MkdirAll fails.
+	dataPath := filepath.Join(tmpDir, "data")
+	if err := os.WriteFile(dataPath, []byte("block"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := ensureContainerStorageDirs(tmpDir)
+	if err == nil {
+		t.Fatal("expected error when directory creation fails")
+	}
+	if !strings.Contains(err.Error(), "create directory") {
+		t.Errorf("expected 'create directory' in error, got %q", err.Error())
+	}
+}
+
+func TestEnsureContainerStorageDirs_Idempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Call twice — should not error on second call.
+	if err := ensureContainerStorageDirs(tmpDir); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if err := ensureContainerStorageDirs(tmpDir); err != nil {
+		t.Fatalf("second call: %v", err)
 	}
 }
 

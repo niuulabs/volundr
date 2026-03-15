@@ -3,6 +3,7 @@ package runtime
 import (
 	"bufio"
 	"context"
+	"io/fs"
 	"os"
 	"os/exec"
 
@@ -27,6 +28,7 @@ type postgresProvider interface {
 	Start(ctx context.Context) error
 	Stop() error
 	RunMigrations(ctx context.Context, dir string) (int, error)
+	RunMigrationsFS(ctx context.Context, migrationFS fs.FS) (int, error)
 }
 
 // newPostgres is a hookable function for creating a postgres provider.

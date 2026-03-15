@@ -1,5 +1,7 @@
 """Static resource provider for dev/test environments."""
 
+import logging
+
 from volundr.domain.models import (
     ClusterResourceInfo,
     ResourceCategory,
@@ -7,6 +9,10 @@ from volundr.domain.models import (
     TranslatedResources,
 )
 from volundr.domain.ports import ResourceProvider
+
+logger = logging.getLogger(__name__)
+
+_K8S_MEMORY_SUFFIXES = ("Ki", "Mi", "Gi", "Ti")
 
 # Standard resource types always available (CPU + Memory only;
 # GPU and other resources are discovered dynamically from node data)
@@ -85,11 +91,25 @@ def translate_resource_config(resource_config: dict) -> TranslatedResources:
         requests["cpu"] = str(cpu)
         limits["cpu"] = str(cpu)
 
-    # Memory
+    # Memory — bare numbers are treated as Gi to prevent accidental byte values
     memory = resource_config.get("memory")
     if memory:
-        requests["memory"] = str(memory)
-        limits["memory"] = str(memory)
+        mem_str = str(memory)
+        if mem_str and not any(mem_str.endswith(s) for s in _K8S_MEMORY_SUFFIXES):
+            try:
+                float(mem_str)
+                logger.warning(
+                    "Memory value '%s' has no unit suffix — interpreting as '%sGi'",
+                    mem_str,
+                    mem_str,
+                )
+                mem_str = f"{mem_str}Gi"
+            except (ValueError, TypeError):
+                # Non-numeric, non-suffixed value — leave as-is for
+                # downstream validation to reject.
+                logger.warning("Memory value '%s' is not a valid number or K8s quantity", mem_str)
+        requests["memory"] = mem_str
+        limits["memory"] = mem_str
 
     # GPU
     gpu = resource_config.get("gpu")
@@ -128,10 +148,17 @@ def validate_resource_config(resource_config: dict) -> list[str]:
     memory = resource_config.get("memory")
     if memory is not None:
         mem_str = str(memory)
-        if mem_str and not any(mem_str.endswith(s) for s in ("Ki", "Mi", "Gi", "Ti")):
-            # Allow plain numbers (bytes) or K8s suffixes
+        if not mem_str:
+            errors.append("memory value must not be empty")
+        elif not any(mem_str.endswith(s) for s in _K8S_MEMORY_SUFFIXES):
             try:
                 float(mem_str)
+                # Bare number — warn but don't block (translate auto-appends Gi)
+                errors.append(
+                    f"memory value '{memory}' has no unit suffix"
+                    f" — will be interpreted as {memory}Gi"
+                    " (use Ki, Mi, Gi, or Ti suffix to be explicit)"
+                )
             except (ValueError, TypeError):
                 errors.append(f"invalid memory value: {memory} (use Ki, Mi, Gi, or Ti suffix)")
 
