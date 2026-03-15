@@ -544,8 +544,10 @@ fi
         if home_enabled:
             home_env = [{"name": "HOME", "value": home_mount}]
 
+        safe_hostname = re.sub(r"[^a-z0-9-]", "-", session.name.lower())
+        safe_hostname = safe_hostname.strip("-")[:63] or "session"
         pod_spec: dict[str, Any] = {
-            "hostname": re.sub(r"[^a-z0-9-]", "-", session.name.lower()).strip("-")[:63] or "session",
+            "hostname": safe_hostname,
             "terminationGracePeriodSeconds": 30,
             "securityContext": {
                 "fsGroup": 1000,

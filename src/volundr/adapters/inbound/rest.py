@@ -69,9 +69,7 @@ class SessionCreate(BaseModel):
         if not v:
             raise ValueError("Session name must not be empty")
         if len(v) > 63:
-            raise ValueError(
-                "Session name must be at most 63 characters (RFC 1123 hostname limit)"
-            )
+            raise ValueError("Session name must be at most 63 characters (RFC 1123 hostname limit)")
         if v != v.lower():
             raise ValueError(
                 "Session name must be lowercase — uppercase characters are not allowed"
@@ -88,6 +86,7 @@ class SessionCreate(BaseModel):
                 "and hyphens (-)"
             )
         return v
+
     model: str = Field(
         default="",
         max_length=100,
@@ -165,6 +164,7 @@ class SessionUpdate(BaseModel):
         if v is None:
             return v
         return SessionCreate.validate_rfc1123(v)
+
     model: str | None = Field(
         default=None,
         min_length=1,
