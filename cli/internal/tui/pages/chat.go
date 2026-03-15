@@ -82,7 +82,7 @@ type ChatPage struct {
 func NewChatPage(client *api.Client, sender *tui.ProgramSender) ChatPage {
 	return ChatPage{
 		model:          "claude-sonnet-4",
-		inputActive:    true,
+		inputActive:    false,
 		client:         client,
 		sender:         sender,
 		streamingIdx:   -1,
@@ -449,6 +449,11 @@ func (c ChatPage) InputActive() bool { //nolint:gocritic // value receiver neede
 	return c.inputActive
 }
 
+// SetInputActive sets the input focus state (for testing).
+func (c *ChatPage) SetInputActive(active bool) {
+	c.inputActive = active
+}
+
 // SetSize updates the page dimensions.
 func (c *ChatPage) SetSize(w, h int) {
 	c.width = w
@@ -496,7 +501,6 @@ func (c ChatPage) View() string { //nolint:gocritic // value receiver needed for
 			messages,
 			"",
 			inputArea,
-			lipgloss.NewStyle().Foreground(theme.TextMuted).Render("  i: insert  Esc: normal  Tab: toggle  Enter: send  ↑↓/j/k: scroll  G/g: bottom/top"),
 		))
 }
 

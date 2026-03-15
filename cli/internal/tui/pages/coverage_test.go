@@ -207,12 +207,12 @@ func TestChatPage_FinalizeStreaming_OutOfBounds(_ *testing.T) {
 
 func TestChatPage_InputActive(t *testing.T) {
 	page := NewChatPage(nil, nil)
-	if !page.InputActive() {
-		t.Error("expected input active by default")
-	}
-	page.inputActive = false
 	if page.InputActive() {
-		t.Error("expected input inactive")
+		t.Error("expected input inactive by default (normal mode)")
+	}
+	page.inputActive = true
+	if !page.InputActive() {
+		t.Error("expected input active after enabling")
 	}
 }
 
@@ -1367,12 +1367,12 @@ func TestAdminPage_Update_Refresh(t *testing.T) {
 
 func TestTerminalPage_InsertMode(t *testing.T) {
 	page := NewTerminalPage("", nil, nil)
-	if !page.InsertMode() {
-		t.Error("expected insert mode by default")
-	}
-	page.insertMode = false
 	if page.InsertMode() {
-		t.Error("expected not insert mode")
+		t.Error("expected normal mode by default")
+	}
+	page.insertMode = true
+	if !page.InsertMode() {
+		t.Error("expected insert mode after enabling")
 	}
 }
 
@@ -1392,23 +1392,22 @@ func TestTerminalPage_HandleKey_InsertModeToggle(t *testing.T) {
 	page.width = 80
 	page.height = 24
 
-	// Toggle insert mode off via ctrl+] (code 0x1D).
-	page, _ = page.handleKey(tea.KeyPressMsg{Code: 0x1D})
-	if page.insertMode {
-		t.Error("expected insert mode off after ctrl+]")
-	}
-
-	// Toggle back on.
+	// Default is normal mode; toggle to insert via ctrl+] (code 0x1D).
 	page, _ = page.handleKey(tea.KeyPressMsg{Code: 0x1D})
 	if !page.insertMode {
-		t.Error("expected insert mode on after second ctrl+]")
+		t.Error("expected insert mode on after ctrl+]")
+	}
+
+	// Toggle back to normal.
+	page, _ = page.handleKey(tea.KeyPressMsg{Code: 0x1D})
+	if page.insertMode {
+		t.Error("expected insert mode off after second ctrl+]")
 	}
 }
 
 func TestTerminalPage_HandleKey_NormalModeI(t *testing.T) {
 	page := NewTerminalPage("", nil, nil)
-	page.insertMode = false
-
+	// Default is already normal mode.
 	page, _ = page.handleKey(tea.KeyPressMsg{Code: 'i'})
 	if !page.insertMode {
 		t.Error("expected insert mode after 'i' in normal mode")

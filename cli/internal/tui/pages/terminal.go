@@ -103,7 +103,7 @@ func NewTerminalPage(serverURL string, client *api.Client, pool *tui.ClientPool)
 		pool:       pool,
 		outputCh:   outputCh,
 		connCh:     connCh,
-		insertMode: true,
+		insertMode: false,
 	}
 }
 
@@ -185,8 +185,13 @@ func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) { //nolint:goc
 func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	key := msg.Key().Keystroke()
 
-	// Ctrl+] always toggles between insert and normal mode (like the
-	// classic telnet escape character). Works regardless of current mode.
+	// Esc always exits insert mode (consistent with chat page).
+	if key == "esc" && t.insertMode {
+		t.insertMode = false
+		return t, nil
+	}
+
+	// Ctrl+] toggles between insert and normal mode (classic telnet escape).
 	// Match both "ctrl+]" (Kitty protocol) and raw 0x1D (legacy terminals).
 	if key == "ctrl+]" || msg.Key().Code == 0x1D {
 		t.insertMode = !t.insertMode
@@ -220,14 +225,24 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //noli
 		return t, nil
 	}
 
-	// --- Normal mode: navigation keys, i to re-enter insert mode ---
+	// --- Normal mode ---
 	if !t.insertMode {
-		// i enters insert mode (like vim / chat page).
-		if key == "i" {
+		switch key {
+		case "i":
 			t.insertMode = true
+		// Tab navigation consistent with other pages
+		case "tab":
+			if len(t.tabs) > 1 {
+				t.activeTab = (t.activeTab + 1) % len(t.tabs)
+				t.connectTab(t.activeTab)
+			}
+		case "shift+tab":
+			if len(t.tabs) > 1 {
+				t.activeTab = (t.activeTab - 1 + len(t.tabs)) % len(t.tabs)
+				t.connectTab(t.activeTab)
+			}
 		}
-		// All other keys are ignored in normal mode; they fall through
-		// to the app layer in tui.go for page navigation (1-7, q, ?, [).
+		// All other keys fall through to the app layer for page nav (1-7, q, ?, [).
 		return t, nil
 	}
 
@@ -748,10 +763,10 @@ func (t TerminalPage) View() string { //nolint:gocritic // value receiver needed
 	var helpText string
 	if t.insertMode {
 		modeTag := lipgloss.NewStyle().Foreground(theme.AccentEmerald).Bold(true).Render("INSERT")
-		helpText = fmt.Sprintf("  %s  ctrl+]: normal mode  ctrl+t: new  ctrl+w: close  ctrl+n/p: tabs  ctrl+f: fullscreen", modeTag)
+		helpText = fmt.Sprintf("  %s  Esc: normal  ctrl+t: new tab  ctrl+w: close  ctrl+n/p: tabs  ctrl+f: fullscreen", modeTag)
 	} else {
-		modeTag := lipgloss.NewStyle().Foreground(theme.AccentAmber).Bold(true).Render("NORMAL")
-		helpText = fmt.Sprintf("  %s  i: insert  1-7: navigate  q: quit  ?: help  [: sidebar  ctrl+]: insert mode", modeTag)
+		modeTag := lipgloss.NewStyle().Foreground(theme.AccentCyan).Bold(true).Render("NORMAL")
+		helpText = fmt.Sprintf("  %s  i: insert  Tab/⇧Tab: switch tab  ctrl+t: new  ctrl+w: close  ctrl+f: fullscreen", modeTag)
 	}
 	helpText = lipgloss.NewStyle().Foreground(theme.TextMuted).Render(helpText)
 

@@ -127,12 +127,19 @@ func (f Footer) chatHints() []FooterHint {
 func (f Footer) terminalHints() []FooterHint {
 	if f.Mode == tui.ModeInsert {
 		return []FooterHint{
-			{Key: "Ctrl+]", Desc: "exit terminal"},
-			{Key: "Alt+N", Desc: "navigate"},
+			{Key: "Esc", Desc: "normal"},
+			{Key: "Ctrl+t", Desc: "new tab"},
+			{Key: "Ctrl+w", Desc: "close tab"},
+			{Key: "Ctrl+n/p", Desc: "tabs"},
+			{Key: "Ctrl+f", Desc: "fullscreen"},
 		}
 	}
 	return []FooterHint{
 		{Key: "i", Desc: "insert"},
+		{Key: "Tab", Desc: "switch tab"},
+		{Key: "Ctrl+t", Desc: "new tab"},
+		{Key: "Ctrl+w", Desc: "close"},
+		{Key: "Ctrl+f", Desc: "fullscreen"},
 		{Key: "Ctrl+K", Desc: "command"},
 	}
 }
