@@ -1197,7 +1197,7 @@ func TestRunMigrationsFS_OpenDatabaseError(t *testing.T) {
 	}
 }
 
-// allowDockerConnections tests.
+// AllowDockerConnections tests.
 
 func TestAllowDockerConnections_NoHbaFile(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -1259,7 +1259,7 @@ func TestAllowDockerConnections_AppendsRule(t *testing.T) {
 	err := pg.allowDockerConnections(context.Background(), tmpDir)
 
 	// Read the file to verify the rule was appended.
-	data, readErr := os.ReadFile(hbaPath)
+	data, readErr := os.ReadFile(hbaPath) //nolint:gosec // test file path from t.TempDir()
 	if readErr != nil {
 		t.Fatalf("read pg_hba.conf: %v", readErr)
 	}

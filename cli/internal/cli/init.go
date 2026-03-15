@@ -274,7 +274,8 @@ func isEnvVarName(s string) bool {
 
 // checkCommand verifies that a command is available on PATH.
 func checkCommand(name string, args ...string) error {
-	cmd := exec.Command(name, args...) //nolint:gosec // arguments are hardcoded string literals from callers
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // arguments are hardcoded string literals from callers
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()

@@ -1425,7 +1425,7 @@ func TestDownFromPID_SuccessWithRunningProcess(t *testing.T) {
 	}
 
 	// Start a sleep process that we can signal.
-	cmd := exec.Command("sleep", "60")
+	cmd := exec.CommandContext(context.Background(), "sleep", "60") //nolint:gosec // test process
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start sleep process: %v", err)
 	}
