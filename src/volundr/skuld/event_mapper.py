@@ -69,7 +69,7 @@ class EventMapper:
             self._ingest_snapshot(line)
             return []
 
-        if ev_type != "assistant":
+        if ev_type not in ("assistant", "user"):
             return []
 
         msg = line.get("message") or {}
@@ -81,13 +81,18 @@ class EventMapper:
         t = self._elapsed(ts)
 
         # --- tool results (enrich pending events) --------------------------
+        # Tool results arrive as "user" messages in the JSONL format
         result_events = self._try_enrich_results(content, t)
 
-        # --- tool_use blocks -----------------------------------------------
-        tool_events = self._extract_tool_events(content, t)
+        # --- tool_use blocks (only in assistant messages) ------------------
+        tool_events: list[dict] = []
+        if ev_type == "assistant":
+            tool_events = self._extract_tool_events(content, t)
 
-        # --- message-level token usage (on final assistant turn) -----------
-        token_event = self._extract_token_event(msg, t)
+        # --- message-level token usage (only in assistant messages) --------
+        token_event: dict | None = None
+        if ev_type == "assistant":
+            token_event = self._extract_token_event(msg, t)
 
         events: list[dict] = []
         events.extend(result_events)
