@@ -58,6 +58,14 @@ type terminalTab struct {
 	connState  string
 	connErr    error
 	mu         sync.Mutex
+
+	// history keeps rendered screen snapshots for scrollback.
+	// On each output event, the current screen lines are appended
+	// (deduplicating against the previous snapshot). This allows
+	// scrolling even when the emulator is in alternate screen mode
+	// (tmux), where the native scrollback buffer is unavailable.
+	history    []string
+	lastRender string // previous Render() output for dedup
 }
 
 // TerminalPage implements a full remote PTY terminal via WebSocket and x/vt.
@@ -142,7 +150,13 @@ func (t TerminalPage) waitForConn() tea.Cmd { //nolint:gocritic // value receive
 func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
 	switch msg := msg.(type) {
 	case TerminalOutputMsg:
-		// New PTY output was written to the vt emulator; re-render.
+		// Capture rendered lines into scrollback history.
+		if msg.TabIndex >= 0 && msg.TabIndex < len(t.tabs) {
+			tab := t.tabs[msg.TabIndex]
+			tab.mu.Lock()
+			t.captureHistory(tab)
+			tab.mu.Unlock()
+		}
 		return t, t.waitForOutput()
 
 	case TerminalConnectedMsg:
@@ -190,7 +204,7 @@ func (t TerminalPage) Update(msg tea.Msg) (TerminalPage, tea.Cmd) { //nolint:goc
 
 // handleKey processes keyboard input.
 func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //nolint:gocritic // value receiver needed for page interface consistency
-	key := msg.Key().Keystroke()
+	key := msg.String()
 
 	// Esc always exits insert mode (consistent with chat page).
 	if key == "esc" && t.insertMode {
@@ -259,11 +273,10 @@ func (t TerminalPage) handleKey(msg tea.KeyMsg) (TerminalPage, tea.Cmd) { //noli
 		case "G":
 			t.scrollPos = 0 // jump to bottom (live view)
 		case "g":
-			t.clampScroll() // clamp sets to max if over; we set high first
 			if len(t.tabs) > 0 {
 				tab := t.tabs[t.activeTab]
 				tab.mu.Lock()
-				t.scrollPos = t.maxScrollback(tab)
+				t.scrollPos = len(tab.history)
 				tab.mu.Unlock()
 			}
 		// Tab navigation consistent with other pages
@@ -827,34 +840,48 @@ func (t TerminalPage) View() string { //nolint:gocritic // value receiver needed
 		Render(lipgloss.JoinVertical(lipgloss.Left, elements...))
 }
 
-// renderScrollback renders the terminal scrollback buffer at the current scroll
-// position. Must be called with tab.mu held.
-func (t TerminalPage) renderScrollback(tab *terminalTab, _, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
-	sb := tab.emulator.Scrollback()
-	screenLines := strings.Split(tab.emulator.Render(), "\n")
-
-	// Build combined line list: scrollback (oldest first) + screen lines.
-	var allLines []string
-	if sb != nil {
-		sbLen := sb.Len()
-		allLines = make([]string, 0, sbLen+len(screenLines))
-		for i := 0; i < sbLen; i++ {
-			line := sb.Line(i)
-			if line != nil {
-				allLines = append(allLines, line.String())
-			} else {
-				allLines = append(allLines, "")
-			}
-		}
-	} else {
-		allLines = make([]string, 0, len(screenLines))
+// captureHistory appends new lines from the current render to the tab's
+// history buffer. Compares against lastRender to avoid duplicating the same
+// screen. Must be called with tab.mu held.
+func (t TerminalPage) captureHistory(tab *terminalTab) { //nolint:gocritic // value receiver
+	rendered := tab.emulator.Render()
+	if rendered == tab.lastRender {
+		return
 	}
-	allLines = append(allLines, screenLines...)
 
-	totalLines := len(allLines)
+	lines := strings.Split(rendered, "\n")
 
-	// scrollPos is the number of lines scrolled up from the bottom.
-	// end is the index of the last visible line + 1.
+	if tab.lastRender == "" {
+		// First render — store all lines.
+		tab.history = append(tab.history, lines...)
+	} else {
+		// Find new lines by comparing with the previous render.
+		// The terminal typically adds lines at the bottom, so
+		// append the new screen content and let scroll handle dedup.
+		// Simple approach: just replace with full history + current screen.
+		// We keep the old history and append current screen lines.
+		tab.history = append(tab.history, lines...)
+	}
+
+	tab.lastRender = rendered
+
+	// Cap history size.
+	if len(tab.history) > scrollbackMaxLines {
+		excess := len(tab.history) - scrollbackMaxLines
+		tab.history = tab.history[excess:]
+	}
+}
+
+// renderScrollback renders from the history buffer at the current scroll offset.
+// Must be called with tab.mu held.
+func (t TerminalPage) renderScrollback(tab *terminalTab, _, height int) string { //nolint:gocritic // value receiver needed for page interface consistency
+	if len(tab.history) == 0 {
+		return tab.emulator.Render()
+	}
+
+	totalLines := len(tab.history)
+
+	// scrollPos is lines scrolled up from the bottom.
 	end := totalLines - t.scrollPos
 	if end > totalLines {
 		end = totalLines
@@ -867,11 +894,11 @@ func (t TerminalPage) renderScrollback(tab *terminalTab, _, height int) string {
 		start = 0
 	}
 
-	visible := allLines[start:end]
+	visible := tab.history[start:end]
 	return strings.Join(visible, "\n")
 }
 
-// clampScroll ensures scrollPos doesn't exceed available scrollback.
+// clampScroll ensures scrollPos doesn't exceed available history.
 func (t *TerminalPage) clampScroll() {
 	if len(t.tabs) == 0 {
 		t.scrollPos = 0
@@ -879,22 +906,11 @@ func (t *TerminalPage) clampScroll() {
 	}
 	tab := t.tabs[t.activeTab]
 	tab.mu.Lock()
-	max := t.maxScrollback(tab)
+	max := len(tab.history)
 	tab.mu.Unlock()
 	if t.scrollPos > max {
 		t.scrollPos = max
 	}
-}
-
-// maxScrollback returns the total scrollable lines for the active tab.
-// Must be called with tab.mu held.
-func (t TerminalPage) maxScrollback(tab *terminalTab) int { //nolint:gocritic // value receiver
-	screenLines := strings.Count(tab.emulator.Render(), "\n")
-	sb := tab.emulator.Scrollback()
-	if sb == nil {
-		return screenLines
-	}
-	return sb.Len() + screenLines
 }
 
 // renderEmptyState renders the view when no terminals are open.
