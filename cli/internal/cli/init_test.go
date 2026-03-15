@@ -47,25 +47,49 @@ func TestCheckCommand(t *testing.T) {
 	}
 }
 
-func TestInstallInstructions(t *testing.T) {
+func TestInstallInstructionsForOS(t *testing.T) {
 	tests := []struct {
+		name     string
 		tool     string
+		goos     string
+		goarch   string
 		contains string
 	}{
-		{"kubectl", "kubernetes.io"},
-		{"helm", "helm.sh"},
+		{"kubectl darwin", "kubectl", "darwin", "arm64", "brew install kubectl"},
+		{"kubectl linux", "kubectl", "linux", "amd64", "kubernetes.io/docs/tasks/tools/install-kubectl-linux"},
+		{"kubectl linux arch", "kubectl", "linux", "arm64", "arm64"},
+		{"kubectl other", "kubectl", "windows", "amd64", "kubernetes.io/docs/tasks/tools/"},
+		{"helm darwin", "helm", "darwin", "arm64", "brew install helm"},
+		{"helm linux", "helm", "linux", "amd64", "get-helm-3"},
+		{"helm other", "helm", "windows", "amd64", "helm.sh/docs/intro/install"},
+		{"unknown tool", "unknown", "linux", "amd64", ""},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.tool, func(t *testing.T) {
-			result := installInstructions(tt.tool)
+		t.Run(tt.name, func(t *testing.T) {
+			result := installInstructionsForOS(tt.tool, tt.goos, tt.goarch)
+			if tt.contains == "" {
+				if result != "" {
+					t.Errorf("expected empty, got %q", result)
+				}
+				return
+			}
 			if !strings.Contains(result, tt.contains) {
-				t.Errorf("installInstructions(%q) = %q, expected to contain %q", tt.tool, result, tt.contains)
+				t.Errorf("installInstructionsForOS(%q, %q, %q) = %q, expected to contain %q",
+					tt.tool, tt.goos, tt.goarch, result, tt.contains)
 			}
 		})
 	}
+}
 
-	// Unknown tool returns empty.
+func TestInstallInstructions(t *testing.T) {
+	// Wrapper should return non-empty for known tools.
+	if result := installInstructions("kubectl"); !strings.Contains(result, "kubernetes.io") {
+		t.Errorf("expected kubernetes.io in result, got %q", result)
+	}
+	if result := installInstructions("helm"); !strings.Contains(result, "helm.sh") {
+		t.Errorf("expected helm.sh in result, got %q", result)
+	}
 	if result := installInstructions("unknown"); result != "" {
 		t.Errorf("expected empty for unknown tool, got %q", result)
 	}

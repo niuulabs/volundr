@@ -331,6 +331,61 @@ func TestRunInit_GitHubWithDefaultCloneToken(t *testing.T) {
 	}
 }
 
+func TestRunInit_DockerRuntime_PreflightChecks(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Override PATH to ensure kubectl/helm are not found.
+	t.Setenv("PATH", tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "docker"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Pipe minimal stdin — preflight should fail before any prompts.
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString("\n")
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err == nil {
+		t.Fatal("expected preflight check error for missing kubectl")
+	}
+	if !strings.Contains(err.Error(), "kubectl is required") {
+		t.Errorf("expected kubectl error, got: %v", err)
+	}
+}
+
+func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Override PATH to ensure kubectl/helm are not found.
+	t.Setenv("PATH", tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "k3s"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString("\n")
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err == nil {
+		t.Fatal("expected preflight check error for missing kubectl")
+	}
+	if !strings.Contains(err.Error(), "kubectl is required") {
+		t.Errorf("expected kubectl error, got: %v", err)
+	}
+}
+
 func TestRunInit_InteractiveRuntime(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)

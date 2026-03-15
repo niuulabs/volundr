@@ -283,14 +283,18 @@ func checkCommand(name string, args ...string) error {
 
 // installInstructions returns platform-specific install instructions for a tool.
 func installInstructions(tool string) string {
-	goos := goruntime.GOOS
+	return installInstructionsForOS(tool, goruntime.GOOS, goruntime.GOARCH)
+}
+
+// installInstructionsForOS returns install instructions for a tool on the given OS/arch.
+func installInstructionsForOS(tool, goos, goarch string) string {
 	switch tool {
 	case "kubectl":
 		switch goos {
 		case "darwin":
 			return "  brew install kubectl\n  or: https://kubernetes.io/docs/tasks/tools/install-kubectl-macos/"
 		case "linux":
-			return "  curl -LO \"https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/" + goruntime.GOARCH + "/kubectl\"\n" +
+			return "  curl -LO \"https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/" + goarch + "/kubectl\"\n" +
 				"  chmod +x kubectl && sudo mv kubectl /usr/local/bin/\n" +
 				"  or: https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/"
 		default:
