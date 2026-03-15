@@ -741,7 +741,7 @@ func (c ChatPage) renderInput() string { //nolint:gocritic // value receiver nee
 	return inputBox
 }
 
-// --- Mention menu helpers. ---
+// Mention menu helpers.
 
 // anyMentionActive returns true if any mention menu is open.
 func (c *ChatPage) anyMentionActive() bool {
@@ -992,11 +992,11 @@ func (c *ChatPage) searchIssues(query string) {
 	})
 }
 
-// --- Mention syntax highlighting in messages. ---
+// Mention syntax highlighting in messages.
 
 // mentionPatterns matches @file, /command, and !ISSUE references in message text.
 var (
-	fileRefPattern    = regexp.MustCompile(`@[a-zA-Z0-9_./_-]+`)
+	fileRefPattern    = regexp.MustCompile(`@[a-zA-Z0-9_./-]+`)
 	issueRefPattern   = regexp.MustCompile(`![A-Z]+-\d+`)
 	commandRefPattern = regexp.MustCompile(`^/\w+`)
 )

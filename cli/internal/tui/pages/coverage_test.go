@@ -2535,9 +2535,7 @@ func TestChroniclesPage_SetSession(t *testing.T) {
 	}
 }
 
-// =====================================================
-// Terminal: captureHistory, renderScrollback, clampScroll
-// =====================================================
+// Terminal: captureHistory, renderScrollback, clampScroll.
 
 func TestTerminalPage_CaptureHistory(t *testing.T) {
 	page := NewTerminalPage("", nil, nil)
@@ -2553,8 +2551,8 @@ func TestTerminalPage_CaptureHistory(t *testing.T) {
 	tab.emulator = emu
 
 	// Write some content to the emulator.
-	_, _ = emu.Write([]byte("Hello World\r\n"))
-	_, _ = emu.Write([]byte("Line 2\r\n"))
+	_, _ = emu.WriteString("Hello World\r\n")
+	_, _ = emu.WriteString("Line 2\r\n")
 
 	// Capture history should populate history.
 	page.captureHistory(tab)
@@ -2573,7 +2571,7 @@ func TestTerminalPage_CaptureHistory(t *testing.T) {
 	}
 
 	// Write more content and capture again.
-	_, _ = emu.Write([]byte("Line 3\r\n"))
+	_, _ = emu.WriteString("Line 3\r\n")
 	page.captureHistory(tab)
 	if len(tab.history) <= histLen {
 		t.Error("expected history to grow after new content")
@@ -2597,7 +2595,7 @@ func TestTerminalPage_CaptureHistory_MaxLines(t *testing.T) {
 		tab.history[i] = "old line"
 	}
 
-	_, _ = emu.Write([]byte("new content\r\n"))
+	_, _ = emu.WriteString("new content\r\n")
 	page.captureHistory(tab)
 
 	// History should be capped.
