@@ -226,9 +226,28 @@ class TestSkippedEvents:
     def setup_method(self):
         self.mapper = EventMapper()
 
-    def test_user_event_skipped(self):
+    def test_user_text_message_produces_no_events(self):
         events = self.mapper.map_event({"type": "user", "message": {"content": "hi"}})
         assert events == []
+
+    def test_user_with_tool_result_enriches_pending(self):
+        """Tool results arrive as 'user' messages in the JSONL format."""
+        # Buffer a tool_use event
+        tool_line = _assistant_with_tool(
+            "Bash",
+            {"command": "echo hello"},
+            tool_use_id="tool-user-result",
+        )
+        self.mapper.map_event(tool_line)
+        assert "tool-user-result" in self.mapper._pending
+
+        # Result arrives as a 'user' message
+        result_line = _user_with_result("tool-user-result", "hello", is_error=False)
+        assert result_line["type"] == "user"  # Verify the helper uses 'user' type
+        events = self.mapper.map_event(result_line)
+        assert len(events) == 1
+        assert events[0]["type"] == "terminal"
+        assert events[0]["exit"] == 0
 
     def test_progress_event_skipped(self):
         events = self.mapper.map_event({"type": "progress", "data": {"type": "agent_progress"}})
@@ -300,7 +319,7 @@ def _user_with_result(
     is_error: bool = False,
 ) -> dict:
     return {
-        "type": "assistant",
+        "type": "user",
         "timestamp": "2026-03-15T02:42:40.000Z",
         "message": {
             "stop_reason": None,
