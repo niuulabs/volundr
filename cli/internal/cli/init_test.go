@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -31,6 +32,42 @@ func TestIsEnvVarName(t *testing.T) {
 				t.Errorf("isEnvVarName(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestCheckCommand(t *testing.T) {
+	// "go" should always be available in test environment.
+	if err := checkCommand("go", "version"); err != nil {
+		t.Errorf("expected 'go version' to succeed: %v", err)
+	}
+
+	// A nonexistent command should fail.
+	if err := checkCommand("volundr-nonexistent-tool-12345"); err == nil {
+		t.Error("expected error for nonexistent command")
+	}
+}
+
+func TestInstallInstructions(t *testing.T) {
+	tests := []struct {
+		tool     string
+		contains string
+	}{
+		{"kubectl", "kubernetes.io"},
+		{"helm", "helm.sh"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			result := installInstructions(tt.tool)
+			if !strings.Contains(result, tt.contains) {
+				t.Errorf("installInstructions(%q) = %q, expected to contain %q", tt.tool, result, tt.contains)
+			}
+		})
+	}
+
+	// Unknown tool returns empty.
+	if result := installInstructions("unknown"); result != "" {
+		t.Errorf("expected empty for unknown tool, got %q", result)
 	}
 }
 

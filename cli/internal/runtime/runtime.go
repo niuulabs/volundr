@@ -90,7 +90,7 @@ const (
 // dir itself needs 0o755 so the container can traverse to its mounted files.
 func ensureContainerStorageDirs(cfgDir string) error {
 	// Config dir must be traversable by the container user.
-	if err := os.Chmod(cfgDir, 0o755); err != nil {
+	if err := os.Chmod(cfgDir, 0o755); err != nil { //nolint:gosec // container user needs to traverse config dir
 		return fmt.Errorf("chmod config dir: %w", err)
 	}
 
@@ -108,7 +108,7 @@ func ensureContainerStorageDirs(cfgDir string) error {
 		filepath.Join(cfgDir, "user-credentials"),
 	}
 	for _, dir := range writableDirs {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // container user needs access to storage dirs
 			return fmt.Errorf("create directory %s: %w", dir, err)
 		}
 		if err := os.Chown(dir, containerUID, containerGID); err != nil {
@@ -117,7 +117,7 @@ func ensureContainerStorageDirs(cfgDir string) error {
 				return fmt.Errorf("chmod directory %s: %w", dir, err)
 			}
 		} else {
-			if err := os.Chmod(dir, 0o755); err != nil {
+			if err := os.Chmod(dir, 0o750); err != nil { //nolint:gosec // container user needs access to storage dirs
 				return fmt.Errorf("chmod directory %s: %w", dir, err)
 			}
 		}

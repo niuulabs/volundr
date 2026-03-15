@@ -450,7 +450,7 @@ func findMigrationsDir() string {
 
 // runMigrationsAuto runs migrations using embedded SQL files if available,
 // falling back to the filesystem. Returns (applied, source, error).
-func runMigrationsAuto(ctx context.Context, pg postgresProvider) (int, string, error) {
+func runMigrationsAuto(ctx context.Context, pg postgresProvider) (applied int, source string, err error) {
 	// Try embedded migrations first.
 	if mfs := migrations.FS(); mfs != nil {
 		applied, err := pg.RunMigrationsFS(ctx, mfs)
@@ -462,6 +462,6 @@ func runMigrationsAuto(ctx context.Context, pg postgresProvider) (int, string, e
 	if dir == "" {
 		return 0, "", nil
 	}
-	applied, err := pg.RunMigrations(ctx, dir)
+	applied, err = pg.RunMigrations(ctx, dir)
 	return applied, dir, err
 }

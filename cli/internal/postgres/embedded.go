@@ -32,7 +32,7 @@ func New(cfg *config.Config) *EmbeddedPostgres {
 }
 
 // Start initializes and starts the embedded PostgreSQL instance.
-func (e *EmbeddedPostgres) Start(_ context.Context) error {
+func (e *EmbeddedPostgres) Start(ctx context.Context) error {
 	dataDir := e.config.Database.DataDir
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("create data directory %s: %w", dataDir, err)
@@ -80,7 +80,7 @@ func (e *EmbeddedPostgres) Start(_ context.Context) error {
 	// bridge networks (172.16.0.0/12 covers the default 172.17.0.0/16
 	// and k3d networks).
 	if e.config.Runtime == "docker" || e.config.Runtime == "k3s" {
-		if err := e.allowDockerConnections(dataDir); err != nil {
+		if err := e.allowDockerConnections(ctx, dataDir); err != nil {
 			return fmt.Errorf("configure pg_hba for docker: %w", err)
 		}
 	}
@@ -91,11 +91,11 @@ func (e *EmbeddedPostgres) Start(_ context.Context) error {
 // allowDockerConnections appends a pg_hba.conf rule that permits
 // password-authenticated connections from Docker bridge networks,
 // then signals Postgres to reload its configuration.
-func (e *EmbeddedPostgres) allowDockerConnections(dataDir string) error {
+func (e *EmbeddedPostgres) allowDockerConnections(ctx context.Context, dataDir string) (err error) {
 	hbaPath := filepath.Join(dataDir, "pg_hba.conf")
 	hbaRule := "\n# Allow connections from Docker bridge networks\nhost    all    all    172.16.0.0/12    password\n"
 
-	data, err := os.ReadFile(hbaPath)
+	data, err := os.ReadFile(hbaPath) //nolint:gosec // pg_hba.conf in trusted data directory
 	if err != nil {
 		return fmt.Errorf("read pg_hba.conf: %w", err)
 	}
@@ -109,7 +109,11 @@ func (e *EmbeddedPostgres) allowDockerConnections(dataDir string) error {
 	if err != nil {
 		return fmt.Errorf("open pg_hba.conf: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); err == nil && cerr != nil {
+			err = fmt.Errorf("close pg_hba.conf: %w", cerr)
+		}
+	}()
 
 	if _, err := f.WriteString(hbaRule); err != nil {
 		return fmt.Errorf("write pg_hba.conf: %w", err)
@@ -122,7 +126,7 @@ func (e *EmbeddedPostgres) allowDockerConnections(dataDir string) error {
 	}
 	pgCtl := filepath.Join(cfgDir, "cache", "pg", "bin", "pg_ctl")
 
-	cmd := exec.Command(pgCtl, "reload", "-D", dataDir) //nolint:gosec // pg_ctl path from trusted cache directory
+	cmd := exec.CommandContext(ctx, pgCtl, "reload", "-D", dataDir) //nolint:gosec // pg_ctl path from trusted cache directory
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("reload postgres config: %w\n%s", err, out)
 	}

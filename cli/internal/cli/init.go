@@ -274,7 +274,7 @@ func isEnvVarName(s string) bool {
 
 // checkCommand verifies that a command is available on PATH.
 func checkCommand(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) //nolint:gosec // arguments are hardcoded string literals from callers
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
@@ -282,10 +282,10 @@ func checkCommand(name string, args ...string) error {
 
 // installInstructions returns platform-specific install instructions for a tool.
 func installInstructions(tool string) string {
-	os := goruntime.GOOS
+	goos := goruntime.GOOS
 	switch tool {
 	case "kubectl":
-		switch os {
+		switch goos {
 		case "darwin":
 			return "  brew install kubectl\n  or: https://kubernetes.io/docs/tasks/tools/install-kubectl-macos/"
 		case "linux":
@@ -296,7 +296,7 @@ func installInstructions(tool string) string {
 			return "  https://kubernetes.io/docs/tasks/tools/"
 		}
 	case "helm":
-		switch os {
+		switch goos {
 		case "darwin":
 			return "  brew install helm\n  or: https://helm.sh/docs/intro/install/"
 		case "linux":
