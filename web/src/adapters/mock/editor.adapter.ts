@@ -7,7 +7,7 @@ import type { IEditorService, WorkbenchConfig } from '@/ports/editor.port';
 export class MockEditorAdapter implements IEditorService {
   getWorkbenchConfig(_sessionId: string, hostname: string): WorkbenchConfig {
     return {
-      remoteAuthority: `${hostname}:8445`,
+      remoteAuthority: hostname,
       wsUrl: `wss://${hostname}/reh/`,
     };
   }

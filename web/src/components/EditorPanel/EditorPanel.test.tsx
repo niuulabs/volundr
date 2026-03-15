@@ -32,7 +32,7 @@ vi.mock('@/adapters/api/editor.adapter', () => {
   class MockApiEditorAdapter {
     getWorkbenchConfig(_sessionId: string, hostname: string) {
       return {
-        remoteAuthority: `${hostname}:8445`,
+        remoteAuthority: hostname,
         wsUrl: `wss://${hostname}/reh/`,
       };
     }
@@ -87,7 +87,7 @@ describe('EditorPanel', () => {
       })
     );
 
-    expect(config.remoteAuthority).toBe('pod.example.com:8445');
+    expect(config.remoteAuthority).toBe('pod.example.com');
     expect(config.webSocketFactory).toBeDefined();
     expect(config.webSocketFactory.create).toBeInstanceOf(Function);
   });

@@ -6,7 +6,7 @@ describe('MockEditorAdapter', () => {
     const adapter = new MockEditorAdapter();
     const config = adapter.getWorkbenchConfig('session-1', 'test-host');
 
-    expect(config.remoteAuthority).toBe('test-host:8445');
+    expect(config.remoteAuthority).toBe('test-host');
   });
 
   it('should return wss WebSocket URL', () => {

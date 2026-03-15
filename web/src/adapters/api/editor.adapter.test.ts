@@ -12,9 +12,15 @@ describe('ApiEditorAdapter', () => {
     vi.restoreAllMocks();
   });
 
-  it('should return remoteAuthority with hostname and REH port', () => {
+  it('should return remoteAuthority matching hostname', () => {
     const config = adapter.getWorkbenchConfig('session-123', 'pod-abc.example.com');
-    expect(config.remoteAuthority).toBe('pod-abc.example.com:8445');
+    expect(config.remoteAuthority).toBe('pod-abc.example.com');
+  });
+
+  it('should preserve port in remoteAuthority for local mode', () => {
+    const config = adapter.getWorkbenchConfig('session-123', '127.0.0.1:8080');
+    expect(config.remoteAuthority).toBe('127.0.0.1:8080');
+    expect(config.wsUrl).toContain('127.0.0.1:8080');
   });
 
   it('should return wss WebSocket URL when page is https', () => {

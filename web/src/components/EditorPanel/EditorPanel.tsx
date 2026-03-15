@@ -101,7 +101,12 @@ export function EditorPanel({ hostname, sessionId, className }: EditorPanelProps
           remoteAuthority: config.remoteAuthority,
           webSocketFactory: {
             create: (url: string) => {
-              const ws = wsFactory(url);
+              // VS Code builds URLs from remoteAuthority like:
+              //   ws://host:port/<path>?reconnectionToken=...
+              // Rewrite to route through nginx's /reh/ prefix:
+              //   ws://host:port/reh/<path>?reconnectionToken=...
+              const rewritten = url.replace(/^(wss?:\/\/[^/]+)(\/)/, '$1/reh/');
+              const ws = wsFactory(rewritten);
               return {
                 send: (data: ArrayBuffer | string) => ws.send(data),
                 close: () => ws.close(),
