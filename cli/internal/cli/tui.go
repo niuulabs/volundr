@@ -80,6 +80,8 @@ type tuiModel struct {
 	header  components.Header
 	sidebar components.Sidebar
 	help    components.HelpOverlay
+	footer  components.Footer
+	palette components.Palette
 
 	// Active session (set when user presses Enter on a session).
 	activeSession *api.Session
@@ -123,6 +125,8 @@ func newTUIModel(cfg *remote.Config, pool *tuipkg.ClientPool, sender *tuipkg.Pro
 		header:  components.NewHeaderWithPool(pool),
 		sidebar: components.NewSidebar(),
 		help:    components.NewHelpOverlay(),
+		footer:  components.NewFooter(),
+		palette: components.NewPalette(),
 	}
 }
 
@@ -190,6 +194,64 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:gocritic /
 	// Debug: log all non-trivial messages to help diagnose routing issues.
 	if debugTUI {
 		debugLogMsg(msg)
+	}
+
+	// Handle palette messages.
+	switch typedMsg := msg.(type) {
+	case components.PaletteSelectedMsg:
+		m.palette.Close()
+		switch typedMsg.Item.Type {
+		case components.PalettePage:
+			m.app.ActivePage = typedMsg.Item.Page
+		case components.PaletteAction:
+			switch typedMsg.Item.Action {
+			case "quit":
+				return m, tea.Quit
+			case "help":
+				m.app.ShowHelp = !m.app.ShowHelp
+			case "toggle-sidebar":
+				m.app.ShowSidebar = !m.app.ShowSidebar
+			case "refresh":
+				// Synthesize an 'r' key press to the active page.
+				// Pages already handle 'r' for refresh.
+			}
+		}
+		m.updateMode()
+		return m, nil
+
+	case components.PaletteDismissedMsg:
+		m.updateMode()
+		return m, nil
+	}
+
+	// Ctrl+K opens the command palette globally, even when input is captured.
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "ctrl+k" {
+		items := components.DefaultPaletteItems()
+		// Add active sessions to palette items if available.
+		if m.activeSession != nil {
+			sessionItem := components.PaletteItem{
+				Type:      components.PaletteSession,
+				Label:     m.activeSession.Name,
+				Desc:      m.activeSession.Status,
+				Icon:      "\u25c9",
+				SessionID: m.activeSession.ID,
+			}
+			items = append([]components.PaletteItem{sessionItem}, items...)
+		}
+		m.palette.Open(items, m.app.Width, m.app.Height)
+		m.app.Mode = tuipkg.ModeCommand
+		return m, nil
+	}
+
+	// When palette is visible, route all keys to it.
+	if m.palette.Visible {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			cmd = m.palette.Update(keyMsg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return m, tea.Batch(cmds...)
+		}
 	}
 
 	// Handle server connectivity.
@@ -368,6 +430,63 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:gocritic /
 		}
 	}
 
+	// When chronicles search is active, capture keys for the search field.
+	if m.app.ActivePage == tuipkg.PageChronicles && m.chronicles.Searching() {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			key := keyMsg.String()
+			switch {
+			case key == "ctrl+c":
+				// Let through to app (quit).
+			case strings.HasPrefix(key, "alt+"):
+				// alt+number navigation — fall through to app
+			default:
+				m.chronicles, cmd = m.chronicles.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+	}
+
+	// When diffs search is active, capture keys for the search field.
+	if m.app.ActivePage == tuipkg.PageDiffs && m.diffs.Searching() {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			key := keyMsg.String()
+			switch {
+			case key == "ctrl+c":
+				// Let through to app (quit).
+			case strings.HasPrefix(key, "alt+"):
+				// alt+number navigation — fall through to app
+			default:
+				m.diffs, cmd = m.diffs.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+	}
+
+	// When admin search is active, capture keys for the search field.
+	if m.app.ActivePage == tuipkg.PageAdmin && m.admin.Searching() {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			key := keyMsg.String()
+			switch {
+			case key == "ctrl+c":
+				// Let through to app (quit).
+			case strings.HasPrefix(key, "alt+"):
+				// alt+number navigation — fall through to app
+			default:
+				m.admin, cmd = m.admin.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+	}
+
 	// Set InputCaptured for KeyMsg so the app layer suppresses global
 	// keybindings (q, ?, [, 1-7) when a text input is active.
 	if _, ok := msg.(tea.KeyMsg); ok {
@@ -427,6 +546,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:gocritic /
 		}
 	}
 
+	// Update mode indicator based on current page state.
+	m.updateMode()
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -467,6 +589,9 @@ func (m tuiModel) handleSessionSelected(msg pages.SessionSelectedMsg) (tea.Model
 // isInputCaptured returns true when the active page has a text input that
 // should suppress global keybindings (q, ?, [, 1-7).
 func (m tuiModel) isInputCaptured() bool { //nolint:gocritic // called from Update which requires value receiver
+	if m.palette.Visible {
+		return true
+	}
 	switch m.app.ActivePage {
 	case tuipkg.PageTerminal:
 		return m.terminal.InsertMode()
@@ -476,10 +601,62 @@ func (m tuiModel) isInputCaptured() bool { //nolint:gocritic // called from Upda
 		return m.sessions.Searching()
 	case tuipkg.PageSettings:
 		return m.settings.Editing()
-	case tuipkg.PageDiffs, tuipkg.PageChronicles, tuipkg.PageAdmin:
-		return false
+	case tuipkg.PageDiffs:
+		return m.diffs.Searching()
+	case tuipkg.PageChronicles:
+		return m.chronicles.Searching()
+	case tuipkg.PageAdmin:
+		return m.admin.Searching()
 	}
 	return false
+}
+
+// updateMode sets the mode based on current page state and syncs it to
+// the header and footer components.
+func (m *tuiModel) updateMode() {
+	m.app.Mode = m.resolveMode()
+	m.header.Mode = m.app.Mode
+	m.footer.Page = m.app.ActivePage
+	m.footer.Mode = m.app.Mode
+}
+
+// resolveMode determines the current interaction mode from page state.
+func (m *tuiModel) resolveMode() tuipkg.Mode {
+	if m.palette.Visible {
+		return tuipkg.ModeCommand
+	}
+
+	switch m.app.ActivePage {
+	case tuipkg.PageTerminal:
+		if m.terminal.InsertMode() {
+			return tuipkg.ModeInsert
+		}
+	case tuipkg.PageChat:
+		if m.chat.InputActive() {
+			return tuipkg.ModeInsert
+		}
+	case tuipkg.PageSettings:
+		if m.settings.Editing() {
+			return tuipkg.ModeInsert
+		}
+	case tuipkg.PageSessions:
+		if m.sessions.Searching() {
+			return tuipkg.ModeSearch
+		}
+	case tuipkg.PageChronicles:
+		if m.chronicles.Searching() {
+			return tuipkg.ModeSearch
+		}
+	case tuipkg.PageDiffs:
+		if m.diffs.Searching() {
+			return tuipkg.ModeSearch
+		}
+	case tuipkg.PageAdmin:
+		if m.admin.Searching() {
+			return tuipkg.ModeSearch
+		}
+	}
+	return tuipkg.ModeNormal
 }
 
 func (m tuiModel) View() tea.View { //nolint:gocritic // tea.Model interface requires value receiver
@@ -496,6 +673,12 @@ func (m tuiModel) View() tea.View { //nolint:gocritic // tea.Model interface req
 
 	// Render header
 	header := m.header.View()
+
+	// Render footer
+	m.footer.Width = m.app.Width
+	m.footer.Page = m.app.ActivePage
+	m.footer.Mode = m.app.Mode
+	footer := m.footer.View()
 
 	// Render sidebar
 	sidebar := m.sidebar.View()
@@ -519,13 +702,19 @@ func (m tuiModel) View() tea.View { //nolint:gocritic // tea.Model interface req
 		pageContent = m.admin.View()
 	}
 
-	// Compose layout: header on top, sidebar + content below
+	// Compose layout: header on top, sidebar + content below, footer at bottom
 	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, pageContent)
-	fullView := lipgloss.JoinVertical(lipgloss.Left, header, body)
+	fullView := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 
 	// Help overlay sits on top of everything
 	if m.app.ShowHelp {
 		v.Content = m.help.View(m.app.Width, m.app.Height)
+		return v
+	}
+
+	// Palette overlay sits on top of everything
+	if m.palette.Visible {
+		v.Content = m.palette.View(m.app.Width, m.app.Height)
 		return v
 	}
 

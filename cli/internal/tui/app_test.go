@@ -275,8 +275,8 @@ func TestApp_ContentHeight(t *testing.T) {
 	app := NewApp("")
 	app.Height = 40
 
-	if app.ContentHeight() != 38 {
-		t.Errorf("expected content height %d, got %d", 38, app.ContentHeight())
+	if app.ContentHeight() != 37 {
+		t.Errorf("expected content height %d, got %d", 37, app.ContentHeight())
 	}
 }
 

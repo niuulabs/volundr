@@ -1,6 +1,8 @@
 package tui
 
-import "github.com/niuulabs/volundr/cli/internal/api"
+import (
+	"github.com/niuulabs/volundr/cli/internal/api"
+)
 
 // ClusterSession is a session tagged with its cluster context.
 type ClusterSession struct {
@@ -20,4 +22,21 @@ type ClusterStatusMsg struct {
 	ContextKey string
 	Status     ClusterStatus
 	Error      error
+}
+
+// PaletteNavigateMsg requests navigation to a specific page from the palette.
+type PaletteNavigateMsg struct {
+	Page Page
+}
+
+// PaletteActionMsg requests execution of a named action from the palette.
+type PaletteActionMsg struct {
+	Action string
+}
+
+// FilesLoadedMsg carries file listing results from the session pod.
+type FilesLoadedMsg struct {
+	Files []api.FileEntry
+	Path  string // The directory path that was listed
+	Err   error
 }
