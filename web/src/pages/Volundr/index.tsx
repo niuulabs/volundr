@@ -1054,15 +1054,9 @@ export function VolundrPage() {
               ))}
 
             {activeTab === 'code' &&
-              (isSessionReady ? (
-                <EditorPanel
-                  hostname={effectiveSelectedSession.hostname ?? null}
-                  sessionId={effectiveSelectedSession.id}
-                  codeEndpoint={effectiveSelectedSession.codeEndpoint}
-                  className={styles.tabPanel}
-                />
-              ) : isSessionBooting(effectiveSelectedSession.status) ||
-                (isRunning && !connectionVerified) ? (
+              !isSessionReady &&
+              (isSessionBooting(effectiveSelectedSession.status) ||
+              (isRunning && !connectionVerified) ? (
                 <SessionStartingIndicator className={styles.tabPanel} />
               ) : (
                 <div className={styles.emptyState}>
@@ -1074,6 +1068,15 @@ export function VolundrPage() {
                   </p>
                 </div>
               ))}
+            {isSessionReady && (
+              <EditorPanel
+                hostname={effectiveSelectedSession.hostname ?? null}
+                sessionId={effectiveSelectedSession.id}
+                codeEndpoint={effectiveSelectedSession.codeEndpoint}
+                className={styles.tabPanel}
+                hidden={activeTab !== 'code'}
+              />
+            )}
 
             {activeTab === 'diffs' && (
               <SessionDiffs

@@ -14,6 +14,8 @@ export interface EditorPanelProps {
   codeEndpoint?: string | null;
   /** Additional CSS class name. */
   className?: string;
+  /** When true, keep the DOM mounted but visually hidden. */
+  hidden?: boolean;
 }
 
 type EditorStatus = 'idle' | 'initializing' | 'connected' | 'error';
@@ -27,7 +29,13 @@ type EditorStatus = 'idle' | 'initializing' | 'connected' | 'error';
  * `initialize()` can only be called once per page load (upstream VS Code
  * constraint). If the sessionId changes, the user must reload the page.
  */
-export function EditorPanel({ hostname, sessionId, codeEndpoint, className }: EditorPanelProps) {
+export function EditorPanel({
+  hostname,
+  sessionId,
+  codeEndpoint,
+  className,
+  hidden,
+}: EditorPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<EditorStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -113,7 +121,7 @@ export function EditorPanel({ hostname, sessionId, codeEndpoint, className }: Ed
   }
 
   return (
-    <div className={cn(styles.container, className)}>
+    <div className={cn(styles.container, className, hidden && styles.hidden)}>
       <div ref={containerRef} className={styles.workbench} />
     </div>
   );
