@@ -73,12 +73,6 @@ class TestValuesDefaults:
         defaults = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]
         assert defaults["session"]["model"]  # non-empty
 
-    def test_skuld_claude_defaults_code_server_enabled(self, values_yaml):
-        """Test skuld-claude defaults have code-server enabled."""
-        defaults = values_yaml["sessionDefinitions"]["skuldClaude"]["defaults"]
-        assert defaults["codeServer"]["enabled"] is True
-        assert defaults["codeServer"]["image"]["repository"] == "codercom/code-server"
-
     def test_skuld_claude_defaults_image_repository(self, values_yaml):
         """Test skuld-claude defaults have correct image repository."""
         defaults = values_yaml["sessionDefinitions"]["skuldClaude"]["defaults"]
@@ -239,11 +233,6 @@ class TestFarmSessionDefinitionTemplate:
     def test_values_has_resources(self, template_yaml):
         """Test values includes resources."""
         assert ".Values.sessionDefinitions.skuldClaude.defaults.resources" in template_yaml
-
-    def test_values_has_code_server(self, template_yaml):
-        """Test values includes code-server configuration."""
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.codeServer.enabled" in template_yaml
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.codeServer.image" in template_yaml
 
     def test_values_has_ingress(self, template_yaml):
         """Test values includes ingress configuration."""

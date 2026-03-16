@@ -1006,7 +1006,6 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 				"ingress_backend":   fmt.Sprintf("k3d-%s-serverlb", k3sClusterName),
 				"storage_path":      k3sNodeStoragePath,
 				"skuld_image":       cfg.Docker.SkuldImage,
-				"code_server_image": cfg.Docker.CodeServerImage,
 				"reh_image":         cfg.Docker.RehImage,
 				"devrunner_image":   cfg.Docker.TtydImage,
 				"db_host":           "host.k3d.internal",

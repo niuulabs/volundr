@@ -312,7 +312,7 @@ class Session(BaseModel):
     )
     code_endpoint: str | None = Field(
         default=None,
-        description="URL for the code-server IDE when running",
+        description="URL for the editor IDE when running",
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

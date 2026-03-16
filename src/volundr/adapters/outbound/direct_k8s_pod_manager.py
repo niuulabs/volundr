@@ -41,7 +41,7 @@ DEFAULT_POLL_INTERVAL = 2.0
 DEFAULT_READINESS_TIMEOUT = 300.0
 
 # Nginx config template for the session pod entry point.
-# Routes requests to skuld broker (8081), code-server (8443), and terminal (7681).
+# Routes requests to skuld broker (8081), vscode-reh (8445), and terminal (7681).
 NGINX_CONF_TEMPLATE = """\
 worker_processes auto;
 error_log /dev/stderr warn;
@@ -68,10 +68,6 @@ http {{
 
     upstream broker {{
         server 127.0.0.1:8081;
-    }}
-
-    upstream codeserver {{
-        server 127.0.0.1:8443;
     }}
 
     upstream reh {{
@@ -166,9 +162,9 @@ http {{
             proxy_send_timeout 3600s;
         }}
 
-        # Default catch-all -> code-server IDE
+        # Default catch-all -> broker
         location / {{
-            proxy_pass http://codeserver/;
+            proxy_pass http://broker/;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
@@ -203,7 +199,6 @@ class DirectK8sPodManager(PodManager):
         ingress_backend: str = "k3d-volundr-serverlb",
         external_url: str = "http://127.0.0.1:8080",
         skuld_image: str = "ghcr.io/niuulabs/skuld:0.2.0",
-        code_server_image: str = "codercom/code-server:latest",
         reh_image: str = "ghcr.io/niuulabs/vscode-reh:latest",
         nginx_image: str = "nginx:alpine",
         devrunner_image: str = "ghcr.io/niuulabs/devrunner:0.2.0",
@@ -225,7 +220,6 @@ class DirectK8sPodManager(PodManager):
         self._ingress_backend = ingress_backend
         self._external_url = external_url.rstrip("/")
         self._skuld_image = skuld_image
-        self._code_server_image = code_server_image
         self._reh_image = reh_image
         self._nginx_image = nginx_image
         self._devrunner_image = devrunner_image
@@ -284,7 +278,7 @@ class DirectK8sPodManager(PodManager):
         return f"ws://{self._ingress_backend}{self._session_path(session)}/session"
 
     def _code_endpoint(self, session: Session) -> str:
-        """Build the code-server endpoint URL."""
+        """Build the editor endpoint URL."""
         return f"http://{self._ingress_backend}{self._session_path(session)}/"
 
     def _build_labels(self, session: Session) -> dict[str, str]:
@@ -525,7 +519,7 @@ fi
             "requests": {"memory": "256Mi", "cpu": "100m"},
             "limits": {"memory": "1Gi", "cpu": "500m"},
         }
-        code_server_res = {
+        reh_res = {
             "requests": {"memory": "256Mi", "cpu": "100m"},
             "limits": {"memory": "2Gi", "cpu": "1000m"},
         }
@@ -608,25 +602,6 @@ fi
                     "resources": skuld_res,
                 },
                 {
-                    "name": "code-server",
-                    "image": self._code_server_image,
-                    "ports": [{"containerPort": 8443, "name": "ide"}],
-                    "command": ["dumb-init", "--", "/usr/bin/code-server"],
-                    "args": [
-                        "--bind-addr=0.0.0.0:8443",
-                        "--auth=none",
-                        "--disable-telemetry",
-                        f"/volundr/sessions/{session.id}/workspace",
-                    ],
-                    "env": home_env,
-                    "securityContext": {
-                        "runAsUser": 1000,
-                        "allowPrivilegeEscalation": False,
-                    },
-                    "volumeMounts": workload_mounts,
-                    "resources": code_server_res,
-                },
-                {
                     "name": "vscode-reh",
                     "image": self._reh_image,
                     "ports": [{"containerPort": 8445, "name": "reh"}],
@@ -635,7 +610,7 @@ fi
                         "allowPrivilegeEscalation": False,
                     },
                     "volumeMounts": workload_mounts,
-                    "resources": code_server_res,
+                    "resources": reh_res,
                     "livenessProbe": {
                         "tcpSocket": {"port": 8445},
                         "initialDelaySeconds": 10,

@@ -1,7 +1,7 @@
-"""Integration tests for workspace sharing between Skuld and code-server.
+"""Integration tests for workspace sharing between editor containers.
 
 These tests verify that the Helm chart configuration correctly sets up
-workspace sharing between the Skuld broker and code-server containers.
+workspace sharing between the Skuld broker and editor containers.
 """
 
 from pathlib import Path
@@ -34,14 +34,14 @@ class TestWorkspacePathConsistency:
         return template_path.read_text()
 
     def test_both_containers_use_workspace_path_helper(self, deployment_yaml):
-        """Test both Skuld and code-server use the same workspace path helper."""
+        """Test both Skuld and editor containers use the same workspace path helper."""
         # Count occurrences of the workspace path helper
         workspace_helper_count = deployment_yaml.count('include "skuld.workspacePath"')
-        # Should appear at least twice (once for Skuld env, once for code-server arg)
+        # Should appear at least twice (once for Skuld env, once for editor container)
         assert workspace_helper_count >= 2
 
-    def test_both_containers_mount_sessions_volume(self, deployment_yaml):
-        """Test both containers mount the sessions volume."""
+    def test_all_containers_mount_sessions_volume(self, deployment_yaml):
+        """Test all containers mount the sessions volume."""
         # Find volume mount sections
         volume_mount_count = deployment_yaml.count("name: sessions")
         # Should appear at least 3 times: 2 volume mounts + 1 volume definition
@@ -58,14 +58,9 @@ class TestWorkspacePathConsistency:
         # And it uses the helper
         assert 'include "skuld.workspacePath"' in deployment_yaml
 
-    def test_code_server_workspace_arg(self, deployment_yaml):
-        """Test code-server receives workspace path as argument."""
-        # code-server's last arg should be the workspace path
-        # The workspace path helper should be used in the args section
-        args_section_start = deployment_yaml.find("args:", deployment_yaml.find("code-server"))
-        args_section_end = deployment_yaml.find("env:", args_section_start)
-        args_section = deployment_yaml[args_section_start:args_section_end]
-        assert 'include "skuld.workspacePath"' in args_section
+    def test_workspace_path_helper_used_in_deployment(self, deployment_yaml):
+        """Test workspace path helper is referenced in the deployment template."""
+        assert 'include "skuld.workspacePath"' in deployment_yaml
 
 
 class TestPersistenceConfiguration:

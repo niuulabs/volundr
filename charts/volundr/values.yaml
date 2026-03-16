@@ -728,7 +728,7 @@ existingSecrets:
 # FarmSessionDefinition CRs to create
 # These define session types that Farm agents can use
 sessionDefinitions:
-  # Skuld-Claude session definition (Claude Code with code-server IDE)
+  # Skuld-Claude session definition (Claude Code with embedded VS Code editor)
   skuldClaude:
     # -- Enable skuld-claude session definition
     enabled: true
@@ -780,20 +780,6 @@ sessionDefinitions:
         limits:
           memory: "1Gi"
           cpu: "500m"
-
-      codeServer:
-        # -- Enable code-server sidecar
-        enabled: true
-        image:
-          repository: codercom/code-server
-          tag: "latest"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
 
       # -- Image pull secrets for session pods
       imagePullSecrets:
@@ -863,7 +849,7 @@ sessionDefinitions:
       volundr:
         apiUrl: ""
 
-  # Skuld-Codex session definition (OpenAI Codex with code-server IDE)
+  # Skuld-Codex session definition (OpenAI Codex with embedded VS Code editor)
   # Uses the same skuld chart as skuld-claude, parameterised for Codex.
   skuldCodex:
     # -- Enable skuld-codex session definition (disabled by default)
@@ -906,19 +892,6 @@ sessionDefinitions:
         limits:
           memory: "1Gi"
           cpu: "500m"
-
-      codeServer:
-        enabled: true
-        image:
-          repository: codercom/code-server
-          tag: "latest"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
 
       imagePullSecrets:
         - ghcr-pull-secret

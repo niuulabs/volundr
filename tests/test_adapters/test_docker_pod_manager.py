@@ -45,7 +45,6 @@ def pod_manager(tmp_compose_dir: Path) -> DockerPodManager:
     return DockerPodManager(
         network="test-net",
         skuld_image="test/skuld:latest",
-        code_server_image="test/code-server:latest",
         ttyd_image="test/ttyd:latest",
         compose_dir=str(tmp_compose_dir),
         db_host="localhost",
@@ -127,7 +126,7 @@ async def test_start_generates_compose_and_runs(
 
     compose = yaml.safe_load(compose_path.read_text())
     assert "skuld" in compose["services"]
-    assert "code-server" in compose["services"]
+    assert "vscode-reh" in compose["services"]
     assert "ttyd" in compose["services"]
     assert compose["services"]["skuld"]["image"] == "test/skuld:latest"
     assert compose["services"]["skuld"]["environment"]["SESSION_ID"] == str(sample_session.id)
@@ -334,7 +333,7 @@ async def test_start_without_gateway_domain(
 
     project = f"volundr-session-{sample_session.id}"
     assert result.chat_endpoint == f"http://{project}-skuld-1:8080/session"
-    assert result.code_endpoint == f"http://{project}-code-server-1:8080/"
+    assert result.code_endpoint == f"http://{project}-vscode-reh-1:8445/"
 
 
 @pytest.mark.asyncio
