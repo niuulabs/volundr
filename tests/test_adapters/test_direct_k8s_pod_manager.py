@@ -258,7 +258,7 @@ class TestManifests:
         containers = manifest["spec"]["template"]["spec"]["containers"]
 
         # Check HOME is set on all workload containers
-        for name in ("skuld", "devrunner"):
+        for name in ("skuld", "vscode-reh", "devrunner"):
             container = next(c for c in containers if c["name"] == name)
             cenv = {e["name"]: e["value"] for e in container["env"] if "value" in e}
             assert cenv["HOME"] == "/volundr/home"

@@ -605,6 +605,10 @@ fi
                     "name": "vscode-reh",
                     "image": self._reh_image,
                     "ports": [{"containerPort": 8445, "name": "reh"}],
+                    "env": [
+                        {"name": "SESSION_ID", "value": str(session.id)},
+                    ]
+                    + home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
