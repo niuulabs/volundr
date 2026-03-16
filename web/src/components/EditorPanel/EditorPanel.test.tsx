@@ -3,41 +3,25 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { EditorPanel } from './EditorPanel';
 import { resetEditorState } from './editorState';
 
-// Mock the monaco-vscode-api modules
-const mockInitialize = vi.fn().mockResolvedValue(undefined);
+// Mock the workbenchInit module — this is the new initialization module
+import { markInitialized } from './editorState';
 
-vi.mock('@codingame/monaco-vscode-api', () => ({
-  initialize: (...args: unknown[]) => mockInitialize(...args),
+const mockInitWorkbench = vi.fn().mockImplementation(async (params: { sessionId: string }) => {
+  markInitialized(params.sessionId);
+});
+vi.mock('./workbenchInit', () => ({
+  initWorkbench: (...args: unknown[]) => mockInitWorkbench(...args),
 }));
 
-vi.mock('@codingame/monaco-vscode-workbench-service-override', () => ({
-  default: () => ({ workbench: true }),
-}));
-
-vi.mock('@codingame/monaco-vscode-remote-agent-service-override', () => ({
-  default: () => ({ remoteAgent: true }),
-}));
-
-vi.mock('@codingame/monaco-vscode-terminal-service-override', () => ({
-  default: () => ({ terminal: true }),
-}));
-
-// Mock getAccessToken
-vi.mock('@/adapters/api/client', () => ({
-  getAccessToken: vi.fn(() => 'test-jwt-token'),
-}));
-
-// Mock the editor adapter
-vi.mock('@/adapters/api/editor.adapter', () => {
-  class MockApiEditorAdapter {
-    getWorkbenchConfig(_sessionId: string, hostname: string) {
-      return {
-        remoteAuthority: hostname,
-        wsUrl: `wss://${hostname}/reh/`,
-      };
-    }
+// jsdom doesn't support attachShadow natively — stub it
+beforeEach(() => {
+  if (!HTMLElement.prototype.attachShadow) {
+    HTMLElement.prototype.attachShadow = function () {
+      const frag = document.createDocumentFragment() as unknown as ShadowRoot;
+      (frag as unknown as Record<string, unknown>).appendChild = this.appendChild.bind(this);
+      return frag;
+    };
   }
-  return { ApiEditorAdapter: MockApiEditorAdapter };
 });
 
 describe('EditorPanel', () => {
@@ -70,40 +54,21 @@ describe('EditorPanel', () => {
     expect(container.firstChild).toHaveClass('custom-class');
   });
 
-  it('calls initialize with correct service overrides', async () => {
+  it('calls initWorkbench with correct params', async () => {
     render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
-      expect(mockInitialize).toHaveBeenCalledTimes(1);
+      expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
     });
 
-    const [services, , config] = mockInitialize.mock.calls[0];
-
-    expect(services).toEqual(
-      expect.objectContaining({
-        workbench: true,
-        remoteAgent: true,
-        terminal: true,
-      })
-    );
-
-    expect(config.remoteAuthority).toBe('pod.example.com');
-    expect(config.webSocketFactory).toBeDefined();
-    expect(config.webSocketFactory.create).toBeInstanceOf(Function);
+    const params = mockInitWorkbench.mock.calls[0][0];
+    expect(params.hostname).toBe('pod.example.com');
+    expect(params.sessionId).toBe('session-123');
+    expect(params.container).toBeInstanceOf(HTMLDivElement);
   });
 
-  it('shows status bar with Connected after successful init', async () => {
-    render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Connected')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('pod.example.com')).toBeInTheDocument();
-  });
-
-  it('shows error state when initialize fails', async () => {
-    mockInitialize.mockRejectedValueOnce(new Error('Failed to load workbench'));
+  it('shows error state when initWorkbench fails', async () => {
+    mockInitWorkbench.mockRejectedValueOnce(new Error('Failed to load workbench'));
 
     render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
@@ -118,7 +83,7 @@ describe('EditorPanel', () => {
     const { unmount } = render(<EditorPanel hostname="pod-1.example.com" sessionId="session-1" />);
 
     await waitFor(() => {
-      expect(screen.getByText('Connected')).toBeInTheDocument();
+      expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
     });
 
     unmount();
@@ -138,67 +103,28 @@ describe('EditorPanel', () => {
     const { rerender } = render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
-      expect(mockInitialize).toHaveBeenCalledTimes(1);
+      expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
     });
 
     rerender(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Connected')).toBeInTheDocument();
-    });
-
-    // Should not call initialize again
-    expect(mockInitialize).toHaveBeenCalledTimes(1);
+    // Should not call initWorkbench again
+    expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
   });
 
   it('renders the workbench container div', async () => {
-    const { container } = render(
-      <EditorPanel hostname="pod.example.com" sessionId="session-123" />
-    );
-
-    await waitFor(() => {
-      expect(mockInitialize).toHaveBeenCalledTimes(1);
-    });
-
-    const containerDiv = mockInitialize.mock.calls[0][1];
-    expect(containerDiv).toBeInstanceOf(HTMLDivElement);
-    expect(container.contains(containerDiv)).toBe(true);
-  });
-
-  it('webSocketFactory.create returns a WebSocket adapter', async () => {
-    class MockWebSocket {
-      url: string;
-      protocols: string[];
-      constructor(url: string, protocols: string[]) {
-        this.url = url;
-        this.protocols = protocols;
-      }
-      send = vi.fn();
-      close = vi.fn();
-      addEventListener = vi.fn();
-    }
-    vi.stubGlobal('WebSocket', MockWebSocket);
-
     render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
     await waitFor(() => {
-      expect(mockInitialize).toHaveBeenCalledTimes(1);
+      expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
     });
 
-    const [, , config] = mockInitialize.mock.calls[0];
-    const wsAdapter = config.webSocketFactory.create('wss://pod.example.com/reh/');
-
-    expect(wsAdapter.send).toBeInstanceOf(Function);
-    expect(wsAdapter.close).toBeInstanceOf(Function);
-    expect(wsAdapter.onOpen).toBeInstanceOf(Function);
-    expect(wsAdapter.onClose).toBeInstanceOf(Function);
-    expect(wsAdapter.onMessage).toBeInstanceOf(Function);
-    expect(wsAdapter.onError).toBeInstanceOf(Function);
-    expect(wsAdapter.getProtocol()).toBe('vscode-reh');
+    const params = mockInitWorkbench.mock.calls[0][0];
+    expect(params.container).toBeInstanceOf(HTMLDivElement);
   });
 
-  it('handles non-Error thrown from initialize', async () => {
-    mockInitialize.mockRejectedValueOnce('string error');
+  it('handles non-Error thrown from initWorkbench', async () => {
+    mockInitWorkbench.mockRejectedValueOnce('string error');
 
     render(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 

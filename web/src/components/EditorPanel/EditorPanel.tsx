@@ -1,10 +1,8 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { Code, RotateCcw } from 'lucide-react';
 import { cn } from '@/utils';
-import { getAccessToken } from '@/adapters/api/client';
-import { createBearerWebSocketFactory, VSCODE_REH_PROTOCOL } from '@/utils/bearerWebSocketFactory';
-import { ApiEditorAdapter } from '@/adapters/api/editor.adapter';
-import { isInitialized, getInitializedSessionId, markInitialized } from './editorState';
+import { isInitialized, getInitializedSessionId } from './editorState';
+import { initWorkbench } from './workbenchInit';
 import styles from './EditorPanel.module.css';
 
 export interface EditorPanelProps {
@@ -12,134 +10,65 @@ export interface EditorPanelProps {
   hostname: string | null;
   /** Session identifier. */
   sessionId: string | null;
+  /** Code endpoint URL — used to derive the session base path for routing. */
+  codeEndpoint?: string | null;
   /** Additional CSS class name. */
   className?: string;
 }
 
-type EditorStatus = 'idle' | 'initializing' | 'connected' | 'error' | 'session-changed';
-
-const editorService = new ApiEditorAdapter();
+type EditorStatus = 'idle' | 'initializing' | 'connected' | 'error';
 
 /**
  * VS Code workbench panel using @codingame/monaco-vscode-api.
  *
  * Renders the full VS Code workbench inside a div, connected to a
- * VS Code REH server in the session pod. All WebSocket connections
- * use subprotocol bearer auth via the custom WebSocket factory.
+ * VS Code REH server in the session pod.
  *
- * ## Session switching constraint
- *
- * VS Code's `initialize()` registers global services (file system,
- * extension host, terminal mux) that cannot be torn down or
- * re-created. Calling it a second time throws. This is upstream VS
- * Code architecture, not a limitation of @codingame/monaco-vscode-api.
- *
- * Two strategies exist for handling session switches:
- *
- * 1. **Page reload** (current implementation) — detect that the
- *    `sessionId` changed after init and prompt the user to reload.
- *    Simple, no extra iframes, works today.
- *
- * 2. **iframe isolation** — render the workbench inside an iframe so
- *    each session gets its own JS context. CodinGame documents this
- *    as a supported pattern. Adds complexity (postMessage bridge for
- *    auth tokens, theme sync) but avoids a full page reload.
- *
- * We use strategy 1 for the spike. Strategy 2 can be adopted in a
- * follow-up ticket if seamless session switching becomes a
- * requirement.
+ * `initialize()` can only be called once per page load (upstream VS Code
+ * constraint). If the sessionId changes, the user must reload the page.
  */
-export function EditorPanel({ hostname, sessionId, className }: EditorPanelProps) {
+export function EditorPanel({ hostname, sessionId, codeEndpoint, className }: EditorPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<EditorStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const initializeWorkbench = useCallback(async () => {
-    if (!hostname || !sessionId || !containerRef.current) {
-      return;
-    }
+  // Derive session-changed state without setState in the effect body.
+  const sessionChanged = useMemo(
+    () => isInitialized() && sessionId != null && getInitializedSessionId() !== sessionId,
+    [sessionId]
+  );
 
-    if (isInitialized() && getInitializedSessionId() !== sessionId) {
-      setStatus('session-changed');
+  useEffect(() => {
+    if (!hostname || !sessionId || !containerRef.current || sessionChanged) {
       return;
     }
 
     if (isInitialized()) {
-      setStatus('connected');
       return;
     }
 
-    setStatus('initializing');
+    let cancelled = false;
 
-    try {
-      const config = editorService.getWorkbenchConfig(sessionId, hostname);
-
-      const wsFactory = createBearerWebSocketFactory({
-        getToken: getAccessToken,
+    initWorkbench({
+      hostname,
+      sessionId,
+      codeEndpoint: codeEndpoint ?? undefined,
+      container: containerRef.current,
+    })
+      .then(() => {
+        if (!cancelled) setStatus('connected');
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setStatus('error');
+          setErrorMessage(err instanceof Error ? err.message : String(err));
+        }
       });
 
-      const [
-        { initialize },
-        { default: getWorkbenchServiceOverride },
-        { default: getRemoteAgentServiceOverride },
-        { default: getTerminalServiceOverride },
-      ] = await Promise.all([
-        import('@codingame/monaco-vscode-api'),
-        import('@codingame/monaco-vscode-workbench-service-override'),
-        import('@codingame/monaco-vscode-remote-agent-service-override'),
-        import('@codingame/monaco-vscode-terminal-service-override'),
-      ]);
-
-      await initialize(
-        {
-          ...getWorkbenchServiceOverride(),
-          ...getRemoteAgentServiceOverride(),
-          ...getTerminalServiceOverride(),
-        },
-        containerRef.current,
-        {
-          remoteAuthority: config.remoteAuthority,
-          webSocketFactory: {
-            create: (url: string) => {
-              // VS Code builds URLs from remoteAuthority like:
-              //   ws://host:port/<path>?reconnectionToken=...
-              // Rewrite to route through nginx's /reh/ prefix:
-              //   ws://host:port/reh/<path>?reconnectionToken=...
-              const rewritten = url.replace(/^(wss?:\/\/[^/]+)(\/)/, '$1/reh/');
-              const ws = wsFactory(rewritten);
-              return {
-                send: (data: ArrayBuffer | string) => ws.send(data),
-                close: () => ws.close(),
-                onOpen: (listener: () => void) => {
-                  ws.addEventListener('open', listener);
-                },
-                onClose: (listener: (code: number, reason: string) => void) => {
-                  ws.addEventListener('close', (e: CloseEvent) => listener(e.code, e.reason));
-                },
-                onMessage: (listener: (data: ArrayBuffer | string) => void) => {
-                  ws.addEventListener('message', (e: MessageEvent) => listener(e.data));
-                },
-                onError: (listener: (error: unknown) => void) => {
-                  ws.addEventListener('error', listener);
-                },
-                getProtocol: () => VSCODE_REH_PROTOCOL,
-              };
-            },
-          },
-        }
-      );
-
-      markInitialized(sessionId);
-      setStatus('connected');
-    } catch (err) {
-      setStatus('error');
-      setErrorMessage(err instanceof Error ? err.message : String(err));
-    }
-  }, [hostname, sessionId]);
-
-  useEffect(() => {
-    initializeWorkbench();
-  }, [initializeWorkbench]);
+    return () => {
+      cancelled = true;
+    };
+  }, [hostname, sessionId, codeEndpoint, sessionChanged]);
 
   if (!hostname || !sessionId) {
     return (
@@ -152,7 +81,7 @@ export function EditorPanel({ hostname, sessionId, className }: EditorPanelProps
     );
   }
 
-  if (status === 'session-changed') {
+  if (sessionChanged) {
     return (
       <div className={cn(styles.container, className)}>
         <div className={styles.emptyState}>
@@ -183,24 +112,9 @@ export function EditorPanel({ hostname, sessionId, className }: EditorPanelProps
     );
   }
 
-  const statusLabel =
-    status === 'initializing' ? 'Connecting...' : status === 'connected' ? 'Connected' : 'Idle';
-
-  const statusDotClass =
-    status === 'initializing'
-      ? styles.statusDotConnecting
-      : status === 'connected'
-        ? styles.statusDotConnected
-        : styles.statusDotDisconnected;
-
   return (
     <div className={cn(styles.container, className)}>
       <div ref={containerRef} className={styles.workbench} />
-      <div className={styles.statusBar}>
-        <span className={cn(styles.statusDot, statusDotClass)} />
-        <span>{statusLabel}</span>
-        <span>{hostname}</span>
-      </div>
     </div>
   );
 }

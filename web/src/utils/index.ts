@@ -1,4 +1,5 @@
 export { cn } from './classnames';
+export { rewriteOrigin } from './rewriteOrigin';
 export {
   formatBytes,
   formatResourcePair,

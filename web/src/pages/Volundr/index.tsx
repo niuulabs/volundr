@@ -1058,6 +1058,7 @@ export function VolundrPage() {
                 <EditorPanel
                   hostname={effectiveSelectedSession.hostname ?? null}
                   sessionId={effectiveSelectedSession.id}
+                  codeEndpoint={effectiveSelectedSession.codeEndpoint}
                   className={styles.tabPanel}
                 />
               ) : isSessionBooting(effectiveSelectedSession.status) ||

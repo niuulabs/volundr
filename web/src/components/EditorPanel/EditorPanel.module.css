@@ -12,6 +12,7 @@
   width: 100%;
   min-height: 0;
   position: relative;
+  overflow: hidden;
 }
 
 .statusBar {

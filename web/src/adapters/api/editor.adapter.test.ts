@@ -59,4 +59,36 @@ describe('ApiEditorAdapter', () => {
     expect(config1.wsUrl).toBe(config2.wsUrl);
     expect(config1.remoteAuthority).toBe(config2.remoteAuthority);
   });
+
+  it('should derive basePath from codeEndpoint', () => {
+    vi.stubGlobal('location', { protocol: 'http:' });
+
+    const config = adapter.getWorkbenchConfig(
+      'session-123',
+      '127.0.0.1:8080',
+      'http://127.0.0.1:8080/s/abc-123/'
+    );
+    expect(config.basePath).toBe('/s/abc-123/');
+    expect(config.wsUrl).toBe('ws://127.0.0.1:8080/s/abc-123/reh/');
+  });
+
+  it('should fall back to /reh/ when no codeEndpoint is provided', () => {
+    vi.stubGlobal('location', { protocol: 'http:' });
+
+    const config = adapter.getWorkbenchConfig('session-123', 'localhost');
+    expect(config.basePath).toBeUndefined();
+    expect(config.wsUrl).toBe('ws://localhost/reh/');
+  });
+
+  it('should handle codeEndpoint without trailing slash', () => {
+    vi.stubGlobal('location', { protocol: 'http:' });
+
+    const config = adapter.getWorkbenchConfig(
+      'session-123',
+      '127.0.0.1:8080',
+      'http://127.0.0.1:8080/s/abc-123'
+    );
+    expect(config.basePath).toBe('/s/abc-123/');
+    expect(config.wsUrl).toBe('ws://127.0.0.1:8080/s/abc-123/reh/');
+  });
 });
