@@ -69,8 +69,18 @@ spec:
               mkdir -p "$HOME_DIR/vscode-data/User"
               mkdir -p "$HOME_DIR/.config"
 
-              # Ensure the non-root user owns the home directory tree
-              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR"
+              # Ensure the non-root user owns the home directory tree.
+              # Ignore transient errors from stale sockets/files on hostPath
+              # volumes (e.g. code-server-ipc.sock) that vanish mid-traversal.
+              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/tmp/chown.err || true
+              if [ -s /tmp/chown.err ]; then
+                grep -Ev 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err >&2 || true
+                if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err; then
+                  echo "ERROR: chown encountered unexpected errors" >&2
+                  cat /tmp/chown.err >&2
+                  exit 1
+                fi
+              fi
 
               # Symlink each credential file from the K8s secret into $DEST_DIR/
               # Full volume mounts auto-update when the secret changes (~60s),
@@ -337,6 +347,51 @@ spec:
             - name: vscode-settings
               mountPath: /etc/vscode-defaults
               readOnly: true
+        {{- end }}
+        {{- if .Values.reh.enabled }}
+        # VS Code REH (Remote Extension Host) server — headless WebSocket-only
+        # backend for the VS Code workbench hosted in Hliðskjálf.
+        - name: vscode-reh
+          image: "{{ .Values.reh.image.repository }}:{{ .Values.reh.image.tag }}"
+          imagePullPolicy: {{ .Values.reh.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.securityContext.runAsUser }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          ports:
+            - name: reh
+              containerPort: {{ .Values.reh.port }}
+              protocol: TCP
+          command: ["/opt/vscode-reh/bin/reh-server"]
+          args:
+            - "--host=0.0.0.0"
+            - "--port={{ .Values.reh.port }}"
+            - "--without-connection-token"
+            - "--accept-server-license-terms"
+          env:
+            - name: SESSION_ID
+              value: {{ .Values.session.id | quote }}
+          livenessProbe:
+            tcpSocket:
+              port: reh
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: reh
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.reh.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: sessions
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.homeVolume.enabled }}
+            - name: home
+              mountPath: {{ .Values.homeVolume.mountPath }}
+            {{- end }}
         {{- end }}
         {{- if .Values.localServices.enabled }}
         # Devrunner - minimal runtime for local service testing

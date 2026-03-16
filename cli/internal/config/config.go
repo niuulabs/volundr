@@ -35,6 +35,7 @@ type DockerConfig struct {
 	APIImage        string `yaml:"api_image"`
 	SkuldImage      string `yaml:"skuld_image"`
 	CodeServerImage string `yaml:"code_server_image"`
+	RehImage        string `yaml:"reh_image"`
 	TtydImage       string `yaml:"ttyd_image"`
 	Network         string `yaml:"network"`
 }
@@ -173,6 +174,7 @@ func DefaultConfig() (*Config, error) {
 			APIImage:        "ghcr.io/niuulabs/volundr:latest",
 			SkuldImage:      "ghcr.io/niuulabs/skuld:latest",
 			CodeServerImage: "codercom/code-server:latest",
+			RehImage:        "ghcr.io/niuulabs/vscode-reh:latest",
 			TtydImage:       "ghcr.io/niuulabs/devrunner:latest",
 			Network:         "volundr-net",
 		},

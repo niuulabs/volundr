@@ -355,6 +355,29 @@ func TestRuntimeConfigJSONSerialization(t *testing.T) {
 	}
 }
 
+func TestWithCrossOriginIsolationHeaders(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := WithCrossOriginIsolation(inner)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	want := map[string]string{
+		"Cross-Origin-Embedder-Policy": "credentialless",
+		"Cross-Origin-Opener-Policy":   "same-origin",
+		"Cross-Origin-Resource-Policy": "cross-origin",
+	}
+	for header, expected := range want {
+		got := w.Header().Get(header)
+		if got != expected {
+			t.Errorf("expected %s %q, got %q", header, expected, got)
+		}
+	}
+}
+
 func TestOIDCConfigOmitEmpty(t *testing.T) {
 	cfg := OIDCConfig{
 		Authority: "https://auth.example.com",

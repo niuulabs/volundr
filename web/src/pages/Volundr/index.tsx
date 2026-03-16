@@ -40,6 +40,7 @@ import {
   SessionChronicles,
   SessionStartingIndicator,
   SessionDiffs,
+  EditorPanel,
   Modal,
   SearchInput,
   StatusBadge,
@@ -83,7 +84,6 @@ export function VolundrPage() {
     logs,
     logLoading,
     getLogs,
-    getCodeServerUrl,
     chronicle,
     chronicleLoading,
     getChronicle,
@@ -130,10 +130,6 @@ export function VolundrPage() {
   const [connectName, setConnectName] = useState('');
   const [connectHostname, setConnectHostname] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
-
-  // IDE state
-  const [ideUrl, setIdeUrl] = useState<string | null>(null);
-  const [ideLoading, setIdeLoading] = useState(false);
 
   // Live message count from the WebSocket chat (syncs sidebar badge)
   const [liveChatCount, setLiveChatCount] = useState<number | null>(null);
@@ -383,44 +379,6 @@ export function VolundrPage() {
     effectiveSelectedSession?.origin,
     getLogs,
     fetchSessionHostLogs,
-  ]);
-
-  // Resolve IDE URL when code tab is active and session is running.
-  useEffect(() => {
-    if (
-      activeTab !== 'code' ||
-      !effectiveSelectedSession?.id ||
-      effectiveSelectedSession.status !== 'running'
-    ) {
-      setIdeUrl(null);
-      setIdeLoading(false);
-      return;
-    }
-
-    if (effectiveSelectedSession.origin === 'manual' && effectiveSelectedSession.hostname) {
-      setIdeUrl(`https://${effectiveSelectedSession.hostname}/`);
-      setIdeLoading(false);
-      return;
-    }
-
-    setIdeLoading(true);
-    getCodeServerUrl(effectiveSelectedSession.id)
-      .then(url => {
-        setIdeUrl(url);
-        setIdeLoading(false);
-      })
-      .catch(() => {
-        setIdeUrl(null);
-        setIdeLoading(false);
-      });
-  }, [
-    activeTab,
-    effectiveSelectedSession?.id,
-    effectiveSelectedSession?.status,
-    effectiveSelectedSession?.source,
-    effectiveSelectedSession?.hostname,
-    effectiveSelectedSession?.origin,
-    getCodeServerUrl,
   ]);
 
   const filteredSessions = sessions.filter(session => {
@@ -1096,53 +1054,9 @@ export function VolundrPage() {
               ))}
 
             {activeTab === 'code' &&
-              (isSessionReady ? (
-                ideLoading ? (
-                  <div className={styles.emptyState}>
-                    <Code className={styles.emptyIcon} />
-                    <p>Connecting to IDE...</p>
-                  </div>
-                ) : ideUrl ? (
-                  authEnabled ? (
-                    <div className={styles.emptyState}>
-                      <Code className={styles.emptyIcon} />
-                      <p>VS Code IDE is available for this session</p>
-                      <a
-                        href={(() => {
-                          const token = getAccessToken();
-                          if (!token) return ideUrl;
-                          const sep = ideUrl.includes('?') ? '&' : '?';
-                          return `${ideUrl}${sep}access_token=${encodeURIComponent(token)}`;
-                        })()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.ideOpenButton}
-                      >
-                        Open IDE in new tab
-                      </a>
-                      <span className={styles.ideUrlHint}>{ideUrl}</span>
-                    </div>
-                  ) : (
-                    <div className={styles.iframeContainer}>
-                      <div className={styles.iframeToolbar}>
-                        <span className={styles.iframeUrlLabel}>{ideUrl}</span>
-                      </div>
-                      <iframe
-                        className={styles.sessionIframe}
-                        src={ideUrl}
-                        title={`IDE - ${effectiveSelectedSession.name}`}
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                      />
-                    </div>
-                  )
-                ) : (
-                  <div className={styles.emptyState}>
-                    <Code className={styles.emptyIcon} />
-                    <p>IDE not available for this session</p>
-                  </div>
-                )
-              ) : isSessionBooting(effectiveSelectedSession.status) ||
-                (isRunning && !connectionVerified) ? (
+              !isSessionReady &&
+              (isSessionBooting(effectiveSelectedSession.status) ||
+              (isRunning && !connectionVerified) ? (
                 <SessionStartingIndicator className={styles.tabPanel} />
               ) : (
                 <div className={styles.emptyState}>
@@ -1154,6 +1068,15 @@ export function VolundrPage() {
                   </p>
                 </div>
               ))}
+            {isSessionReady && (
+              <EditorPanel
+                hostname={effectiveSelectedSession.hostname ?? null}
+                sessionId={effectiveSelectedSession.id}
+                codeEndpoint={effectiveSelectedSession.codeEndpoint}
+                className={styles.tabPanel}
+                hidden={activeTab !== 'code'}
+              />
+            )}
 
             {activeTab === 'diffs' && (
               <SessionDiffs

@@ -63,9 +63,9 @@ class TestValuesDefaults:
         """Test envVars defaults to an empty list."""
         assert values_yaml["envVars"] == []
 
-    def test_code_server_enabled_by_default(self, values_yaml):
-        """Test code-server is enabled by default."""
-        assert values_yaml["codeServer"]["enabled"] is True
+    def test_code_server_disabled_by_default(self, values_yaml):
+        """Test code-server is disabled by default (deprecated in favor of REH)."""
+        assert values_yaml["codeServer"]["enabled"] is False
 
     def test_code_server_image_configured(self, values_yaml):
         """Test code-server image is configured."""
@@ -109,6 +109,20 @@ class TestValuesDefaults:
         """Test ingress class defaults to traefik."""
         assert values_yaml["ingress"]["className"] == "traefik"
 
+    def test_reh_enabled_by_default(self, values_yaml):
+        """Test REH is enabled by default."""
+        assert values_yaml["reh"]["enabled"] is True
+
+    def test_reh_image_configured(self, values_yaml):
+        """Test REH image is configured."""
+        image = values_yaml["reh"]["image"]
+        assert image["repository"] == "ghcr.io/niuulabs/vscode-reh"
+        assert "tag" in image
+
+    def test_reh_port_configured(self, values_yaml):
+        """Test REH port defaults to 8445."""
+        assert values_yaml["reh"]["port"] == 8445
+
     def test_skuld_image_configured(self, values_yaml):
         """Test Skuld image is configured."""
         image = values_yaml["image"]
@@ -121,6 +135,28 @@ class TestValuesDefaults:
         assert persistence["enabled"] is True
         assert persistence["existingClaim"] == "volundr-sessions"
         assert persistence["mountPath"] == "/volundr/sessions"
+
+
+class TestNginxConfigMap:
+    """Tests for nginx-configmap.yaml template structure."""
+
+    @pytest.fixture
+    def nginx_yaml(self) -> str:
+        template_path = CHART_DIR / "templates" / "nginx-configmap.yaml"
+        return template_path.read_text()
+
+    def test_reh_upstream_defined(self, nginx_yaml):
+        """Test nginx config defines REH upstream."""
+        assert "upstream reh" in nginx_yaml
+
+    def test_reh_location_routes_websocket(self, nginx_yaml):
+        """Test nginx config routes /reh/ with WebSocket upgrade."""
+        assert "location /reh/" in nginx_yaml
+        assert "proxy_set_header Upgrade" in nginx_yaml
+
+    def test_reh_upstream_gated_on_values(self, nginx_yaml):
+        """Test REH upstream is gated on .Values.reh.enabled."""
+        assert ".Values.reh.enabled" in nginx_yaml
 
 
 class TestConfigMapTemplate:
@@ -201,6 +237,18 @@ class TestDeploymentTemplate:
         """Test code-server overrides entrypoint to skip fixuid."""
         assert "dumb-init" in deployment_yaml
         assert "/usr/bin/code-server" in deployment_yaml
+
+    def test_contains_reh_container(self, deployment_yaml):
+        """Test deployment contains vscode-reh container."""
+        assert "name: vscode-reh" in deployment_yaml
+
+    def test_reh_conditionally_enabled(self, deployment_yaml):
+        """Test REH is conditionally enabled."""
+        assert "if .Values.reh.enabled" in deployment_yaml
+
+    def test_reh_starts_without_connection_token(self, deployment_yaml):
+        """Test REH runs with --without-connection-token."""
+        assert "--without-connection-token" in deployment_yaml
 
     def test_broker_port_is_8081(self, deployment_yaml):
         """Test broker runs on port 8081 (nginx is entry at 8080)."""

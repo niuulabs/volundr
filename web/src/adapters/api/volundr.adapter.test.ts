@@ -215,7 +215,8 @@ describe('ApiVolundrService', () => {
 
       const sessions = await service.getSessions();
 
-      expect(sessions[0].hostname).toBe('localhost:8080');
+      // rewriteOrigin rewrites backend URLs to browser origin (jsdom = localhost:3000)
+      expect(sessions[0].hostname).toBe('localhost:3000');
     });
 
     it('handles null endpoints gracefully', async () => {
@@ -553,7 +554,8 @@ describe('ApiVolundrService', () => {
             id: mockSSESession.id,
             name: mockSSESession.name,
             status: 'running',
-            hostname: 'session-abc.volundr.example.com',
+            // rewriteOrigin rewrites to browser origin in test env
+            hostname: 'localhost:3000',
           }),
         ])
       );
@@ -915,7 +917,8 @@ describe('ApiVolundrService', () => {
       mockFetch.mockReturnValueOnce(mockResponse(mockApiSession));
       const url = await service.getCodeServerUrl(sessions[0].id);
 
-      expect(url).toBe(mockApiSession.code_endpoint);
+      // rewriteOrigin rewrites backend URLs to browser origin
+      expect(url).toBe('http://localhost:3000/code');
     });
 
     it('returns null for stopped managed session', async () => {
