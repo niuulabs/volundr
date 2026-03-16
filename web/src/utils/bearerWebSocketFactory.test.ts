@@ -79,9 +79,9 @@ describe('bearerWebSocketFactory', () => {
   // ---- buildSubprotocols ----------------------------------------------------
 
   describe('buildSubprotocols', () => {
-    it('should return only REH protocol when token is null', () => {
+    it('should return empty array when token is null', () => {
       const protocols = buildSubprotocols(null);
-      expect(protocols).toEqual([VSCODE_REH_PROTOCOL]);
+      expect(protocols).toEqual([]);
     });
 
     it('should return REH protocol and bearer protocol when token is provided', () => {
@@ -102,10 +102,10 @@ describe('bearerWebSocketFactory', () => {
       expect(encoded).toBe(toBase64Url(token));
     });
 
-    it('should return only REH protocol for empty string token', () => {
+    it('should return empty array for empty string token', () => {
       // Empty string is falsy
       const protocols = buildSubprotocols('');
-      expect(protocols).toEqual([VSCODE_REH_PROTOCOL]);
+      expect(protocols).toEqual([]);
     });
   });
 
@@ -133,7 +133,7 @@ describe('bearerWebSocketFactory', () => {
       expect(mock.protocols[1]).toContain(BEARER_PROTOCOL_PREFIX);
     });
 
-    it('should create a WebSocket without bearer when token is null', () => {
+    it('should create a WebSocket without subprotocols when token is null', () => {
       const factory = createBearerWebSocketFactory({
         getToken: () => null,
       });
@@ -141,7 +141,7 @@ describe('bearerWebSocketFactory', () => {
       factory('wss://example.com/reh/');
 
       const mock = MockWebSocket.instances[0];
-      expect(mock.protocols).toEqual([VSCODE_REH_PROTOCOL]);
+      expect(mock.protocols).toEqual([]);
     });
 
     it('should call getToken on each invocation', () => {

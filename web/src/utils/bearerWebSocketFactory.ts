@@ -34,7 +34,7 @@ export const BEARER_PROTOCOL_PREFIX = 'base64url.bearer.authorization.k8s.io';
  */
 export function buildSubprotocols(token: string | null): string[] {
   if (!token) {
-    return [VSCODE_REH_PROTOCOL];
+    return [];
   }
 
   const encoded = toBase64Url(token);
@@ -58,6 +58,6 @@ export function createBearerWebSocketFactory(
   return (url: string): WebSocket => {
     const token = options.getToken();
     const protocols = buildSubprotocols(token);
-    return new WebSocket(url, protocols);
+    return protocols.length > 0 ? new WebSocket(url, protocols) : new WebSocket(url);
   };
 }
