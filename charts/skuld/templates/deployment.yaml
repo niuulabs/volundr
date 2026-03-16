@@ -69,8 +69,18 @@ spec:
               mkdir -p "$HOME_DIR/vscode-data/User"
               mkdir -p "$HOME_DIR/.config"
 
-              # Ensure the non-root user owns the home directory tree
-              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR"
+              # Ensure the non-root user owns the home directory tree.
+              # Ignore transient errors from stale sockets/files on hostPath
+              # volumes (e.g. code-server-ipc.sock) that vanish mid-traversal.
+              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/tmp/chown.err || true
+              if [ -s /tmp/chown.err ]; then
+                grep -Ev 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err >&2 || true
+                if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err; then
+                  echo "ERROR: chown encountered unexpected errors" >&2
+                  cat /tmp/chown.err >&2
+                  exit 1
+                fi
+              fi
 
               # Symlink each credential file from the K8s secret into $DEST_DIR/
               # Full volume mounts auto-update when the secret changes (~60s),

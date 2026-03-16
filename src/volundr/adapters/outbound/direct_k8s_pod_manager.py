@@ -404,10 +404,12 @@ class DirectK8sPodManager(PodManager):
                     "sh",
                     "-c",
                     (
-                        "chown -R 1000:1000 /volundr 2>/tmp/chown.err; rc=$?; "
+                        "chown -R 1000:1000 /volundr 2>/tmp/chown.err || true; "
                         "if [ -s /tmp/chown.err ]; then "
-                        "grep -v 'Invalid argument' /tmp/chown.err >&2; "
-                        "if grep -qv 'Invalid argument' /tmp/chown.err; then exit $rc; fi; "
+                        "grep -Ev 'Invalid argument|No such file or directory|Stale file handle' "
+                        "/tmp/chown.err >&2; "
+                        "if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' "
+                        "/tmp/chown.err; then exit 1; fi; "
                         "fi"
                     ),
                 ],
