@@ -29,8 +29,10 @@ if [ -n "$ANTHROPIC_BASE_URL" ]; then
     export ANTHROPIC_AUTH_TOKEN="${ANTHROPIC_AUTH_TOKEN:-}"
 fi
 
-# Set up Claude Code configuration directory
-export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$WORKSPACE_DIR/.claude}"
+# Set up Claude Code configuration directory.
+# Default to $HOME/.claude where OAuth credentials live (Claude Max subscription).
+# The Helm chart sets CLAUDE_CONFIG_DIR explicitly; this fallback covers direct runs.
+export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 mkdir -p "$CLAUDE_CONFIG_DIR"
 
 echo "=== Starting Broker Service (port 8081) ==="

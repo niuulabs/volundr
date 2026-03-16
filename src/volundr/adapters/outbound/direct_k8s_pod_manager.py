@@ -296,9 +296,11 @@ class DirectK8sPodManager(PodManager):
             env.append({"name": "GIT_BRANCH", "value": git_config["branch"]})
 
         # Handle session metadata from spec values.
+        # Emit SKULD__SESSION__MODEL for pydantic-settings and MODEL for legacy fallback.
         session_config = spec.values.get("session", {})
         if session_config.get("model"):
-            env.append({"name": "SESSION_MODEL", "value": session_config["model"]})
+            env.append({"name": "SKULD__SESSION__MODEL", "value": session_config["model"]})
+            env.append({"name": "MODEL", "value": session_config["model"]})
 
         # Handle extra env passthrough.
         extra_env = spec.values.get("env", {})
@@ -376,7 +378,7 @@ class DirectK8sPodManager(PodManager):
         session: Session,
         spec: SessionSpec,
     ) -> list[dict[str, Any]]:
-        """Build init containers: permissions fix + optional git clone."""
+        """Build init containers: permissions fix, optional home-setup, optional git clone."""
         containers: list[dict[str, Any]] = [
             {
                 "name": "init-permissions",
@@ -398,6 +400,49 @@ class DirectK8sPodManager(PodManager):
                 "securityContext": {"runAsUser": 0},
             },
         ]
+
+        # Home-setup init container: symlinks credential files into $HOME/<dest_dir>.
+        # Mirrors the Helm chart home-setup pattern for Claude Max OAuth credentials.
+        home_vol = spec.values.get("homeVolume", {})
+        cred_files = home_vol.get("credentialFiles", {})
+        if home_vol.get("enabled") and cred_files.get("secretName"):
+            home_mount = home_vol.get("mountPath", self._home_mount_path)
+            secret_mount = cred_files.get("secretMountPath", "/volundr/secrets/credential-files")
+            dest_dir = cred_files.get("destDir", ".claude")
+
+            setup_script = (
+                "set -e; "
+                f'HOME_DIR="{home_mount}"; '
+                f'SECRET_DIR="{secret_mount}"; '
+                f'DEST_DIR="{dest_dir}"; '
+                'mkdir -p "$HOME_DIR/$DEST_DIR"; '
+                'chown -R 1000:1000 "$HOME_DIR"; '
+                'if [ -d "$SECRET_DIR" ]; then '
+                'for f in "$SECRET_DIR"/*; do '
+                '[ -f "$f" ] || continue; '
+                'name=$(basename "$f"); '
+                'ln -sf "$SECRET_DIR/$name" "$HOME_DIR/$DEST_DIR/$name"; '
+                "done; fi"
+            )
+
+            mounts = [{"name": "home", "mountPath": home_mount}]
+            mounts.append(
+                {
+                    "name": "credential-files",
+                    "mountPath": secret_mount,
+                    "readOnly": True,
+                }
+            )
+
+            containers.append(
+                {
+                    "name": "home-setup",
+                    "image": "busybox:latest",
+                    "command": ["sh", "-c", setup_script],
+                    "volumeMounts": mounts,
+                    "securityContext": {"runAsUser": 0},
+                }
+            )
 
         git_config = spec.values.get("git", {})
         clone_url = git_config.get("cloneUrl", "")
@@ -539,10 +584,25 @@ fi
                 {"name": "home", "mountPath": home_mount},
             ]
 
-        # HOME env var — set when home volume is mounted
+        # Credential files volume from K8s secret (mirrors Helm chart pattern).
+        cred_files = home_vol.get("credentialFiles", {})
+        cred_secret = cred_files.get("secretName", "")
+        if home_enabled and cred_secret:
+            volumes.append(
+                {
+                    "name": "credential-files",
+                    "secret": {"secretName": cred_secret, "optional": True},
+                }
+            )
+
+        # HOME and CLAUDE_CONFIG_DIR env vars — set when home volume is mounted
         home_env: list[dict[str, str]] = []
         if home_enabled:
-            home_env = [{"name": "HOME", "value": home_mount}]
+            dest_dir = cred_files.get("destDir", ".claude")
+            home_env = [
+                {"name": "HOME", "value": home_mount},
+                {"name": "CLAUDE_CONFIG_DIR", "value": f"{home_mount}/{dest_dir}"},
+            ]
 
         safe_hostname = re.sub(r"[^a-z0-9-]", "-", session.name.lower())
         safe_hostname = safe_hostname.strip("-")[:63] or "session"
