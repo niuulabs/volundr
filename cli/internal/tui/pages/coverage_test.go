@@ -7,9 +7,11 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/vt"
 	"github.com/niuulabs/volundr/cli/internal/api"
 	"github.com/niuulabs/volundr/cli/internal/remote"
 	tui "github.com/niuulabs/volundr/cli/internal/tui"
+	"github.com/niuulabs/volundr/cli/internal/tui/components"
 )
 
 // Chat page: handleStreamEvent, finalizeStreaming, View with session, etc.
@@ -207,12 +209,12 @@ func TestChatPage_FinalizeStreaming_OutOfBounds(_ *testing.T) {
 
 func TestChatPage_InputActive(t *testing.T) {
 	page := NewChatPage(nil, nil)
-	if !page.InputActive() {
-		t.Error("expected input active by default")
-	}
-	page.inputActive = false
 	if page.InputActive() {
-		t.Error("expected input inactive")
+		t.Error("expected input inactive by default (normal mode)")
+	}
+	page.inputActive = true
+	if !page.InputActive() {
+		t.Error("expected input active after enabling")
 	}
 }
 
@@ -1367,12 +1369,12 @@ func TestAdminPage_Update_Refresh(t *testing.T) {
 
 func TestTerminalPage_InsertMode(t *testing.T) {
 	page := NewTerminalPage("", nil, nil)
-	if !page.InsertMode() {
-		t.Error("expected insert mode by default")
-	}
-	page.insertMode = false
 	if page.InsertMode() {
-		t.Error("expected not insert mode")
+		t.Error("expected normal mode by default")
+	}
+	page.insertMode = true
+	if !page.InsertMode() {
+		t.Error("expected insert mode after enabling")
 	}
 }
 
@@ -1392,23 +1394,22 @@ func TestTerminalPage_HandleKey_InsertModeToggle(t *testing.T) {
 	page.width = 80
 	page.height = 24
 
-	// Toggle insert mode off via ctrl+] (code 0x1D).
-	page, _ = page.handleKey(tea.KeyPressMsg{Code: 0x1D})
-	if page.insertMode {
-		t.Error("expected insert mode off after ctrl+]")
-	}
-
-	// Toggle back on.
+	// Default is normal mode; toggle to insert via ctrl+] (code 0x1D).
 	page, _ = page.handleKey(tea.KeyPressMsg{Code: 0x1D})
 	if !page.insertMode {
-		t.Error("expected insert mode on after second ctrl+]")
+		t.Error("expected insert mode on after ctrl+]")
+	}
+
+	// Toggle back to normal.
+	page, _ = page.handleKey(tea.KeyPressMsg{Code: 0x1D})
+	if page.insertMode {
+		t.Error("expected insert mode off after second ctrl+]")
 	}
 }
 
 func TestTerminalPage_HandleKey_NormalModeI(t *testing.T) {
 	page := NewTerminalPage("", nil, nil)
-	page.insertMode = false
-
+	// Default is already normal mode.
 	page, _ = page.handleKey(tea.KeyPressMsg{Code: 'i'})
 	if !page.insertMode {
 		t.Error("expected insert mode after 'i' in normal mode")
@@ -2532,4 +2533,1249 @@ func TestChroniclesPage_SetSession(t *testing.T) {
 	if page.sessionID != "s1" {
 		t.Errorf("expected sessionID %q, got %q", "s1", page.sessionID)
 	}
+}
+
+// Terminal: captureHistory, renderScrollback, clampScroll.
+
+func TestTerminalPage_CaptureHistory(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.width = 80
+	page.height = 24
+
+	tab := &terminalTab{
+		label:     "test",
+		connState: connStatusConnected,
+	}
+	// Create a real vt emulator for testing.
+	emu := newTestEmulator(t)
+	tab.emulator = emu
+
+	// Write some content to the emulator.
+	_, _ = emu.WriteString("Hello World\r\n")
+	_, _ = emu.WriteString("Line 2\r\n")
+
+	// Capture history should populate history.
+	page.captureHistory(tab)
+	if len(tab.history) == 0 {
+		t.Error("expected non-empty history after capture")
+	}
+	if tab.lastRender == "" {
+		t.Error("expected lastRender to be set")
+	}
+
+	// Calling again with same render should be a no-op.
+	histLen := len(tab.history)
+	page.captureHistory(tab)
+	if len(tab.history) != histLen {
+		t.Errorf("expected history unchanged on same render, was %d now %d", histLen, len(tab.history))
+	}
+
+	// Write more content and capture again.
+	_, _ = emu.WriteString("Line 3\r\n")
+	page.captureHistory(tab)
+	if len(tab.history) <= histLen {
+		t.Error("expected history to grow after new content")
+	}
+
+	_ = emu.Close()
+}
+
+func TestTerminalPage_CaptureHistory_MaxLines(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	tab := &terminalTab{
+		label:     "test",
+		connState: connStatusConnected,
+	}
+	emu := newTestEmulator(t)
+	tab.emulator = emu
+
+	// Pre-populate history close to the limit.
+	tab.history = make([]string, scrollbackMaxLines-5)
+	for i := range tab.history {
+		tab.history[i] = "old line"
+	}
+
+	_, _ = emu.WriteString("new content\r\n")
+	page.captureHistory(tab)
+
+	// History should be capped.
+	if len(tab.history) > scrollbackMaxLines {
+		t.Errorf("expected history capped at %d, got %d", scrollbackMaxLines, len(tab.history))
+	}
+
+	_ = emu.Close()
+}
+
+func TestTerminalPage_RenderScrollback(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.width = 80
+	page.height = 24
+
+	tab := &terminalTab{
+		label:     "test",
+		connState: connStatusConnected,
+		history:   []string{"line1", "line2", "line3", "line4", "line5"},
+	}
+	emu := newTestEmulator(t)
+	tab.emulator = emu
+
+	// Render scrollback at offset 2.
+	page.scrollPos = 2
+	result := page.renderScrollback(tab, 80, 3)
+	if result == "" {
+		t.Error("expected non-empty scrollback")
+	}
+
+	// Render with empty history.
+	tab.history = nil
+	result = page.renderScrollback(tab, 80, 3)
+	if result == "" {
+		t.Error("expected non-empty render with empty history (falls back to emulator)")
+	}
+
+	_ = emu.Close()
+}
+
+func TestTerminalPage_RenderScrollback_Boundaries(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.width = 80
+	page.height = 24
+
+	tab := &terminalTab{
+		history: []string{"a", "b", "c"},
+	}
+	emu := newTestEmulator(t)
+	tab.emulator = emu
+
+	// scrollPos larger than history — end clamps to 0, returns empty string.
+	page.scrollPos = 100
+	result := page.renderScrollback(tab, 80, 10)
+	// With scrollPos > totalLines, the visible window is empty.
+	_ = result
+
+	// scrollPos = 0, height > history — shows all lines.
+	page.scrollPos = 0
+	result = page.renderScrollback(tab, 80, 10)
+	if result != "a\nb\nc" {
+		t.Errorf("expected 'a\\nb\\nc', got %q", result)
+	}
+
+	// scrollPos = 1 with height = 2 — shows first 2 lines.
+	page.scrollPos = 1
+	result = page.renderScrollback(tab, 80, 2)
+	if result != "a\nb" {
+		t.Errorf("expected 'a\\nb', got %q", result)
+	}
+
+	_ = emu.Close()
+}
+
+func TestTerminalPage_ClampScroll(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+
+	// No tabs: clamp to 0.
+	page.scrollPos = 10
+	page.clampScroll()
+	if page.scrollPos != 0 {
+		t.Errorf("expected scrollPos 0 with no tabs, got %d", page.scrollPos)
+	}
+
+	// With tab and history.
+	emu := newTestEmulator(t)
+	tab := &terminalTab{
+		emulator: emu,
+		history:  []string{"a", "b", "c"},
+	}
+	page.tabs = []*terminalTab{tab}
+	page.activeTab = 0
+
+	page.scrollPos = 100
+	page.clampScroll()
+	if page.scrollPos != 3 {
+		t.Errorf("expected scrollPos 3, got %d", page.scrollPos)
+	}
+
+	page.scrollPos = 1
+	page.clampScroll()
+	if page.scrollPos != 1 {
+		t.Errorf("expected scrollPos 1, got %d", page.scrollPos)
+	}
+
+	_ = emu.Close()
+}
+
+func TestTerminalPage_HandleKey_NormalMode_ScrollKeys(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.width = 80
+	page.height = 24
+	page.insertMode = false
+
+	emu := newTestEmulator(t)
+	tab := &terminalTab{
+		emulator: emu,
+		history:  make([]string, 100),
+	}
+	page.tabs = []*terminalTab{tab}
+	page.activeTab = 0
+
+	// i enters insert mode.
+	page, _ = page.handleKey(makeKeyMsg("i"))
+	if !page.insertMode {
+		t.Error("expected insert mode after 'i'")
+	}
+	if page.scrollPos != 0 {
+		t.Error("expected scrollPos 0 after entering insert")
+	}
+	page.insertMode = false
+
+	// up scrolls up.
+	page, _ = page.handleKey(makeKeyMsg("up"))
+	if page.scrollPos != 1 {
+		t.Errorf("expected scrollPos 1, got %d", page.scrollPos)
+	}
+
+	// down scrolls down.
+	page, _ = page.handleKey(makeKeyMsg("down"))
+	if page.scrollPos != 0 {
+		t.Errorf("expected scrollPos 0, got %d", page.scrollPos)
+	}
+
+	// G jumps to bottom.
+	page.scrollPos = 10
+	page, _ = page.handleKey(tea.KeyPressMsg{Code: 'G'})
+	if page.scrollPos != 0 {
+		t.Errorf("expected scrollPos 0 after G, got %d", page.scrollPos)
+	}
+
+	// g jumps to top.
+	page, _ = page.handleKey(tea.KeyPressMsg{Code: 'g'})
+	if page.scrollPos != 100 {
+		t.Errorf("expected scrollPos 100 after g, got %d", page.scrollPos)
+	}
+
+	// pgup/pgdown.
+	page.scrollPos = 0
+	page, _ = page.handleKey(makeKeyMsg("pgup"))
+	if page.scrollPos == 0 {
+		t.Error("expected scrollPos > 0 after pgup")
+	}
+
+	page.scrollPos = 50
+	page, _ = page.handleKey(makeKeyMsg("pgdown"))
+	if page.scrollPos >= 50 {
+		t.Errorf("expected scrollPos < 50 after pgdown, got %d", page.scrollPos)
+	}
+
+	// Tab switches tab.
+	page.scrollPos = 0
+	page, _ = page.handleKey(makeKeyMsg("tab"))
+	// Only 1 tab, so no switch.
+
+	_ = emu.Close()
+}
+
+func TestTerminalPage_HandleKey_EscExitsInsert(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.insertMode = true
+	page, _ = page.handleKey(makeKeyMsg("esc"))
+	if page.insertMode {
+		t.Error("expected normal mode after esc")
+	}
+}
+
+func TestTerminalPage_HandleKey_CtrlBracket(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.insertMode = false
+	page, _ = page.handleKey(tea.KeyPressMsg{Code: ']', Mod: tea.ModCtrl})
+	if !page.insertMode {
+		t.Error("expected insert mode after ctrl+]")
+	}
+	page, _ = page.handleKey(tea.KeyPressMsg{Code: ']', Mod: tea.ModCtrl})
+	if page.insertMode {
+		t.Error("expected normal mode after second ctrl+]")
+	}
+}
+
+// Section.
+// Chat: mention trigger detection, mention key handling, highlight
+// Section.
+
+func TestChatPage_HandleTriggerOrUpdateMention_At(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.inputActive = true
+	page.input = "@"
+	page.handleTriggerOrUpdateMention("@")
+	if !page.fileMention.IsActive() {
+		t.Error("expected file mention active after @")
+	}
+}
+
+func TestChatPage_HandleTriggerOrUpdateMention_Slash(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.inputActive = true
+	page.input = "/"
+	page.handleTriggerOrUpdateMention("/")
+	if !page.commandMention.IsActive() {
+		t.Error("expected command mention active after /")
+	}
+}
+
+func TestChatPage_HandleTriggerOrUpdateMention_Bang(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.inputActive = true
+	page.input = "!"
+	page.handleTriggerOrUpdateMention("!")
+	if !page.issueMention.IsActive() {
+		t.Error("expected issue mention active after !")
+	}
+}
+
+func TestChatPage_HandleTriggerOrUpdateMention_UpdatesActive(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.inputActive = true
+	page.input = "@test"
+	page.fileMention.Open()
+	page.handleTriggerOrUpdateMention("t")
+	// Should update the file mention query.
+	if page.fileMention.Query != "test" {
+		t.Errorf("expected query 'test', got %q", page.fileMention.Query)
+	}
+}
+
+func TestChatPage_HandleMentionKey(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	page.fileMention.SetItems([]components.MentionItem{
+		{Label: "a"}, {Label: "b"},
+	})
+
+	// Up should be consumed.
+	consumed := page.handleMentionKey("up", tea.KeyPressMsg{})
+	if !consumed {
+		t.Error("expected up consumed")
+	}
+	if page.fileMention.Selected != 1 {
+		t.Errorf("expected selected 1, got %d", page.fileMention.Selected)
+	}
+
+	// Down should be consumed.
+	consumed = page.handleMentionKey("down", tea.KeyPressMsg{})
+	if !consumed {
+		t.Error("expected down consumed")
+	}
+
+	// Tab accepts selection.
+	consumed = page.handleMentionKey("tab", tea.KeyPressMsg{})
+	if !consumed {
+		t.Error("expected tab consumed")
+	}
+
+	// Unknown key not consumed.
+	page.fileMention.Open()
+	page.fileMention.SetItems([]components.MentionItem{{Label: "x"}})
+	consumed = page.handleMentionKey("x", tea.KeyPressMsg{})
+	if consumed {
+		t.Error("expected 'x' not consumed")
+	}
+}
+
+func TestChatPage_HandleMentionKey_NoMenu(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	consumed := page.handleMentionKey("up", tea.KeyPressMsg{})
+	if consumed {
+		t.Error("expected not consumed when no menu active")
+	}
+}
+
+func TestChatPage_AcceptMentionSelection(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.input = "@ma"
+	page.fileMention.Open()
+	page.fileMention.SetItems([]components.MentionItem{
+		{Label: "main.go", Value: "@main.go", Category: "file"},
+	})
+
+	page.acceptMentionSelection()
+	if page.input != "@main.go" {
+		t.Errorf("expected input '@main.go', got %q", page.input)
+	}
+	if page.fileMention.IsActive() {
+		t.Error("expected menu closed after selection")
+	}
+}
+
+func TestChatPage_AcceptMentionSelection_Directory(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.input = "@sr"
+	page.fileMention.Open()
+	page.fileMention.SetItems([]components.MentionItem{
+		{Label: "src", Value: "src/", Category: "directory"},
+	})
+
+	page.acceptMentionSelection()
+	// Directory drill-in: should update input and keep menu open.
+	if page.input != "@src/" {
+		t.Errorf("expected input '@src/', got %q", page.input)
+	}
+}
+
+func TestChatPage_AcceptMentionSelection_NoMenu(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.acceptMentionSelection() // Should not panic.
+}
+
+func TestChatPage_AcceptMentionSelection_NoItem(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	// No items set.
+	page.acceptMentionSelection()
+	if page.fileMention.IsActive() {
+		t.Error("expected menu closed when no item")
+	}
+}
+
+func TestChatPage_InputBeforeTrigger(t *testing.T) {
+	page := NewChatPage(nil, nil)
+
+	page.input = "hello @world"
+	before := page.inputBeforeTrigger('@')
+	if before != "hello " {
+		t.Errorf("expected 'hello ', got %q", before)
+	}
+
+	page.input = "notrigger"
+	before = page.inputBeforeTrigger('@')
+	if before != "notrigger" {
+		t.Errorf("expected 'notrigger', got %q", before)
+	}
+}
+
+func TestChatPage_QueryAfterTrigger(t *testing.T) {
+	page := NewChatPage(nil, nil)
+
+	page.input = "hello @world"
+	q := page.queryAfterTrigger('@')
+	if q != "world" {
+		t.Errorf("expected 'world', got %q", q)
+	}
+
+	page.input = "notrigger"
+	q = page.queryAfterTrigger('@')
+	if q != "" {
+		t.Errorf("expected empty, got %q", q)
+	}
+}
+
+func TestChatPage_IsInputAtSlashPosition(t *testing.T) {
+	page := NewChatPage(nil, nil)
+
+	page.input = "/"
+	if !page.isInputAtSlashPosition() {
+		t.Error("expected true for '/'")
+	}
+
+	page.input = "/test"
+	if !page.isInputAtSlashPosition() {
+		t.Error("expected true for '/test'")
+	}
+
+	// "hello /" — slash not at start, but trimmed input starts with '/'.
+	// The function checks if the trimmed input starts with '/',
+	// which is only true when '/' is actually at the beginning.
+	page.input = "hello /"
+	// This is NOT at slash position because the trimmed input starts with 'h'.
+	if page.isInputAtSlashPosition() {
+		t.Error("expected false for 'hello /' since slash is not at start")
+	}
+}
+
+func TestChatPage_UpdateMentionFromInput_FileDeleted(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	page.input = "no at sign"
+	page.updateMentionFromInput()
+	if page.fileMention.IsActive() {
+		t.Error("expected file mention closed when @ removed")
+	}
+}
+
+func TestChatPage_UpdateMentionFromInput_CommandDeleted(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.commandMention.Open()
+	page.input = "no slash"
+	page.updateMentionFromInput()
+	if page.commandMention.IsActive() {
+		t.Error("expected command mention closed when / removed")
+	}
+}
+
+func TestChatPage_UpdateMentionFromInput_IssueDeleted(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.issueMention.Open()
+	page.input = "no bang"
+	page.updateMentionFromInput()
+	if page.issueMention.IsActive() {
+		t.Error("expected issue mention closed when ! removed")
+	}
+}
+
+func TestChatPage_UpdateMentionFromInput_CommandFilter(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.commandMention.Open()
+	page.commandMention.SetItems(page.availableCommands)
+	page.input = "/hel"
+	page.updateMentionFromInput()
+	// Should filter to "help".
+	if len(page.commandMention.Items) != 1 {
+		t.Errorf("expected 1 item for 'hel' filter, got %d", len(page.commandMention.Items))
+	}
+}
+
+func TestChatPage_UpdateMentionFromInput_IssueQuery(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.issueMention.Open()
+	page.input = "!test"
+	page.updateMentionFromInput()
+	// Should update issue query.
+	if page.issueMention.Query != "test" {
+		t.Errorf("expected query 'test', got %q", page.issueMention.Query)
+	}
+}
+
+func TestChatPage_UpdateFileMentionItems(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	page.fileMention.SetQuery("main")
+	page.cachedFiles = []api.FileEntry{
+		{Name: "main.go", Path: "cmd/main.go", IsDir: false},
+		{Name: "utils.go", Path: "pkg/utils.go", IsDir: false},
+		{Name: "src", Path: "src", IsDir: true},
+	}
+	page.updateFileMentionItems()
+	if len(page.fileMention.Items) != 1 {
+		t.Errorf("expected 1 match for 'main', got %d", len(page.fileMention.Items))
+	}
+	if page.fileMention.Items[0].Category != "file" {
+		t.Errorf("expected category 'file', got %q", page.fileMention.Items[0].Category)
+	}
+}
+
+func TestChatPage_UpdateFileMentionItems_Directory(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	page.fileMention.SetQuery("")
+	page.cachedFiles = []api.FileEntry{
+		{Name: "src", Path: "src", IsDir: true},
+	}
+	page.updateFileMentionItems()
+	if len(page.fileMention.Items) != 1 {
+		t.Errorf("expected 1 item, got %d", len(page.fileMention.Items))
+	}
+	if page.fileMention.Items[0].Category != "directory" {
+		t.Errorf("expected category 'directory', got %q", page.fileMention.Items[0].Category)
+	}
+}
+
+func TestChatPage_FilterCommandItems(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.filterCommandItems("help")
+	if len(page.commandMention.Items) != 1 {
+		t.Errorf("expected 1 match for 'help', got %d", len(page.commandMention.Items))
+	}
+	page.filterCommandItems("")
+	if len(page.commandMention.Items) != len(page.availableCommands) {
+		t.Errorf("expected all commands for empty query, got %d", len(page.commandMention.Items))
+	}
+}
+
+func TestChatPage_SearchIssues(t *testing.T) {
+	page := NewChatPage(nil, nil)
+
+	page.searchIssues("")
+	if len(page.issueMention.Items) != 1 {
+		t.Errorf("expected 1 placeholder, got %d", len(page.issueMention.Items))
+	}
+
+	page.searchIssues("ABC-123")
+	if len(page.issueMention.Items) != 1 {
+		t.Errorf("expected 1 placeholder, got %d", len(page.issueMention.Items))
+	}
+}
+
+func TestChatPage_FetchFiles_NoSession(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Loading = true
+	page.fetchFiles("")
+	if page.fileMention.Loading {
+		t.Error("expected loading false when no session")
+	}
+}
+
+func TestChatPage_CloseMentionMenus(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	page.commandMention.Open()
+	page.issueMention.Open()
+	page.closeMentionMenus()
+	if page.fileMention.IsActive() || page.commandMention.IsActive() || page.issueMention.IsActive() {
+		t.Error("expected all menus closed")
+	}
+}
+
+func TestChatPage_ActiveMentionMenu(t *testing.T) {
+	page := NewChatPage(nil, nil)
+
+	// None active.
+	if page.activeMentionMenu() != nil {
+		t.Error("expected nil when no menu active")
+	}
+
+	page.fileMention.Open()
+	if page.activeMentionMenu() != &page.fileMention {
+		t.Error("expected file mention")
+	}
+	page.fileMention.Close()
+
+	page.commandMention.Open()
+	if page.activeMentionMenu() != &page.commandMention {
+		t.Error("expected command mention")
+	}
+	page.commandMention.Close()
+
+	page.issueMention.Open()
+	if page.activeMentionMenu() != &page.issueMention {
+		t.Error("expected issue mention")
+	}
+}
+
+func TestChatPage_AnyMentionActive(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	if page.anyMentionActive() {
+		t.Error("expected false when no menu active")
+	}
+	page.fileMention.Open()
+	if !page.anyMentionActive() {
+		t.Error("expected true when file mention active")
+	}
+}
+
+func TestChatPage_SetInputActive(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.SetInputActive(true)
+	if !page.InputActive() {
+		t.Error("expected input active")
+	}
+	page.SetInputActive(false)
+	if page.InputActive() {
+		t.Error("expected input inactive")
+	}
+}
+
+func TestChatPage_View_WithMentionDropdown(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.session = &api.Session{Name: "test"}
+	page.width = 100
+	page.height = 40
+	page.inputActive = true
+	page.fileMention.Open()
+	page.fileMention.SetItems([]components.MentionItem{
+		{Label: "file.go", Value: "@file.go", Icon: "F"},
+	})
+	view := page.View()
+	if view == "" {
+		t.Error("expected non-empty view with mention dropdown")
+	}
+}
+
+func TestHighlightMentions(t *testing.T) {
+	// File references.
+	result := highlightMentions("check @src/main.go please")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+
+	// Issue references.
+	result = highlightMentions("fix !NIU-123 first")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+
+	// Command references.
+	result = highlightMentions("/help me")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+
+	// Mixed.
+	result = highlightMentions("@file !NIU-1\n/status")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+
+	// No mentions.
+	result = highlightMentions("plain text")
+	if result != "plain text" {
+		t.Errorf("expected unchanged 'plain text', got %q", result)
+	}
+}
+
+// Section.
+// Admin: search, filtering, maxCursor
+// Section.
+
+func TestAdminPage_Searching(t *testing.T) {
+	page := NewAdminPage(nil)
+	if page.Searching() {
+		t.Error("expected not searching initially")
+	}
+	page.searching = true
+	if !page.Searching() {
+		t.Error("expected searching after setting flag")
+	}
+}
+
+func TestAdminPage_HandleSearchInput(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.searching = true
+
+	// Type a character.
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	if page.search != "a" {
+		t.Errorf("expected search 'a', got %q", page.search)
+	}
+
+	// Space.
+	page, _ = page.Update(tea.KeyPressMsg{Code: ' '})
+	if page.search != "a " {
+		t.Errorf("expected 'a ', got %q", page.search)
+	}
+
+	// Backspace.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if page.search != "a" {
+		t.Errorf("expected 'a', got %q", page.search)
+	}
+
+	// Backspace to empty.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if page.search != "" {
+		t.Errorf("expected empty, got %q", page.search)
+	}
+
+	// Backspace on empty.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if page.search != "" {
+		t.Errorf("expected still empty, got %q", page.search)
+	}
+
+	// Enter exits search.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if page.searching {
+		t.Error("expected not searching after enter")
+	}
+
+	// Esc exits search.
+	page.searching = true
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if page.searching {
+		t.Error("expected not searching after esc")
+	}
+}
+
+func TestAdminPage_SearchActivation(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.loading = false
+
+	// / activates search.
+	page, _ = page.Update(tea.KeyPressMsg{Code: '/'})
+	if !page.searching {
+		t.Error("expected searching after /")
+	}
+	if page.search != "" {
+		t.Error("expected empty search after /")
+	}
+}
+
+func TestAdminPage_MaxCursor(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.loading = false
+
+	// Users tab with some data.
+	page.tab = AdminUsers
+	page.users = []api.UserInfo{
+		{DisplayName: "A"}, {DisplayName: "B"}, {DisplayName: "C"},
+	}
+	if page.maxCursor() != 2 {
+		t.Errorf("expected max cursor 2, got %d", page.maxCursor())
+	}
+
+	// Tenants tab.
+	page.tab = AdminTenants
+	page.tenants = []api.Tenant{
+		{Name: "T1"},
+	}
+	if page.maxCursor() != 0 {
+		t.Errorf("expected max cursor 0, got %d", page.maxCursor())
+	}
+
+	// Stats tab.
+	page.tab = AdminStats
+	if page.maxCursor() != 0 {
+		t.Errorf("expected max cursor 0 for stats, got %d", page.maxCursor())
+	}
+}
+
+func TestAdminPage_FilteredUsers(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.users = []api.UserInfo{
+		{DisplayName: "Alice", Email: "alice@example.com", Status: "active"},
+		{DisplayName: "Bob", Email: "bob@example.com", Status: "inactive"},
+	}
+
+	// No search: return all.
+	users := page.filteredUsers()
+	if len(users) != 2 {
+		t.Errorf("expected 2 users, got %d", len(users))
+	}
+
+	// Search by name.
+	page.search = "alice"
+	users = page.filteredUsers()
+	if len(users) != 1 {
+		t.Errorf("expected 1 user for 'alice', got %d", len(users))
+	}
+
+	// Search by email.
+	page.search = "bob@"
+	users = page.filteredUsers()
+	if len(users) != 1 {
+		t.Errorf("expected 1 user for 'bob@', got %d", len(users))
+	}
+
+	// Search by status.
+	page.search = "inactive"
+	users = page.filteredUsers()
+	if len(users) != 1 {
+		t.Errorf("expected 1 user for 'inactive', got %d", len(users))
+	}
+}
+
+func TestAdminPage_FilteredTenants(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.tenants = []api.Tenant{
+		{Name: "Acme Corp", ID: "tenant-1"},
+		{Name: "Beta LLC", ID: "tenant-2"},
+	}
+
+	// No search: return all.
+	tenants := page.filteredTenants()
+	if len(tenants) != 2 {
+		t.Errorf("expected 2 tenants, got %d", len(tenants))
+	}
+
+	// Search by name.
+	page.search = "acme"
+	tenants = page.filteredTenants()
+	if len(tenants) != 1 {
+		t.Errorf("expected 1 tenant for 'acme', got %d", len(tenants))
+	}
+
+	// Search by ID.
+	page.search = "tenant-2"
+	tenants = page.filteredTenants()
+	if len(tenants) != 1 {
+		t.Errorf("expected 1 tenant for 'tenant-2', got %d", len(tenants))
+	}
+}
+
+func TestAdminPage_GoToBottom(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.loading = false
+	page.users = []api.UserInfo{{DisplayName: "A"}, {DisplayName: "B"}, {DisplayName: "C"}}
+
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'G'})
+	if page.cursor != 2 {
+		t.Errorf("expected cursor 2 after G, got %d", page.cursor)
+	}
+
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'g'})
+	if page.cursor != 0 {
+		t.Errorf("expected cursor 0 after g, got %d", page.cursor)
+	}
+}
+
+func TestAdminPage_View_WithData(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.loading = false
+	page.width = 120
+	page.height = 40
+	page.users = []api.UserInfo{
+		{DisplayName: "Alice", Email: "alice@example.com", Status: "active", CreatedAt: "2026-01-01"},
+	}
+	page.tenants = []api.Tenant{
+		{Name: "Acme", ID: "t1", CreatedAt: "2026-01-01"},
+	}
+	stats := &api.StatsResponse{
+		ActiveSessions: 5, TotalSessions: 10, TokensToday: 1000, CostToday: 1.5,
+		LocalTokens: 600, CloudTokens: 400,
+	}
+	page.stats = stats
+
+	// Users view.
+	page.tab = AdminUsers
+	view := page.View()
+	if view == "" {
+		t.Error("expected non-empty users view")
+	}
+
+	// Tenants view.
+	page.tab = AdminTenants
+	view = page.View()
+	if view == "" {
+		t.Error("expected non-empty tenants view")
+	}
+
+	// Stats view.
+	page.tab = AdminStats
+	view = page.View()
+	if view == "" {
+		t.Error("expected non-empty stats view")
+	}
+}
+
+func TestAdminPage_View_SearchBar(t *testing.T) {
+	page := NewAdminPage(nil)
+	page.loading = false
+	page.width = 120
+	page.height = 40
+	page.searching = true
+	page.search = "test"
+
+	view := page.View()
+	if view == "" {
+		t.Error("expected non-empty view with search bar")
+	}
+
+	// Inactive search with filter text.
+	page.searching = false
+	view = page.View()
+	if view == "" {
+		t.Error("expected non-empty view with filter text")
+	}
+}
+
+// Section.
+// Chronicles: search, Searching()
+// Section.
+
+func TestChroniclesPage_Searching(t *testing.T) {
+	page := NewChroniclesPage(nil)
+	if page.Searching() {
+		t.Error("expected not searching initially")
+	}
+	page.searching = true
+	if !page.Searching() {
+		t.Error("expected searching after setting flag")
+	}
+}
+
+func TestChroniclesPage_HandleSearchInput(t *testing.T) {
+	page := NewChroniclesPage(nil)
+	page.noSession = false
+	page.events = []ChronicleEvent{
+		{Type: EventMessage, Label: "hello msg"},
+		{Type: EventFile, Label: "file change"},
+	}
+	page.applyFilter()
+	page.searching = true
+
+	// Type a character.
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
+	if page.search != "h" {
+		t.Errorf("expected search 'h', got %q", page.search)
+	}
+
+	// Space.
+	page, _ = page.Update(tea.KeyPressMsg{Code: ' '})
+	if page.search != "h " {
+		t.Errorf("expected 'h ', got %q", page.search)
+	}
+
+	// Backspace.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if page.search != "h" {
+		t.Errorf("expected 'h', got %q", page.search)
+	}
+
+	// Enter exits.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if page.searching {
+		t.Error("expected not searching after enter")
+	}
+
+	// Esc exits.
+	page.searching = true
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if page.searching {
+		t.Error("expected not searching after esc")
+	}
+}
+
+func TestChroniclesPage_SearchActivation(t *testing.T) {
+	page := NewChroniclesPage(nil)
+	page.noSession = false
+	page.events = []ChronicleEvent{{Type: EventMessage, Label: "test"}}
+	page.applyFilter()
+
+	page, _ = page.Update(tea.KeyPressMsg{Code: '/'})
+	if !page.searching {
+		t.Error("expected searching after /")
+	}
+}
+
+// Section.
+// Diffs: search, Searching()
+// Section.
+
+func TestDiffsPage_Searching(t *testing.T) {
+	page := NewDiffsPage(nil)
+	if page.Searching() {
+		t.Error("expected not searching initially")
+	}
+	page.searching = true
+	if !page.Searching() {
+		t.Error("expected searching after setting flag")
+	}
+}
+
+func TestDiffsPage_HandleSearchInput(t *testing.T) {
+	page := NewDiffsPage(nil)
+	page.files = []DiffFile{
+		{Path: "main.go", Status: "modified"},
+		{Path: "util.go", Status: "added"},
+	}
+	page.applySearch()
+	page.searching = true
+
+	// Type a character.
+	page, _ = page.Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	if page.search != "m" {
+		t.Errorf("expected search 'm', got %q", page.search)
+	}
+
+	// Enter exits.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if page.searching {
+		t.Error("expected not searching after enter")
+	}
+}
+
+func TestDiffsPage_SearchActivation(t *testing.T) {
+	page := NewDiffsPage(nil)
+	page.files = []DiffFile{{Path: "main.go"}}
+	page.applySearch()
+
+	page, _ = page.Update(tea.KeyPressMsg{Code: '/'})
+	if !page.searching {
+		t.Error("expected searching after /")
+	}
+}
+
+// Section.
+// Settings: maxCursor coverage
+// Section.
+
+func TestSettingsPage_MaxCursor(t *testing.T) {
+	page := NewSettingsPage(nil, nil)
+	// maxCursor varies by section; just ensure it doesn't panic.
+	for _, sec := range []SettingsSection{SectionConnection, SectionCredentials, SectionIntegrations, SectionAppearance} {
+		page.section = sec
+		mc := page.maxCursor()
+		if mc < 0 {
+			t.Errorf("expected maxCursor >= 0 for section %d, got %d", sec, mc)
+		}
+	}
+}
+
+// Section.
+// Terminal: View with scroll, tab navigation
+// Section.
+
+func TestTerminalPage_View_WithScroll(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.width = 80
+	page.height = 24
+	page.scrollPos = 5
+
+	emu := newTestEmulator(t)
+	tab := &terminalTab{
+		label:     "test",
+		emulator:  emu,
+		connState: connStatusConnected,
+		history:   make([]string, 50),
+	}
+	for i := range tab.history {
+		tab.history[i] = "line"
+	}
+	page.tabs = []*terminalTab{tab}
+	page.activeTab = 0
+
+	view := page.View()
+	if view == "" {
+		t.Error("expected non-empty view with scroll")
+	}
+
+	_ = emu.Close()
+}
+
+func TestTerminalPage_HandleKey_TabNavigation(t *testing.T) {
+	page := NewTerminalPage("", nil, nil)
+	page.width = 80
+	page.height = 24
+	page.insertMode = false
+
+	emu1 := newTestEmulator(t)
+	emu2 := newTestEmulator(t)
+	page.tabs = []*terminalTab{
+		{label: "tab1", emulator: emu1, connState: connStatusConnected},
+		{label: "tab2", emulator: emu2, connState: connStatusDisconnected},
+	}
+	page.activeTab = 0
+
+	// Tab switches to next.
+	page, _ = page.handleKey(makeKeyMsg("tab"))
+	if page.activeTab != 1 {
+		t.Errorf("expected activeTab 1, got %d", page.activeTab)
+	}
+
+	// Shift+tab switches back.
+	page, _ = page.handleKey(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	if page.activeTab != 0 {
+		t.Errorf("expected activeTab 0, got %d", page.activeTab)
+	}
+
+	_ = emu1.Close()
+	_ = emu2.Close()
+}
+
+// Section.
+// Chat: Update with FilesLoadedMsg, mention menus in Update
+// Section.
+
+func TestChatPage_Update_FilesLoadedMsg(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	page.fileMention.Loading = true
+
+	files := []api.FileEntry{
+		{Name: "main.go", Path: "cmd/main.go"},
+	}
+	page, _ = page.Update(tui.FilesLoadedMsg{Files: files, Path: ""})
+	if page.fileMention.Loading {
+		t.Error("expected loading false after files loaded")
+	}
+	if len(page.cachedFiles) != 1 {
+		t.Errorf("expected 1 cached file, got %d", len(page.cachedFiles))
+	}
+}
+
+func TestChatPage_Update_FilesLoadedMsg_Error(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.fileMention.Open()
+	page.fileMention.Loading = true
+
+	page, _ = page.Update(tui.FilesLoadedMsg{Err: errors.New("fail")})
+	if page.fileMention.Loading {
+		t.Error("expected loading false after error")
+	}
+}
+
+func TestChatPage_Update_MentionNavigation(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.inputActive = true
+	page.fileMention.Open()
+	page.fileMention.SetItems([]components.MentionItem{
+		{Label: "a"}, {Label: "b"},
+	})
+
+	// Up key should be consumed by mention menu.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if page.fileMention.Selected != 1 {
+		t.Errorf("expected selected 1, got %d", page.fileMention.Selected)
+	}
+
+	// Down key should be consumed by mention menu.
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if page.fileMention.Selected != 0 {
+		t.Errorf("expected selected 0, got %d", page.fileMention.Selected)
+	}
+}
+
+func TestChatPage_Update_EscClosesMention(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.inputActive = true
+	page.fileMention.Open()
+
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if page.fileMention.IsActive() {
+		t.Error("expected mention closed after esc")
+	}
+	// Input should still be active (esc closes mention first).
+	if !page.inputActive {
+		t.Error("expected input still active after closing mention")
+	}
+}
+
+func TestChatPage_Update_EnterSelectsMention(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.inputActive = true
+	page.input = "@"
+	page.fileMention.Open()
+	page.fileMention.SetItems([]components.MentionItem{
+		{Label: "file.go", Value: "@file.go", Category: "file"},
+	})
+
+	page, _ = page.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if page.fileMention.IsActive() {
+		t.Error("expected mention closed after enter")
+	}
+	if page.input != "@file.go" {
+		t.Errorf("expected input '@file.go', got %q", page.input)
+	}
+}
+
+func TestChatPage_View_CommandDropdown(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.session = &api.Session{Name: "test"}
+	page.width = 100
+	page.height = 40
+	page.inputActive = true
+	page.commandMention.Open()
+	page.commandMention.SetItems(page.availableCommands)
+	view := page.View()
+	if view == "" {
+		t.Error("expected non-empty view with command dropdown")
+	}
+}
+
+func TestChatPage_View_IssueDropdown(t *testing.T) {
+	page := NewChatPage(nil, nil)
+	page.session = &api.Session{Name: "test"}
+	page.width = 100
+	page.height = 40
+	page.inputActive = true
+	page.issueMention.Open()
+	page.issueMention.SetItems([]components.MentionItem{
+		{Label: "NIU-1", Value: "!NIU-1", Icon: "I"},
+	})
+	view := page.View()
+	if view == "" {
+		t.Error("expected non-empty view with issue dropdown")
+	}
+}
+
+// Helper to create a test vt emulator.
+func newTestEmulator(t *testing.T) *vt.Emulator {
+	t.Helper()
+	return vt.NewEmulator(80, 24)
 }

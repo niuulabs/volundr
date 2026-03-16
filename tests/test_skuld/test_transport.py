@@ -1,5 +1,6 @@
 """Tests for CLI transport implementations."""
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,8 +10,10 @@ from volundr.skuld.transport import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
+    _drain_stream,
     _filter_event,
     _map_codex_tool,
+    _stop_process,
 )
 
 # ---------------------------------------------------------------------------
@@ -419,6 +422,61 @@ class TestSdkWebSocketTransport:
             call_args = mock_exec.call_args[0]
             assert "--resume" in call_args
             assert "resume-me" in call_args
+
+    @pytest.mark.asyncio
+    async def test_start_passes_model_flag(self, tmp_path):
+        transport = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="test-session",
+            model="claude-opus-4-20250514",
+        )
+
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_process.returncode = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--model" in call_args
+            assert "claude-opus-4-20250514" in call_args
+
+    @pytest.mark.asyncio
+    async def test_start_omits_model_flag_when_empty(self, transport):
+        """When model is empty, --model should not appear in CLI args."""
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_process.returncode = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--model" not in call_args
+
+    def test_init_stores_model(self, tmp_path):
+        transport = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            model="claude-opus-4-20250514",
+        )
+        assert transport._model == "claude-opus-4-20250514"
+
+    def test_init_default_model_empty(self, transport):
+        assert transport._model == ""
 
     @pytest.mark.asyncio
     async def test_messages_queued_before_cli_connects(self, transport):
@@ -1233,3 +1291,88 @@ class TestCodexSubprocessTransport:
             mock_exec.return_value = mock_process
             with pytest.raises(RuntimeError, match="stdout not available"):
                 await transport.send_message("task")
+
+
+# ---------------------------------------------------------------------------
+# _drain_stream
+# ---------------------------------------------------------------------------
+
+
+class TestDrainStream:
+    """Tests for the _drain_stream helper."""
+
+    async def test_none_stream_returns_immediately(self):
+        await _drain_stream(None, "test")
+
+    async def test_reads_lines_until_eof(self):
+        reader = asyncio.StreamReader()
+        reader.feed_data(b"line one\nline two\n")
+        reader.feed_eof()
+
+        await _drain_stream(reader, "stdout")
+
+    async def test_handles_empty_lines(self):
+        reader = asyncio.StreamReader()
+        reader.feed_data(b"\n\nactual text\n")
+        reader.feed_eof()
+
+        await _drain_stream(reader, "stderr")
+
+    async def test_handles_stream_error(self):
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        reader.readline = AsyncMock(side_effect=ConnectionResetError("reset"))
+
+        await _drain_stream(reader, "broken")
+
+
+# ---------------------------------------------------------------------------
+# _stop_process
+# ---------------------------------------------------------------------------
+
+
+class TestStopProcess:
+    """Tests for the _stop_process helper."""
+
+    async def test_already_exited_returns_immediately(self):
+        proc = MagicMock(spec=asyncio.subprocess.Process)
+        proc.returncode = 0
+
+        await _stop_process(proc)
+
+        proc.terminate.assert_not_called()
+
+    async def test_terminate_succeeds(self):
+        proc = MagicMock(spec=asyncio.subprocess.Process)
+        proc.returncode = None
+        proc.terminate = MagicMock()
+
+        wait_future: asyncio.Future[int] = asyncio.get_event_loop().create_future()
+        wait_future.set_result(0)
+        proc.wait = MagicMock(return_value=wait_future)
+
+        await _stop_process(proc)
+
+        proc.terminate.assert_called_once()
+
+    async def test_kill_on_timeout(self):
+        proc = MagicMock(spec=asyncio.subprocess.Process)
+        proc.returncode = None
+        proc.terminate = MagicMock()
+        proc.kill = MagicMock()
+
+        # First wait times out, second succeeds
+        call_count = 0
+
+        async def slow_then_fast():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                await asyncio.sleep(999)
+            return 0
+
+        proc.wait = slow_then_fast
+
+        await _stop_process(proc)
+
+        proc.terminate.assert_called_once()
+        proc.kill.assert_called_once()

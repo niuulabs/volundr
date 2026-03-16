@@ -23,6 +23,7 @@ import {
 import { cn } from '@/utils';
 import { serializePresetYaml, parsePresetYaml } from '@/utils/presetYaml';
 import { parseK8sQuantity, formatHumanBytes, formatResourceValue } from '@/utils/k8sQuantity';
+import { validateSessionName } from '@/utils/sessionName';
 import type {
   VolundrPreset,
   VolundrRepo,
@@ -613,15 +614,23 @@ export function ConfigureStep({
             <Terminal className={styles.formLabelIcon} />
             Session Name
             <span className={styles.required}>*</span>
+            <span className={styles.formLabelHint}>(lowercase letters, digits, hyphens)</span>
           </label>
           <input
-            className={styles.formInput}
+            className={cn(
+              styles.formInput,
+              validateSessionName(state.name) && styles.formInputError
+            )}
             type="text"
             placeholder="e.g. feature-auth-refactor"
             value={state.name}
             onChange={e => onChange({ name: e.target.value })}
             required
+            maxLength={63}
           />
+          {validateSessionName(state.name) && (
+            <span className={styles.resourceError}>{validateSessionName(state.name)}</span>
+          )}
         </div>
 
         {/* Linear Issue */}

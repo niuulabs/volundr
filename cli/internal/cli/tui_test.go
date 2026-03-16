@@ -307,8 +307,8 @@ func TestTUIModel_IsInputCaptured_AllPages(t *testing.T) {
 		expected bool
 	}{
 		{"sessions", tuipkg.PageSessions, false},
-		{"chat", tuipkg.PageChat, true},         // inputActive defaults to true
-		{"terminal", tuipkg.PageTerminal, true}, // insertMode defaults to true
+		{"chat", tuipkg.PageChat, false},         // starts in normal mode
+		{"terminal", tuipkg.PageTerminal, false}, // starts in normal mode
 		{"diffs", tuipkg.PageDiffs, false},
 		{"chronicles", tuipkg.PageChronicles, false},
 		{"settings", tuipkg.PageSettings, false},
@@ -555,7 +555,7 @@ func TestTUIModel_Update_ChatPage_InputActive_RegularKey(t *testing.T) {
 	m.app.Width = 120
 	m.app.Height = 40
 	m.app.ActivePage = tuipkg.PageChat
-	// Chat defaults to inputActive=true, so keys should go to chat.
+	m.chat.SetInputActive(true) // simulate insert mode
 	msg := tea.KeyPressMsg{Code: 'h'}
 	result, _ := m.Update(msg)
 	if result == nil {

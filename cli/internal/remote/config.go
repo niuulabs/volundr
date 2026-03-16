@@ -1,5 +1,5 @@
 // Package remote manages CLI configuration for the Volundr remote client.
-// Configuration is stored in ~/.config/volundr/config.yaml.
+// Configuration is stored in $VOLUNDR_HOME/remotes.yaml (or ~/.config/volundr/config.yaml as fallback).
 package remote
 
 import (
@@ -8,6 +8,17 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	// Environment variable that overrides the config directory.
+	envHome = "VOLUNDR_HOME"
+	// Config file name within VOLUNDR_HOME.
+	remotesFile = "remotes.yaml"
+	// Fallback directory when VOLUNDR_HOME is not set.
+	legacyDir = ".config/volundr"
+	// Config file name in the legacy directory.
+	legacyFile = "config.yaml"
 )
 
 // Context represents a single Volundr cluster connection.
@@ -36,21 +47,30 @@ func DefaultConfig() *Config {
 }
 
 // ConfigDir returns the configuration directory path.
+// It checks VOLUNDR_HOME first, falling back to ~/.config/volundr.
 func ConfigDir() (string, error) {
+	if dir := os.Getenv(envHome); dir != "" {
+		return dir, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".config", "volundr"), nil
+	return filepath.Join(home, legacyDir), nil
 }
 
 // ConfigPath returns the full path to the config file.
+// When VOLUNDR_HOME is set, uses $VOLUNDR_HOME/remotes.yaml.
+// Otherwise falls back to ~/.config/volundr/config.yaml.
 func ConfigPath() (string, error) {
-	dir, err := ConfigDir()
-	if err != nil {
-		return "", err
+	if dir := os.Getenv(envHome); dir != "" {
+		return filepath.Join(dir, remotesFile), nil
 	}
-	return filepath.Join(dir, "config.yaml"), nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return filepath.Join(home, legacyDir, legacyFile), nil
 }
 
 // legacyConfig represents the old flat config format for migration purposes.

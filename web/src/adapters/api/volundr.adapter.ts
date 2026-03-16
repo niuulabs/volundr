@@ -1,3 +1,4 @@
+import { rewriteOrigin } from '@/utils';
 import type { IVolundrService } from '@/ports';
 import type {
   SessionSource,
@@ -154,7 +155,11 @@ function extractHost(endpoint: string | null | undefined): string | undefined {
     return undefined;
   }
   try {
-    return new URL(endpoint).host;
+    // Validate the URL is parseable, but return the current browser host
+    // so all session requests route through the same origin (and Vite proxy
+    // in dev mode) instead of hitting the backend host directly.
+    new URL(endpoint);
+    return globalThis.location?.host;
   } catch {
     return undefined;
   }
@@ -195,8 +200,8 @@ function transformSession(api: ApiSessionResponse): VolundrSession {
     podName: api.pod_name ?? undefined,
     error: api.error ?? undefined,
     hostname: extractHost(api.chat_endpoint) ?? extractHost(api.code_endpoint),
-    chatEndpoint: api.chat_endpoint ?? undefined,
-    codeEndpoint: api.code_endpoint ?? undefined,
+    chatEndpoint: api.chat_endpoint ? rewriteOrigin(api.chat_endpoint) : undefined,
+    codeEndpoint: api.code_endpoint ? rewriteOrigin(api.code_endpoint) : undefined,
     taskType: api.task_type ?? undefined,
     ownerId: api.owner_id ?? undefined,
     tenantId: api.tenant_id ?? undefined,
@@ -449,8 +454,8 @@ function transformSSESession(payload: SSESessionPayload): VolundrSession {
     podName: payload.pod_name ?? undefined,
     error: payload.error ?? undefined,
     hostname: extractHost(payload.chat_endpoint) ?? extractHost(payload.code_endpoint),
-    chatEndpoint: payload.chat_endpoint ?? undefined,
-    codeEndpoint: payload.code_endpoint ?? undefined,
+    chatEndpoint: payload.chat_endpoint ? rewriteOrigin(payload.chat_endpoint) : undefined,
+    codeEndpoint: payload.code_endpoint ? rewriteOrigin(payload.code_endpoint) : undefined,
   };
 }
 
@@ -907,7 +912,7 @@ export class ApiVolundrService implements IVolundrService {
       if (response.status !== 'running') {
         return null;
       }
-      return response.code_endpoint;
+      return response.code_endpoint ? rewriteOrigin(response.code_endpoint) : null;
     } catch (error) {
       if (error instanceof ApiClientError && (error.status === 404 || error.status === 422)) {
         return null;

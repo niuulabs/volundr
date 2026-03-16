@@ -60,6 +60,23 @@ func Handler(cfg *RuntimeConfig) http.Handler {
 	return mux
 }
 
+// WithCrossOriginIsolation wraps an http.Handler to set the headers
+// required for cross-origin isolation. VS Code's extension host and
+// language services depend on SharedArrayBuffer, which browsers only
+// enable when these headers are present.
+//
+// Apply at the top-level router so ALL paths (web UI, API proxies,
+// session proxies) include the headers — the browser checks them on
+// every sub-resource fetch from a cross-origin-isolated page.
+func WithCrossOriginIsolation(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cross-Origin-Embedder-Policy", "credentialless")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+		h.ServeHTTP(w, r)
+	})
+}
+
 // spaHandler serves files from the given filesystem. If the requested
 // path doesn't exist (and isn't a static asset), it falls back to
 // index.html for client-side routing.

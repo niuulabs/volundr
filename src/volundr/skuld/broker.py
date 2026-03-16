@@ -28,6 +28,7 @@ from volundr.skuld.channels import (
     TelegramChannel,
     WebSocketChannel,
 )
+from volundr.skuld.chronicle_watcher import ChronicleWatcher
 from volundr.skuld.config import SkuldSettings
 from volundr.skuld.service_manager import (
     ServiceCreateRequest,
@@ -337,6 +338,7 @@ class Broker:
         self._conversation_turns: list[ConversationTurn] = []
         self._pending_assistant_content: str = ""
         self._pending_assistant_parts: list[dict] = []
+        self._chronicle_watcher: ChronicleWatcher | None = None
 
     def _conversation_history_path(self) -> Path:
         """Return the path to the conversation history file."""
@@ -411,6 +413,7 @@ class Broker:
                             workspace_dir=self.workspace_dir,
                             sdk_port=self._settings.port,
                             session_id=self.session_id,
+                            model=self.model,
                             skip_permissions=self._settings.skip_permissions,
                             agent_teams=self._settings.agent_teams,
                         )
@@ -443,6 +446,25 @@ class Broker:
         # Initialize Telegram channel if configured
         await self._init_telegram_channel()
 
+        # Start chronicle watcher (tails JSONL session files for terminal mode)
+        if self._settings.chronicle_watcher_enabled and self.volundr_api_url:
+            workspace_slug = self.workspace_dir.replace("/", "-")
+            watch_dir = Path.home() / ".claude" / "projects" / workspace_slug
+            self._chronicle_watcher = ChronicleWatcher(
+                session_id=self.session_id,
+                watch_dir=watch_dir,
+                api_base_url=self.volundr_api_url,
+                http_headers={
+                    "x-auth-user-id": self._settings.service_user_id,
+                    "x-auth-email": f"{self._settings.service_user_id}@internal",
+                    "x-auth-tenant": self._settings.service_tenant_id,
+                    "x-auth-roles": "volundr:service",
+                },
+                debounce_ms=self._settings.chronicle_watcher_debounce_ms,
+            )
+            asyncio.create_task(self._chronicle_watcher.start())
+            logger.info("Chronicle watcher started for %s", watch_dir)
+
     async def shutdown(self) -> None:
         """Clean up on shutdown.
 
@@ -450,6 +472,10 @@ class Broker:
         transport, so the CLI process is still alive for summary generation.
         """
         logger.info("Broker shutting down")
+
+        # Stop chronicle watcher first (flush pending events)
+        if self._chronicle_watcher:
+            await self._chronicle_watcher.stop()
 
         # Report chronicle BEFORE stopping the transport (CLI must be alive)
         await self._report_chronicle()

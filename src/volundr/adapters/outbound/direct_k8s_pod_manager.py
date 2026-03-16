@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from volundr.domain.models import Session, SessionSpec, SessionStatus
@@ -71,6 +72,10 @@ http {{
 
     upstream codeserver {{
         server 127.0.0.1:8443;
+    }}
+
+    upstream reh {{
+        server 127.0.0.1:8445;
     }}
 
     server {{
@@ -147,6 +152,20 @@ http {{
             return 200 '{{"services":[],"hint":"use svc start to add services"}}';
         }}
 
+        # VS Code REH: WebSocket RPC for editor workbench
+        location /reh/ {{
+            proxy_pass http://reh/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }}
+
         # Default catch-all -> code-server IDE
         location / {{
             proxy_pass http://codeserver/;
@@ -185,6 +204,7 @@ class DirectK8sPodManager(PodManager):
         external_url: str = "http://127.0.0.1:8080",
         skuld_image: str = "ghcr.io/niuulabs/skuld:0.2.0",
         code_server_image: str = "codercom/code-server:latest",
+        reh_image: str = "ghcr.io/niuulabs/vscode-reh:latest",
         nginx_image: str = "nginx:alpine",
         devrunner_image: str = "ghcr.io/niuulabs/devrunner:0.2.0",
         db_host: str = "host.k3d.internal",
@@ -206,6 +226,7 @@ class DirectK8sPodManager(PodManager):
         self._external_url = external_url.rstrip("/")
         self._skuld_image = skuld_image
         self._code_server_image = code_server_image
+        self._reh_image = reh_image
         self._nginx_image = nginx_image
         self._devrunner_image = devrunner_image
         self._db_host = db_host
@@ -295,9 +316,11 @@ class DirectK8sPodManager(PodManager):
             env.append({"name": "GIT_BRANCH", "value": git_config["branch"]})
 
         # Handle session metadata from spec values.
+        # Emit SKULD__SESSION__MODEL for pydantic-settings and MODEL for legacy fallback.
         session_config = spec.values.get("session", {})
         if session_config.get("model"):
-            env.append({"name": "SESSION_MODEL", "value": session_config["model"]})
+            env.append({"name": "SKULD__SESSION__MODEL", "value": session_config["model"]})
+            env.append({"name": "MODEL", "value": session_config["model"]})
 
         # Handle extra env passthrough.
         extra_env = spec.values.get("env", {})
@@ -375,7 +398,7 @@ class DirectK8sPodManager(PodManager):
         session: Session,
         spec: SessionSpec,
     ) -> list[dict[str, Any]]:
-        """Build init containers: permissions fix + optional git clone."""
+        """Build init containers: permissions fix, optional home-setup, optional git clone."""
         containers: list[dict[str, Any]] = [
             {
                 "name": "init-permissions",
@@ -384,10 +407,13 @@ class DirectK8sPodManager(PodManager):
                     "sh",
                     "-c",
                     (
-                        "chown -R 1000:1000 /volundr 2>/tmp/chown.err; rc=$?; "
+                        "chown -R 1000:1000 /volundr 2>/tmp/chown.err || true; "
                         "if [ -s /tmp/chown.err ]; then "
-                        "grep -v 'Invalid argument' /tmp/chown.err >&2; "
-                        "if grep -qv 'Invalid argument' /tmp/chown.err; then exit $rc; fi; "
+                        "grep -Ev 'Invalid argument|No such file or directory|Stale file handle' "
+                        "/tmp/chown.err >&2; "
+                        "if grep -qEv 'Invalid argument|No such file"
+                        " or directory|Stale file handle' "
+                        "/tmp/chown.err; then exit 1; fi; "
                         "fi"
                     ),
                 ],
@@ -543,8 +569,10 @@ fi
         if home_enabled:
             home_env = [{"name": "HOME", "value": home_mount}]
 
+        safe_hostname = re.sub(r"[^a-z0-9-]", "-", session.name.lower())
+        safe_hostname = safe_hostname.strip("-")[:63] or "session"
         pod_spec: dict[str, Any] = {
-            "hostname": session.name,
+            "hostname": safe_hostname,
             "terminationGracePeriodSeconds": 30,
             "securityContext": {
                 "fsGroup": 1000,
@@ -597,6 +625,27 @@ fi
                     },
                     "volumeMounts": workload_mounts,
                     "resources": code_server_res,
+                },
+                {
+                    "name": "vscode-reh",
+                    "image": self._reh_image,
+                    "ports": [{"containerPort": 8445, "name": "reh"}],
+                    "securityContext": {
+                        "runAsUser": 1000,
+                        "allowPrivilegeEscalation": False,
+                    },
+                    "volumeMounts": workload_mounts,
+                    "resources": code_server_res,
+                    "livenessProbe": {
+                        "tcpSocket": {"port": 8445},
+                        "initialDelaySeconds": 10,
+                        "periodSeconds": 30,
+                    },
+                    "readinessProbe": {
+                        "tcpSocket": {"port": 8445},
+                        "initialDelaySeconds": 5,
+                        "periodSeconds": 10,
+                    },
                 },
                 {
                     "name": "devrunner",

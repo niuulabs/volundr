@@ -87,11 +87,11 @@ class TestSessionCreate:
     def test_valid_session_create(self):
         """SessionCreate accepts valid data."""
         data = SessionCreate(
-            name="Test Session",
+            name="test-session",
             model="claude-sonnet-4",
             source=GitSource(repo="https://github.com/org/repo", branch="main"),
         )
-        assert data.name == "Test Session"
+        assert data.name == "test-session"
         assert data.model == "claude-sonnet-4"
         assert data.source.repo == "https://github.com/org/repo"
         assert data.source.branch == "main"
@@ -123,15 +123,15 @@ class TestSessionUpdate:
 
     def test_session_update_partial(self):
         """SessionUpdate allows partial updates."""
-        data = SessionUpdate(name="New Name")
-        assert data.name == "New Name"
+        data = SessionUpdate(name="new-name")
+        assert data.name == "new-name"
         assert data.model is None
         assert data.branch is None
 
     def test_session_update_all_fields(self):
         """SessionUpdate allows all fields."""
-        data = SessionUpdate(name="New Name", model="claude-opus-4", branch="feature/new")
-        assert data.name == "New Name"
+        data = SessionUpdate(name="new-name", model="claude-opus-4", branch="feature/new")
+        assert data.name == "new-name"
         assert data.model == "claude-opus-4"
         assert data.branch == "feature/new"
 
@@ -214,14 +214,14 @@ class TestCreateSession:
         response = client.post(
             "/api/v1/volundr/sessions",
             json={
-                "name": "My Session",
+                "name": "my-session",
                 "model": "claude-sonnet-4",
                 "source": {"type": "git", "repo": "https://github.com/org/repo", "branch": "main"},
             },
         )
         assert response.status_code == 201
         data = response.json()
-        assert data["name"] == "My Session"
+        assert data["name"] == "my-session"
         assert data["model"] == "claude-sonnet-4"
         assert data["source"]["repo"] == "https://github.com/org/repo"
         assert data["source"]["branch"] == "main"
@@ -303,11 +303,11 @@ class TestUpdateSession:
 
         response = client.put(
             f"/api/v1/volundr/sessions/{session.id}",
-            json={"name": "New Name"},
+            json={"name": "new-name"},
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == "New Name"
+        assert data["name"] == "new-name"
         assert data["model"] == "claude-sonnet-4"
 
     async def test_update_session_model(self, client: TestClient, service: SessionService):
@@ -351,7 +351,7 @@ class TestUpdateSession:
     async def test_update_session_all_fields(self, client: TestClient, service: SessionService):
         """Updates name, model, and branch."""
         session = await service.create_session(
-            "Old",
+            "old",
             "claude-sonnet-4",
             source=GitSource(
                 repo="https://github.com/org/repo",
@@ -361,11 +361,11 @@ class TestUpdateSession:
 
         response = client.put(
             f"/api/v1/volundr/sessions/{session.id}",
-            json={"name": "New", "model": "claude-opus-4", "branch": "dev"},
+            json={"name": "new", "model": "claude-opus-4", "branch": "dev"},
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == "New"
+        assert data["name"] == "new"
         assert data["model"] == "claude-opus-4"
         assert data["source"]["branch"] == "dev"
 
@@ -374,7 +374,7 @@ class TestUpdateSession:
         fake_id = uuid4()
         response = client.put(
             f"/api/v1/volundr/sessions/{fake_id}",
-            json={"name": "New Name"},
+            json={"name": "new-name"},
         )
         assert response.status_code == 404
 

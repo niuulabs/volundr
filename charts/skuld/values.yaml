@@ -69,9 +69,10 @@ nginx:
       cpu: "100m"
 
 # code-server sidecar configuration (VS Code in the browser)
+# DEPRECATED: Prefer reh (VS Code Remote Extension Host) for embedded editor.
 codeServer:
   # -- Enable code-server sidecar container
-  enabled: true
+  enabled: false
   image:
     # -- code-server image repository
     repository: codercom/code-server
@@ -99,6 +100,34 @@ codeServer:
   # -- VS Code editor settings (applied from ConfigMap on each container start)
   settings:
     workbench.colorTheme: "Default Dark Modern"
+
+# VS Code Remote Extension Host (REH) server — headless WebSocket-only
+# backend for the VS Code workbench embedded in Hliðskjálf.
+# Replaces code-server: no HTML serving, no static assets, just
+# WebSocket RPC for file system, terminal PTY, and extension host.
+reh:
+  # -- Enable VS Code REH server container
+  enabled: true
+  image:
+    # -- REH server image repository (built with download-reh.sh baked in)
+    repository: ghcr.io/niuulabs/vscode-reh
+    # -- REH server image tag (must match @codingame/monaco-vscode-api version)
+    tag: "latest"
+    # -- REH server image pull policy
+    pullPolicy: Always
+  # -- Port for the REH WebSocket server
+  port: 8445
+  resources:
+    requests:
+      # -- REH memory request
+      memory: "256Mi"
+      # -- REH CPU request
+      cpu: "100m"
+    limits:
+      # -- REH memory limit
+      memory: "2Gi"
+      # -- REH CPU limit
+      cpu: "1000m"
 
 # Local service testing (devrunner sidecar)
 localServices:

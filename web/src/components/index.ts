@@ -89,6 +89,9 @@ export type { SessionChroniclesProps } from './SessionChronicles';
 export { SessionDiffs } from './SessionDiffs';
 export type { SessionDiffsProps } from './SessionDiffs';
 
+export { EditorPanel } from './EditorPanel';
+export type { EditorPanelProps } from './EditorPanel';
+
 // Session group list
 export { SessionGroupList } from './SessionGroupList';
 
