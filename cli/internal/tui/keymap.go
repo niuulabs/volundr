@@ -4,6 +4,107 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// ── Unified Keymap Constants ──────────────────────────────────────────
+//
+// All pages should reference these constants rather than hard-coding key
+// strings. This ensures a consistent keyboard experience across the TUI.
+//
+// Navigation (list items):
+//   j / ↓  — move cursor down in a list
+//   k / ↑  — move cursor up in a list
+//
+// Scrolling (content pane):
+//   J      — scroll content pane down (uppercase)
+//   K      — scroll content pane up (uppercase)
+//
+// Jumping:
+//   G      — jump to bottom (vim: Shift-G = end of file)
+//   g      — jump to top (vim: gg = beginning, single-key shortcut)
+//
+// Search / filter:
+//   /      — enter search mode
+//
+// Selection:
+//   Enter  — open / select the item under the cursor
+//
+// Refresh:
+//   r      — refresh the current view's data
+//
+// Filter cycling:
+//   Tab       — next filter
+//   Shift+Tab — previous filter
+
+const (
+	// KeyDown navigates down in a list.
+	KeyDown = "j"
+	// KeyDownArrow is the arrow-key alternative for down.
+	KeyDownArrow = "down"
+
+	// KeyUp navigates up in a list.
+	KeyUp = "k"
+	// KeyUpArrow is the arrow-key alternative for up.
+	KeyUpArrow = "up"
+
+	// KeyScrollDown scrolls the content pane down (uppercase J).
+	KeyScrollDown = "J"
+	// KeyScrollUp scrolls the content pane up (uppercase K).
+	KeyScrollUp = "K"
+
+	// KeyJumpBottom jumps to the bottom of a list or content pane (Shift-G).
+	KeyJumpBottom = "G"
+	// KeyJumpTop jumps to the top of a list or content pane.
+	KeyJumpTop = "g"
+
+	// KeySearch enters search/filter mode.
+	KeySearch = "/"
+
+	// KeySelect opens or selects the item under the cursor.
+	KeySelect = "enter"
+
+	// KeyRefresh refreshes the current view's data.
+	KeyRefresh = "r"
+
+	// KeyNextFilter cycles to the next filter.
+	KeyNextFilter = "tab"
+	// KeyPrevFilter cycles to the previous filter.
+	KeyPrevFilter = "shift+tab"
+
+	// KeyEscape exits the current mode (search, insert, etc.).
+	KeyEscape = "esc"
+
+	// KeyCommandPalette opens the command palette.
+	KeyCommandPalette = "ctrl+k"
+)
+
+// Mode represents the current interaction mode of the TUI.
+type Mode int
+
+const (
+	// ModeNormal is the default navigation mode.
+	ModeNormal Mode = iota
+	// ModeInsert indicates a text input is active.
+	ModeInsert
+	// ModeSearch indicates search/filter mode.
+	ModeSearch
+	// ModeCommand indicates the command palette is open.
+	ModeCommand
+)
+
+// String returns a human-readable label for the mode.
+func (m Mode) String() string {
+	switch m {
+	case ModeNormal:
+		return "NORMAL"
+	case ModeInsert:
+		return "INSERT"
+	case ModeSearch:
+		return "SEARCH"
+	case ModeCommand:
+		return "COMMAND"
+	}
+	return "NORMAL"
+}
+
 // Page represents a navigable page in the TUI.
 type Page int
 

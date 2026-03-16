@@ -206,6 +206,186 @@ func TestRunInit_WithGitHub_DirectToken(t *testing.T) {
 	}
 }
 
+func TestRunInit_ListenAll(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "local"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Pipe answers: listen=all, API key, db mode, no github.
+	input := strings.Join([]string{
+		"all",          // Listen on all interfaces
+		"test-api-key", // Anthropic API key
+		"",             // Database mode (default embedded)
+		"n",            // Configure GitHub? No
+	}, "\n") + "\n"
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString(input)
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err != nil {
+		t.Logf("runInit error (expected in test env): %v", err)
+	}
+}
+
+func TestRunInit_ListenCustomIP(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "local"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Pipe answers: listen=custom IP, API key, db mode, no github.
+	input := strings.Join([]string{
+		"192.168.1.100", // Custom listen address
+		"test-api-key",  // Anthropic API key
+		"",              // Database mode (default embedded)
+		"n",             // Configure GitHub? No
+	}, "\n") + "\n"
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString(input)
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err != nil {
+		t.Logf("runInit error (expected in test env): %v", err)
+	}
+}
+
+func TestRunInit_ExternalDB_CustomPort(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "local"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Pipe answers: listen, API key, external db with custom port, no github.
+	input := strings.Join([]string{
+		"",             // Listen (default localhost)
+		"test-api-key", // Anthropic API key
+		"external",     // Database mode
+		"localhost",    // DB host
+		"",             // DB port (empty = default 5432)
+		"user",         // DB user
+		"pass",         // DB password
+		"mydb",         // DB name
+		"n",            // Configure GitHub? No
+	}, "\n") + "\n"
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString(input)
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err != nil {
+		t.Logf("runInit error (expected in test env): %v", err)
+	}
+}
+
+func TestRunInit_GitHubWithDefaultCloneToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "local"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Pipe answers: listen, API key, db, github with direct token and default clone token.
+	input := strings.Join([]string{
+		"",                   // Listen (default localhost)
+		"test-api-key",       // Anthropic API key
+		"",                   // Database mode (default embedded)
+		"y",                  // Configure GitHub? Yes
+		"ghp_directtoken123", // GitHub token (direct)
+		"org1",               // GitHub orgs
+		"",                   // GitHub API URL (default)
+		"",                   // Session clone token (default: same as above)
+	}, "\n") + "\n"
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString(input)
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err != nil {
+		t.Logf("runInit error (expected in test env): %v", err)
+	}
+}
+
+func TestRunInit_DockerRuntime_PreflightChecks(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Override PATH to ensure kubectl/helm are not found.
+	t.Setenv("PATH", tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "docker"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Pipe minimal stdin — preflight should fail before any prompts.
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString("\n")
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err == nil {
+		t.Fatal("expected preflight check error for missing kubectl")
+	}
+	if !strings.Contains(err.Error(), "kubectl is required") {
+		t.Errorf("expected kubectl error, got: %v", err)
+	}
+}
+
+func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Override PATH to ensure kubectl/helm are not found.
+	t.Setenv("PATH", tmpDir)
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "k3s"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString("\n")
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runInit(nil, nil)
+	if err == nil {
+		t.Fatal("expected preflight check error for missing kubectl")
+	}
+	if !strings.Contains(err.Error(), "kubectl is required") {
+		t.Errorf("expected kubectl error, got: %v", err)
+	}
+}
+
 func TestRunInit_InteractiveRuntime(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)

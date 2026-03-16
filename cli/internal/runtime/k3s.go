@@ -71,6 +71,12 @@ var k3sComposeTemplate = template.Must(template.New("k3s-compose").Parse(`servic
       - "{{.ConfigPath}}:/etc/volundr/config.yaml:ro"
       - "{{.KubeconfigPath}}:/etc/volundr/kubeconfig:ro"
       - "{{.StorageDir}}:/volundr-storage"
+{{- if .ExtraHosts}}
+    extra_hosts:
+{{- range .ExtraHosts}}
+      - "{{.}}"
+{{- end}}
+{{- end}}
     networks:
       - k3d-{{.ClusterName}}
 
@@ -94,6 +100,7 @@ type k3sComposeData struct {
 	KubeconfigPath  string
 	StorageDir      string
 	ClusterName     string
+	ExtraHosts      []string
 }
 
 // k3sAPIConfig represents the Python API config file structure for k3s mode.
@@ -163,6 +170,14 @@ func (r *K3sRuntime) Init(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
+	// Verify kubectl is available.
+	fmt.Print("  kubectl         ... ")
+	if _, err := execCommandContext(ctx, "kubectl", "version", "--client").CombinedOutput(); err != nil {
+		fmt.Println("not found")
+		return fmt.Errorf("kubectl is required but not installed. Install it from https://kubernetes.io/docs/tasks/tools/")
+	}
+	fmt.Println("ok")
+
 	// Verify helm is available, offer to install if not.
 	fmt.Print("  Helm            ... ")
 	if _, err := execCommandContext(ctx, "helm", "version", "--short").CombinedOutput(); err != nil {
@@ -222,16 +237,15 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 
 		// Run migrations.
 		fmt.Print("  Migrations    ... ")
-		migrationsDir := findMigrationsDir()
-		if migrationsDir != "" {
-			applied, err := r.pg.RunMigrations(ctx, migrationsDir)
-			if err != nil {
-				fmt.Println("failed")
-				return fmt.Errorf("run migrations: %w", err)
-			}
-			fmt.Printf("applied (%d migrations)\n", applied)
+		applied, source, err := runMigrationsAuto(ctx, r.pg)
+		if err != nil {
+			fmt.Println("failed")
+			return fmt.Errorf("run migrations: %w", err)
+		}
+		if source != "" {
+			fmt.Printf("applied (%d migrations, source: %s)\n", applied, source)
 		} else {
-			fmt.Println("skipped (no migrations directory found)")
+			fmt.Println("skipped (no migrations found)")
 		}
 	}
 
@@ -247,6 +261,15 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	namespace := r.namespace(cfg)
 	if err := r.ensureK8sSecrets(cfg, namespace); err != nil {
 		return fmt.Errorf("create k8s secrets: %w", err)
+	}
+
+	// Ensure storage directories are accessible by the container user.
+	cfgDir, err := config.ConfigDir()
+	if err != nil {
+		return fmt.Errorf("get config dir: %w", err)
+	}
+	if err := ensureContainerStorageDirs(cfgDir); err != nil {
+		return fmt.Errorf("ensure container storage dirs: %w", err)
 	}
 
 	// Generate k3s-mode config for the Python API.
@@ -498,6 +521,12 @@ func (r *K3sRuntime) initK3d(ctx context.Context, cfg *config.Config) error {
 
 	if strings.Contains(string(out), k3sClusterName) {
 		fmt.Println("exists")
+		// Cluster exists — still prompt for local mounts config if not
+		// yet configured (the k3d node volumes can't change, but the
+		// config flag is needed for the API to show mount options).
+		if !cfg.LocalMounts.Enabled {
+			r.promptK3dLocalMountPrefixes(cfg)
+		}
 		return nil
 	}
 
@@ -556,7 +585,7 @@ func (r *K3sRuntime) initNativeK3s(cfg *config.Config) error {
 	}
 	kcPath := hostKubeconfigPath()
 	if data, err := os.ReadFile(defaultKC); err == nil { //nolint:gosec // path from known kubeconfig location or KUBECONFIG env
-		if writeErr := os.WriteFile(kcPath, data, 0o600); writeErr != nil { //nolint:gosec // path derived from trusted config directory
+		if writeErr := os.WriteFile(kcPath, data, 0o644); writeErr != nil { //nolint:gosec // kubeconfig must be readable by container user
 			return fmt.Errorf("write kubeconfig: %w", writeErr)
 		}
 	}
@@ -1051,7 +1080,7 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 	}
 
 	configPath := filepath.Join(cfgDir, k3sConfigFileName)
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+	if err := os.WriteFile(configPath, data, 0o644); err != nil { //nolint:gosec // config must be readable by container user
 		return "", fmt.Errorf("write k3s config: %w", err)
 	}
 
@@ -1079,7 +1108,7 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 	}
 
 	data := k3sComposeData{
-		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr-api:latest"),
+		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr:latest"),
 		ContainerName:   k3sContainerName,
 		APIPort:         k3sAPIInternalPort,
 		DBHost:          dbHost,
@@ -1094,13 +1123,19 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 		ClusterName:     k3sClusterName,
 	}
 
+	// On Linux, host.docker.internal doesn't resolve by default
+	// (Docker Desktop feature only). Add extra_hosts mapping.
+	if runtime.GOOS == "linux" {
+		data.ExtraHosts = []string{"host.docker.internal:host-gateway"}
+	}
+
 	var buf bytes.Buffer
 	if err := k3sComposeTemplate.Execute(&buf, data); err != nil {
 		return fmt.Errorf("render compose template: %w", err)
 	}
 
 	composePath := filepath.Join(cfgDir, k3sComposeFileName)
-	if err := os.WriteFile(composePath, buf.Bytes(), 0o600); err != nil {
+	if err := os.WriteFile(composePath, buf.Bytes(), 0o644); err != nil { //nolint:gosec // compose file must be readable by container user
 		return fmt.Errorf("write compose file: %w", err)
 	}
 
@@ -1130,7 +1165,7 @@ func (r *K3sRuntime) writeHostKubeconfig() error {
 	}
 
 	kcPath := hostKubeconfigPath()
-	if err := os.WriteFile(kcPath, out, 0o600); err != nil {
+	if err := os.WriteFile(kcPath, out, 0o644); err != nil { //nolint:gosec // kubeconfig must be readable by container user
 		return fmt.Errorf("write kubeconfig to %s: %w", kcPath, err)
 	}
 	fmt.Printf("  Kubeconfig     ... %s\n", kcPath)
@@ -1182,7 +1217,7 @@ func (r *K3sRuntime) writeK3dKubeconfig(cfgDir string) (string, error) {
 	}
 
 	kubeconfigPath := filepath.Join(cfgDir, k3sDockerKubeconfigFile)                //nolint:gosec // path derived from trusted config directory
-	if err := os.WriteFile(kubeconfigPath, []byte(kubeconfig), 0o600); err != nil { //nolint:gosec // path derived from trusted config directory
+	if err := os.WriteFile(kubeconfigPath, []byte(kubeconfig), 0o644); err != nil { //nolint:gosec // kubeconfig must be readable by container user
 		return "", fmt.Errorf("write docker kubeconfig: %w", err)
 	}
 

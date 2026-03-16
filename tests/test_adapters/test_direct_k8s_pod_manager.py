@@ -194,7 +194,8 @@ class TestEnvironment:
         env = pod_manager._build_env(sample_session, spec)
 
         env_dict = {e["name"]: e["value"] for e in env if "value" in e}
-        assert env_dict["SESSION_MODEL"] == "claude-opus-4-20250514"
+        assert env_dict["SKULD__SESSION__MODEL"] == "claude-opus-4-20250514"
+        assert env_dict["MODEL"] == "claude-opus-4-20250514"
 
     def test_build_env_with_extra_env(
         self,

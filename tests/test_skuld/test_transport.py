@@ -424,6 +424,61 @@ class TestSdkWebSocketTransport:
             assert "resume-me" in call_args
 
     @pytest.mark.asyncio
+    async def test_start_passes_model_flag(self, tmp_path):
+        transport = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="test-session",
+            model="claude-opus-4-20250514",
+        )
+
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_process.returncode = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--model" in call_args
+            assert "claude-opus-4-20250514" in call_args
+
+    @pytest.mark.asyncio
+    async def test_start_omits_model_flag_when_empty(self, transport):
+        """When model is empty, --model should not appear in CLI args."""
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_process.returncode = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--model" not in call_args
+
+    def test_init_stores_model(self, tmp_path):
+        transport = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            model="claude-opus-4-20250514",
+        )
+        assert transport._model == "claude-opus-4-20250514"
+
+    def test_init_default_model_empty(self, transport):
+        assert transport._model == ""
+
+    @pytest.mark.asyncio
     async def test_messages_queued_before_cli_connects(self, transport):
         """Messages sent before CLI connects are queued."""
         transport.on_event(AsyncMock())

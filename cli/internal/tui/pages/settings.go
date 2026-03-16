@@ -130,6 +130,10 @@ func (s SettingsPage) Update(msg tea.Msg) (SettingsPage, tea.Cmd) { //nolint:goc
 			}
 		case "down", "j":
 			s.cursor++
+		case "G":
+			s.cursor = s.maxCursor()
+		case "g":
+			s.cursor = 0
 		case "enter":
 			s.startEditing()
 		case "r":
@@ -190,6 +194,21 @@ func (s SettingsPage) settingsHelp() string { //nolint:gocritic // value receive
 // Editing returns whether the settings editor is active.
 func (s SettingsPage) Editing() bool { //nolint:gocritic // value receiver needed for page interface consistency
 	return s.editing
+}
+
+// maxCursor returns the maximum cursor position for the current section.
+func (s SettingsPage) maxCursor() int { //nolint:gocritic // value receiver needed for page interface consistency
+	switch s.section {
+	case SectionConnection:
+		return 0 // single server URL item
+	case SectionCredentials:
+		return 0
+	case SectionIntegrations:
+		return max(0, len(s.integrations)-1)
+	case SectionAppearance:
+		return 0
+	}
+	return 0
 }
 
 // SetSize updates the page dimensions.

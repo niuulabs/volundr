@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from volundr.domain.models import Session, SessionSpec, SessionStatus
@@ -315,9 +316,11 @@ class DirectK8sPodManager(PodManager):
             env.append({"name": "GIT_BRANCH", "value": git_config["branch"]})
 
         # Handle session metadata from spec values.
+        # Emit SKULD__SESSION__MODEL for pydantic-settings and MODEL for legacy fallback.
         session_config = spec.values.get("session", {})
         if session_config.get("model"):
-            env.append({"name": "SESSION_MODEL", "value": session_config["model"]})
+            env.append({"name": "SKULD__SESSION__MODEL", "value": session_config["model"]})
+            env.append({"name": "MODEL", "value": session_config["model"]})
 
         # Handle extra env passthrough.
         extra_env = spec.values.get("env", {})
@@ -395,7 +398,7 @@ class DirectK8sPodManager(PodManager):
         session: Session,
         spec: SessionSpec,
     ) -> list[dict[str, Any]]:
-        """Build init containers: permissions fix + optional git clone."""
+        """Build init containers: permissions fix, optional home-setup, optional git clone."""
         containers: list[dict[str, Any]] = [
             {
                 "name": "init-permissions",
@@ -565,8 +568,10 @@ fi
         if home_enabled:
             home_env = [{"name": "HOME", "value": home_mount}]
 
+        safe_hostname = re.sub(r"[^a-z0-9-]", "-", session.name.lower())
+        safe_hostname = safe_hostname.strip("-")[:63] or "session"
         pod_spec: dict[str, Any] = {
-            "hostname": session.name,
+            "hostname": safe_hostname,
             "terminationGracePeriodSeconds": 30,
             "securityContext": {
                 "fsGroup": 1000,

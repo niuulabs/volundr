@@ -22,10 +22,73 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestConfigDirUsesVolundrHome(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(envHome, tmpDir)
+
+	dir, err := ConfigDir()
+	if err != nil {
+		t.Fatalf("config dir: %v", err)
+	}
+	if dir != tmpDir {
+		t.Errorf("expected %q, got %q", tmpDir, dir)
+	}
+}
+
+func TestConfigPathUsesVolundrHome(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(envHome, tmpDir)
+
+	path, err := ConfigPath()
+	if err != nil {
+		t.Fatalf("config path: %v", err)
+	}
+
+	expected := filepath.Join(tmpDir, remotesFile)
+	if path != expected {
+		t.Errorf("expected %q, got %q", expected, path)
+	}
+}
+
+func TestSaveAndLoadWithVolundrHome(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(envHome, tmpDir)
+
+	cfg := DefaultConfig()
+	cfg.Contexts["dev"] = &Context{
+		Name:   "dev",
+		Server: "https://dev.example.com",
+		Token:  "tok-dev",
+	}
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	// Verify the file was written to VOLUNDR_HOME/remotes.yaml.
+	if _, err := os.Stat(filepath.Join(tmpDir, remotesFile)); err != nil {
+		t.Fatalf("expected remotes.yaml in VOLUNDR_HOME: %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	dev := loaded.GetContext("dev")
+	if dev == nil {
+		t.Fatal("expected dev context to exist")
+	}
+	if dev.Server != "https://dev.example.com" {
+		t.Errorf("expected server %q, got %q", "https://dev.example.com", dev.Server)
+	}
+}
+
 func TestConfigSaveAndLoad(t *testing.T) {
 	// Use a temp directory as the config home.
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	cfg := DefaultConfig()
 	cfg.Theme = "light"
@@ -83,6 +146,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 func TestConfigMigration(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	// Write an old-format config.
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
@@ -151,6 +215,7 @@ theme: dark
 func TestConfigMigrationPreservesAllFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
@@ -421,6 +486,7 @@ func TestResolveContext_NonExistentKey(t *testing.T) {
 func TestLoadNonExistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -438,6 +504,7 @@ func TestLoadNonExistentFile(t *testing.T) {
 func TestLoadInvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
@@ -458,6 +525,7 @@ func TestLoadInvalidYAML(t *testing.T) {
 func TestConfigDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	dir, err := ConfigDir()
 	if err != nil {
@@ -473,6 +541,7 @@ func TestConfigDir(t *testing.T) {
 func TestConfigPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	path, err := ConfigPath()
 	if err != nil {
@@ -488,6 +557,7 @@ func TestConfigPath(t *testing.T) {
 func TestMigrationEmptyThemeDefaultsToDark(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
@@ -515,6 +585,7 @@ token: tok
 func TestLoadNewFormatWithNilContexts(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
 
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {

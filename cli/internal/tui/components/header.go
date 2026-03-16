@@ -3,6 +3,7 @@ package components
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -29,6 +30,7 @@ type Header struct {
 	Connected   bool // kept for backward compat; use State instead
 	State       HeaderState
 	PoolSummary string
+	Mode        tui.Mode
 }
 
 // NewHeader creates a new Header component.
@@ -60,7 +62,7 @@ func NewHeaderWithPool(pool *tui.ClientPool) Header {
 }
 
 // View renders the header bar.
-func (h Header) View() string {
+func (h *Header) View() string {
 	theme := tui.DefaultTheme
 
 	logoStyle := lipgloss.NewStyle().
@@ -90,9 +92,31 @@ func (h Header) View() string {
 			Render("◌")
 	}
 
-	left := fmt.Sprintf("%s %s",
+	// Mode indicator
+	var modeColor color.Color
+	switch h.Mode {
+	case tui.ModeNormal:
+		modeColor = theme.AccentCyan
+	case tui.ModeInsert:
+		modeColor = theme.AccentEmerald
+	case tui.ModeSearch:
+		modeColor = theme.AccentAmber
+	case tui.ModeCommand:
+		modeColor = theme.AccentPurple
+	}
+
+	modeStyle := lipgloss.NewStyle().
+		Foreground(theme.BgPrimary).
+		Background(modeColor).
+		Bold(true).
+		Padding(0, 1)
+
+	modeIndicator := modeStyle.Render(h.Mode.String())
+
+	left := fmt.Sprintf("%s %s %s",
 		logoStyle.Render("⚒"),
 		titleStyle.Render(h.Title),
+		modeIndicator,
 	)
 
 	// Right side: show pool summary if available, otherwise single server URL.

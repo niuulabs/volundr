@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -808,6 +809,468 @@ func TestRunMigrationsWithDB_PartialApplyOnError(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// RunMigrationsWithFS tests.
+
+func TestRunMigrationsWithFS_PingError(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing().WillReturnError(fmt.Errorf("connection refused"))
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(t.TempDir()))
+	if err == nil {
+		t.Fatal("expected ping error")
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if !contains(err.Error(), "ping database") {
+		t.Errorf("expected 'ping database' in error, got %q", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_CreateTableError(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnError(fmt.Errorf("permission denied"))
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(t.TempDir()))
+	if err == nil {
+		t.Fatal("expected create table error")
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if !contains(err.Error(), "create schema_migrations table") {
+		t.Errorf("expected 'create schema_migrations table' in error, got %q", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_NoMigrations(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(t.TempDir()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_AppliesNewMigrations(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "000002_add_col.up.sql"), []byte("ALTER TABLE test ADD COLUMN name TEXT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Also add a down migration to verify it's skipped.
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.down.sql"), []byte("DROP TABLE test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// Migration 000001: not yet applied.
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000001_init").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectBegin()
+	mock.ExpectExec("CREATE TABLE test").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations").
+		WithArgs("000001_init").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	// Migration 000002: not yet applied.
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000002_add_col").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectBegin()
+	mock.ExpectExec("ALTER TABLE test ADD COLUMN name TEXT").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations").
+		WithArgs("000002_add_col").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if applied != 2 {
+		t.Errorf("expected 2 applied, got %d", applied)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_SkipsAlreadyApplied(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000001_init").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_CheckVersionError(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000001_init").
+		WillReturnError(fmt.Errorf("query failed"))
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
+	if err == nil {
+		t.Fatal("expected error checking migration version")
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if !contains(err.Error(), "check migration") {
+		t.Errorf("expected 'check migration' in error, got %q", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_BeginTxError(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000001_init").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectBegin().WillReturnError(fmt.Errorf("cannot begin transaction"))
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
+	if err == nil {
+		t.Fatal("expected begin transaction error")
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if !contains(err.Error(), "begin transaction") {
+		t.Errorf("expected 'begin transaction' in error, got %q", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_ExecMigrationError(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("INVALID SQL"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000001_init").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectBegin()
+	mock.ExpectExec("INVALID SQL").
+		WillReturnError(fmt.Errorf("syntax error"))
+	mock.ExpectRollback()
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
+	if err == nil {
+		t.Fatal("expected exec migration error")
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if !contains(err.Error(), "execute migration") {
+		t.Errorf("expected 'execute migration' in error, got %q", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_RecordMigrationError(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000001_init").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectBegin()
+	mock.ExpectExec("CREATE TABLE test").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations").
+		WithArgs("000001_init").
+		WillReturnError(fmt.Errorf("unique constraint violation"))
+	mock.ExpectRollback()
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
+	if err == nil {
+		t.Fatal("expected record migration error")
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if !contains(err.Error(), "record migration") {
+		t.Errorf("expected 'record migration' in error, got %q", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRunMigrationsWithFS_CommitError(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectPing()
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs("000001_init").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectBegin()
+	mock.ExpectExec("CREATE TABLE test").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations").
+		WithArgs("000001_init").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit().WillReturnError(fmt.Errorf("commit failed"))
+
+	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
+	if err == nil {
+		t.Fatal("expected commit error")
+	}
+	if applied != 0 {
+		t.Errorf("expected 0 applied, got %d", applied)
+	}
+	if !contains(err.Error(), "commit migration") {
+		t.Errorf("expected 'commit migration' in error, got %q", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// RunMigrationsFS (public method) tests.
+
+func TestRunMigrationsFS_OpenDatabaseError(t *testing.T) {
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Port:     15433,
+			User:     "test",
+			Password: "test",
+			Name:     "testdb",
+		},
+	}
+
+	pg := New(cfg)
+	// RunMigrationsFS will fail at PingContext because no real DB is running.
+	_, err := pg.RunMigrationsFS(context.Background(), os.DirFS(t.TempDir()))
+	if err == nil {
+		t.Fatal("expected error when no database is running")
+	}
+}
+
+// AllowDockerConnections tests.
+
+func TestAllowDockerConnections_NoHbaFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("VOLUNDR_HOME", tmpDir)
+
+	cfg := &config.Config{}
+	pg := New(cfg)
+
+	err := pg.allowDockerConnections(context.Background(), tmpDir)
+	if err == nil {
+		t.Fatal("expected error reading pg_hba.conf")
+	}
+	if !contains(err.Error(), "read pg_hba.conf") {
+		t.Errorf("expected 'read pg_hba.conf' in error, got %q", err.Error())
+	}
+}
+
+func TestAllowDockerConnections_AlreadyContainsRule(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("VOLUNDR_HOME", tmpDir)
+
+	// Write pg_hba.conf with the Docker rule already present.
+	hbaPath := filepath.Join(tmpDir, "pg_hba.conf")
+	if err := os.WriteFile(hbaPath, []byte("host all all 172.16.0.0/12 password\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{}
+	pg := New(cfg)
+
+	// Should return nil without error since rule already exists.
+	err := pg.allowDockerConnections(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("expected no error when rule already exists, got: %v", err)
+	}
+}
+
+func TestAllowDockerConnections_AppendsRule(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("VOLUNDR_HOME", tmpDir)
+
+	// Create required directories for pg_ctl path.
+	pgCtlDir := filepath.Join(tmpDir, "cache", "pg", "bin")
+	if err := os.MkdirAll(pgCtlDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write pg_hba.conf without the Docker rule.
+	hbaPath := filepath.Join(tmpDir, "pg_hba.conf")
+	if err := os.WriteFile(hbaPath, []byte("# Default rules\nlocal all all trust\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{}
+	pg := New(cfg)
+
+	// This will fail at the pg_ctl reload step since there's no real pg_ctl,
+	// but the file should have been updated before that point.
+	err := pg.allowDockerConnections(context.Background(), tmpDir)
+
+	// Read the file to verify the rule was appended.
+	data, readErr := os.ReadFile(hbaPath) //nolint:gosec // test file path from t.TempDir()
+	if readErr != nil {
+		t.Fatalf("read pg_hba.conf: %v", readErr)
+	}
+
+	if !strings.Contains(string(data), "172.16.0.0/12") {
+		t.Error("expected Docker bridge rule to be appended to pg_hba.conf")
+	}
+
+	// We expect an error from pg_ctl reload since there's no real binary.
+	if err == nil {
+		t.Log("allowDockerConnections succeeded unexpectedly (pg_ctl may exist)")
 	}
 }
 

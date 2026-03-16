@@ -274,8 +274,8 @@ func TestNewChatPage(t *testing.T) {
 	if page.model != "claude-sonnet-4" {
 		t.Errorf("expected model %q, got %q", "claude-sonnet-4", page.model)
 	}
-	if !page.inputActive {
-		t.Error("expected input active by default")
+	if page.inputActive {
+		t.Error("expected normal mode (input inactive) by default")
 	}
 }
 

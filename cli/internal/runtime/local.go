@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/migrations"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
 )
 
@@ -90,16 +91,15 @@ func (r *LocalRuntime) Up(ctx context.Context, cfg *config.Config) error {
 
 		// Run migrations.
 		fmt.Print("  Migrations    ... ")
-		migrationsDir := findMigrationsDir()
-		if migrationsDir != "" {
-			applied, err := r.pg.RunMigrations(ctx, migrationsDir)
-			if err != nil {
-				fmt.Println("failed")
-				return fmt.Errorf("run migrations: %w", err)
-			}
-			fmt.Printf("applied (%d migrations)\n", applied)
+		applied, source, err := runMigrationsAuto(ctx, r.pg)
+		if err != nil {
+			fmt.Println("failed")
+			return fmt.Errorf("run migrations: %w", err)
+		}
+		if source != "" {
+			fmt.Printf("applied (%d migrations, source: %s)\n", applied, source)
 		} else {
-			fmt.Println("skipped (no migrations directory found)")
+			fmt.Println("skipped (no migrations found)")
 		}
 	}
 
@@ -446,4 +446,22 @@ func findMigrationsDir() string {
 	}
 
 	return ""
+}
+
+// runMigrationsAuto runs migrations using embedded SQL files if available,
+// falling back to the filesystem. Returns (applied, source, error).
+func runMigrationsAuto(ctx context.Context, pg postgresProvider) (applied int, source string, err error) {
+	// Try embedded migrations first.
+	if mfs := migrations.FS(); mfs != nil {
+		applied, err := pg.RunMigrationsFS(ctx, mfs)
+		return applied, "embedded", err
+	}
+
+	// Fall back to filesystem.
+	dir := findMigrationsDir()
+	if dir == "" {
+		return 0, "", nil
+	}
+	applied, err = pg.RunMigrations(ctx, dir)
+	return applied, dir, err
 }
