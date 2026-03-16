@@ -296,9 +296,11 @@ class DirectK8sPodManager(PodManager):
             env.append({"name": "GIT_BRANCH", "value": git_config["branch"]})
 
         # Handle session metadata from spec values.
+        # Emit SKULD__SESSION__MODEL for pydantic-settings and MODEL for legacy fallback.
         session_config = spec.values.get("session", {})
         if session_config.get("model"):
-            env.append({"name": "SESSION_MODEL", "value": session_config["model"]})
+            env.append({"name": "SKULD__SESSION__MODEL", "value": session_config["model"]})
+            env.append({"name": "MODEL", "value": session_config["model"]})
 
         # Handle extra env passthrough.
         extra_env = spec.values.get("env", {})
@@ -376,7 +378,7 @@ class DirectK8sPodManager(PodManager):
         session: Session,
         spec: SessionSpec,
     ) -> list[dict[str, Any]]:
-        """Build init containers: permissions fix + optional git clone."""
+        """Build init containers: permissions fix, optional home-setup, optional git clone."""
         containers: list[dict[str, Any]] = [
             {
                 "name": "init-permissions",

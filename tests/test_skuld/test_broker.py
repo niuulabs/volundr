@@ -89,6 +89,20 @@ class TestBroker:
         assert isinstance(transport, CodexSubprocessTransport)
         assert transport._model == "gpt-4o"
 
+    def test_create_transport_sdk_passes_model(self, tmp_path):
+        settings = SkuldSettings(
+            transport="sdk",
+            session={
+                "id": "s1",
+                "workspace_dir": str(tmp_path),
+                "model": "claude-opus-4-20250514",
+            },
+        )
+        b = Broker(settings=settings)
+        transport = b._create_transport()
+        assert isinstance(transport, SdkWebSocketTransport)
+        assert transport._model == "claude-opus-4-20250514"
+
     @pytest.mark.asyncio
     async def test_startup_creates_workspace(self, test_broker, tmp_path):
         """Test startup creates workspace directory and initializes transport."""

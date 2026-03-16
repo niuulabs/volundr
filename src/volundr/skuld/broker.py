@@ -413,6 +413,7 @@ class Broker:
                             workspace_dir=self.workspace_dir,
                             sdk_port=self._settings.port,
                             session_id=self.session_id,
+                            model=self.model,
                             skip_permissions=self._settings.skip_permissions,
                             agent_teams=self._settings.agent_teams,
                         )
