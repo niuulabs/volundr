@@ -411,7 +411,8 @@ class DirectK8sPodManager(PodManager):
                         "if [ -s /tmp/chown.err ]; then "
                         "grep -Ev 'Invalid argument|No such file or directory|Stale file handle' "
                         "/tmp/chown.err >&2; "
-                        "if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' "
+                        "if grep -qEv 'Invalid argument|No such file"
+                        " or directory|Stale file handle' "
                         "/tmp/chown.err; then exit 1; fi; "
                         "fi"
                     ),
