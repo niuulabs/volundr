@@ -4,27 +4,37 @@
 #
 # Usage: ./download-reh.sh [output-dir]
 #
-# The commit hash is read from the installed npm package to ensure
-# client and server are from the same VS Code build. If the pinned
-# commit's REH binary is unavailable, falls back to the latest stable.
+# The Microsoft release commit is fetched from the CodinGame GitHub
+# source (npm strips the config field during publish). This commit
+# is the only one Microsoft publishes REH binaries for.
 
 set -euo pipefail
 
 OUTPUT_DIR="${1:-/opt/vscode-reh}"
 ARCH="${ARCH:-linux-x64}"
-PRODUCT_JS="node_modules/@codingame/monaco-vscode-api/vscode/product.json.js"
+PACKAGE_JSON="node_modules/@codingame/monaco-vscode-api/package.json"
 
-if [ ! -f "$PRODUCT_JS" ]; then
-  echo "ERROR: $PRODUCT_JS not found." >&2
+if [ ! -f "$PACKAGE_JSON" ]; then
+  echo "ERROR: $PACKAGE_JSON not found." >&2
   echo "Run 'npm install' in the web/ directory first." >&2
   exit 1
 fi
 
-# The commit hash is embedded in the webviewContentExternalBaseUrlTemplate URL
-# inside the product.json.js file, in the pattern /insider/<commit>/out/
-COMMIT=$(grep -oP '(?<=/insider/)[0-9a-f]{40}(?=/)' "$PRODUCT_JS" | head -1)
+# npm strips the config field during publish, so we read the package
+# version and fetch the commit from the GitHub source package.json.
+VERSION=$(jq -r '.version' "$PACKAGE_JSON")
+if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+  echo "ERROR: Could not read version from $PACKAGE_JSON" >&2
+  exit 1
+fi
+
+echo "Package version: $VERSION"
+echo "Fetching VS Code commit from GitHub source..."
+
+GITHUB_URL="https://raw.githubusercontent.com/CodinGame/monaco-vscode-api/v${VERSION}/package.json"
+COMMIT=$(curl -fsSL "$GITHUB_URL" | jq -r '.config.vscode.commit // empty')
 if [ -z "$COMMIT" ]; then
-  echo "ERROR: Could not extract VS Code commit hash from $PRODUCT_JS" >&2
+  echo "ERROR: Could not read .config.vscode.commit from $GITHUB_URL" >&2
   exit 1
 fi
 
@@ -34,22 +44,10 @@ echo "Output:         $OUTPUT_DIR"
 
 mkdir -p "$OUTPUT_DIR"
 
-# Try the pinned commit first, fall back to latest stable if unavailable.
-# The OSS commit embedded in @codingame packages may not have a matching
-# REH binary on Microsoft's update server — only official VS Code release
-# commits are guaranteed to be available.
-COMMIT_URL="https://update.code.visualstudio.com/commit:${COMMIT}/server-${ARCH}/stable"
-LATEST_URL="https://update.code.visualstudio.com/latest/server-${ARCH}/stable"
+URL="https://update.code.visualstudio.com/commit:${COMMIT}/server-${ARCH}/stable"
+echo "Downloading from: $URL"
 
-echo "Trying pinned commit: $COMMIT_URL"
-if curl -fsSL "$COMMIT_URL" -o /tmp/reh.tar.gz 2>/dev/null; then
-  echo "Downloaded REH for pinned commit"
-else
-  echo "WARN: Pinned commit not available, falling back to latest stable"
-  echo "Downloading from: $LATEST_URL"
-  curl -fsSL "$LATEST_URL" -o /tmp/reh.tar.gz
-fi
-
+curl -fsSL "$URL" -o /tmp/reh.tar.gz
 tar -xz -C "$OUTPUT_DIR" --strip-components=1 -f /tmp/reh.tar.gz
 rm -f /tmp/reh.tar.gz
 

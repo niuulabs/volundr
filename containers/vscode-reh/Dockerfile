@@ -9,7 +9,7 @@ LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    grep \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Detect architecture: map Docker TARGETARCH to VS Code REH arch names
