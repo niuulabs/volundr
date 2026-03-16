@@ -37,12 +37,6 @@ data:
             server 127.0.0.1:8081;
         }
 
-        {{- if .Values.codeServer.enabled }}
-        upstream codeserver {
-            server 127.0.0.1:{{ .Values.codeServer.port }};
-        }
-        {{- end }}
-
         {{- if .Values.reh.enabled }}
         upstream reh {
             server 127.0.0.1:{{ .Values.reh.port }};
@@ -95,21 +89,6 @@ data:
             location /ready {
                 proxy_pass http://broker/ready;
             }
-
-            {{- if and .Values.codeServer.enabled (ne .Values.ingress.paths.ide "/") }}
-            # code-server: VS Code IDE (sub-path)
-            location {{ .Values.ingress.paths.ide }}/ {
-                proxy_pass http://codeserver{{ .Values.ingress.paths.ide }}/;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-                proxy_set_header Accept-Encoding gzip;
-            }
-            {{- end }}
 
             {{- if .Values.reh.enabled }}
             # VS Code REH: WebSocket RPC for embedded editor
@@ -171,18 +150,6 @@ data:
 
             # Default catch-all
             location / {
-                {{- if and .Values.codeServer.enabled (eq .Values.ingress.paths.ide "/") }}
-                # code-server at root - IDE is the default handler
-                proxy_pass http://codeserver/;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-                proxy_set_header Accept-Encoding gzip;
-                {{- else }}
                 proxy_pass http://broker/;
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
@@ -190,7 +157,6 @@ data:
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                {{- end }}
             }
         }
     }

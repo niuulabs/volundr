@@ -43,7 +43,6 @@ def pod_manager() -> DirectK8sPodManager:
         base_path="/s",
         ingress_class="traefik",
         skuld_image="ghcr.io/niuulabs/skuld:test",
-        code_server_image="codercom/code-server:test",
         nginx_image="nginx:test",
         devrunner_image="ghcr.io/niuulabs/devrunner:test",
         db_host="host.k3d.internal",
@@ -231,7 +230,7 @@ class TestManifests:
         container_names = [c["name"] for c in containers]
         assert "nginx" in container_names
         assert "skuld" in container_names
-        assert "code-server" in container_names
+        assert "vscode-reh" in container_names
         assert "devrunner" in container_names
 
         # Check skuld env vars.
@@ -259,7 +258,7 @@ class TestManifests:
         containers = manifest["spec"]["template"]["spec"]["containers"]
 
         # Check HOME is set on all workload containers
-        for name in ("skuld", "code-server", "devrunner"):
+        for name in ("skuld", "vscode-reh", "devrunner"):
             container = next(c for c in containers if c["name"] == name)
             cenv = {e["name"]: e["value"] for e in container["env"] if "value" in e}
             assert cenv["HOME"] == "/volundr/home"

@@ -71,7 +71,7 @@ spec:
 
               # Ensure the non-root user owns the home directory tree.
               # Ignore transient errors from stale sockets/files on hostPath
-              # volumes (e.g. code-server-ipc.sock) that vanish mid-traversal.
+              # volumes that vanish mid-traversal.
               chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/tmp/chown.err || true
               if [ -s /tmp/chown.err ]; then
                 grep -Ev 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err >&2 || true
@@ -256,98 +256,6 @@ spec:
               readOnly: true
             {{- end }}
             {{- end }}
-        {{- if .Values.codeServer.enabled }}
-        # code-server - VS Code IDE in browser
-        - name: code-server
-          image: "{{ .Values.codeServer.image.repository }}:{{ .Values.codeServer.image.tag }}"
-          imagePullPolicy: {{ .Values.codeServer.image.pullPolicy }}
-          securityContext:
-            runAsUser: {{ .Values.securityContext.runAsUser }}
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
-          ports:
-            - name: ide
-              containerPort: {{ .Values.codeServer.port }}
-              protocol: TCP
-          # Override entrypoint to skip fixuid; copy VS Code settings from ConfigMap before starting
-          command: ["dumb-init", "--", "/bin/sh", "-c"]
-          args:
-            - |
-              mkdir -p /home/coder/.local/share/code-server/User
-              {{- if .Values.homeVolume.enabled }}
-              # Use persistent VS Code settings from home PVC; seed from defaults on first run
-              if [ -f "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" ]; then
-                ln -sf "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" /home/coder/.local/share/code-server/User/settings.json
-              else
-                cp /etc/vscode-defaults/settings.json "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json"
-                ln -sf "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" /home/coder/.local/share/code-server/User/settings.json
-              fi
-              # Symlink credential dir into the coder home so terminal access works
-              ln -sfn "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}" "/home/coder/{{ .Values.homeVolume.credentialFiles.destDir }}"
-              {{- else }}
-              cp /etc/vscode-defaults/settings.json /home/coder/.local/share/code-server/User/settings.json
-              {{- end }}
-              exec /usr/bin/code-server \
-                --bind-addr=0.0.0.0:{{ .Values.codeServer.port }} \
-                --auth={{ if .Values.codeServer.password }}password{{ else }}none{{ end }} \
-                --disable-telemetry \
-                {{ include "skuld.workspacePath" . | quote }}
-          env:
-            - name: SESSION_ID
-              value: {{ .Values.session.id | quote }}
-            {{- if .Values.homeVolume.enabled }}
-            - name: HOME
-              value: {{ .Values.homeVolume.mountPath | quote }}
-            {{- if eq (toString .Values.broker.cliType) "codex" }}
-            - name: CODEX_HOME
-              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
-            {{- else }}
-            - name: CLAUDE_CONFIG_DIR
-              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
-            {{- end }}
-            {{- end }}
-            {{- if .Values.codeServer.password }}
-            - name: PASSWORD
-              value: {{ .Values.codeServer.password | quote }}
-            {{- end }}
-            {{- if .Values.codeServer.extensions }}
-            - name: EXTENSIONS
-              value: {{ .Values.codeServer.extensions | quote }}
-            {{- end }}
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: ide
-            initialDelaySeconds: 10
-            periodSeconds: 30
-            timeoutSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: ide
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            timeoutSeconds: 5
-          resources:
-            {{- toYaml .Values.codeServer.resources | nindent 12 }}
-          volumeMounts:
-            {{- if .Values.persistence.enabled }}
-            - name: sessions
-              mountPath: {{ .Values.persistence.mountPath }}
-            {{- end }}
-            {{- if .Values.homeVolume.enabled }}
-            - name: home
-              mountPath: {{ .Values.homeVolume.mountPath }}
-            {{- if .Values.homeVolume.credentialFiles.secretName }}
-            - name: credential-files
-              mountPath: {{ .Values.homeVolume.credentialFiles.secretMountPath }}
-              readOnly: true
-            {{- end }}
-            {{- end }}
-            - name: vscode-settings
-              mountPath: /etc/vscode-defaults
-              readOnly: true
-        {{- end }}
         {{- if .Values.reh.enabled }}
         # VS Code REH (Remote Extension Host) server — headless WebSocket-only
         # backend for the VS Code workbench hosted in Hliðskjálf.
@@ -371,6 +279,10 @@ spec:
           env:
             - name: SESSION_ID
               value: {{ .Values.session.id | quote }}
+            {{- if .Values.homeVolume.enabled }}
+            - name: HOME
+              value: {{ .Values.homeVolume.mountPath | quote }}
+            {{- end }}
           livenessProbe:
             tcpSocket:
               port: reh
@@ -495,11 +407,6 @@ spec:
           secret:
             secretName: {{ .Values.homeVolume.credentialFiles.secretName }}
         {{- end }}
-        {{- end }}
-        {{- if .Values.codeServer.enabled }}
-        - name: vscode-settings
-          configMap:
-            name: {{ include "skuld.fullname" . }}-vscode-settings
         {{- end }}
         {{- if and .Values.localServices.enabled .Values.localServices.terminal.debug }}
         - name: terminal-debug

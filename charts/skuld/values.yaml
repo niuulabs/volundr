@@ -1,5 +1,5 @@
 # Skuld Helm Chart Values
-# Claude Code CLI session pod with WebSocket broker and code-server IDE
+# Claude Code CLI session pod with WebSocket broker and embedded VS Code editor
 
 # Global values (can be set by parent chart)
 global:
@@ -47,7 +47,7 @@ resources:
 
 # Nginx entry point (routes all traffic internally)
 # All external traffic enters via nginx on port 8080 and is routed
-# to broker, code-server, devrunner, etc. based on URL path.
+# to broker, devrunner, etc. based on URL path.
 nginx:
   image:
     # -- Nginx image repository
@@ -68,42 +68,9 @@ nginx:
       # -- Nginx CPU limit
       cpu: "100m"
 
-# code-server sidecar configuration (VS Code in the browser)
-# DEPRECATED: Prefer reh (VS Code Remote Extension Host) for embedded editor.
-codeServer:
-  # -- Enable code-server sidecar container
-  enabled: false
-  image:
-    # -- code-server image repository
-    repository: codercom/code-server
-    # -- code-server image tag
-    tag: "latest"
-    # -- code-server image pull policy
-    pullPolicy: Always
-  resources:
-    requests:
-      # -- code-server memory request
-      memory: "256Mi"
-      # -- code-server CPU request
-      cpu: "100m"
-    limits:
-      # -- code-server memory limit
-      memory: "2Gi"
-      # -- code-server CPU limit
-      cpu: "1000m"
-  # -- Port for code-server (VS Code in browser)
-  port: 8443
-  # -- Password for code-server authentication (empty string disables password)
-  password: ""
-  # -- Extra VS Code extensions to install (comma-separated extension IDs)
-  extensions: ""
-  # -- VS Code editor settings (applied from ConfigMap on each container start)
-  settings:
-    workbench.colorTheme: "Default Dark Modern"
-
 # VS Code Remote Extension Host (REH) server — headless WebSocket-only
 # backend for the VS Code workbench embedded in Hliðskjálf.
-# Replaces code-server: no HTML serving, no static assets, just
+# No HTML serving, no static assets, just
 # WebSocket RPC for file system, terminal PTY, and extension host.
 reh:
   # -- Enable VS Code REH server container
@@ -201,7 +168,7 @@ ingress:
   paths:
     # -- WebSocket path for Skuld broker
     session: /session
-    # -- code-server IDE path (/ catch-all when codeServer.enabled)
+    # -- IDE path (catch-all)
     ide: /
   tls:
     # -- Enable TLS
