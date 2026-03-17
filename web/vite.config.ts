@@ -63,7 +63,6 @@ export default defineConfig(({ mode }) => {
           dts({
             include: ['src/plugin.ts', 'src/**/*.ts', 'src/**/*.tsx'],
             outDir: 'dist',
-            rollupTypes: true,
             tsconfigPath: './tsconfig.app.json',
           }),
         ]
@@ -121,22 +120,13 @@ export default defineConfig(({ mode }) => {
     ? {
         lib: {
           entry: path.resolve(__dirname, 'src/plugin.ts'),
-          name: 'VolundrUI',
-          formats: ['es', 'umd'],
-          fileName: (format) =>
-            format === 'es' ? 'volundr-ui.es.js' : 'volundr-ui.umd.cjs',
+          formats: ['es'],
+          fileName: () => 'volundr-ui.es.js',
         },
         rollupOptions: {
           external: ['react', 'react-dom', 'react-router-dom'],
-          output: {
-            globals: {
-              react: 'React',
-              'react-dom': 'ReactDOM',
-              'react-router-dom': 'ReactRouterDOM',
-            },
-          },
         },
-        sourcemap: true,
+        sourcemap: false,
         outDir: 'dist',
       }
     : {
