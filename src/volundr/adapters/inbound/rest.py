@@ -229,7 +229,7 @@ class SessionResponse(BaseModel):
         description="Skuld chat proxy URL (null when not running)",
     )
     code_endpoint: str | None = Field(
-        description="Code-server IDE URL (null when not running)",
+        description="Editor IDE URL (null when not running)",
     )
     created_at: str = Field(description="ISO 8601 creation timestamp")
     updated_at: str = Field(description="ISO 8601 last update timestamp")
@@ -327,7 +327,7 @@ class SessionEndpoints(BaseModel):
     """Response model for session endpoints after start."""
 
     chat_endpoint: str = Field(description="Skuld chat proxy URL")
-    code_endpoint: str = Field(description="Code-server IDE URL")
+    code_endpoint: str = Field(description="Editor IDE URL")
 
 
 class ModelInfo(BaseModel):

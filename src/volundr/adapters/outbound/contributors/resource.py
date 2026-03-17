@@ -64,7 +64,7 @@ class ResourceContributor(SessionContributor):
 
         # Build per-container resource overrides matching the Helm chart layout.
         # CPU/memory requests+limits go to the workload containers (devrunner
-        # gets the full user budget, code-server and skuld keep defaults).
+        # gets the full user budget, skuld keeps defaults).
         # GPU limits always go to devrunner; when gpu_timeslice is enabled,
         # GPU limits are also set on skuld so both containers share the GPU
         # via NVIDIA time-slicing.

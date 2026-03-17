@@ -1,7 +1,7 @@
 """Docker Compose adapter for pod management.
 
 Manages per-session Docker Compose stacks for local development.
-Each session gets its own compose project with Skuld, code-server,
+Each session gets its own compose project with Skuld, vscode-reh,
 and ttyd containers on a shared Docker network.
 
 Constructor accepts plain kwargs (dynamic adapter pattern):
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class DockerPodManager(PodManager):
     """Docker Compose implementation of PodManager.
 
-    Starts a per-session compose stack with Skuld, code-server, and ttyd
+    Starts a per-session compose stack with Skuld, vscode-reh, and ttyd
     containers. Suitable for local development and single-node deployments.
 
     Uses python-on-whales for typed Docker Compose interactions instead of
@@ -58,7 +58,6 @@ class DockerPodManager(PodManager):
         *,
         network: str = "volundr-net",
         skuld_image: str = "ghcr.io/niuulabs/skuld:latest",
-        code_server_image: str = "ghcr.io/niuulabs/code-server:latest",
         reh_image: str = "ghcr.io/niuulabs/vscode-reh:latest",
         ttyd_image: str = "ghcr.io/niuulabs/ttyd:latest",
         compose_dir: str = "~/.volundr/sessions",
@@ -73,7 +72,6 @@ class DockerPodManager(PodManager):
     ):
         self._network = network
         self._skuld_image = skuld_image
-        self._code_server_image = code_server_image
         self._reh_image = reh_image
         self._ttyd_image = ttyd_image
         self._compose_dir = Path(compose_dir).expanduser()
@@ -125,7 +123,7 @@ class DockerPodManager(PodManager):
     def _code_endpoint(self, session: Session) -> str:
         if self._gateway_domain:
             return f"https://{self._gateway_domain}/s/{session.id}/"
-        return f"http://{self._project_name(session)}-code-server-1:8080/"
+        return f"http://{self._project_name(session)}-vscode-reh-1:8445/"
 
     def _build_compose(
         self,
@@ -193,11 +191,6 @@ class DockerPodManager(PodManager):
                     "image": self._skuld_image,
                     "networks": [self._network],
                     "environment": skuld_env,
-                    "volumes": volumes,
-                },
-                "code-server": {
-                    "image": self._code_server_image,
-                    "networks": [self._network],
                     "volumes": volumes,
                 },
                 "vscode-reh": {

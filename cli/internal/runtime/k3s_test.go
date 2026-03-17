@@ -1350,7 +1350,7 @@ func TestK3sRuntime_QueryK8sPodStates_Success(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	podListJSON := `{"items":[{"metadata":{"name":"skuld-abc","labels":{"app.kubernetes.io/name":"skuld"}},"status":{"phase":"Running"}},{"metadata":{"name":"code-server-xyz","labels":{}},"status":{"phase":"Pending"}}]}`
+	podListJSON := `{"items":[{"metadata":{"name":"skuld-abc","labels":{"app.kubernetes.io/name":"skuld"}},"status":{"phase":"Running"}},{"metadata":{"name":"vscode-reh-xyz","labels":{}},"status":{"phase":"Pending"}}]}`
 	withMockExec(t, "MOCK_RESPONSE="+podListJSON)
 
 	r := NewK3sRuntime()

@@ -7,7 +7,7 @@
 # distribution of this software and related documentation without an express
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
-# FarmSessionDefinition for Skuld-Claude (Claude Code session with code-server IDE)
+# FarmSessionDefinition for Skuld-Claude (Claude Code session with embedded VS Code editor)
 # This defines the session type that Farm agents can use to create Claude sessions.
 # Uses the shared skuld Helm chart, parameterised for Claude Code.
 
@@ -57,14 +57,6 @@ spec:
 
       resources:
         {{- toYaml .Values.sessionDefinitions.skuldClaude.defaults.resources | nindent 8 }}
-
-      codeServer:
-        enabled: {{ .Values.sessionDefinitions.skuldClaude.defaults.codeServer.enabled }}
-        image:
-          repository: {{ .Values.sessionDefinitions.skuldClaude.defaults.codeServer.image.repository }}
-          tag: {{ .Values.sessionDefinitions.skuldClaude.defaults.codeServer.image.tag | quote }}
-        resources:
-          {{- toYaml .Values.sessionDefinitions.skuldClaude.defaults.codeServer.resources | nindent 10 }}
 
       {{- with .Values.sessionDefinitions.skuldClaude.defaults.imagePullSecrets }}
       global:

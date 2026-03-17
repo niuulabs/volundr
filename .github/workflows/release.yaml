@@ -342,6 +342,8 @@ jobs:
 
       - name: Build library
         run: npm run build:lib
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Publish to GitHub Packages
         run: npm publish
