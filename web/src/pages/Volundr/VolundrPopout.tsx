@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   Hammer,
@@ -11,18 +11,16 @@ import {
   FolderGit2,
   Globe,
 } from 'lucide-react';
-import {
-  StatusBadge,
-  SessionTerminal,
-  SessionChat,
-  SessionStartingIndicator,
-  EditorPanel,
-} from '@/components';
+import { StatusBadge, SessionTerminal, SessionChat, SessionStartingIndicator } from '@/components';
 import { useVolundr, useBroadcastChannel, useSessionProbe } from '@/hooks';
 import type { VolundrSession } from '@/models';
 import { isSessionBooting } from '@/models';
 import { getSourceLabel, getBranch, isGitSource } from '@/utils/source';
 import styles from './VolundrPopout.module.css';
+
+const EditorPanel = lazy(() =>
+  import('@/components/EditorPanel/EditorPanel').then(m => ({ default: m.EditorPanel }))
+);
 
 type TabType = 'terminal' | 'code' | 'chat';
 
@@ -261,12 +259,14 @@ export function VolundrPopout() {
             </div>
           )
         ) : isSessionReady ? (
-          <EditorPanel
-            hostname={session.hostname ?? null}
-            sessionId={session.id}
-            codeEndpoint={session.codeEndpoint}
-            className={styles.fullPanel}
-          />
+          <Suspense fallback={null}>
+            <EditorPanel
+              hostname={session.hostname ?? null}
+              sessionId={session.id}
+              codeEndpoint={session.codeEndpoint}
+              className={styles.fullPanel}
+            />
+          </Suspense>
         ) : session.status === 'starting' ||
           session.status === 'provisioning' ||
           (isRunning && !connectionVerified) ? (

@@ -18,14 +18,12 @@
     "directory": "web"
   },
   "type": "module",
-  "main": "dist/volundr-ui.umd.cjs",
   "module": "dist/volundr-ui.es.js",
   "types": "dist/plugin.d.ts",
   "exports": {
     ".": {
       "types": "./dist/plugin.d.ts",
-      "import": "./dist/volundr-ui.es.js",
-      "require": "./dist/volundr-ui.umd.cjs"
+      "import": "./dist/volundr-ui.es.js"
     },
     "./styles": "./dist/volundr-ui.css"
   },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Hammer,
@@ -40,7 +40,6 @@ import {
   SessionChronicles,
   SessionStartingIndicator,
   SessionDiffs,
-  EditorPanel,
   Modal,
   SearchInput,
   StatusBadge,
@@ -58,6 +57,10 @@ import { isSessionBooting, isSessionActive } from '@/models';
 import { formatTokens, cn } from '@/utils';
 import { getRepo, getBranch, getSourceLabel, isGitSource } from '@/utils/source';
 import styles from './VolundrPage.module.css';
+
+const EditorPanel = lazy(() =>
+  import('@/components/EditorPanel/EditorPanel').then(m => ({ default: m.EditorPanel }))
+);
 
 const STATUS_OPTIONS = ['all', 'running', 'stopped', 'error'];
 
@@ -1069,13 +1072,15 @@ export function VolundrPage() {
                 </div>
               ))}
             {isSessionReady && (
-              <EditorPanel
-                hostname={effectiveSelectedSession.hostname ?? null}
-                sessionId={effectiveSelectedSession.id}
-                codeEndpoint={effectiveSelectedSession.codeEndpoint}
-                className={styles.tabPanel}
-                hidden={activeTab !== 'code'}
-              />
+              <Suspense fallback={null}>
+                <EditorPanel
+                  hostname={effectiveSelectedSession.hostname ?? null}
+                  sessionId={effectiveSelectedSession.id}
+                  codeEndpoint={effectiveSelectedSession.codeEndpoint}
+                  className={styles.tabPanel}
+                  hidden={activeTab !== 'code'}
+                />
+              </Suspense>
             )}
 
             {activeTab === 'diffs' && (
