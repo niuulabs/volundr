@@ -72,7 +72,7 @@ vi.mock('@/components/SessionChat', () => ({
   ),
 }));
 
-vi.mock('@/components/EditorPanel', () => ({
+vi.mock('@/components/EditorPanel/EditorPanel', () => ({
   EditorPanel: ({
     hostname,
     sessionId,
@@ -758,7 +758,7 @@ describe('VolundrPage', () => {
 
   // Tests for embedded editor panel (VS Code workbench via REH)
   describe('Editor panel', () => {
-    it('renders EditorPanel when code tab is active and session is running', () => {
+    it('renders EditorPanel when code tab is active and session is running', async () => {
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -769,7 +769,7 @@ describe('VolundrPage', () => {
 
       fireEvent.click(screen.getByText('Code'));
 
-      const panel = screen.getByTestId('editor-panel');
+      const panel = await screen.findByTestId('editor-panel');
       expect(panel).toBeInTheDocument();
       expect(panel).toHaveAttribute('data-hostname', 'skuld-7f3a2b1c.volundr.local');
       expect(panel).toHaveAttribute('data-session-id', 'forge-7f3a2b1c');
@@ -2024,7 +2024,7 @@ describe('VolundrPage', () => {
 
   // Tests for editor panel states
   describe('Editor panel states', () => {
-    it('renders EditorPanel with session hostname when code tab is active', () => {
+    it('renders EditorPanel with session hostname when code tab is active', async () => {
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -2035,7 +2035,7 @@ describe('VolundrPage', () => {
 
       fireEvent.click(screen.getByText('Code'));
 
-      const panel = screen.getByTestId('editor-panel');
+      const panel = await screen.findByTestId('editor-panel');
       expect(panel).toHaveAttribute('data-hostname', 'skuld-7f3a2b1c.volundr.local');
     });
 
