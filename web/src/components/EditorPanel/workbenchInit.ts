@@ -271,7 +271,16 @@ async function doInitWorkbench({
     create: (url: string) => {
       const rehPrefix = config.basePath ? `${config.basePath}reh/` : '/reh/';
       const rewritten = url.replace(/^(wss?:\/\/[^/]+)\//, `$1${rehPrefix}`);
-      const ws = wsFactory(rewritten);
+
+      // Append access_token query param so the Envoy Gateway SecurityPolicy
+      // can validate the JWT (it extracts from headers and query params, but
+      // not from the Sec-WebSocket-Protocol subprotocol used by wsFactory).
+      const token = getAccessToken();
+      const authedUrl = token
+        ? `${rewritten}${rewritten.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`
+        : rewritten;
+
+      const ws = wsFactory(authedUrl);
       ws.binaryType = 'arraybuffer';
 
       return {
