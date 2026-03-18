@@ -11,7 +11,6 @@
  * @see https://github.com/CodinGame/monaco-vscode-api/tree/main/demo
  */
 import { getAccessToken } from '@/adapters/api/client';
-import { createBearerWebSocketFactory } from '@/utils/bearerWebSocketFactory';
 import { ApiEditorAdapter } from '@/adapters/api/editor.adapter';
 import { isInitialized, getInitializedSessionId, markInitialized } from './editorState';
 
@@ -180,7 +179,6 @@ async function doInitWorkbench({
   container,
 }: InitWorkbenchParams): Promise<void> {
   const config = editorService.getWorkbenchConfig(sessionId, hostname, codeEndpoint);
-  const wsFactory = createBearerWebSocketFactory({ getToken: getAccessToken });
 
   // ── 1. Create IndexedDB providers (user data persistence) ──
   await createIndexedDBProviders();
@@ -272,15 +270,14 @@ async function doInitWorkbench({
       const rehPrefix = config.basePath ? `${config.basePath}reh/` : '/reh/';
       const rewritten = url.replace(/^(wss?:\/\/[^/]+)\//, `$1${rehPrefix}`);
 
-      // Append access_token query param so the Envoy Gateway SecurityPolicy
-      // can validate the JWT (it extracts from headers and query params, but
-      // not from the Sec-WebSocket-Protocol subprotocol used by wsFactory).
+      // Append access_token query param for gateway JWT validation,
+      // matching the pattern used by chat and terminal WebSockets.
       const token = getAccessToken();
       const authedUrl = token
         ? `${rewritten}${rewritten.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`
         : rewritten;
 
-      const ws = wsFactory(authedUrl);
+      const ws = new WebSocket(authedUrl);
       ws.binaryType = 'arraybuffer';
 
       return {
