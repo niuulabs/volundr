@@ -1,0 +1,38 @@
+{{- if .Values.sessionGateway.enabled -}}
+# ClientTrafficPolicy forces HTTP/1.1 on the session Gateway listener.
+#
+# By default, Envoy Gateway advertises both h2 and http/1.1 via TLS ALPN.
+# Browsers prefer HTTP/2, but Envoy Gateway does not expose the
+# allow_connect setting needed for RFC 8441 Extended CONNECT (WebSocket
+# over HTTP/2). Without Extended CONNECT, browsers that negotiate HTTP/2
+# silently fail all WebSocket connections — breaking chat, terminal, and
+# VS Code REH endpoints.
+#
+# Forcing HTTP/1.1 ALPN ensures standard WebSocket upgrades (RFC 6455)
+# work reliably. Session traffic is predominantly WebSocket, so the loss
+# of HTTP/2 multiplexing has minimal impact.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: {{ .Values.sessionGateway.name }}-client
+  namespace: {{ .Release.Namespace }}
+  labels:
+    helm.sh/chart: {{ include "volundr.chart" . }}
+    {{- include "volundr.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: session-gateway
+    app.kubernetes.io/part-of: volundr
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: {{ .Values.sessionGateway.name }}
+  tls:
+    alpnProtocols:
+      - http/1.1
+  timeout:
+    http:
+      requestReceivedTimeout: 0s
+  connection:
+    bufferLimit: 1048576
+{{- end }}
