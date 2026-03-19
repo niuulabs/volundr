@@ -1073,7 +1073,6 @@ export class ApiVolundrService implements IVolundrService {
     return mapCIStatus(response.status) ?? 'unknown';
   }
 
-  /* eslint-disable @typescript-eslint/no-unused-vars */
   async getSessionMcpServers(_sessionId: string): Promise<import('@/models').McpServer[]> {
     // TODO: Implement when backend endpoint is available
     return [];
@@ -1229,7 +1228,6 @@ export class ApiVolundrService implements IVolundrService {
       url: issue.url,
     };
   }
-  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   async getIdentity(): Promise<VolundrIdentity> {
     const response = await api.get<ApiIdentityResponse>('/me');
@@ -1538,7 +1536,6 @@ export class ApiVolundrService implements IVolundrService {
     return response.map(this.mapWorkspace);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async restoreWorkspace(_id: string): Promise<void> {
     // No-op: restore is handled by StorageContributor on session create.
   }

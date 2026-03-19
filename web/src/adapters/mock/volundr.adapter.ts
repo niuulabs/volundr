@@ -500,7 +500,6 @@ export class MockVolundrService implements IVolundrService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getSessionDiff(_sessionId: string, filePath: string, _base: DiffBase): Promise<DiffData> {
     // Return realistic mock diff data based on file extension
     const isNewFile = filePath.endsWith('.test.ts') || filePath.endsWith('.test.tsx');
@@ -682,7 +681,6 @@ export class MockVolundrService implements IVolundrService {
     return servers.map(s => ({ ...s }));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async searchTrackerIssues(query: string, _projectId?: string): Promise<TrackerIssue[]> {
     const lower = query.toLowerCase();
     return mockTrackerIssues
@@ -699,11 +697,10 @@ export class MockVolundrService implements IVolundrService {
     return mockProjectRepoMappings.map(m => ({ ...m }));
   }
 
-  /* eslint-disable @typescript-eslint/no-unused-vars */
   async getSessionFiles(
-    sessionId: string,
+    _sessionId: string,
     path?: string,
-    root?: import('@/models').FileRoot
+    _root?: import('@/models').FileRoot
   ): Promise<FileTreeEntry[]> {
     const dirPath = path ?? '';
     const entries = mockFileTree[dirPath];
@@ -714,39 +711,38 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async downloadSessionFile(
-    sessionId: string,
-    filePath: string,
-    root?: import('@/models').FileRoot
+    _sessionId: string,
+    _filePath: string,
+    _root?: import('@/models').FileRoot
   ): Promise<Blob> {
     return new Blob(['mock file content'], { type: 'application/octet-stream' });
   }
 
   async uploadSessionFiles(
-    sessionId: string,
-    files: File[],
-    targetPath: string,
-    root?: import('@/models').FileRoot
+    _sessionId: string,
+    _files: File[],
+    _targetPath: string,
+    _root?: import('@/models').FileRoot
   ): Promise<FileTreeEntry[]> {
     return [];
   }
 
   async createSessionDirectory(
-    sessionId: string,
+    _sessionId: string,
     path: string,
-    root?: import('@/models').FileRoot
+    _root?: import('@/models').FileRoot
   ): Promise<FileTreeEntry> {
     const name = path.split('/').pop() ?? path;
     return { name, path, type: 'directory' };
   }
 
   async deleteSessionFile(
-    sessionId: string,
-    filePath: string,
-    root?: import('@/models').FileRoot
+    _sessionId: string,
+    _filePath: string,
+    _root?: import('@/models').FileRoot
   ): Promise<void> {
     // no-op
   }
-  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   async updateTrackerIssueStatus(
     issueId: string,
@@ -835,7 +831,6 @@ export class MockVolundrService implements IVolundrService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deleteTenant(_id: string): Promise<void> {
     // no-op in mock
   }
@@ -869,7 +864,6 @@ export class MockVolundrService implements IVolundrService {
     return { success: true, userId: _userId, homePvc: `home-${_userId}`, errors: [] };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async reprovisionTenant(_tenantId: string): Promise<VolundrProvisioningResult[]> {
     return [
       { success: true, userId: 'user-1', homePvc: 'home-user-1', errors: [] },
@@ -1020,7 +1014,6 @@ export class MockVolundrService implements IVolundrService {
     this.mockIntegrations = this.mockIntegrations.filter(i => i.id !== id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async testIntegration(_id: string): Promise<IntegrationTestResult> {
     return {
       success: true,
