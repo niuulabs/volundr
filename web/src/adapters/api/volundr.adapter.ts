@@ -1604,9 +1604,12 @@ export class ApiVolundrService implements IVolundrService {
         } else {
           // Merge: preserve fields not carried by SSE (e.g. trackerIssue, taskType)
           const existing = this.cachedSessions[idx];
+          const defined = Object.fromEntries(
+            Object.entries(session).filter(([, v]) => v !== undefined)
+          );
           this.cachedSessions[idx] = {
             ...existing,
-            ...session,
+            ...defined,
           };
         }
         this.notifySessionSubscribers();

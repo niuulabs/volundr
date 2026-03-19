@@ -583,6 +583,104 @@ describe('ApiVolundrService', () => {
       expect(lastCall[0].tokensUsed).toBe(2000);
     });
 
+    it('handles session_created with tracker issue fields', async () => {
+      const callback = vi.fn();
+      service.subscribe(callback);
+      await vi.waitFor(() => {
+        expect(MockSSEStream.instances).toHaveLength(1);
+      });
+
+      const eventSource = MockSSEStream.instances[0];
+      const sessionWithTracker: SSESessionPayload = {
+        ...mockSSESession,
+        tracker_issue_id: 'NIU-42',
+        issue_tracker_url: 'https://linear.app/niuu/issue/NIU-42',
+      };
+      await eventSource.simulateEvent('session_created', sessionWithTracker);
+
+      const lastCall = callback.mock.calls[callback.mock.calls.length - 1][0];
+      expect(lastCall[0].trackerIssue).toEqual(
+        expect.objectContaining({
+          id: 'NIU-42',
+          identifier: 'NIU-42',
+          url: 'https://linear.app/niuu/issue/NIU-42',
+        })
+      );
+    });
+
+    it('preserves tracker issue on SSE update via merge', async () => {
+      const callback = vi.fn();
+      service.subscribe(callback);
+      await vi.waitFor(() => {
+        expect(MockSSEStream.instances).toHaveLength(1);
+      });
+
+      const eventSource = MockSSEStream.instances[0];
+
+      // Create session with tracker
+      const sessionWithTracker: SSESessionPayload = {
+        ...mockSSESession,
+        tracker_issue_id: 'NIU-42',
+        issue_tracker_url: 'https://linear.app/niuu/issue/NIU-42',
+      };
+      await eventSource.simulateEvent('session_created', sessionWithTracker);
+
+      // Update session without tracker fields (simulates legacy SSE)
+      const updateWithoutTracker: SSESessionPayload = {
+        ...mockSSESession,
+        tokens_used: 3000,
+      };
+      await eventSource.simulateEvent('session_updated', updateWithoutTracker);
+
+      const lastCall = callback.mock.calls[callback.mock.calls.length - 1][0];
+      expect(lastCall[0].tokensUsed).toBe(3000);
+      // trackerIssue should be preserved from the original session
+      expect(lastCall[0].trackerIssue).toEqual(
+        expect.objectContaining({
+          id: 'NIU-42',
+          identifier: 'NIU-42',
+        })
+      );
+    });
+
+    it('handles SSE session with flat repo/branch fields (no source)', async () => {
+      const callback = vi.fn();
+      service.subscribe(callback);
+      await vi.waitFor(() => {
+        expect(MockSSEStream.instances).toHaveLength(1);
+      });
+
+      const eventSource = MockSSEStream.instances[0];
+      const flatSession: SSESessionPayload = {
+        id: '550e8400-e29b-41d4-a716-446655440099',
+        name: 'Flat Fields Session',
+        model: 'claude-sonnet-4-20250514',
+        repo: 'https://github.com/org/repo',
+        branch: 'develop',
+        status: 'running',
+        chat_endpoint: null,
+        code_endpoint: null,
+        created_at: '2026-02-03T12:00:00',
+        updated_at: '2026-02-03T12:05:00',
+        last_active: '2026-02-03T12:05:00',
+        message_count: 0,
+        tokens_used: 0,
+        pod_name: null,
+        error: null,
+      };
+      await eventSource.simulateEvent('session_created', flatSession);
+
+      const lastCall = callback.mock.calls[callback.mock.calls.length - 1][0];
+      const created = lastCall.find(
+        (s: { id: string }) => s.id === '550e8400-e29b-41d4-a716-446655440099'
+      );
+      expect(created.source).toEqual({
+        type: 'git',
+        repo: 'https://github.com/org/repo',
+        branch: 'develop',
+      });
+    });
+
     it('handles session_deleted events', async () => {
       const callback = vi.fn();
       service.subscribe(callback);
