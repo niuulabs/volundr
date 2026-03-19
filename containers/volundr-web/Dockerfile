@@ -9,6 +9,7 @@ RUN npm ci --ignore-scripts
 
 # Copy source and build
 COPY web/ .
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # Stage 2: Serve with nginx

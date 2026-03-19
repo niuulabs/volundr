@@ -141,6 +141,7 @@ def definitions_from_config(
             env_from_credentials=item.get("env_from_credentials", {}),
             auth_type=item.get("auth_type", "api_key"),
             oauth=oauth_spec,
+            file_mounts=item.get("file_mounts", {}),
         )
         result.append(defn)
         logger.debug("Loaded integration definition: %s", defn.slug)

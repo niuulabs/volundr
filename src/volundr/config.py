@@ -601,6 +601,7 @@ class IntegrationDefinitionConfig(BaseModel):
     env_from_credentials: dict[str, str] = Field(default_factory=dict)
     auth_type: str = "api_key"
     oauth: OAuthSpecConfig | None = None
+    file_mounts: dict[str, str] = Field(default_factory=dict)
 
 
 def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:

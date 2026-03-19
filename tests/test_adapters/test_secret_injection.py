@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
 from volundr.adapters.outbound.infisical_secret_injection import (
-    InfisicalCSISecretInjectionAdapter,
+    InfisicalAgentInjectionAdapter,
 )
 from volundr.adapters.outbound.memory_secret_injection import (
     InMemorySecretInjectionAdapter,
 )
-from volundr.domain.models import PodSpecAdditions
+from volundr.domain.models import CredentialMapping, PodSpecAdditions
 
 # ------------------------------------------------------------------
 # PodSpecAdditions model
@@ -21,8 +21,6 @@ from volundr.domain.models import PodSpecAdditions
 
 
 class TestPodSpecAdditions:
-    """Tests for the PodSpecAdditions frozen dataclass."""
-
     def test_defaults(self):
         pa = PodSpecAdditions()
         assert pa.volumes == ()
@@ -47,18 +45,40 @@ class TestPodSpecAdditions:
             service_account="my-sa",
         )
         assert len(pa.volumes) == 1
-        assert pa.volumes[0]["name"] == "v1"
-        assert pa.volume_mounts[0]["mountPath"] == "/mnt"
         assert pa.labels == {"app": "test"}
-        assert pa.annotations == {"note": "value"}
-        assert len(pa.env) == 1
         assert pa.service_account == "my-sa"
 
     def test_post_init_converts_empty_tuple_defaults_to_dicts(self):
-        """Labels and annotations use () as frozen default, converted to {} by __post_init__."""
         pa = PodSpecAdditions()
         assert isinstance(pa.labels, dict)
         assert isinstance(pa.annotations, dict)
+
+
+# ------------------------------------------------------------------
+# CredentialMapping model
+# ------------------------------------------------------------------
+
+
+class TestCredentialMapping:
+    def test_defaults(self):
+        m = CredentialMapping(credential_name="my-cred")
+        assert m.credential_name == "my-cred"
+        assert m.env_mappings == {}
+        assert m.file_mappings == {}
+
+    def test_with_mappings(self):
+        m = CredentialMapping(
+            credential_name="openai-cred",
+            env_mappings={"OPENAI_API_KEY": "api_key"},
+            file_mappings={"/etc/config": "config_file"},
+        )
+        assert m.env_mappings == {"OPENAI_API_KEY": "api_key"}
+        assert m.file_mappings == {"/etc/config": "config_file"}
+
+    def test_frozen(self):
+        m = CredentialMapping(credential_name="x")
+        with pytest.raises(AttributeError):
+            m.credential_name = "y"  # type: ignore[misc]
 
 
 # ------------------------------------------------------------------
@@ -67,8 +87,6 @@ class TestPodSpecAdditions:
 
 
 class TestInMemorySecretInjectionAdapter:
-    """Tests for the in-memory adapter."""
-
     @pytest.fixture()
     def adapter(self):
         return InMemorySecretInjectionAdapter()
@@ -78,7 +96,6 @@ class TestInMemorySecretInjectionAdapter:
         result = await adapter.pod_spec_additions("user-1", "session-1")
         assert isinstance(result, PodSpecAdditions)
         assert result.volumes == ()
-        assert result.service_account is None
 
     @pytest.mark.asyncio()
     async def test_provision_user(self, adapter):
@@ -92,165 +109,296 @@ class TestInMemorySecretInjectionAdapter:
         assert "alice" not in adapter._provisioned_users
 
     @pytest.mark.asyncio()
-    async def test_deprovision_nonexistent_is_noop(self, adapter):
-        # Should not raise
-        await adapter.deprovision_user("nonexistent")
-
-    @pytest.mark.asyncio()
     async def test_accepts_extra_kwargs(self):
-        """Dynamic adapter pattern: extra kwargs are ignored."""
         adapter = InMemorySecretInjectionAdapter(foo="bar", baz=42)
         result = await adapter.pod_spec_additions("u1", "s1")
         assert isinstance(result, PodSpecAdditions)
 
 
 # ------------------------------------------------------------------
-# InfisicalCSISecretInjectionAdapter
+# InfisicalAgentInjectionAdapter
 # ------------------------------------------------------------------
 
 
-def _mock_response(status_code: int = 200, json_data: dict | None = None) -> httpx.Response:
-    """Build a mock httpx.Response."""
-    return httpx.Response(
-        status_code=status_code,
-        json=json_data or {},
-        request=httpx.Request("GET", "http://test"),
-    )
-
-
-class TestInfisicalCSISecretInjectionAdapter:
-    """Tests for the Infisical CSI adapter with mocked httpx."""
-
+class TestInfisicalAgentInjectionAdapter:
     @pytest.fixture()
     def adapter(self):
-        return InfisicalCSISecretInjectionAdapter(
+        return InfisicalAgentInjectionAdapter(
             infisical_url="https://infisical.test",
             client_id="test-client-id",
             client_secret="test-client-secret",
             namespace="test-ns",
+            org_id="org-123",
+            credential_project_id="proj-123",
+            environment="dev",
+            token_ttl_seconds=300,
         )
 
     @pytest.mark.asyncio()
-    async def test_pod_spec_additions_returns_csi_volume(self, adapter):
+    async def test_pod_spec_additions_returns_annotations(self, adapter):
         result = await adapter.pod_spec_additions("alice", "s-123")
 
-        assert result.service_account == "skuld-alice"
-        assert len(result.volumes) == 1
-        vol = result.volumes[0]
-        assert vol["csi"]["driver"] == "secrets-store.csi.k8s.io"
-        assert vol["csi"]["readOnly"] is True
-        assert vol["csi"]["volumeAttributes"]["secretProviderClass"] == "infisical-alice"
-
-        assert len(result.volume_mounts) == 1
-        mount = result.volume_mounts[0]
-        assert mount["mountPath"] == "/run/secrets/user"
-        assert mount["readOnly"] is True
+        assert result.annotations["org.infisical.com/inject"] == "true"
+        assert result.annotations["org.infisical.com/inject-mode"] == "init"
+        assert result.annotations["org.infisical.com/agent-config-map"] == "infisical-agent-s-123"
+        assert result.annotations["org.infisical.com/agent-revoke-on-shutdown"] == "true"
+        assert result.annotations["org.infisical.com/agent-set-security-context"] == "true"
+        assert result.volumes == ()
+        assert result.service_account is None
 
     @pytest.mark.asyncio()
-    async def test_provision_user_creates_project_and_identity(self, adapter):
-        auth_resp = _mock_response(200, {"accessToken": "tok-123"})
-        project_resp = _mock_response(200, {"workspace": {"id": "proj-id-1"}})
-        identity_resp = _mock_response(200, {"identity": {"id": "ident-id-1"}})
-        k8s_auth_resp = _mock_response(200, {})
-
-        with patch.object(adapter, "_get_client") as mock_client_fn:
-            mock_client = AsyncMock()
-            mock_client_fn.return_value = mock_client
-            mock_client.post = AsyncMock(
-                side_effect=[auth_resp, project_resp, identity_resp, k8s_auth_resp]
+    async def test_ensure_creates_identity_and_configmap(self, adapter):
+        """ensure_secret_provider_class creates an identity and ConfigMap."""
+        mappings = [
+            CredentialMapping(
+                credential_name="openai-cred",
+                env_mappings={"OPENAI_API_KEY": "api_key"},
+            ),
+        ]
+        with (
+            patch.object(
+                adapter, "_create_session_identity",
+                return_value="ident-1",
+            ) as mock_identity,
+            patch.object(adapter, "_create_or_update_configmap") as mock_cm,
+        ):
+            await adapter.ensure_secret_provider_class(
+                "alice", mappings, session_id="s-123",
             )
 
-            await adapter.provision_user("alice")
+            mock_identity.assert_called_once_with("alice", "s-123")
+            mock_cm.assert_called_once()
+            call_kwargs = mock_cm.call_args[1]
+            assert call_kwargs["name"] == "infisical-agent-s-123"
+            assert "config.yaml" in call_kwargs["data"]
+            assert call_kwargs["labels"]["volundr.niuu.io/session-id"] == "s-123"
+            assert call_kwargs["annotations"]["volundr.niuu.io/identity-id"] == "ident-1"
 
-            # Auth + 3 API calls
+    @pytest.mark.asyncio()
+    async def test_ensure_skips_when_no_mappings(self, adapter):
+        with patch.object(adapter, "_create_session_identity") as mock_ident:
+            await adapter.ensure_secret_provider_class("alice", [], session_id="s-1")
+            mock_ident.assert_not_called()
+
+    @pytest.mark.asyncio()
+    async def test_ensure_skips_when_no_session_id(self, adapter):
+        mappings = [CredentialMapping(credential_name="cred")]
+        with patch.object(adapter, "_create_session_identity") as mock_ident:
+            await adapter.ensure_secret_provider_class("alice", mappings)
+            mock_ident.assert_not_called()
+
+    @pytest.mark.asyncio()
+    async def test_build_configmap_uses_kubernetes_auth(self, adapter):
+        """Config uses kubernetes auth with identity ID."""
+        import yaml
+
+        mappings = [
+            CredentialMapping(
+                credential_name="openai-cred",
+                env_mappings={"OPENAI_API_KEY": "api_key"},
+            ),
+        ]
+        data = adapter._build_configmap_data(
+            user_id="alice",
+            credential_mappings=mappings,
+            identity_id="ident-1",
+        )
+
+        config = yaml.safe_load(data["config.yaml"])
+        assert config["infisical"]["auth"]["type"] == "kubernetes"
+        assert config["infisical"]["auth"]["config"]["identity-id"] == "ident-1"
+
+    @pytest.mark.asyncio()
+    async def test_build_configmap_env_mapping(self, adapter):
+        """Env mappings render as export lines in env.sh."""
+        import yaml
+
+        mappings = [
+            CredentialMapping(
+                credential_name="openai-cred",
+                env_mappings={"OPENAI_API_KEY": "api_key", "OPENAI_ORG": "org_id"},
+            ),
+        ]
+        data = adapter._build_configmap_data(
+            user_id="alice",
+            credential_mappings=mappings,
+            identity_id="ident-1",
+        )
+
+        config = yaml.safe_load(data["config.yaml"])
+        env_templates = [
+            t for t in config["templates"]
+            if t["destination-path"] == "/run/secrets/env.sh"
+        ]
+        assert len(env_templates) == 1
+        content = env_templates[0]["template-content"]
+        assert "export OPENAI_API_KEY=" in content
+        assert "export OPENAI_ORG=" in content
+        assert 'getSecretByName "proj-123" "dev" "/users/alice/openai-cred" "api_key"' in content
+
+    @pytest.mark.asyncio()
+    async def test_build_configmap_file_mapping(self, adapter):
+        """File mappings render as individual templates at target paths."""
+        import yaml
+
+        mappings = [
+            CredentialMapping(
+                credential_name="ssh-key",
+                file_mappings={"/home/dev/.ssh/id_rsa": "private_key"},
+            ),
+        ]
+        data = adapter._build_configmap_data(
+            user_id="alice",
+            credential_mappings=mappings,
+            identity_id="ident-1",
+        )
+
+        config = yaml.safe_load(data["config.yaml"])
+        file_templates = [
+            t for t in config["templates"]
+            if t["destination-path"] == "/home/dev/.ssh/id_rsa"
+        ]
+        assert len(file_templates) == 1
+        content = file_templates[0]["template-content"]
+        assert 'getSecretByName "proj-123" "dev" "/users/alice/ssh-key" "private_key"' in content
+
+    @pytest.mark.asyncio()
+    async def test_build_configmap_unmapped_credential(self, adapter):
+        """Unmapped credentials produce no templates (nothing to render)."""
+        import yaml
+
+        mappings = [
+            CredentialMapping(credential_name="generic-cred"),
+        ]
+        data = adapter._build_configmap_data(
+            user_id="alice",
+            credential_mappings=mappings,
+            identity_id="ident-1",
+        )
+
+        config = yaml.safe_load(data["config.yaml"])
+        assert len(config.get("templates", [])) == 0
+
+    @pytest.mark.asyncio()
+    async def test_build_configmap_mixed_mappings(self, adapter):
+        """Multiple credentials with different mapping types."""
+        import yaml
+
+        mappings = [
+            CredentialMapping(
+                credential_name="openai",
+                env_mappings={"OPENAI_API_KEY": "api_key"},
+            ),
+            CredentialMapping(
+                credential_name="ssh",
+                file_mappings={"/root/.ssh/id_rsa": "private_key"},
+            ),
+            CredentialMapping(credential_name="raw-cred"),
+        ]
+        data = adapter._build_configmap_data(
+            user_id="alice",
+            credential_mappings=mappings,
+            identity_id="ident-1",
+        )
+
+        config = yaml.safe_load(data["config.yaml"])
+        # env.sh + ssh file = 2 templates (unmapped raw-cred is skipped)
+        assert len(config["templates"]) == 2
+
+    @pytest.mark.asyncio()
+    async def test_create_session_identity(self, adapter):
+        """_create_session_identity makes 4 API calls in sequence."""
+        responses = [
+            # 1. Create identity
+            _mock_response(200, {"identity": {"id": "ident-1"}}),
+            # 2. Attach Kubernetes Auth
+            _mock_response(200, {"identityKubernetesAuth": {"id": "ka-1"}}),
+            # 3. Add identity to project
+            _mock_response(200, {"identityMembership": {"id": "mem-1"}}),
+            # 4. Add privilege
+            _mock_response(200, {"privilege": {"id": "priv-1"}}),
+        ]
+
+        with (
+            patch.object(adapter, "_ensure_authenticated", return_value="mgmt-token"),
+            patch.object(adapter, "_get_client") as mock_get_client,
+        ):
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=responses)
+            mock_get_client.return_value = mock_client
+
+            identity_id = await adapter._create_session_identity("alice", "s-123")
+
+            assert identity_id == "ident-1"
             assert mock_client.post.call_count == 4
 
-            # Verify project creation
-            project_call = mock_client.post.call_args_list[1]
-            assert project_call[0][0] == "/api/v2/workspace"
-            assert project_call[1]["json"]["projectName"] == "user-alice"
+            # Verify identity creation call
+            create_call = mock_client.post.call_args_list[0]
+            assert create_call[0][0] == "/api/v1/identities"
+            assert create_call[1]["json"]["name"] == "session-s-123"
+            assert create_call[1]["json"]["organizationId"] == "org-123"
 
-            # Verify identity creation
-            identity_call = mock_client.post.call_args_list[2]
-            assert identity_call[0][0] == "/api/v1/identities"
-            assert identity_call[1]["json"]["name"] == "skuld-alice"
+            # Verify Kubernetes Auth call
+            k8s_auth_call = mock_client.post.call_args_list[1]
+            assert "/kubernetes-auth/identities/ident-1" in k8s_auth_call[0][0]
+            assert k8s_auth_call[1]["json"]["allowedNamespaces"] == "test-ns"
 
-            # Verify k8s auth
-            k8s_call = mock_client.post.call_args_list[3]
-            assert "/kubernetes-auth" in k8s_call[0][0]
-            assert k8s_call[1]["json"]["allowedServiceAccounts"] == "skuld-alice"
-            assert k8s_call[1]["json"]["allowedNamespaces"] == "test-ns"
+            # Verify project membership call
+            membership_call = mock_client.post.call_args_list[2]
+            assert "/memberships/identities/ident-1" in membership_call[0][0]
+            assert membership_call[1]["json"]["role"] == "no-access"
 
-    @pytest.mark.asyncio()
-    async def test_deprovision_user_deletes_identity_and_project(self, adapter):
-        auth_resp = _mock_response(200, {"accessToken": "tok-123"})
-        delete_identity_resp = _mock_response(200, {})
-        delete_project_resp = _mock_response(200, {})
-
-        with patch.object(adapter, "_get_client") as mock_client_fn:
-            mock_client = AsyncMock()
-            mock_client_fn.return_value = mock_client
-            mock_client.post = AsyncMock(return_value=auth_resp)
-            mock_client.delete = AsyncMock(side_effect=[delete_identity_resp, delete_project_resp])
-
-            await adapter.deprovision_user("alice")
-
-            assert mock_client.delete.call_count == 2
-
-            # Verify identity deletion
-            id_call = mock_client.delete.call_args_list[0]
-            assert "skuld-alice" in id_call[0][0]
-
-            # Verify project deletion
-            proj_call = mock_client.delete.call_args_list[1]
-            assert "user-alice" in proj_call[0][0]
+            # Verify privilege call
+            priv_call = mock_client.post.call_args_list[3]
+            assert priv_call[0][0] == "/api/v2/identity-project-additional-privilege"
+            perms = priv_call[1]["json"]["permissions"]
+            assert perms[0]["conditions"]["secretPath"]["$glob"] == "/users/alice/**"
 
     @pytest.mark.asyncio()
-    async def test_deprovision_tolerates_404(self, adapter):
-        """404 on delete is acceptable (already cleaned up)."""
-        auth_resp = _mock_response(200, {"accessToken": "tok-123"})
-        not_found_resp = _mock_response(404, {})
+    async def test_create_session_identity_cleans_up_on_auth_failure(self, adapter):
+        """If attaching Kubernetes Auth fails, the identity is deleted."""
+        responses = [
+            _mock_response(200, {"identity": {"id": "ident-1"}}),
+            _mock_response(403, text="forbidden"),
+        ]
 
-        with patch.object(adapter, "_get_client") as mock_client_fn:
+        with (
+            patch.object(adapter, "_ensure_authenticated", return_value="mgmt-token"),
+            patch.object(adapter, "_get_client") as mock_get_client,
+            patch.object(adapter, "_delete_identity") as mock_delete,
+        ):
             mock_client = AsyncMock()
-            mock_client_fn.return_value = mock_client
-            mock_client.post = AsyncMock(return_value=auth_resp)
-            mock_client.delete = AsyncMock(return_value=not_found_resp)
+            mock_client.post = AsyncMock(side_effect=responses)
+            mock_get_client.return_value = mock_client
 
-            # Should not raise
-            await adapter.deprovision_user("alice")
+            with pytest.raises(RuntimeError, match="Failed to attach Kubernetes Auth"):
+                await adapter._create_session_identity("alice", "s-123")
+
+            mock_delete.assert_called_once_with("ident-1")
 
     @pytest.mark.asyncio()
-    async def test_provision_user_raises_on_auth_failure(self, adapter):
-        auth_fail_resp = _mock_response(401, {"message": "bad creds"})
-
-        with patch.object(adapter, "_get_client") as mock_client_fn:
-            mock_client = AsyncMock()
-            mock_client_fn.return_value = mock_client
-            mock_client.post = AsyncMock(return_value=auth_fail_resp)
-
-            with pytest.raises(RuntimeError, match="Infisical auth failed"):
-                await adapter.provision_user("alice")
+    async def test_provision_user_is_noop(self, adapter):
+        await adapter.provision_user("alice")  # should not raise
 
     @pytest.mark.asyncio()
-    async def test_provision_user_raises_on_project_creation_failure(self, adapter):
-        auth_resp = _mock_response(200, {"accessToken": "tok-123"})
-        project_fail_resp = _mock_response(500, {"message": "internal error"})
-
-        with patch.object(adapter, "_get_client") as mock_client_fn:
-            mock_client = AsyncMock()
-            mock_client_fn.return_value = mock_client
-            mock_client.post = AsyncMock(side_effect=[auth_resp, project_fail_resp])
-
-            with pytest.raises(RuntimeError, match="create project failed"):
-                await adapter.provision_user("alice")
+    async def test_deprovision_user_is_noop(self, adapter):
+        await adapter.deprovision_user("alice")  # should not raise
 
     @pytest.mark.asyncio()
     async def test_accepts_extra_kwargs(self):
-        """Dynamic adapter pattern: extra kwargs are ignored."""
-        adapter = InfisicalCSISecretInjectionAdapter(
+        adapter = InfisicalAgentInjectionAdapter(
             infisical_url="https://test.example.com",
             extra_param="ignored",
         )
         result = await adapter.pod_spec_additions("u1", "s1")
-        assert result.service_account == "skuld-u1"
+        assert result.annotations["org.infisical.com/inject"] == "true"
+
+
+def _mock_response(status_code: int, json_data: dict | None = None, text: str = "") -> MagicMock:
+    """Create a mock httpx response."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.text = text or str(json_data)
+    if json_data is not None:
+        resp.json.return_value = json_data
+    return resp

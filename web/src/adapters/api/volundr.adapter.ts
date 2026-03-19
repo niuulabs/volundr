@@ -155,11 +155,8 @@ function extractHost(endpoint: string | null | undefined): string | undefined {
     return undefined;
   }
   try {
-    // Validate the URL is parseable, but return the current browser host
-    // so all session requests route through the same origin (and Vite proxy
-    // in dev mode) instead of hitting the backend host directly.
-    new URL(endpoint);
-    return globalThis.location?.host;
+    const rewritten = rewriteOrigin(endpoint);
+    return new URL(rewritten).host;
   } catch {
     return undefined;
   }

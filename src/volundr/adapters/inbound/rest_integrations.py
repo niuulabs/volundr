@@ -37,10 +37,9 @@ class IntegrationCreateRequest(BaseModel):
         examples=["issue_tracker"],
     )
     adapter: str = Field(
-        ...,
-        min_length=1,
+        default="",
         max_length=500,
-        description="Fully-qualified adapter class path",
+        description="Fully-qualified adapter class path (empty for env-only integrations)",
         examples=["volundr.adapters.trackers.linear.LinearAdapter"],
     )
     credential_name: str = Field(

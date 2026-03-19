@@ -513,6 +513,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
 
             # Create session contributors (dynamic adapter pattern)
+            mount_strategies = SecretMountStrategyRegistry()
             contributors = _create_contributors(
                 settings,
                 template_provider=template_provider,
@@ -523,6 +524,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 gateway=gateway_adapter,
                 secret_injection=secret_injection,
                 credential_store=credential_store,
+                mount_strategies=mount_strategies,
                 integration_repo=integration_repo,
                 integration_registry=integration_registry,
                 user_integration=user_integration_service,

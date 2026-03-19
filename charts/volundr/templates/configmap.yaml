@@ -266,9 +266,8 @@ data:
       secret_kwargs_env: {}
       {{- end }}
 
-    {{- if .Values.integrations }}
+    {{- if and .Values.integrations .Values.integrations.definitions }}
     integrations:
-      {{- if .Values.integrations.definitions }}
       definitions:
         {{- range .Values.integrations.definitions }}
         - slug: {{ .slug | quote }}
@@ -290,10 +289,13 @@ data:
           {{- if .mcp_server }}
           mcp_server: {{ .mcp_server | toJson }}
           {{- end }}
+          {{- if .env_from_credentials }}
+          env_from_credentials: {{ .env_from_credentials | toJson }}
+          {{- end }}
+          {{- if .file_mounts }}
+          file_mounts: {{ .file_mounts | toJson }}
+          {{- end }}
         {{- end }}
-      {{- else }}
-      definitions: []
-      {{- end }}
     {{- end }}
 
     {{- if .Values.oauth }}

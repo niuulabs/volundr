@@ -919,6 +919,7 @@ class IntegrationDefinition:
     env_from_credentials: dict[str, str] = ()  # type: ignore[assignment]
     auth_type: str = "api_key"
     oauth: OAuthSpec | None = None
+    file_mounts: dict[str, str] = ()  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if not isinstance(self.credential_schema, dict):
@@ -927,6 +928,8 @@ class IntegrationDefinition:
             object.__setattr__(self, "config_schema", dict(self.config_schema))
         if not isinstance(self.env_from_credentials, dict):
             object.__setattr__(self, "env_from_credentials", dict(self.env_from_credentials))
+        if not isinstance(self.file_mounts, dict):
+            object.__setattr__(self, "file_mounts", dict(self.file_mounts))
 
 
 @dataclass(frozen=True)
@@ -963,12 +966,34 @@ class MCPServerConfig:
 
 
 @dataclass(frozen=True)
+class CredentialMapping:
+    """Maps a stored credential to its injection targets.
+
+    Used by SecretInjectionPort to build agent templates that render
+    credential fields directly to env vars and/or file paths.
+
+    ``env_mappings``: ``{ENV_VAR_NAME: credential_field_name}``
+    ``file_mappings``: ``{target_file_path: credential_field_name}``
+    """
+
+    credential_name: str
+    env_mappings: dict[str, str] = ()  # type: ignore[assignment]
+    file_mappings: dict[str, str] = ()  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.env_mappings, dict):
+            object.__setattr__(self, "env_mappings", dict(self.env_mappings))
+        if not isinstance(self.file_mappings, dict):
+            object.__setattr__(self, "file_mappings", dict(self.file_mappings))
+
+
+@dataclass(frozen=True)
 class PodSpecAdditions:
-    """Pod spec contributions for secret injection via CSI driver.
+    """Pod spec contributions for secret injection.
 
     Returned by SecretInjectionPort adapters to tell the orchestrator
-    how to configure volumes, mounts, labels, and annotations for
-    CSI-based secret injection. Volundr never sees secret values.
+    how to configure volumes, mounts, labels, and annotations.
+    Volundr never sees secret values.
     """
 
     volumes: tuple[dict, ...] = ()

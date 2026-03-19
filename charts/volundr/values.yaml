@@ -1204,10 +1204,11 @@ sidecars: []
 # Users select from these pre-configured definitions in the session wizard;
 # they cannot create or modify definitions from the UI.
 #
-# Each definition specifies the adapter class, credential schema, and
-# optional MCP server that gets injected into the session pod.
-integrations:
-  definitions: []
+# When definitions is empty (default), the built-in catalog from
+# _default_integration_definitions() is used (GitHub, GitLab, Linear,
+# Anthropic, OpenAI). Override here only to customise the catalog.
+integrations: {}
+  # definitions:
     # - slug: linear
     #   name: Linear
     #   description: "Linear issue tracker integration"

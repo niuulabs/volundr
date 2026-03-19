@@ -554,8 +554,8 @@ describe('ApiVolundrService', () => {
             id: mockSSESession.id,
             name: mockSSESession.name,
             status: 'running',
-            // rewriteOrigin rewrites to browser origin in test env
-            hostname: 'localhost:3000',
+            // Non-loopback host is preserved (gateway domain)
+            hostname: 'session-abc.volundr.example.com',
           }),
         ])
       );

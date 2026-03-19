@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from volundr.domain.models import PodSpecAdditions
+from volundr.domain.models import CredentialMapping, PodSpecAdditions
 from volundr.domain.ports import SecretInjectionPort
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,14 @@ class InMemorySecretInjectionAdapter(SecretInjectionPort):
     ) -> PodSpecAdditions:
         """Return empty additions in dev mode."""
         return PodSpecAdditions()
+
+    async def ensure_secret_provider_class(
+        self,
+        user_id: str,
+        credential_mappings: list[CredentialMapping],
+        session_id: str | None = None,
+    ) -> None:
+        """No-op in dev mode."""
 
     async def provision_user(self, user_id: str) -> None:
         """Track user as provisioned."""

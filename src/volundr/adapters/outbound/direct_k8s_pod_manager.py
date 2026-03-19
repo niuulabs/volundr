@@ -322,16 +322,8 @@ class DirectK8sPodManager(PodManager):
             for k, v in extra_env.items():
                 env.append({"name": k, "value": str(v)})
 
-        # Inject secrets from K8s secrets (matches Helm chart envSecrets pattern).
-        env_secrets = [
-            {
-                "envVar": "ANTHROPIC_API_KEY",
-                "secretName": "anthropic-api-key",
-                "secretKey": "api-key",
-            },
-            {"envVar": "GITHUB_TOKEN", "secretName": "github-token", "secretKey": "token"},
-        ]
-        for es in env_secrets:
+        # Inject secrets from contributor-provided envSecrets.
+        for es in spec.values.get("envSecrets", []):
             env.append(
                 {
                     "name": es["envVar"],
@@ -568,6 +560,8 @@ fi
         pod_spec: dict[str, Any] = {
             "hostname": safe_hostname,
             "terminationGracePeriodSeconds": 30,
+            **({"serviceAccountName": spec.pod_spec.service_account}
+               if spec.pod_spec and spec.pod_spec.service_account else {}),
             "securityContext": {
                 "fsGroup": 1000,
             },
