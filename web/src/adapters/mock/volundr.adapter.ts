@@ -124,7 +124,7 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async getFeatures(): Promise<import('@/models').VolundrFeatures> {
-    return { localMountsEnabled: true };
+    return { localMountsEnabled: true, fileManagerEnabled: true };
   }
 
   async getModels(): Promise<Record<string, VolundrModel>> {
@@ -685,13 +685,30 @@ export class MockVolundrService implements IVolundrService {
     return mockProjectRepoMappings.map(m => ({ ...m }));
   }
 
-  async getSessionFiles(_sessionId: string, path?: string): Promise<FileTreeEntry[]> {
+  async getSessionFiles(_sessionId: string, path?: string, _root?: import('@/models').FileRoot): Promise<FileTreeEntry[]> {
     const dirPath = path ?? '';
     const entries = mockFileTree[dirPath];
     if (!entries) {
       return [];
     }
     return entries.map(e => ({ ...e }));
+  }
+
+  async downloadSessionFile(_sessionId: string, _path: string, _root?: import('@/models').FileRoot): Promise<Blob> {
+    return new Blob(['mock file content'], { type: 'application/octet-stream' });
+  }
+
+  async uploadSessionFiles(_sessionId: string, _files: File[], _targetPath: string, _root?: import('@/models').FileRoot): Promise<FileTreeEntry[]> {
+    return [];
+  }
+
+  async createSessionDirectory(_sessionId: string, path: string, _root?: import('@/models').FileRoot): Promise<FileTreeEntry> {
+    const name = path.split('/').pop() ?? path;
+    return { name, path, type: 'directory' };
+  }
+
+  async deleteSessionFile(_sessionId: string, _path: string, _root?: import('@/models').FileRoot): Promise<void> {
+    // no-op
   }
 
   async updateLinearIssueStatus(
@@ -1140,11 +1157,16 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async getAdminSettings(): Promise<AdminSettings> {
-    return { storage: { homeEnabled: true } };
+    return { storage: { homeEnabled: true, fileManagerEnabled: true } };
   }
 
   async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
-    return { storage: { homeEnabled: data.storage?.homeEnabled ?? true } };
+    return {
+      storage: {
+        homeEnabled: data.storage?.homeEnabled ?? true,
+        fileManagerEnabled: data.storage?.fileManagerEnabled ?? true,
+      },
+    };
   }
 
   private notifySubscribers(): void {

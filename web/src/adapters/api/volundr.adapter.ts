@@ -523,10 +523,16 @@ export class ApiVolundrService implements IVolundrService {
 
   async getFeatures(): Promise<import('@/models').VolundrFeatures> {
     try {
-      const response = await api.get<{ local_mounts_enabled: boolean }>('/features');
-      return { localMountsEnabled: response.local_mounts_enabled };
+      const response = await api.get<{
+        local_mounts_enabled: boolean;
+        file_manager_enabled: boolean;
+      }>('/features');
+      return {
+        localMountsEnabled: response.local_mounts_enabled,
+        fileManagerEnabled: response.file_manager_enabled ?? true,
+      };
     } catch {
-      return { localMountsEnabled: false };
+      return { localMountsEnabled: false, fileManagerEnabled: true };
     }
   }
 
@@ -1012,11 +1018,87 @@ export class ApiVolundrService implements IVolundrService {
   }
 
   async getSessionFiles(
-    _sessionId: string,
-    _path?: string
+    sessionId: string,
+    path?: string,
+    root?: import('@/models').FileRoot
   ): Promise<import('@/models').FileTreeEntry[]> {
-    // TODO: Implement when backend endpoint is available
-    return [];
+    const params = new URLSearchParams();
+    if (path) params.set('path', path);
+    if (root) params.set('root', root);
+    const qs = params.toString();
+    const response = await api.get<{ entries: import('@/models').FileTreeEntry[] }>(
+      `/sessions/${sessionId}/files${qs ? `?${qs}` : ''}`
+    );
+    return response.entries;
+  }
+
+  async downloadSessionFile(
+    sessionId: string,
+    path: string,
+    root?: import('@/models').FileRoot
+  ): Promise<Blob> {
+    const params = new URLSearchParams({ path });
+    if (root) params.set('root', root);
+    const token = getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(
+      `/api/v1/volundr/sessions/${sessionId}/files/download?${params}`,
+      { headers }
+    );
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.status}`);
+    }
+    return response.blob();
+  }
+
+  async uploadSessionFiles(
+    sessionId: string,
+    files: File[],
+    targetPath: string,
+    root?: import('@/models').FileRoot
+  ): Promise<import('@/models').FileTreeEntry[]> {
+    const params = new URLSearchParams();
+    if (targetPath) params.set('path', targetPath);
+    if (root) params.set('root', root);
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    const token = getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(
+      `/api/v1/volundr/sessions/${sessionId}/files/upload?${params}`,
+      { method: 'POST', headers, body: formData }
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Upload failed: ${text}`);
+    }
+    const data = await response.json();
+    return data.entries;
+  }
+
+  async createSessionDirectory(
+    sessionId: string,
+    path: string,
+    root?: import('@/models').FileRoot
+  ): Promise<import('@/models').FileTreeEntry> {
+    return api.post<import('@/models').FileTreeEntry>(
+      `/sessions/${sessionId}/files/mkdir`,
+      { path, root: root ?? 'workspace' }
+    );
+  }
+
+  async deleteSessionFile(
+    sessionId: string,
+    path: string,
+    root?: import('@/models').FileRoot
+  ): Promise<void> {
+    const params = new URLSearchParams({ path });
+    if (root) params.set('root', root);
+    await api.delete(`/sessions/${sessionId}/files?${params}`);
   }
 
   async searchLinearIssues(
@@ -1359,20 +1441,33 @@ export class ApiVolundrService implements IVolundrService {
   }
 
   async getAdminSettings(): Promise<AdminSettings> {
-    const response = await api.get<{ storage: { home_enabled: boolean } }>('/admin/settings');
+    const response = await api.get<{
+      storage: { home_enabled: boolean; file_manager_enabled: boolean };
+    }>('/admin/settings');
     return {
-      storage: { homeEnabled: response.storage.home_enabled },
+      storage: {
+        homeEnabled: response.storage.home_enabled,
+        fileManagerEnabled: response.storage.file_manager_enabled ?? true,
+      },
     };
   }
 
   async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
     const body: Record<string, unknown> = {};
     if (data.storage) {
-      body.storage = { home_enabled: data.storage.homeEnabled };
+      body.storage = {
+        home_enabled: data.storage.homeEnabled,
+        file_manager_enabled: data.storage.fileManagerEnabled,
+      };
     }
-    const response = await api.put<{ storage: { home_enabled: boolean } }>('/admin/settings', body);
+    const response = await api.put<{
+      storage: { home_enabled: boolean; file_manager_enabled: boolean };
+    }>('/admin/settings', body);
     return {
-      storage: { homeEnabled: response.storage.home_enabled },
+      storage: {
+        homeEnabled: response.storage.home_enabled,
+        fileManagerEnabled: response.storage.file_manager_enabled ?? true,
+      },
     };
   }
 
