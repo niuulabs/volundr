@@ -693,6 +693,90 @@ class IntegrationsConfig(BaseModel):
     )
 
 
+class FeatureModuleConfig(BaseModel):
+    """A single feature module definition.
+
+    Each entry defines a UI module that can be toggled on/off by admins
+    and reordered/hidden by users. The ``key`` maps to a frontend component
+    registered in the module registry.
+
+    Example YAML::
+
+        features:
+          - key: users
+            label: Users
+            icon: Users
+            scope: admin
+            default_enabled: true
+            order: 10
+    """
+
+    key: str = Field(description="Unique module identifier, e.g. 'users', 'storage'")
+    label: str = Field(description="Display name shown in navigation")
+    icon: str = Field(description="Lucide icon name, e.g. 'Users', 'HardDrive'")
+    scope: str = Field(description="'admin' or 'user' — which page this module appears on")
+    default_enabled: bool = Field(
+        default=True,
+        description="Whether this module is enabled by default for all users",
+    )
+    admin_only: bool = Field(
+        default=False,
+        description="Whether this module is only visible to admin users",
+    )
+    order: int = Field(
+        default=0,
+        description="Default sort order (lower = higher in nav)",
+    )
+
+
+def _default_feature_modules() -> list[FeatureModuleConfig]:
+    """Return the built-in feature module catalog."""
+    return [
+        # Admin-scoped modules
+        FeatureModuleConfig(
+            key="users", label="Users", icon="Users",
+            scope="admin", default_enabled=True, admin_only=True, order=10,
+        ),
+        FeatureModuleConfig(
+            key="tenants", label="Tenants", icon="Building2",
+            scope="admin", default_enabled=True, admin_only=True, order=20,
+        ),
+        FeatureModuleConfig(
+            key="storage", label="Storage", icon="HardDrive",
+            scope="admin", default_enabled=True, admin_only=True, order=30,
+        ),
+        FeatureModuleConfig(
+            key="resources", label="Resources", icon="Cpu",
+            scope="admin", default_enabled=True, admin_only=True, order=40,
+        ),
+        FeatureModuleConfig(
+            key="feature-management", label="Features", icon="ToggleLeft",
+            scope="admin", default_enabled=True, admin_only=True, order=50,
+        ),
+        # User-scoped modules
+        FeatureModuleConfig(
+            key="credentials", label="Credentials", icon="KeyRound",
+            scope="user", default_enabled=True, order=10,
+        ),
+        FeatureModuleConfig(
+            key="workspaces", label="Workspaces", icon="HardDrive",
+            scope="user", default_enabled=True, order=20,
+        ),
+        FeatureModuleConfig(
+            key="integrations", label="Integrations", icon="Link2",
+            scope="user", default_enabled=True, order=30,
+        ),
+        FeatureModuleConfig(
+            key="appearance", label="Appearance", icon="Palette",
+            scope="user", default_enabled=True, order=40,
+        ),
+        FeatureModuleConfig(
+            key="layout", label="Layout", icon="LayoutDashboard",
+            scope="user", default_enabled=True, order=50,
+        ),
+    ]
+
+
 class AuthDiscoveryConfig(BaseModel):
     """Public auth discovery configuration for CLI and external clients.
 
@@ -770,6 +854,10 @@ class Settings(BaseSettings):
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)
     mcp_servers: list[MCPServerEntry] = Field(default_factory=list)
+    features: list[FeatureModuleConfig] = Field(
+        default_factory=_default_feature_modules,
+        description="Feature module catalog — defines available UI modules.",
+    )
 
     @classmethod
     def settings_customise_sources(

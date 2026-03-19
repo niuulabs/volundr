@@ -586,3 +586,26 @@ export interface ApiSecretTypeInfoResponse {
   }>;
   default_mount_type: string;
 }
+
+/**
+ * Feature module response from API
+ */
+export interface ApiFeatureModuleResponse {
+  key: string;
+  label: string;
+  icon: string;
+  scope: string;
+  enabled: boolean;
+  default_enabled: boolean;
+  admin_only: boolean;
+  order: number;
+}
+
+/**
+ * User feature preference response from API
+ */
+export interface ApiUserFeaturePreferenceResponse {
+  feature_key: string;
+  visible: boolean;
+  sort_order: number;
+}

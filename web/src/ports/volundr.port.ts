@@ -38,6 +38,9 @@ import type {
   SessionSource,
   AdminSettings,
   AdminStorageSettings,
+  FeatureModule,
+  FeatureScope,
+  UserFeaturePreference,
 } from '@/models';
 
 /**
@@ -489,4 +492,26 @@ export interface IVolundrService {
    * Update admin settings (admin only)
    */
   updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings>;
+
+  // Feature modules
+
+  /**
+   * Get the feature module catalog, optionally filtered by scope
+   */
+  getFeatureModules(scope?: FeatureScope): Promise<FeatureModule[]>;
+
+  /**
+   * Admin: toggle a feature on/off globally
+   */
+  toggleFeature(key: string, enabled: boolean): Promise<FeatureModule>;
+
+  /**
+   * Get the current user's feature layout preferences
+   */
+  getUserFeaturePreferences(): Promise<UserFeaturePreference[]>;
+
+  /**
+   * Update the current user's feature layout preferences
+   */
+  updateUserFeaturePreferences(preferences: UserFeaturePreference[]): Promise<UserFeaturePreference[]>;
 }
