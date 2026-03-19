@@ -679,6 +679,9 @@ describe('ConfigureStep', () => {
       rules: [],
       envVars: { NODE_ENV: 'test' },
       envSecretRefs: ['GITHUB_TOKEN'],
+      source: null,
+      integrationIds: [],
+      setupScripts: [],
       workloadConfig: {},
     };
 
@@ -705,6 +708,109 @@ describe('ConfigureStep', () => {
           model: 'claude-opus',
           systemPrompt: 'Be concise.',
           taskType: 'skuld-claude',
+        })
+      );
+    });
+
+    it('restores source from preset when repo is available', () => {
+      const presetWithSource = {
+        ...mockPreset,
+        source: {
+          type: 'git' as const,
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+        },
+      };
+      renderStep({ presets: [presetWithSource] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+        })
+      );
+    });
+
+    it('shows warning when preset repo is unavailable', () => {
+      const presetWithMissingRepo = {
+        ...mockPreset,
+        source: {
+          type: 'git' as const,
+          repo: 'https://github.com/org/deleted-repo.git',
+          branch: 'main',
+        },
+      };
+      renderStep({ presets: [presetWithMissingRepo] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(expect.not.objectContaining({ sourceType: 'git' }));
+    });
+
+    it('filters out unavailable credentials from preset', () => {
+      const presetWithMissingCreds = {
+        ...mockPreset,
+        envSecretRefs: ['GITHUB_TOKEN', 'DELETED_SECRET'],
+      };
+      renderStep({
+        presets: [presetWithMissingCreds],
+        availableSecrets: ['GITHUB_TOKEN', 'NPM_TOKEN'],
+      });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedCredentials: ['GITHUB_TOKEN'],
+        })
+      );
+    });
+
+    it('restores local mount source from preset', () => {
+      const presetWithMount = {
+        ...mockPreset,
+        source: {
+          type: 'local_mount' as const,
+          paths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+        },
+      };
+      renderStep({ presets: [presetWithMount] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceType: 'local_mount',
+          mountPaths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+        })
+      );
+    });
+
+    it('restores setup scripts from preset', () => {
+      const presetWithScripts = {
+        ...mockPreset,
+        setupScripts: ['npm install', 'npm run build'],
+      };
+      renderStep({ presets: [presetWithScripts] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          setupScripts: ['npm install', 'npm run build'],
         })
       );
     });
@@ -785,6 +891,81 @@ describe('ConfigureStep', () => {
           yamlMode: false,
           model: 'claude-opus',
           systemPrompt: 'Hello',
+        })
+      );
+    });
+
+    it('serializes source to YAML when repo is set', () => {
+      renderStep({
+        state: buildState({
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+        }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      fireEvent.click(screen.getByText('Edit as YAML'));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          yamlMode: true,
+          yamlContent: expect.stringContaining('source:'),
+        })
+      );
+    });
+
+    it('parses local mount source from YAML back to form mode', () => {
+      const yamlWithMount = [
+        'model: claude-opus',
+        'source:',
+        '  type: local_mount',
+        '  paths:',
+        '    - host_path: /data',
+        '      mount_path: /workspace',
+        '      read_only: true',
+        '',
+      ].join('\n');
+      renderStep({
+        state: buildState({ yamlMode: true, yamlContent: yamlWithMount }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      fireEvent.click(screen.getByText('Form View'));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          yamlMode: false,
+          sourceType: 'local_mount',
+        })
+      );
+    });
+
+    it('parses source from YAML back to form mode', () => {
+      const yamlWithSource = [
+        'model: claude-opus',
+        'source:',
+        '  type: git',
+        '  repo: https://github.com/org/repo-one.git',
+        '  branch: develop',
+        'integration_ids:',
+        '  - integ-1',
+        'setup_scripts:',
+        '  - npm install',
+        '',
+      ].join('\n');
+      renderStep({
+        state: buildState({ yamlMode: true, yamlContent: yamlWithSource }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      fireEvent.click(screen.getByText('Form View'));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          yamlMode: false,
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+          selectedIntegrations: ['integ-1'],
+          setupScripts: ['npm install'],
         })
       );
     });
@@ -1086,6 +1267,73 @@ describe('ConfigureStep', () => {
       fireEvent.click(screen.getByText('Save'));
 
       expect(onSavePreset).toHaveBeenCalledWith(expect.objectContaining({ name: 'My Preset' }));
+    });
+
+    it('includes git source in saved preset when repo is set', async () => {
+      const onSavePreset = vi.fn().mockResolvedValue({ id: 'new-p2', name: 'With Repo' });
+      renderStep({
+        onSavePreset,
+        state: buildState({
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+          selectedIntegrations: ['integ-1'],
+          setupScripts: ['npm install'],
+        }),
+      });
+      fireEvent.click(screen.getByText('Save as Preset'));
+      fireEvent.change(screen.getByPlaceholderText('Preset name'), {
+        target: { value: 'With Repo' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSavePreset).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: { type: 'git', repo: 'https://github.com/org/repo-one.git', branch: 'develop' },
+          integrationIds: ['integ-1'],
+          setupScripts: ['npm install'],
+        })
+      );
+    });
+
+    it('includes local mount source in saved preset', async () => {
+      const onSavePreset = vi.fn().mockResolvedValue({ id: 'new-p3', name: 'With Mount' });
+      renderStep({
+        onSavePreset,
+        state: buildState({
+          sourceType: 'local_mount',
+          mountPaths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+        }),
+      });
+      fireEvent.click(screen.getByText('Save as Preset'));
+      fireEvent.change(screen.getByPlaceholderText('Preset name'), {
+        target: { value: 'With Mount' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSavePreset).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: {
+            type: 'local_mount',
+            paths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+          },
+        })
+      );
+    });
+
+    it('saves null source when no repo is set', async () => {
+      const onSavePreset = vi.fn().mockResolvedValue({ id: 'new-p4', name: 'No Source' });
+      renderStep({
+        onSavePreset,
+        state: buildState({ sourceType: 'git', repo: '', branch: '' }),
+      });
+      fireEvent.click(screen.getByText('Save as Preset'));
+      fireEvent.change(screen.getByPlaceholderText('Preset name'), {
+        target: { value: 'No Source' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSavePreset).toHaveBeenCalledWith(expect.objectContaining({ source: null }));
     });
 
     it('hides form when cancel is clicked', () => {
