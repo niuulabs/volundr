@@ -10,7 +10,6 @@ from volundr.adapters.outbound.contributors.secrets import (
     SecretsContributor,
 )
 from volundr.domain.models import (
-    CredentialMapping,
     GitSource,
     IntegrationConnection,
     IntegrationDefinition,

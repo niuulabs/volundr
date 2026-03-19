@@ -56,7 +56,8 @@ class TestListConnections:
         pool.fetch.return_value = [_mock_row()]
 
         result = await repo.list_connections(
-            "user-1", integration_type=IntegrationType.ISSUE_TRACKER,
+            "user-1",
+            integration_type=IntegrationType.ISSUE_TRACKER,
         )
 
         assert len(result) == 1

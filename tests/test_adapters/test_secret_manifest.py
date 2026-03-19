@@ -4,8 +4,6 @@ import json
 import os
 from pathlib import Path
 
-import pytest
-
 
 def _source_secrets(manifest_path: Path, secret_dir: Path) -> None:
     """Standalone version of devrunner._source_secrets for testing."""

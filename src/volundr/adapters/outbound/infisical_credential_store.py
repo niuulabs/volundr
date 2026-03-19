@@ -85,7 +85,7 @@ class InfisicalCredentialStore(CredentialStorePort):
             },
         )
         if response.status_code >= 400:
-            raise RuntimeError(f"Infisical auth failed ({response.status_code}): {response.text}")
+            raise RuntimeError(f"Infisical auth failed ({response.status_code})")
         self._access_token = response.json()["accessToken"]
         return self._access_token
 
@@ -162,9 +162,7 @@ class InfisicalCredentialStore(CredentialStorePort):
             )
 
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"Infisical secret write failed for {key} ({response.status_code}): {response.text}"
-            )
+            raise RuntimeError(f"Infisical secret write failed for {key} ({response.status_code})")
 
     async def _delete_secret(self, key: str, folder_path: str) -> None:
         """Delete a single Infisical secret."""
@@ -183,10 +181,9 @@ class InfisicalCredentialStore(CredentialStorePort):
         )
         if response.status_code >= 400 and response.status_code != 404:
             logger.error(
-                "Infisical delete failed for %s: %s %s",
+                "Infisical delete failed for %s: %s",
                 key,
                 response.status_code,
-                response.text,
             )
 
     async def _list_secrets_in_folder(self, folder_path: str) -> list[dict]:
@@ -206,7 +203,7 @@ class InfisicalCredentialStore(CredentialStorePort):
         if response.status_code == 404:
             return []
         if response.status_code >= 400:
-            logger.error("Infisical list failed: %s %s", response.status_code, response.text)
+            logger.error("Infisical list failed: %s", response.status_code)
             return []
 
         return response.json().get("secrets", [])
@@ -228,7 +225,7 @@ class InfisicalCredentialStore(CredentialStorePort):
         if response.status_code == 404:
             return []
         if response.status_code >= 400:
-            logger.error("Infisical folder list failed: %s %s", response.status_code, response.text)
+            logger.error("Infisical folder list failed: %s", response.status_code)
             return []
 
         folders = response.json().get("folders", [])

@@ -152,17 +152,20 @@ class TestCallback:
         defn = _make_definition(slug="linear")
         clients = {
             "linear": OAuthClientConfig(
-                client_id="cid", client_secret="csec",
+                client_id="cid",
+                client_secret="csec",
             ),
         }
         app, credential_store, integration_repo = _make_app(
-            definitions=[defn], clients=clients,
+            definitions=[defn],
+            clients=clients,
         )
         client = TestClient(app, raise_server_exceptions=False)
 
         # Step 1: call authorize to create pending state
         auth_resp = client.get(
-            f"{PREFIX}/linear/authorize", headers=AUTH,
+            f"{PREFIX}/linear/authorize",
+            headers=AUTH,
         )
         assert auth_resp.status_code == 200
         url = auth_resp.json()["url"]
@@ -227,7 +230,8 @@ class TestDisconnect:
         defn = _make_definition(slug="linear")
         clients = {"linear": OAuthClientConfig(client_id="cid", client_secret="csec")}
         app, credential_store, integration_repo = _make_app(
-            definitions=[defn], clients=clients,
+            definitions=[defn],
+            clients=clients,
         )
         integration_repo.list_connections.return_value = [connection]
         credential_store.get_value.return_value = {"access_token": "tok-123"}
@@ -255,7 +259,8 @@ class TestDisconnect:
         )
 
         app, credential_store, integration_repo = _make_app(
-            definitions=[], clients={},
+            definitions=[],
+            clients={},
         )
         integration_repo.list_connections.return_value = [connection]
         client = TestClient(app)

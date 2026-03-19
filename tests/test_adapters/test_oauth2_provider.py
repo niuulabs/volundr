@@ -7,9 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from volundr.adapters.outbound.oauth2_provider import OAuth2Provider
 from volundr.domain.models import OAuthSpec
 
-_HTTPX_CLIENT = (
-    "volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient"
-)
+_HTTPX_CLIENT = "volundr.adapters.outbound.oauth2_provider.httpx.AsyncClient"
 
 
 def _make_spec(**overrides) -> OAuthSpec:
@@ -41,7 +39,8 @@ class TestAuthorizationUrl:
         provider = _make_provider()
 
         url = provider.authorization_url(
-            state="abc123", redirect_uri="https://app.test/callback",
+            state="abc123",
+            redirect_uri="https://app.test/callback",
         )
 
         assert "https://auth.example.com/authorize?" in url
@@ -96,7 +95,8 @@ class TestExchangeCode:
 
         with patch(_HTTPX_CLIENT, return_value=mock_client):
             result = await provider.exchange_code(
-                "auth-code-123", "https://app/cb",
+                "auth-code-123",
+                "https://app/cb",
             )
 
         assert result == {"api_key": "tok-abc"}

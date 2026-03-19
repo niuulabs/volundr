@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from volundr.adapters.outbound.infisical_secret_injection import (
@@ -157,13 +156,16 @@ class TestInfisicalAgentInjectionAdapter:
         ]
         with (
             patch.object(
-                adapter, "_create_session_identity",
+                adapter,
+                "_create_session_identity",
                 return_value="ident-1",
             ) as mock_identity,
             patch.object(adapter, "_create_or_update_configmap") as mock_cm,
         ):
             await adapter.ensure_secret_provider_class(
-                "alice", mappings, session_id="s-123",
+                "alice",
+                mappings,
+                session_id="s-123",
             )
 
             mock_identity.assert_called_once_with("alice", "s-123")
@@ -227,8 +229,7 @@ class TestInfisicalAgentInjectionAdapter:
 
         config = yaml.safe_load(data["config.yaml"])
         env_templates = [
-            t for t in config["templates"]
-            if t["destination-path"] == "/run/secrets/env.sh"
+            t for t in config["templates"] if t["destination-path"] == "/run/secrets/env.sh"
         ]
         assert len(env_templates) == 1
         content = env_templates[0]["template-content"]
@@ -255,8 +256,7 @@ class TestInfisicalAgentInjectionAdapter:
 
         config = yaml.safe_load(data["config.yaml"])
         file_templates = [
-            t for t in config["templates"]
-            if t["destination-path"] == "/home/dev/.ssh/id_rsa"
+            t for t in config["templates"] if t["destination-path"] == "/home/dev/.ssh/id_rsa"
         ]
         assert len(file_templates) == 1
         content = file_templates[0]["template-content"]

@@ -425,7 +425,7 @@ class TestFluxPodManagerSpecValues:
         sample_session: Session,
         mock_api,
     ):
-        """PodSpecAdditions are translated into extraVolumes/extraVolumeMounts/serviceAccountName."""
+        """PodSpecAdditions translate to extraVolumes/Mounts/serviceAccountName."""
         pm = FluxPodManager(
             namespace="test-ns",
             base_domain="volundr.example.com",

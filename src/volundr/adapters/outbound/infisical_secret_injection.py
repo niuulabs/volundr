@@ -140,7 +140,7 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
             },
         )
         if response.status_code >= 400:
-            raise RuntimeError(f"Infisical auth failed ({response.status_code}): {response.text}")
+            raise RuntimeError(f"Infisical auth failed ({response.status_code})")
         self._access_token = response.json()["accessToken"]
         return self._access_token
 
@@ -182,8 +182,7 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
         )
         if resp.status_code >= 400:
             raise RuntimeError(
-                f"Failed to create identity for session {session_id} "
-                f"({resp.status_code}): {resp.text}"
+                f"Failed to create identity for session {session_id} ({resp.status_code})"
             )
         identity_id = resp.json()["identity"]["id"]
 
@@ -207,8 +206,7 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
         if resp.status_code >= 400:
             await self._delete_identity(identity_id)
             raise RuntimeError(
-                f"Failed to attach Kubernetes Auth to identity {identity_id} "
-                f"({resp.status_code}): {resp.text}"
+                f"Failed to attach Kubernetes Auth to identity {identity_id} ({resp.status_code})"
             )
 
         # 3. Add identity as project member (required before adding privileges)
@@ -220,7 +218,7 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
         if resp.status_code >= 400:
             await self._delete_identity(identity_id)
             raise RuntimeError(
-                f"Failed to add identity {identity_id} to project ({resp.status_code}): {resp.text}"
+                f"Failed to add identity {identity_id} to project ({resp.status_code})"
             )
 
         # 4. Add folder-scoped read privilege
@@ -256,8 +254,7 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
         if resp.status_code >= 400:
             await self._delete_identity(identity_id)
             raise RuntimeError(
-                f"Failed to add folder privilege for identity {identity_id} "
-                f"({resp.status_code}): {resp.text}"
+                f"Failed to add folder privilege for identity {identity_id} ({resp.status_code})"
             )
 
         logger.info(
@@ -281,10 +278,9 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
         )
         if resp.status_code >= 400 and resp.status_code != 404:
             logger.warning(
-                "Failed to delete identity %s: %s %s",
+                "Failed to delete identity %s: %s",
                 identity_id,
                 resp.status_code,
-                resp.text,
             )
         else:
             logger.info("Deleted identity %s", identity_id)
