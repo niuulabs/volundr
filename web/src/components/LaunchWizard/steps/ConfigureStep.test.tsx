@@ -222,17 +222,17 @@ describe('ConfigureStep', () => {
     });
   });
 
-  describe('Linear issue search', () => {
-    it('does not render Linear search when searchLinearIssues is not provided', () => {
+  describe('Tracker issue search', () => {
+    it('does not render tracker search when searchTrackerIssues is not provided', () => {
       renderStep();
 
-      expect(screen.queryByText('Linear Issue')).not.toBeInTheDocument();
+      expect(screen.queryByText('Issue')).not.toBeInTheDocument();
     });
 
-    it('renders Linear search when searchLinearIssues is provided', () => {
-      renderStep({ searchLinearIssues: vi.fn().mockResolvedValue([]) });
+    it('renders tracker search when searchTrackerIssues is provided', () => {
+      renderStep({ searchTrackerIssues: vi.fn().mockResolvedValue([]) });
 
-      expect(screen.getByText('Linear Issue')).toBeInTheDocument();
+      expect(screen.getByText('Issue')).toBeInTheDocument();
     });
   });
 

@@ -43,6 +43,8 @@ export interface ApiSessionResponse {
   pod_name: string | null;
   error: string | null;
   task_type?: string | null;
+  tracker_issue_id?: string | null;
+  issue_tracker_url?: string | null;
   owner_id?: string | null;
   tenant_id?: string | null;
 }
@@ -98,6 +100,8 @@ export interface ApiSessionCreate {
   credential_names?: string[];
   integration_ids?: string[];
   resource_config?: Record<string, string | undefined>;
+  issue_id?: string | null;
+  issue_url?: string | null;
 }
 
 /**
@@ -236,7 +240,11 @@ export interface SSESessionPayload {
   id: string;
   name: string;
   model: string;
-  source: ApiSessionSource;
+  /** Flat repo/branch fields (legacy) */
+  repo?: string;
+  branch?: string;
+  /** Nested source object (when present) */
+  source?: ApiSessionSource;
   status: ApiSessionStatus;
   chat_endpoint: string | null;
   code_endpoint: string | null;
@@ -247,6 +255,11 @@ export interface SSESessionPayload {
   tokens_used: number;
   pod_name: string | null;
   error: string | null;
+  tracker_issue_id?: string | null;
+  issue_tracker_url?: string | null;
+  task_type?: string | null;
+  owner_id?: string | null;
+  tenant_id?: string | null;
 }
 
 /**

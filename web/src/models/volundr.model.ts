@@ -49,13 +49,13 @@ export interface LocalMountSource {
 
 export type SessionSource = GitSource | LocalMountSource;
 
-export type LinearIssueStatus = 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
+export type TrackerIssueStatus = 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
 
-export interface LinearIssue {
+export interface TrackerIssue {
   id: string;
   identifier: string;
   title: string;
-  status: LinearIssueStatus;
+  status: TrackerIssueStatus;
   assignee?: string;
   labels?: string[];
   priority?: number;
@@ -118,7 +118,7 @@ export interface VolundrSession {
   codeEndpoint?: string;
   taskType?: string;
   archivedAt?: Date;
-  linearIssue?: LinearIssue;
+  trackerIssue?: TrackerIssue;
   ownerId?: string;
   tenantId?: string;
 }

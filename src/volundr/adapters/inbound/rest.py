@@ -135,6 +135,11 @@ class SessionCreate(BaseModel):
         max_length=255,
         description="Issue tracker ID to link to the session",
     )
+    issue_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="URL of the linked issue in the tracker",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -992,6 +997,7 @@ def create_router(
                 principal=principal,
                 workspace_id=data.workspace_id,
                 tracker_issue_id=data.issue_id,
+                issue_tracker_url=data.issue_url,
             )
         except RepoValidationError as e:
             raise HTTPException(

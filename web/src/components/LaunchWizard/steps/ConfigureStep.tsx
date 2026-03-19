@@ -31,7 +31,7 @@ import type {
   McpServerConfig,
   McpServerType,
   CliTool,
-  LinearIssue,
+  TrackerIssue,
   RepoProvider,
   VolundrWorkspace,
   StoredCredential,
@@ -40,7 +40,7 @@ import type {
 } from '@/models';
 import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/ports';
-import { LinearIssueSearch } from '@/components';
+import { TrackerIssueSearch } from '@/components';
 import type { WizardState } from '../LaunchWizard';
 import styles from './ConfigureStep.module.css';
 
@@ -52,7 +52,7 @@ export interface ConfigureStepProps {
   availableMcpServers: McpServerConfig[];
   availableSecrets: string[];
   service: IVolundrService;
-  searchLinearIssues?: (query: string) => Promise<LinearIssue[]>;
+  searchTrackerIssues?: (query: string) => Promise<TrackerIssue[]>;
   localMountsEnabled?: boolean;
   onChange: (updates: Partial<WizardState>) => void;
   onSavePreset: (
@@ -110,7 +110,7 @@ export function ConfigureStep({
   availableMcpServers,
   availableSecrets,
   service,
-  searchLinearIssues,
+  searchTrackerIssues,
   localMountsEnabled = false,
   onChange,
   onSavePreset,
@@ -323,19 +323,19 @@ export function ConfigureStep({
     }
   }, [state, onChange]);
 
-  const handleLinearSelect = useCallback(
-    (issue: LinearIssue) => {
-      const updates: Partial<WizardState> = { linearIssue: issue };
+  const handleTrackerSelect = useCallback(
+    (issue: TrackerIssue) => {
+      const updates: Partial<WizardState> = { trackerIssue: issue };
       if (!state.name) {
-        updates.name = issue.identifier;
+        updates.name = issue.identifier.toLowerCase();
       }
       onChange(updates);
     },
     [state.name, onChange]
   );
 
-  const handleLinearClear = useCallback(() => {
-    onChange({ linearIssue: undefined });
+  const handleTrackerClear = useCallback(() => {
+    onChange({ trackerIssue: undefined });
   }, [onChange]);
 
   // MCP server management
@@ -633,15 +633,15 @@ export function ConfigureStep({
           )}
         </div>
 
-        {/* Linear Issue */}
-        {searchLinearIssues && (
+        {/* Issue */}
+        {searchTrackerIssues && (
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Linear Issue</label>
-            <LinearIssueSearch
-              onSelect={handleLinearSelect}
-              onClear={handleLinearClear}
-              selectedIssue={state.linearIssue ?? null}
-              onSearch={searchLinearIssues}
+            <label className={styles.formLabel}>Issue</label>
+            <TrackerIssueSearch
+              onSelect={handleTrackerSelect}
+              onClear={handleTrackerClear}
+              selectedIssue={state.trackerIssue ?? null}
+              onSearch={searchTrackerIssues}
             />
           </div>
         )}

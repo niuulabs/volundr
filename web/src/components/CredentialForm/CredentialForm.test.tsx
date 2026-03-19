@@ -6,7 +6,7 @@ import type { CatalogEntry } from '@/models';
 const mockEntry: CatalogEntry = {
   slug: 'linear',
   name: 'Linear',
-  description: 'Linear issue tracker',
+  description: 'Issue tracker',
   integration_type: 'issue_tracker',
   adapter: 'volundr.adapters.outbound.linear.LinearAdapter',
   icon: 'linear',

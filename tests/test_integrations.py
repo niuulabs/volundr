@@ -17,7 +17,7 @@ from volundr.domain.models import (
     Principal,
     TrackerIssue,
 )
-from volundr.domain.ports import SecretRepository
+from volundr.domain.ports import CredentialStorePort
 from volundr.domain.services.tracker import TrackerService
 from volundr.domain.services.tracker_factory import TrackerFactory
 
@@ -30,15 +30,15 @@ def integration_repo() -> InMemoryIntegrationRepository:
 
 
 @pytest.fixture
-def mock_secret_repo() -> AsyncMock:
-    repo = AsyncMock(spec=SecretRepository)
-    repo.get_credential = AsyncMock(return_value={"api_key": "test-key"})
-    return repo
+def mock_credential_store() -> AsyncMock:
+    store = AsyncMock(spec=CredentialStorePort)
+    store.get_value = AsyncMock(return_value={"api_key": "test-key"})
+    return store
 
 
 @pytest.fixture
-def tracker_factory(mock_secret_repo: AsyncMock) -> TrackerFactory:
-    return TrackerFactory(mock_secret_repo)
+def tracker_factory(mock_credential_store: AsyncMock) -> TrackerFactory:
+    return TrackerFactory(mock_credential_store)
 
 
 @pytest.fixture
@@ -168,10 +168,10 @@ class TestTrackerFactory:
 
     async def test_create_credential_not_found(
         self,
-        mock_secret_repo: AsyncMock,
+        mock_credential_store: AsyncMock,
     ):
-        mock_secret_repo.get_credential = AsyncMock(return_value=None)
-        factory = TrackerFactory(mock_secret_repo)
+        mock_credential_store.get_value = AsyncMock(return_value=None)
+        factory = TrackerFactory(mock_credential_store)
 
         now = datetime.now(UTC)
         conn = IntegrationConnection(

@@ -31,6 +31,9 @@ import {
   Settings,
   Shield,
   LogOut,
+  Pencil,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import {
   MetricCard,
@@ -74,6 +77,7 @@ export function VolundrPage() {
     repos,
     templates,
     loading,
+    updateSession,
     stopSession,
     resumeSession,
     startSession,
@@ -103,8 +107,8 @@ export function VolundrPage() {
     presets,
     saveTemplate,
     savePreset,
-    searchLinearIssues,
-    updateLinearIssueStatus,
+    searchTrackerIssues,
+    updateTrackerIssueStatus,
   } = useVolundr();
   const navigate = useNavigate();
   const { isAdmin } = useIdentity(volundrService);
@@ -128,6 +132,10 @@ export function VolundrPage() {
 
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
+
+  // Session name editing state
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
 
   // Connect session form state
   const [connectName, setConnectName] = useState('');
@@ -503,7 +511,7 @@ export function VolundrPage() {
           model: config.model,
           templateName: config.templateName,
           taskType: config.taskType,
-          linearIssue: config.linearIssue,
+          trackerIssue: config.trackerIssue,
           terminalRestricted: config.terminalRestricted,
           workspaceId: config.workspaceId,
           credentialNames: config.credentialNames,
@@ -910,9 +918,64 @@ export function VolundrPage() {
           {/* Session bar */}
           <div className={styles.sessionBar}>
             <div className={styles.sessionBarLeft}>
-              <span className={styles.sessionName}>{effectiveSelectedSession.name}</span>
+              {editingName ? (
+                <form
+                  className={styles.sessionNameForm}
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    const trimmed = editNameValue.trim();
+                    if (trimmed && trimmed !== effectiveSelectedSession.name) {
+                      await updateSession(effectiveSelectedSession.id, { name: trimmed });
+                    }
+                    setEditingName(false);
+                  }}
+                >
+                  <input
+                    className={styles.sessionNameInput}
+                    value={editNameValue}
+                    onChange={e => setEditNameValue(e.target.value)}
+                    onBlur={() => setEditingName(false)}
+                    onKeyDown={e => {
+                      if (e.key === 'Escape') setEditingName(false);
+                    }}
+                    autoFocus
+                    maxLength={63}
+                  />
+                  <button
+                    type="submit"
+                    className={styles.sessionNameSave}
+                    onMouseDown={e => e.preventDefault()}
+                  >
+                    <Check className={styles.sessionNameIcon} />
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.sessionNameBtn}
+                  onClick={() => {
+                    setEditNameValue(effectiveSelectedSession.name);
+                    setEditingName(true);
+                  }}
+                >
+                  <span className={styles.sessionName}>{effectiveSelectedSession.name}</span>
+                  <Pencil className={styles.sessionNameEditIcon} />
+                </button>
+              )}
               {isManualSession && <span className={styles.manualTag}>manual</span>}
               <StatusBadge status={effectiveSelectedSession.status} />
+              {effectiveSelectedSession.trackerIssue && (
+                <a
+                  href={effectiveSelectedSession.trackerIssue.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.ticketLink}
+                  title={effectiveSelectedSession.trackerIssue.title}
+                >
+                  {effectiveSelectedSession.trackerIssue.identifier}
+                  <ExternalLink className={styles.ticketLinkIcon} />
+                </a>
+              )}
               <span className={styles.sessionBarSep} />
               {isManualSession ? (
                 <div className={styles.repoInfo}>
@@ -1124,8 +1187,8 @@ export function VolundrPage() {
                 onCreatePR={createPullRequest}
                 onMergePR={mergePullRequest}
                 onRefreshCI={refreshCIStatus}
-                linearIssue={effectiveSelectedSession.linearIssue}
-                onLinearStatusChange={updateLinearIssueStatus}
+                trackerIssue={effectiveSelectedSession.trackerIssue}
+                onTrackerStatusChange={updateTrackerIssueStatus}
                 onNavigateToDiff={(filePath: string) => {
                   setPendingDiffFile(filePath);
                   setActiveTab('diffs');
@@ -1212,7 +1275,7 @@ export function VolundrPage() {
             }}
             onSavePreset={savePreset}
             isLaunching={isLaunching}
-            searchLinearIssues={searchLinearIssues}
+            searchTrackerIssues={searchTrackerIssues}
           />
           {launchError && (
             <div className={styles.launchError}>

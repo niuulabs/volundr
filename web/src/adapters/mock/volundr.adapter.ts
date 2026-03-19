@@ -16,7 +16,7 @@ import type {
   McpServerConfig,
   VolundrPreset,
   VolundrTemplate,
-  LinearIssue,
+  TrackerIssue,
   ProjectRepoMapping,
   FileTreeEntry,
   VolundrIdentity,
@@ -46,7 +46,7 @@ import {
   mockVolundrPullRequests,
   mockVolundrPresets,
   mockVolundrTemplates,
-  mockLinearIssues,
+  mockTrackerIssues,
   mockProjectRepoMappings,
   mockVolundrMcpServers,
   mockAvailableMcpServers,
@@ -258,7 +258,7 @@ export class MockVolundrService implements IVolundrService {
     model: string;
     templateName?: string;
     taskType?: string;
-    linearIssue?: LinearIssue;
+    trackerIssue?: TrackerIssue;
     terminalRestricted?: boolean;
     credentialNames?: string[];
     integrationIds?: string[];
@@ -274,7 +274,7 @@ export class MockVolundrService implements IVolundrService {
       messageCount: 0,
       tokensUsed: 0,
       taskType: config.taskType,
-      linearIssue: config.linearIssue,
+      trackerIssue: config.trackerIssue,
     };
     this.sessions.unshift(newSession);
     this.stats.totalSessions += 1;
@@ -307,6 +307,20 @@ export class MockVolundrService implements IVolundrService {
     this.simulateTransition(newSession.id);
 
     return { ...newSession };
+  }
+
+  async updateSession(
+    sessionId: string,
+    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string }
+  ): Promise<VolundrSession> {
+    const session = this.sessions.find(s => s.id === sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    if (updates.name) session.name = updates.name;
+    if (updates.model) session.model = updates.model;
+    this.notifySubscribers();
+    return session;
   }
 
   async stopSession(sessionId: string): Promise<void> {
@@ -669,9 +683,9 @@ export class MockVolundrService implements IVolundrService {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async searchLinearIssues(query: string, _projectId?: string): Promise<LinearIssue[]> {
+  async searchTrackerIssues(query: string, _projectId?: string): Promise<TrackerIssue[]> {
     const lower = query.toLowerCase();
-    return mockLinearIssues
+    return mockTrackerIssues
       .filter(
         issue =>
           issue.identifier.toLowerCase().includes(lower) ||
@@ -694,20 +708,20 @@ export class MockVolundrService implements IVolundrService {
     return entries.map(e => ({ ...e }));
   }
 
-  async updateLinearIssueStatus(
+  async updateTrackerIssueStatus(
     issueId: string,
-    status: LinearIssue['status']
-  ): Promise<LinearIssue> {
-    const issue = mockLinearIssues.find(i => i.id === issueId);
+    status: TrackerIssue['status']
+  ): Promise<TrackerIssue> {
+    const issue = mockTrackerIssues.find(i => i.id === issueId);
     if (!issue) {
-      throw new Error(`Linear issue ${issueId} not found`);
+      throw new Error(`Tracker issue ${issueId} not found`);
     }
     issue.status = status;
 
     // Also update any sessions that have this issue linked
     for (const session of this.sessions) {
-      if (session.linearIssue?.id === issueId) {
-        session.linearIssue = { ...issue };
+      if (session.trackerIssue?.id === issueId) {
+        session.trackerIssue = { ...issue };
       }
     }
     this.notifySubscribers();
@@ -872,7 +886,7 @@ export class MockVolundrService implements IVolundrService {
     {
       slug: 'linear',
       name: 'Linear',
-      description: 'Linear issue tracker',
+      description: 'Issue tracker',
       integration_type: 'issue_tracker',
       adapter: 'volundr.adapters.outbound.linear.LinearAdapter',
       icon: 'linear',

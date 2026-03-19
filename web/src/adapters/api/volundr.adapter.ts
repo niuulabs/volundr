@@ -147,6 +147,18 @@ function mapSessionStatus(apiStatus: ApiSessionStatus): SessionStatus {
 }
 
 /**
+ * Map a tracker issue status string to the TrackerIssueStatus union.
+ */
+function mapTrackerStatus(status: string): import('@/models').TrackerIssueStatus {
+  const lower = status.toLowerCase().replace(/\s+/g, '_');
+  const valid = ['backlog', 'todo', 'in_progress', 'done', 'cancelled'] as const;
+  if ((valid as readonly string[]).includes(lower)) {
+    return lower as import('@/models').TrackerIssueStatus;
+  }
+  return 'todo';
+}
+
+/**
  * Extract the host (hostname + port) from an endpoint URL.
  * Returns undefined when the URL is missing or unparseable.
  */
@@ -202,6 +214,15 @@ function transformSession(api: ApiSessionResponse): VolundrSession {
     taskType: api.task_type ?? undefined,
     ownerId: api.owner_id ?? undefined,
     tenantId: api.tenant_id ?? undefined,
+    trackerIssue: api.tracker_issue_id
+      ? {
+          id: api.tracker_issue_id,
+          identifier: api.tracker_issue_id,
+          title: '',
+          status: 'todo',
+          url: api.issue_tracker_url ?? '',
+        }
+      : undefined,
   };
 }
 
@@ -439,12 +460,16 @@ function transformPreset(apiPreset: ApiPresetResponse): VolundrPreset {
  * Transform SSE session payload to UI model
  */
 function transformSSESession(payload: SSESessionPayload): VolundrSession {
+  const source: import('@/models').SessionSource = payload.source
+    ? transformSource(payload.source)
+    : { type: 'git', repo: payload.repo ?? '', branch: payload.branch ?? 'main' };
+
   return {
     id: payload.id,
     name: payload.name,
     model: payload.model,
     status: mapSessionStatus(payload.status),
-    source: transformSource(payload.source),
+    source,
     lastActive: new Date(payload.last_active).getTime(),
     messageCount: payload.message_count,
     tokensUsed: payload.tokens_used,
@@ -453,6 +478,18 @@ function transformSSESession(payload: SSESessionPayload): VolundrSession {
     hostname: extractHost(payload.chat_endpoint) ?? extractHost(payload.code_endpoint),
     chatEndpoint: payload.chat_endpoint ? rewriteOrigin(payload.chat_endpoint) : undefined,
     codeEndpoint: payload.code_endpoint ? rewriteOrigin(payload.code_endpoint) : undefined,
+    taskType: payload.task_type ?? undefined,
+    ownerId: payload.owner_id ?? undefined,
+    tenantId: payload.tenant_id ?? undefined,
+    trackerIssue: payload.tracker_issue_id
+      ? {
+          id: payload.tracker_issue_id,
+          identifier: payload.tracker_issue_id,
+          title: '',
+          status: 'todo',
+          url: payload.issue_tracker_url ?? '',
+        }
+      : undefined,
   };
 }
 
@@ -716,6 +753,7 @@ export class ApiVolundrService implements IVolundrService {
     credentialNames?: string[];
     integrationIds?: string[];
     resourceConfig?: Record<string, string | undefined>;
+    trackerIssue?: import('@/models').TrackerIssue;
   }): Promise<VolundrSession> {
     const createRequest: ApiSessionCreate = {
       name: config.name,
@@ -728,6 +766,8 @@ export class ApiVolundrService implements IVolundrService {
       credential_names: config.credentialNames?.length ? config.credentialNames : undefined,
       integration_ids: config.integrationIds?.length ? config.integrationIds : undefined,
       resource_config: config.resourceConfig,
+      issue_id: config.trackerIssue?.identifier ?? null,
+      issue_url: config.trackerIssue?.url ?? null,
     };
 
     const response = await api.post<ApiSessionResponse>('/sessions', createRequest);
@@ -770,6 +810,17 @@ export class ApiVolundrService implements IVolundrService {
     this.cachedSessions = [session, ...this.cachedSessions];
     this.notifySessionSubscribers();
 
+    return session;
+  }
+
+  async updateSession(
+    sessionId: string,
+    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string }
+  ): Promise<VolundrSession> {
+    const resp = await api.put<ApiSessionResponse>(`/sessions/${sessionId}`, updates);
+    const session = transformSession(resp);
+    this.cachedSessions = this.cachedSessions.map(s => (s.id === sessionId ? session : s));
+    this.notifySessionSubscribers();
     return session;
   }
 
@@ -1016,12 +1067,37 @@ export class ApiVolundrService implements IVolundrService {
     return [];
   }
 
-  async searchLinearIssues(
-    _query: string,
+  async searchTrackerIssues(
+    query: string,
     _projectId?: string
-  ): Promise<import('@/models').LinearIssue[]> {
-    // TODO: Implement when backend endpoint is available
-    return [];
+  ): Promise<import('@/models').TrackerIssue[]> {
+    interface TrackerIssue {
+      id: string;
+      identifier: string;
+      title: string;
+      status: string;
+      assignee?: string;
+      labels?: string[];
+      priority?: number;
+      url: string;
+    }
+    try {
+      const results = await api.get<TrackerIssue[]>(
+        `/issues/search?q=${encodeURIComponent(query)}`
+      );
+      return results.map(issue => ({
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+        status: mapTrackerStatus(issue.status),
+        assignee: issue.assignee ?? undefined,
+        labels: issue.labels ?? [],
+        priority: issue.priority ?? 0,
+        url: issue.url,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   async getProjectRepoMappings(): Promise<import('@/models').ProjectRepoMapping[]> {
@@ -1029,12 +1105,33 @@ export class ApiVolundrService implements IVolundrService {
     return [];
   }
 
-  async updateLinearIssueStatus(
-    _issueId: string,
-    _status: import('@/models').LinearIssueStatus
-  ): Promise<import('@/models').LinearIssue> {
-    // TODO: Implement when backend endpoint is available
-    throw new Error('Not implemented');
+  async updateTrackerIssueStatus(
+    issueId: string,
+    issueStatus: import('@/models').TrackerIssueStatus
+  ): Promise<import('@/models').TrackerIssue> {
+    interface TrackerIssue {
+      id: string;
+      identifier: string;
+      title: string;
+      status: string;
+      assignee?: string;
+      labels?: string[];
+      priority?: number;
+      url: string;
+    }
+    const issue = await api.post<TrackerIssue>(`/issues/${issueId}/status`, {
+      status: issueStatus,
+    });
+    return {
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      status: mapTrackerStatus(issue.status),
+      assignee: issue.assignee ?? undefined,
+      labels: issue.labels ?? [],
+      priority: issue.priority ?? 0,
+      url: issue.url,
+    };
   }
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
@@ -1505,7 +1602,12 @@ export class ApiVolundrService implements IVolundrService {
         if (idx === -1) {
           this.cachedSessions = [session, ...this.cachedSessions];
         } else {
-          this.cachedSessions[idx] = session;
+          // Merge: preserve fields not carried by SSE (e.g. trackerIssue, taskType)
+          const existing = this.cachedSessions[idx];
+          this.cachedSessions[idx] = {
+            ...existing,
+            ...session,
+          };
         }
         this.notifySessionSubscribers();
         break;

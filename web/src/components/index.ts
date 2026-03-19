@@ -36,14 +36,14 @@ export type { MessageCostFooterProps } from './molecules/MessageCostFooter';
 export { SessionStartingIndicator } from './molecules/SessionStartingIndicator';
 export type { SessionStartingIndicatorProps } from './molecules/SessionStartingIndicator';
 
-export { LinearIssueBadge } from './molecules/LinearIssueBadge';
-export type { LinearIssueBadgeProps } from './molecules/LinearIssueBadge';
+export { TrackerIssueBadge } from './molecules/TrackerIssueBadge';
+export type { TrackerIssueBadgeProps } from './molecules/TrackerIssueBadge';
 
-export { LinearIssueSearch } from './molecules/LinearIssueSearch';
-export type { LinearIssueSearchProps } from './molecules/LinearIssueSearch';
+export { TrackerIssueSearch } from './molecules/TrackerIssueSearch';
+export type { TrackerIssueSearchProps } from './molecules/TrackerIssueSearch';
 
-export { LinearIssueSection } from './molecules/LinearIssueSection';
-export type { LinearIssueSectionProps } from './molecules/LinearIssueSection';
+export { TrackerIssueSection } from './molecules/TrackerIssueSection';
+export type { TrackerIssueSectionProps } from './molecules/TrackerIssueSection';
 
 // Organisms
 export { OdinStatusBar } from './organisms/OdinStatusBar';

@@ -1,14 +1,14 @@
 import { ExternalLink } from 'lucide-react';
-import type { LinearIssue, LinearIssueStatus } from '@/models';
+import type { TrackerIssue, TrackerIssueStatus } from '@/models';
 import { cn } from '@/utils';
-import styles from './LinearIssueBadge.module.css';
+import styles from './TrackerIssueBadge.module.css';
 
-export interface LinearIssueBadgeProps {
-  issue: LinearIssue;
+export interface TrackerIssueBadgeProps {
+  issue: TrackerIssue;
   className?: string;
 }
 
-const STATUS_LABELS: Record<LinearIssueStatus, string> = {
+const STATUS_LABELS: Record<TrackerIssueStatus, string> = {
   backlog: 'Backlog',
   todo: 'Todo',
   in_progress: 'In Progress',
@@ -16,7 +16,7 @@ const STATUS_LABELS: Record<LinearIssueStatus, string> = {
   cancelled: 'Cancelled',
 };
 
-export function LinearIssueBadge({ issue, className }: LinearIssueBadgeProps) {
+export function TrackerIssueBadge({ issue, className }: TrackerIssueBadgeProps) {
   return (
     <a
       className={cn(styles.badge, className)}

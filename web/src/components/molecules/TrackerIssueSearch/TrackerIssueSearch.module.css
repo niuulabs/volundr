@@ -14,7 +14,7 @@
 }
 
 .inputWrapper:focus-within {
-  border-color: var(--color-accent-indigo);
+  border-color: var(--color-brand);
 }
 
 .searchIcon {

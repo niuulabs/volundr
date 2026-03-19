@@ -189,10 +189,10 @@ describe('SessionCard', () => {
     expect(badge).toHaveAttribute('style', expect.stringContaining('--model-color: #22c55e'));
   });
 
-  it('renders Linear issue badge when session has a linked issue', () => {
+  it('renders Tracker issue badge when session has a linked issue', () => {
     const sessionWithIssue: VolundrSession = {
       ...runningSession,
-      linearIssue: {
+      trackerIssue: {
         id: 'issue-1',
         identifier: 'NIU-44',
         title: 'Fix calibration',

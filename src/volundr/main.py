@@ -32,7 +32,6 @@ from volundr.adapters.outbound.config_mcp_servers import ConfigMCPServerProvider
 from volundr.adapters.outbound.config_profiles import ConfigProfileProvider
 from volundr.adapters.outbound.config_templates import ConfigTemplateProvider
 from volundr.adapters.outbound.git_registry import create_git_registry
-from volundr.adapters.outbound.memory_secret_repo import InMemorySecretRepository
 from volundr.adapters.outbound.memory_secrets import InMemorySecretManager
 from volundr.adapters.outbound.pg_event_sink import PostgresEventSink
 from volundr.adapters.outbound.postgres import PostgresSessionRepository
@@ -637,12 +636,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             workspace_service = WorkspaceService(storage_adapter)
             app.state.workspace_service = workspace_service
 
-            # Integration tracker factory (reuses integration_repo/registry created above)
-            secret_repository = InMemorySecretRepository()
-
+            # Integration tracker factory (reuses credential_store created above)
             from volundr.domain.services.tracker_factory import TrackerFactory
 
-            tracker_factory = TrackerFactory(secret_repository)
+            tracker_factory = TrackerFactory(credential_store)
 
             # Issue tracker integration (Linear, Jira, etc.)
             tracker_service = None

@@ -11,7 +11,7 @@ import type {
   McpServerConfig,
   VolundrPreset,
   VolundrTemplate,
-  LinearIssue,
+  TrackerIssue,
   ProjectRepoMapping,
   FileTreeEntry,
 } from '@/models';
@@ -125,7 +125,7 @@ export const mockVolundrRepos: VolundrRepo[] = [
   },
 ];
 
-export const mockLinearIssues: LinearIssue[] = [
+export const mockTrackerIssues: TrackerIssue[] = [
   {
     id: 'lin-001',
     identifier: 'NIU-44',
@@ -178,7 +178,7 @@ export const mockLinearIssues: LinearIssue[] = [
   {
     id: 'lin-006',
     identifier: 'NIU-49',
-    title: 'Add Linear issue integration to Volundr sessions',
+    title: 'Add Tracker issue integration to Volundr sessions',
     status: 'in_progress',
     assignee: 'Jozef',
     labels: ['hlidskjalf', 'volundr'],
@@ -258,7 +258,7 @@ export const mockVolundrSessions: VolundrSession[] = [
     tokensUsed: 156420,
     podName: 'skuld-7f3a2b1c-xkj2p',
     taskType: 'skuld-claude',
-    linearIssue: mockLinearIssues[0],
+    trackerIssue: mockTrackerIssues[0],
   },
   {
     id: 'forge-9d4e8f2a',
@@ -271,7 +271,7 @@ export const mockVolundrSessions: VolundrSession[] = [
     tokensUsed: 423800,
     podName: 'skuld-9d4e8f2a-mn3qr',
     taskType: 'skuld-claude',
-    linearIssue: mockLinearIssues[1],
+    trackerIssue: mockTrackerIssues[1],
   },
   {
     id: 'forge-2c5d9e7b',
@@ -283,7 +283,7 @@ export const mockVolundrSessions: VolundrSession[] = [
     messageCount: 89,
     tokensUsed: 287650,
     taskType: 'skuld-gemini',
-    linearIssue: mockLinearIssues[2],
+    trackerIssue: mockTrackerIssues[2],
   },
   {
     id: 'forge-5a1b3c8d',

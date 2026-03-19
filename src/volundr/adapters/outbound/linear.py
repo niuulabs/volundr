@@ -34,8 +34,8 @@ query {
 """
 
 _SEARCH_ISSUES_QUERY = """
-query SearchIssues($query: String!, $first: Int!) {
-  issueSearch(query: $query, first: $first) {
+query SearchIssues($term: String!, $first: Int!) {
+  searchIssues(term: $term, first: $first) {
     nodes {
       id
       identifier
@@ -239,15 +239,15 @@ class LinearAdapter(IssueTrackerProvider):
         if cached is not None:
             return cached  # type: ignore[return-value]
 
-        search_query = query
+        search_term = query
         if project_id:
-            search_query = f"project:{project_id} {query}"
+            search_term = f"project:{project_id} {query}"
 
         data = await self._graphql(
             _SEARCH_ISSUES_QUERY,
-            {"query": search_query, "first": 25},
+            {"term": search_term, "first": 25},
         )
-        nodes = data.get("issueSearch", {}).get("nodes", [])
+        nodes = data.get("searchIssues", {}).get("nodes", [])
         issues = [self._node_to_issue(n) for n in nodes]
         self._set_cached(cache_key, issues, ttl=30.0)
         return issues
