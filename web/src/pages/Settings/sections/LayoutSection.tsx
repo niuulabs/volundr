@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
-import type { FeatureModule, UserFeaturePreference } from '@/models';
+import type { UserFeaturePreference } from '@/models';
 import type { IVolundrService } from '@/ports';
 import { resolveIcon } from '@/modules/icons';
 import { cn } from '@/utils/classnames';
@@ -34,7 +34,7 @@ export function LayoutSection({ service }: LayoutSectionProps) {
 
       const prefMap = new Map(prefs.map(p => [p.featureKey, p]));
 
-      const merged: LayoutItem[] = features.map((f, idx) => {
+      const merged: LayoutItem[] = features.map((f) => {
         const pref = prefMap.get(f.key);
         return {
           key: f.key,

@@ -11,7 +11,6 @@ from volundr.domain.services.feature import (
     UserFeaturePreference,
 )
 
-
 # ── Fake asyncpg pool for testing ──────────────────────────────────
 
 class FakeConnection:

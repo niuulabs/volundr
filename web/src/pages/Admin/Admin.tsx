@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import type { IVolundrService } from '@/ports';
 import { SectionLayout } from '@/components/SectionLayout';
 import { AdminGuard } from '@/components/AdminGuard';
@@ -12,11 +12,8 @@ export function AdminPage({ service }: AdminPageProps) {
   const { sections, loading } = useFeatureModules('admin', service);
   const [activeSection, setActiveSection] = useState('');
 
-  useEffect(() => {
-    if (sections.length > 0 && !activeSection) {
-      setActiveSection(sections[0].key);
-    }
-  }, [sections, activeSection]);
+  const resolvedSection =
+    activeSection || (sections.length > 0 ? sections[0].key : '');
 
   if (loading) {
     return null;
@@ -28,7 +25,7 @@ export function AdminPage({ service }: AdminPageProps) {
         <SectionLayout
           title="Admin"
           sections={sections}
-          activeSection={activeSection}
+          activeSection={resolvedSection}
           onSectionChange={setActiveSection}
           service={service}
         />

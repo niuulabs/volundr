@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Settings } from 'lucide-react';
 import type { IVolundrService } from '@/ports';
 import { registerModule, getModule, getAllModules } from './registry';
-import type { ModuleEntry } from './registry';
+
 
 const dummyLoad = () =>
   Promise.resolve({

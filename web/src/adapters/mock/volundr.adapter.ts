@@ -1147,6 +1147,39 @@ export class MockVolundrService implements IVolundrService {
     return { storage: { homeEnabled: data.storage?.homeEnabled ?? true } };
   }
 
+  async getFeatureModules(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _scope?: import('@/models').FeatureScope,
+  ): Promise<import('@/models').FeatureModule[]> {
+    return [];
+  }
+
+  async toggleFeature(
+    _key: string,
+    _enabled: boolean,
+  ): Promise<import('@/models').FeatureModule> {
+    return {
+      key: _key,
+      label: _key,
+      icon: 'settings',
+      scope: 'admin',
+      enabled: _enabled,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 0,
+    };
+  }
+
+  async getUserFeaturePreferences(): Promise<import('@/models').UserFeaturePreference[]> {
+    return [];
+  }
+
+  async updateUserFeaturePreferences(
+    preferences: import('@/models').UserFeaturePreference[],
+  ): Promise<import('@/models').UserFeaturePreference[]> {
+    return preferences;
+  }
+
   private notifySubscribers(): void {
     for (const callback of this.subscribers) {
       callback(this.sessions.map(s => ({ ...s })));

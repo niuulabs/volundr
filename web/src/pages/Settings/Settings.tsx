@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import type { IVolundrService } from '@/ports';
 import { SectionLayout } from '@/components/SectionLayout';
 import { useFeatureModules } from '@/hooks/useFeatureModules';
@@ -11,11 +11,8 @@ export function SettingsPage({ service }: SettingsPageProps) {
   const { sections, loading } = useFeatureModules('user', service);
   const [activeSection, setActiveSection] = useState('');
 
-  useEffect(() => {
-    if (sections.length > 0 && !activeSection) {
-      setActiveSection(sections[0].key);
-    }
-  }, [sections, activeSection]);
+  const resolvedSection =
+    activeSection || (sections.length > 0 ? sections[0].key : '');
 
   if (loading) {
     return null;
@@ -26,7 +23,7 @@ export function SettingsPage({ service }: SettingsPageProps) {
       <SectionLayout
         title="Settings"
         sections={sections}
-        activeSection={activeSection}
+        activeSection={resolvedSection}
         onSectionChange={setActiveSection}
         service={service}
       />
