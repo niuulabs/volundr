@@ -434,6 +434,9 @@ function transformPreset(apiPreset: ApiPresetResponse): VolundrPreset {
     rules: apiPreset.rules ?? [],
     envVars: apiPreset.env_vars ?? {},
     envSecretRefs: apiPreset.env_secret_refs ?? [],
+    source: apiPreset.source ? transformSource(apiPreset.source) : null,
+    integrationIds: apiPreset.integration_ids ?? [],
+    setupScripts: apiPreset.setup_scripts ?? [],
     workloadConfig: apiPreset.workload_config ?? {},
   };
 }
@@ -657,6 +660,17 @@ export class ApiVolundrService implements IVolundrService {
       rules: preset.rules,
       env_vars: preset.envVars,
       env_secret_refs: preset.envSecretRefs,
+      source: preset.source
+        ? preset.source.type === 'git'
+          ? { type: 'git' as const, repo: preset.source.repo, branch: preset.source.branch }
+          : {
+              type: 'local_mount' as const,
+              paths: preset.source.paths,
+              node_selector: preset.source.node_selector,
+            }
+        : null,
+      integration_ids: preset.integrationIds,
+      setup_scripts: preset.setupScripts,
       workload_config: preset.workloadConfig,
     };
 
