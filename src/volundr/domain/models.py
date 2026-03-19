@@ -1274,6 +1274,18 @@ class Preset(BaseModel):
         default_factory=list,
         description="K8s secret names to mount as env vars",
     )
+    source: SessionSource | None = Field(
+        default=None,
+        description="Workspace source configuration (git or local mount)",
+    )
+    integration_ids: list[str] = Field(
+        default_factory=list,
+        description="Integration connection IDs to attach to sessions",
+    )
+    setup_scripts: list[str] = Field(
+        default_factory=list,
+        description="Shell scripts to run during workspace setup",
+    )
     workload_config: dict = Field(
         default_factory=dict,
         description="Additional workload-specific configuration",

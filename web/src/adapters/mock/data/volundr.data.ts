@@ -896,6 +896,9 @@ export const mockVolundrPresets: VolundrPreset[] = [
     rules: [],
     envVars: { WORKSPACE_DIR: '/workspace', LOG_LEVEL: 'info' },
     envSecretRefs: [],
+    source: null,
+    integrationIds: [],
+    setupScripts: [],
     workloadConfig: {},
   },
   {
@@ -916,6 +919,9 @@ export const mockVolundrPresets: VolundrPreset[] = [
     rules: [],
     envVars: {},
     envSecretRefs: ['anthropic-api-key'],
+    source: null,
+    integrationIds: [],
+    setupScripts: [],
     workloadConfig: { maxTurns: 30 },
   },
   {
@@ -939,6 +945,9 @@ export const mockVolundrPresets: VolundrPreset[] = [
     rules: [],
     envVars: {},
     envSecretRefs: ['anthropic-api-key'],
+    source: null,
+    integrationIds: [],
+    setupScripts: [],
     workloadConfig: { maxTurns: 200 },
   },
   {
@@ -959,6 +968,9 @@ export const mockVolundrPresets: VolundrPreset[] = [
     rules: [],
     envVars: {},
     envSecretRefs: [],
+    source: null,
+    integrationIds: [],
+    setupScripts: [],
     workloadConfig: { maxTurns: 50 },
   },
   {
@@ -982,6 +994,9 @@ export const mockVolundrPresets: VolundrPreset[] = [
     rules: [],
     envVars: {},
     envSecretRefs: ['openai-api-key'],
+    source: null,
+    integrationIds: [],
+    setupScripts: [],
     workloadConfig: {},
   },
 ];
