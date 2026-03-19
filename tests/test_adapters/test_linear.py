@@ -326,6 +326,20 @@ class TestUpdateIssueStatus:
             await adapter.update_issue_status("issue-1", "Invalid")
 
 
+class TestLinearAdapterConstructor:
+    """Tests for LinearAdapter constructor edge cases."""
+
+    def test_extra_kwargs_ignored(self):
+        """Extra kwargs from dynamic adapter pattern don't crash."""
+        adapter = LinearAdapter(
+            api_key="test-key",
+            api_url="https://api.linear.app/graphql",
+            name="linear-prod",
+            some_other="value",
+        )
+        assert adapter.provider_name == "linear"
+
+
 class TestClose:
     async def test_close(self):
         adapter = _make_adapter()

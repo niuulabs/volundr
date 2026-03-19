@@ -142,7 +142,7 @@ class _CacheEntry:
 class LinearAdapter(IssueTrackerProvider):
     """Linear issue tracker adapter using GraphQL API."""
 
-    def __init__(self, api_key: str, api_url: str = LINEAR_API_URL):
+    def __init__(self, api_key: str, api_url: str = LINEAR_API_URL, **_extra: object):
         self._api_key = api_key
         self._api_url = api_url
         self._client = httpx.AsyncClient(
