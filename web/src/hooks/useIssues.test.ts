@@ -121,4 +121,18 @@ describe('useIssues', () => {
 
     expect(issue).toBeNull();
   });
+
+  it('searchIssues wraps non-Error rejection', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce('string error');
+
+    const { result } = renderHook(() => useIssues());
+
+    await act(async () => {
+      await result.current.searchIssues('test');
+    });
+
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error?.message).toBe('Failed to search issues');
+    expect(result.current.issues).toEqual([]);
+  });
 });
