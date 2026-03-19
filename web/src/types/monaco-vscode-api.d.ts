@@ -338,6 +338,86 @@ declare module '@codingame/monaco-vscode-api/workers/extensionHost.worker' {
   // Extension host worker entry point
 }
 
+declare module 'vscode' {
+  export class Uri {
+    static from(components: {
+      scheme: string;
+      authority?: string;
+      path?: string;
+      query?: string;
+      fragment?: string;
+    }): Uri;
+    static parse(value: string): Uri;
+    readonly scheme: string;
+    readonly authority: string;
+    readonly path: string;
+  }
+
+  export interface WorkspaceFolder {
+    readonly uri: Uri;
+    readonly name: string;
+    readonly index: number;
+  }
+
+  export namespace workspace {
+    export const workspaceFolders: readonly WorkspaceFolder[] | undefined;
+    export function updateWorkspaceFolders(
+      start: number,
+      deleteCount: number | undefined | null,
+      ...workspaceFoldersToAdd: { uri: Uri; name?: string }[]
+    ): boolean;
+    export function openTextDocument(uri: Uri): Thenable<TextDocument>;
+  }
+
+  export namespace commands {
+    export function executeCommand<T>(command: string, ...rest: unknown[]): Thenable<T>;
+  }
+
+  export interface TextDocument {
+    readonly uri: Uri;
+    readonly fileName: string;
+  }
+
+  export interface TextEditor {
+    readonly document: TextDocument;
+  }
+
+  export interface TabInputText {
+    readonly uri: Uri;
+  }
+
+  export interface Tab {
+    readonly label: string;
+    readonly input: TabInputText | unknown;
+    readonly isActive: boolean;
+  }
+
+  export interface TabGroup {
+    readonly isActive: boolean;
+    readonly activeTab: Tab | undefined;
+    readonly tabs: readonly Tab[];
+  }
+
+  export interface TabGroups {
+    readonly all: readonly TabGroup[];
+    readonly activeTabGroup: TabGroup;
+    close(tab: Tab | readonly Tab[]): Thenable<boolean>;
+  }
+
+  export interface ShowTextDocumentOptions {
+    preview?: boolean;
+    preserveFocus?: boolean;
+  }
+
+  export namespace window {
+    export const tabGroups: TabGroups;
+    export function showTextDocument(
+      document: TextDocument,
+      options?: ShowTextDocumentOptions
+    ): Thenable<TextEditor>;
+  }
+}
+
 declare module '@codingame/monaco-vscode-api/vscode/vs/base/common/uri' {
   export class URI {
     static from(components: {

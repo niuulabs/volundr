@@ -1,16 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { EditorPanel } from './EditorPanel';
-import { resetEditorState } from './editorState';
+import { resetEditorState, markInitialized } from './editorState';
+import { resetSessionRouter, setActiveRoute } from './sessionRouter';
 
-// Mock the workbenchInit module — this is the new initialization module
-import { markInitialized } from './editorState';
-
+// Mock the workbenchInit module
 const mockInitWorkbench = vi.fn().mockImplementation(async (params: { sessionId: string }) => {
-  markInitialized(params.sessionId);
+  markInitialized();
+  setActiveRoute({ sessionId: params.sessionId, hostname: 'test-host' });
 });
+const mockSwitchSession = vi
+  .fn()
+  .mockImplementation(async (sessionId: string, hostname: string) => {
+    setActiveRoute({ sessionId, hostname });
+  });
 vi.mock('./workbenchInit', () => ({
   initWorkbench: (...args: unknown[]) => mockInitWorkbench(...args),
+  switchSession: (...args: unknown[]) => mockSwitchSession(...args),
 }));
 
 // jsdom doesn't support attachShadow natively — stub it
@@ -28,6 +34,7 @@ describe('EditorPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetEditorState();
+    resetSessionRouter();
   });
 
   afterEach(() => {
@@ -79,24 +86,20 @@ describe('EditorPanel', () => {
     expect(screen.getByText('Failed to load workbench')).toBeInTheDocument();
   });
 
-  it('shows session-changed state when sessionId differs from initialized session', async () => {
-    const { unmount } = render(<EditorPanel hostname="pod-1.example.com" sessionId="session-1" />);
+  it('calls switchSession when sessionId changes after initialization', async () => {
+    const { rerender } = render(<EditorPanel hostname="pod-1.example.com" sessionId="session-1" />);
 
     await waitFor(() => {
       expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
     });
 
-    unmount();
-
-    render(<EditorPanel hostname="pod-2.example.com" sessionId="session-2" />);
+    rerender(<EditorPanel hostname="pod-2.example.com" sessionId="session-2" />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Session changed — the editor requires a page reload to reconnect.')
-      ).toBeInTheDocument();
+      expect(mockSwitchSession).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByText('Reload page')).toBeInTheDocument();
+    expect(mockSwitchSession).toHaveBeenCalledWith('session-2', 'pod-2.example.com', undefined);
   });
 
   it('does not re-initialize when same session re-renders', async () => {
@@ -108,8 +111,9 @@ describe('EditorPanel', () => {
 
     rerender(<EditorPanel hostname="pod.example.com" sessionId="session-123" />);
 
-    // Should not call initWorkbench again
+    // Should not call initWorkbench or switchSession again
     expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
+    expect(mockSwitchSession).not.toHaveBeenCalled();
   });
 
   it('renders the workbench container div', async () => {
@@ -133,5 +137,23 @@ describe('EditorPanel', () => {
     });
 
     expect(screen.getByText('string error')).toBeInTheDocument();
+  });
+
+  it('shows error when switchSession fails', async () => {
+    const { rerender } = render(<EditorPanel hostname="pod-1.example.com" sessionId="session-1" />);
+
+    await waitFor(() => {
+      expect(mockInitWorkbench).toHaveBeenCalledTimes(1);
+    });
+
+    mockSwitchSession.mockRejectedValueOnce(new Error('Switch failed'));
+
+    rerender(<EditorPanel hostname="pod-2.example.com" sessionId="session-2" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to initialize editor')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Switch failed')).toBeInTheDocument();
   });
 });

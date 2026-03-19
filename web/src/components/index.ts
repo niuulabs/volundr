@@ -107,6 +107,9 @@ export type { TemplateBrowserProps } from './TemplateBrowser';
 export { LaunchWizard } from './LaunchWizard';
 export type { LaunchWizardProps, LaunchConfig } from './LaunchWizard';
 
+// File manager
+export { FileManager } from './FileManager';
+
 // Integration components
 export { IntegrationCard } from './IntegrationCard';
 export { CredentialForm } from './CredentialForm';

@@ -2,7 +2,10 @@ import type { SessionStatus } from './status.model';
 
 export interface VolundrFeatures {
   localMountsEnabled: boolean;
+  fileManagerEnabled: boolean;
 }
+
+export type FileRoot = 'workspace' | 'home';
 
 export interface ResourceType {
   name: string;
@@ -360,6 +363,8 @@ export interface FileTreeEntry {
   name: string;
   path: string;
   type: 'file' | 'directory';
+  size?: number;
+  modified?: string;
 }
 
 export type WorkspaceStatus = 'active' | 'archived' | 'deleted';
@@ -378,6 +383,7 @@ export interface VolundrWorkspace {
 
 export interface AdminStorageSettings {
   homeEnabled: boolean;
+  fileManagerEnabled: boolean;
 }
 
 export interface AdminSettings {

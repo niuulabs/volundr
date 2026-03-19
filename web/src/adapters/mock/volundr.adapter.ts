@@ -124,7 +124,7 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async getFeatures(): Promise<import('@/models').VolundrFeatures> {
-    return { localMountsEnabled: true };
+    return { localMountsEnabled: true, fileManagerEnabled: true };
   }
 
   async getModels(): Promise<Record<string, VolundrModel>> {
@@ -699,13 +699,56 @@ export class MockVolundrService implements IVolundrService {
     return mockProjectRepoMappings.map(m => ({ ...m }));
   }
 
-  async getSessionFiles(_sessionId: string, path?: string): Promise<FileTreeEntry[]> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async getSessionFiles(
+    sessionId: string,
+    path?: string,
+    root?: import('@/models').FileRoot
+  ): Promise<FileTreeEntry[]> {
     const dirPath = path ?? '';
     const entries = mockFileTree[dirPath];
     if (!entries) {
       return [];
     }
     return entries.map(e => ({ ...e }));
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async downloadSessionFile(
+    sessionId: string,
+    filePath: string,
+    root?: import('@/models').FileRoot
+  ): Promise<Blob> {
+    return new Blob(['mock file content'], { type: 'application/octet-stream' });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async uploadSessionFiles(
+    sessionId: string,
+    files: File[],
+    targetPath: string,
+    root?: import('@/models').FileRoot
+  ): Promise<FileTreeEntry[]> {
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async createSessionDirectory(
+    sessionId: string,
+    path: string,
+    root?: import('@/models').FileRoot
+  ): Promise<FileTreeEntry> {
+    const name = path.split('/').pop() ?? path;
+    return { name, path, type: 'directory' };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async deleteSessionFile(
+    sessionId: string,
+    filePath: string,
+    root?: import('@/models').FileRoot
+  ): Promise<void> {
+    // no-op
   }
 
   async updateTrackerIssueStatus(
@@ -1160,11 +1203,16 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async getAdminSettings(): Promise<AdminSettings> {
-    return { storage: { homeEnabled: true } };
+    return { storage: { homeEnabled: true, fileManagerEnabled: true } };
   }
 
   async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
-    return { storage: { homeEnabled: data.storage?.homeEnabled ?? true } };
+    return {
+      storage: {
+        homeEnabled: data.storage?.homeEnabled ?? true,
+        fileManagerEnabled: data.storage?.fileManagerEnabled ?? true,
+      },
+    };
   }
 
   private notifySubscribers(): void {

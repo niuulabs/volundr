@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field, field_validator
 
 from volundr.adapters.inbound.auth import require_role
@@ -779,6 +780,15 @@ class WorkspaceResponse(BaseModel):
         )
 
 
+async def _close_client(
+    client: httpx.AsyncClient,
+    response: httpx.Response,
+) -> None:
+    """Background task to close streaming httpx client and response."""
+    await response.aclose()
+    await client.aclose()
+
+
 def create_router(
     session_service: SessionService,
     stats_service: StatsService | None = None,
@@ -829,8 +839,12 @@ def create_router(
         (e.g. local mounts are only meaningful in k3s / CLI mode).
         """
         settings = request.app.state.settings
+        admin = request.app.state.admin_settings
         return {
             "local_mounts_enabled": settings.local_mounts.enabled,
+            "file_manager_enabled": admin.get("storage", {}).get(
+                "file_manager_enabled", True
+            ),
         }
 
     @router.get("/auth/config", tags=["Auth"])
@@ -1492,6 +1506,42 @@ def create_router(
                 detail=f"Could not connect to session pod: {e}",
             )
 
+    async def _skuld_base_url(session_id: UUID) -> str:
+        """Resolve the Skuld HTTP base URL for a session."""
+        session = await service.get_session(session_id)
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
+        if not session.chat_endpoint:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} has no active endpoint",
+            )
+        base_url = session.chat_endpoint.replace(
+            "wss://", "https://"
+        ).replace("ws://", "http://")
+        if base_url.endswith("/session"):
+            base_url = base_url[: -len("/session")]
+        return base_url
+
+    def _validate_file_path(path: str) -> None:
+        """Validate that a file path is relative and safe."""
+        if ".." in path or path.startswith("/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid path: must be relative and cannot contain '..'",
+            )
+
+    def _validate_file_root(root: str) -> None:
+        """Validate the root parameter."""
+        if root not in ("workspace", "home"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="root must be 'workspace' or 'home'",
+            )
+
     @router.get(
         "/sessions/{session_id}/files",
         responses={
@@ -1505,41 +1555,26 @@ def create_router(
         session_id: UUID = Path(description="Unique session identifier"),
         path: str = Query(
             default="",
-            description="Relative directory path within the workspace",
+            description="Relative directory path within the root",
+        ),
+        root: str = Query(
+            default="workspace",
+            description="Root directory: 'workspace' or 'home'",
         ),
     ) -> dict:
-        """List files in a session workspace via Skuld.
+        """List files in a session root via Skuld.
 
         Proxies to the session pod's ``GET /api/files`` endpoint.
         Respects .gitignore and excludes noise directories.
         Directories are sorted before files, both alphabetical.
         """
-        if ".." in path or path.startswith("/"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=("Invalid path: must be relative and cannot contain '..'"),
-            )
-
-        session = await service.get_session(session_id)
-        if session is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session not found: {session_id}",
-            )
-
-        if not session.chat_endpoint:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} has no active endpoint",
-            )
-
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
+        _validate_file_path(path)
+        _validate_file_root(root)
+        base_url = await _skuld_base_url(session_id)
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                params: dict[str, str] = {}
+                params: dict[str, str] = {"root": root}
                 if path:
                     params["path"] = path
                 response = await client.get(
@@ -1556,7 +1591,7 @@ def create_router(
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=(f"Failed to list files from session pod: {e.response.status_code}"),
+                detail=f"Failed to list files from session pod: {e.response.status_code}",
             )
         except httpx.RequestError as e:
             logger.warning(
@@ -1564,6 +1599,207 @@ def create_router(
                 session_id,
                 e,
             )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not connect to session pod: {e}",
+            )
+
+    @router.get(
+        "/sessions/{session_id}/files/download",
+        responses={
+            400: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+        tags=["Sessions"],
+    )
+    async def download_session_file(
+        session_id: UUID = Path(description="Unique session identifier"),
+        path: str = Query(description="File path to download"),
+        root: str = Query(
+            default="workspace",
+            description="Root directory: 'workspace' or 'home'",
+        ),
+    ) -> StreamingResponse:
+        """Download a file from a session via Skuld."""
+        _validate_file_path(path)
+        _validate_file_root(root)
+        base_url = await _skuld_base_url(session_id)
+
+        try:
+            client = httpx.AsyncClient(timeout=30.0)
+            response = await client.send(
+                client.build_request(
+                    "GET",
+                    f"{base_url}/api/files/download",
+                    params={"path": path, "root": root},
+                ),
+                stream=True,
+            )
+            response.raise_for_status()
+
+            filename = path.rsplit("/", 1)[-1] if "/" in path else path
+            return StreamingResponse(
+                response.aiter_bytes(),
+                media_type=response.headers.get(
+                    "content-type", "application/octet-stream"
+                ),
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
+                background=BackgroundTask(_close_client, client, response),
+            )
+        except httpx.HTTPStatusError as e:
+            await client.aclose()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Download failed: {e.response.status_code}",
+            )
+        except httpx.RequestError as e:
+            await client.aclose()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not connect to session pod: {e}",
+            )
+
+    @router.post(
+        "/sessions/{session_id}/files/upload",
+        responses={
+            400: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            413: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+        tags=["Sessions"],
+    )
+    async def upload_session_files(
+        request: Request,
+        session_id: UUID = Path(description="Unique session identifier"),
+        path: str = Query(
+            default="",
+            description="Target directory path",
+        ),
+        root: str = Query(
+            default="workspace",
+            description="Root directory: 'workspace' or 'home'",
+        ),
+    ) -> dict:
+        """Upload files to a session via Skuld."""
+        _validate_file_path(path)
+        _validate_file_root(root)
+        base_url = await _skuld_base_url(session_id)
+
+        body = await request.body()
+        content_type = request.headers.get("content-type", "")
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{base_url}/api/files/upload",
+                    params={"path": path, "root": root},
+                    content=body,
+                    headers={"content-type": content_type},
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=e.response.status_code
+                if e.response.status_code in (400, 413)
+                else status.HTTP_502_BAD_GATEWAY,
+                detail=f"Upload failed: {e.response.text}",
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not connect to session pod: {e}",
+            )
+
+    @router.post(
+        "/sessions/{session_id}/files/mkdir",
+        responses={
+            400: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+        tags=["Sessions"],
+    )
+    async def create_session_directory(
+        session_id: UUID = Path(description="Unique session identifier"),
+        body: dict = ...,  # type: ignore[assignment]
+    ) -> dict:
+        """Create a directory in a session via Skuld."""
+        dir_path = body.get("path", "")
+        root = body.get("root", "workspace")
+        _validate_file_path(dir_path)
+        _validate_file_root(root)
+        base_url = await _skuld_base_url(session_id)
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{base_url}/api/files/mkdir",
+                    json={"path": dir_path, "root": root},
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=e.response.status_code
+                if e.response.status_code in (400, 403, 409)
+                else status.HTTP_502_BAD_GATEWAY,
+                detail=f"mkdir failed: {e.response.text}",
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not connect to session pod: {e}",
+            )
+
+    @router.delete(
+        "/sessions/{session_id}/files",
+        responses={
+            400: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+        tags=["Sessions"],
+    )
+    async def delete_session_file(
+        session_id: UUID = Path(description="Unique session identifier"),
+        path: str = Query(description="Path to delete"),
+        root: str = Query(
+            default="workspace",
+            description="Root directory: 'workspace' or 'home'",
+        ),
+    ) -> dict:
+        """Delete a file or directory in a session via Skuld."""
+        _validate_file_path(path)
+        _validate_file_root(root)
+        if not path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="path is required",
+            )
+        base_url = await _skuld_base_url(session_id)
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.delete(
+                    f"{base_url}/api/files",
+                    params={"path": path, "root": root},
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=e.response.status_code
+                if e.response.status_code in (400, 403, 404)
+                else status.HTTP_502_BAD_GATEWAY,
+                detail=f"Delete failed: {e.response.text}",
+            )
+        except httpx.RequestError as e:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Could not connect to session pod: {e}",
