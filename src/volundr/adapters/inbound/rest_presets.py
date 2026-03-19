@@ -83,6 +83,18 @@ class PresetCreate(BaseModel):
         default_factory=list,
         description="K8s secret names to mount as env vars",
     )
+    source: dict | None = Field(
+        default=None,
+        description="Workspace source (git or local_mount) as JSON",
+    )
+    integration_ids: list[str] = Field(
+        default_factory=list,
+        description="Integration connection IDs to attach",
+    )
+    setup_scripts: list[str] = Field(
+        default_factory=list,
+        description="Shell scripts for workspace setup",
+    )
     workload_config: dict = Field(
         default_factory=dict,
         description="Additional workload-specific configuration",
@@ -165,6 +177,18 @@ class PresetUpdate(BaseModel):
         default=None,
         description="New K8s secret references",
     )
+    source: dict | None = Field(
+        default=None,
+        description="New workspace source",
+    )
+    integration_ids: list[str] | None = Field(
+        default=None,
+        description="New integration connection IDs",
+    )
+    setup_scripts: list[str] | None = Field(
+        default=None,
+        description="New setup scripts",
+    )
     workload_config: dict | None = Field(
         default=None,
         description="New workload config",
@@ -189,6 +213,9 @@ class PresetResponse(BaseModel):
     rules: list[dict] = Field(description="Rule definitions")
     env_vars: dict[str, str] = Field(description="Environment variables")
     env_secret_refs: list[str] = Field(description="K8s secret references")
+    source: dict | None = Field(description="Workspace source configuration")
+    integration_ids: list[str] = Field(description="Integration connection IDs")
+    setup_scripts: list[str] = Field(description="Setup shell scripts")
     workload_config: dict = Field(description="Workload-specific config")
     created_at: str = Field(description="ISO 8601 creation timestamp")
     updated_at: str = Field(description="ISO 8601 last update timestamp")
@@ -212,6 +239,9 @@ class PresetResponse(BaseModel):
             rules=preset.rules,
             env_vars=preset.env_vars,
             env_secret_refs=preset.env_secret_refs,
+            source=preset.source.model_dump() if preset.source else None,
+            integration_ids=preset.integration_ids,
+            setup_scripts=preset.setup_scripts,
             workload_config=preset.workload_config,
             created_at=preset.created_at.isoformat(),
             updated_at=preset.updated_at.isoformat(),
@@ -290,6 +320,9 @@ def create_presets_router(preset_service: PresetService) -> APIRouter:
                 rules=data.rules,
                 env_vars=data.env_vars,
                 env_secret_refs=data.env_secret_refs,
+                source=data.source,
+                integration_ids=data.integration_ids,
+                setup_scripts=data.setup_scripts,
                 workload_config=data.workload_config,
             )
             return PresetResponse.from_preset(preset)

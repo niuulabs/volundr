@@ -42,6 +42,9 @@ class PresetService:
         rules: list[dict] | None = None,
         env_vars: dict[str, str] | None = None,
         env_secret_refs: list[str] | None = None,
+        source: dict | None = None,
+        integration_ids: list[str] | None = None,
+        setup_scripts: list[str] | None = None,
         workload_config: dict | None = None,
     ) -> Preset:
         """Create a new preset."""
@@ -67,6 +70,9 @@ class PresetService:
             rules=rules or [],
             env_vars=env_vars or {},
             env_secret_refs=env_secret_refs or [],
+            source=source,
+            integration_ids=integration_ids or [],
+            setup_scripts=setup_scripts or [],
             workload_config=workload_config or {},
         )
         created = await self._repository.create(preset)

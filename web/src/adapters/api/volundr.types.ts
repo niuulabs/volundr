@@ -399,6 +399,9 @@ export interface ApiPresetResponse {
   rules: Array<{ path?: string; inline?: string }>;
   env_vars: Record<string, string>;
   env_secret_refs: string[];
+  source: ApiSessionSource | null;
+  integration_ids: string[];
+  setup_scripts: string[];
   workload_config: Record<string, string | number | boolean | undefined>;
 }
 
@@ -426,6 +429,9 @@ export interface ApiPresetCreate {
   rules: Array<{ path?: string; inline?: string }>;
   env_vars: Record<string, string>;
   env_secret_refs: string[];
+  source: ApiSessionSource | null;
+  integration_ids: string[];
+  setup_scripts: string[];
   workload_config: Record<string, string | number | boolean | undefined>;
 }
 

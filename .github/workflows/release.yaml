@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]  # stable semver only, skip prerelease (v*-dev.*)
 
 permissions: read-all
 
