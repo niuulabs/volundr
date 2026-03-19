@@ -32,7 +32,13 @@ interface PresetYamlDoc {
   rules?: Array<{ path?: string; inline?: string }>;
   env_vars?: Record<string, string>;
   env_secret_refs?: string[];
-  source?: { type: 'git'; repo: string; branch: string } | { type: 'local_mount'; paths: Array<{ host_path: string; mount_path: string; read_only: boolean }> } | null;
+  source?:
+    | { type: 'git'; repo: string; branch: string }
+    | {
+        type: 'local_mount';
+        paths: Array<{ host_path: string; mount_path: string; read_only: boolean }>;
+      }
+    | null;
   integration_ids?: string[];
   setup_scripts?: string[];
   workload_config?: Record<string, string | number | boolean | undefined>;

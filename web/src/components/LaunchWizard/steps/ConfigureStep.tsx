@@ -276,18 +276,19 @@ export function ConfigureStep({
 
       // Validate source (repo)
       if (preset.source) {
-        if (preset.source.type === 'git') {
-          const matchedRepo = repos.find(r => r.cloneUrl === preset.source!.repo);
+        const src = preset.source;
+        if (src.type === 'git') {
+          const matchedRepo = repos.find(r => r.cloneUrl === src.repo);
           if (matchedRepo) {
             updates.sourceType = 'git';
-            updates.repo = preset.source.repo;
-            updates.branch = (preset.source as import('@/models').GitSource).branch ?? matchedRepo.defaultBranch;
+            updates.repo = src.repo;
+            updates.branch = src.branch ?? matchedRepo.defaultBranch;
           } else {
-            warnings.push(`Repository "${preset.source.repo}" is no longer available`);
+            warnings.push(`Repository "${src.repo}" is no longer available`);
           }
-        } else if (preset.source.type === 'local_mount') {
+        } else if (src.type === 'local_mount') {
           updates.sourceType = 'local_mount';
-          updates.mountPaths = [...(preset.source as import('@/models').LocalMountSource).paths];
+          updates.mountPaths = [...src.paths];
         }
       }
 
@@ -302,7 +303,9 @@ export function ConfigureStep({
       // Validate integrations
       const enabledIntegrationIds = new Set(integrations.filter(i => i.enabled).map(i => i.id));
       const validIntegrations = preset.integrationIds.filter(id => enabledIntegrationIds.has(id));
-      const missingIntegrations = preset.integrationIds.filter(id => !enabledIntegrationIds.has(id));
+      const missingIntegrations = preset.integrationIds.filter(
+        id => !enabledIntegrationIds.has(id)
+      );
       for (const id of missingIntegrations) {
         const slug = integrations.find(i => i.id === id)?.slug ?? id;
         warnings.push(`Integration "${slug}" is no longer available`);
@@ -321,8 +324,12 @@ export function ConfigureStep({
       const source: import('@/models').SessionSource | null =
         state.sourceType === 'git' && state.repo
           ? { type: 'git', repo: state.repo, branch: state.branch }
-          : state.sourceType === 'local_mount' && state.mountPaths.some(p => p.host_path && p.mount_path)
-            ? { type: 'local_mount', paths: state.mountPaths.filter(p => p.host_path && p.mount_path) }
+          : state.sourceType === 'local_mount' &&
+              state.mountPaths.some(p => p.host_path && p.mount_path)
+            ? {
+                type: 'local_mount',
+                paths: state.mountPaths.filter(p => p.host_path && p.mount_path),
+              }
             : null;
       const yamlContent = serializePresetYaml({
         cliTool: state.template.cliTool,
@@ -572,8 +579,12 @@ export function ConfigureStep({
       const source: import('@/models').SessionSource | null =
         state.sourceType === 'git' && state.repo
           ? { type: 'git', repo: state.repo, branch: state.branch }
-          : state.sourceType === 'local_mount' && state.mountPaths.some(p => p.host_path && p.mount_path)
-            ? { type: 'local_mount', paths: state.mountPaths.filter(p => p.host_path && p.mount_path) }
+          : state.sourceType === 'local_mount' &&
+              state.mountPaths.some(p => p.host_path && p.mount_path)
+            ? {
+                type: 'local_mount',
+                paths: state.mountPaths.filter(p => p.host_path && p.mount_path),
+              }
             : null;
 
       const saved = await onSavePreset({
