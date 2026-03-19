@@ -190,7 +190,7 @@ class TestSearchIssues:
         adapter = _make_adapter()
         adapter._client = AsyncMock()
         adapter._client.post.return_value = _mock_response(
-            {"data": {"issueSearch": {"nodes": [_issue_node()]}}}
+            {"data": {"searchIssues": {"nodes": [_issue_node()]}}}
         )
 
         issues = await adapter.search_issues("test")
@@ -200,14 +200,16 @@ class TestSearchIssues:
     async def test_search_with_project(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"data": {"issueSearch": {"nodes": []}}})
+        adapter._client.post.return_value = _mock_response(
+            {"data": {"searchIssues": {"nodes": []}}}
+        )
 
         issues = await adapter.search_issues("test", project_id="proj-1")
         assert len(issues) == 0
 
         call_args = adapter._client.post.call_args
         payload = call_args[1]["json"]
-        assert "project:proj-1" in payload["variables"]["query"]
+        assert "project:proj-1" in payload["variables"]["term"]
 
 
 class TestGetRecentIssues:
