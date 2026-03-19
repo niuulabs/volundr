@@ -140,9 +140,7 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
             },
         )
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"Infisical auth failed ({response.status_code}): {response.text}"
-            )
+            raise RuntimeError(f"Infisical auth failed ({response.status_code}): {response.text}")
         self._access_token = response.json()["accessToken"]
         return self._access_token
 
@@ -215,16 +213,14 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
 
         # 3. Add identity as project member (required before adding privileges)
         resp = await client.post(
-            f"/api/v1/projects/{self._credential_project_id}"
-            f"/memberships/identities/{identity_id}",
+            f"/api/v1/projects/{self._credential_project_id}/memberships/identities/{identity_id}",
             headers=headers,
             json={"role": "no-access"},
         )
         if resp.status_code >= 400:
             await self._delete_identity(identity_id)
             raise RuntimeError(
-                f"Failed to add identity {identity_id} to project "
-                f"({resp.status_code}): {resp.text}"
+                f"Failed to add identity {identity_id} to project ({resp.status_code}): {resp.text}"
             )
 
         # 4. Add folder-scoped read privilege
@@ -387,9 +383,7 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
                 name=configmap_name,
                 namespace=self._namespace,
             )
-            identity_id = (cm.metadata.annotations or {}).get(
-                "volundr.niuu.io/identity-id", ""
-            )
+            identity_id = (cm.metadata.annotations or {}).get("volundr.niuu.io/identity-id", "")
 
             # Delete the identity first (revokes all access immediately)
             if identity_id:
@@ -408,7 +402,9 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
             else:
                 logger.warning(
                     "Failed to cleanup session %s: %s",
-                    session_id, exc, exc_info=True,
+                    session_id,
+                    exc,
+                    exc_info=True,
                 )
         finally:
             await api_client.close()
@@ -446,8 +442,6 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
 
         for mapping in credential_mappings:
             folder = self._credential_folder(user_id, mapping.credential_name)
-            has_explicit_mapping = bool(mapping.env_mappings or mapping.file_mappings)
-
             # Env var mappings → accumulate into env.sh
             for env_var, field_name in mapping.env_mappings.items():
                 env_lines.append(
@@ -465,10 +459,12 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
                     "{{ .Value }}"
                     "{{- end }}"
                 )
-                templates.append({
-                    "destination-path": target_path,
-                    "template-content": template_content,
-                })
+                templates.append(
+                    {
+                        "destination-path": target_path,
+                        "template-content": template_content,
+                    }
+                )
 
             # Unmapped credentials — skip template generation.
             # Without explicit env/file mappings we don't know what to render.
@@ -477,10 +473,12 @@ class InfisicalAgentInjectionAdapter(SecretInjectionPort):
 
         # Combine all env lines into a single env.sh template
         if env_lines:
-            templates.append({
-                "destination-path": _ENV_FILE_PATH,
-                "template-content": "\n".join(env_lines) + "\n",
-            })
+            templates.append(
+                {
+                    "destination-path": _ENV_FILE_PATH,
+                    "template-content": "\n".join(env_lines) + "\n",
+                }
+            )
 
         config_dict = {
             "infisical": {

@@ -560,8 +560,11 @@ fi
         pod_spec: dict[str, Any] = {
             "hostname": safe_hostname,
             "terminationGracePeriodSeconds": 30,
-            **({"serviceAccountName": spec.pod_spec.service_account}
-               if spec.pod_spec and spec.pod_spec.service_account else {}),
+            **(
+                {"serviceAccountName": spec.pod_spec.service_account}
+                if spec.pod_spec and spec.pod_spec.service_account
+                else {}
+            ),
             "securityContext": {
                 "fsGroup": 1000,
             },

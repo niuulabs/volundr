@@ -80,13 +80,15 @@ class IntegrationContributor(SessionContributor):
                         "key": cred_key,
                     }
                 # MCP server config with empty env — sourced by entrypoint
-                mcp_servers.append({
-                    "name": spec.name,
-                    "type": "stdio",
-                    "command": spec.command,
-                    "args": list(spec.args),
-                    "env": {},
-                })
+                mcp_servers.append(
+                    {
+                        "name": spec.name,
+                        "type": "stdio",
+                        "command": spec.command,
+                        "args": list(spec.args),
+                        "env": {},
+                    }
+                )
 
             # File mounts (e.g., Claude OAuth credentials)
             for target_path in defn.file_mounts:

@@ -169,8 +169,7 @@ class SecretInjectionContributor(SessionContributor):
             )
         except Exception:
             logger.warning(
-                "Failed to ensure injection config for user %s — "
-                "skipping secret volume injection",
+                "Failed to ensure injection config for user %s — skipping secret volume injection",
                 session.owner_id,
                 exc_info=True,
             )

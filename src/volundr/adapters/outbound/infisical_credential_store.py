@@ -184,7 +184,9 @@ class InfisicalCredentialStore(CredentialStorePort):
         if response.status_code >= 400 and response.status_code != 404:
             logger.error(
                 "Infisical delete failed for %s: %s %s",
-                key, response.status_code, response.text,
+                key,
+                response.status_code,
+                response.text,
             )
 
     async def _list_secrets_in_folder(self, folder_path: str) -> list[dict]:
@@ -267,17 +269,19 @@ class InfisicalCredentialStore(CredentialStorePort):
             )
 
         # Store metadata as a __meta__ secret
-        meta_json = json.dumps({
-            "id": cred_id,
-            "name": name,
-            "secret_type": secret_type.value,
-            "keys": list(data.keys()),
-            "metadata": metadata or {},
-            "owner_id": owner_id,
-            "owner_type": owner_type,
-            "created_at": created_at.isoformat(),
-            "updated_at": now.isoformat(),
-        })
+        meta_json = json.dumps(
+            {
+                "id": cred_id,
+                "name": name,
+                "secret_type": secret_type.value,
+                "keys": list(data.keys()),
+                "metadata": metadata or {},
+                "owner_id": owner_id,
+                "owner_type": owner_type,
+                "created_at": created_at.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+        )
         await self._create_or_update_secret(
             key=_META_KEY,
             value=meta_json,
