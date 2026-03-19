@@ -300,11 +300,32 @@ export interface IVolundrService {
   updateLinearIssueStatus(issueId: string, status: LinearIssue['status']): Promise<LinearIssue>;
 
   /**
-   * Get files and directories for a session workspace
+   * Get files and directories for a session root
    * @param sessionId Session ID
    * @param path Optional directory path to list (defaults to root)
+   * @param root Optional root: 'workspace' or 'home'
    */
-  getSessionFiles(sessionId: string, path?: string): Promise<FileTreeEntry[]>;
+  getSessionFiles(sessionId: string, path?: string, root?: import('@/models').FileRoot): Promise<FileTreeEntry[]>;
+
+  /**
+   * Download a file from a session
+   */
+  downloadSessionFile(sessionId: string, path: string, root?: import('@/models').FileRoot): Promise<Blob>;
+
+  /**
+   * Upload files to a session directory
+   */
+  uploadSessionFiles(sessionId: string, files: File[], targetPath: string, root?: import('@/models').FileRoot): Promise<FileTreeEntry[]>;
+
+  /**
+   * Create a directory in a session
+   */
+  createSessionDirectory(sessionId: string, path: string, root?: import('@/models').FileRoot): Promise<FileTreeEntry>;
+
+  /**
+   * Delete a file or directory in a session
+   */
+  deleteSessionFile(sessionId: string, path: string, root?: import('@/models').FileRoot): Promise<void>;
 
   /**
    * Get the current authenticated user's identity

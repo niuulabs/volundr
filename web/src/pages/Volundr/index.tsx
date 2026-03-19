@@ -31,6 +31,7 @@ import {
   Settings,
   Shield,
   LogOut,
+  FolderOpen,
 } from 'lucide-react';
 import {
   MetricCard,
@@ -45,6 +46,7 @@ import {
   StatusBadge,
   StatusDot,
   SessionGroupList,
+  FileManager,
 } from '@/components';
 import { LaunchWizard } from '@/components/LaunchWizard';
 import type { LaunchConfig } from '@/components/LaunchWizard';
@@ -64,7 +66,7 @@ const EditorPanel = lazy(() =>
 
 const STATUS_OPTIONS = ['all', 'running', 'stopped', 'error'];
 
-type TabId = 'chat' | 'terminal' | 'code' | 'diffs' | 'chronicles' | 'logs';
+type TabId = 'chat' | 'terminal' | 'code' | 'files' | 'diffs' | 'chronicles' | 'logs';
 
 export function VolundrPage() {
   const {
@@ -116,6 +118,11 @@ export function VolundrPage() {
   const [pendingDiffFile, setPendingDiffFile] = useState<string | null>(null);
   const [showLaunchWizard, setShowLaunchWizard] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
+  const [fileManagerEnabled, setFileManagerEnabled] = useState(false);
+
+  useEffect(() => {
+    volundrService.getFeatures().then(f => setFileManagerEnabled(f.fileManagerEnabled));
+  }, []);
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage(
     'volundr-sidebar-collapsed',
     false
@@ -397,8 +404,10 @@ export function VolundrPage() {
   const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
     { id: 'chat', label: 'Chat', icon: MessageSquare },
     { id: 'terminal', label: 'Terminal', icon: Terminal },
-
     { id: 'code', label: isManualSession ? 'IDE' : 'Code', icon: Code },
+    ...(fileManagerEnabled
+      ? [{ id: 'files' as TabId, label: 'Files', icon: FolderOpen }]
+      : []),
     { id: 'diffs', label: 'Diffs', icon: GitCompareArrows },
     { id: 'chronicles', label: 'Chronicles', icon: ScrollText },
     { id: 'logs', label: 'Logs', icon: FileText },
@@ -1081,6 +1090,14 @@ export function VolundrPage() {
                   hidden={activeTab !== 'code'}
                 />
               </Suspense>
+            )}
+
+            {activeTab === 'files' && fileManagerEnabled && (
+              <FileManager
+                sessionId={effectiveSelectedSession.id}
+                service={volundrService}
+                className={styles.tabPanel}
+              />
             )}
 
             {activeTab === 'diffs' && (

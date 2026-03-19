@@ -19,8 +19,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+import shutil
+from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from volundr.config import LoggingConfig
 from volundr.skuld.channels import (
@@ -1411,15 +1414,33 @@ _SKIP_NAMES = frozenset(
 _SHOW_HIDDEN = frozenset({".github", ".claude", ".vscode"})
 
 
-@app.get("/api/files")
-async def list_files(path: str = "") -> dict:
-    """List files and directories in the session workspace."""
-    workspace = Path(broker.workspace_dir).resolve()
-    target = (workspace / path).resolve()
+def _resolve_root(root: str) -> Path:
+    """Return the resolved base directory for the given root name."""
+    if root == "home":
+        return Path(broker._settings.home_path).resolve()
+    return Path(broker.workspace_dir).resolve()
 
-    # Security: path traversal protection
-    if not str(target).startswith(str(workspace)):
+
+def _safe_resolve(base: Path, relative_path: str) -> Path:
+    """Resolve a path safely, raising HTTPException on traversal attempts."""
+    target = (base / relative_path).resolve()
+    if not str(target).startswith(str(base)):
         raise HTTPException(400, "Path traversal not allowed")
+    return target
+
+
+def _validate_root(root: str) -> None:
+    """Validate root parameter is exactly 'workspace' or 'home'."""
+    if root not in ("workspace", "home"):
+        raise HTTPException(400, "root must be 'workspace' or 'home'")
+
+
+@app.get("/api/files")
+async def list_files(path: str = "", root: str = "workspace") -> dict:
+    """List files and directories in a session root (workspace or home)."""
+    _validate_root(root)
+    base = _resolve_root(root)
+    target = _safe_resolve(base, path)
 
     if not target.is_dir():
         raise HTTPException(404, "Directory not found")
@@ -1435,15 +1456,133 @@ async def list_files(path: str = "") -> dict:
             continue
         if item.name in _SKIP_NAMES:
             continue
+        stat = item.stat(follow_symlinks=False)
         entries.append(
             {
                 "name": item.name,
-                "path": str(item.relative_to(workspace)),
+                "path": str(item.relative_to(base)),
                 "type": "directory" if item.is_dir() else "file",
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
             }
         )
 
     return {"entries": entries}
+
+
+@app.get("/api/files/download")
+async def download_file(path: str, root: str = "workspace") -> FileResponse:
+    """Download a single file from the session."""
+    _validate_root(root)
+    base = _resolve_root(root)
+    target = _safe_resolve(base, path)
+
+    if not target.is_file():
+        raise HTTPException(404, "File not found")
+
+    return FileResponse(
+        path=str(target),
+        filename=target.name,
+        media_type="application/octet-stream",
+    )
+
+
+@app.post("/api/files/upload")
+async def upload_files(
+    files: list[UploadFile],
+    path: str = "",
+    root: str = "workspace",
+) -> dict:
+    """Upload files to a target directory in the session."""
+    _validate_root(root)
+    base = _resolve_root(root)
+    target_dir = _safe_resolve(base, path)
+
+    if not target_dir.is_dir():
+        raise HTTPException(404, "Target directory not found")
+
+    max_size = broker._settings.max_upload_size_bytes
+    uploaded: list[dict] = []
+    for upload in files:
+        if upload.filename is None:
+            continue
+        # Prevent path traversal in filenames
+        safe_name = Path(upload.filename).name
+        dest = _safe_resolve(base, str(Path(path) / safe_name))
+
+        content = await upload.read()
+        if len(content) > max_size:
+            raise HTTPException(
+                413,
+                f"File {safe_name} exceeds maximum upload size "
+                f"({max_size} bytes)",
+            )
+        dest.write_bytes(content)
+        stat = dest.stat()
+        uploaded.append(
+            {
+                "name": safe_name,
+                "path": str(dest.relative_to(base)),
+                "type": "file",
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+            }
+        )
+
+    return {"entries": uploaded}
+
+
+class MkdirRequest(BaseModel):
+    path: str
+    root: str = "workspace"
+
+
+@app.post("/api/files/mkdir")
+async def mkdir(body: MkdirRequest) -> dict:
+    """Create a directory."""
+    _validate_root(body.root)
+    base = _resolve_root(body.root)
+    target = _safe_resolve(base, body.path)
+
+    if target.exists():
+        raise HTTPException(409, "Path already exists")
+
+    try:
+        target.mkdir(parents=True, exist_ok=False)
+    except PermissionError:
+        raise HTTPException(403, "Permission denied")
+
+    stat = target.stat()
+    return {
+        "name": target.name,
+        "path": str(target.relative_to(base)),
+        "type": "directory",
+        "size": stat.st_size,
+        "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+    }
+
+
+@app.delete("/api/files")
+async def delete_file(path: str, root: str = "workspace") -> dict:
+    """Delete a file or directory."""
+    _validate_root(root)
+    if not path:
+        raise HTTPException(400, "Cannot delete root directory")
+    base = _resolve_root(root)
+    target = _safe_resolve(base, path)
+
+    if not target.exists():
+        raise HTTPException(404, "Path not found")
+
+    try:
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+    except PermissionError:
+        raise HTTPException(403, "Permission denied")
+
+    return {"deleted": str(target.relative_to(base))}
 
 
 def _parse_diff_output(raw: str, file_path: str) -> dict:
