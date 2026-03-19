@@ -9,8 +9,8 @@ from uuid import UUID, uuid4
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
-from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field, field_validator
+from starlette.background import BackgroundTask
 
 from volundr.adapters.inbound.auth import require_role
 from volundr.domain.models import (
@@ -842,9 +842,7 @@ def create_router(
         admin = request.app.state.admin_settings
         return {
             "local_mounts_enabled": settings.local_mounts.enabled,
-            "file_manager_enabled": admin.get("storage", {}).get(
-                "file_manager_enabled", True
-            ),
+            "file_manager_enabled": admin.get("storage", {}).get("file_manager_enabled", True),
         }
 
     @router.get("/auth/config", tags=["Auth"])
@@ -1519,9 +1517,7 @@ def create_router(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} has no active endpoint",
             )
-        base_url = session.chat_endpoint.replace(
-            "wss://", "https://"
-        ).replace("ws://", "http://")
+        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
         if base_url.endswith("/session"):
             base_url = base_url[: -len("/session")]
         return base_url
@@ -1641,9 +1637,7 @@ def create_router(
             filename = path.rsplit("/", 1)[-1] if "/" in path else path
             return StreamingResponse(
                 response.aiter_bytes(),
-                media_type=response.headers.get(
-                    "content-type", "application/octet-stream"
-                ),
+                media_type=response.headers.get("content-type", "application/octet-stream"),
                 headers={
                     "Content-Disposition": f'attachment; filename="{filename}"',
                 },

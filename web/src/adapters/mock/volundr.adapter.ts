@@ -699,7 +699,7 @@ export class MockVolundrService implements IVolundrService {
     return mockProjectRepoMappings.map(m => ({ ...m }));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   async getSessionFiles(
     sessionId: string,
     path?: string,
@@ -713,7 +713,6 @@ export class MockVolundrService implements IVolundrService {
     return entries.map(e => ({ ...e }));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async downloadSessionFile(
     sessionId: string,
     filePath: string,
@@ -722,7 +721,6 @@ export class MockVolundrService implements IVolundrService {
     return new Blob(['mock file content'], { type: 'application/octet-stream' });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async uploadSessionFiles(
     sessionId: string,
     files: File[],
@@ -732,7 +730,6 @@ export class MockVolundrService implements IVolundrService {
     return [];
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async createSessionDirectory(
     sessionId: string,
     path: string,
@@ -742,7 +739,6 @@ export class MockVolundrService implements IVolundrService {
     return { name, path, type: 'directory' };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deleteSessionFile(
     sessionId: string,
     filePath: string,
@@ -750,6 +746,7 @@ export class MockVolundrService implements IVolundrService {
   ): Promise<void> {
     // no-op
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   async updateTrackerIssueStatus(
     issueId: string,

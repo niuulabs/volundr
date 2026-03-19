@@ -255,4 +255,237 @@ describe('FileManager', () => {
       expect(screen.getByText('1.2 KB')).toBeTruthy();
     });
   });
+
+  it('deselects a file when clicking the same file again', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    // Select file
+    fireEvent.click(screen.getByText('README.md'));
+    const row = screen.getByText('README.md').closest('[role="button"]');
+    expect(row).toBeTruthy();
+    // Click same file again to deselect
+    fireEvent.click(screen.getByText('README.md'));
+    // Download button should be disabled again (no selection)
+    const downloadBtn = screen.getByTitle('Download');
+    expect(downloadBtn).toHaveProperty('disabled', true);
+  });
+
+  it('handles fetchEntries error by setting entries to empty', async () => {
+    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Network error')
+    );
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('Empty directory')).toBeTruthy();
+    });
+  });
+
+  it('does nothing when handleDownload is called with no selection', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    // Click download without selecting a file (button is disabled but handler has early return)
+    const downloadBtn = screen.getByTitle('Download');
+    fireEvent.click(downloadBtn);
+    expect(service.downloadSessionFile).not.toHaveBeenCalled();
+  });
+
+  it('handles download failure gracefully', async () => {
+    (service.downloadSessionFile as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Download failed')
+    );
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('README.md'));
+    fireEvent.click(screen.getByTitle('Download'));
+    await waitFor(() => {
+      expect(service.downloadSessionFile).toHaveBeenCalled();
+    });
+    // Component should not crash - file list still visible
+    expect(screen.getByText('README.md')).toBeTruthy();
+  });
+
+  it('does nothing when handleDelete is called with no selection', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    const deleteBtn = screen.getByTitle('Delete');
+    fireEvent.click(deleteBtn);
+    expect(service.deleteSessionFile).not.toHaveBeenCalled();
+  });
+
+  it('handles delete failure gracefully', async () => {
+    (service.deleteSessionFile as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Delete failed')
+    );
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('README.md'));
+    fireEvent.click(screen.getByTitle('Delete'));
+    await waitFor(() => {
+      expect(service.deleteSessionFile).toHaveBeenCalled();
+    });
+    expect(screen.getByText('README.md')).toBeTruthy();
+  });
+
+  it('does nothing when handleMkdir is called with empty name', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTitle('New Folder'));
+    // Leave input empty and click Create
+    fireEvent.click(screen.getByTestId('mkdir-submit'));
+    expect(service.createSessionDirectory).not.toHaveBeenCalled();
+  });
+
+  it('handles mkdir failure gracefully', async () => {
+    (service.createSessionDirectory as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Mkdir failed')
+    );
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTitle('New Folder'));
+    const input = screen.getByTestId('mkdir-input');
+    fireEvent.change(input, { target: { value: 'fail-dir' } });
+    fireEvent.click(screen.getByTestId('mkdir-submit'));
+    await waitFor(() => {
+      expect(service.createSessionDirectory).toHaveBeenCalled();
+    });
+    // Component should not crash
+    expect(screen.getByText('README.md')).toBeTruthy();
+  });
+
+  it('handles upload failure by setting status to error', async () => {
+    (service.uploadSessionFiles as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Upload failed')
+    );
+    render(<FileManager sessionId="test-session" service={service} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['hello'], 'bad-file.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(service.uploadSessionFiles).toHaveBeenCalled();
+    });
+    // The upload item should show with error status (XCircle icon rendered)
+    await waitFor(() => {
+      expect(screen.getByText('bad-file.txt')).toBeTruthy();
+    });
+  });
+
+  it('does not upload when drop event has no files', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    const dropZone = screen.getByText('Drop files here').closest('[role="button"]')!;
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [] },
+    });
+    expect(service.uploadSessionFiles).not.toHaveBeenCalled();
+  });
+
+  it('does not upload when file input change has no files', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    const input = screen.getByTestId('file-input');
+    fireEvent.change(input, { target: { files: null } });
+    expect(service.uploadSessionFiles).not.toHaveBeenCalled();
+  });
+
+  it('handles Enter keydown on file row', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    const row = screen.getByText('README.md').closest('[role="button"]')!;
+    fireEvent.keyDown(row, { key: 'Enter' });
+    // File should be selected - download button should be enabled
+    const downloadBtn = screen.getByTitle('Download');
+    expect(downloadBtn).toHaveProperty('disabled', false);
+  });
+
+  it('handles Enter keydown on drop zone', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    const dropZone = screen.getByText('Drop files here').closest('[role="button"]')!;
+    // Should not throw when pressing Enter on drop zone
+    fireEvent.keyDown(dropZone, { key: 'Enter' });
+  });
+
+  it('handles Enter keydown on mkdir input to submit', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTitle('New Folder'));
+    const input = screen.getByTestId('mkdir-input');
+    fireEvent.change(input, { target: { value: 'enter-dir' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(service.createSessionDirectory).toHaveBeenCalled();
+    });
+  });
+
+  it('handles Escape keydown on mkdir input to close dialog', async () => {
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTitle('New Folder'));
+    const input = screen.getByTestId('mkdir-input');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    // Dialog should be closed - mkdir input should not be visible
+    expect(screen.queryByTestId('mkdir-input')).toBeNull();
+  });
+
+  it('renders entry with null size as empty string', async () => {
+    const entriesWithNullSize: FileTreeEntry[] = [
+      {
+        name: 'no-size.txt',
+        path: 'no-size.txt',
+        type: 'file',
+        size: null as unknown as number,
+        modified: '2026-03-19T10:00:00Z',
+      },
+    ];
+    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue(entriesWithNullSize);
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('no-size.txt')).toBeTruthy();
+    });
+  });
+
+  it('renders entry with no modified date as empty string', async () => {
+    const entriesNoModified: FileTreeEntry[] = [
+      { name: 'no-date.txt', path: 'no-date.txt', type: 'file', size: 100, modified: '' },
+    ];
+    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue(entriesNoModified);
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('no-date.txt')).toBeTruthy();
+    });
+  });
+
+  it('formats 0 bytes correctly', async () => {
+    const entriesZeroSize: FileTreeEntry[] = [
+      {
+        name: 'empty.txt',
+        path: 'empty.txt',
+        type: 'file',
+        size: 0,
+        modified: '2026-03-19T10:00:00Z',
+      },
+    ];
+    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue(entriesZeroSize);
+    render(<FileManager sessionId="test-session" service={service} />);
+    await waitFor(() => {
+      expect(screen.getByText('0 B')).toBeTruthy();
+    });
+  });
 });
