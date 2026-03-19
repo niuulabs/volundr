@@ -181,8 +181,7 @@ class InfisicalCredentialStore(CredentialStorePort):
         )
         if response.status_code >= 400 and response.status_code != 404:
             logger.error(
-                "Infisical delete failed for %s: %s",
-                key,
+                "Infisical delete failed with status code: %s",
                 response.status_code,
             )
 
