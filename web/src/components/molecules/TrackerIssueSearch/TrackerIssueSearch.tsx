@@ -1,19 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
-import type { LinearIssue, LinearIssueStatus } from '@/models';
+import type { TrackerIssue, TrackerIssueStatus } from '@/models';
 import { cn } from '@/utils';
-import styles from './LinearIssueSearch.module.css';
+import styles from './TrackerIssueSearch.module.css';
 
-export interface LinearIssueSearchProps {
-  onSelect: (issue: LinearIssue) => void;
+export interface TrackerIssueSearchProps {
+  onSelect: (issue: TrackerIssue) => void;
   onClear: () => void;
-  selectedIssue: LinearIssue | null;
-  onSearch: (query: string) => Promise<LinearIssue[]>;
+  selectedIssue: TrackerIssue | null;
+  onSearch: (query: string) => Promise<TrackerIssue[]>;
   disabled?: boolean;
   className?: string;
 }
 
-const STATUS_LABELS: Record<LinearIssueStatus, string> = {
+const STATUS_LABELS: Record<TrackerIssueStatus, string> = {
   backlog: 'Backlog',
   todo: 'Todo',
   in_progress: 'In Progress',
@@ -29,16 +29,16 @@ const PRIORITY_LABELS: Record<number, string> = {
   4: 'Low',
 };
 
-export function LinearIssueSearch({
+export function TrackerIssueSearch({
   onSelect,
   onClear,
   selectedIssue,
   onSearch,
   disabled = false,
   className,
-}: LinearIssueSearchProps) {
+}: TrackerIssueSearchProps) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<LinearIssue[]>([]);
+  const [results, setResults] = useState<TrackerIssue[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -87,7 +87,7 @@ export function LinearIssueSearch({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSelect = (issue: LinearIssue) => {
+  const handleSelect = (issue: TrackerIssue) => {
     onSelect(issue);
     setQuery('');
     setIsOpen(false);
@@ -130,7 +130,7 @@ export function LinearIssueSearch({
         <input
           type="text"
           className={styles.input}
-          placeholder="Search Linear issues (e.g. NIU-44)..."
+          placeholder="Search issues (e.g. NIU-44)..."
           value={query}
           onChange={e => {
             setQuery(e.target.value);

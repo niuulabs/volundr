@@ -1047,38 +1047,38 @@ describe('MockVolundrService', () => {
     });
   });
 
-  describe('searchLinearIssues', () => {
+  describe('searchTrackerIssues', () => {
     it('returns issues matching identifier', async () => {
-      const results = await service.searchLinearIssues('NIU-44');
+      const results = await service.searchTrackerIssues('NIU-44');
       expect(results.length).toBeGreaterThan(0);
       expect(results[0].identifier).toBe('NIU-44');
     });
 
     it('returns issues matching title text', async () => {
-      const results = await service.searchLinearIssues('thermal');
+      const results = await service.searchTrackerIssues('thermal');
       expect(results.length).toBeGreaterThan(0);
       expect(results[0].title).toContain('thermal');
     });
 
     it('returns issues matching label', async () => {
-      const results = await service.searchLinearIssues('firmware');
+      const results = await service.searchTrackerIssues('firmware');
       expect(results.length).toBeGreaterThan(0);
     });
 
     it('returns empty array for non-matching query', async () => {
-      const results = await service.searchLinearIssues('zzz-nonexistent-xyz');
+      const results = await service.searchTrackerIssues('zzz-nonexistent-xyz');
       expect(results).toEqual([]);
     });
 
     it('returns copies of issue objects', async () => {
-      const r1 = await service.searchLinearIssues('NIU-44');
-      const r2 = await service.searchLinearIssues('NIU-44');
+      const r1 = await service.searchTrackerIssues('NIU-44');
+      const r2 = await service.searchTrackerIssues('NIU-44');
       expect(r1[0]).not.toBe(r2[0]);
       expect(r1[0]).toEqual(r2[0]);
     });
 
     it('returns issues with all expected properties', async () => {
-      const results = await service.searchLinearIssues('NIU-44');
+      const results = await service.searchTrackerIssues('NIU-44');
       const issue = results[0];
       expect(issue.id).toBeDefined();
       expect(issue.identifier).toBeDefined();
@@ -1110,16 +1110,16 @@ describe('MockVolundrService', () => {
     });
   });
 
-  describe('updateLinearIssueStatus', () => {
+  describe('updateTrackerIssueStatus', () => {
     it('updates issue status', async () => {
       const sessions = await service.getSessions();
-      const sessionWithIssue = sessions.find(s => s.linearIssue);
-      if (!sessionWithIssue?.linearIssue) {
+      const sessionWithIssue = sessions.find(s => s.trackerIssue);
+      if (!sessionWithIssue?.trackerIssue) {
         return;
       }
 
-      const issueId = sessionWithIssue.linearIssue.id;
-      const updated = await service.updateLinearIssueStatus(issueId, 'done');
+      const issueId = sessionWithIssue.trackerIssue.id;
+      const updated = await service.updateTrackerIssueStatus(issueId, 'done');
 
       expect(updated.status).toBe('done');
       expect(updated.id).toBe(issueId);
@@ -1127,20 +1127,20 @@ describe('MockVolundrService', () => {
 
     it('updates linked sessions when issue status changes', async () => {
       const sessions = await service.getSessions();
-      const sessionWithIssue = sessions.find(s => s.linearIssue);
-      if (!sessionWithIssue?.linearIssue) {
+      const sessionWithIssue = sessions.find(s => s.trackerIssue);
+      if (!sessionWithIssue?.trackerIssue) {
         return;
       }
 
-      const issueId = sessionWithIssue.linearIssue.id;
-      await service.updateLinearIssueStatus(issueId, 'done');
+      const issueId = sessionWithIssue.trackerIssue.id;
+      await service.updateTrackerIssueStatus(issueId, 'done');
 
       const updatedSession = await service.getSession(sessionWithIssue.id);
-      expect(updatedSession?.linearIssue?.status).toBe('done');
+      expect(updatedSession?.trackerIssue?.status).toBe('done');
     });
 
     it('throws for non-existent issue', async () => {
-      await expect(service.updateLinearIssueStatus('nonexistent', 'done')).rejects.toThrow();
+      await expect(service.updateTrackerIssueStatus('nonexistent', 'done')).rejects.toThrow();
     });
   });
 
@@ -1238,63 +1238,63 @@ describe('MockVolundrService', () => {
     });
   });
 
-  describe('updateLinearIssueStatus notifications', () => {
+  describe('updateTrackerIssueStatus notifications', () => {
     it('notifies subscribers on status change', async () => {
       const callback = vi.fn();
       service.subscribe(callback);
 
       const sessions = await service.getSessions();
-      const sessionWithIssue = sessions.find(s => s.linearIssue);
-      if (!sessionWithIssue?.linearIssue) {
+      const sessionWithIssue = sessions.find(s => s.trackerIssue);
+      if (!sessionWithIssue?.trackerIssue) {
         return;
       }
 
-      await service.updateLinearIssueStatus(sessionWithIssue.linearIssue.id, 'done');
+      await service.updateTrackerIssueStatus(sessionWithIssue.trackerIssue.id, 'done');
       expect(callback).toHaveBeenCalled();
     });
   });
 
-  describe('startSession with linearIssue', () => {
-    it('creates session with linked Linear issue', async () => {
-      const issue = (await service.searchLinearIssues('NIU-44'))[0];
+  describe('startSession with trackerIssue', () => {
+    it('creates session with linked Tracker issue', async () => {
+      const issue = (await service.searchTrackerIssues('NIU-44'))[0];
 
       const session = await service.startSession({
         name: 'test-with-issue',
         source: { type: 'git', repo: 'test/repo', branch: 'feature/niu-44' },
         model: 'claude-opus',
-        linearIssue: issue,
+        trackerIssue: issue,
       });
 
-      expect(session.linearIssue).toBeDefined();
-      expect(session.linearIssue?.identifier).toBe('NIU-44');
+      expect(session.trackerIssue).toBeDefined();
+      expect(session.trackerIssue?.identifier).toBe('NIU-44');
     });
 
-    it('creates session without Linear issue when not provided', async () => {
+    it('creates session without Tracker issue when not provided', async () => {
       const session = await service.startSession({
         name: 'test-no-issue',
         source: { type: 'git', repo: 'test/repo', branch: 'main' },
         model: 'claude-opus',
       });
 
-      expect(session.linearIssue).toBeUndefined();
+      expect(session.trackerIssue).toBeUndefined();
     });
   });
 
-  describe('sessions with linearIssue in mock data', () => {
-    it('some mock sessions have linearIssue set', async () => {
+  describe('sessions with trackerIssue in mock data', () => {
+    it('some mock sessions have trackerIssue set', async () => {
       const sessions = await service.getSessions();
-      const withIssue = sessions.filter(s => s.linearIssue);
+      const withIssue = sessions.filter(s => s.trackerIssue);
       expect(withIssue.length).toBeGreaterThan(0);
     });
 
-    it('linearIssue has expected properties', async () => {
+    it('trackerIssue has expected properties', async () => {
       const sessions = await service.getSessions();
-      const session = sessions.find(s => s.linearIssue);
-      expect(session?.linearIssue?.id).toBeDefined();
-      expect(session?.linearIssue?.identifier).toBeDefined();
-      expect(session?.linearIssue?.title).toBeDefined();
-      expect(session?.linearIssue?.status).toBeDefined();
-      expect(session?.linearIssue?.url).toBeDefined();
+      const session = sessions.find(s => s.trackerIssue);
+      expect(session?.trackerIssue?.id).toBeDefined();
+      expect(session?.trackerIssue?.identifier).toBeDefined();
+      expect(session?.trackerIssue?.title).toBeDefined();
+      expect(session?.trackerIssue?.status).toBeDefined();
+      expect(session?.trackerIssue?.url).toBeDefined();
     });
   });
 

@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -19,7 +20,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-import shutil
 from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -1514,8 +1514,7 @@ async def upload_files(
         if len(content) > max_size:
             raise HTTPException(
                 413,
-                f"File {safe_name} exceeds maximum upload size "
-                f"({max_size} bytes)",
+                f"File {safe_name} exceeds maximum upload size ({max_size} bytes)",
             )
         dest.write_bytes(content)
         stat = dest.stat()

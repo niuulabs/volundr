@@ -39,9 +39,7 @@ class TestFileDownloadEndpoint:
         assert response.status_code == 404
 
     def test_download_path_traversal_blocked(self):
-        response = self.client.get(
-            "/api/files/download", params={"path": "../../../etc/passwd"}
-        )
+        response = self.client.get("/api/files/download", params={"path": "../../../etc/passwd"})
         assert response.status_code == 400
         assert "Path traversal" in response.json()["detail"]
 
@@ -214,15 +212,11 @@ class TestDeleteEndpoint:
         assert response.status_code == 400
 
     def test_delete_path_traversal_blocked(self):
-        response = self.client.delete(
-            "/api/files", params={"path": "../../../etc/passwd"}
-        )
+        response = self.client.delete("/api/files", params={"path": "../../../etc/passwd"})
         assert response.status_code == 400
 
     def test_delete_invalid_root(self):
-        response = self.client.delete(
-            "/api/files", params={"path": "test.txt", "root": "invalid"}
-        )
+        response = self.client.delete("/api/files", params={"path": "test.txt", "root": "invalid"})
         assert response.status_code == 400
 
 

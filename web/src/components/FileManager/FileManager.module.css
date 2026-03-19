@@ -29,7 +29,9 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
 }
 
 .dropZone:hover,
@@ -150,7 +152,9 @@
   color: var(--color-text-muted);
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 
 .rootButton:hover {

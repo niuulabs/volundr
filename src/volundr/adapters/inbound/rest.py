@@ -9,8 +9,8 @@ from uuid import UUID, uuid4
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
-from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field, field_validator
+from starlette.background import BackgroundTask
 
 from volundr.adapters.inbound.auth import require_role
 from volundr.domain.models import (
@@ -131,6 +131,16 @@ class SessionCreate(BaseModel):
         default_factory=dict,
         description="Resource allocation overrides (cpu, memory, gpu)",
     )
+    issue_id: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Issue tracker ID to link to the session",
+    )
+    issue_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="URL of the linked issue in the tracker",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -242,6 +252,10 @@ class SessionResponse(BaseModel):
         default=None,
         description="Linked issue tracker identifier",
     )
+    issue_tracker_url: str | None = Field(
+        default=None,
+        description="Web URL for the linked issue in the tracker",
+    )
     preset_id: UUID | None = Field(
         default=None,
         description="Preset used to configure this session",
@@ -307,6 +321,7 @@ class SessionResponse(BaseModel):
             pod_name=session.pod_name,
             error=session.error,
             tracker_issue_id=session.tracker_issue_id,
+            issue_tracker_url=session.issue_tracker_url,
             preset_id=session.preset_id,
             archived_at=(session.archived_at.isoformat() if session.archived_at else None),
             owner_id=session.owner_id,
@@ -827,9 +842,7 @@ def create_router(
         admin = request.app.state.admin_settings
         return {
             "local_mounts_enabled": settings.local_mounts.enabled,
-            "file_manager_enabled": admin.get("storage", {}).get(
-                "file_manager_enabled", True
-            ),
+            "file_manager_enabled": admin.get("storage", {}).get("file_manager_enabled", True),
         }
 
     @router.get("/auth/config", tags=["Auth"])
@@ -995,6 +1008,8 @@ def create_router(
                 preset_id=data.preset_id,
                 principal=principal,
                 workspace_id=data.workspace_id,
+                tracker_issue_id=data.issue_id,
+                issue_tracker_url=data.issue_url,
             )
         except RepoValidationError as e:
             raise HTTPException(
@@ -1502,9 +1517,7 @@ def create_router(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} has no active endpoint",
             )
-        base_url = session.chat_endpoint.replace(
-            "wss://", "https://"
-        ).replace("ws://", "http://")
+        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
         if base_url.endswith("/session"):
             base_url = base_url[: -len("/session")]
         return base_url
@@ -1624,9 +1637,7 @@ def create_router(
             filename = path.rsplit("/", 1)[-1] if "/" in path else path
             return StreamingResponse(
                 response.aiter_bytes(),
-                media_type=response.headers.get(
-                    "content-type", "application/octet-stream"
-                ),
+                media_type=response.headers.get("content-type", "application/octet-stream"),
                 headers={
                     "Content-Disposition": f'attachment; filename="{filename}"',
                 },

@@ -14,7 +14,9 @@ from volundr.adapters.outbound.flux import (
 )
 from volundr.domain.models import (
     GitSource,
+    PodSpecAdditions,
     Session,
+    SessionSpec,
     SessionStatus,
 )
 
@@ -417,3 +419,53 @@ class TestFluxPodManagerSpecValues:
 
         body = mock_api.create_namespaced_custom_object.call_args[1]["body"]
         assert "gateway" not in body["spec"]["values"]
+
+    async def test_pod_spec_translated_to_helm_values(
+        self,
+        sample_session: Session,
+        mock_api,
+    ):
+        """PodSpecAdditions translate to extraVolumes/Mounts/serviceAccountName."""
+        pm = FluxPodManager(
+            namespace="test-ns",
+            base_domain="volundr.example.com",
+        )
+        pod_spec = PodSpecAdditions(
+            volumes=({"name": "csi-vol", "csi": {"driver": "secrets-store.csi.k8s.io"}},),
+            volume_mounts=({"name": "csi-vol", "mountPath": "/run/secrets/user"},),
+            service_account="skuld-user-1",
+        )
+        spec = SessionSpec(
+            values={"session": {"id": str(sample_session.id)}},
+            pod_spec=pod_spec,
+        )
+        with patch.object(pm, "_get_api", return_value=mock_api):
+            await pm.start(sample_session, spec)
+
+        body = mock_api.create_namespaced_custom_object.call_args[1]["body"]
+        values = body["spec"]["values"]
+        assert len(values["extraVolumes"]) == 1
+        assert values["extraVolumes"][0]["name"] == "csi-vol"
+        assert len(values["extraVolumeMounts"]) == 1
+        assert values["extraVolumeMounts"][0]["mountPath"] == "/run/secrets/user"
+        assert values["serviceAccountName"] == "skuld-user-1"
+
+    async def test_empty_pod_spec_no_extra_values(
+        self,
+        sample_session: Session,
+        mock_api,
+    ):
+        """Empty PodSpecAdditions produces no extraVolumes/extraVolumeMounts."""
+        pm = FluxPodManager(
+            namespace="test-ns",
+            base_domain="volundr.example.com",
+        )
+        spec = make_spec()
+        with patch.object(pm, "_get_api", return_value=mock_api):
+            await pm.start(sample_session, spec)
+
+        body = mock_api.create_namespaced_custom_object.call_args[1]["body"]
+        values = body["spec"]["values"]
+        assert "extraVolumes" not in values
+        assert "extraVolumeMounts" not in values
+        assert "serviceAccountName" not in values

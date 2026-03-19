@@ -6,7 +6,7 @@ import type { CatalogEntry, IntegrationConnection } from '@/models';
 const mockCatalogEntry: CatalogEntry = {
   slug: 'linear',
   name: 'Linear',
-  description: 'Linear issue tracker',
+  description: 'Issue tracker',
   integration_type: 'issue_tracker',
   adapter: 'volundr.adapters.outbound.linear.LinearAdapter',
   icon: 'linear',
@@ -21,6 +21,8 @@ const mockCatalogEntry: CatalogEntry = {
     args: ['-y', '@anthropic-ai/linear-mcp-server'],
     env_from_credentials: { LINEAR_API_KEY: 'api_key' },
   },
+  auth_type: 'api_key',
+  oauth_scopes: [],
 };
 
 const mockConnection: IntegrationConnection = {
@@ -43,7 +45,7 @@ describe('IntegrationCard', () => {
 
   it('renders description', () => {
     render(<IntegrationCard entry={mockCatalogEntry} onConnect={vi.fn()} />);
-    expect(screen.getByText('Linear issue tracker')).toBeDefined();
+    expect(screen.getByText('Issue tracker')).toBeDefined();
   });
 
   it('renders type badge', () => {

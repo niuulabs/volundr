@@ -1,15 +1,15 @@
 import { ExternalLink, User, Tag, AlertTriangle } from 'lucide-react';
-import type { LinearIssue, LinearIssueStatus } from '@/models';
+import type { TrackerIssue, TrackerIssueStatus } from '@/models';
 import { cn } from '@/utils';
-import styles from './LinearIssueSection.module.css';
+import styles from './TrackerIssueSection.module.css';
 
-export interface LinearIssueSectionProps {
-  issue: LinearIssue;
-  onStatusChange: (issueId: string, status: LinearIssueStatus) => void;
+export interface TrackerIssueSectionProps {
+  issue: TrackerIssue;
+  onStatusChange: (issueId: string, status: TrackerIssueStatus) => void;
   className?: string;
 }
 
-const STATUS_OPTIONS: { value: LinearIssueStatus; label: string }[] = [
+const STATUS_OPTIONS: { value: TrackerIssueStatus; label: string }[] = [
   { value: 'backlog', label: 'Backlog' },
   { value: 'todo', label: 'Todo' },
   { value: 'in_progress', label: 'In Progress' },
@@ -25,7 +25,11 @@ const PRIORITY_LABELS: Record<number, string> = {
   4: 'Low',
 };
 
-export function LinearIssueSection({ issue, onStatusChange, className }: LinearIssueSectionProps) {
+export function TrackerIssueSection({
+  issue,
+  onStatusChange,
+  className,
+}: TrackerIssueSectionProps) {
   return (
     <div className={cn(styles.container, className)}>
       <div className={styles.header}>
@@ -48,7 +52,7 @@ export function LinearIssueSection({ issue, onStatusChange, className }: LinearI
         <select
           className={styles.statusSelect}
           value={issue.status}
-          onChange={e => onStatusChange(issue.id, e.target.value as LinearIssueStatus)}
+          onChange={e => onStatusChange(issue.id, e.target.value as TrackerIssueStatus)}
           data-status={issue.status}
         >
           {STATUS_OPTIONS.map(opt => (

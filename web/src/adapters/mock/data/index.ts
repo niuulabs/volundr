@@ -17,7 +17,7 @@ export {
   mockVolundrPullRequests,
   mockVolundrPresets,
   mockVolundrTemplates,
-  mockLinearIssues,
+  mockTrackerIssues,
   mockProjectRepoMappings,
   mockVolundrMcpServers,
   mockAvailableMcpServers,

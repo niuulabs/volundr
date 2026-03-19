@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import type { LinearIssue } from '@/models';
-import { LinearIssueSearch } from './LinearIssueSearch';
+import type { TrackerIssue } from '@/models';
+import { TrackerIssueSearch } from './TrackerIssueSearch';
 
-const mockIssues: LinearIssue[] = [
+const mockIssues: TrackerIssue[] = [
   {
     id: 'lin-001',
     identifier: 'NIU-44',
@@ -24,7 +24,7 @@ const mockIssues: LinearIssue[] = [
   },
 ];
 
-describe('LinearIssueSearch', () => {
+describe('TrackerIssueSearch', () => {
   const mockOnSelect = vi.fn();
   const mockOnClear = vi.fn();
   const mockOnSearch = vi.fn();
@@ -36,19 +36,19 @@ describe('LinearIssueSearch', () => {
 
   it('renders search input when no issue selected', () => {
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={null}
         onSearch={mockOnSearch}
       />
     );
-    expect(screen.getByPlaceholderText(/search linear issues/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/search issues/i)).toBeInTheDocument();
   });
 
   it('shows dropdown results when typing', async () => {
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={null}
@@ -56,7 +56,7 @@ describe('LinearIssueSearch', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/search linear issues/i);
+    const input = screen.getByPlaceholderText(/search issues/i);
     fireEvent.change(input, { target: { value: 'NIU' } });
     fireEvent.focus(input);
 
@@ -72,7 +72,7 @@ describe('LinearIssueSearch', () => {
 
   it('calls onSelect when clicking a result', async () => {
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={null}
@@ -80,7 +80,7 @@ describe('LinearIssueSearch', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/search linear issues/i);
+    const input = screen.getByPlaceholderText(/search issues/i);
     fireEvent.change(input, { target: { value: 'NIU' } });
     fireEvent.focus(input);
 
@@ -94,7 +94,7 @@ describe('LinearIssueSearch', () => {
 
   it('shows selected issue when one is set', () => {
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={mockIssues[0]}
@@ -108,7 +108,7 @@ describe('LinearIssueSearch', () => {
 
   it('calls onClear when clearing selected issue', () => {
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={mockIssues[0]}
@@ -122,7 +122,7 @@ describe('LinearIssueSearch', () => {
 
   it('disables input when disabled prop is true', () => {
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={null}
@@ -131,13 +131,13 @@ describe('LinearIssueSearch', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/search linear issues/i);
+    const input = screen.getByPlaceholderText(/search issues/i);
     expect(input).toBeDisabled();
   });
 
   it('does not search with less than 2 characters', async () => {
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={null}
@@ -145,7 +145,7 @@ describe('LinearIssueSearch', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/search linear issues/i);
+    const input = screen.getByPlaceholderText(/search issues/i);
     fireEvent.change(input, { target: { value: 'N' } });
 
     // Wait a bit for the debounce
@@ -156,7 +156,7 @@ describe('LinearIssueSearch', () => {
   it('closes dropdown when clicking outside', async () => {
     render(
       <div>
-        <LinearIssueSearch
+        <TrackerIssueSearch
           onSelect={mockOnSelect}
           onClear={mockOnClear}
           selectedIssue={null}
@@ -166,7 +166,7 @@ describe('LinearIssueSearch', () => {
       </div>
     );
 
-    const input = screen.getByPlaceholderText(/search linear issues/i);
+    const input = screen.getByPlaceholderText(/search issues/i);
     fireEvent.change(input, { target: { value: 'NIU' } });
     fireEvent.focus(input);
 
@@ -186,7 +186,7 @@ describe('LinearIssueSearch', () => {
     mockOnSearch.mockResolvedValue([]);
 
     render(
-      <LinearIssueSearch
+      <TrackerIssueSearch
         onSelect={mockOnSelect}
         onClear={mockOnClear}
         selectedIssue={null}
@@ -194,7 +194,7 @@ describe('LinearIssueSearch', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/search linear issues/i);
+    const input = screen.getByPlaceholderText(/search issues/i);
     fireEvent.change(input, { target: { value: 'xyz' } });
     fireEvent.focus(input);
 

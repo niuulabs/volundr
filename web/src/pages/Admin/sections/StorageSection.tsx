@@ -162,7 +162,10 @@ export function StorageSection({ service }: StorageSectionProps) {
             </div>
             <button
               type="button"
-              className={cn(styles.toggle, adminSettings.storage.fileManagerEnabled && styles.toggleOn)}
+              className={cn(
+                styles.toggle,
+                adminSettings.storage.fileManagerEnabled && styles.toggleOn
+              )}
               onClick={handleToggleFileManager}
               disabled={settingsToggling}
               aria-label="Toggle file manager"

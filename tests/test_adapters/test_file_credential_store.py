@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -139,3 +140,31 @@ class TestFileCredentialStore:
 
         value = await encrypted_store.get_value("user", "u1", "secret")
         assert value == {"token": "my-secret"}
+
+    # ------------------------------------------------------------------
+    # Individual credential files
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio()
+    async def test_store_creates_individual_file(self, store: FileCredentialStore) -> None:
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"})
+        individual = store._base_dir / "user" / "u1" / "my-key.json"
+        assert individual.exists()
+        data = json.loads(individual.read_text())
+        assert data == {"token": "abc"}
+
+    @pytest.mark.asyncio()
+    async def test_store_updates_individual_file(self, store: FileCredentialStore) -> None:
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "v1"})
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "v2"})
+        individual = store._base_dir / "user" / "u1" / "my-key.json"
+        data = json.loads(individual.read_text())
+        assert data == {"token": "v2"}
+
+    @pytest.mark.asyncio()
+    async def test_delete_removes_individual_file(self, store: FileCredentialStore) -> None:
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"})
+        individual = store._base_dir / "user" / "u1" / "my-key.json"
+        assert individual.exists()
+        await store.delete("user", "u1", "my-key")
+        assert not individual.exists()

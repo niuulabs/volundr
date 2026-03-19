@@ -142,6 +142,19 @@ class FluxPodManager(PodManager):
         values = copy.deepcopy(self._session_defaults)
         _deep_merge(values, spec.values)
 
+        # Translate pod_spec additions into Helm values
+        if spec.pod_spec:
+            if spec.pod_spec.volumes:
+                values["extraVolumes"] = [dict(v) for v in spec.pod_spec.volumes]
+            if spec.pod_spec.volume_mounts:
+                values["extraVolumeMounts"] = [dict(vm) for vm in spec.pod_spec.volume_mounts]
+            if spec.pod_spec.service_account:
+                values["serviceAccountName"] = spec.pod_spec.service_account
+            if spec.pod_spec.labels:
+                values["podLabels"] = dict(spec.pod_spec.labels)
+            if spec.pod_spec.annotations:
+                values["podAnnotations"] = dict(spec.pod_spec.annotations)
+
         manifest = self._build_helmrelease(release_name, values)
 
         try:

@@ -39,7 +39,12 @@ function formatBytes(bytes: number): string {
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function FileManager({ sessionId, service, className }: FileManagerProps) {
@@ -83,7 +88,7 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
       }
       setSelected(prev => (prev === entry.path ? null : entry.path));
     },
-    [navigateTo],
+    [navigateTo]
   );
 
   const handleDownload = useCallback(async () => {
@@ -146,7 +151,7 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
       }
       fetchEntries();
     },
-    [service, sessionId, currentPath, root, fetchEntries],
+    [service, sessionId, currentPath, root, fetchEntries]
   );
 
   const handleDrop = useCallback(
@@ -158,7 +163,7 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
         doUpload(files);
       }
     },
-    [doUpload],
+    [doUpload]
   );
 
   const handleFileInput = useCallback(
@@ -169,7 +174,7 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
       }
       e.target.value = '';
     },
-    [doUpload],
+    [doUpload]
   );
 
   const breadcrumbParts = currentPath ? currentPath.split('/') : [];
@@ -184,13 +189,18 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
       <div className={styles.uploadPane}>
         <div
           className={cn(styles.dropZone, dragActive && styles.dropZoneActive)}
-          onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+          onDragOver={e => {
+            e.preventDefault();
+            setDragActive(true);
+          }}
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           role="button"
           tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter') fileInputRef.current?.click(); }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') fileInputRef.current?.click();
+          }}
         >
           <Upload className={styles.dropIcon} />
           <span className={styles.dropLabel}>Drop files here</span>
@@ -209,9 +219,15 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
           <div className={styles.uploadQueue}>
             {uploads.map((item, i) => (
               <div key={`${item.file.name}-${i}`} className={styles.uploadItem}>
-                {item.status === 'done' && <CheckCircle className={cn(styles.toolbarIcon, styles.uploadItemDone)} />}
-                {item.status === 'error' && <XCircle className={cn(styles.toolbarIcon, styles.uploadItemError)} />}
-                {(item.status === 'pending' || item.status === 'uploading') && <File className={styles.toolbarIcon} />}
+                {item.status === 'done' && (
+                  <CheckCircle className={cn(styles.toolbarIcon, styles.uploadItemDone)} />
+                )}
+                {item.status === 'error' && (
+                  <XCircle className={cn(styles.toolbarIcon, styles.uploadItemError)} />
+                )}
+                {(item.status === 'pending' || item.status === 'uploading') && (
+                  <File className={styles.toolbarIcon} />
+                )}
                 <span className={styles.uploadItemName}>{item.file.name}</span>
                 <span className={styles.uploadItemSize}>{formatBytes(item.file.size)}</span>
               </div>
@@ -227,14 +243,22 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
             <button
               type="button"
               className={cn(styles.rootButton, root === 'workspace' && styles.rootButtonActive)}
-              onClick={() => { setRoot('workspace'); setCurrentPath(''); setSelected(null); }}
+              onClick={() => {
+                setRoot('workspace');
+                setCurrentPath('');
+                setSelected(null);
+              }}
             >
               Workspace
             </button>
             <button
               type="button"
               className={cn(styles.rootButton, root === 'home' && styles.rootButtonActive)}
-              onClick={() => { setRoot('home'); setCurrentPath(''); setSelected(null); }}
+              onClick={() => {
+                setRoot('home');
+                setCurrentPath('');
+                setSelected(null);
+              }}
             >
               Home
             </button>
@@ -277,18 +301,17 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
         </div>
 
         <div className={styles.breadcrumb}>
-          <button
-            type="button"
-            className={styles.breadcrumbSegment}
-            onClick={() => navigateTo('')}
-          >
+          <button type="button" className={styles.breadcrumbSegment} onClick={() => navigateTo('')}>
             {root === 'workspace' ? 'workspace' : 'home'}
           </button>
           {breadcrumbParts.map((part, i) => {
             const partPath = breadcrumbParts.slice(0, i + 1).join('/');
             return (
               <span key={partPath}>
-                <ChevronRight className={styles.toolbarIcon} style={{ display: 'inline', verticalAlign: 'middle' }} />
+                <ChevronRight
+                  className={styles.toolbarIcon}
+                  style={{ display: 'inline', verticalAlign: 'middle' }}
+                />
                 <button
                   type="button"
                   className={styles.breadcrumbSegment}
@@ -317,7 +340,9 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
                 onClick={() => handleRowClick(entry)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={e => { if (e.key === 'Enter') handleRowClick(entry); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleRowClick(entry);
+                }}
               >
                 {entry.type === 'directory' ? (
                   <Folder className={cn(styles.fileIcon, styles.fileIconDir)} />
@@ -338,7 +363,11 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
 
         {showMkdir && (
           <>
-            <div className={styles.overlay} onClick={() => setShowMkdir(false)} role="presentation" />
+            <div
+              className={styles.overlay}
+              onClick={() => setShowMkdir(false)}
+              role="presentation"
+            />
             <div className={styles.dialog} role="dialog" aria-label="New Folder">
               <div className={styles.dialogTitle}>New Folder</div>
               <input
@@ -347,7 +376,10 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
                 onChange={e => setMkdirName(e.target.value)}
                 placeholder="folder-name"
                 autoFocus
-                onKeyDown={e => { if (e.key === 'Enter') handleMkdir(); if (e.key === 'Escape') setShowMkdir(false); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleMkdir();
+                  if (e.key === 'Escape') setShowMkdir(false);
+                }}
                 data-testid="mkdir-input"
               />
               <div className={styles.dialogActions}>

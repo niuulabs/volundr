@@ -16,7 +16,7 @@ import type {
   McpServerConfig,
   VolundrPreset,
   VolundrTemplate,
-  LinearIssue,
+  TrackerIssue,
   ProjectRepoMapping,
   FileTreeEntry,
   VolundrIdentity,
@@ -46,7 +46,7 @@ import {
   mockVolundrPullRequests,
   mockVolundrPresets,
   mockVolundrTemplates,
-  mockLinearIssues,
+  mockTrackerIssues,
   mockProjectRepoMappings,
   mockVolundrMcpServers,
   mockAvailableMcpServers,
@@ -258,7 +258,7 @@ export class MockVolundrService implements IVolundrService {
     model: string;
     templateName?: string;
     taskType?: string;
-    linearIssue?: LinearIssue;
+    trackerIssue?: TrackerIssue;
     terminalRestricted?: boolean;
     credentialNames?: string[];
     integrationIds?: string[];
@@ -274,7 +274,7 @@ export class MockVolundrService implements IVolundrService {
       messageCount: 0,
       tokensUsed: 0,
       taskType: config.taskType,
-      linearIssue: config.linearIssue,
+      trackerIssue: config.trackerIssue,
     };
     this.sessions.unshift(newSession);
     this.stats.totalSessions += 1;
@@ -307,6 +307,20 @@ export class MockVolundrService implements IVolundrService {
     this.simulateTransition(newSession.id);
 
     return { ...newSession };
+  }
+
+  async updateSession(
+    sessionId: string,
+    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string }
+  ): Promise<VolundrSession> {
+    const session = this.sessions.find(s => s.id === sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    if (updates.name) session.name = updates.name;
+    if (updates.model) session.model = updates.model;
+    this.notifySubscribers();
+    return session;
   }
 
   async stopSession(sessionId: string): Promise<void> {
@@ -486,7 +500,6 @@ export class MockVolundrService implements IVolundrService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getSessionDiff(_sessionId: string, filePath: string, _base: DiffBase): Promise<DiffData> {
     // Return realistic mock diff data based on file extension
     const isNewFile = filePath.endsWith('.test.ts') || filePath.endsWith('.test.tsx');
@@ -668,10 +681,9 @@ export class MockVolundrService implements IVolundrService {
     return servers.map(s => ({ ...s }));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async searchLinearIssues(query: string, _projectId?: string): Promise<LinearIssue[]> {
+  async searchTrackerIssues(query: string, _projectId?: string): Promise<TrackerIssue[]> {
     const lower = query.toLowerCase();
-    return mockLinearIssues
+    return mockTrackerIssues
       .filter(
         issue =>
           issue.identifier.toLowerCase().includes(lower) ||
@@ -685,7 +697,11 @@ export class MockVolundrService implements IVolundrService {
     return mockProjectRepoMappings.map(m => ({ ...m }));
   }
 
-  async getSessionFiles(_sessionId: string, path?: string, _root?: import('@/models').FileRoot): Promise<FileTreeEntry[]> {
+  async getSessionFiles(
+    _sessionId: string,
+    path?: string,
+    _root?: import('@/models').FileRoot
+  ): Promise<FileTreeEntry[]> {
     const dirPath = path ?? '';
     const entries = mockFileTree[dirPath];
     if (!entries) {
@@ -694,37 +710,54 @@ export class MockVolundrService implements IVolundrService {
     return entries.map(e => ({ ...e }));
   }
 
-  async downloadSessionFile(_sessionId: string, _path: string, _root?: import('@/models').FileRoot): Promise<Blob> {
+  async downloadSessionFile(
+    _sessionId: string,
+    _filePath: string,
+    _root?: import('@/models').FileRoot
+  ): Promise<Blob> {
     return new Blob(['mock file content'], { type: 'application/octet-stream' });
   }
 
-  async uploadSessionFiles(_sessionId: string, _files: File[], _targetPath: string, _root?: import('@/models').FileRoot): Promise<FileTreeEntry[]> {
+  async uploadSessionFiles(
+    _sessionId: string,
+    _files: File[],
+    _targetPath: string,
+    _root?: import('@/models').FileRoot
+  ): Promise<FileTreeEntry[]> {
     return [];
   }
 
-  async createSessionDirectory(_sessionId: string, path: string, _root?: import('@/models').FileRoot): Promise<FileTreeEntry> {
+  async createSessionDirectory(
+    _sessionId: string,
+    path: string,
+    _root?: import('@/models').FileRoot
+  ): Promise<FileTreeEntry> {
     const name = path.split('/').pop() ?? path;
     return { name, path, type: 'directory' };
   }
 
-  async deleteSessionFile(_sessionId: string, _path: string, _root?: import('@/models').FileRoot): Promise<void> {
+  async deleteSessionFile(
+    _sessionId: string,
+    _filePath: string,
+    _root?: import('@/models').FileRoot
+  ): Promise<void> {
     // no-op
   }
 
-  async updateLinearIssueStatus(
+  async updateTrackerIssueStatus(
     issueId: string,
-    status: LinearIssue['status']
-  ): Promise<LinearIssue> {
-    const issue = mockLinearIssues.find(i => i.id === issueId);
+    status: TrackerIssue['status']
+  ): Promise<TrackerIssue> {
+    const issue = mockTrackerIssues.find(i => i.id === issueId);
     if (!issue) {
-      throw new Error(`Linear issue ${issueId} not found`);
+      throw new Error(`Tracker issue ${issueId} not found`);
     }
     issue.status = status;
 
     // Also update any sessions that have this issue linked
     for (const session of this.sessions) {
-      if (session.linearIssue?.id === issueId) {
-        session.linearIssue = { ...issue };
+      if (session.trackerIssue?.id === issueId) {
+        session.trackerIssue = { ...issue };
       }
     }
     this.notifySubscribers();
@@ -798,7 +831,6 @@ export class MockVolundrService implements IVolundrService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deleteTenant(_id: string): Promise<void> {
     // no-op in mock
   }
@@ -832,7 +864,6 @@ export class MockVolundrService implements IVolundrService {
     return { success: true, userId: _userId, homePvc: `home-${_userId}`, errors: [] };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async reprovisionTenant(_tenantId: string): Promise<VolundrProvisioningResult[]> {
     return [
       { success: true, userId: 'user-1', homePvc: 'home-user-1', errors: [] },
@@ -889,7 +920,7 @@ export class MockVolundrService implements IVolundrService {
     {
       slug: 'linear',
       name: 'Linear',
-      description: 'Linear issue tracker',
+      description: 'Issue tracker',
       integration_type: 'issue_tracker',
       adapter: 'volundr.adapters.outbound.linear.LinearAdapter',
       icon: 'linear',
@@ -901,6 +932,8 @@ export class MockVolundrService implements IVolundrService {
         args: ['-y', '@anthropic-ai/linear-mcp-server'],
         env_from_credentials: { LINEAR_API_KEY: 'api_key' },
       },
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
     {
       slug: 'github',
@@ -920,6 +953,8 @@ export class MockVolundrService implements IVolundrService {
         args: ['-y', '@modelcontextprotocol/server-github'],
         env_from_credentials: { GITHUB_PERSONAL_ACCESS_TOKEN: 'personal_access_token' },
       },
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
     {
       slug: 'telegram',
@@ -934,6 +969,8 @@ export class MockVolundrService implements IVolundrService {
       },
       config_schema: {},
       mcp_server: null,
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
   ];
 
@@ -977,7 +1014,6 @@ export class MockVolundrService implements IVolundrService {
     this.mockIntegrations = this.mockIntegrations.filter(i => i.id !== id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async testIntegration(_id: string): Promise<IntegrationTestResult> {
     return {
       success: true,

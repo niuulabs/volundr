@@ -92,6 +92,12 @@ rules:
     resources: ["persistentvolumeclaims"]
     verbs: ["create", "delete", "get", "list", "watch"]
   {{- end }}
+  {{- if contains "InfisicalAgent" .Values.secretInjection.adapter }}
+  # Cluster-wide access to ConfigMaps in session namespace (agent injector config)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}
   # Namespace listing for multi-namespace deployments
   - apiGroups: [""]
     resources: ["namespaces"]
