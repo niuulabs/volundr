@@ -916,6 +916,7 @@ export function VolundrPage() {
               </div>
             )}
           </div>
+          <div className={styles.versionTag}>{__APP_VERSION__}</div>
         </div>
       )}
 
