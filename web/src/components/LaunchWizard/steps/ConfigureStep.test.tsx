@@ -679,6 +679,9 @@ describe('ConfigureStep', () => {
       rules: [],
       envVars: { NODE_ENV: 'test' },
       envSecretRefs: ['GITHUB_TOKEN'],
+      source: null,
+      integrationIds: [],
+      setupScripts: [],
       workloadConfig: {},
     };
 

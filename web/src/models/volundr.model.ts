@@ -457,6 +457,9 @@ export interface VolundrPreset {
   rules: RuleConfig[];
   envVars: Record<string, string>;
   envSecretRefs: string[];
+  source: SessionSource | null;
+  integrationIds: string[];
+  setupScripts: string[];
   workloadConfig: WorkloadConfig;
 }
 

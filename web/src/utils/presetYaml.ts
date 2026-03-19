@@ -7,6 +7,7 @@ import type {
   SkillConfig,
   RuleConfig,
   WorkloadConfig,
+  SessionSource,
 } from '@/models';
 
 /**
@@ -31,6 +32,9 @@ interface PresetYamlDoc {
   rules?: Array<{ path?: string; inline?: string }>;
   env_vars?: Record<string, string>;
   env_secret_refs?: string[];
+  source?: { type: 'git'; repo: string; branch: string } | { type: 'local_mount'; paths: Array<{ host_path: string; mount_path: string; read_only: boolean }> } | null;
+  integration_ids?: string[];
+  setup_scripts?: string[];
   workload_config?: Record<string, string | number | boolean | undefined>;
 }
 
@@ -49,6 +53,9 @@ export interface PresetRuntimeFields {
   rules: RuleConfig[];
   envVars: Record<string, string>;
   envSecretRefs: string[];
+  source: SessionSource | null;
+  integrationIds: string[];
+  setupScripts: string[];
   workloadConfig: WorkloadConfig;
 }
 
@@ -81,6 +88,9 @@ export function serializePresetYaml(fields: PresetRuntimeFields): string {
     rules: fields.rules.length > 0 ? fields.rules : undefined,
     env_vars: Object.keys(fields.envVars).length > 0 ? fields.envVars : undefined,
     env_secret_refs: fields.envSecretRefs.length > 0 ? fields.envSecretRefs : undefined,
+    source: fields.source ?? undefined,
+    integration_ids: fields.integrationIds.length > 0 ? fields.integrationIds : undefined,
+    setup_scripts: fields.setupScripts.length > 0 ? fields.setupScripts : undefined,
     workload_config:
       Object.keys(fields.workloadConfig).length > 0 ? fields.workloadConfig : undefined,
   };
@@ -143,6 +153,15 @@ export function parsePresetYaml(yamlStr: string): Partial<PresetRuntimeFields> {
   }
   if (doc.env_secret_refs) {
     result.envSecretRefs = doc.env_secret_refs;
+  }
+  if (doc.source !== undefined) {
+    result.source = doc.source as SessionSource | null;
+  }
+  if (doc.integration_ids) {
+    result.integrationIds = doc.integration_ids;
+  }
+  if (doc.setup_scripts) {
+    result.setupScripts = doc.setup_scripts;
   }
   if (doc.workload_config) {
     result.workloadConfig = doc.workload_config;

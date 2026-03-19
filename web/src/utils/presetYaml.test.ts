@@ -20,6 +20,9 @@ const fullFields: PresetRuntimeFields = {
   rules: [{ inline: 'Always use TypeScript.' }],
   envVars: { NODE_ENV: 'development', DEBUG: 'true' },
   envSecretRefs: ['GITHUB_TOKEN', 'LINEAR_API_KEY'],
+  source: { type: 'git', repo: 'github.com/org/repo', branch: 'main' },
+  integrationIds: ['integ-1'],
+  setupScripts: ['npm install'],
   workloadConfig: { timeout: 3600 },
 };
 
@@ -35,6 +38,9 @@ const minimalFields: PresetRuntimeFields = {
   rules: [],
   envVars: {},
   envSecretRefs: [],
+  source: null,
+  integrationIds: [],
+  setupScripts: [],
   workloadConfig: {},
 };
 

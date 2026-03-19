@@ -28,6 +28,9 @@ def _mock_row(**overrides):
         "rules": json.dumps([]),
         "env_vars": json.dumps({}),
         "env_secret_refs": json.dumps([]),
+        "source": None,
+        "integration_ids": json.dumps([]),
+        "setup_scripts": json.dumps([]),
         "workload_config": json.dumps({}),
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -35,6 +38,7 @@ def _mock_row(**overrides):
     defaults.update(overrides)
     row = MagicMock()
     row.__getitem__ = lambda self, key: defaults[key]
+    row.get = lambda key, default=None: defaults.get(key, default)
     return row
 
 
