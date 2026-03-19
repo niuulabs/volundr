@@ -182,6 +182,15 @@ export interface InitWorkbenchParams {
 // (mounts → unmounts → remounts in dev, causing two concurrent calls).
 let initPromise: Promise<void> | null = null;
 
+// VS Code extension API reference, populated after initialize + registerExtension.
+// Used by switchSession() and tabStateManager to call workspace/window/commands APIs.
+let vsCodeApi: typeof import('vscode') | null = null;
+
+/** Get the VS Code extension API. Only available after initialization. */
+export function getVsCodeApi(): typeof import('vscode') | null {
+  return vsCodeApi;
+}
+
 export async function initWorkbench(params: InitWorkbenchParams): Promise<void> {
   if (isInitialized()) {
     return;
@@ -387,8 +396,13 @@ async function doInitWorkbench({
     {} // envOptions
   );
 
-  // ── 7. Register default API extension (matching demo) ──
-  registerExtension(
+  // ── 7. Register default API extension and store the API reference ──
+  //
+  // The extension API gives us access to vscode.workspace, vscode.window,
+  // vscode.commands, etc. We store it in a module-level variable so
+  // switchSession() can use it without `import('vscode')` (which Vite
+  // can't resolve at build time since `vscode` is a virtual module).
+  const ext = registerExtension(
     {
       name: 'volundr',
       publisher: 'niuulabs',
@@ -396,7 +410,9 @@ async function doInitWorkbench({
       engines: { vscode: '*' },
     },
     ExtensionHostKind.LocalProcess
-  ).setAsDefaultApi();
+  );
+  ext.setAsDefaultApi();
+  vsCodeApi = await ext.getApi();
 
   markInitialized();
 }
@@ -421,14 +437,17 @@ export async function switchSession(
   const config = editorService.getWorkbenchConfig(sessionId, hostname, codeEndpoint);
   const previousRoute = getActiveRoute();
 
+  if (!vsCodeApi) {
+    throw new Error('Cannot switch session: VS Code API not initialized');
+  }
+
   // 1. Save the current session's open tabs before switching.
   if (previousRoute) {
-    await saveTabState(previousRoute.sessionId);
+    await saveTabState(previousRoute.sessionId, vsCodeApi);
   }
 
   // 2. Close all open editors so stale tabs don't flash errors.
-  const vscode = await import('vscode');
-  await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  await vsCodeApi.commands.executeCommand('workbench.action.closeAllEditors');
 
   // 3. Update routing so new WebSocket connections go to the new REH server.
   setActiveRoute({
@@ -441,15 +460,15 @@ export async function switchSession(
   closeAllWebSockets();
 
   // 5. Swap the workspace folder.
-  const newFolderUri = vscode.Uri.from({
+  const newFolderUri = vsCodeApi.Uri.from({
     scheme: 'vscode-remote',
     authority: STABLE_AUTHORITY,
     path: `/volundr/sessions/${sessionId}/workspace`,
   });
 
-  const currentFolderCount = vscode.workspace.workspaceFolders?.length ?? 0;
-  vscode.workspace.updateWorkspaceFolders(0, currentFolderCount, { uri: newFolderUri });
+  const currentFolderCount = vsCodeApi.workspace.workspaceFolders?.length ?? 0;
+  vsCodeApi.workspace.updateWorkspaceFolders(0, currentFolderCount, { uri: newFolderUri });
 
   // 6. Restore previously saved tabs for the new session (if any).
-  await restoreTabState(sessionId, STABLE_AUTHORITY);
+  await restoreTabState(sessionId, STABLE_AUTHORITY, vsCodeApi);
 }

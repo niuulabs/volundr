@@ -5,7 +5,42 @@
  * Tab state is stored in-memory (lost on page reload). Each entry
  * records the file paths relative to the workspace root and which
  * tab was active, allowing reconstruction of URIs for any session.
+ *
+ * The VS Code API is passed in as a parameter (not imported directly)
+ * because the `vscode` module is a virtual module provided at runtime
+ * by @codingame/monaco-vscode-api and cannot be resolved by Vite at
+ * build time.
  */
+
+/** Minimal subset of the VS Code API needed by the tab state manager. */
+export interface VsCodeApi {
+  Uri: {
+    from(components: { scheme: string; authority?: string; path?: string }): {
+      scheme: string;
+      authority: string;
+      path: string;
+    };
+  };
+  window: {
+    tabGroups: {
+      all: readonly {
+        tabs: readonly {
+          input: unknown;
+        }[];
+      }[];
+      activeTabGroup: {
+        activeTab: { input: unknown } | undefined;
+      };
+    };
+    showTextDocument(
+      document: unknown,
+      options?: { preview?: boolean; preserveFocus?: boolean }
+    ): Thenable<unknown>;
+  };
+  workspace: {
+    openTextDocument(uri: unknown): Thenable<unknown>;
+  };
+}
 
 export interface SavedTab {
   /** Path relative to the workspace root (e.g. "src/main.ts"). */
@@ -37,13 +72,11 @@ export function extractRelativePath(fullPath: string): string | null {
  * Reads from `vscode.window.tabGroups` to discover all open text
  * editor tabs and their active state.
  */
-export async function saveTabState(sessionId: string): Promise<void> {
-  const vscode = await import('vscode');
-
+export async function saveTabState(sessionId: string, api: VsCodeApi): Promise<void> {
   const tabs: SavedTab[] = [];
-  const activeTabUri = vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
+  const activeTabUri = api.window.tabGroups.activeTabGroup?.activeTab?.input;
 
-  for (const group of vscode.window.tabGroups.all) {
+  for (const group of api.window.tabGroups.all) {
     for (const tab of group.tabs) {
       const input = tab.input;
       // TabInputText has a `uri` property — filter to text editor tabs only.
@@ -83,13 +116,15 @@ export function getSavedTabState(sessionId: string): SavedTab[] | undefined {
  * Opens each saved file and focuses the one that was previously active.
  * Operates on a best-effort basis — files that no longer exist are skipped.
  */
-export async function restoreTabState(sessionId: string, authority: string): Promise<void> {
+export async function restoreTabState(
+  sessionId: string,
+  authority: string,
+  api: VsCodeApi
+): Promise<void> {
   const saved = tabStateBySession.get(sessionId);
   if (!saved || saved.length === 0) {
     return;
   }
-
-  const vscode = await import('vscode');
 
   // Open each saved tab. Save the active one for last so it ends up focused.
   let activeTab: SavedTab | null = null;
@@ -99,30 +134,30 @@ export async function restoreTabState(sessionId: string, authority: string): Pro
       activeTab = tab;
       continue;
     }
-    await openTab(vscode, sessionId, authority, tab);
+    await openTab(api, sessionId, authority, tab);
   }
 
   // Open the active tab last so it gets focus.
   if (activeTab) {
-    await openTab(vscode, sessionId, authority, activeTab);
+    await openTab(api, sessionId, authority, activeTab);
   }
 }
 
 async function openTab(
-  vscode: typeof import('vscode'),
+  api: VsCodeApi,
   sessionId: string,
   authority: string,
   tab: SavedTab
 ): Promise<void> {
-  const uri = vscode.Uri.from({
+  const uri = api.Uri.from({
     scheme: 'vscode-remote',
     authority,
     path: `/volundr/sessions/${sessionId}/workspace/${tab.relativePath}`,
   });
 
   try {
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: !tab.isActive });
+    const doc = await api.workspace.openTextDocument(uri);
+    await api.window.showTextDocument(doc, { preview: false, preserveFocus: !tab.isActive });
   } catch {
     // File may no longer exist — skip silently.
   }

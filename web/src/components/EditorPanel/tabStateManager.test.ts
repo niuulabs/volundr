@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { VsCodeApi } from './tabStateManager';
 import {
   extractRelativePath,
   saveTabState,
@@ -7,44 +8,50 @@ import {
   resetTabStateManager,
 } from './tabStateManager';
 
-// Mock the vscode module
-const mockExecuteCommand = vi.fn();
-const mockShowTextDocument = vi.fn().mockResolvedValue({});
-const mockOpenTextDocument = vi.fn().mockResolvedValue({ uri: {} });
+function createMockApi(): VsCodeApi & {
+  _showTextDocument: ReturnType<typeof vi.fn>;
+  _openTextDocument: ReturnType<typeof vi.fn>;
+  _tabGroups: {
+    all: { tabs: { input: { uri: { path: string; scheme: string } } }[] }[];
+    activeTabGroup: { activeTab: { input: { uri: { path: string } } } | null };
+  };
+} {
+  const showTextDocument = vi.fn().mockResolvedValue({});
+  const openTextDocument = vi.fn().mockResolvedValue({ uri: {} });
+  const tabGroups = {
+    all: [] as { tabs: { input: { uri: { path: string; scheme: string } } }[] }[],
+    activeTabGroup: { activeTab: null as { input: { uri: { path: string } } } | null },
+  };
 
-const mockTabGroups = {
-  all: [] as { tabs: { input: { uri: { path: string; scheme: string } } }[] }[],
-  activeTabGroup: { activeTab: null as { input: { uri: { path: string } } } | null },
-};
-
-vi.mock('vscode', () => ({
-  window: {
-    get tabGroups() {
-      return mockTabGroups;
+  return {
+    Uri: {
+      from: (c: { scheme: string; authority?: string; path?: string }) => ({
+        scheme: c.scheme,
+        authority: c.authority ?? '',
+        path: c.path ?? '',
+      }),
     },
-    showTextDocument: (...args: unknown[]) => mockShowTextDocument(...args),
-  },
-  workspace: {
-    openTextDocument: (...args: unknown[]) => mockOpenTextDocument(...args),
-  },
-  commands: {
-    executeCommand: (...args: unknown[]) => mockExecuteCommand(...args),
-  },
-  Uri: {
-    from: (components: { scheme: string; authority: string; path: string }) => ({
-      scheme: components.scheme,
-      authority: components.authority,
-      path: components.path,
-    }),
-  },
-}));
+    window: {
+      get tabGroups() {
+        return tabGroups;
+      },
+      showTextDocument: showTextDocument,
+    },
+    workspace: {
+      openTextDocument: openTextDocument,
+    },
+    _showTextDocument: showTextDocument,
+    _openTextDocument: openTextDocument,
+    _tabGroups: tabGroups,
+  };
+}
 
 describe('tabStateManager', () => {
+  let api: ReturnType<typeof createMockApi>;
+
   beforeEach(() => {
     resetTabStateManager();
-    vi.clearAllMocks();
-    mockTabGroups.all = [];
-    mockTabGroups.activeTabGroup = { activeTab: null };
+    api = createMockApi();
   });
 
   describe('extractRelativePath', () => {
@@ -70,7 +77,7 @@ describe('tabStateManager', () => {
 
   describe('saveTabState', () => {
     it('should save open tabs for a session', async () => {
-      mockTabGroups.all = [
+      api._tabGroups.all = [
         {
           tabs: [
             {
@@ -86,13 +93,13 @@ describe('tabStateManager', () => {
           ],
         },
       ];
-      mockTabGroups.activeTabGroup = {
+      api._tabGroups.activeTabGroup = {
         activeTab: {
           input: { uri: { path: '/volundr/sessions/s1/workspace/src/b.ts' } },
         },
       };
 
-      await saveTabState('s1');
+      await saveTabState('s1', api);
 
       const saved = getSavedTabState('s1');
       expect(saved).toHaveLength(2);
@@ -101,7 +108,7 @@ describe('tabStateManager', () => {
     });
 
     it('should skip non-vscode-remote tabs', async () => {
-      mockTabGroups.all = [
+      api._tabGroups.all = [
         {
           tabs: [
             {
@@ -113,9 +120,8 @@ describe('tabStateManager', () => {
           ],
         },
       ];
-      mockTabGroups.activeTabGroup = { activeTab: null };
 
-      await saveTabState('s1');
+      await saveTabState('s1', api);
 
       const saved = getSavedTabState('s1');
       expect(saved).toHaveLength(1);
@@ -123,9 +129,7 @@ describe('tabStateManager', () => {
     });
 
     it('should save empty array when no tabs are open', async () => {
-      mockTabGroups.all = [];
-
-      await saveTabState('s1');
+      await saveTabState('s1', api);
 
       const saved = getSavedTabState('s1');
       expect(saved).toEqual([]);
@@ -134,8 +138,7 @@ describe('tabStateManager', () => {
 
   describe('restoreTabState', () => {
     it('should restore previously saved tabs', async () => {
-      // Manually seed saved state by calling save with mock tabs.
-      mockTabGroups.all = [
+      api._tabGroups.all = [
         {
           tabs: [
             {
@@ -151,39 +154,41 @@ describe('tabStateManager', () => {
           ],
         },
       ];
-      mockTabGroups.activeTabGroup = {
+      api._tabGroups.activeTabGroup = {
         activeTab: {
           input: { uri: { path: '/volundr/sessions/s1/workspace/src/b.ts' } },
         },
       };
 
-      await saveTabState('s1');
-      vi.clearAllMocks();
+      await saveTabState('s1', api);
 
-      // Now restore.
-      await restoreTabState('s1', 'gateway.example.com');
+      // Reset mocks for restore phase.
+      api._openTextDocument.mockClear();
+      api._showTextDocument.mockClear();
+
+      await restoreTabState('s1', 'gateway.example.com', api);
 
       // Non-active tab opened first, then active tab last for focus.
-      expect(mockOpenTextDocument).toHaveBeenCalledTimes(2);
-      expect(mockShowTextDocument).toHaveBeenCalledTimes(2);
+      expect(api._openTextDocument).toHaveBeenCalledTimes(2);
+      expect(api._showTextDocument).toHaveBeenCalledTimes(2);
 
       // First call: non-active tab (src/a.ts)
-      const firstUri = mockOpenTextDocument.mock.calls[0][0];
+      const firstUri = api._openTextDocument.mock.calls[0][0];
       expect(firstUri.path).toBe('/volundr/sessions/s1/workspace/src/a.ts');
 
       // Second call: active tab (src/b.ts)
-      const secondUri = mockOpenTextDocument.mock.calls[1][0];
+      const secondUri = api._openTextDocument.mock.calls[1][0];
       expect(secondUri.path).toBe('/volundr/sessions/s1/workspace/src/b.ts');
     });
 
     it('should do nothing when no saved state exists', async () => {
-      await restoreTabState('nonexistent', 'gateway.example.com');
+      await restoreTabState('nonexistent', 'gateway.example.com', api);
 
-      expect(mockOpenTextDocument).not.toHaveBeenCalled();
+      expect(api._openTextDocument).not.toHaveBeenCalled();
     });
 
     it('should skip files that fail to open', async () => {
-      mockTabGroups.all = [
+      api._tabGroups.all = [
         {
           tabs: [
             {
@@ -194,15 +199,12 @@ describe('tabStateManager', () => {
           ],
         },
       ];
-      mockTabGroups.activeTabGroup = { activeTab: null };
 
-      await saveTabState('s1');
-      vi.clearAllMocks();
-
-      mockOpenTextDocument.mockRejectedValueOnce(new Error('File not found'));
+      await saveTabState('s1', api);
+      api._openTextDocument.mockRejectedValueOnce(new Error('File not found'));
 
       // Should not throw.
-      await expect(restoreTabState('s1', 'gateway.example.com')).resolves.toBeUndefined();
+      await expect(restoreTabState('s1', 'gateway.example.com', api)).resolves.toBeUndefined();
     });
   });
 
