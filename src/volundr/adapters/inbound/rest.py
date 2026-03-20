@@ -846,8 +846,8 @@ def create_router(
 
         return principal
 
-    @router.get("/features", tags=["Features"])
-    async def get_features(request: Request) -> dict:
+    @router.get("/feature-flags", tags=["Features"])
+    async def get_feature_flags(request: Request) -> dict:
         """Return feature flags derived from server configuration.
 
         Lets the frontend adapt its UI based on what the backend supports
