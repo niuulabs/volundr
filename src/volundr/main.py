@@ -16,6 +16,7 @@ from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.inbound.rest_admin_settings import create_admin_settings_router
 from volundr.adapters.inbound.rest_credentials import create_credentials_router
 from volundr.adapters.inbound.rest_events import create_events_router
+from volundr.adapters.inbound.rest_features import create_features_router
 from volundr.adapters.inbound.rest_git import create_git_router
 from volundr.adapters.inbound.rest_integrations import create_integrations_router
 from volundr.adapters.inbound.rest_issues import create_issues_router
@@ -60,6 +61,7 @@ from volundr.domain.services import (
     TrackerService,
 )
 from volundr.domain.services.event_ingestion import EventIngestionService
+from volundr.domain.services.feature import FeatureService
 from volundr.domain.services.profile import ForgeProfileService
 from volundr.domain.services.template import WorkspaceTemplateService
 from volundr.domain.services.workspace import WorkspaceService
@@ -621,6 +623,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Admin settings (config-driven, runtime-toggleable)
             admin_settings_router = create_admin_settings_router()
             app.include_router(admin_settings_router)
+
+            # Feature module system (config-driven, DB-persisted toggles)
+            feature_service = FeatureService(pool, settings.features)
+            features_router = create_features_router(feature_service)
+            app.include_router(features_router)
+            app.state.feature_service = feature_service
 
             # Credential management (reuses credential_store created above)
             credential_service = CredentialService(

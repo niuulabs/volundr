@@ -38,6 +38,9 @@ import type {
   VolundrProvisioningResult,
   AdminSettings,
   AdminStorageSettings,
+  FeatureModule,
+  FeatureScope,
+  UserFeaturePreference,
 } from '@/models';
 import { createApiClient, ApiClientError, getAccessToken } from './client';
 import type {
@@ -76,6 +79,8 @@ import type {
   ApiSecretTypeInfoResponse,
   ApiWorkspaceResponse,
   ApiClusterResourceInfo,
+  ApiFeatureModuleResponse,
+  ApiUserFeaturePreferenceResponse,
 } from './volundr.types';
 
 /**
@@ -1480,6 +1485,65 @@ export class ApiVolundrService implements IVolundrService {
         fileManagerEnabled: response.storage.file_manager_enabled ?? true,
       },
     };
+  }
+
+  async getFeatureModules(scope?: FeatureScope): Promise<FeatureModule[]> {
+    const params = scope ? `?scope=${scope}` : '';
+    const response = await api.get<ApiFeatureModuleResponse[]>(`/features${params}`);
+    return response.map(f => ({
+      key: f.key,
+      label: f.label,
+      icon: f.icon,
+      scope: f.scope as FeatureScope,
+      enabled: f.enabled,
+      defaultEnabled: f.default_enabled,
+      adminOnly: f.admin_only,
+      order: f.order,
+    }));
+  }
+
+  async toggleFeature(key: string, enabled: boolean): Promise<FeatureModule> {
+    const f = await api.put<ApiFeatureModuleResponse>(`/features/${key}/toggle`, { enabled });
+    return {
+      key: f.key,
+      label: f.label,
+      icon: f.icon,
+      scope: f.scope as FeatureScope,
+      enabled: f.enabled,
+      defaultEnabled: f.default_enabled,
+      adminOnly: f.admin_only,
+      order: f.order,
+    };
+  }
+
+  async getUserFeaturePreferences(): Promise<UserFeaturePreference[]> {
+    const response = await api.get<ApiUserFeaturePreferenceResponse[]>('/features/preferences');
+    return response.map(p => ({
+      featureKey: p.feature_key,
+      visible: p.visible,
+      sortOrder: p.sort_order,
+    }));
+  }
+
+  async updateUserFeaturePreferences(
+    preferences: UserFeaturePreference[]
+  ): Promise<UserFeaturePreference[]> {
+    const body = {
+      preferences: preferences.map(p => ({
+        feature_key: p.featureKey,
+        visible: p.visible,
+        sort_order: p.sortOrder,
+      })),
+    };
+    const response = await api.put<ApiUserFeaturePreferenceResponse[]>(
+      '/features/preferences',
+      body
+    );
+    return response.map(p => ({
+      featureKey: p.feature_key,
+      visible: p.visible,
+      sortOrder: p.sort_order,
+    }));
   }
 
   private mapWorkspace(w: ApiWorkspaceResponse): VolundrWorkspace {

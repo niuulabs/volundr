@@ -390,6 +390,25 @@ export interface AdminSettings {
   storage: AdminStorageSettings;
 }
 
+export type FeatureScope = 'admin' | 'user';
+
+export interface FeatureModule {
+  key: string;
+  label: string;
+  icon: string;
+  scope: FeatureScope;
+  enabled: boolean;
+  defaultEnabled: boolean;
+  adminOnly: boolean;
+  order: number;
+}
+
+export interface UserFeaturePreference {
+  featureKey: string;
+  visible: boolean;
+  sortOrder: number;
+}
+
 // Types merged from forgeProfile.model.ts
 export type McpServerType = 'stdio' | 'sse' | 'http';
 

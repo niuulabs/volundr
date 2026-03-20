@@ -126,6 +126,9 @@ export type {
   VolundrWorkspace,
   AdminSettings,
   AdminStorageSettings,
+  FeatureModule,
+  FeatureScope,
+  UserFeaturePreference,
 } from './volundr.model';
 
 export { TASK_TYPES } from './volundr.model';
