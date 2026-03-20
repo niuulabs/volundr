@@ -36,8 +36,8 @@ class LocalStorageAdapter(StoragePort):
     Workspace directory: ``{base_dir}/workspaces/{session_id}/``
     Home directory:      ``{base_dir}/home/{user_id}/``
 
-    ``PVCRef.name`` contains the absolute host path so that
-    ``DockerPodManager`` can interpret it as a bind-mount source.
+    ``PVCRef.name`` contains the absolute host path so that local
+    adapters can interpret it as a bind-mount source.
     ``PVCRef.namespace`` is set to ``"local"`` as a sentinel value.
     """
 

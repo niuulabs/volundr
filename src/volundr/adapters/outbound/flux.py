@@ -1,9 +1,8 @@
 """Flux HelmRelease adapter for pod management.
 
 Creates HelmRelease custom resources in Kubernetes, which Flux
-reconciles into running session pods. Drop-in replacement for
-the Farm adapter — selected via the dynamic adapter pattern
-in config YAML.
+reconciles into running session pods. Selected via the dynamic
+adapter pattern in config YAML.
 """
 
 import copy

@@ -247,8 +247,8 @@ class TestSessionServiceDelete:
     ):
         """Deleting a running session succeeds even if pod stop fails.
 
-        This handles the case where Farm returns an error (e.g., 500) when
-        trying to cancel a task that doesn't exist or has already been cleaned up.
+        This handles the case where the pod manager returns an error when
+        trying to stop pods that don't exist or have already been cleaned up.
         """
         service = SessionService(repository, failing_pod_manager)
         created = await service.create_session(

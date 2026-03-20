@@ -126,7 +126,6 @@ All `SessionContribution` objects are deep-merged into a single `SessionSpec`:
 
 `PodManager.start(session, spec)` submits the merged spec to the backend:
 
-- **Farm** -- submits a Helm-based task to the Farm task scheduler
 - **Flux** -- creates a HelmRelease for the Skuld chart
 - **Direct K8s** -- applies pod manifests directly via the Kubernetes API
 - **Docker** -- runs containers via Docker (local development)

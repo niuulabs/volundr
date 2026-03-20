@@ -168,3 +168,59 @@ class TestFileCredentialStore:
         assert individual.exists()
         await store.delete("user", "u1", "my-key")
         assert not individual.exists()
+
+    # ------------------------------------------------------------------
+    # Atomic write error handling
+    # ------------------------------------------------------------------
+
+    def test_write_file_cleans_up_on_os_write_error(
+        self, store: FileCredentialStore, tmp_path: Path
+    ) -> None:
+        """When os.write raises, the temp file is cleaned up and fd is closed."""
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        target_path = tmp_path / "user" / "u1" / "credentials.json"
+        data = {"metadata": {}, "values": {}}
+
+        with patch("volundr.adapters.outbound.file_credential_store.os.write", side_effect=IOError("disk full")):
+            with pytest.raises(IOError, match="disk full"):
+                store._write_file(target_path, data)
+
+        # Verify no leftover temp files in the directory
+        if target_path.parent.exists():
+            tmp_files = list(target_path.parent.glob("*.tmp"))
+            assert tmp_files == []
+
+    def test_write_individual_credential_cleans_up_on_os_write_error(
+        self, store: FileCredentialStore, tmp_path: Path
+    ) -> None:
+        """When os.write raises in _write_individual_credential, cleanup happens."""
+        from unittest.mock import patch
+
+        with patch("volundr.adapters.outbound.file_credential_store.os.write", side_effect=IOError("disk full")):
+            with pytest.raises(IOError, match="disk full"):
+                store._write_individual_credential("user", "u1", "my-key", {"token": "abc"})
+
+        # Verify no leftover temp files
+        cred_dir = store._base_dir / "user" / "u1"
+        if cred_dir.exists():
+            tmp_files = list(cred_dir.glob("*.tmp"))
+            assert tmp_files == []
+
+    # ------------------------------------------------------------------
+    # Health check failure
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio()
+    async def test_health_check_returns_false_on_os_error(
+        self, tmp_path: Path
+    ) -> None:
+        """Health check returns False when the base directory is not writable."""
+        from unittest.mock import patch
+
+        store = FileCredentialStore(base_dir=str(tmp_path / "health"))
+        with patch.object(Path, "write_text", side_effect=OSError("permission denied")):
+            result = await store.health_check()
+        assert result is False
