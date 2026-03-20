@@ -177,15 +177,14 @@ class TestFileCredentialStore:
         self, store: FileCredentialStore, tmp_path: Path
     ) -> None:
         """When os.write raises, the temp file is cleaned up and fd is closed."""
-        import os
-        import tempfile
         from unittest.mock import patch
 
         target_path = tmp_path / "user" / "u1" / "credentials.json"
         data = {"metadata": {}, "values": {}}
 
-        with patch("volundr.adapters.outbound.file_credential_store.os.write", side_effect=IOError("disk full")):
-            with pytest.raises(IOError, match="disk full"):
+        mock_target = "volundr.adapters.outbound.file_credential_store.os.write"
+        with patch(mock_target, side_effect=OSError("disk full")):
+            with pytest.raises(OSError, match="disk full"):
                 store._write_file(target_path, data)
 
         # Verify no leftover temp files in the directory
@@ -199,8 +198,9 @@ class TestFileCredentialStore:
         """When os.write raises in _write_individual_credential, cleanup happens."""
         from unittest.mock import patch
 
-        with patch("volundr.adapters.outbound.file_credential_store.os.write", side_effect=IOError("disk full")):
-            with pytest.raises(IOError, match="disk full"):
+        mock_target = "volundr.adapters.outbound.file_credential_store.os.write"
+        with patch(mock_target, side_effect=OSError("disk full")):
+            with pytest.raises(OSError, match="disk full"):
                 store._write_individual_credential("user", "u1", "my-key", {"token": "abc"})
 
         # Verify no leftover temp files
@@ -214,9 +214,7 @@ class TestFileCredentialStore:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio()
-    async def test_health_check_returns_false_on_os_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_health_check_returns_false_on_os_error(self, tmp_path: Path) -> None:
         """Health check returns False when the base directory is not writable."""
         from unittest.mock import patch
 

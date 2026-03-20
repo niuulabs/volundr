@@ -17,7 +17,7 @@ from volundr.domain.models import (
     PullRequestStatus,
     RepoInfo,
 )
-from volundr.domain.ports import GitProvider, GitWorkflowProvider
+from volundr.domain.ports import GitProvider
 
 
 class TestGitProviderRegistry:
@@ -579,9 +579,7 @@ class TestListRepos:
             url="https://github.com/org1/repo1",
         )
 
-        provider = _make_workflow_provider_mock(
-            name="GitHub", provider_type=GitProviderType.GITHUB
-        )
+        provider = _make_workflow_provider_mock(name="GitHub", provider_type=GitProviderType.GITHUB)
         provider.list_repos.return_value = [repo]
 
         registry = GitProviderRegistry()
@@ -606,9 +604,7 @@ class TestGetWorkflowProvider:
 
     def test_provider_does_not_support_workflow(self):
         """Raises ValueError when provider doesn't implement GitWorkflowProvider."""
-        provider = _make_git_provider_mock(
-            name="BasicProvider", supports_url="basic.com"
-        )
+        provider = _make_git_provider_mock(name="BasicProvider", supports_url="basic.com")
 
         registry = GitProviderRegistry()
         registry.register(provider)
@@ -637,9 +633,7 @@ class TestWorkflowDelegation:
         return registry
 
     @pytest.mark.asyncio
-    async def test_create_branch(
-        self, registry: GitProviderRegistry, workflow_provider: AsyncMock
-    ):
+    async def test_create_branch(self, registry: GitProviderRegistry, workflow_provider: AsyncMock):
         """create_branch delegates to the workflow provider."""
         workflow_provider.create_branch.return_value = True
 
@@ -719,9 +713,7 @@ class TestWorkflowDelegation:
         """list_pull_requests delegates to the workflow provider."""
         workflow_provider.list_pull_requests.return_value = []
 
-        result = await registry.list_pull_requests(
-            "https://github.com/org/repo", status="open"
-        )
+        result = await registry.list_pull_requests("https://github.com/org/repo", status="open")
 
         assert result == []
         workflow_provider.list_pull_requests.assert_awaited_once_with(
@@ -735,9 +727,7 @@ class TestWorkflowDelegation:
         """merge_pull_request delegates to the workflow provider."""
         workflow_provider.merge_pull_request.return_value = True
 
-        result = await registry.merge_pull_request(
-            "https://github.com/org/repo", 1, "squash"
-        )
+        result = await registry.merge_pull_request("https://github.com/org/repo", 1, "squash")
 
         assert result is True
         workflow_provider.merge_pull_request.assert_awaited_once_with(
@@ -745,9 +735,7 @@ class TestWorkflowDelegation:
         )
 
     @pytest.mark.asyncio
-    async def test_get_ci_status(
-        self, registry: GitProviderRegistry, workflow_provider: AsyncMock
-    ):
+    async def test_get_ci_status(self, registry: GitProviderRegistry, workflow_provider: AsyncMock):
         """get_ci_status delegates to the workflow provider."""
         workflow_provider.get_ci_status.return_value = CIStatus.PASSING
 
@@ -759,18 +747,14 @@ class TestWorkflowDelegation:
         )
 
     @pytest.mark.asyncio
-    async def test_list_branches(
-        self, registry: GitProviderRegistry, workflow_provider: AsyncMock
-    ):
+    async def test_list_branches(self, registry: GitProviderRegistry, workflow_provider: AsyncMock):
         """list_branches delegates to the provider."""
         workflow_provider.list_branches.return_value = ["main", "dev", "feature"]
 
         result = await registry.list_branches("https://github.com/org/repo")
 
         assert result == ["main", "dev", "feature"]
-        workflow_provider.list_branches.assert_awaited_once_with(
-            "https://github.com/org/repo"
-        )
+        workflow_provider.list_branches.assert_awaited_once_with("https://github.com/org/repo")
 
     @pytest.mark.asyncio
     async def test_list_branches_no_provider(self):

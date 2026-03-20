@@ -517,9 +517,7 @@ class TestFluxPodManagerStartErrorHandling:
 
         mock_api.patch_namespaced_custom_object.assert_not_called()
 
-    async def test_start_with_pod_labels_and_annotations(
-        self, sample_session: Session, mock_api
-    ):
+    async def test_start_with_pod_labels_and_annotations(self, sample_session: Session, mock_api):
         """PodSpecAdditions with labels and annotations are translated."""
         pm = FluxPodManager(namespace="test-ns", base_domain="volundr.example.com")
         pod_spec = PodSpecAdditions(
@@ -557,9 +555,7 @@ class TestFluxPodManagerStopErrorHandling:
         self, pod_manager: FluxPodManager, sample_session: Session, mock_api
     ):
         """403 Forbidden errors from delete are re-raised."""
-        mock_api.delete_namespaced_custom_object.side_effect = Exception(
-            "403 Forbidden"
-        )
+        mock_api.delete_namespaced_custom_object.side_effect = Exception("403 Forbidden")
         with patch.object(pod_manager, "_get_api", return_value=mock_api):
             with pytest.raises(Exception, match="403 Forbidden"):
                 await pod_manager.stop(sample_session)
@@ -572,9 +568,7 @@ class TestFluxPodManagerStatusErrorHandling:
         self, pod_manager: FluxPodManager, sample_session: Session, mock_api
     ):
         """Non-404/NotFound errors from get are re-raised."""
-        mock_api.get_namespaced_custom_object.side_effect = Exception(
-            "500 Internal Server Error"
-        )
+        mock_api.get_namespaced_custom_object.side_effect = Exception("500 Internal Server Error")
         with patch.object(pod_manager, "_get_api", return_value=mock_api):
             with pytest.raises(Exception, match="500 Internal Server Error"):
                 await pod_manager.status(sample_session)
@@ -583,9 +577,7 @@ class TestFluxPodManagerStatusErrorHandling:
         self, pod_manager: FluxPodManager, sample_session: Session, mock_api
     ):
         """403 Forbidden errors from get are re-raised."""
-        mock_api.get_namespaced_custom_object.side_effect = Exception(
-            "403 Forbidden"
-        )
+        mock_api.get_namespaced_custom_object.side_effect = Exception("403 Forbidden")
         with patch.object(pod_manager, "_get_api", return_value=mock_api):
             with pytest.raises(Exception, match="403 Forbidden"):
                 await pod_manager.status(sample_session)
@@ -692,7 +684,13 @@ class TestFluxPodManagerWaitForReadyErrors:
         mock_watch_mod.Watch.return_value = mock_watch
         with (
             patch.object(pod_manager, "_get_api", return_value=mock_api),
-            patch.dict("sys.modules", {"kubernetes_asyncio.watch": mock_watch_mod, "kubernetes_asyncio": MagicMock(watch=mock_watch_mod)}),
+            patch.dict(
+                "sys.modules",
+                {
+                    "kubernetes_asyncio.watch": mock_watch_mod,
+                    "kubernetes_asyncio": MagicMock(watch=mock_watch_mod),
+                },
+            ),
         ):
             with pytest.raises(ConnectionError, match="stream disconnected"):
                 await pod_manager.wait_for_ready(sample_session, timeout=5)
@@ -719,7 +717,13 @@ class TestFluxPodManagerWaitForReadyErrors:
         mock_watch_mod.Watch.return_value = mock_watch
         with (
             patch.object(pod_manager, "_get_api", return_value=mock_api),
-            patch.dict("sys.modules", {"kubernetes_asyncio.watch": mock_watch_mod, "kubernetes_asyncio": MagicMock(watch=mock_watch_mod)}),
+            patch.dict(
+                "sys.modules",
+                {
+                    "kubernetes_asyncio.watch": mock_watch_mod,
+                    "kubernetes_asyncio": MagicMock(watch=mock_watch_mod),
+                },
+            ),
         ):
             result = await pod_manager.wait_for_ready(sample_session, timeout=5)
 
@@ -751,7 +755,13 @@ class TestFluxPodManagerWaitForReadyErrors:
         mock_watch_mod.Watch.return_value = mock_watch
         with (
             patch.object(pod_manager, "_get_api", return_value=mock_api),
-            patch.dict("sys.modules", {"kubernetes_asyncio.watch": mock_watch_mod, "kubernetes_asyncio": MagicMock(watch=mock_watch_mod)}),
+            patch.dict(
+                "sys.modules",
+                {
+                    "kubernetes_asyncio.watch": mock_watch_mod,
+                    "kubernetes_asyncio": MagicMock(watch=mock_watch_mod),
+                },
+            ),
         ):
             result = await pod_manager.wait_for_ready(sample_session, timeout=5)
 
@@ -780,7 +790,7 @@ class TestFluxPodManagerGetApi:
                 "kubernetes_asyncio.config": mock_config,
             },
         ):
-            result = await pod_manager._get_api()
+            await pod_manager._get_api()
 
         mock_config.load_incluster_config.assert_called_once()
         mock_config.load_kube_config.assert_not_called()
@@ -807,7 +817,7 @@ class TestFluxPodManagerGetApi:
                 "kubernetes_asyncio.config": mock_config,
             },
         ):
-            result = await pm._get_api()
+            await pm._get_api()
 
         mock_config.load_kube_config.assert_called_once()
         assert pm._api_client is mock_client_instance

@@ -3,7 +3,7 @@
 import asyncio
 from datetime import datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -400,9 +400,7 @@ class TestInMemoryEventBroadcaster:
         assert broadcaster.subscriber_count == 1
 
     @pytest.mark.asyncio
-    async def test_publish_chronicle_event_all_fields(
-        self, broadcaster: InMemoryEventBroadcaster
-    ):
+    async def test_publish_chronicle_event_all_fields(self, broadcaster: InMemoryEventBroadcaster):
         """Test publish_chronicle_event with all optional fields populated."""
         session_id = uuid4()
         chronicle_id = uuid4()
@@ -469,16 +467,24 @@ class TestInMemoryEventBroadcaster:
         # Verify files
         assert len(evt.data["files"]) == 2
         assert evt.data["files"][0] == {
-            "path": "src/main.py", "status": "mod", "ins": 10, "del": 3,
+            "path": "src/main.py",
+            "status": "mod",
+            "ins": 10,
+            "del": 3,
         }
         assert evt.data["files"][1] == {
-            "path": "src/utils.py", "status": "new", "ins": 25, "del": 0,
+            "path": "src/utils.py",
+            "status": "new",
+            "ins": 25,
+            "del": 0,
         }
 
         # Verify commits
         assert len(evt.data["commits"]) == 1
         assert evt.data["commits"][0] == {
-            "hash": "abc1234", "msg": "fix bug", "time": "14:35",
+            "hash": "abc1234",
+            "msg": "fix bug",
+            "time": "14:35",
         }
 
         # Verify token_burn
