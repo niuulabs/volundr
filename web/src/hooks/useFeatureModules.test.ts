@@ -9,13 +9,19 @@ import { Settings } from 'lucide-react';
 // Register test modules in the registry
 registerModule({
   key: 'credentials',
-  load: () => Promise.resolve({ default: (() => null) as unknown as React.ComponentType<{ service: IVolundrService }> }),
+  load: () =>
+    Promise.resolve({
+      default: (() => null) as unknown as React.ComponentType<{ service: IVolundrService }>,
+    }),
   icon: Settings,
 });
 
 registerModule({
   key: 'workspaces',
-  load: () => Promise.resolve({ default: (() => null) as unknown as React.ComponentType<{ service: IVolundrService }> }),
+  load: () =>
+    Promise.resolve({
+      default: (() => null) as unknown as React.ComponentType<{ service: IVolundrService }>,
+    }),
   icon: Settings,
 });
 

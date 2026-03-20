@@ -34,7 +34,7 @@ export function LayoutSection({ service }: LayoutSectionProps) {
 
       const prefMap = new Map(prefs.map(p => [p.featureKey, p]));
 
-      const merged: LayoutItem[] = features.map((f) => {
+      const merged: LayoutItem[] = features.map(f => {
         const pref = prefMap.get(f.key);
         return {
           key: f.key,
@@ -64,7 +64,7 @@ export function LayoutSection({ service }: LayoutSectionProps) {
 
   const handleToggleVisible = useCallback((key: string) => {
     setItems(prev =>
-      prev.map(item => (item.key === key ? { ...item, visible: !item.visible } : item)),
+      prev.map(item => (item.key === key ? { ...item, visible: !item.visible } : item))
     );
     setDirty(true);
   }, []);

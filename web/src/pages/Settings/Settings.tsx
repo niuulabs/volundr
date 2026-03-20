@@ -11,8 +11,7 @@ export function SettingsPage({ service }: SettingsPageProps) {
   const { sections, loading } = useFeatureModules('user', service);
   const [activeSection, setActiveSection] = useState('');
 
-  const resolvedSection =
-    activeSection || (sections.length > 0 ? sections[0].key : '');
+  const resolvedSection = activeSection || (sections.length > 0 ? sections[0].key : '');
 
   if (loading) {
     return null;

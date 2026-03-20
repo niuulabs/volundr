@@ -39,19 +39,18 @@ export function FeatureManagementSection({ service }: FeatureManagementSectionPr
         setToggling(null);
       }
     },
-    [service],
+    [service]
   );
 
-  const filtered =
-    scopeFilter === 'all' ? features : features.filter(f => f.scope === scopeFilter);
+  const filtered = scopeFilter === 'all' ? features : features.filter(f => f.scope === scopeFilter);
 
   return (
     <div className={styles.section}>
       <div className={styles.header}>
         <h3 className={styles.title}>Feature Modules</h3>
         <p className={styles.subtitle}>
-          Enable or disable feature modules for all users. Disabled features are
-          hidden from navigation.
+          Enable or disable feature modules for all users. Disabled features are hidden from
+          navigation.
         </p>
       </div>
 
@@ -87,9 +86,7 @@ export function FeatureManagementSection({ service }: FeatureManagementSectionPr
                     <div className={styles.featureMeta}>
                       <span className={styles.featureBadge}>{feature.scope}</span>
                       <span className={styles.featureBadge}>{feature.key}</span>
-                      {feature.adminOnly && (
-                        <span className={styles.featureBadge}>admin-only</span>
-                      )}
+                      {feature.adminOnly && <span className={styles.featureBadge}>admin-only</span>}
                     </div>
                   </div>
                 </div>
@@ -101,9 +98,7 @@ export function FeatureManagementSection({ service }: FeatureManagementSectionPr
                   disabled={isToggling}
                   aria-label={`Toggle ${feature.label}`}
                 >
-                  <span
-                    className={cn(styles.toggleKnob, feature.enabled && styles.toggleKnobOn)}
-                  />
+                  <span className={cn(styles.toggleKnob, feature.enabled && styles.toggleKnobOn)} />
                 </button>
               </div>
             );

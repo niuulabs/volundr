@@ -3,7 +3,6 @@ import { Settings } from 'lucide-react';
 import type { IVolundrService } from '@/ports';
 import { registerModule, getModule, getAllModules } from './registry';
 
-
 const dummyLoad = () =>
   Promise.resolve({
     default: (() => null) as unknown as React.ComponentType<{ service: IVolundrService }>,

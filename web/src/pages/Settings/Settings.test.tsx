@@ -110,10 +110,46 @@ const mockCredentials: StoredCredential[] = [
 ];
 
 const mockUserFeatures: FeatureModule[] = [
-  { key: 'credentials', label: 'Credentials', icon: 'KeyRound', scope: 'user', enabled: true, defaultEnabled: true, adminOnly: false, order: 10 },
-  { key: 'workspaces', label: 'Workspaces', icon: 'HardDrive', scope: 'user', enabled: true, defaultEnabled: true, adminOnly: false, order: 20 },
-  { key: 'integrations', label: 'Integrations', icon: 'Link2', scope: 'user', enabled: true, defaultEnabled: true, adminOnly: false, order: 30 },
-  { key: 'appearance', label: 'Appearance', icon: 'Palette', scope: 'user', enabled: true, defaultEnabled: true, adminOnly: false, order: 40 },
+  {
+    key: 'credentials',
+    label: 'Credentials',
+    icon: 'KeyRound',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 10,
+  },
+  {
+    key: 'workspaces',
+    label: 'Workspaces',
+    icon: 'HardDrive',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 20,
+  },
+  {
+    key: 'integrations',
+    label: 'Integrations',
+    icon: 'Link2',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 30,
+  },
+  {
+    key: 'appearance',
+    label: 'Appearance',
+    icon: 'Palette',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 40,
+  },
 ];
 
 function createMockService(overrides?: Partial<IVolundrService>): IVolundrService {

@@ -102,7 +102,7 @@ registerModule({
   load: () =>
     import('@/pages/Settings/sections/AppearanceSection').then(
       // AppearanceSection ignores the service prop — cast is safe
-      m => ({ default: m.AppearanceSection as unknown as ModuleComponent }),
+      m => ({ default: m.AppearanceSection as unknown as ModuleComponent })
     ),
   icon: Palette,
 });

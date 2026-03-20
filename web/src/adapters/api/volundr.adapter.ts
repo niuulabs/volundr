@@ -1526,7 +1526,7 @@ export class ApiVolundrService implements IVolundrService {
   }
 
   async updateUserFeaturePreferences(
-    preferences: UserFeaturePreference[],
+    preferences: UserFeaturePreference[]
   ): Promise<UserFeaturePreference[]> {
     const body = {
       preferences: preferences.map(p => ({
@@ -1537,7 +1537,7 @@ export class ApiVolundrService implements IVolundrService {
     };
     const response = await api.put<ApiUserFeaturePreferenceResponse[]>(
       '/features/preferences',
-      body,
+      body
     );
     return response.map(p => ({
       featureKey: p.feature_key,

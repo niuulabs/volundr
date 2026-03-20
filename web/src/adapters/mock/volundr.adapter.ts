@@ -1055,16 +1055,12 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async getFeatureModules(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _scope?: import('@/models').FeatureScope,
+    _scope?: import('@/models').FeatureScope
   ): Promise<import('@/models').FeatureModule[]> {
     return [];
   }
 
-  async toggleFeature(
-    _key: string,
-    _enabled: boolean,
-  ): Promise<import('@/models').FeatureModule> {
+  async toggleFeature(_key: string, _enabled: boolean): Promise<import('@/models').FeatureModule> {
     return {
       key: _key,
       label: _key,
@@ -1082,7 +1078,7 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async updateUserFeaturePreferences(
-    preferences: import('@/models').UserFeaturePreference[],
+    preferences: import('@/models').UserFeaturePreference[]
   ): Promise<import('@/models').UserFeaturePreference[]> {
     return preferences;
   }

@@ -38,7 +38,7 @@ interface UseFeatureModulesResult {
  */
 export function useFeatureModules(
   scope: FeatureScope,
-  service: IVolundrService,
+  service: IVolundrService
 ): UseFeatureModulesResult {
   const [features, setFeatures] = useState<FeatureModule[]>([]);
   const [preferences, setPreferences] = useState<UserFeaturePreference[]>([]);
@@ -67,17 +67,14 @@ export function useFeatureModules(
   }, [fetchData]);
 
   // Build sections by merging features + user prefs + module registry
-  const sections = useMemo(
-    () => buildSections(features, preferences),
-    [features, preferences],
-  );
+  const sections = useMemo(() => buildSections(features, preferences), [features, preferences]);
 
   return { sections, loading, error, features, preferences, refetch: fetchData };
 }
 
 function buildSections(
   features: FeatureModule[],
-  preferences: UserFeaturePreference[],
+  preferences: UserFeaturePreference[]
 ): SectionDefinition[] {
   const prefMap = new Map(preferences.map(p => [p.featureKey, p]));
 

@@ -506,5 +506,7 @@ export interface IVolundrService {
   /**
    * Update the current user's feature layout preferences
    */
-  updateUserFeaturePreferences(preferences: UserFeaturePreference[]): Promise<UserFeaturePreference[]>;
+  updateUserFeaturePreferences(
+    preferences: UserFeaturePreference[]
+  ): Promise<UserFeaturePreference[]>;
 }

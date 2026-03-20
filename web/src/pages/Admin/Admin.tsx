@@ -12,8 +12,7 @@ export function AdminPage({ service }: AdminPageProps) {
   const { sections, loading } = useFeatureModules('admin', service);
   const [activeSection, setActiveSection] = useState('');
 
-  const resolvedSection =
-    activeSection || (sections.length > 0 ? sections[0].key : '');
+  const resolvedSection = activeSection || (sections.length > 0 ? sections[0].key : '');
 
   if (loading) {
     return null;
