@@ -261,6 +261,20 @@ class ChronicleWatcher:
             self._state[name] = file_state
             _save_state(self._state_path, self._state)
 
+    # ---- auth / header updates --------------------------------------------
+
+    def update_headers(self, headers: dict[str, str]) -> None:
+        """Replace HTTP headers (e.g. when a user JWT becomes available).
+
+        Forces the HTTP client to be recreated on the next request so the
+        new headers take effect.
+        """
+        self._http_headers = headers
+        if self._http_client is not None:
+            # Schedule close on next event-loop tick; recreated lazily
+            asyncio.ensure_future(self._http_client.aclose())
+            self._http_client = None
+
     # ---- API reporting ----------------------------------------------------
 
     async def _get_http_client(self) -> httpx.AsyncClient:
