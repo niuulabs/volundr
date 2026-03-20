@@ -1861,9 +1861,24 @@ async def get_diff_files(
     return {"files": files}
 
 
+class _TokenRedactFilter(logging.Filter):
+    """Redact access_token values from log messages to prevent JWT leaks."""
+
+    _pattern = re.compile(r"access_token=[^\s\"&]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if hasattr(record, "msg") and isinstance(record.msg, str):
+            record.msg = self._pattern.sub("access_token=[REDACTED]", record.msg)
+        return True
+
+
 def main() -> None:
     """Run the broker server."""
     import uvicorn
+
+    # Redact JWTs from uvicorn protocol logs
+    for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        logging.getLogger(name).addFilter(_TokenRedactFilter())
 
     settings = SkuldSettings()
     logger.info("Starting Skuld broker on %s:%d", settings.host, settings.port)
