@@ -761,7 +761,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     logger.exception("Failed to initialize OTel event sink")
 
             event_ingestion = EventIngestionService(sinks=event_sinks)
-            events_router = create_events_router(event_ingestion, pg_event_sink)
+            events_router = create_events_router(
+                event_ingestion, pg_event_sink, session_service=session_service
+            )
             app.include_router(events_router)
 
             # Store for access in routes if needed

@@ -6,6 +6,7 @@ Supports two transport modes (selected via config):
 """
 
 import asyncio
+import base64
 import collections
 import json
 import logging
@@ -288,6 +289,71 @@ class SessionArtifacts:
         self.turn_count += 1
 
 
+# ---------------------------------------------------------------------------
+# JWT helpers
+# ---------------------------------------------------------------------------
+
+_AUTH_HEADER = "authorization"
+_BEARER_PREFIX = "bearer "
+
+# Headers injected by Envoy sidecar after JWT validation
+_ENVOY_USER_ID_HEADER = "x-auth-user-id"
+_ENVOY_EMAIL_HEADER = "x-auth-email"
+_ENVOY_TENANT_HEADER = "x-auth-tenant"
+_ENVOY_ROLES_HEADER = "x-auth-roles"
+
+
+def _decode_jwt_claims(token: str) -> dict:
+    """Decode JWT payload without signature verification.
+
+    Skuld does not verify signatures — that is Envoy's / the API gateway's
+    job.  We only decode to extract user identity claims for API forwarding.
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return {}
+        # JWT base64url → standard base64
+        payload_b64 = parts[1]
+        # Add padding
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        payload_bytes = base64.urlsafe_b64decode(payload_b64)
+        return json.loads(payload_bytes)
+    except Exception:
+        return {}
+
+
+def _extract_bearer_token(headers: dict[str, str]) -> str | None:
+    """Extract Bearer token from an Authorization header value."""
+    auth = headers.get(_AUTH_HEADER, "")
+    if auth.lower().startswith(_BEARER_PREFIX):
+        return auth[len(_BEARER_PREFIX) :].strip()
+    return None
+
+
+def _extract_token_from_websocket(websocket: WebSocket) -> str | None:
+    """Extract JWT from WebSocket connection.
+
+    Checks (in order):
+    1. Authorization header (Bearer token) — preferred, works with Envoy
+    2. x-auth-* headers injected by Envoy sidecar
+    3. access_token query parameter — browser fallback
+    """
+    headers = {k.lower(): v for k, v in websocket.headers.items()}
+
+    # 1. Bearer token from Authorization header
+    token = _extract_bearer_token(headers)
+    if token:
+        return token
+
+    # 2. If Envoy headers are present, we don't have the raw JWT but we
+    #    have the validated claims — return None (caller uses headers instead)
+    # This case is handled separately in the broker
+
+    # 3. Query parameter fallback (browser WebSocket can't set headers)
+    return websocket.query_params.get("access_token")
+
+
 CONVERSATION_HISTORY_DIR = ".skuld"
 CONVERSATION_HISTORY_FILE = "conversation.json"
 
@@ -335,6 +401,7 @@ class Broker:
         self.service_manager: ServiceManager | None = None
         self._channels = ChannelRegistry()
         self._http_client: httpx.AsyncClient | None = None
+        self._http_client_jwt: str | None = None  # JWT used to create _http_client
         self._artifacts = SessionArtifacts()
         self._session_start_reported = False
         self._event_sequence = 0
@@ -342,6 +409,10 @@ class Broker:
         self._pending_assistant_content: str = ""
         self._pending_assistant_parts: list[dict] = []
         self._chronicle_watcher: ChronicleWatcher | None = None
+
+        # JWT identity state — populated on first browser WebSocket connection
+        self._user_jwt: str | None = None
+        self._user_claims: dict = {}
 
     def _conversation_history_path(self) -> Path:
         """Return the path to the conversation history file."""
@@ -457,12 +528,7 @@ class Broker:
                 session_id=self.session_id,
                 watch_dir=watch_dir,
                 api_base_url=self.volundr_api_url,
-                http_headers={
-                    "x-auth-user-id": self._settings.service_user_id,
-                    "x-auth-email": f"{self._settings.service_user_id}@internal",
-                    "x-auth-tenant": self._settings.service_tenant_id,
-                    "x-auth-roles": "volundr:service",
-                },
+                http_headers=self._build_auth_headers(),
                 debounce_ms=self._settings.chronicle_watcher_debounce_ms,
             )
             asyncio.create_task(self._chronicle_watcher.start())
@@ -776,19 +842,41 @@ class Broker:
 
                 await self._transport.send_message(message)
 
+    def _build_auth_headers(self) -> dict[str, str]:
+        """Build authentication headers for Volundr API calls.
+
+        Uses the user's JWT when available (preferred), falling back to
+        service identity headers for backward compatibility.
+        """
+        if self._user_jwt:
+            return {"Authorization": f"Bearer {self._user_jwt}"}
+
+        # Fallback: service identity (e.g. during shutdown with no JWT)
+        logger.debug("No user JWT available, falling back to service identity headers")
+        return {
+            "x-auth-user-id": self._settings.service_user_id,
+            "x-auth-email": f"{self._settings.service_user_id}@internal",
+            "x-auth-tenant": self._settings.service_tenant_id,
+            "x-auth-roles": "volundr:service",
+        }
+
     async def _get_http_client(self) -> httpx.AsyncClient:
-        """Lazy-init HTTP client for Volundr API calls."""
+        """Lazy-init HTTP client for Volundr API calls.
+
+        Recreates the client when the JWT changes so the Authorization
+        header stays current.
+        """
+        if self._http_client is not None and self._http_client_jwt != self._user_jwt:
+            await self._http_client.aclose()
+            self._http_client = None
+
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(
                 base_url=self.volundr_api_url,
                 timeout=10.0,
-                headers={
-                    "x-auth-user-id": self._settings.service_user_id,
-                    "x-auth-email": f"{self._settings.service_user_id}@internal",
-                    "x-auth-tenant": self._settings.service_tenant_id,
-                    "x-auth-roles": "volundr:service",
-                },
+                headers=self._build_auth_headers(),
             )
+            self._http_client_jwt = self._user_jwt
         return self._http_client
 
     def _next_sequence(self) -> int:
@@ -1132,8 +1220,39 @@ class Broker:
         except Exception:
             logger.warning("Failed to initialize Telegram channel", exc_info=True)
 
+    def _update_jwt_from_websocket(self, websocket: WebSocket) -> None:
+        """Extract and store JWT from an incoming WebSocket connection.
+
+        Prefers the Authorization header (set by Envoy or reverse proxy),
+        then falls back to the access_token query parameter (browser).
+        Updates the stored JWT on each connection so token refreshes
+        propagate automatically.
+        """
+        try:
+            token = _extract_token_from_websocket(websocket)
+        except Exception:
+            logger.debug("Failed to extract JWT from WebSocket", exc_info=True)
+            return
+        if not token:
+            if self._user_jwt is None:
+                logger.warning("No JWT found on WebSocket connection")
+            return
+
+        self._user_jwt = token
+        self._user_claims = _decode_jwt_claims(token)
+
+        user_id = self._user_claims.get("sub", "unknown")
+        logger.info("JWT updated from WebSocket connection (sub=%s)", user_id)
+
+        # Propagate new auth headers to the chronicle watcher
+        if self._chronicle_watcher is not None:
+            self._chronicle_watcher.update_headers(self._build_auth_headers())
+
     async def handle_websocket(self, websocket: WebSocket) -> None:
         """Handle a browser WebSocket connection at /session."""
+        # Extract JWT before accepting — headers are available pre-accept
+        self._update_jwt_from_websocket(websocket)
+
         await websocket.accept()
         channel = WebSocketChannel(websocket)
         self._channels.add(channel)
