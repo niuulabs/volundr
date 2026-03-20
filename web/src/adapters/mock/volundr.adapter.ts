@@ -1041,6 +1041,21 @@ export class MockVolundrService implements IVolundrService {
     }
   }
 
+  async bulkDeleteWorkspaces(
+    sessionIds: string[]
+  ): Promise<{ deleted: number; failed: Array<{ session_id: string; error: string }> }> {
+    await new Promise(r => setTimeout(r, 300));
+    let deleted = 0;
+    for (const sid of sessionIds) {
+      const ws = this.mockWorkspaces.find(w => w.sessionId === sid);
+      if (ws) {
+        ws.status = 'deleted';
+        deleted++;
+      }
+    }
+    return { deleted, failed: [] };
+  }
+
   async getAdminSettings(): Promise<AdminSettings> {
     return { storage: { homeEnabled: true, fileManagerEnabled: true } };
   }
