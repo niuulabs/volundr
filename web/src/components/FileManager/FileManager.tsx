@@ -76,7 +76,15 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
   const [dragActive, setDragActive] = useState(false);
   const [showMkdir, setShowMkdir] = useState(false);
   const [mkdirName, setMkdirName] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showError = useCallback((message: string) => {
+    setError(message);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setError(null), 5000);
+  }, []);
 
   const fetchEntries = useCallback(async () => {
     if (!apiBase) return;
@@ -124,7 +132,7 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
       const response = await fetch(`${apiBase}/api/files/download?${params}`, {
         headers: authHeaders(),
       });
-      if (!response.ok) throw new Error(`${response.status}`);
+      if (!response.ok) throw new Error(`Download failed (${response.status})`);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -134,10 +142,10 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      // download failed silently
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Download failed');
     }
-  }, [apiBase, selected, root]);
+  }, [apiBase, selected, root, showError]);
 
   const handleDelete = useCallback(async () => {
     if (!selected || !apiBase) return;
@@ -149,10 +157,10 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
       });
       setSelected(null);
       fetchEntries();
-    } catch {
-      // delete failed silently
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Delete failed');
     }
-  }, [apiBase, selected, root, fetchEntries]);
+  }, [apiBase, selected, root, fetchEntries, showError]);
 
   const handleMkdir = useCallback(async () => {
     if (!mkdirName.trim() || !apiBase) return;
@@ -166,10 +174,10 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
       setShowMkdir(false);
       setMkdirName('');
       fetchEntries();
-    } catch {
-      // mkdir failed silently
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Failed to create folder');
     }
-  }, [apiBase, currentPath, root, mkdirName, fetchEntries]);
+  }, [apiBase, currentPath, root, mkdirName, fetchEntries, showError]);
 
   const doUpload = useCallback(
     async (files: File[]) => {
@@ -226,45 +234,196 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
     [doUpload]
   );
 
+  const clearDoneUploads = useCallback(() => {
+    setUploads(prev => prev.filter(u => u.status !== 'done' && u.status !== 'error'));
+  }, []);
+
   const breadcrumbParts = currentPath ? currentPath.split('/') : [];
 
   const selectedEntry = selected ? entries.find(e => e.path === selected) : null;
   const canDownload = selectedEntry?.type === 'file';
   const canDelete = !!selected;
+  const hasFinishedUploads = uploads.some(u => u.status === 'done' || u.status === 'error');
 
   return (
-    <div className={cn(styles.container, className)}>
-      {/* Left pane: Upload */}
-      <div className={styles.uploadPane}>
-        <div
-          className={cn(styles.dropZone, dragActive && styles.dropZoneActive)}
-          onDragOver={e => {
-            e.preventDefault();
-            setDragActive(true);
-          }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => {
-            if (e.key === 'Enter') fileInputRef.current?.click();
-          }}
-        >
-          <Upload className={styles.dropIcon} />
-          <span className={styles.dropLabel}>Drop files here</span>
-          <span className={styles.dropSub}>or click to browse</span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            onChange={handleFileInput}
-            data-testid="file-input"
-          />
-        </div>
+    <div
+      className={cn(styles.container, dragActive && styles.containerDragActive, className)}
+      onDragOver={e => {
+        e.preventDefault();
+        setDragActive(true);
+      }}
+      onDragLeave={e => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setDragActive(false);
+      }}
+      onDrop={handleDrop}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={handleFileInput}
+        data-testid="file-input"
+      />
 
-        {uploads.length > 0 && (
+      <div className={styles.toolbar}>
+        <div className={styles.rootToggle}>
+          <button
+            type="button"
+            className={cn(styles.rootButton, root === 'workspace' && styles.rootButtonActive)}
+            onClick={() => {
+              setRoot('workspace');
+              setCurrentPath('');
+              setSelected(null);
+            }}
+          >
+            Workspace
+          </button>
+          <button
+            type="button"
+            className={cn(styles.rootButton, root === 'home' && styles.rootButtonActive)}
+            onClick={() => {
+              setRoot('home');
+              setCurrentPath('');
+              setSelected(null);
+            }}
+          >
+            Home
+          </button>
+        </div>
+        <div className={styles.toolbarSpacer} />
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          onClick={() => fileInputRef.current?.click()}
+          title="Upload"
+        >
+          <Upload className={styles.toolbarIcon} />
+        </button>
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          onClick={() => setShowMkdir(true)}
+          title="New Folder"
+        >
+          <FolderPlus className={styles.toolbarIcon} />
+        </button>
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          onClick={handleDownload}
+          disabled={!canDownload}
+          title="Download"
+        >
+          <Download className={styles.toolbarIcon} />
+        </button>
+        <button
+          type="button"
+          className={cn(styles.toolbarButton, styles.toolbarButtonDanger)}
+          onClick={handleDelete}
+          disabled={!canDelete}
+          title="Delete"
+        >
+          <Trash2 className={styles.toolbarIcon} />
+        </button>
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          onClick={fetchEntries}
+          title="Refresh"
+        >
+          <RefreshCw className={styles.toolbarIcon} />
+        </button>
+      </div>
+
+      <div className={styles.breadcrumb}>
+        <button type="button" className={styles.breadcrumbSegment} onClick={() => navigateTo('')}>
+          {root === 'workspace' ? 'workspace' : 'home'}
+        </button>
+        {breadcrumbParts.map((part, i) => {
+          const partPath = breadcrumbParts.slice(0, i + 1).join('/');
+          return (
+            <span key={partPath}>
+              <ChevronRight className={cn(styles.toolbarIcon, styles.breadcrumbSeparatorIcon)} />
+              <button
+                type="button"
+                className={styles.breadcrumbSegment}
+                onClick={() => navigateTo(partPath)}
+              >
+                {part}
+              </button>
+            </span>
+          );
+        })}
+      </div>
+
+      <div className={styles.fileTable}>
+        {loading ? (
+          <div className={styles.loading}>Loading...</div>
+        ) : entries.length === 0 ? (
+          <div className={styles.emptyDir}>
+            <FolderOpen className={styles.emptyIcon} />
+            <span>Empty directory</span>
+          </div>
+        ) : (
+          entries.map(entry => (
+            <div
+              key={entry.path}
+              className={cn(styles.fileRow, selected === entry.path && styles.fileRowSelected)}
+              onClick={() => handleRowClick(entry)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleRowClick(entry);
+              }}
+            >
+              {entry.type === 'directory' ? (
+                <Folder className={cn(styles.fileIcon, styles.fileIconDir)} />
+              ) : (
+                <File className={cn(styles.fileIcon, styles.fileIconFile)} />
+              )}
+              <span className={styles.fileName}>{entry.name}</span>
+              <span className={styles.fileSize}>
+                {entry.type === 'file' && entry.size != null ? formatBytes(entry.size) : ''}
+              </span>
+              <span className={styles.fileModified}>
+                {entry.modified ? formatDate(entry.modified) : ''}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      {dragActive && (
+        <div className={styles.dropOverlay}>
+          <Upload className={styles.dropIcon} />
+          <span className={styles.dropLabel}>Drop files to upload</span>
+        </div>
+      )}
+
+      {error && (
+        <div className={styles.errorBar} role="alert">
+          <XCircle className={styles.toolbarIcon} />
+          <span>{error}</span>
+          <button type="button" className={styles.errorDismiss} onClick={() => setError(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {uploads.length > 0 && (
+        <div className={styles.uploadBar}>
+          <div className={styles.uploadBarHeader}>
+            <span className={styles.uploadBarTitle}>
+              Uploads ({uploads.filter(u => u.status === 'done').length}/{uploads.length})
+            </span>
+            {hasFinishedUploads && (
+              <button type="button" className={styles.uploadBarClear} onClick={clearDoneUploads}>
+                Clear
+              </button>
+            )}
+          </div>
           <div className={styles.uploadQueue}>
             {uploads.map((item, i) => (
               <div key={`${item.file.name}-${i}`} className={styles.uploadItem}>
@@ -275,183 +434,57 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
                   <XCircle className={cn(styles.toolbarIcon, styles.uploadItemError)} />
                 )}
                 {(item.status === 'pending' || item.status === 'uploading') && (
-                  <File className={styles.toolbarIcon} />
+                  <RefreshCw className={cn(styles.toolbarIcon, styles.uploadItemSpinner)} />
                 )}
                 <span className={styles.uploadItemName}>{item.file.name}</span>
                 <span className={styles.uploadItemSize}>{formatBytes(item.file.size)}</span>
+                {item.status === 'done' && <span className={styles.uploadItemStatus}>Done</span>}
+                {item.status === 'error' && (
+                  <span className={styles.uploadItemStatusError}>{item.error ?? 'Failed'}</span>
+                )}
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Right pane: Browser */}
-      <div className={styles.browserPane}>
-        <div className={styles.toolbar}>
-          <div className={styles.rootToggle}>
-            <button
-              type="button"
-              className={cn(styles.rootButton, root === 'workspace' && styles.rootButtonActive)}
-              onClick={() => {
-                setRoot('workspace');
-                setCurrentPath('');
-                setSelected(null);
+      {showMkdir && (
+        <>
+          <div className={styles.overlay} onClick={() => setShowMkdir(false)} role="presentation" />
+          <div className={styles.dialog} role="dialog" aria-label="New Folder">
+            <div className={styles.dialogTitle}>New Folder</div>
+            <input
+              className={styles.dialogInput}
+              value={mkdirName}
+              onChange={e => setMkdirName(e.target.value)}
+              placeholder="folder-name"
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleMkdir();
+                if (e.key === 'Escape') setShowMkdir(false);
               }}
-            >
-              Workspace
-            </button>
-            <button
-              type="button"
-              className={cn(styles.rootButton, root === 'home' && styles.rootButtonActive)}
-              onClick={() => {
-                setRoot('home');
-                setCurrentPath('');
-                setSelected(null);
-              }}
-            >
-              Home
-            </button>
-          </div>
-          <div className={styles.toolbarSpacer} />
-          <button
-            type="button"
-            className={styles.toolbarButton}
-            onClick={() => setShowMkdir(true)}
-            title="New Folder"
-          >
-            <FolderPlus className={styles.toolbarIcon} />
-          </button>
-          <button
-            type="button"
-            className={styles.toolbarButton}
-            onClick={handleDownload}
-            disabled={!canDownload}
-            title="Download"
-          >
-            <Download className={styles.toolbarIcon} />
-          </button>
-          <button
-            type="button"
-            className={cn(styles.toolbarButton, styles.toolbarButtonDanger)}
-            onClick={handleDelete}
-            disabled={!canDelete}
-            title="Delete"
-          >
-            <Trash2 className={styles.toolbarIcon} />
-          </button>
-          <button
-            type="button"
-            className={styles.toolbarButton}
-            onClick={fetchEntries}
-            title="Refresh"
-          >
-            <RefreshCw className={styles.toolbarIcon} />
-          </button>
-        </div>
-
-        <div className={styles.breadcrumb}>
-          <button type="button" className={styles.breadcrumbSegment} onClick={() => navigateTo('')}>
-            {root === 'workspace' ? 'workspace' : 'home'}
-          </button>
-          {breadcrumbParts.map((part, i) => {
-            const partPath = breadcrumbParts.slice(0, i + 1).join('/');
-            return (
-              <span key={partPath}>
-                <ChevronRight
-                  className={styles.toolbarIcon}
-                  style={{ display: 'inline', verticalAlign: 'middle' }}
-                />
-                <button
-                  type="button"
-                  className={styles.breadcrumbSegment}
-                  onClick={() => navigateTo(partPath)}
-                >
-                  {part}
-                </button>
-              </span>
-            );
-          })}
-        </div>
-
-        <div className={styles.fileTable}>
-          {loading ? (
-            <div className={styles.loading}>Loading...</div>
-          ) : entries.length === 0 ? (
-            <div className={styles.emptyDir}>
-              <FolderOpen className={styles.emptyIcon} />
-              <span>Empty directory</span>
-            </div>
-          ) : (
-            entries.map(entry => (
-              <div
-                key={entry.path}
-                className={cn(styles.fileRow, selected === entry.path && styles.fileRowSelected)}
-                onClick={() => handleRowClick(entry)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleRowClick(entry);
-                }}
-              >
-                {entry.type === 'directory' ? (
-                  <Folder className={cn(styles.fileIcon, styles.fileIconDir)} />
-                ) : (
-                  <File className={cn(styles.fileIcon, styles.fileIconFile)} />
-                )}
-                <span className={styles.fileName}>{entry.name}</span>
-                <span className={styles.fileSize}>
-                  {entry.type === 'file' && entry.size != null ? formatBytes(entry.size) : ''}
-                </span>
-                <span className={styles.fileModified}>
-                  {entry.modified ? formatDate(entry.modified) : ''}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-
-        {showMkdir && (
-          <>
-            <div
-              className={styles.overlay}
-              onClick={() => setShowMkdir(false)}
-              role="presentation"
+              data-testid="mkdir-input"
             />
-            <div className={styles.dialog} role="dialog" aria-label="New Folder">
-              <div className={styles.dialogTitle}>New Folder</div>
-              <input
-                className={styles.dialogInput}
-                value={mkdirName}
-                onChange={e => setMkdirName(e.target.value)}
-                placeholder="folder-name"
-                autoFocus
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleMkdir();
-                  if (e.key === 'Escape') setShowMkdir(false);
-                }}
-                data-testid="mkdir-input"
-              />
-              <div className={styles.dialogActions}>
-                <button
-                  type="button"
-                  className={styles.dialogButton}
-                  onClick={() => setShowMkdir(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={cn(styles.dialogButton, styles.dialogButtonPrimary)}
-                  onClick={handleMkdir}
-                  data-testid="mkdir-submit"
-                >
-                  Create
-                </button>
-              </div>
+            <div className={styles.dialogActions}>
+              <button
+                type="button"
+                className={styles.dialogButton}
+                onClick={() => setShowMkdir(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={cn(styles.dialogButton, styles.dialogButtonPrimary)}
+                onClick={handleMkdir}
+                data-testid="mkdir-submit"
+              >
+                Create
+              </button>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

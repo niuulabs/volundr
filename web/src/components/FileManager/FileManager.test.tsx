@@ -197,10 +197,17 @@ describe('FileManager', () => {
     });
   });
 
-  it('renders upload drop zone', async () => {
+  it('has an upload button in the toolbar', async () => {
     render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
-    expect(screen.getByText('Drop files here')).toBeTruthy();
-    expect(screen.getByText('or click to browse')).toBeTruthy();
+    expect(screen.getByTitle('Upload')).toBeTruthy();
+  });
+
+  it('triggers file input when upload button is clicked', async () => {
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
+    const input = screen.getByTestId('file-input') as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click');
+    fireEvent.click(screen.getByTitle('Upload'));
+    expect(clickSpy).toHaveBeenCalled();
   });
 
   it('uploads files via file input', async () => {
@@ -214,6 +221,41 @@ describe('FileManager', () => {
         expect.objectContaining({ method: 'POST' })
       );
     });
+  });
+
+  it('shows upload status after uploading', async () => {
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['hello'], 'test.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText('test.txt')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Done')).toBeTruthy();
+    });
+  });
+
+  it('shows upload count in upload bar', async () => {
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['hello'], 'test.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText('Uploads (1/1)')).toBeTruthy();
+    });
+  });
+
+  it('clears finished uploads when Clear is clicked', async () => {
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['hello'], 'test.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText('Clear')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('Clear'));
+    expect(screen.queryByText('test.txt')).toBeNull();
   });
 
   it('renders breadcrumb navigation', async () => {
@@ -341,9 +383,8 @@ describe('FileManager', () => {
     });
   });
 
-  it('handles download failure gracefully', async () => {
+  it('shows error message when download fails', async () => {
     global.fetch = mockFetchResponses();
-    // Override download to fail
     const originalFetchFn = global.fetch as ReturnType<typeof vi.fn>;
     const origImpl = originalFetchFn.getMockImplementation();
     global.fetch = vi.fn((url: string, init?: RequestInit) => {
@@ -360,12 +401,33 @@ describe('FileManager', () => {
     fireEvent.click(screen.getByText('README.md'));
     fireEvent.click(screen.getByTitle('Download'));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/download'),
-        expect.any(Object)
-      );
+      expect(screen.getByRole('alert')).toBeTruthy();
+      expect(screen.getByText('Download failed (500)')).toBeTruthy();
     });
-    expect(screen.getByText('README.md')).toBeTruthy();
+  });
+
+  it('dismisses error when Dismiss is clicked', async () => {
+    global.fetch = mockFetchResponses();
+    const originalFetchFn = global.fetch as ReturnType<typeof vi.fn>;
+    const origImpl = originalFetchFn.getMockImplementation();
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/download')) {
+        return Promise.resolve(new Response('', { status: 500 }));
+      }
+      return origImpl!(url, init);
+    }) as unknown as typeof fetch;
+
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
+    await waitFor(() => {
+      expect(screen.getByText('README.md')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('README.md'));
+    fireEvent.click(screen.getByTitle('Download'));
+    await waitFor(() => {
+      expect(screen.getByText('Dismiss')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('Dismiss'));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('does nothing when handleDelete is called with no selection', async () => {
@@ -381,7 +443,7 @@ describe('FileManager', () => {
     expect(deleteCalls).toHaveLength(0);
   });
 
-  it('handles delete failure gracefully', async () => {
+  it('shows error message when delete fails', async () => {
     const baseFetch = mockFetchResponses();
     const baseFetchImpl = (baseFetch as ReturnType<typeof vi.fn>).getMockImplementation()!;
     global.fetch = vi.fn((url: string, init?: RequestInit) => {
@@ -398,12 +460,9 @@ describe('FileManager', () => {
     fireEvent.click(screen.getByText('README.md'));
     fireEvent.click(screen.getByTitle('Delete'));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('path=README.md'),
-        expect.objectContaining({ method: 'DELETE' })
-      );
+      expect(screen.getByRole('alert')).toBeTruthy();
+      expect(screen.getByText('Delete failed')).toBeTruthy();
     });
-    expect(screen.getByText('README.md')).toBeTruthy();
   });
 
   it('does nothing when handleMkdir is called with empty name', async () => {
@@ -419,7 +478,7 @@ describe('FileManager', () => {
     expect(mkdirCalls).toHaveLength(0);
   });
 
-  it('handles mkdir failure gracefully', async () => {
+  it('shows error message when mkdir fails', async () => {
     const baseFetch = mockFetchResponses();
     const baseFetchImpl = (baseFetch as ReturnType<typeof vi.fn>).getMockImplementation()!;
     global.fetch = vi.fn((url: string, init?: RequestInit) => {
@@ -438,12 +497,8 @@ describe('FileManager', () => {
     fireEvent.change(input, { target: { value: 'fail-dir' } });
     fireEvent.click(screen.getByTestId('mkdir-submit'));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/mkdir'),
-        expect.any(Object)
-      );
+      expect(screen.getByRole('alert')).toBeTruthy();
     });
-    expect(screen.getByText('README.md')).toBeTruthy();
   });
 
   it('handles upload failure by setting status to error', async () => {
@@ -465,18 +520,6 @@ describe('FileManager', () => {
     });
   });
 
-  it('does not upload when drop event has no files', async () => {
-    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
-    const dropZone = screen.getByText('Drop files here').closest('[role="button"]')!;
-    (global.fetch as ReturnType<typeof vi.fn>).mockClear();
-    fireEvent.drop(dropZone, {
-      dataTransfer: { files: [] },
-    });
-    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    const uploadCalls = calls.filter((c: unknown[]) => (c[0] as string).includes('/upload'));
-    expect(uploadCalls).toHaveLength(0);
-  });
-
   it('does not upload when file input change has no files', async () => {
     render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     const input = screen.getByTestId('file-input');
@@ -496,12 +539,6 @@ describe('FileManager', () => {
     fireEvent.keyDown(row, { key: 'Enter' });
     const downloadBtn = screen.getByTitle('Download');
     expect(downloadBtn).toHaveProperty('disabled', false);
-  });
-
-  it('handles Enter keydown on drop zone', async () => {
-    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
-    const dropZone = screen.getByText('Drop files here').closest('[role="button"]')!;
-    fireEvent.keyDown(dropZone, { key: 'Enter' });
   });
 
   it('handles Enter keydown on mkdir input to submit', async () => {
@@ -600,6 +637,20 @@ describe('FileManager', () => {
     // Should show empty directory since no fetch is made
     await waitFor(() => {
       expect(screen.getByText('Empty directory')).toBeTruthy();
+    });
+  });
+
+  it('supports drag and drop on the whole container', async () => {
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
+    const container = screen.getByText('workspace').closest('[class*="container"]')!;
+    const file = new File(['hello'], 'dropped.txt', { type: 'text/plain' });
+    fireEvent.dragOver(container, { dataTransfer: { files: [file] } });
+    fireEvent.drop(container, { dataTransfer: { files: [file] } });
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/files/upload'),
+        expect.objectContaining({ method: 'POST' })
+      );
     });
   });
 });
