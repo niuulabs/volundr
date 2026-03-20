@@ -81,6 +81,10 @@ class SessionRepository(ABC):
         """Retrieve a session by ID. Returns None if not found."""
 
     @abstractmethod
+    async def get_many(self, session_ids: list[UUID]) -> dict[UUID, Session]:
+        """Retrieve multiple sessions by ID. Returns a dict mapping ID to Session."""
+
+    @abstractmethod
     async def list(
         self,
         status: SessionStatus | None = None,

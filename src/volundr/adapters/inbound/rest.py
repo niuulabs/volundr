@@ -762,9 +762,21 @@ class WorkspaceResponse(BaseModel):
     deleted_at: str | None = Field(
         description="ISO 8601 deletion timestamp",
     )
+    session_name: str | None = Field(None, description="Name of the associated session")
+    source_url: str | None = Field(None, description="Git repository URL if applicable")
+    source_ref: str | None = Field(None, description="Git branch/ref if applicable")
 
     @classmethod
-    def from_workspace(cls, ws) -> "WorkspaceResponse":
+    def from_workspace(cls, ws, session=None) -> "WorkspaceResponse":
+        source_url = None
+        source_ref = None
+        session_name = None
+        if session is not None:
+            session_name = session.name
+            if hasattr(session.source, "repo"):
+                source_url = session.source.repo
+            if hasattr(session.source, "branch"):
+                source_ref = session.source.branch
         return cls(
             id=ws.id,
             session_id=ws.session_id,
@@ -776,6 +788,9 @@ class WorkspaceResponse(BaseModel):
             created_at=ws.created_at.isoformat() if ws.created_at else "",
             archived_at=ws.archived_at.isoformat() if ws.archived_at else None,
             deleted_at=ws.deleted_at.isoformat() if ws.deleted_at else None,
+            session_name=session_name,
+            source_url=source_url,
+            source_ref=source_ref,
         )
 
 
@@ -2036,7 +2051,12 @@ def create_router(
         workspace_service = request.app.state.workspace_service
         ws_status = WorkspaceStatus(status_filter) if status_filter else None
         workspaces = await workspace_service.list_workspaces(principal.user_id, ws_status)
-        return [WorkspaceResponse.from_workspace(ws) for ws in workspaces]
+        session_ids = [ws.session_id for ws in workspaces]
+        sessions_map = await session_service._repository.get_many(session_ids)
+        return [
+            WorkspaceResponse.from_workspace(ws, sessions_map.get(ws.session_id))
+            for ws in workspaces
+        ]
 
     @router.delete(
         "/workspaces/{session_id}",
@@ -2085,6 +2105,77 @@ def create_router(
             workspaces = await workspace_service.list_workspaces(user_id, ws_status)
         else:
             workspaces = await workspace_service.list_all_workspaces(ws_status)
-        return [WorkspaceResponse.from_workspace(ws) for ws in workspaces]
+        session_ids = [ws.session_id for ws in workspaces]
+        sessions_map = await session_service._repository.get_many(session_ids)
+        return [
+            WorkspaceResponse.from_workspace(ws, sessions_map.get(ws.session_id))
+            for ws in workspaces
+        ]
+
+    @router.post(
+        "/workspaces/bulk-delete",
+        status_code=status.HTTP_200_OK,
+        tags=["Workspaces"],
+    )
+    async def bulk_delete_workspaces(
+        request: Request,
+        body: dict,
+    ):
+        """Delete multiple workspaces by session IDs."""
+        principal = await _optional_principal(request)
+        session_ids = body.get("session_ids", [])
+        if not session_ids:
+            return {"deleted": 0, "failed": []}
+
+        workspace_service = request.app.state.workspace_service
+        user_workspaces = await workspace_service.list_workspaces(
+            principal.user_id if principal else "",
+        )
+        owned_session_ids = {str(ws.session_id) for ws in user_workspaces}
+
+        deleted = 0
+        failed = []
+        for sid in session_ids:
+            if str(sid) not in owned_session_ids:
+                failed.append({"session_id": sid, "error": "Not found or not owned"})
+                continue
+            try:
+                ok = await workspace_service.delete_workspace_by_session(str(sid))
+                if ok:
+                    deleted += 1
+                else:
+                    failed.append({"session_id": sid, "error": "Not found"})
+            except Exception as e:
+                failed.append({"session_id": sid, "error": str(e)})
+        return {"deleted": deleted, "failed": failed}
+
+    @router.post(
+        "/admin/workspaces/bulk-delete",
+        status_code=status.HTTP_200_OK,
+        tags=["Admin"],
+    )
+    async def admin_bulk_delete_workspaces(
+        request: Request,
+        body: dict,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Delete multiple workspaces by session IDs (admin)."""
+        session_ids = body.get("session_ids", [])
+        if not session_ids:
+            return {"deleted": 0, "failed": []}
+
+        workspace_service = request.app.state.workspace_service
+        deleted = 0
+        failed = []
+        for sid in session_ids:
+            try:
+                ok = await workspace_service.delete_workspace_by_session(str(sid))
+                if ok:
+                    deleted += 1
+                else:
+                    failed.append({"session_id": sid, "error": "Not found"})
+            except Exception as e:
+                failed.append({"session_id": sid, "error": str(e)})
+        return {"deleted": deleted, "failed": failed}
 
     return router

@@ -1456,6 +1456,15 @@ export class ApiVolundrService implements IVolundrService {
     await api.delete(`/workspaces/${id}`);
   }
 
+  async bulkDeleteWorkspaces(
+    sessionIds: string[]
+  ): Promise<{ deleted: number; failed: Array<{ session_id: string; error: string }> }> {
+    return api.post<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>(
+      '/workspaces/bulk-delete',
+      { session_ids: sessionIds }
+    );
+  }
+
   async getAdminSettings(): Promise<AdminSettings> {
     const response = await api.get<{
       storage: { home_enabled: boolean; file_manager_enabled: boolean };
@@ -1557,6 +1566,9 @@ export class ApiVolundrService implements IVolundrService {
       status: w.status,
       createdAt: w.created_at,
       archivedAt: w.archived_at ?? undefined,
+      sessionName: w.session_name ?? undefined,
+      sourceUrl: w.source_url ?? undefined,
+      sourceRef: w.source_ref ?? undefined,
     };
   }
 

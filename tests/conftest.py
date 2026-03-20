@@ -54,6 +54,9 @@ class InMemorySessionRepository(SessionRepository):
     async def get(self, session_id: UUID) -> Session | None:
         return self._sessions.get(session_id)
 
+    async def get_many(self, session_ids: list[UUID]) -> dict[UUID, Session]:
+        return {sid: self._sessions[sid] for sid in session_ids if sid in self._sessions}
+
     async def list(
         self,
         status: SessionStatus | None = None,

@@ -758,6 +758,21 @@
   flex: 1;
 }
 
+/* Workspace filter toggle */
+.workspaceFilterToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  margin-top: var(--space-1);
+}
+
+.workspaceFilterToggle input {
+  accent-color: var(--color-brand);
+}
+
 /* Workspace info */
 .workspaceInfo {
   margin-top: var(--space-2);
