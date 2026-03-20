@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 
-from volundr.domain.models import Principal, SessionEvent, SessionEventType
+from volundr.domain.models import SessionEvent, SessionEventType
 from volundr.domain.ports import SessionEventRepository
 from volundr.domain.services.event_ingestion import EventIngestionService
 from volundr.domain.services.session import SessionAccessDeniedError, SessionService
