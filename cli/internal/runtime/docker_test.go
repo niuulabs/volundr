@@ -228,7 +228,7 @@ func TestGenerateDockerConfig(t *testing.T) {
 	}
 
 	// Verify adapter class paths.
-	if parsed.PodManager["adapter"] != "volundr.adapters.outbound.docker_pod_manager.DockerPodManager" {
+	if parsed.PodManager["adapter"] != "volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager" {
 		t.Errorf("unexpected pod_manager adapter: %v", parsed.PodManager["adapter"])
 	}
 	if parsed.CredentialStore["adapter"] != "volundr.adapters.outbound.file_credential_store.FileCredentialStore" {
@@ -255,11 +255,8 @@ func TestGenerateDockerConfig(t *testing.T) {
 	if !ok {
 		t.Fatal("expected pod_manager kwargs to be a map")
 	}
-	if pmKwargs["compose_dir"] != "/volundr-storage/sessions" {
-		t.Errorf("expected pod_manager compose_dir to use container path, got %v", pmKwargs["compose_dir"])
-	}
-	if pmKwargs["network"] != "volundr-net" {
-		t.Errorf("expected pod_manager network to be volundr-net, got %v", pmKwargs["network"])
+	if pmKwargs["namespace"] != "default" {
+		t.Errorf("expected pod_manager namespace to be default, got %v", pmKwargs["namespace"])
 	}
 
 	csKwargs, ok := parsed.CredentialStore["kwargs"].(map[string]interface{})

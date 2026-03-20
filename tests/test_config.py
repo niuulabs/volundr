@@ -603,9 +603,9 @@ database:
   port: 5433
 
 pod_manager:
-  adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
   kwargs:
-    base_url: "https://farm.yaml.example.com"
+    namespace: "volundr-test"
 """
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml_content)
@@ -617,7 +617,7 @@ pod_manager:
 
         assert settings.database.host == "yaml-db-host"
         assert settings.database.port == 5433
-        assert settings.pod_manager.kwargs["base_url"] == "https://farm.yaml.example.com"
+        assert settings.pod_manager.kwargs["namespace"] == "volundr-test"
 
     def test_env_vars_override_yaml(self, tmp_path, monkeypatch):
         """Environment variables override YAML config values.

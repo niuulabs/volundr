@@ -46,7 +46,7 @@ class TelegramConfig(BaseModel):
 
 
 class SkuldSessionConfig(BaseModel):
-    """Per-session configuration (set by Farm ITaaS at pod creation)."""
+    """Per-session configuration (set by Volundr at pod creation)."""
 
     id: str = Field(default="unknown")
     name: str = Field(default="unknown")

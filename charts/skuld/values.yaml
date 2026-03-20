@@ -12,9 +12,9 @@ global:
     # -- Global image tag override
     tag: ""
 
-# Session configuration (set by Farm ITaaS at deployment time)
+# Session configuration (set by Volundr at deployment time)
 session:
-  # -- Session identifier (UUID, set by Volundr/Farm)
+  # -- Session identifier (UUID, set by Volundr)
   id: ""
   # -- Human-readable session name
   name: ""
@@ -162,7 +162,7 @@ ingress:
     # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     # nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     # nginx.ingress.kubernetes.io/proxy-buffering: "off"
-  # -- Hostname for the session ingress (set by Farm ITaaS, e.g., session-uuid.niuu.world)
+  # -- Hostname for the session ingress (set by Volundr, e.g., session-uuid.niuu.world)
   host: ""
   # Path routing configuration (used by nginx internally)
   paths:
@@ -244,7 +244,7 @@ broker:
 
 # Volundr API (for token usage reporting back to the control plane)
 volundr:
-  # -- URL of the Volundr API service (set by FarmSessionDefinition).
+  # -- URL of the Volundr API service (set by session definition).
   # Use the -internal service to bypass Envoy JWT validation:
   #   http://volundr-internal.volundr.svc.cluster.local
   apiUrl: ""

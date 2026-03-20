@@ -107,14 +107,14 @@ class PodManagerConfig(BaseModel):
     Example YAML::
 
         pod_manager:
-          adapter: "volundr.adapters.outbound.farm.FarmPodManager"
-          base_url: "http://farm-tasks.default.svc.cluster.local"
-          timeout: 30
+          adapter: "volundr.adapters.outbound.flux.FluxPodManager"
+          namespace: "volundr"
+          chart_name: "skuld"
           ...
     """
 
     adapter: str = Field(
-        default="volundr.adapters.outbound.farm.FarmPodManager",
+        default="volundr.adapters.outbound.flux.FluxPodManager",
         description="Fully-qualified class path for the PodManager adapter.",
     )
     kwargs: dict[str, Any] = Field(

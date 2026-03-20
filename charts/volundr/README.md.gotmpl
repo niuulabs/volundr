@@ -10,7 +10,7 @@ Helm chart for deploying **Volundr** — a self-hosted Claude Code session manag
 - Helm 3.8+
 - PostgreSQL database
 - ReadWriteMany-capable storage class (e.g., Longhorn, NFS, EFS)
-- (Optional) NVIDIA Farm or Flux for session orchestration
+- (Optional) Flux for session orchestration
 - (Optional) Envoy Gateway + GatewayClass for session routing
 - (Optional) Kyverno for multi-tenant PVC isolation
 
@@ -69,7 +69,7 @@ Volundr uses a **dynamic adapter pattern** for all pluggable subsystems. Each ad
 
 **How it works:**
 
-1. The `adapter` value is a fully-qualified Python class path (e.g., `volundr.adapters.outbound.farm.FarmPodManager`).
+1. The `adapter` value is a fully-qualified Python class path (e.g., `volundr.adapters.outbound.flux.FluxPodManager`).
 2. At startup, Volundr dynamically imports the class using `importlib`.
 3. All keys under `kwargs` are passed to the class constructor as keyword arguments.
 4. **No code changes** are required to swap backends -- only update the Helm values.
@@ -105,7 +105,7 @@ This chart expects secrets to be created externally (via External Secrets or man
 
 | Secret Name | Keys | Used By |
 |-------------|------|---------|
-| Pod manager token (configurable) | `token` | `podManager.existingSecret` -- API token for Farm/Flux backend |
+| Pod manager token (configurable) | `token` | `podManager.existingSecret` -- API token for Flux backend |
 | GitHub token (configurable) | `token` | `git.github.existingSecret` -- GitHub API access |
 | GitLab token (configurable) | `token` | `git.gitlab.existingSecret` -- GitLab API access |
 | `claude-credentials` | (credential files) | Session pods -- Claude credential files symlinked into `$HOME/.claude/` |
@@ -125,7 +125,7 @@ Sessions are stored at `/volundr/sessions/{uuid}/`:
 
 ### From 0.1.x to 0.2.x
 
-Version 0.2.0 adds the full Volundr service deployment. If you were only using the FarmSessionDefinition CRD, no changes are required.
+Version 0.2.0 adds the full Volundr service deployment.
 
 ## Uninstallation
 

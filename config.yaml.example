@@ -51,15 +51,13 @@ database:
   max_pool_size: 20
 
 pod_manager:
-  adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
   kwargs:
-    base_url: http://farm-tasks.default.svc.cluster.local
-    # token: your-farm-token  # Or use POD_MANAGER_TOKEN env var
-    timeout: 30.0
-    task_type: skuld
-    user: volundr
-    labels:
-      - volundr
+    namespace: default
+    chart_name: skuld
+    chart_version: "0.1.0"
+    source_ref_kind: HelmRepository
+    source_ref_name: skuld
     base_domain: volundr.local
     chat_scheme: wss
     code_scheme: https
@@ -67,7 +65,7 @@ pod_manager:
     code_path: /
 
 # Forge profiles (argument templates for workload instantiation)
-# Profiles define the base set of values assembled into Farm task_args.
+# Profiles define the base set of values assembled into session specs.
 profiles:
   - name: standard
     description: "Standard coding session"
