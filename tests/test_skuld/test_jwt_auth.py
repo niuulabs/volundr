@@ -197,3 +197,54 @@ class TestBrokerJwtIntegration:
         test_broker._update_jwt_from_websocket(ws)
 
         mock_watcher.update_headers.assert_called_once_with({"Authorization": f"Bearer {token}"})
+
+    def test_no_jwt_on_websocket_logs_warning(self, test_broker):
+        """When no token is present and no prior JWT exists, a warning is logged."""
+        ws = MagicMock()
+        ws.headers = {}
+        ws.query_params = {}
+
+        test_broker._update_jwt_from_websocket(ws)
+
+        # No JWT stored
+        assert test_broker._user_jwt is None
+
+    def test_no_jwt_on_websocket_preserves_existing(self, test_broker):
+        """When reconnect has no token, existing JWT is preserved."""
+        existing_token = _make_jwt({"sub": "u1"})
+        test_broker._user_jwt = existing_token
+
+        ws = MagicMock()
+        ws.headers = {}
+        ws.query_params = {}
+
+        test_broker._update_jwt_from_websocket(ws)
+
+        # Existing JWT preserved
+        assert test_broker._user_jwt == existing_token
+
+    @pytest.mark.asyncio
+    async def test_get_http_client_fallback_when_no_jwt(self, test_broker):
+        """When no JWT is set, client uses service identity headers."""
+        client = await test_broker._get_http_client()
+        assert client.headers.get("x-auth-user-id") == "skuld-broker"
+        assert "authorization" not in {k.lower() for k in client.headers.keys()}
+
+        # Cleanup
+        await client.aclose()
+        test_broker._http_client = None
+
+    @pytest.mark.asyncio
+    async def test_get_http_client_reuses_when_jwt_unchanged(self, test_broker):
+        """Client is reused when JWT hasn't changed."""
+        token = _make_jwt({"sub": "u1"})
+        test_broker._user_jwt = token
+
+        client1 = await test_broker._get_http_client()
+        client2 = await test_broker._get_http_client()
+
+        assert client1 is client2
+
+        # Cleanup
+        await client1.aclose()
+        test_broker._http_client = None
