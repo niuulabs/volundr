@@ -49,7 +49,7 @@ interface UseVolundrResult {
   updateSession: (sessionId: string, updates: { name?: string }) => Promise<VolundrSession>;
   stopSession: (sessionId: string) => Promise<void>;
   resumeSession: (sessionId: string) => Promise<void>;
-  deleteSession: (sessionId: string) => Promise<void>;
+  deleteSession: (sessionId: string, cleanup?: string[]) => Promise<void>;
   archiveSession: (sessionId: string) => Promise<void>;
   restoreSession: (sessionId: string) => Promise<void>;
   archivedSessions: VolundrSession[];
@@ -252,8 +252,8 @@ export function useVolundr(): UseVolundrResult {
     );
   }, []);
 
-  const deleteSession = useCallback(async (sessionId: string) => {
-    await volundrService.deleteSession(sessionId);
+  const deleteSession = useCallback(async (sessionId: string, cleanup?: string[]) => {
+    await volundrService.deleteSession(sessionId, cleanup);
     setSessions(prev => prev.filter(s => s.id !== sessionId));
   }, []);
 

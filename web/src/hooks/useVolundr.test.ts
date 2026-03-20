@@ -275,7 +275,7 @@ describe('useVolundr', () => {
       await result.current.deleteSession('session-001');
     });
 
-    expect(volundrService.deleteSession).toHaveBeenCalledWith('session-001');
+    expect(volundrService.deleteSession).toHaveBeenCalledWith('session-001', undefined);
     expect(result.current.sessions).toHaveLength(1);
     expect(result.current.sessions.find(s => s.id === 'session-001')).toBeUndefined();
   });

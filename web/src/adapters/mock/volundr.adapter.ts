@@ -341,7 +341,7 @@ export class MockVolundrService implements IVolundrService {
     }
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
+  async deleteSession(sessionId: string, _cleanup: string[] = []): Promise<void> {
     const sessionIndex = this.sessions.findIndex(s => s.id === sessionId);
     if (sessionIndex === -1) {
       return;

@@ -15,6 +15,7 @@ from volundr.adapters.inbound.auth import require_role
 from volundr.domain.models import (
     Chronicle,
     ChronicleStatus,
+    CleanupTarget,
     GitProviderType,
     GitSource,
     Model,
@@ -220,6 +221,15 @@ class SessionStart(BaseModel):
             },
         },
     }
+
+
+class DeleteSessionBody(BaseModel):
+    """Optional request body for session deletion with cleanup targets."""
+
+    cleanup: list[CleanupTarget] = Field(
+        default_factory=list,
+        description="Resources to permanently delete alongside the session",
+    )
 
 
 class SessionResponse(BaseModel):
@@ -1109,12 +1119,19 @@ def create_router(
         tags=["Sessions"],
     )
     async def delete_session(
-        request: Request, session_id: UUID = Path(description="Unique session identifier")
+        request: Request,
+        session_id: UUID = Path(description="Unique session identifier"),
+        body: DeleteSessionBody | None = None,
     ) -> None:
-        """Delete a session."""
+        """Delete a session with optional resource cleanup."""
         principal = await _optional_principal(request)
+        cleanup_targets = body.cleanup if body else []
         try:
-            deleted = await service.delete_session(session_id, principal=principal)
+            deleted = await service.delete_session(
+                session_id,
+                principal=principal,
+                cleanup_targets=cleanup_targets,
+            )
         except SessionAccessDeniedError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

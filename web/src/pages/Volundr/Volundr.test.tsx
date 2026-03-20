@@ -859,9 +859,6 @@ describe('VolundrPage', () => {
   // New tests for delete functionality
   describe('Delete functionality', () => {
     it('calls deleteSession when Delete button clicked', async () => {
-      // Mock window.confirm to return true
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -874,17 +871,20 @@ describe('VolundrPage', () => {
       const deleteButton = screen.getByTitle('Delete session');
       fireEvent.click(deleteButton);
 
+      // Dialog should now be open
       await waitFor(() => {
-        expect(deleteSession).toHaveBeenCalledWith('forge-7f3a2b1c');
+        expect(screen.getByTestId('delete-session-dialog')).toBeInTheDocument();
       });
 
-      confirmSpy.mockRestore();
+      // Confirm deletion
+      fireEvent.click(screen.getByTestId('delete-session-confirm'));
+
+      await waitFor(() => {
+        expect(deleteSession).toHaveBeenCalledWith('forge-7f3a2b1c', []);
+      });
     });
 
     it('does not call deleteSession when confirmation is cancelled', async () => {
-      // Mock window.confirm to return false
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -897,10 +897,15 @@ describe('VolundrPage', () => {
       fireEvent.click(deleteButton);
 
       await waitFor(() => {
-        expect(deleteSession).not.toHaveBeenCalled();
+        expect(screen.getByTestId('delete-session-dialog')).toBeInTheDocument();
       });
 
-      confirmSpy.mockRestore();
+      // Cancel deletion
+      fireEvent.click(screen.getByTestId('delete-session-cancel'));
+
+      await waitFor(() => {
+        expect(deleteSession).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -1413,9 +1418,7 @@ describe('VolundrPage', () => {
       expect(screen.getByText('IDE')).toBeInTheDocument();
     });
 
-    it('shows remove confirmation for manual session delete', () => {
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
+    it('shows remove confirmation for manual session delete', async () => {
       vi.mocked(useVolundr).mockReturnValue(
         createMockHookReturn({
           sessions: [manualSession],
@@ -1432,9 +1435,10 @@ describe('VolundrPage', () => {
       const deleteButton = screen.getByTitle('Remove session');
       fireEvent.click(deleteButton);
 
-      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Remove'));
-
-      confirmSpy.mockRestore();
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-session-dialog')).toBeInTheDocument();
+        expect(screen.getByText('Remove session')).toBeInTheDocument();
+      });
     });
 
     it('shows connect-specific empty state for chat when disconnected', () => {
