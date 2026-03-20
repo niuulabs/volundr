@@ -19,6 +19,8 @@ from volundr.adapters.outbound.k8s_storage import InMemoryStorageAdapter
 from volundr.config import LocalMountsConfig
 from volundr.domain.models import (
     GitSource,
+    LocalMountSource,
+    MountMapping,
     Principal,
     Session,
     Workspace,
@@ -143,6 +145,22 @@ class TestWorkspaceResponse:
         assert resp.source_url == "https://github.com/org/repo.git"
         assert resp.source_ref == "develop"
 
+    def test_with_local_mount_session(self):
+        """LocalMountSource has no repo/branch — source_url and source_ref should be None."""
+        sid = uuid4()
+        ws = Workspace(id=uuid4(), session_id=sid, user_id="u", tenant_id="t", pvc_name="p")
+        session = Session(
+            id=sid,
+            name="local-session",
+            source=LocalMountSource(
+                paths=[MountMapping(host_path="/data", mount_path="/workspace")]
+            ),
+        )
+        resp = WorkspaceResponse.from_workspace(ws, session)
+        assert resp.session_name == "local-session"
+        assert resp.source_url is None
+        assert resp.source_ref is None
+
 
 # ── GET /workspaces ─────────────────────────────────────────────
 
@@ -177,6 +195,24 @@ class TestListWorkspaces:
         assert resp.status_code == 200
         assert resp.json() == []
 
+    def test_list_without_identity(self, session_service, workspace_service):
+        """When no identity adapter is configured, returns empty list."""
+        app = FastAPI()
+        router = create_router(session_service)
+        app.include_router(router)
+
+        class _Stubs:
+            local_mounts = LocalMountsConfig()
+
+        app.state.settings = _Stubs()
+        app.state.admin_settings = {}
+        app.state.workspace_service = workspace_service
+        app.state.session_service = session_service
+        # Intentionally NOT setting app.state.identity
+        resp = TestClient(app).get("/api/v1/volundr/workspaces")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
 
 # ── DELETE /workspaces/{session_id} ─────────────────────────────
 
@@ -193,6 +229,20 @@ class TestDeleteWorkspace:
     async def test_delete_nonexistent(self, app):
         with patch(_PATCH_TARGET, _extract_user):
             resp = TestClient(app).delete(f"/api/v1/volundr/workspaces/{uuid4()}")
+        assert resp.status_code == 404
+
+    async def test_delete_returns_not_found_when_service_fails(
+        self, app, storage, workspace_service
+    ):
+        """Workspace exists in listing but delete_workspace_by_session returns False."""
+        sid = str(uuid4())
+        await storage.create_session_workspace(sid, "user-1", "t1")
+
+        with (
+            patch(_PATCH_TARGET, _extract_user),
+            patch.object(workspace_service, "delete_workspace_by_session", return_value=False),
+        ):
+            resp = TestClient(app).delete(f"/api/v1/volundr/workspaces/{sid}")
         assert resp.status_code == 404
 
 
@@ -240,6 +290,46 @@ class TestBulkDeleteWorkspaces:
         assert len(data["failed"]) == 1
         assert data["failed"][0]["error"] == "Not found or not owned"
 
+    async def test_delete_returns_not_found(self, app, storage, workspace_service):
+        """Workspace is owned but delete_workspace_by_session returns False."""
+        sid = str(uuid4())
+        await storage.create_session_workspace(sid, "user-1", "t1")
+
+        with (
+            patch(_PATCH_TARGET, _extract_user),
+            patch.object(workspace_service, "delete_workspace_by_session", return_value=False),
+        ):
+            resp = TestClient(app).post(
+                "/api/v1/volundr/workspaces/bulk-delete",
+                json={"session_ids": [sid]},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["deleted"] == 0
+        assert data["failed"][0]["error"] == "Not found"
+
+    async def test_delete_handles_exception(self, app, storage, workspace_service):
+        sid = str(uuid4())
+        await storage.create_session_workspace(sid, "user-1", "t1")
+
+        with (
+            patch(_PATCH_TARGET, _extract_user),
+            patch.object(
+                workspace_service,
+                "delete_workspace_by_session",
+                side_effect=RuntimeError("storage error"),
+            ),
+        ):
+            resp = TestClient(app).post(
+                "/api/v1/volundr/workspaces/bulk-delete",
+                json={"session_ids": [sid]},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["deleted"] == 0
+        assert len(data["failed"]) == 1
+        assert "storage error" in data["failed"][0]["error"]
+
 
 # ── POST /admin/workspaces/bulk-delete ──────────────────────────
 
@@ -275,6 +365,27 @@ class TestAdminBulkDelete:
         data = resp.json()
         assert data["deleted"] == 0
         assert len(data["failed"]) == 1
+
+    async def test_delete_handles_exception(self, admin_app, storage, workspace_service):
+        sid = str(uuid4())
+        await storage.create_session_workspace(sid, "any-user", "t1")
+
+        with (
+            patch(_PATCH_TARGET, _extract_admin),
+            patch.object(
+                workspace_service,
+                "delete_workspace_by_session",
+                side_effect=RuntimeError("k8s error"),
+            ),
+        ):
+            resp = TestClient(admin_app).post(
+                "/api/v1/volundr/admin/workspaces/bulk-delete",
+                json={"session_ids": [sid]},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["deleted"] == 0
+        assert "k8s error" in data["failed"][0]["error"]
 
 
 # ── GET /admin/workspaces ───────────────────────────────────────
