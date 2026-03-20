@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]  # stable semver only, skip prerelease (v*-dev.*)
 
 permissions: read-all
 
@@ -67,6 +67,8 @@ jobs:
           file: ./containers/${{ matrix.container }}/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}-${{ matrix.platform }}
+          build-args: |
+            APP_VERSION=${{ needs.version.outputs.version }}
           labels: |
             org.opencontainers.image.title=${{ matrix.container }}
             org.opencontainers.image.description=${{ steps.meta.outputs.description }}

@@ -8,12 +8,22 @@
  * all service override packages. Dynamic imports caused module resolution
  * issues that prevented views from registering.
  *
+ * The workbench is initialized ONCE with a stable remote authority and a
+ * dynamic WebSocket factory. Session switching is handled by updating the
+ * mutable routing state and forcing a reconnection — no page reload needed.
+ *
  * @see https://github.com/CodinGame/monaco-vscode-api/tree/main/demo
  */
 import { getAccessToken } from '@/adapters/api/client';
-import { createBearerWebSocketFactory } from '@/utils/bearerWebSocketFactory';
 import { ApiEditorAdapter } from '@/adapters/api/editor.adapter';
-import { isInitialized, getInitializedSessionId, markInitialized } from './editorState';
+import { isInitialized, markInitialized } from './editorState';
+import {
+  getActiveRoute,
+  setActiveRoute,
+  trackWebSocket,
+  closeAllWebSockets,
+} from './sessionRouter';
+import { saveTabState, restoreTabState } from './tabStateManager';
 
 // ── Static imports (matching demo pattern) ──
 import { initialize } from '@codingame/monaco-vscode-api';
@@ -132,6 +142,16 @@ import searchWorkerUrl from '@codingame/monaco-vscode-search-service-override/wo
 
 const editorService = new ApiEditorAdapter();
 
+/**
+ * Stable remote authority used for ALL sessions.
+ *
+ * By using the gateway host (window.location.host) as the authority,
+ * all session folder URIs share the same authority. This allows the
+ * dynamic WebSocket factory to route connections to different REH
+ * servers without VS Code thinking it's a different remote server.
+ */
+const STABLE_AUTHORITY = globalThis.location?.host ?? 'localhost';
+
 const workerUrls: Record<string, string> = {
   editorWorkerService: editorWorkerUrl,
   extensionHostWorkerMain: extensionHostWorkerUrl,
@@ -162,8 +182,17 @@ export interface InitWorkbenchParams {
 // (mounts → unmounts → remounts in dev, causing two concurrent calls).
 let initPromise: Promise<void> | null = null;
 
+// VS Code extension API reference, populated after initialize + registerExtension.
+// Used by switchSession() and tabStateManager to call workspace/window/commands APIs.
+let vsCodeApi: typeof import('vscode') | null = null;
+
+/** Get the VS Code extension API. Only available after initialization. */
+export function getVsCodeApi(): typeof import('vscode') | null {
+  return vsCodeApi;
+}
+
 export async function initWorkbench(params: InitWorkbenchParams): Promise<void> {
-  if (isInitialized() && getInitializedSessionId() === params.sessionId) {
+  if (isInitialized()) {
     return;
   }
   if (initPromise) {
@@ -173,6 +202,17 @@ export async function initWorkbench(params: InitWorkbenchParams): Promise<void> 
   return initPromise;
 }
 
+/**
+ * Build a folder URI for a given session.
+ */
+function buildFolderUri(sessionId: string): URI {
+  return URI.from({
+    scheme: 'vscode-remote',
+    authority: STABLE_AUTHORITY,
+    path: `/volundr/sessions/${sessionId}/workspace`,
+  });
+}
+
 async function doInitWorkbench({
   hostname,
   sessionId,
@@ -180,7 +220,13 @@ async function doInitWorkbench({
   container,
 }: InitWorkbenchParams): Promise<void> {
   const config = editorService.getWorkbenchConfig(sessionId, hostname, codeEndpoint);
-  const wsFactory = createBearerWebSocketFactory({ getToken: getAccessToken });
+
+  // Set the initial session route so the WebSocket factory knows where to connect.
+  setActiveRoute({
+    sessionId,
+    hostname,
+    basePath: config.basePath,
+  });
 
   // ── 1. Create IndexedDB providers (user data persistence) ──
   await createIndexedDBProviders();
@@ -260,19 +306,34 @@ async function doInitWorkbench({
   };
 
   // ── 4. Build workspace provider ──
-  const folderUri = URI.from({
-    scheme: 'vscode-remote',
-    authority: config.remoteAuthority,
-    path: `/volundr/sessions/${sessionId}/workspace`,
-  });
+  const folderUri = buildFolderUri(sessionId);
 
-  // ── 5. Build IWebSocket factory ──
+  // ── 5. Build dynamic IWebSocket factory ──
+  //
+  // The factory reads from the mutable activeRoute on every new connection.
+  // When a session switch closes existing WebSockets, VS Code reconnects
+  // through this factory — which now routes to the new session's REH server.
   const webSocketFactory = {
     create: (url: string) => {
-      const rehPrefix = config.basePath ? `${config.basePath}reh/` : '/reh/';
-      const rewritten = url.replace(/^(wss?:\/\/[^/]+)\//, `$1${rehPrefix}`);
-      const ws = wsFactory(rewritten);
+      const route = getActiveRoute();
+      const rehPrefix = route?.basePath ? `${route.basePath}reh/` : '/reh/';
+      // Replace both the host and path prefix: the session gateway may live
+      // on a different domain (e.g. sessions.example.com) than the web UI.
+      const targetHost = route?.hostname ?? STABLE_AUTHORITY;
+      const rewritten = url.replace(/^(wss?:\/\/)[^/]+\//, `$1${targetHost}${rehPrefix}`);
+
+      // Append access_token query param for gateway JWT validation,
+      // matching the pattern used by chat and terminal WebSockets.
+      const token = getAccessToken();
+      const authedUrl = token
+        ? `${rewritten}${rewritten.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`
+        : rewritten;
+
+      const ws = new WebSocket(authedUrl);
       ws.binaryType = 'arraybuffer';
+
+      // Track so we can close on session switch.
+      trackWebSocket(ws);
 
       return {
         onData: (listener: (data: ArrayBuffer) => void) => {
@@ -312,7 +373,7 @@ async function doInitWorkbench({
     services,
     container,
     {
-      remoteAuthority: config.remoteAuthority,
+      remoteAuthority: STABLE_AUTHORITY,
       webSocketFactory,
       workspaceProvider: {
         trusted: true,
@@ -338,8 +399,13 @@ async function doInitWorkbench({
     {} // envOptions
   );
 
-  // ── 7. Register default API extension (matching demo) ──
-  registerExtension(
+  // ── 7. Register default API extension and store the API reference ──
+  //
+  // The extension API gives us access to vscode.workspace, vscode.window,
+  // vscode.commands, etc. We store it in a module-level variable so
+  // switchSession() can use it without `import('vscode')` (which Vite
+  // can't resolve at build time since `vscode` is a virtual module).
+  const ext = registerExtension(
     {
       name: 'volundr',
       publisher: 'niuulabs',
@@ -347,7 +413,65 @@ async function doInitWorkbench({
       engines: { vscode: '*' },
     },
     ExtensionHostKind.LocalProcess
-  ).setAsDefaultApi();
+  );
+  ext.setAsDefaultApi();
+  vsCodeApi = await ext.getApi();
 
-  markInitialized(sessionId);
+  markInitialized();
+}
+
+/**
+ * Switch the workbench to a different session without page reload.
+ *
+ * 1. Saves the current session's open editor tabs for later restoration.
+ * 2. Closes all open editors to avoid stale file references.
+ * 3. Updates the mutable routing state so new WebSocket connections
+ *    go to the new session's REH server.
+ * 4. Closes all existing WebSocket connections, forcing VS Code to
+ *    reconnect through the factory (now routing to the new session).
+ * 5. Swaps the workspace folder to the new session's workspace path.
+ * 6. Restores previously saved tabs for the new session (if any).
+ */
+export async function switchSession(
+  sessionId: string,
+  hostname: string,
+  codeEndpoint?: string
+): Promise<void> {
+  const config = editorService.getWorkbenchConfig(sessionId, hostname, codeEndpoint);
+  const previousRoute = getActiveRoute();
+
+  if (!vsCodeApi) {
+    throw new Error('Cannot switch session: VS Code API not initialized');
+  }
+
+  // 1. Save the current session's open tabs before switching.
+  if (previousRoute) {
+    await saveTabState(previousRoute.sessionId, vsCodeApi);
+  }
+
+  // 2. Close all open editors so stale tabs don't flash errors.
+  await vsCodeApi.commands.executeCommand('workbench.action.closeAllEditors');
+
+  // 3. Update routing so new WebSocket connections go to the new REH server.
+  setActiveRoute({
+    sessionId,
+    hostname,
+    basePath: config.basePath,
+  });
+
+  // 4. Close existing WebSocket connections — VS Code will auto-reconnect.
+  closeAllWebSockets();
+
+  // 5. Swap the workspace folder.
+  const newFolderUri = vsCodeApi.Uri.from({
+    scheme: 'vscode-remote',
+    authority: STABLE_AUTHORITY,
+    path: `/volundr/sessions/${sessionId}/workspace`,
+  });
+
+  const currentFolderCount = vsCodeApi.workspace.workspaceFolders?.length ?? 0;
+  vsCodeApi.workspace.updateWorkspaceFolders(0, currentFolderCount, { uri: newFolderUri });
+
+  // 6. Restore previously saved tabs for the new session (if any).
+  await restoreTabState(sessionId, STABLE_AUTHORITY, vsCodeApi);
 }

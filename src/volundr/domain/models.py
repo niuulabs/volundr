@@ -348,6 +348,10 @@ class Session(BaseModel):
         default=None,
         description="Linked issue tracker issue identifier",
     )
+    issue_tracker_url: str | None = Field(
+        default=None,
+        description="Web URL for the linked issue in the tracker",
+    )
     preset_id: UUID | None = Field(
         default=None,
         description="Preset used to configure this session",
@@ -869,6 +873,29 @@ class MCPServerSpec:
 
 
 @dataclass(frozen=True)
+class OAuthSpec:
+    """OAuth2 provider specification — all URLs and params needed for a flow."""
+
+    authorize_url: str
+    token_url: str
+    revoke_url: str = ""
+    scopes: tuple[str, ...] = ()
+    token_field_mapping: dict[str, str] = ()  # type: ignore[assignment]
+    extra_authorize_params: dict[str, str] = ()  # type: ignore[assignment]
+    extra_token_params: dict[str, str] = ()  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.scopes, tuple):
+            object.__setattr__(self, "scopes", tuple(self.scopes))
+        if not isinstance(self.token_field_mapping, dict):
+            object.__setattr__(self, "token_field_mapping", dict(self.token_field_mapping))
+        if not isinstance(self.extra_authorize_params, dict):
+            object.__setattr__(self, "extra_authorize_params", dict(self.extra_authorize_params))
+        if not isinstance(self.extra_token_params, dict):
+            object.__setattr__(self, "extra_token_params", dict(self.extra_token_params))
+
+
+@dataclass(frozen=True)
 class IntegrationDefinition:
     """A known integration type in the catalog.
 
@@ -890,6 +917,9 @@ class IntegrationDefinition:
     config_schema: dict = ()  # type: ignore[assignment]
     mcp_server: MCPServerSpec | None = None
     env_from_credentials: dict[str, str] = ()  # type: ignore[assignment]
+    auth_type: str = "api_key"
+    oauth: OAuthSpec | None = None
+    file_mounts: dict[str, str] = ()  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if not isinstance(self.credential_schema, dict):
@@ -898,6 +928,8 @@ class IntegrationDefinition:
             object.__setattr__(self, "config_schema", dict(self.config_schema))
         if not isinstance(self.env_from_credentials, dict):
             object.__setattr__(self, "env_from_credentials", dict(self.env_from_credentials))
+        if not isinstance(self.file_mounts, dict):
+            object.__setattr__(self, "file_mounts", dict(self.file_mounts))
 
 
 @dataclass(frozen=True)
@@ -934,12 +966,34 @@ class MCPServerConfig:
 
 
 @dataclass(frozen=True)
+class CredentialMapping:
+    """Maps a stored credential to its injection targets.
+
+    Used by SecretInjectionPort to build agent templates that render
+    credential fields directly to env vars and/or file paths.
+
+    ``env_mappings``: ``{ENV_VAR_NAME: credential_field_name}``
+    ``file_mappings``: ``{target_file_path: credential_field_name}``
+    """
+
+    credential_name: str
+    env_mappings: dict[str, str] = ()  # type: ignore[assignment]
+    file_mappings: dict[str, str] = ()  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.env_mappings, dict):
+            object.__setattr__(self, "env_mappings", dict(self.env_mappings))
+        if not isinstance(self.file_mappings, dict):
+            object.__setattr__(self, "file_mappings", dict(self.file_mappings))
+
+
+@dataclass(frozen=True)
 class PodSpecAdditions:
-    """Pod spec contributions for secret injection via CSI driver.
+    """Pod spec contributions for secret injection.
 
     Returned by SecretInjectionPort adapters to tell the orchestrator
-    how to configure volumes, mounts, labels, and annotations for
-    CSI-based secret injection. Volundr never sees secret values.
+    how to configure volumes, mounts, labels, and annotations.
+    Volundr never sees secret values.
     """
 
     volumes: tuple[dict, ...] = ()
@@ -1091,7 +1145,7 @@ class ForgeProfile(BaseModel):
         Use WorkspaceTemplate directly for new code. This class is kept
         for backward compatibility during migration.
 
-    Defines the base set of values that Volundr assembles into Farm task_args.
+    Defines the base set of values that Volundr assembles into session specs.
     The Helm chart for the target task_type gives these values meaning.
     """
 
@@ -1219,6 +1273,18 @@ class Preset(BaseModel):
     env_secret_refs: list[str] = Field(
         default_factory=list,
         description="K8s secret names to mount as env vars",
+    )
+    source: SessionSource | None = Field(
+        default=None,
+        description="Workspace source configuration (git or local mount)",
+    )
+    integration_ids: list[str] = Field(
+        default_factory=list,
+        description="Integration connection IDs to attach to sessions",
+    )
+    setup_scripts: list[str] = Field(
+        default_factory=list,
+        description="Shell scripts to run during workspace setup",
     )
     workload_config: dict = Field(
         default_factory=dict,

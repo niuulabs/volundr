@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from volundr.domain.models import IntegrationConnection
-from volundr.domain.ports import IssueTrackerProvider, SecretRepository
+from volundr.domain.ports import CredentialStorePort, IssueTrackerProvider
 from volundr.utils import import_class as _import_class
 
 logger = logging.getLogger(__name__)
@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 class TrackerFactory:
     """Creates IssueTrackerProvider instances from IntegrationConnection configs.
 
-    Resolves the credential from the SecretRepository, imports the adapter
+    Resolves the credential from the CredentialStorePort, imports the adapter
     class, and instantiates it with the merged credential + config kwargs.
     """
 
-    def __init__(self, secret_repo: SecretRepository) -> None:
-        self._secret_repo = secret_repo
+    def __init__(self, credential_store: CredentialStorePort) -> None:
+        self._credential_store = credential_store
 
     async def create(self, connection: IntegrationConnection) -> IssueTrackerProvider:
         """Create an IssueTrackerProvider from a connection definition.
@@ -34,8 +34,11 @@ class TrackerFactory:
         Raises:
             ValueError: If the credential is not found.
         """
-        cred_path = f"users/{connection.user_id}/{connection.credential_name}"
-        cred = await self._secret_repo.get_credential(cred_path)
+        cred = await self._credential_store.get_value(
+            "user",
+            connection.user_id,
+            connection.credential_name,
+        )
         if cred is None:
             raise ValueError(
                 f"Credential '{connection.credential_name}' not found "

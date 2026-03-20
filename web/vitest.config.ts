@@ -31,9 +31,16 @@ export default defineConfig({
       },
     },
   },
+  define: {
+    '__APP_VERSION__': JSON.stringify('test'),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // `vscode` is provided at runtime by the VS Code extension host.
+      // In tests it's mocked via vi.mock('vscode') in setup.ts, but Vite's
+      // import analysis still needs a resolvable path.
+      vscode: path.resolve(__dirname, './src/test/__mocks__/vscode.ts'),
     },
   },
 });

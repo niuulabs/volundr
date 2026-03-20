@@ -54,19 +54,6 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "volundr.databasePort" . }}
-    # Allow connections to Farm API
-    - to:
-        {{- if .Values.networkPolicy.farmPodSelector }}
-        - podSelector:
-            {{- toYaml .Values.networkPolicy.farmPodSelector | nindent 12 }}
-        {{- else }}
-        - podSelector: {}
-        {{- end }}
-      ports:
-        - protocol: TCP
-          port: 80
-        - protocol: TCP
-          port: 443
     {{- with .Values.networkPolicy.extraEgress }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

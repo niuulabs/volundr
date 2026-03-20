@@ -31,7 +31,7 @@ import type {
   McpServerConfig,
   McpServerType,
   CliTool,
-  LinearIssue,
+  TrackerIssue,
   RepoProvider,
   VolundrWorkspace,
   StoredCredential,
@@ -40,7 +40,7 @@ import type {
 } from '@/models';
 import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/ports';
-import { LinearIssueSearch } from '@/components';
+import { TrackerIssueSearch } from '@/components';
 import type { WizardState } from '../LaunchWizard';
 import styles from './ConfigureStep.module.css';
 
@@ -52,7 +52,7 @@ export interface ConfigureStepProps {
   availableMcpServers: McpServerConfig[];
   availableSecrets: string[];
   service: IVolundrService;
-  searchLinearIssues?: (query: string) => Promise<LinearIssue[]>;
+  searchTrackerIssues?: (query: string) => Promise<TrackerIssue[]>;
   localMountsEnabled?: boolean;
   onChange: (updates: Partial<WizardState>) => void;
   onSavePreset: (
@@ -110,7 +110,7 @@ export function ConfigureStep({
   availableMcpServers,
   availableSecrets,
   service,
-  searchLinearIssues,
+  searchTrackerIssues,
   localMountsEnabled = false,
   onChange,
   onSavePreset,
@@ -123,6 +123,7 @@ export function ConfigureStep({
   const [showMcpPicker, setShowMcpPicker] = useState(false);
   const [showMcpForm, setShowMcpForm] = useState(false);
   const [yamlError, setYamlError] = useState<string | null>(null);
+  const [presetWarnings, setPresetWarnings] = useState<string[]>([]);
   const [customMcpName, setCustomMcpName] = useState('');
   const [customMcpType, setCustomMcpType] = useState<McpServerType>('stdio');
   const [customMcpCommand, setCustomMcpCommand] = useState('');
@@ -244,13 +245,16 @@ export function ConfigureStep({
     (presetId: string) => {
       if (!presetId) {
         onChange({ preset: null });
+        setPresetWarnings([]);
         return;
       }
       const preset = presets.find(p => p.id === presetId);
       if (!preset) {
         return;
       }
-      onChange({
+
+      const warnings: string[] = [];
+      const updates: Partial<WizardState> = {
         preset,
         model: preset.model ?? '',
         taskType: `skuld-${preset.cliTool}`,
@@ -258,7 +262,7 @@ export function ConfigureStep({
         mcpServers: [...preset.mcpServers],
         resourceConfig: { ...preset.resourceConfig },
         envVars: { ...preset.envVars },
-        selectedCredentials: [...preset.envSecretRefs],
+        setupScripts: [...preset.setupScripts],
         template: {
           ...state.template,
           cliTool: preset.cliTool,
@@ -268,14 +272,65 @@ export function ConfigureStep({
           rules: [...preset.rules],
           workloadConfig: { ...preset.workloadConfig },
         },
-      });
+      };
+
+      // Validate source (repo)
+      if (preset.source) {
+        const src = preset.source;
+        if (src.type === 'git') {
+          const matchedRepo = repos.find(r => r.cloneUrl === src.repo);
+          if (matchedRepo) {
+            updates.sourceType = 'git';
+            updates.repo = src.repo;
+            updates.branch = src.branch ?? matchedRepo.defaultBranch;
+          } else {
+            warnings.push(`Repository "${src.repo}" is no longer available`);
+          }
+        } else if (src.type === 'local_mount') {
+          updates.sourceType = 'local_mount';
+          updates.mountPaths = [...src.paths];
+        }
+      }
+
+      // Validate credentials
+      const validCreds = preset.envSecretRefs.filter(s => availableSecrets.includes(s));
+      const missingCreds = preset.envSecretRefs.filter(s => !availableSecrets.includes(s));
+      for (const c of missingCreds) {
+        warnings.push(`Credential "${c}" is no longer available`);
+      }
+      updates.selectedCredentials = validCreds;
+
+      // Validate integrations
+      const enabledIntegrationIds = new Set(integrations.filter(i => i.enabled).map(i => i.id));
+      const validIntegrations = preset.integrationIds.filter(id => enabledIntegrationIds.has(id));
+      const missingIntegrations = preset.integrationIds.filter(
+        id => !enabledIntegrationIds.has(id)
+      );
+      for (const id of missingIntegrations) {
+        const slug = integrations.find(i => i.id === id)?.slug ?? id;
+        warnings.push(`Integration "${slug}" is no longer available`);
+      }
+      updates.selectedIntegrations = validIntegrations;
+
+      setPresetWarnings(warnings);
+      onChange(updates);
     },
-    [presets, state.template, onChange]
+    [presets, repos, availableSecrets, integrations, state.template, onChange]
   );
 
   const handleToggleYaml = useCallback(() => {
     if (!state.yamlMode) {
       // Switching to YAML mode: serialize current state
+      const source: import('@/models').SessionSource | null =
+        state.sourceType === 'git' && state.repo
+          ? { type: 'git', repo: state.repo, branch: state.branch }
+          : state.sourceType === 'local_mount' &&
+              state.mountPaths.some(p => p.host_path && p.mount_path)
+            ? {
+                type: 'local_mount',
+                paths: state.mountPaths.filter(p => p.host_path && p.mount_path),
+              }
+            : null;
       const yamlContent = serializePresetYaml({
         cliTool: state.template.cliTool,
         workloadType: state.template.workloadType,
@@ -288,6 +343,9 @@ export function ConfigureStep({
         rules: state.template.rules,
         envVars: state.envVars,
         envSecretRefs: state.selectedCredentials,
+        source,
+        integrationIds: state.selectedIntegrations,
+        setupScripts: state.setupScripts,
         workloadConfig: state.template.workloadConfig,
       });
       onChange({ yamlMode: true, yamlContent });
@@ -305,6 +363,18 @@ export function ConfigureStep({
       if (parsed.resourceConfig) updates.resourceConfig = parsed.resourceConfig;
       if (parsed.envVars) updates.envVars = parsed.envVars;
       if (parsed.envSecretRefs) updates.selectedCredentials = parsed.envSecretRefs;
+      if (parsed.source !== undefined) {
+        if (parsed.source && parsed.source.type === 'git') {
+          updates.sourceType = 'git';
+          updates.repo = parsed.source.repo;
+          updates.branch = parsed.source.branch;
+        } else if (parsed.source && parsed.source.type === 'local_mount') {
+          updates.sourceType = 'local_mount';
+          updates.mountPaths = [...parsed.source.paths];
+        }
+      }
+      if (parsed.integrationIds) updates.selectedIntegrations = parsed.integrationIds;
+      if (parsed.setupScripts) updates.setupScripts = parsed.setupScripts;
 
       // Template-nested fields
       const templateUpdates = { ...state.template };
@@ -323,19 +393,19 @@ export function ConfigureStep({
     }
   }, [state, onChange]);
 
-  const handleLinearSelect = useCallback(
-    (issue: LinearIssue) => {
-      const updates: Partial<WizardState> = { linearIssue: issue };
+  const handleTrackerSelect = useCallback(
+    (issue: TrackerIssue) => {
+      const updates: Partial<WizardState> = { trackerIssue: issue };
       if (!state.name) {
-        updates.name = issue.identifier;
+        updates.name = issue.identifier.toLowerCase();
       }
       onChange(updates);
     },
     [state.name, onChange]
   );
 
-  const handleLinearClear = useCallback(() => {
-    onChange({ linearIssue: undefined });
+  const handleTrackerClear = useCallback(() => {
+    onChange({ trackerIssue: undefined });
   }, [onChange]);
 
   // MCP server management
@@ -506,6 +576,17 @@ export function ConfigureStep({
     }
     setIsSavingPreset(true);
     try {
+      const source: import('@/models').SessionSource | null =
+        state.sourceType === 'git' && state.repo
+          ? { type: 'git', repo: state.repo, branch: state.branch }
+          : state.sourceType === 'local_mount' &&
+              state.mountPaths.some(p => p.host_path && p.mount_path)
+            ? {
+                type: 'local_mount',
+                paths: state.mountPaths.filter(p => p.host_path && p.mount_path),
+              }
+            : null;
+
       const saved = await onSavePreset({
         name: savePresetName.trim(),
         description: '',
@@ -521,6 +602,9 @@ export function ConfigureStep({
         rules: state.template.rules,
         envVars: state.envVars,
         envSecretRefs: state.selectedCredentials,
+        source,
+        integrationIds: state.selectedIntegrations,
+        setupScripts: state.setupScripts,
         workloadConfig: state.template.workloadConfig,
       });
       onChange({ preset: saved });
@@ -576,6 +660,25 @@ export function ConfigureStep({
           </select>
           {state.preset && (
             <span className={styles.presetDescription}>{state.preset.description}</span>
+          )}
+          {presetWarnings.length > 0 && (
+            <div className={styles.presetWarnings}>
+              <div className={styles.presetWarningsHeader}>
+                <span>Preset loaded with warnings</span>
+                <button
+                  type="button"
+                  className={styles.presetWarningsDismiss}
+                  onClick={() => setPresetWarnings([])}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <ul className={styles.presetWarningsList}>
+                {presetWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
@@ -633,15 +736,15 @@ export function ConfigureStep({
           )}
         </div>
 
-        {/* Linear Issue */}
-        {searchLinearIssues && (
+        {/* Issue */}
+        {searchTrackerIssues && (
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Linear Issue</label>
-            <LinearIssueSearch
-              onSelect={handleLinearSelect}
-              onClear={handleLinearClear}
-              selectedIssue={state.linearIssue ?? null}
-              onSearch={searchLinearIssues}
+            <label className={styles.formLabel}>Issue</label>
+            <TrackerIssueSearch
+              onSelect={handleTrackerSelect}
+              onClear={handleTrackerClear}
+              selectedIssue={state.trackerIssue ?? null}
+              onSearch={searchTrackerIssues}
             />
           </div>
         )}

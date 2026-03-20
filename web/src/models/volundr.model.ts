@@ -2,7 +2,10 @@ import type { SessionStatus } from './status.model';
 
 export interface VolundrFeatures {
   localMountsEnabled: boolean;
+  fileManagerEnabled: boolean;
 }
+
+export type FileRoot = 'workspace' | 'home';
 
 export interface ResourceType {
   name: string;
@@ -49,13 +52,13 @@ export interface LocalMountSource {
 
 export type SessionSource = GitSource | LocalMountSource;
 
-export type LinearIssueStatus = 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
+export type TrackerIssueStatus = 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
 
-export interface LinearIssue {
+export interface TrackerIssue {
   id: string;
   identifier: string;
   title: string;
-  status: LinearIssueStatus;
+  status: TrackerIssueStatus;
   assignee?: string;
   labels?: string[];
   priority?: number;
@@ -118,7 +121,7 @@ export interface VolundrSession {
   codeEndpoint?: string;
   taskType?: string;
   archivedAt?: Date;
-  linearIssue?: LinearIssue;
+  trackerIssue?: TrackerIssue;
   ownerId?: string;
   tenantId?: string;
 }
@@ -360,6 +363,8 @@ export interface FileTreeEntry {
   name: string;
   path: string;
   type: 'file' | 'directory';
+  size?: number;
+  modified?: string;
 }
 
 export type WorkspaceStatus = 'active' | 'archived' | 'deleted';
@@ -378,10 +383,30 @@ export interface VolundrWorkspace {
 
 export interface AdminStorageSettings {
   homeEnabled: boolean;
+  fileManagerEnabled: boolean;
 }
 
 export interface AdminSettings {
   storage: AdminStorageSettings;
+}
+
+export type FeatureScope = 'admin' | 'user';
+
+export interface FeatureModule {
+  key: string;
+  label: string;
+  icon: string;
+  scope: FeatureScope;
+  enabled: boolean;
+  defaultEnabled: boolean;
+  adminOnly: boolean;
+  order: number;
+}
+
+export interface UserFeaturePreference {
+  featureKey: string;
+  visible: boolean;
+  sortOrder: number;
 }
 
 // Types merged from forgeProfile.model.ts
@@ -457,6 +482,9 @@ export interface VolundrPreset {
   rules: RuleConfig[];
   envVars: Record<string, string>;
   envSecretRefs: string[];
+  source: SessionSource | null;
+  integrationIds: string[];
+  setupScripts: string[];
   workloadConfig: WorkloadConfig;
 }
 

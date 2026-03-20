@@ -834,6 +834,68 @@ class TestGitHubProviderWorkflow:
         assert result is False
 
 
+class TestGitHubProviderConstructor:
+    """Tests for GitHubProvider constructor edge cases."""
+
+    def test_extra_kwargs_ignored(self):
+        """Extra kwargs from dynamic adapter pattern don't crash."""
+        provider = GitHubProvider(
+            name="GitHub",
+            base_url="https://api.github.com",
+            token="tok",
+            orgs=("org1",),
+            some_extra_key="value",
+            another="123",
+        )
+        assert provider.name == "GitHub"
+        assert provider.orgs == ("org1",)
+
+    def test_orgs_from_comma_separated_string(self):
+        """Orgs can be provided as a comma-separated string."""
+        provider = GitHubProvider(
+            name="GitHub",
+            base_url="https://api.github.com",
+            orgs="niuulabs, anthropic, openai",
+        )
+        assert provider.orgs == ("niuulabs", "anthropic", "openai")
+
+    def test_orgs_from_string_strips_whitespace(self):
+        """Whitespace is stripped from comma-separated orgs."""
+        provider = GitHubProvider(
+            name="GitHub",
+            base_url="https://api.github.com",
+            orgs="  org1 ,  , org2  ",
+        )
+        assert provider.orgs == ("org1", "org2")
+
+    def test_orgs_from_empty_string(self):
+        """Empty string produces empty tuple."""
+        provider = GitHubProvider(
+            name="GitHub",
+            base_url="https://api.github.com",
+            orgs="",
+        )
+        assert provider.orgs == ()
+
+    def test_orgs_from_list(self):
+        """Orgs can be provided as a list."""
+        provider = GitHubProvider(
+            name="GitHub",
+            base_url="https://api.github.com",
+            orgs=["a", "b"],
+        )
+        assert provider.orgs == ("a", "b")
+
+    def test_orgs_from_tuple(self):
+        """Orgs can be provided as a tuple (original behavior)."""
+        provider = GitHubProvider(
+            name="GitHub",
+            base_url="https://api.github.com",
+            orgs=("x", "y"),
+        )
+        assert provider.orgs == ("x", "y")
+
+
 class TestGitHubBranchErrors:
     """Tests for branch listing error handling and diagnostics."""
 

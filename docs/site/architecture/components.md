@@ -20,7 +20,7 @@ The API depends exclusively on abstract port interfaces. Every infrastructure co
 | `SessionRepository` | Session CRUD (PostgreSQL) |
 | `ChronicleRepository` | Chronicle persistence, reforge chain walking |
 | `TimelineRepository` | Timeline event storage for chronicles |
-| `PodManager` | Start/stop/status of session pods (Farm, Flux, direct K8s, Docker) |
+| `PodManager` | Start/stop/status of session pods (Flux, direct K8s) |
 | `StoragePort` | PVC provisioning -- workspace (per-session) and home (per-user) |
 | `GatewayPort` | Gateway API config for session HTTPRoute creation |
 | `CredentialStorePort` | Pluggable credential storage (Vault, Infisical, memory, file) |

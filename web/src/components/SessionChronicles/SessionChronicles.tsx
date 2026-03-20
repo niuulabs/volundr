@@ -24,10 +24,10 @@ import type {
   SessionStatus,
   PullRequest,
   CIStatusValue,
-  LinearIssue,
-  LinearIssueStatus,
+  TrackerIssue,
+  TrackerIssueStatus,
 } from '@/models';
-import { LinearIssueSection } from '@/components/molecules/LinearIssueSection';
+import { TrackerIssueSection } from '@/components/molecules/TrackerIssueSection';
 import { ContextSidebar } from '@/components/ContextSidebar';
 import { useContextSidebar } from '@/hooks';
 import { cn } from '@/utils';
@@ -51,8 +51,8 @@ export interface SessionChroniclesProps {
   onCreatePR: (sessionId: string, title?: string, targetBranch?: string) => Promise<void>;
   onMergePR: (prNumber: number, repoUrl: string) => Promise<void>;
   onRefreshCI: (prNumber: number, repoUrl: string, branch: string) => Promise<void>;
-  linearIssue?: LinearIssue;
-  onLinearStatusChange?: (issueId: string, status: LinearIssueStatus) => void;
+  trackerIssue?: TrackerIssue;
+  onTrackerStatusChange?: (issueId: string, status: TrackerIssueStatus) => void;
   onNavigateToDiff?: (filePath: string) => void;
 }
 
@@ -97,8 +97,8 @@ export function SessionChronicles({
   onCreatePR,
   onMergePR,
   onRefreshCI,
-  linearIssue,
-  onLinearStatusChange,
+  trackerIssue,
+  onTrackerStatusChange,
   onNavigateToDiff,
 }: SessionChroniclesProps) {
   const [prTitle, setPrTitle] = useState('');
@@ -259,10 +259,10 @@ export function SessionChronicles({
 
           {/* Sidebar */}
           <div className={styles.sidebar}>
-            {linearIssue && onLinearStatusChange && (
+            {trackerIssue && onTrackerStatusChange && (
               <div className={styles.sidebarPanel}>
-                <h3 className={styles.sidebarTitle}>Linear Issue</h3>
-                <LinearIssueSection issue={linearIssue} onStatusChange={onLinearStatusChange} />
+                <h3 className={styles.sidebarTitle}>Issue</h3>
+                <TrackerIssueSection issue={trackerIssue} onStatusChange={onTrackerStatusChange} />
               </div>
             )}
 

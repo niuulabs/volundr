@@ -155,6 +155,12 @@ class InMemoryEventBroadcaster(EventBroadcaster):
                 "tokens_used": session.tokens_used,
                 "pod_name": session.pod_name,
                 "error": session.error,
+                "source": session.source.model_dump() if session.source else None,
+                "tracker_issue_id": session.tracker_issue_id,
+                "issue_tracker_url": session.issue_tracker_url,
+                "task_type": getattr(session, "task_type", None),
+                "owner_id": str(session.owner_id) if session.owner_id else None,
+                "tenant_id": str(session.tenant_id) if session.tenant_id else None,
             },
             timestamp=datetime.utcnow(),
         )

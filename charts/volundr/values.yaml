@@ -218,19 +218,18 @@ provisioning:
 
 podManager:
   # -- Fully-qualified class path for the PodManager adapter
-  adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
   # -- Existing secret containing the backend API token (mounted as POD_MANAGER_TOKEN)
   existingSecret: ""
   # -- Key in secret containing the token
   tokenKey: token
   # -- All kwargs forwarded to the adapter constructor
   kwargs:
-    base_url: "http://farm-tasks.default.svc.cluster.local"
-    timeout: 30
-    task_type: "skuld-claude"
-    user: "volundr"
-    labels:
-      - session
+    namespace: "default"
+    chart_name: "skuld"
+    chart_version: "0.1.0"
+    source_ref_kind: "HelmRepository"
+    source_ref_name: "skuld"
     base_domain: "skuld.valhalla.asgard.niuu.world"
     chat_scheme: "wss"
     code_scheme: "https"
@@ -252,12 +251,12 @@ chronicle:
   retentionDays: 0
 
 # Forge profiles (argument templates for workload instantiation)
-# Profiles define base values that Volundr assembles into Farm task_args.
+# Profiles define base values that Volundr assembles into session specs.
 profiles: []
   # - name: standard
   #   description: "Standard Claude Code session"
   #   workloadType: session
-  #   sessionDefinition: skuld-claude   # which FarmSessionDefinition to use
+  #   sessionDefinition: skuld-claude   # which session definition to use
   #   model: "claude-sonnet-4-20250514"
   #   resourceConfig:
   #     cpu: "500m"
@@ -271,7 +270,7 @@ profiles: []
   # - name: codex-standard
   #   description: "Standard OpenAI Codex session"
   #   workloadType: session
-  #   sessionDefinition: skuld-codex   # routes to the Codex FarmSessionDefinition
+  #   sessionDefinition: skuld-codex   # routes to the Codex session definition
   #   model: "o4-mini"
   #   resourceConfig:
   #     cpu: "500m"
@@ -697,6 +696,17 @@ authDiscovery:
   # -- OIDC scopes
   scopes: "openid profile email"
 
+# OAuth integration configuration
+oauth:
+  # -- Base URL for OAuth redirect callbacks (e.g. https://volundr.example.com)
+  redirectBaseUrl: ""
+  # -- Per-integration OAuth client credentials
+  # clients:
+  #   linear:
+  #     clientId: ""
+  #     clientSecret: ""
+  clients: {}
+
 # Application configuration
 config:
   # -- Log level (debug, info, warning, error)
@@ -725,8 +735,8 @@ existingSecrets:
   # Expected keys: ANTHROPIC_API_KEY, optionally ANTHROPIC_BASE_URL
   anthropic: volundr-anthropic-api
 
-# FarmSessionDefinition CRs to create
-# These define session types that Farm agents can use
+# Session definition templates
+# These define session types for workload instantiation
 sessionDefinitions:
   # Skuld-Claude session definition (Claude Code with embedded VS Code editor)
   skuldClaude:
@@ -845,7 +855,7 @@ sessionDefinitions:
       runtimeClassName: ""
 
       # -- Volundr API URL for session pods to report token usage
-      # Overridden in the FarmSessionDefinition template with the in-cluster URL
+      # Overridden in the session definition template with the in-cluster URL
       volundr:
         apiUrl: ""
 
@@ -1128,8 +1138,6 @@ networkPolicy:
   ingressFrom: []
   # -- Database pod selector for egress
   databasePodSelector: {}
-  # -- Farm pod selector for egress
-  farmPodSelector: {}
   # -- Extra ingress rules
   extraIngress: []
   # -- Extra egress rules
@@ -1193,10 +1201,11 @@ sidecars: []
 # Users select from these pre-configured definitions in the session wizard;
 # they cannot create or modify definitions from the UI.
 #
-# Each definition specifies the adapter class, credential schema, and
-# optional MCP server that gets injected into the session pod.
-integrations:
-  definitions: []
+# When definitions is empty (default), the built-in catalog from
+# _default_integration_definitions() is used (GitHub, GitLab, Linear,
+# Anthropic, OpenAI). Override here only to customise the catalog.
+integrations: {}
+  # definitions:
     # - slug: linear
     #   name: Linear
     #   description: "Linear issue tracker integration"

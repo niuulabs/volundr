@@ -266,9 +266,8 @@ data:
       secret_kwargs_env: {}
       {{- end }}
 
-    {{- if .Values.integrations }}
+    {{- if and .Values.integrations .Values.integrations.definitions }}
     integrations:
-      {{- if .Values.integrations.definitions }}
       definitions:
         {{- range .Values.integrations.definitions }}
         - slug: {{ .slug | quote }}
@@ -290,9 +289,27 @@ data:
           {{- if .mcp_server }}
           mcp_server: {{ .mcp_server | toJson }}
           {{- end }}
+          {{- if .env_from_credentials }}
+          env_from_credentials: {{ .env_from_credentials | toJson }}
+          {{- end }}
+          {{- if .file_mounts }}
+          file_mounts: {{ .file_mounts | toJson }}
+          {{- end }}
+        {{- end }}
+    {{- end }}
+
+    {{- if .Values.oauth }}
+    oauth:
+      redirect_base_url: {{ .Values.oauth.redirectBaseUrl | default "" | quote }}
+      {{- if .Values.oauth.clients }}
+      clients:
+        {{- range $slug, $client := .Values.oauth.clients }}
+        {{ $slug }}:
+          client_id: {{ $client.clientId | quote }}
+          client_secret: {{ $client.clientSecret | quote }}
         {{- end }}
       {{- else }}
-      definitions: []
+      clients: {}
       {{- end }}
     {{- end }}
 

@@ -47,12 +47,12 @@ Skuld is the session runtime for [Volundr](../volundr/). Each session deploys as
 Skuld is **not installed manually**. It is deployed automatically by the Volundr control plane:
 
 1. A user creates a session in Volundr
-2. Volundr submits a task to Farm ITaaS (or creates a Flux HelmRelease)
-3. Farm deploys a Skuld Helm release with session-specific values
+2. Volundr creates a Flux HelmRelease for the session
+3. Flux deploys a Skuld Helm release with session-specific values
 4. The session pod starts, clones the git repo (if configured), and accepts connections
 5. On session stop, the pod generates a chronicle summary and is deleted
 
-The `FarmSessionDefinition` CRs in the Volundr chart define default values for Skuld deployments. Per-session overrides (model, repo, resources) are merged at deployment time.
+The session definitions in the Volundr chart define default values for Skuld deployments. Per-session overrides (model, repo, resources) are merged at deployment time.
 
 ## Installation (Manual / Development)
 
@@ -98,11 +98,11 @@ helm install my-session ./charts/skuld \
 
 ### Session
 
-These values are typically set by Volundr/Farm at deployment time, not by the user.
+These values are typically set by Volundr at deployment time, not by the user.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `session.id` | string | `""` | Session identifier (UUID, set by Volundr/Farm) |
+| `session.id` | string | `""` | Session identifier (UUID, set by Volundr) |
 | `session.name` | string | `""` | Human-readable session name |
 | `session.model` | string | `"claude-sonnet-4-20250514"` | AI model to use for the session |
 
@@ -191,7 +191,7 @@ Optional sidecar for terminal access and dynamic local service management. Provi
 | `ingress.enabled` | bool | `true` | Enable ingress |
 | `ingress.className` | string | `"traefik"` | Ingress class name |
 | `ingress.annotations` | object | See values.yaml | Ingress annotations (controller-specific). Default includes cert-manager cluster-issuer |
-| `ingress.host` | string | `""` | Hostname for the session ingress (set by Farm ITaaS, e.g., `session-uuid.niuu.world`) |
+| `ingress.host` | string | `""` | Hostname for the session ingress (set by Volundr, e.g., `session-uuid.niuu.world`) |
 | `ingress.paths.session` | string | `"/session"` | WebSocket path for Skuld broker |
 | `ingress.paths.ide` | string | `"/"` | code-server IDE path (`/` catch-all when codeServer.enabled) |
 | `ingress.tls.enabled` | bool | `true` | Enable TLS |
@@ -252,7 +252,7 @@ Configuration for reporting token usage and session events back to the Volundr c
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `volundr.apiUrl` | string | `""` | URL of the Volundr API service (set by FarmSessionDefinition). Use the `-internal` service to bypass Envoy JWT validation |
+| `volundr.apiUrl` | string | `""` | URL of the Volundr API service (set by session definition). Use the `-internal` service to bypass Envoy JWT validation |
 | `volundr.serviceUserId` | string | `"skuld-broker"` | Service identity for internal API calls (`x-auth-user-id` header) |
 | `volundr.serviceTenantId` | string | `"default"` | Tenant ID for internal API calls (`x-auth-tenant` header) |
 

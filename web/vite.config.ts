@@ -73,6 +73,9 @@ export default defineConfig(({ mode }) => {
   // Without this polyfill the app crashes silently in the browser.
   define: {
     'process.env': '{}',
+    '__APP_VERSION__': JSON.stringify(
+      process.env.VITE_APP_VERSION || process.env.npm_package_version || 'dev'
+    ),
   },
   // Workers from @codingame/monaco-vscode-* use code-splitting, which
   // requires ES module format (IIFE is the Vite default and doesn't support it).

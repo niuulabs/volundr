@@ -8,8 +8,6 @@ import type {
   VolundrLog,
   SessionChronicle,
   ClusterResourceInfo,
-  DiffData,
-  DiffBase,
   PullRequest,
   MergeResult,
   CIStatusValue,
@@ -17,9 +15,8 @@ import type {
   McpServerConfig,
   VolundrPreset,
   VolundrTemplate,
-  LinearIssue,
+  TrackerIssue,
   ProjectRepoMapping,
-  FileTreeEntry,
   VolundrIdentity,
   VolundrUser,
   VolundrTenant,
@@ -38,6 +35,9 @@ import type {
   SessionSource,
   AdminSettings,
   AdminStorageSettings,
+  FeatureModule,
+  FeatureScope,
+  UserFeaturePreference,
 } from '@/models';
 
 /**
@@ -161,7 +161,7 @@ export interface IVolundrService {
     model: string;
     templateName?: string;
     taskType?: string;
-    linearIssue?: LinearIssue;
+    trackerIssue?: TrackerIssue;
     terminalRestricted?: boolean;
     workspaceId?: string;
     credentialNames?: string[];
@@ -175,6 +175,14 @@ export interface IVolundrService {
    * but is not managed by the backend.
    */
   connectSession(config: { name: string; hostname: string }): Promise<VolundrSession>;
+
+  /**
+   * Update a session (e.g. rename)
+   */
+  updateSession(
+    sessionId: string,
+    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string }
+  ): Promise<VolundrSession>;
 
   /**
    * Stop a running session
@@ -246,11 +254,6 @@ export interface IVolundrService {
   getChronicle(sessionId: string): Promise<SessionChronicle | null>;
 
   /**
-   * Get diff data for a specific file in a session
-   */
-  getSessionDiff(sessionId: string, filePath: string, base: DiffBase): Promise<DiffData>;
-
-  /**
    * Subscribe to chronicle updates for a session via SSE
    * @returns Unsubscribe function
    */
@@ -285,26 +288,19 @@ export interface IVolundrService {
   getSessionMcpServers(sessionId: string): Promise<McpServer[]>;
 
   /**
-   * Search Linear issues by query string, optionally scoped to a project
+   * Search Tracker issues by query string, optionally scoped to a project
    */
-  searchLinearIssues(query: string, projectId?: string): Promise<LinearIssue[]>;
+  searchTrackerIssues(query: string, projectId?: string): Promise<TrackerIssue[]>;
 
   /**
-   * Get mappings between Linear projects and git repositories
+   * Get mappings between tracker projects and git repositories
    */
   getProjectRepoMappings(): Promise<ProjectRepoMapping[]>;
 
   /**
-   * Update the status of a Linear issue
+   * Update the status of a Tracker issue
    */
-  updateLinearIssueStatus(issueId: string, status: LinearIssue['status']): Promise<LinearIssue>;
-
-  /**
-   * Get files and directories for a session workspace
-   * @param sessionId Session ID
-   * @param path Optional directory path to list (defaults to root)
-   */
-  getSessionFiles(sessionId: string, path?: string): Promise<FileTreeEntry[]>;
+  updateTrackerIssueStatus(issueId: string, status: TrackerIssue['status']): Promise<TrackerIssue>;
 
   /**
    * Get the current authenticated user's identity
@@ -489,4 +485,28 @@ export interface IVolundrService {
    * Update admin settings (admin only)
    */
   updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings>;
+
+  // Feature modules
+
+  /**
+   * Get the feature module catalog, optionally filtered by scope
+   */
+  getFeatureModules(scope?: FeatureScope): Promise<FeatureModule[]>;
+
+  /**
+   * Admin: toggle a feature on/off globally
+   */
+  toggleFeature(key: string, enabled: boolean): Promise<FeatureModule>;
+
+  /**
+   * Get the current user's feature layout preferences
+   */
+  getUserFeaturePreferences(): Promise<UserFeaturePreference[]>;
+
+  /**
+   * Update the current user's feature layout preferences
+   */
+  updateUserFeaturePreferences(
+    preferences: UserFeaturePreference[]
+  ): Promise<UserFeaturePreference[]>;
 }

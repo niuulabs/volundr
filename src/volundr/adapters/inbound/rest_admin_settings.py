@@ -19,6 +19,10 @@ class AdminStorageSettings(BaseModel):
     home_enabled: bool = Field(
         description="Whether home PVC provisioning is enabled for users",
     )
+    file_manager_enabled: bool = Field(
+        default=True,
+        description="Whether the file manager tab is visible in sessions",
+    )
 
 
 class AdminSettingsResponse(BaseModel):
@@ -49,9 +53,11 @@ def create_admin_settings_router() -> APIRouter:
     ):
         """Get admin settings (admin only)."""
         settings = request.app.state.admin_settings
+        storage = settings.get("storage", {})
         return AdminSettingsResponse(
             storage=AdminStorageSettings(
-                home_enabled=settings.get("storage", {}).get("home_enabled", True),
+                home_enabled=storage.get("home_enabled", True),
+                file_manager_enabled=storage.get("file_manager_enabled", True),
             ),
         )
 
@@ -64,14 +70,19 @@ def create_admin_settings_router() -> APIRouter:
         """Update admin settings (admin only)."""
         settings = request.app.state.admin_settings
         if body.storage is not None:
-            settings.setdefault("storage", {})["home_enabled"] = body.storage.home_enabled
+            storage = settings.setdefault("storage", {})
+            storage["home_enabled"] = body.storage.home_enabled
+            storage["file_manager_enabled"] = body.storage.file_manager_enabled
             logger.info(
-                "Admin updated storage.home_enabled to %s",
+                "Admin updated storage settings: home_enabled=%s, file_manager_enabled=%s",
                 body.storage.home_enabled,
+                body.storage.file_manager_enabled,
             )
+        storage = settings.get("storage", {})
         return AdminSettingsResponse(
             storage=AdminStorageSettings(
-                home_enabled=settings.get("storage", {}).get("home_enabled", True),
+                home_enabled=storage.get("home_enabled", True),
+                file_manager_enabled=storage.get("file_manager_enabled", True),
             ),
         )
 

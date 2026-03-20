@@ -1,8 +1,9 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
-import { Code, RotateCcw } from 'lucide-react';
+import { useRef, useEffect, useState } from 'react';
+import { Code } from 'lucide-react';
 import { cn } from '@/utils';
-import { isInitialized, getInitializedSessionId } from './editorState';
-import { initWorkbench } from './workbenchInit';
+import { isInitialized } from './editorState';
+import { getActiveRoute } from './sessionRouter';
+import { initWorkbench, switchSession } from './workbenchInit';
 import styles from './EditorPanel.module.css';
 
 export interface EditorPanelProps {
@@ -18,7 +19,7 @@ export interface EditorPanelProps {
   hidden?: boolean;
 }
 
-type EditorStatus = 'idle' | 'initializing' | 'connected' | 'error';
+type EditorStatus = 'idle' | 'initializing' | 'connected' | 'switching' | 'error';
 
 /**
  * VS Code workbench panel using @codingame/monaco-vscode-api.
@@ -26,8 +27,9 @@ type EditorStatus = 'idle' | 'initializing' | 'connected' | 'error';
  * Renders the full VS Code workbench inside a div, connected to a
  * VS Code REH server in the session pod.
  *
- * `initialize()` can only be called once per page load (upstream VS Code
- * constraint). If the sessionId changes, the user must reload the page.
+ * The workbench is initialized once on first mount. When the session
+ * changes, the WebSocket routing and workspace folder are dynamically
+ * swapped without requiring a page reload.
  */
 export function EditorPanel({
   hostname,
@@ -40,14 +42,9 @@ export function EditorPanel({
   const [status, setStatus] = useState<EditorStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Derive session-changed state without setState in the effect body.
-  const sessionChanged = useMemo(
-    () => isInitialized() && sessionId != null && getInitializedSessionId() !== sessionId,
-    [sessionId]
-  );
-
+  // First-time initialization effect.
   useEffect(() => {
-    if (!hostname || !sessionId || !containerRef.current || sessionChanged) {
+    if (!hostname || !sessionId || !containerRef.current) {
       return;
     }
 
@@ -76,7 +73,45 @@ export function EditorPanel({
     return () => {
       cancelled = true;
     };
-  }, [hostname, sessionId, codeEndpoint, sessionChanged]);
+  }, [hostname, sessionId, codeEndpoint]);
+
+  // Session switch effect — runs when session changes after initialization.
+  useEffect(() => {
+    if (!hostname || !sessionId) {
+      return;
+    }
+
+    if (!isInitialized()) {
+      return;
+    }
+
+    // Skip if this is already the active session.
+    const currentRoute = getActiveRoute();
+    if (currentRoute?.sessionId === sessionId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    Promise.resolve()
+      .then(() => {
+        if (!cancelled) setStatus('switching');
+        return switchSession(sessionId, hostname, codeEndpoint ?? undefined);
+      })
+      .then(() => {
+        if (!cancelled) setStatus('connected');
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setStatus('error');
+          setErrorMessage(err instanceof Error ? err.message : String(err));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hostname, sessionId, codeEndpoint]);
 
   if (!hostname || !sessionId) {
     return (
@@ -84,25 +119,6 @@ export function EditorPanel({
         <div className={styles.emptyState}>
           <Code className={styles.emptyIcon} />
           <p>Start a session to access the editor</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (sessionChanged) {
-    return (
-      <div className={cn(styles.container, className)}>
-        <div className={styles.emptyState}>
-          <RotateCcw className={styles.emptyIcon} />
-          <p>Session changed — the editor requires a page reload to reconnect.</p>
-          <button
-            className={styles.reloadButton}
-            onClick={() => globalThis.location.reload()}
-            type="button"
-          >
-            <RotateCcw size={14} />
-            Reload page
-          </button>
         </div>
       </div>
     );

@@ -144,9 +144,9 @@ class TestValuesDefaults:
         broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
         assert broker["transport"] == "subprocess"
 
-    def test_pod_manager_default_task_type_is_skuld_claude(self, values_yaml):
-        """Test podManager default task_type is skuld-claude."""
-        assert values_yaml["podManager"]["kwargs"]["task_type"] == "skuld-claude"
+    def test_pod_manager_default_chart_name_is_skuld(self, values_yaml):
+        """Test podManager default chart_name is skuld."""
+        assert values_yaml["podManager"]["kwargs"]["chart_name"] == "skuld"
 
     def test_skuld_claude_env_secrets_has_anthropic_key(self, values_yaml):
         """Test skuld-claude defaults have ANTHROPIC_API_KEY in envSecrets."""
@@ -161,161 +161,6 @@ class TestValuesDefaults:
         assert isinstance(secrets, list)
         assert len(secrets) == 1
         assert secrets[0]["envVar"] == "OPENAI_API_KEY"
-
-
-class TestFarmSessionDefinitionTemplate:
-    """Tests for farm-session-definition-skuld-claude.yaml template structure."""
-
-    @pytest.fixture
-    def template_yaml(self) -> str:
-        """Load farm-session-definition-skuld-claude.yaml template."""
-        template_path = CHART_DIR / "templates" / "farm-session-definition-skuld-claude.yaml"
-        return template_path.read_text()
-
-    def test_has_conditional_enabled(self, template_yaml):
-        """Test template is conditionally enabled."""
-        assert ".Values.sessionDefinitions.skuldClaude.enabled" in template_yaml
-        assert 'contains "FarmPodManager"' in template_yaml
-
-    def test_has_correct_api_version(self, template_yaml):
-        """Test template uses correct API version."""
-        assert "apiVersion: farm.nvidia.com/v1" in template_yaml
-
-    def test_has_correct_kind(self, template_yaml):
-        """Test template uses correct kind."""
-        assert "kind: FarmSessionDefinition" in template_yaml
-
-    def test_has_name_skuld_claude(self, template_yaml):
-        """Test template uses skuld-claude as the resource name."""
-        assert "name: skuld-claude" in template_yaml
-
-    def test_has_namespace(self, template_yaml):
-        """Test template sets namespace."""
-        assert ".Release.Namespace" in template_yaml
-
-    def test_has_labels(self, template_yaml):
-        """Test template includes labels."""
-        assert 'include "volundr.labels"' in template_yaml
-
-    def test_spec_has_routing_labels(self, template_yaml):
-        """Test spec has routing labels."""
-        assert ".Values.sessionDefinitions.skuldClaude.labels" in template_yaml
-
-    def test_spec_has_active_field(self, template_yaml):
-        """Test spec has active field."""
-        assert ".Values.sessionDefinitions.skuldClaude.active" in template_yaml
-
-    def test_helm_has_chart(self, template_yaml):
-        """Test helm config has chart field."""
-        assert ".Values.sessionDefinitions.skuldClaude.helm.chart" in template_yaml
-
-    def test_helm_has_repo(self, template_yaml):
-        """Test helm config has repo field."""
-        assert ".Values.sessionDefinitions.skuldClaude.helm.repo" in template_yaml
-
-    def test_helm_has_repo_name(self, template_yaml):
-        """Test helm config has repoName field."""
-        assert ".Values.sessionDefinitions.skuldClaude.helm.repoName" in template_yaml
-
-    def test_helm_has_version(self, template_yaml):
-        """Test helm config has version field."""
-        assert ".Values.sessionDefinitions.skuldClaude.helm.version" in template_yaml
-
-    def test_values_has_session_model(self, template_yaml):
-        """Test values includes session model."""
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.session.model" in template_yaml
-
-    def test_values_has_image(self, template_yaml):
-        """Test values includes image configuration."""
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.image.repository" in template_yaml
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.image.tag" in template_yaml
-
-    def test_values_has_resources(self, template_yaml):
-        """Test values includes resources."""
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.resources" in template_yaml
-
-    def test_values_has_ingress(self, template_yaml):
-        """Test values includes ingress configuration."""
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.ingress.className" in template_yaml
-        assert (
-            ".Values.sessionDefinitions.skuldClaude.defaults.ingress.annotations" in template_yaml
-        )
-
-    def test_values_has_persistence_with_pvc_reference(self, template_yaml):
-        """Test values includes persistence with PVC reference."""
-        assert 'include "volundr.sessionsPvcName"' in template_yaml
-        assert (
-            ".Values.sessionDefinitions.skuldClaude.defaults.persistence.mountPath" in template_yaml
-        )
-
-    def test_values_has_security_context(self, template_yaml):
-        """Test values includes security context."""
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.securityContext" in template_yaml
-
-    def test_values_has_credential_files(self, template_yaml):
-        """Test values includes credentialFiles block (not legacy claude block)."""
-        assert "credentialFiles:" in template_yaml
-        assert ".credentialFiles.destDir" in template_yaml
-        assert ".credentialFiles.secretName" in template_yaml
-        assert "claude:" not in template_yaml
-
-    def test_passes_env_secrets(self, template_yaml):
-        """Test template passes envSecrets through to skuld chart."""
-        assert "envSecrets:" in template_yaml
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.envSecrets" in template_yaml
-
-    def test_passes_env_vars(self, template_yaml):
-        """Test template passes envVars through to skuld chart."""
-        assert ".Values.sessionDefinitions.skuldClaude.defaults.envVars" in template_yaml
-
-
-class TestFarmSessionDefinitionCodexTemplate:
-    """Tests for farm-session-definition-skuld-codex.yaml template structure."""
-
-    @pytest.fixture
-    def template_yaml(self) -> str:
-        """Load farm-session-definition-skuld-codex.yaml template."""
-        template_path = CHART_DIR / "templates" / "farm-session-definition-skuld-codex.yaml"
-        return template_path.read_text()
-
-    def test_has_conditional_enabled(self, template_yaml):
-        """Test codex template is conditionally enabled."""
-        assert ".Values.sessionDefinitions.skuldCodex.enabled" in template_yaml
-        assert 'contains "FarmPodManager"' in template_yaml
-
-    def test_has_correct_kind(self, template_yaml):
-        """Test codex template uses correct kind."""
-        assert "kind: FarmSessionDefinition" in template_yaml
-
-    def test_has_name_skuld_codex(self, template_yaml):
-        """Test codex template uses skuld-codex as the resource name."""
-        assert "name: skuld-codex" in template_yaml
-
-    def test_references_same_skuld_chart(self, template_yaml):
-        """Test codex template references the shared skuld chart."""
-        assert ".Values.sessionDefinitions.skuldCodex.helm.chart" in template_yaml
-
-    def test_has_credential_files_block(self, template_yaml):
-        """Test codex template uses credentialFiles block."""
-        assert "credentialFiles:" in template_yaml
-        assert ".credentialFiles.destDir" in template_yaml
-
-    def test_does_not_reference_skuld_claude(self, template_yaml):
-        """Test codex template does not reference skuldClaude values."""
-        assert "skuldClaude" not in template_yaml
-
-    def test_broker_cli_type_codex(self, template_yaml):
-        """Test codex template sets cliType to codex."""
-        assert ".Values.sessionDefinitions.skuldCodex.defaults.broker.cliType" in template_yaml
-
-    def test_passes_env_secrets(self, template_yaml):
-        """Test codex template passes envSecrets through to skuld chart."""
-        assert "envSecrets:" in template_yaml
-        assert ".Values.sessionDefinitions.skuldCodex.defaults.envSecrets" in template_yaml
-
-    def test_passes_env_vars(self, template_yaml):
-        """Test codex template passes envVars through to skuld chart."""
-        assert ".Values.sessionDefinitions.skuldCodex.defaults.envVars" in template_yaml
 
 
 class TestHelpersTemplate:
@@ -583,9 +428,9 @@ class TestRbacTemplate:
         """Test template creates RoleBinding."""
         assert "kind: RoleBinding" in template_yaml
 
-    def test_has_farm_api_group(self, template_yaml):
-        """Test template has Farm API group permissions."""
-        assert "farm.nvidia.com" in template_yaml
+    def test_has_flux_api_group(self, template_yaml):
+        """Test template has Flux API group permissions."""
+        assert "helm.toolkit.fluxcd.io" in template_yaml
 
     def test_has_cluster_wide_conditional(self, template_yaml):
         """Test template has cluster-wide conditional."""
@@ -750,7 +595,7 @@ class TestNewValuesDefaults:
         pm = values_yaml["podManager"]
         assert "adapter" in pm
         assert "kwargs" in pm
-        assert pm["kwargs"]["timeout"] == 30
+        assert pm["kwargs"]["chart_name"] == "skuld"
 
     def test_resources_configured(self, values_yaml):
         """Test resources are configured."""

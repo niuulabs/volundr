@@ -72,6 +72,7 @@ def app(
         local_mounts = LocalMountsConfig()
 
     app.state.settings = _SettingsStub()
+    app.state.admin_settings = {}
     return app
 
 
