@@ -406,11 +406,7 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
         <div className={styles.errorBar} role="alert">
           <XCircle className={styles.toolbarIcon} />
           <span>{error}</span>
-          <button
-            type="button"
-            className={styles.errorDismiss}
-            onClick={() => setError(null)}
-          >
+          <button type="button" className={styles.errorDismiss} onClick={() => setError(null)}>
             Dismiss
           </button>
         </div>
@@ -423,11 +419,7 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
               Uploads ({uploads.filter(u => u.status === 'done').length}/{uploads.length})
             </span>
             {hasFinishedUploads && (
-              <button
-                type="button"
-                className={styles.uploadBarClear}
-                onClick={clearDoneUploads}
-              >
+              <button type="button" className={styles.uploadBarClear} onClick={clearDoneUploads}>
                 Clear
               </button>
             )}
@@ -446,9 +438,7 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
                 )}
                 <span className={styles.uploadItemName}>{item.file.name}</span>
                 <span className={styles.uploadItemSize}>{formatBytes(item.file.size)}</span>
-                {item.status === 'done' && (
-                  <span className={styles.uploadItemStatus}>Done</span>
-                )}
+                {item.status === 'done' && <span className={styles.uploadItemStatus}>Done</span>}
                 {item.status === 'error' && (
                   <span className={styles.uploadItemStatusError}>{item.error ?? 'Failed'}</span>
                 )}
@@ -460,11 +450,7 @@ export function FileManager({ chatEndpoint, className }: FileManagerProps) {
 
       {showMkdir && (
         <>
-          <div
-            className={styles.overlay}
-            onClick={() => setShowMkdir(false)}
-            role="presentation"
-          />
+          <div className={styles.overlay} onClick={() => setShowMkdir(false)} role="presentation" />
           <div className={styles.dialog} role="dialog" aria-label="New Folder">
             <div className={styles.dialogTitle}>New Folder</div>
             <input
