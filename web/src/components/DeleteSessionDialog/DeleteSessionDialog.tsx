@@ -69,20 +69,18 @@ export const DeleteSessionDialog: FC<DeleteSessionDialogProps> = ({
     <div className={styles.overlay} data-testid="delete-session-dialog">
       <div className={styles.backdrop} onClick={handleCancel} />
       <div className={styles.dialog}>
-        <h2 className={styles.title}>
-          {isManual ? 'Remove session' : 'Delete session'}
-        </h2>
+        <h2 className={styles.title}>{isManual ? 'Remove session' : 'Delete session'}</h2>
         <p className={styles.description}>
           {isManual ? (
             <>
-              Remove <span className={styles.sessionName}>{sessionName}</span> from the
-              session list?
+              Remove <span className={styles.sessionName}>{sessionName}</span> from the session
+              list?
             </>
           ) : (
             <>
               Are you sure you want to delete{' '}
-              <span className={styles.sessionName}>{sessionName}</span>? This action cannot
-              be undone.
+              <span className={styles.sessionName}>{sessionName}</span>? This action cannot be
+              undone.
             </>
           )}
         </p>

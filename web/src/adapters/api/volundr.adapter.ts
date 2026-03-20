@@ -890,9 +890,8 @@ export class ApiVolundrService implements IVolundrService {
 
     // Manual sessions: no-op on backend, just remove locally
     if (session?.origin !== 'manual') {
-      await api.delete(`/sessions/${sessionId}`, {
-        data: { cleanup },
-      });
+      const body = cleanup.length > 0 ? { cleanup } : undefined;
+      await api.delete(`/sessions/${sessionId}`, body);
     }
 
     this.cachedSessions = this.cachedSessions.filter(s => s.id !== sessionId);
