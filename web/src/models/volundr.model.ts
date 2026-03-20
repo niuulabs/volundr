@@ -393,7 +393,7 @@ export interface AdminSettings {
   storage: AdminStorageSettings;
 }
 
-export type FeatureScope = 'admin' | 'user';
+export type FeatureScope = 'admin' | 'user' | 'session';
 
 export interface FeatureModule {
   key: string;

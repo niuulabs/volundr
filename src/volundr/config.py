@@ -790,6 +790,35 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             key="feature-management", label="Features", icon="ToggleLeft",
             scope="admin", default_enabled=True, admin_only=True, order=50,
         ),
+        # Session-scoped modules (main page panels)
+        FeatureModuleConfig(
+            key="chat", label="Chat", icon="MessageSquare",
+            scope="session", default_enabled=True, order=10,
+        ),
+        FeatureModuleConfig(
+            key="terminal", label="Terminal", icon="Terminal",
+            scope="session", default_enabled=True, order=20,
+        ),
+        FeatureModuleConfig(
+            key="code", label="Code", icon="Code",
+            scope="session", default_enabled=True, order=30,
+        ),
+        FeatureModuleConfig(
+            key="files", label="Files", icon="FolderOpen",
+            scope="session", default_enabled=True, order=40,
+        ),
+        FeatureModuleConfig(
+            key="diffs", label="Diffs", icon="GitCompareArrows",
+            scope="session", default_enabled=True, order=50,
+        ),
+        FeatureModuleConfig(
+            key="chronicles", label="Chronicles", icon="ScrollText",
+            scope="session", default_enabled=True, order=60,
+        ),
+        FeatureModuleConfig(
+            key="logs", label="Logs", icon="FileText",
+            scope="session", default_enabled=True, order=70,
+        ),
         # User-scoped modules
         FeatureModuleConfig(
             key="credentials", label="Credentials", icon="KeyRound",

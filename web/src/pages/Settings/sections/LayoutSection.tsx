@@ -28,7 +28,7 @@ export function LayoutSection({ service }: LayoutSectionProps) {
     setLoading(true);
     try {
       const [features, prefs] = await Promise.all([
-        service.getFeatureModules('user'),
+        service.getFeatureModules('session'),
         service.getUserFeaturePreferences(),
       ]);
 
@@ -116,9 +116,7 @@ export function LayoutSection({ service }: LayoutSectionProps) {
     <div className={styles.section}>
       <div className={styles.header}>
         <h3 className={styles.title}>Layout</h3>
-        <p className={styles.subtitle}>
-          Show, hide, or reorder the sections in your Settings page.
-        </p>
+        <p className={styles.subtitle}>Show, hide, or reorder the panels in your session view.</p>
       </div>
 
       <div className={styles.featureList}>

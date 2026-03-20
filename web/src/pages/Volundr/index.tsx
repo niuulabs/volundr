@@ -59,8 +59,9 @@ import { useVolundr, useLocalStorage, useSessionProbe, useDiffViewer, useIdentit
 import { useAuth } from '@/auth';
 import { volundrService } from '@/adapters';
 import { getAccessToken } from '@/adapters/api/client';
-import type { VolundrSession, VolundrLog } from '@/models';
+import type { VolundrSession, VolundrLog, FeatureModule, UserFeaturePreference } from '@/models';
 import { isSessionBooting, isSessionActive } from '@/models';
+import { resolveIcon } from '@/modules/icons';
 import { formatTokens, cn } from '@/utils';
 import { getRepo, getBranch, getSourceLabel, isGitSource } from '@/utils/source';
 import styles from './VolundrPage.module.css';
@@ -124,10 +125,91 @@ export function VolundrPage() {
   const [pendingDiffFile, setPendingDiffFile] = useState<string | null>(null);
   const [showLaunchWizard, setShowLaunchWizard] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
-  const [fileManagerEnabled, setFileManagerEnabled] = useState(false);
+  const defaultPanels: FeatureModule[] = [
+    {
+      key: 'chat',
+      label: 'Chat',
+      icon: 'MessageSquare',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 10,
+    },
+    {
+      key: 'terminal',
+      label: 'Terminal',
+      icon: 'Terminal',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 20,
+    },
+    {
+      key: 'code',
+      label: 'Code',
+      icon: 'Code',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 30,
+    },
+    {
+      key: 'files',
+      label: 'Files',
+      icon: 'FolderOpen',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 40,
+    },
+    {
+      key: 'diffs',
+      label: 'Diffs',
+      icon: 'GitCompareArrows',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 50,
+    },
+    {
+      key: 'chronicles',
+      label: 'Chronicles',
+      icon: 'ScrollText',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 60,
+    },
+    {
+      key: 'logs',
+      label: 'Logs',
+      icon: 'FileText',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 70,
+    },
+  ];
+  const [sessionPanels, setSessionPanels] = useState<FeatureModule[]>(defaultPanels);
+  const [panelPrefs, setPanelPrefs] = useState<UserFeaturePreference[]>([]);
 
   useEffect(() => {
-    volundrService.getFeatures().then(f => setFileManagerEnabled(f.fileManagerEnabled));
+    Promise.all([
+      volundrService.getFeatureModules('session'),
+      volundrService.getUserFeaturePreferences(),
+    ]).then(([panels, prefs]) => {
+      if (panels.length > 0) {
+        setSessionPanels(panels);
+      }
+      setPanelPrefs(prefs);
+    });
   }, []);
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage(
     'volundr-sidebar-collapsed',
@@ -414,15 +496,43 @@ export function VolundrPage() {
     return true;
   });
 
-  const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
-    { id: 'chat', label: 'Chat', icon: MessageSquare },
-    { id: 'terminal', label: 'Terminal', icon: Terminal },
-    { id: 'code', label: isManualSession ? 'IDE' : 'Code', icon: Code },
-    ...(fileManagerEnabled ? [{ id: 'files' as TabId, label: 'Files', icon: FolderOpen }] : []),
-    { id: 'diffs', label: 'Diffs', icon: GitCompareArrows },
-    { id: 'chronicles', label: 'Chronicles', icon: ScrollText },
-    { id: 'logs', label: 'Logs', icon: FileText },
-  ];
+  const tabs = useMemo(() => {
+    const prefMap = new Map(panelPrefs.map(p => [p.featureKey, p]));
+
+    // Filter to enabled + visible panels
+    const visible = sessionPanels.filter(f => {
+      if (!f.enabled) return false;
+      const pref = prefMap.get(f.key);
+      if (pref && !pref.visible) return false;
+      return true;
+    });
+
+    // Sort by user preference, then default order
+    visible.sort((a, b) => {
+      const prefA = prefMap.get(a.key);
+      const prefB = prefMap.get(b.key);
+      const orderA = prefA !== undefined ? prefA.sortOrder : a.order;
+      const orderB = prefB !== undefined ? prefB.sortOrder : b.order;
+      return orderA - orderB;
+    });
+
+    // Icon fallback map for panels that need special handling
+    const fallbackIcons: Record<string, typeof MessageSquare> = {
+      chat: MessageSquare,
+      terminal: Terminal,
+      code: Code,
+      files: FolderOpen,
+      diffs: GitCompareArrows,
+      chronicles: ScrollText,
+      logs: FileText,
+    };
+
+    return visible.map(f => ({
+      id: f.key as TabId,
+      label: f.key === 'code' && isManualSession ? 'IDE' : f.label,
+      icon: resolveIcon(f.icon) ?? fallbackIcons[f.key] ?? MessageSquare,
+    }));
+  }, [sessionPanels, panelPrefs, isManualSession]);
 
   const selectedModel = effectiveSelectedSession ? models[effectiveSelectedSession.model] : null;
   const isLocal = selectedModel?.provider === 'local';
@@ -1161,7 +1271,7 @@ export function VolundrPage() {
               </Suspense>
             )}
 
-            {activeTab === 'files' && fileManagerEnabled && (
+            {activeTab === 'files' && (
               <FileManager chatEndpoint={chatEndpoint} className={styles.tabPanel} />
             )}
 
