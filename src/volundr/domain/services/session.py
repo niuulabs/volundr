@@ -388,7 +388,7 @@ class SessionService:
             except Exception as e:
                 # Log the error but continue with deletion.
                 # The session should be deleted even if we can't stop its pods
-                # (e.g., task already cleaned up in Farm, network issues, etc.)
+                # (e.g., task already cleaned up, network issues, etc.)
                 logger.warning(
                     "Failed to stop pods for session %s during deletion: %s. "
                     "Proceeding with session deletion.",
@@ -614,8 +614,8 @@ class SessionService:
             await self._broadcaster.publish_session_updated(stopping)
 
         try:
-            stopped_in_farm = await self._pod_manager.stop(session)
-            if not stopped_in_farm:
+            stopped = await self._pod_manager.stop(session)
+            if not stopped:
                 logger.warning(
                     "Pod manager could not find/cancel pods for session %s "
                     "(may already be stopped or task ID mismatch)",

@@ -3,6 +3,7 @@
 from volundr.config import (
     DatabaseConfig,
     EventPipelineConfig,
+    FeatureModuleConfig,
     GitConfig,
     GitHubConfig,
     GitHubInstance,
@@ -11,6 +12,7 @@ from volundr.config import (
     OtelConfig,
     RabbitMQConfig,
     Settings,
+    _default_feature_modules,
 )
 
 
@@ -603,9 +605,9 @@ database:
   port: 5433
 
 pod_manager:
-  adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
   kwargs:
-    base_url: "https://farm.yaml.example.com"
+    namespace: "volundr-test"
 """
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml_content)
@@ -617,7 +619,7 @@ pod_manager:
 
         assert settings.database.host == "yaml-db-host"
         assert settings.database.port == 5433
-        assert settings.pod_manager.kwargs["base_url"] == "https://farm.yaml.example.com"
+        assert settings.pod_manager.kwargs["namespace"] == "volundr-test"
 
     def test_env_vars_override_yaml(self, tmp_path, monkeypatch):
         """Environment variables override YAML config values.
@@ -686,6 +688,72 @@ git:
 
         assert settings.database.host == "localhost"
         assert settings.pod_manager.kwargs == {}
+
+
+class TestFeatureModuleConfig:
+    """Tests for FeatureModuleConfig."""
+
+    def test_defaults(self):
+        config = FeatureModuleConfig(
+            key="test", label="Test", icon="Settings", scope="user",
+        )
+        assert config.default_enabled is True
+        assert config.admin_only is False
+        assert config.order == 0
+
+    def test_custom_values(self):
+        config = FeatureModuleConfig(
+            key="storage",
+            label="Storage",
+            icon="HardDrive",
+            scope="admin",
+            default_enabled=False,
+            admin_only=True,
+            order=30,
+        )
+        assert config.key == "storage"
+        assert config.scope == "admin"
+        assert config.default_enabled is False
+        assert config.admin_only is True
+        assert config.order == 30
+
+    def test_default_feature_modules_not_empty(self):
+        modules = _default_feature_modules()
+        assert len(modules) > 0
+        keys = [m.key for m in modules]
+        assert "users" in keys
+        assert "credentials" in keys
+
+    def test_default_modules_have_both_scopes(self):
+        modules = _default_feature_modules()
+        scopes = {m.scope for m in modules}
+        assert "admin" in scopes
+        assert "user" in scopes
+
+    def test_settings_includes_features(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        settings = Settings()
+        assert len(settings.features) > 0
+        assert all(isinstance(f, FeatureModuleConfig) for f in settings.features)
+
+    def test_settings_features_from_yaml(self, tmp_path, monkeypatch):
+        yaml_content = """
+features:
+  - key: custom
+    label: Custom Module
+    icon: Settings
+    scope: user
+    default_enabled: true
+    order: 100
+"""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml_content)
+        monkeypatch.chdir(tmp_path)
+
+        settings = Settings()
+        assert len(settings.features) == 1
+        assert settings.features[0].key == "custom"
+        assert settings.features[0].label == "Custom Module"
 
 
 class TestRabbitMQConfig:

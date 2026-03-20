@@ -1316,6 +1316,7 @@ def create_router(
         tags=["Sessions"],
     )
     async def report_token_usage(
+        request: Request,
         session_id: UUID = Path(description="Unique session identifier"),
         data: TokenUsageReport = ...,
     ) -> TokenUsageResponse:
@@ -1325,6 +1326,18 @@ def create_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Token service not available",
             )
+
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_usage")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report usage for session {session_id}",
+                )
 
         provider = ModelProvider(data.provider)
 
@@ -1532,6 +1545,7 @@ def create_router(
         tags=["Chronicles"],
     )
     async def report_chronicle(
+        request: Request,
         session_id: UUID = Path(description="Unique session identifier"),
         data: BrokerChronicleReport = ...,
     ) -> ChronicleResponse:
@@ -1545,6 +1559,19 @@ def create_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Chronicle service not available",
             )
+
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_chronicle")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report chronicle for session {session_id}",
+                )
+
         try:
             chronicle = await chronicle_service.create_or_update_from_broker(
                 session_id=session_id,
@@ -1845,6 +1872,7 @@ def create_router(
         tags=["Timeline"],
     )
     async def add_timeline_event(
+        request: Request,
         session_id: UUID = Path(description="Session identifier for timeline lookup"),
         data: TimelineEventCreate = ...,
     ) -> TimelineEventResponse:
@@ -1854,6 +1882,18 @@ def create_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Chronicle service not available",
             )
+
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_timeline")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report timeline for session {session_id}",
+                )
 
         chronicle = await chronicle_service.get_chronicle_by_session(session_id)
         if chronicle is None:

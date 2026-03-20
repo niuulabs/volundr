@@ -96,7 +96,7 @@ Controls how session pods are deployed. Uses the dynamic adapter pattern.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `podManager.adapter` | `volundr.adapters.outbound.farm.FarmPodManager` | Fully-qualified class path |
+| `podManager.adapter` | `volundr.adapters.outbound.flux.FluxPodManager` | Fully-qualified class path |
 | `podManager.existingSecret` | `""` | Secret with backend API token |
 | `podManager.tokenKey` | `token` | Key in secret for token |
 | `podManager.kwargs` | see below | Constructor kwargs |
@@ -105,37 +105,16 @@ Default kwargs:
 
 ```yaml
 kwargs:
-  base_url: "http://farm-tasks.default.svc.cluster.local"
-  timeout: 30
-  task_type: "skuld-claude"
-  user: "volundr"
-  labels:
-    - session
+  namespace: "default"
+  chart_name: "skuld"
+  chart_version: "0.1.0"
+  source_ref_kind: "HelmRepository"
+  source_ref_name: "skuld"
   base_domain: "skuld.valhalla.asgard.niuu.world"
   chat_scheme: "wss"
   code_scheme: "https"
   chat_path: "/session"
   code_path: "/"
-```
-
-Flux adapter example:
-
-```yaml
-podManager:
-  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
-  kwargs:
-    namespace: "default"
-    chart_name: "skuld"
-    chart_version: "0.1.0"
-    source_ref_kind: "HelmRepository"
-    source_ref_name: "skuld"
-    timeout: "5m"
-    interval: "5m"
-    base_domain: "skuld.valhalla.asgard.niuu.world"
-    chat_scheme: "wss"
-    code_scheme: "https"
-    chat_path: "/session"
-    code_path: "/"
 ```
 
 ---
@@ -186,7 +165,7 @@ profiles:
 | `name` | Unique profile name |
 | `description` | Human-readable description |
 | `workloadType` | Workload type (`session`) |
-| `sessionDefinition` | Which FarmSessionDefinition to use (`skuld-claude`, `skuld-codex`) |
+| `sessionDefinition` | Which session definition to use (`skuld-claude`, `skuld-codex`) |
 | `model` | Default AI model |
 | `resourceConfig` | CPU, memory, GPU requests |
 | `mcpServers` | MCP servers to inject |
@@ -584,7 +563,7 @@ Each entry also supports `secretKwargs` for injecting values from K8s secrets.
 
 ## Session Definitions
 
-Define session types (FarmSessionDefinition CRs).
+Define session types for workload instantiation.
 
 ### skuld-claude
 
@@ -762,7 +741,6 @@ securityContext:
 | `networkPolicy.enabled` | `false` | Enable NetworkPolicy |
 | `networkPolicy.ingressFrom` | `[]` | Ingress selectors |
 | `networkPolicy.databasePodSelector` | `{}` | DB pod selector for egress |
-| `networkPolicy.farmPodSelector` | `{}` | Farm pod selector for egress |
 | `networkPolicy.extraIngress` | `[]` | Extra ingress rules |
 | `networkPolicy.extraEgress` | `[]` | Extra egress rules |
 

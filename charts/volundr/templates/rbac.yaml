@@ -6,12 +6,6 @@ metadata:
   labels:
     {{- include "volundr.labels" . | nindent 4 }}
 rules:
-  {{- if contains "FarmPodManager" .Values.podManager.adapter }}
-  # Access to Farm session definitions (FarmPodManager only)
-  - apiGroups: ["farm.nvidia.com"]
-    resources: ["farmsessiondefinitions", "farmsessions"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  {{- end }}
   {{- if and (contains "FluxPodManager" .Values.podManager.adapter) (not .Values.rbac.clusterWide) }}
   # Access to Flux HelmReleases (FluxPodManager only, same-namespace)
   # NOTE: If sessions run in a different namespace, enable rbac.clusterWide
@@ -74,12 +68,6 @@ metadata:
   labels:
     {{- include "volundr.labels" . | nindent 4 }}
 rules:
-  {{- if contains "FarmPodManager" .Values.podManager.adapter }}
-  # Cluster-wide access to Farm CRDs (FarmPodManager only)
-  - apiGroups: ["farm.nvidia.com"]
-    resources: ["farmsessiondefinitions"]
-    verbs: ["get", "list", "watch"]
-  {{- end }}
   {{- if contains "FluxPodManager" .Values.podManager.adapter }}
   # Cluster-wide access to Flux HelmReleases (cross-namespace)
   - apiGroups: ["helm.toolkit.fluxcd.io"]

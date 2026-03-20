@@ -1145,7 +1145,7 @@ class ForgeProfile(BaseModel):
         Use WorkspaceTemplate directly for new code. This class is kept
         for backward compatibility during migration.
 
-    Defines the base set of values that Volundr assembles into Farm task_args.
+    Defines the base set of values that Volundr assembles into session specs.
     The Helm chart for the target task_type gives these values meaning.
     """
 

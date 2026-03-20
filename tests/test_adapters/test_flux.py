@@ -1,6 +1,6 @@
 """Tests for Flux HelmRelease pod manager adapter."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -469,3 +469,375 @@ class TestFluxPodManagerSpecValues:
         assert "extraVolumes" not in values
         assert "extraVolumeMounts" not in values
         assert "serviceAccountName" not in values
+
+
+class TestFluxPodManagerStartErrorHandling:
+    """Tests for start() error handling paths."""
+
+    async def test_start_patches_on_409_conflict(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """409 error from create triggers a patch instead."""
+        spec = make_spec()
+        mock_api.create_namespaced_custom_object.side_effect = Exception("409 Conflict")
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            result = await pod_manager.start(sample_session, spec)
+
+        mock_api.patch_namespaced_custom_object.assert_called_once()
+        patch_kwargs = mock_api.patch_namespaced_custom_object.call_args[1]
+        assert patch_kwargs["name"] == f"skuld-{sample_session.id}"
+        assert patch_kwargs["namespace"] == "test-ns"
+        assert result.pod_name == f"skuld-{sample_session.id}"
+
+    async def test_start_patches_on_already_exists(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """AlreadyExists error from create triggers a patch instead."""
+        spec = make_spec()
+        mock_api.create_namespaced_custom_object.side_effect = Exception(
+            "AlreadyExists: helmreleases already exists"
+        )
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            result = await pod_manager.start(sample_session, spec)
+
+        mock_api.patch_namespaced_custom_object.assert_called_once()
+        assert result.pod_name == f"skuld-{sample_session.id}"
+
+    async def test_start_raises_on_non_conflict_error(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """Non-409/AlreadyExists errors from create are re-raised."""
+        spec = make_spec()
+        mock_api.create_namespaced_custom_object.side_effect = Exception(
+            "500 Internal Server Error"
+        )
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            with pytest.raises(Exception, match="500 Internal Server Error"):
+                await pod_manager.start(sample_session, spec)
+
+        mock_api.patch_namespaced_custom_object.assert_not_called()
+
+    async def test_start_with_pod_labels_and_annotations(self, sample_session: Session, mock_api):
+        """PodSpecAdditions with labels and annotations are translated."""
+        pm = FluxPodManager(namespace="test-ns", base_domain="volundr.example.com")
+        pod_spec = PodSpecAdditions(
+            labels={"app": "test", "env": "dev"},
+            annotations={"prometheus.io/scrape": "true"},
+        )
+        spec = SessionSpec(
+            values={"session": {"id": str(sample_session.id)}},
+            pod_spec=pod_spec,
+        )
+        with patch.object(pm, "_get_api", return_value=mock_api):
+            await pm.start(sample_session, spec)
+
+        body = mock_api.create_namespaced_custom_object.call_args[1]["body"]
+        values = body["spec"]["values"]
+        assert values["podLabels"] == {"app": "test", "env": "dev"}
+        assert values["podAnnotations"] == {"prometheus.io/scrape": "true"}
+
+
+class TestFluxPodManagerStopErrorHandling:
+    """Tests for stop() error re-raise path."""
+
+    async def test_stop_reraises_non_404_error(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """Non-404/NotFound errors from delete are re-raised."""
+        mock_api.delete_namespaced_custom_object.side_effect = Exception(
+            "500 Internal Server Error"
+        )
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            with pytest.raises(Exception, match="500 Internal Server Error"):
+                await pod_manager.stop(sample_session)
+
+    async def test_stop_reraises_permission_error(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """403 Forbidden errors from delete are re-raised."""
+        mock_api.delete_namespaced_custom_object.side_effect = Exception("403 Forbidden")
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            with pytest.raises(Exception, match="403 Forbidden"):
+                await pod_manager.stop(sample_session)
+
+
+class TestFluxPodManagerStatusErrorHandling:
+    """Tests for status() error re-raise path."""
+
+    async def test_status_reraises_non_404_error(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """Non-404/NotFound errors from get are re-raised."""
+        mock_api.get_namespaced_custom_object.side_effect = Exception("500 Internal Server Error")
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            with pytest.raises(Exception, match="500 Internal Server Error"):
+                await pod_manager.status(sample_session)
+
+    async def test_status_reraises_permission_error(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """403 Forbidden errors from get are re-raised."""
+        mock_api.get_namespaced_custom_object.side_effect = Exception("403 Forbidden")
+        with patch.object(pod_manager, "_get_api", return_value=mock_api):
+            with pytest.raises(Exception, match="403 Forbidden"):
+                await pod_manager.status(sample_session)
+
+
+class TestFluxPodManagerMapStatusReasons:
+    """Tests for _map_status with various failure reasons."""
+
+    def test_map_status_upgrade_failed(self):
+        obj = {
+            "status": {
+                "conditions": [
+                    {"type": "Ready", "status": "False", "reason": "UpgradeFailed"},
+                ],
+            },
+        }
+        assert FluxPodManager._map_status(obj) == SessionStatus.FAILED
+
+    def test_map_status_reconciliation_failed(self):
+        obj = {
+            "status": {
+                "conditions": [
+                    {"type": "Ready", "status": "False", "reason": "ReconciliationFailed"},
+                ],
+            },
+        }
+        assert FluxPodManager._map_status(obj) == SessionStatus.FAILED
+
+    def test_map_status_install_failed(self):
+        obj = {
+            "status": {
+                "conditions": [
+                    {"type": "Ready", "status": "False", "reason": "InstallFailed"},
+                ],
+            },
+        }
+        assert FluxPodManager._map_status(obj) == SessionStatus.FAILED
+
+    def test_map_status_unknown_reason_returns_starting(self):
+        """Non-failure reasons with status False return STARTING."""
+        obj = {
+            "status": {
+                "conditions": [
+                    {"type": "Ready", "status": "False", "reason": "ArtifactFailed"},
+                ],
+            },
+        }
+        assert FluxPodManager._map_status(obj) == SessionStatus.STARTING
+
+    def test_map_status_no_reason_returns_starting(self):
+        """Ready=False with no reason returns STARTING."""
+        obj = {
+            "status": {
+                "conditions": [
+                    {"type": "Ready", "status": "False"},
+                ],
+            },
+        }
+        assert FluxPodManager._map_status(obj) == SessionStatus.STARTING
+
+    def test_map_status_skips_non_ready_conditions(self):
+        """Non-Ready conditions are ignored."""
+        obj = {
+            "status": {
+                "conditions": [
+                    {"type": "Reconciling", "status": "True"},
+                    {"type": "Ready", "status": "True"},
+                ],
+            },
+        }
+        assert FluxPodManager._map_status(obj) == SessionStatus.RUNNING
+
+    def test_map_status_no_status_key(self):
+        """Missing status key entirely returns STARTING."""
+        assert FluxPodManager._map_status({}) == SessionStatus.STARTING
+
+    def test_map_status_empty_conditions_list(self):
+        """Empty conditions list returns STARTING."""
+        obj = {"status": {"conditions": []}}
+        assert FluxPodManager._map_status(obj) == SessionStatus.STARTING
+
+
+class TestFluxPodManagerWaitForReadyErrors:
+    """Tests for wait_for_ready watch error handling."""
+
+    async def test_wait_reraises_watch_error(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """Watch stream errors are re-raised after logging."""
+        # Make status() return STARTING so it enters the watch path
+        mock_api.get_namespaced_custom_object.return_value = {
+            "status": {"conditions": []},
+        }
+
+        async def _failing_stream(*args, **kwargs):
+            raise ConnectionError("stream disconnected")
+            yield  # make it an async generator that raises
+
+        mock_watch = MagicMock()
+        mock_watch.stream = _failing_stream
+        mock_watch.stop = MagicMock()
+
+        mock_watch_mod = MagicMock()
+        mock_watch_mod.Watch.return_value = mock_watch
+        with (
+            patch.object(pod_manager, "_get_api", return_value=mock_api),
+            patch.dict(
+                "sys.modules",
+                {
+                    "kubernetes_asyncio.watch": mock_watch_mod,
+                    "kubernetes_asyncio": MagicMock(watch=mock_watch_mod),
+                },
+            ),
+        ):
+            with pytest.raises(ConnectionError, match="stream disconnected"):
+                await pod_manager.wait_for_ready(sample_session, timeout=5)
+
+        mock_watch.stop.assert_called_once()
+
+    async def test_wait_returns_failed_on_timeout(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """When the watch stream ends without a terminal status, returns FAILED."""
+        mock_api.get_namespaced_custom_object.return_value = {
+            "status": {"conditions": []},
+        }
+
+        async def _empty_stream(*args, **kwargs):
+            return
+            yield  # make it an async generator that yields nothing
+
+        mock_watch = MagicMock()
+        mock_watch.stream = _empty_stream
+        mock_watch.stop = MagicMock()
+
+        mock_watch_mod = MagicMock()
+        mock_watch_mod.Watch.return_value = mock_watch
+        with (
+            patch.object(pod_manager, "_get_api", return_value=mock_api),
+            patch.dict(
+                "sys.modules",
+                {
+                    "kubernetes_asyncio.watch": mock_watch_mod,
+                    "kubernetes_asyncio": MagicMock(watch=mock_watch_mod),
+                },
+            ),
+        ):
+            result = await pod_manager.wait_for_ready(sample_session, timeout=5)
+
+        assert result == SessionStatus.FAILED
+
+    async def test_wait_skips_non_dict_events(
+        self, pod_manager: FluxPodManager, sample_session: Session, mock_api
+    ):
+        """Non-dict event objects are skipped."""
+        mock_api.get_namespaced_custom_object.return_value = {
+            "status": {"conditions": []},
+        }
+
+        async def _stream_with_non_dict(*args, **kwargs):
+            yield {"object": "not-a-dict"}
+            yield {
+                "object": {
+                    "status": {
+                        "conditions": [{"type": "Ready", "status": "True"}],
+                    },
+                },
+            }
+
+        mock_watch = MagicMock()
+        mock_watch.stream = _stream_with_non_dict
+        mock_watch.stop = MagicMock()
+
+        mock_watch_mod = MagicMock()
+        mock_watch_mod.Watch.return_value = mock_watch
+        with (
+            patch.object(pod_manager, "_get_api", return_value=mock_api),
+            patch.dict(
+                "sys.modules",
+                {
+                    "kubernetes_asyncio.watch": mock_watch_mod,
+                    "kubernetes_asyncio": MagicMock(watch=mock_watch_mod),
+                },
+            ),
+        ):
+            result = await pod_manager.wait_for_ready(sample_session, timeout=5)
+
+        assert result == SessionStatus.RUNNING
+
+
+class TestFluxPodManagerGetApi:
+    """Tests for _get_api lazy initialization."""
+
+    async def test_get_api_loads_incluster_config(self, pod_manager: FluxPodManager):
+        """When incluster config succeeds, it is used."""
+        mock_client_instance = MagicMock()
+        mock_config = MagicMock()
+        mock_config.ConfigException = Exception
+        mock_config.load_kube_config = AsyncMock()
+        mock_client_mod = MagicMock()
+        mock_client_mod.ApiClient.return_value = mock_client_instance
+        mock_custom_api = MagicMock()
+        mock_client_mod.CustomObjectsApi.return_value = mock_custom_api
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "kubernetes_asyncio": MagicMock(client=mock_client_mod, config=mock_config),
+                "kubernetes_asyncio.client": mock_client_mod,
+                "kubernetes_asyncio.config": mock_config,
+            },
+        ):
+            await pod_manager._get_api()
+
+        mock_config.load_incluster_config.assert_called_once()
+        mock_config.load_kube_config.assert_not_called()
+        assert pod_manager._api_client is mock_client_instance
+
+    async def test_get_api_falls_back_to_kube_config(self):
+        """When incluster config fails, falls back to kube config."""
+        pm = FluxPodManager()
+        mock_client_instance = MagicMock()
+        mock_config = MagicMock()
+        mock_config.ConfigException = Exception
+        mock_config.load_incluster_config.side_effect = Exception("not in cluster")
+        mock_config.load_kube_config = AsyncMock()
+        mock_client_mod = MagicMock()
+        mock_client_mod.ApiClient.return_value = mock_client_instance
+        mock_custom_api = MagicMock()
+        mock_client_mod.CustomObjectsApi.return_value = mock_custom_api
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "kubernetes_asyncio": MagicMock(client=mock_client_mod, config=mock_config),
+                "kubernetes_asyncio.client": mock_client_mod,
+                "kubernetes_asyncio.config": mock_config,
+            },
+        ):
+            await pm._get_api()
+
+        mock_config.load_kube_config.assert_called_once()
+        assert pm._api_client is mock_client_instance
+
+    async def test_get_api_reuses_existing_client(self, pod_manager: FluxPodManager):
+        """When _api_client is already set, does not re-initialize."""
+        existing_client = MagicMock()
+        pod_manager._api_client = existing_client
+        mock_client_mod = MagicMock()
+        mock_custom_api = MagicMock()
+        mock_client_mod.CustomObjectsApi.return_value = mock_custom_api
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "kubernetes_asyncio": MagicMock(client=mock_client_mod),
+                "kubernetes_asyncio.client": mock_client_mod,
+            },
+        ):
+            result = await pod_manager._get_api()
+
+        assert pod_manager._api_client is existing_client
+        assert result is mock_custom_api

@@ -75,10 +75,8 @@ src/volundr/
 │       ├── github.py          # GitHub GitProvider + GitWorkflowProvider
 │       ├── gitlab.py          # GitLab GitProvider + GitWorkflowProvider
 │       ├── git_registry.py    # Multi-provider git registry
-│       ├── farm.py            # Farm-based PodManager (Helm tasks)
 │       ├── flux.py            # Flux-based PodManager (HelmRelease)
 │       ├── direct_k8s_pod_manager.py  # Direct K8s PodManager
-│       ├── docker_pod_manager.py      # Docker PodManager (local dev)
 │       ├── k8s_storage.py     # K8s PVC StoragePort
 │       ├── identity.py        # OIDC IdentityPort adapters
 │       ├── authorization.py   # AuthorizationPort (Cerbos, allow-all)
@@ -178,10 +176,10 @@ Configuration specifies the adapter class and any kwargs:
 
 ```yaml
 pod_manager:
-  adapter: "volundr.adapters.outbound.farm.FarmPodManager"
+  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
   kwargs:
-    farm_url: "http://farm.volundr.svc:8080"
     namespace: "volundr-sessions"
+    chart_name: "skuld"
 
 identity:
   adapter: "volundr.adapters.outbound.identity.OIDCIdentityAdapter"
