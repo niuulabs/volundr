@@ -474,6 +474,13 @@ export interface IVolundrService {
    */
   deleteWorkspace(id: string): Promise<void>;
 
+  /**
+   * Delete multiple workspaces by session IDs
+   */
+  bulkDeleteWorkspaces(
+    sessionIds: string[]
+  ): Promise<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>;
+
   // Admin settings
 
   /**

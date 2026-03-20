@@ -91,6 +91,16 @@ function validateResourceInput(
   return null;
 }
 
+function workspaceLabel(ws: VolundrWorkspace): string {
+  if (ws.sessionName) return ws.sessionName;
+  if (ws.sourceUrl) {
+    const repoName = ws.sourceUrl.replace(/.*\//, '').replace(/\.git$/, '');
+    const ref = ws.sourceRef || 'main';
+    return `${repoName} / ${ref}`;
+  }
+  return ws.pvcName;
+}
+
 const CLI_TOOLS: { value: CliTool; label: string; description: string }[] = [
   { value: 'claude', label: 'Claude Code', description: 'Anthropic Claude CLI agent' },
   { value: 'codex', label: 'Codex', description: 'OpenAI Codex CLI agent' },
@@ -134,6 +144,7 @@ export function ConfigureStep({
   const [customMcpEnv, setCustomMcpEnv] = useState<Record<string, string>>({});
   const [newEnvKey, setNewEnvKey] = useState('');
   const [newEnvVal, setNewEnvVal] = useState('');
+  const [showAllWorkspaces, setShowAllWorkspaces] = useState(false);
 
   const [credentials, setCredentials] = useState<StoredCredential[]>([]);
   const [integrations, setIntegrations] = useState<IntegrationConnection[]>([]);
@@ -211,6 +222,19 @@ export function ConfigureStep({
   }, [credentials, availableSecrets]);
 
   const selectedWorkspace = workspaces.find(ws => ws.id === state.workspaceId);
+
+  const filteredWorkspaces = useMemo(() => {
+    if (showAllWorkspaces || !state.repo) return workspaces;
+    return workspaces.filter(ws => {
+      if (!ws.sourceUrl) return false;
+      const normalize = (url: string) =>
+        url
+          .replace(/^https?:\/\//, '')
+          .replace(/\.git$/, '')
+          .replace(/\/$/, '');
+      return normalize(ws.sourceUrl) === normalize(state.repo);
+    });
+  }, [workspaces, state.repo, showAllWorkspaces]);
 
   const currentRepo = repos.find(r => r.cloneUrl === state.repo);
   const branches = currentRepo?.branches ?? [];
@@ -947,19 +971,37 @@ export function ConfigureStep({
               onChange={e => onChange({ workspaceId: e.target.value || undefined })}
             >
               <option value="">New workspace</option>
-              {workspaces.map(ws => (
+              {filteredWorkspaces.map(ws => (
                 <option key={ws.id} value={ws.id}>
-                  {ws.pvcName} ({ws.sizeGb}Gi) — archived{' '}
+                  {workspaceLabel(ws)} ({ws.sizeGb}Gi) — archived{' '}
                   {new Date(ws.archivedAt || ws.createdAt).toLocaleDateString()}
                 </option>
               ))}
             </select>
+            {state.repo && workspaces.length > 0 && (
+              <label className={styles.workspaceFilterToggle}>
+                <input
+                  type="checkbox"
+                  checked={showAllWorkspaces}
+                  onChange={e => {
+                    setShowAllWorkspaces(e.target.checked);
+                    if (!e.target.checked) onChange({ workspaceId: undefined });
+                  }}
+                />
+                <span>Show all archived workspaces</span>
+              </label>
+            )}
             {selectedWorkspace && (
               <div className={styles.workspaceInfo}>
-                PVC: {selectedWorkspace.pvcName} · {selectedWorkspace.sizeGb}Gi · archived{' '}
+                {workspaceLabel(selectedWorkspace)} · {selectedWorkspace.sizeGb}Gi · archived{' '}
                 {new Date(
                   selectedWorkspace.archivedAt || selectedWorkspace.createdAt
                 ).toLocaleDateString()}
+              </div>
+            )}
+            {filteredWorkspaces.length === 0 && workspaces.length > 0 && !showAllWorkspaces && (
+              <div className={styles.workspaceInfo}>
+                No archived workspaces match the selected repository
               </div>
             )}
           </div>

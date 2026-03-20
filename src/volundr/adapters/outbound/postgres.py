@@ -62,6 +62,16 @@ class PostgresSessionRepository(SessionRepository):
             return None
         return self._row_to_session(row)
 
+    async def get_many(self, session_ids: list[UUID]) -> dict[UUID, Session]:
+        """Retrieve multiple sessions by ID."""
+        if not session_ids:
+            return {}
+        rows = await self._pool.fetch(
+            "SELECT * FROM sessions WHERE id = ANY($1::uuid[])",
+            session_ids,
+        )
+        return {row["id"]: self._row_to_session(row) for row in rows}
+
     async def list(
         self,
         status: SessionStatus | None = None,

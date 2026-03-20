@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ConfigureStep } from './ConfigureStep';
 import type { ConfigureStepProps } from './ConfigureStep';
@@ -101,6 +101,36 @@ function buildState(overrides: Partial<WizardState> = {}): WizardState {
 }
 
 let onChange: ReturnType<typeof vi.fn>;
+
+const mockArchivedWorkspaces = [
+  {
+    id: 'ws-1',
+    pvcName: 'ws-pvc-001',
+    sessionId: 'session-1',
+    ownerId: 'user-1',
+    tenantId: 'tenant-1',
+    sizeGb: 10,
+    status: 'archived',
+    createdAt: '2026-01-15T10:00:00Z',
+    archivedAt: '2026-02-01T09:00:00Z',
+    sessionName: 'my-feature',
+    sourceUrl: 'https://github.com/org/repo-one.git',
+    sourceRef: 'main',
+  },
+  {
+    id: 'ws-2',
+    pvcName: 'ws-pvc-002',
+    sessionId: 'session-2',
+    ownerId: 'user-1',
+    tenantId: 'tenant-1',
+    sizeGb: 5,
+    status: 'archived',
+    createdAt: '2026-01-10T10:00:00Z',
+    archivedAt: '2026-01-20T09:00:00Z',
+    sourceUrl: 'https://github.com/org/other-repo.git',
+    sourceRef: 'develop',
+  },
+];
 
 const mockService = {
   listWorkspaces: vi.fn().mockResolvedValue([]),
@@ -1890,6 +1920,118 @@ describe('ConfigureStep', () => {
           'GPU is shared between the AI broker and your workload via NVIDIA time-slicing'
         )
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('workspace section', () => {
+    it('shows workspace section when archived workspaces exist', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service });
+
+      expect(await screen.findByText('Workspace')).toBeInTheDocument();
+      expect(screen.getByText('New workspace')).toBeInTheDocument();
+    });
+
+    it('does not show workspace section when no archived workspaces', () => {
+      renderStep();
+
+      // "Workspace" heading should not be present (only workspace-unrelated labels)
+      expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
+    });
+
+    it('shows workspace dropdown with readable labels', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service });
+
+      // Wait for workspaces to load
+      await waitFor(() => {
+        // sessionName for ws-1
+        expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      });
+
+      // repo/branch fallback for ws-2
+      expect(screen.getByText(/other-repo \/ develop/)).toBeInTheDocument();
+    });
+
+    it('filters workspaces by source-compatibility when repo is selected', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'main',
+        }),
+      });
+
+      await waitFor(() => {
+        // matching workspace should appear
+        expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      });
+
+      // non-matching workspace should be filtered out
+      expect(screen.queryByText(/other-repo \/ develop/)).not.toBeInTheDocument();
+    });
+
+    it('shows all workspaces when "Show all archived workspaces" is checked', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'main',
+        }),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      });
+
+      // Initially only matching workspace visible
+      expect(screen.queryByText(/other-repo \/ develop/)).not.toBeInTheDocument();
+
+      // Check "Show all archived workspaces"
+      fireEvent.click(screen.getByText('Show all archived workspaces'));
+
+      // Both should now be visible
+      expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      expect(screen.getByText(/other-repo \/ develop/)).toBeInTheDocument();
+    });
+
+    it('shows message when no workspaces match selected repo', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({
+          repo: 'https://github.com/org/nonexistent-repo.git',
+          branch: 'main',
+        }),
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('No archived workspaces match the selected repository')
+        ).toBeInTheDocument();
+      });
     });
   });
 });

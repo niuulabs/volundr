@@ -130,6 +130,45 @@ class TestPostgresSessionRepositoryGet:
         assert call_args[0][1] == session_id
 
 
+class TestPostgresSessionRepositoryGetMany:
+    """Tests for get_many method."""
+
+    async def test_get_many_returns_empty_for_empty_input(
+        self, repository: PostgresSessionRepository, mock_pool
+    ):
+        result = await repository.get_many([])
+        assert result == {}
+        mock_pool.fetch.assert_not_called()
+
+    async def test_get_many_returns_sessions_by_id(
+        self, repository: PostgresSessionRepository, mock_pool, sample_row
+    ):
+        sid = sample_row["id"]
+        mock_pool.fetch.return_value = [sample_row]
+
+        result = await repository.get_many([sid])
+
+        assert len(result) == 1
+        assert sid in result
+        assert result[sid].name == sample_row["name"]
+        mock_pool.fetch.assert_called_once()
+        call_args = mock_pool.fetch.call_args
+        assert "ANY($1::uuid[])" in call_args[0][0]
+
+    async def test_get_many_returns_subset_for_missing_ids(
+        self, repository: PostgresSessionRepository, mock_pool, sample_row
+    ):
+        sid = sample_row["id"]
+        missing_id = uuid4()
+        mock_pool.fetch.return_value = [sample_row]
+
+        result = await repository.get_many([sid, missing_id])
+
+        assert len(result) == 1
+        assert sid in result
+        assert missing_id not in result
+
+
 class TestPostgresSessionRepositoryList:
     """Tests for list method."""
 
