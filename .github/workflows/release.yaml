@@ -143,7 +143,7 @@ jobs:
             "${IMAGE}:${VERSION}-arm64"
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
 
       - name: Sign container image
         run: |
@@ -188,7 +188,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4
+        uses: github/codeql-action/upload-sarif@c6f931105cb2c34c8f901cc885ba1e2e259cf745 # v4
         if: always() && hashFiles(format('trivy-{0}.sarif', matrix.container)) != ''
         with:
           sarif_file: trivy-${{ matrix.container }}.sarif
@@ -387,7 +387,7 @@ jobs:
           subject-path: release-assets/volundr-*
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
           name: Release v${{ needs.version.outputs.version }}
