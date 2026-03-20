@@ -581,6 +581,9 @@ export interface ApiWorkspaceResponse {
   created_at: string;
   archived_at: string | null;
   deleted_at: string | null;
+  session_name: string | null;
+  source_url: string | null;
+  source_ref: string | null;
 }
 
 /**

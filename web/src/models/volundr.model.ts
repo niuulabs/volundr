@@ -379,6 +379,9 @@ export interface VolundrWorkspace {
   status: WorkspaceStatus;
   createdAt: string;
   archivedAt?: string;
+  sessionName?: string;
+  sourceUrl?: string;
+  sourceRef?: string;
 }
 
 export interface AdminStorageSettings {

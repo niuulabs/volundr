@@ -245,3 +245,51 @@
 .confirmDeleteButton:hover {
   opacity: 0.9;
 }
+
+/* ─── Selection ─── */
+.selectCheckbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+.selectedRow {
+  background-color: color-mix(in srgb, var(--color-brand) 8%, transparent);
+}
+
+/* ─── Workspace Cell ─── */
+.workspaceCell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.workspaceLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.workspacePvc {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* ─── Bulk Action Bar ─── */
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background-color: color-mix(in srgb, var(--color-brand) 10%, var(--color-bg-secondary));
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 30%, transparent);
+}
+
+.bulkBarText {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
