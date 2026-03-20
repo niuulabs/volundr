@@ -507,8 +507,67 @@ class Devrunner:
             return {"status": "unknown"}
 
 
+def _source_secrets() -> None:
+    """Read /run/secrets/manifest.json and inject secrets into env/filesystem."""
+    manifest_path = Path("/run/secrets/manifest.json")
+    secret_dir = Path("/run/secrets/user")
+    if not manifest_path.exists() or not secret_dir.is_dir():
+        return
+
+    manifest = json.loads(manifest_path.read_text())
+    for env_var, spec in manifest.get("env", {}).items():
+        fpath = secret_dir / spec["file"]
+        if not fpath.exists():
+            continue
+        data = json.loads(fpath.read_text())
+        os.environ[env_var] = data.get(spec.get("key", ""), "")
+
+    for target, spec in manifest.get("files", {}).items():
+        src = secret_dir / spec["file"]
+        if src.exists():
+            Path(target).parent.mkdir(parents=True, exist_ok=True)
+            if not Path(target).exists():
+                Path(target).symlink_to(src)
+
+    logger.info("Secrets sourced from manifest (%d env, %d files)",
+                len(manifest.get("env", {})), len(manifest.get("files", {})))
+
+
+def _source_env_file() -> None:
+    """Source env vars rendered by Infisical Agent Injector."""
+    env_file = Path("/run/secrets/env.sh")
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # Parse "export KEY='VALUE'" lines
+        if line.startswith("export "):
+            line = line[len("export "):]
+        key, _, value = line.partition("=")
+        if not key:
+            continue
+        # Strip surrounding quotes
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        os.environ[key] = value
+    logger.info("Sourced env vars from %s", env_file)
+
+
+def _cleanup_agent_token() -> None:
+    """Remove leftover Infisical agent access token (no longer needed after init)."""
+    token_path = Path("/home/.infisical-workdir/identity-access-token")
+    if token_path.exists():
+        token_path.unlink()
+        logger.info("Removed Infisical agent token at %s", token_path)
+
+
 async def main() -> None:
     """Entry point."""
+    _source_secrets()
+    _source_env_file()
+    _cleanup_agent_token()
     session_id = os.environ.get("SESSION_ID", "unknown")
     mount_path = os.environ.get("PERSISTENCE_MOUNT_PATH", "/volundr/sessions")
     workspace_dir = Path(

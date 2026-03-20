@@ -56,7 +56,7 @@ credentialStore:
 
 | Component | Port | Default Adapter |
 |-----------|------|-----------------|
-| Pod manager | PodManager | FarmPodManager |
+| Pod manager | PodManager | FluxPodManager |
 | Identity | IdentityPort | AllowAllIdentityAdapter |
 | Authorization | AuthorizationPort | AllowAllAuthorizationAdapter |
 | Credential store | CredentialStorePort | MemoryCredentialStore |

@@ -59,7 +59,28 @@ export function StorageSection({ service }: StorageSectionProps) {
     setSettingsToggling(true);
     try {
       const updated = await service.updateAdminSettings({
-        storage: { homeEnabled: !adminSettings.storage.homeEnabled },
+        storage: {
+          ...adminSettings.storage,
+          homeEnabled: !adminSettings.storage.homeEnabled,
+        },
+      });
+      setAdminSettings(updated);
+    } finally {
+      setSettingsToggling(false);
+    }
+  }, [service, adminSettings]);
+
+  const handleToggleFileManager = useCallback(async () => {
+    if (!adminSettings) {
+      return;
+    }
+    setSettingsToggling(true);
+    try {
+      const updated = await service.updateAdminSettings({
+        storage: {
+          ...adminSettings.storage,
+          fileManagerEnabled: !adminSettings.storage.fileManagerEnabled,
+        },
       });
       setAdminSettings(updated);
     } finally {
@@ -127,6 +148,27 @@ export function StorageSection({ service }: StorageSectionProps) {
               onClick={handleToggleHomeEnabled}
               disabled={settingsToggling}
               aria-label="Toggle persistent home directories"
+            >
+              <span className={styles.toggleKnob} />
+            </button>
+          </div>
+          <div className={styles.settingRow}>
+            <div className={styles.settingInfo}>
+              <span className={styles.settingLabel}>File Manager</span>
+              <span className={styles.settingDescription}>
+                Show the Files tab in sessions, allowing users to upload, download, and manage files
+                in session workspaces and home directories.
+              </span>
+            </div>
+            <button
+              type="button"
+              className={cn(
+                styles.toggle,
+                adminSettings.storage.fileManagerEnabled && styles.toggleOn
+              )}
+              onClick={handleToggleFileManager}
+              disabled={settingsToggling}
+              aria-label="Toggle file manager"
             >
               <span className={styles.toggleKnob} />
             </button>

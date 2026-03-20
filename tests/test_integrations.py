@@ -17,7 +17,7 @@ from volundr.domain.models import (
     Principal,
     TrackerIssue,
 )
-from volundr.domain.ports import SecretRepository
+from volundr.domain.ports import CredentialStorePort
 from volundr.domain.services.tracker import TrackerService
 from volundr.domain.services.tracker_factory import TrackerFactory
 
@@ -30,15 +30,15 @@ def integration_repo() -> InMemoryIntegrationRepository:
 
 
 @pytest.fixture
-def mock_secret_repo() -> AsyncMock:
-    repo = AsyncMock(spec=SecretRepository)
-    repo.get_credential = AsyncMock(return_value={"api_key": "test-key"})
-    return repo
+def mock_credential_store() -> AsyncMock:
+    store = AsyncMock(spec=CredentialStorePort)
+    store.get_value = AsyncMock(return_value={"api_key": "test-key"})
+    return store
 
 
 @pytest.fixture
-def tracker_factory(mock_secret_repo: AsyncMock) -> TrackerFactory:
-    return TrackerFactory(mock_secret_repo)
+def tracker_factory(mock_credential_store: AsyncMock) -> TrackerFactory:
+    return TrackerFactory(mock_credential_store)
 
 
 @pytest.fixture
@@ -168,10 +168,10 @@ class TestTrackerFactory:
 
     async def test_create_credential_not_found(
         self,
-        mock_secret_repo: AsyncMock,
+        mock_credential_store: AsyncMock,
     ):
-        mock_secret_repo.get_credential = AsyncMock(return_value=None)
-        factory = TrackerFactory(mock_secret_repo)
+        mock_credential_store.get_value = AsyncMock(return_value=None)
+        factory = TrackerFactory(mock_credential_store)
 
         now = datetime.now(UTC)
         conn = IntegrationConnection(
@@ -490,6 +490,140 @@ class TestIntegrationEndpoints:
             "/api/v1/volundr/integrations/nonexistent/test",
         )
         assert response.status_code == 404
+
+
+class TestIntegrationTestEndpointBranches:
+    """Tests for non-tracker integration test endpoint branches."""
+
+    async def test_source_control_with_valid_credential(
+        self,
+        integration_repo: InMemoryIntegrationRepository,
+        tracker_factory: TrackerFactory,
+        mock_principal: Principal,
+    ):
+        credential_store = AsyncMock()
+        credential_store.get_value.return_value = {"token": "ghp_xxx"}
+
+        app = FastAPI()
+
+        async def mock_extract_principal():
+            return mock_principal
+
+        router = create_integrations_router(
+            integration_repo,
+            tracker_factory,
+            credential_store=credential_store,
+        )
+        app.include_router(router)
+
+        from volundr.adapters.inbound.auth import extract_principal
+
+        app.dependency_overrides[extract_principal] = mock_extract_principal
+        client = TestClient(app)
+
+        now = datetime.now(UTC)
+        conn = IntegrationConnection(
+            id="sc-1",
+            user_id="user-1",
+            integration_type="source_control",
+            adapter="volundr.adapters.outbound.github.GitHubProvider",
+            credential_name="gh-token",
+            config={},
+            enabled=True,
+            created_at=now,
+            updated_at=now,
+        )
+        await integration_repo.save_connection(conn)
+
+        resp = client.post("/api/v1/volundr/integrations/sc-1/test")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    async def test_ai_provider_with_missing_credential(
+        self,
+        integration_repo: InMemoryIntegrationRepository,
+        tracker_factory: TrackerFactory,
+        mock_principal: Principal,
+    ):
+        credential_store = AsyncMock()
+        credential_store.get_value.return_value = None
+
+        app = FastAPI()
+
+        async def mock_extract_principal():
+            return mock_principal
+
+        router = create_integrations_router(
+            integration_repo,
+            tracker_factory,
+            credential_store=credential_store,
+        )
+        app.include_router(router)
+
+        from volundr.adapters.inbound.auth import extract_principal
+
+        app.dependency_overrides[extract_principal] = mock_extract_principal
+        client = TestClient(app)
+
+        now = datetime.now(UTC)
+        conn = IntegrationConnection(
+            id="ai-1",
+            user_id="user-1",
+            integration_type="ai_provider",
+            adapter="volundr.adapters.outbound.anthropic.AnthropicProvider",
+            credential_name="anthropic-key",
+            config={},
+            enabled=True,
+            created_at=now,
+            updated_at=now,
+        )
+        await integration_repo.save_connection(conn)
+
+        resp = client.post("/api/v1/volundr/integrations/ai-1/test")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is False
+        assert resp.json()["error"] == "Credential not found"
+
+    async def test_messaging_type_not_supported(
+        self,
+        integration_repo: InMemoryIntegrationRepository,
+        tracker_factory: TrackerFactory,
+        mock_principal: Principal,
+    ):
+        app = FastAPI()
+
+        async def mock_extract_principal():
+            return mock_principal
+
+        router = create_integrations_router(
+            integration_repo,
+            tracker_factory,
+        )
+        app.include_router(router)
+
+        from volundr.adapters.inbound.auth import extract_principal
+
+        app.dependency_overrides[extract_principal] = mock_extract_principal
+        client = TestClient(app)
+
+        now = datetime.now(UTC)
+        conn = IntegrationConnection(
+            id="msg-1",
+            user_id="user-1",
+            integration_type="messaging",
+            adapter="some.MessagingAdapter",
+            credential_name="slack-key",
+            config={},
+            enabled=True,
+            created_at=now,
+            updated_at=now,
+        )
+        await integration_repo.save_connection(conn)
+
+        resp = client.post("/api/v1/volundr/integrations/msg-1/test")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is False
+        assert "not supported" in resp.json()["error"]
 
 
 # --- IntegrationConnection model tests ---

@@ -66,10 +66,13 @@ RUN chmod -R +x /opt/vscode-reh/bin/ && \
       exit 1; \
     fi
 
+COPY containers/vscode-reh/entrypoint.sh /opt/vscode-reh/entrypoint.sh
+RUN chmod +x /opt/vscode-reh/entrypoint.sh
+
 USER coder
 WORKDIR /home/coder
 
 EXPOSE 8445
 
-ENTRYPOINT ["/opt/vscode-reh/bin/reh-server"]
+ENTRYPOINT ["/opt/vscode-reh/entrypoint.sh"]
 CMD ["--host=0.0.0.0", "--port=8445", "--without-connection-token", "--accept-server-license-terms"]

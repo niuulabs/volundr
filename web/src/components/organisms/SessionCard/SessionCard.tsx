@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { GitBranch, Globe, MessageSquare, Zap, Server } from 'lucide-react';
 import type { VolundrSession, VolundrModel } from '@/models';
 import { StatusBadge } from '@/components/atoms/StatusBadge';
-import { LinearIssueBadge } from '@/components/molecules/LinearIssueBadge';
+import { TrackerIssueBadge } from '@/components/molecules/TrackerIssueBadge';
 import { cn, formatTime, formatTokens } from '@/utils';
 import { getSourceLabel, getBranch, isGitSource } from '@/utils/source';
 import styles from './SessionCard.module.css';
@@ -58,7 +58,7 @@ export function SessionCard({
           )}
         </div>
         <div className={styles.badges}>
-          {session.linearIssue && <LinearIssueBadge issue={session.linearIssue} />}
+          {session.trackerIssue && <TrackerIssueBadge issue={session.trackerIssue} />}
           {isManual && <span className={styles.manualBadge}>manual</span>}
           <StatusBadge status={session.status} />
         </div>

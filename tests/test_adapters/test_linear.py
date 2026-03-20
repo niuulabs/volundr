@@ -190,7 +190,7 @@ class TestSearchIssues:
         adapter = _make_adapter()
         adapter._client = AsyncMock()
         adapter._client.post.return_value = _mock_response(
-            {"data": {"issueSearch": {"nodes": [_issue_node()]}}}
+            {"data": {"searchIssues": {"nodes": [_issue_node()]}}}
         )
 
         issues = await adapter.search_issues("test")
@@ -200,14 +200,16 @@ class TestSearchIssues:
     async def test_search_with_project(self):
         adapter = _make_adapter()
         adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"data": {"issueSearch": {"nodes": []}}})
+        adapter._client.post.return_value = _mock_response(
+            {"data": {"searchIssues": {"nodes": []}}}
+        )
 
         issues = await adapter.search_issues("test", project_id="proj-1")
         assert len(issues) == 0
 
         call_args = adapter._client.post.call_args
         payload = call_args[1]["json"]
-        assert "project:proj-1" in payload["variables"]["query"]
+        assert "project:proj-1" in payload["variables"]["term"]
 
 
 class TestGetRecentIssues:
@@ -324,6 +326,20 @@ class TestUpdateIssueStatus:
 
         with pytest.raises(LinearAPIError, match="Status 'Invalid' not found"):
             await adapter.update_issue_status("issue-1", "Invalid")
+
+
+class TestLinearAdapterConstructor:
+    """Tests for LinearAdapter constructor edge cases."""
+
+    def test_extra_kwargs_ignored(self):
+        """Extra kwargs from dynamic adapter pattern don't crash."""
+        adapter = LinearAdapter(
+            api_key="test-key",
+            api_url="https://api.linear.app/graphql",
+            name="linear-prod",
+            some_other="value",
+        )
+        assert adapter.provider_name == "linear"
 
 
 class TestClose:

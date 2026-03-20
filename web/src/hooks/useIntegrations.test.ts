@@ -158,4 +158,69 @@ describe('useIntegrations', () => {
 
     expect(result.current.integrations).toHaveLength(0);
   });
+
+  it('starts OAuth flow and refreshes after popup closes', async () => {
+    const mockPopup = { closed: false } as Window;
+    vi.spyOn(window, 'open').mockReturnValue(mockPopup);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://oauth.example.com/authorize' }),
+    } as Response);
+
+    const { result } = renderHook(() => useIntegrations());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const flowPromise = act(async () => {
+      setTimeout(() => {
+        (mockPopup as { closed: boolean }).closed = true;
+      }, 10);
+      await result.current.startOAuthFlow('linear');
+    });
+
+    await flowPromise;
+    expect(window.open).toHaveBeenCalledWith(
+      'https://oauth.example.com/authorize',
+      'oauth-linear',
+      'width=600,height=700'
+    );
+
+    vi.restoreAllMocks();
+  });
+
+  it('throws when OAuth fetch response is not ok', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+    } as Response);
+
+    const { result } = renderHook(() => useIntegrations());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(
+      act(async () => {
+        await result.current.startOAuthFlow('linear');
+      })
+    ).rejects.toThrow('Failed to start OAuth flow');
+
+    vi.restoreAllMocks();
+  });
+
+  it('throws when popup is blocked (window.open returns null)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://oauth.example.com/authorize' }),
+    } as Response);
+    vi.spyOn(window, 'open').mockReturnValue(null);
+
+    const { result } = renderHook(() => useIntegrations());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(
+      act(async () => {
+        await result.current.startOAuthFlow('linear');
+      })
+    ).rejects.toThrow('Popup blocked');
+
+    vi.restoreAllMocks();
+  });
 });

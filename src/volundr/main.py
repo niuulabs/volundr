@@ -19,6 +19,8 @@ from volundr.adapters.inbound.rest_events import create_events_router
 from volundr.adapters.inbound.rest_features import create_features_router
 from volundr.adapters.inbound.rest_git import create_git_router
 from volundr.adapters.inbound.rest_integrations import create_integrations_router
+from volundr.adapters.inbound.rest_issues import create_issues_router
+from volundr.adapters.inbound.rest_oauth import create_oauth_router
 from volundr.adapters.inbound.rest_presets import create_presets_router
 from volundr.adapters.inbound.rest_profiles import create_profiles_router
 from volundr.adapters.inbound.rest_prompts import create_prompts_router
@@ -31,12 +33,11 @@ from volundr.adapters.outbound.config_mcp_servers import ConfigMCPServerProvider
 from volundr.adapters.outbound.config_profiles import ConfigProfileProvider
 from volundr.adapters.outbound.config_templates import ConfigTemplateProvider
 from volundr.adapters.outbound.git_registry import create_git_registry
-from volundr.adapters.outbound.memory_integrations import InMemoryIntegrationRepository
-from volundr.adapters.outbound.memory_secret_repo import InMemorySecretRepository
 from volundr.adapters.outbound.memory_secrets import InMemorySecretManager
 from volundr.adapters.outbound.pg_event_sink import PostgresEventSink
 from volundr.adapters.outbound.postgres import PostgresSessionRepository
 from volundr.adapters.outbound.postgres_chronicles import PostgresChronicleRepository
+from volundr.adapters.outbound.postgres_integrations import PostgresIntegrationRepository
 from volundr.adapters.outbound.postgres_presets import PostgresPresetRepository
 from volundr.adapters.outbound.postgres_prompts import PostgresPromptRepository
 from volundr.adapters.outbound.postgres_stats import PostgresStatsRepository
@@ -498,7 +499,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 [d.model_dump() for d in settings.integrations.definitions],
             )
             integration_registry = IntegrationRegistry(integration_definitions)
-            integration_repo = InMemoryIntegrationRepository()
+            integration_repo = PostgresIntegrationRepository(pool)
 
             # User integration service — ephemeral per-user provider factory.
             # Created early so session contributors can use it.
@@ -513,6 +514,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
 
             # Create session contributors (dynamic adapter pattern)
+            mount_strategies = SecretMountStrategyRegistry()
             contributors = _create_contributors(
                 settings,
                 template_provider=template_provider,
@@ -523,6 +525,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 gateway=gateway_adapter,
                 secret_injection=secret_injection,
                 credential_store=credential_store,
+                mount_strategies=mount_strategies,
                 integration_repo=integration_repo,
                 integration_registry=integration_registry,
                 user_integration=user_integration_service,
@@ -641,12 +644,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             workspace_service = WorkspaceService(storage_adapter)
             app.state.workspace_service = workspace_service
 
-            # Integration tracker factory (reuses integration_repo/registry created above)
-            secret_repository = InMemorySecretRepository()
-
+            # Integration tracker factory (reuses credential_store created above)
             from volundr.domain.services.tracker_factory import TrackerFactory
 
-            tracker_factory = TrackerFactory(secret_repository)
+            tracker_factory = TrackerFactory(credential_store)
 
             # Issue tracker integration (Linear, Jira, etc.)
             tracker_service = None
@@ -674,8 +675,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 integration_repo,
                 tracker_factory,
                 registry=integration_registry,
+                credential_store=credential_store,
             )
             app.include_router(integrations_router)
+
+            # OAuth integration endpoints
+            oauth_router = create_oauth_router(
+                oauth_config=settings.oauth,
+                integration_registry=integration_registry,
+                credential_store=credential_store,
+                integration_repo=integration_repo,
+            )
+            app.include_router(oauth_router)
+
+            # Generic issue endpoints
+            issues_router = create_issues_router(
+                integration_repo,
+                tracker_factory,
+            )
+            app.include_router(issues_router)
 
             # Wire shared issue providers now that linear_adapter is available
             if linear_adapter:

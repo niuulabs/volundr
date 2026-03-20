@@ -130,6 +130,16 @@ class SessionCreate(BaseModel):
         default_factory=dict,
         description="Resource allocation overrides (cpu, memory, gpu)",
     )
+    issue_id: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Issue tracker ID to link to the session",
+    )
+    issue_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="URL of the linked issue in the tracker",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -241,6 +251,10 @@ class SessionResponse(BaseModel):
         default=None,
         description="Linked issue tracker identifier",
     )
+    issue_tracker_url: str | None = Field(
+        default=None,
+        description="Web URL for the linked issue in the tracker",
+    )
     preset_id: UUID | None = Field(
         default=None,
         description="Preset used to configure this session",
@@ -306,6 +320,7 @@ class SessionResponse(BaseModel):
             pod_name=session.pod_name,
             error=session.error,
             tracker_issue_id=session.tracker_issue_id,
+            issue_tracker_url=session.issue_tracker_url,
             preset_id=session.preset_id,
             archived_at=(session.archived_at.isoformat() if session.archived_at else None),
             owner_id=session.owner_id,
@@ -814,8 +829,10 @@ def create_router(
         (e.g. local mounts are only meaningful in k3s / CLI mode).
         """
         settings = request.app.state.settings
+        admin = request.app.state.admin_settings
         return {
             "local_mounts_enabled": settings.local_mounts.enabled,
+            "file_manager_enabled": admin.get("storage", {}).get("file_manager_enabled", True),
         }
 
     @router.get("/auth/config", tags=["Auth"])
@@ -981,6 +998,8 @@ def create_router(
                 preset_id=data.preset_id,
                 principal=principal,
                 workspace_id=data.workspace_id,
+                tracker_issue_id=data.issue_id,
+                issue_tracker_url=data.issue_url,
             )
         except RepoValidationError as e:
             raise HTTPException(
@@ -1385,168 +1404,6 @@ def create_router(
             )
         except httpx.RequestError as e:
             logger.warning("Log proxy connection failed for session %s: %s", session_id, e)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not connect to session pod: {e}",
-            )
-
-    @router.get(
-        "/sessions/{session_id}/diff",
-        responses={
-            400: {"model": ErrorResponse},
-            404: {"model": ErrorResponse},
-            502: {"model": ErrorResponse},
-        },
-        tags=["Sessions"],
-    )
-    async def get_session_diff(
-        session_id: UUID = Path(description="Unique session identifier"),
-        file: str | None = Query(
-            default=None,
-            description="File path relative to workspace (optional)",
-        ),
-        base: str = Query(
-            default="last-commit",
-            description="Diff base mode: last-commit or default-branch",
-        ),
-    ) -> dict:
-        """Get git diff from a session workspace via Skuld.
-
-        Proxies to the session pod's ``GET /api/diff`` endpoint.
-
-        - **last-commit**: ``git diff HEAD`` (uncommitted changes)
-        - **default-branch**: ``git diff main...HEAD`` (full branch diff)
-        """
-        if base not in ("last-commit", "default-branch"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Invalid base parameter: {base}. Must be 'last-commit' or 'default-branch'"
-                ),
-            )
-
-        session = await service.get_session(session_id)
-        if session is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session not found: {session_id}",
-            )
-
-        if not session.chat_endpoint:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} has no active endpoint",
-            )
-
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
-
-        params: dict[str, str] = {"base": base}
-        if file is not None:
-            params["file"] = file
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{base_url}/api/diff",
-                    params=params,
-                )
-                response.raise_for_status()
-                return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "Diff proxy failed for session %s: %s",
-                session_id,
-                e,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=(f"Failed to fetch diff from session pod: {e.response.status_code}"),
-            )
-        except httpx.RequestError as e:
-            logger.warning(
-                "Diff proxy connection failed for session %s: %s",
-                session_id,
-                e,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not connect to session pod: {e}",
-            )
-
-    @router.get(
-        "/sessions/{session_id}/files",
-        responses={
-            400: {"model": ErrorResponse},
-            404: {"model": ErrorResponse},
-            502: {"model": ErrorResponse},
-        },
-        tags=["Sessions"],
-    )
-    async def list_session_files(
-        session_id: UUID = Path(description="Unique session identifier"),
-        path: str = Query(
-            default="",
-            description="Relative directory path within the workspace",
-        ),
-    ) -> dict:
-        """List files in a session workspace via Skuld.
-
-        Proxies to the session pod's ``GET /api/files`` endpoint.
-        Respects .gitignore and excludes noise directories.
-        Directories are sorted before files, both alphabetical.
-        """
-        if ".." in path or path.startswith("/"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=("Invalid path: must be relative and cannot contain '..'"),
-            )
-
-        session = await service.get_session(session_id)
-        if session is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session not found: {session_id}",
-            )
-
-        if not session.chat_endpoint:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} has no active endpoint",
-            )
-
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                params: dict[str, str] = {}
-                if path:
-                    params["path"] = path
-                response = await client.get(
-                    f"{base_url}/api/files",
-                    params=params,
-                )
-                response.raise_for_status()
-                return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "Files proxy failed for session %s: %s",
-                session_id,
-                e,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=(f"Failed to list files from session pod: {e.response.status_code}"),
-            )
-        except httpx.RequestError as e:
-            logger.warning(
-                "Files proxy connection failed for session %s: %s",
-                session_id,
-                e,
-            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Could not connect to session pod: {e}",

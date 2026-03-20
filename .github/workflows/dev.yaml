@@ -56,6 +56,8 @@ jobs:
           file: ./containers/${{ matrix.container }}/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ github.sha }}-${{ matrix.platform }}
+          build-args: |
+            APP_VERSION=dev-${{ github.sha }}
           labels: |
             org.opencontainers.image.title=${{ matrix.container }}
             org.opencontainers.image.licenses=Apache-2.0

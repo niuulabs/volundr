@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { CatalogEntry } from '@/models';
+import type { CatalogEntry, SchemaProperty } from '@/models';
 import styles from './CredentialForm.module.css';
 
 interface CredentialFormProps {
@@ -13,23 +13,113 @@ interface CredentialFormProps {
   error?: string;
 }
 
+function schemaInputType(prop: SchemaProperty | undefined): string {
+  if (!prop) return 'text';
+  switch (prop.type) {
+    case 'password':
+      return 'password';
+    case 'url':
+      return 'url';
+    case 'email':
+      return 'email';
+    default:
+      return 'text';
+  }
+}
+
+interface TagInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}
+
+function TagInput({ value, onChange, placeholder }: TagInputProps) {
+  const tags = value
+    ? value
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean)
+    : [];
+  const [inputValue, setInputValue] = useState('');
+
+  const addTag = (raw: string) => {
+    const tag = raw.trim();
+    if (!tag || tags.includes(tag)) return;
+    const next = [...tags, tag].join(', ');
+    onChange(next);
+  };
+
+  const removeTag = (index: number) => {
+    const next = tags.filter((_, i) => i !== index).join(', ');
+    onChange(next);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(inputValue);
+      setInputValue('');
+    }
+    if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+      removeTag(tags.length - 1);
+    }
+  };
+
+  const handleBlur = () => {
+    if (inputValue.trim()) {
+      addTag(inputValue);
+      setInputValue('');
+    }
+  };
+
+  return (
+    <div className={styles.tagContainer}>
+      <div className={styles.tagList}>
+        {tags.map((tag, i) => (
+          <span key={tag} className={styles.tag}>
+            {tag}
+            <button
+              type="button"
+              className={styles.tagRemove}
+              onClick={() => removeTag(i)}
+              aria-label={`Remove ${tag}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          className={styles.tagInput}
+          value={inputValue}
+          onChange={e => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          placeholder={tags.length === 0 ? placeholder : ''}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function CredentialForm({ entry, onSubmit, onCancel, error }: CredentialFormProps) {
-  const credentialFields = Object.keys(entry.credential_schema.properties ?? {});
-  const configFields = Object.keys(entry.config_schema.properties ?? {});
+  const credentialProps = entry.credential_schema.properties ?? {};
+  const configProps = entry.config_schema.properties ?? {};
+  const credentialFields = Object.keys(credentialProps);
+  const configFields = Object.keys(configProps);
   const requiredFields = new Set(entry.credential_schema.required ?? []);
 
   const [credentialName, setCredentialName] = useState(`${entry.slug}-credentials`);
   const [credentials, setCredentials] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const key of credentialFields) {
-      init[key] = '';
+      init[key] = credentialProps[key]?.default ?? '';
     }
     return init;
   });
   const [config, setConfig] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const key of configFields) {
-      init[key] = '';
+      init[key] = configProps[key]?.default ?? '';
     }
     return init;
   });
@@ -42,6 +132,9 @@ export function CredentialForm({ entry, onSubmit, onCancel, error }: CredentialF
     }
     onSubmit(credentialName.trim(), credentials, config);
   }, [allRequiredFilled, credentialName, credentials, config, onSubmit]);
+
+  const labelFor = (key: string, prop: SchemaProperty | undefined): string =>
+    prop?.label ?? formatLabel(key);
 
   return (
     <div className={styles.overlay} onClick={onCancel}>
@@ -61,34 +154,56 @@ export function CredentialForm({ entry, onSubmit, onCancel, error }: CredentialF
           <div className={styles.hint}>A name to identify this credential in the vault</div>
         </div>
 
-        {credentialFields.map(key => (
-          <div key={key} className={styles.field}>
-            <label className={styles.label}>
-              {formatLabel(key)}
-              {requiredFields.has(key) ? ' *' : ''}
-            </label>
-            <input
-              className={styles.input}
-              type="password"
-              value={credentials[key] ?? ''}
-              onChange={e => setCredentials(prev => ({ ...prev, [key]: e.target.value }))}
-              placeholder={`Enter ${formatLabel(key).toLowerCase()}`}
-            />
-          </div>
-        ))}
+        {credentialFields.map(key => {
+          const prop = credentialProps[key];
+          return (
+            <div key={key} className={styles.field}>
+              <label className={styles.label}>
+                {labelFor(key, prop)}
+                {requiredFields.has(key) ? ' *' : ''}
+              </label>
+              <input
+                className={styles.input}
+                type={
+                  prop?.type === 'password' || !prop?.type || prop.type === 'string'
+                    ? 'password'
+                    : schemaInputType(prop)
+                }
+                value={credentials[key] ?? ''}
+                onChange={e => setCredentials(prev => ({ ...prev, [key]: e.target.value }))}
+                placeholder={`Enter ${labelFor(key, prop).toLowerCase()}`}
+              />
+            </div>
+          );
+        })}
 
-        {configFields.map(key => (
-          <div key={key} className={styles.field}>
-            <label className={styles.label}>{formatLabel(key)}</label>
-            <input
-              className={styles.input}
-              type="text"
-              value={config[key] ?? ''}
-              onChange={e => setConfig(prev => ({ ...prev, [key]: e.target.value }))}
-              placeholder={`Enter ${formatLabel(key).toLowerCase()}`}
-            />
-          </div>
-        ))}
+        {configFields.map(key => {
+          const prop = configProps[key];
+          const isArray = prop?.type === 'string[]';
+          return (
+            <div key={key} className={styles.field}>
+              <label className={styles.label}>{labelFor(key, prop)}</label>
+              {isArray ? (
+                <>
+                  <TagInput
+                    value={config[key] ?? ''}
+                    onChange={val => setConfig(prev => ({ ...prev, [key]: val }))}
+                    placeholder={`Enter ${labelFor(key, prop).toLowerCase()}`}
+                  />
+                  <div className={styles.hint}>Separate with commas</div>
+                </>
+              ) : (
+                <input
+                  className={styles.input}
+                  type={schemaInputType(prop)}
+                  value={config[key] ?? ''}
+                  onChange={e => setConfig(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={`Enter ${labelFor(key, prop).toLowerCase()}`}
+                />
+              )}
+            </div>
+          );
+        })}
 
         <div className={styles.actions}>
           <button className={styles.cancelButton} onClick={onCancel}>

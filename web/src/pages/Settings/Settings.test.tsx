@@ -17,7 +17,7 @@ const mockCatalog: CatalogEntry[] = [
   {
     slug: 'linear',
     name: 'Linear',
-    description: 'Linear issue tracker',
+    description: 'Issue tracker',
     integration_type: 'issue_tracker',
     adapter: 'volundr.adapters.outbound.linear.LinearAdapter',
     icon: 'linear',
@@ -32,6 +32,8 @@ const mockCatalog: CatalogEntry[] = [
       args: ['-y', '@anthropic-ai/linear-mcp-server'],
       env_from_credentials: { LINEAR_API_KEY: 'api_key' },
     },
+    auth_type: 'api_key',
+    oauth_scopes: [],
   },
   {
     slug: 'github',
@@ -43,6 +45,8 @@ const mockCatalog: CatalogEntry[] = [
     credential_schema: { required: ['token'], properties: { token: { type: 'string' } } },
     config_schema: {},
     mcp_server: null,
+    auth_type: 'api_key',
+    oauth_scopes: [],
   },
 ];
 

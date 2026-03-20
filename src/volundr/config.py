@@ -107,14 +107,14 @@ class PodManagerConfig(BaseModel):
     Example YAML::
 
         pod_manager:
-          adapter: "volundr.adapters.outbound.farm.FarmPodManager"
-          base_url: "http://farm-tasks.default.svc.cluster.local"
-          timeout: 30
+          adapter: "volundr.adapters.outbound.flux.FluxPodManager"
+          namespace: "volundr"
+          chart_name: "skuld"
           ...
     """
 
     adapter: str = Field(
-        default="volundr.adapters.outbound.farm.FarmPodManager",
+        default="volundr.adapters.outbound.flux.FluxPodManager",
         description="Fully-qualified class path for the PodManager adapter.",
     )
     kwargs: dict[str, Any] = Field(
@@ -560,6 +560,32 @@ class SessionContributorConfig(BaseModel):
     )
 
 
+class OAuthSpecConfig(BaseModel):
+    """OAuth2 provider specification in config."""
+
+    authorize_url: str
+    token_url: str
+    revoke_url: str = ""
+    scopes: list[str] = Field(default_factory=list)
+    token_field_mapping: dict[str, str] = Field(default_factory=dict)
+    extra_authorize_params: dict[str, str] = Field(default_factory=dict)
+    extra_token_params: dict[str, str] = Field(default_factory=dict)
+
+
+class OAuthClientConfig(BaseModel):
+    """Client credentials for a single OAuth integration."""
+
+    client_id: str
+    client_secret: str
+
+
+class OAuthConfig(BaseModel):
+    """Top-level OAuth configuration."""
+
+    redirect_base_url: str = ""
+    clients: dict[str, OAuthClientConfig] = Field(default_factory=dict)
+
+
 class IntegrationDefinitionConfig(BaseModel):
     """A single integration definition in the catalog."""
 
@@ -573,6 +599,9 @@ class IntegrationDefinitionConfig(BaseModel):
     config_schema: dict[str, Any] = Field(default_factory=dict)
     mcp_server: dict[str, Any] | None = None
     env_from_credentials: dict[str, str] = Field(default_factory=dict)
+    auth_type: str = "api_key"
+    oauth: OAuthSpecConfig | None = None
+    file_mounts: dict[str, str] = Field(default_factory=dict)
 
 
 def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
@@ -657,6 +686,14 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
                 "args": ["-y", "@modelcontextprotocol/server-linear"],
                 "env_from_credentials": {"LINEAR_API_KEY": "api_key"},
             },
+            auth_type="oauth2_authorization_code",
+            oauth=OAuthSpecConfig(
+                authorize_url="https://linear.app/oauth/authorize",
+                token_url="https://api.linear.app/oauth/token",
+                revoke_url="https://api.linear.app/oauth/revoke",
+                scopes=["read", "write", "issues:create", "comments:create"],
+                token_field_mapping={"api_key": "access_token"},
+            ),
         ),
         IntegrationDefinitionConfig(
             slug="anthropic",
@@ -848,6 +885,7 @@ class Settings(BaseSettings):
     linear: LinearConfig = Field(default_factory=LinearConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
+    oauth: OAuthConfig = Field(default_factory=OAuthConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)

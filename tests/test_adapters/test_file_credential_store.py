@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -139,3 +140,85 @@ class TestFileCredentialStore:
 
         value = await encrypted_store.get_value("user", "u1", "secret")
         assert value == {"token": "my-secret"}
+
+    # ------------------------------------------------------------------
+    # Individual credential files
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio()
+    async def test_store_creates_individual_file(self, store: FileCredentialStore) -> None:
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"})
+        individual = store._base_dir / "user" / "u1" / "my-key.json"
+        assert individual.exists()
+        data = json.loads(individual.read_text())
+        assert data == {"token": "abc"}
+
+    @pytest.mark.asyncio()
+    async def test_store_updates_individual_file(self, store: FileCredentialStore) -> None:
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "v1"})
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "v2"})
+        individual = store._base_dir / "user" / "u1" / "my-key.json"
+        data = json.loads(individual.read_text())
+        assert data == {"token": "v2"}
+
+    @pytest.mark.asyncio()
+    async def test_delete_removes_individual_file(self, store: FileCredentialStore) -> None:
+        await store.store("user", "u1", "my-key", SecretType.API_KEY, {"token": "abc"})
+        individual = store._base_dir / "user" / "u1" / "my-key.json"
+        assert individual.exists()
+        await store.delete("user", "u1", "my-key")
+        assert not individual.exists()
+
+    # ------------------------------------------------------------------
+    # Atomic write error handling
+    # ------------------------------------------------------------------
+
+    def test_write_file_cleans_up_on_os_write_error(
+        self, store: FileCredentialStore, tmp_path: Path
+    ) -> None:
+        """When os.write raises, the temp file is cleaned up and fd is closed."""
+        from unittest.mock import patch
+
+        target_path = tmp_path / "user" / "u1" / "credentials.json"
+        data = {"metadata": {}, "values": {}}
+
+        mock_target = "volundr.adapters.outbound.file_credential_store.os.write"
+        with patch(mock_target, side_effect=OSError("disk full")):
+            with pytest.raises(OSError, match="disk full"):
+                store._write_file(target_path, data)
+
+        # Verify no leftover temp files in the directory
+        if target_path.parent.exists():
+            tmp_files = list(target_path.parent.glob("*.tmp"))
+            assert tmp_files == []
+
+    def test_write_individual_credential_cleans_up_on_os_write_error(
+        self, store: FileCredentialStore, tmp_path: Path
+    ) -> None:
+        """When os.write raises in _write_individual_credential, cleanup happens."""
+        from unittest.mock import patch
+
+        mock_target = "volundr.adapters.outbound.file_credential_store.os.write"
+        with patch(mock_target, side_effect=OSError("disk full")):
+            with pytest.raises(OSError, match="disk full"):
+                store._write_individual_credential("user", "u1", "my-key", {"token": "abc"})
+
+        # Verify no leftover temp files
+        cred_dir = store._base_dir / "user" / "u1"
+        if cred_dir.exists():
+            tmp_files = list(cred_dir.glob("*.tmp"))
+            assert tmp_files == []
+
+    # ------------------------------------------------------------------
+    # Health check failure
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio()
+    async def test_health_check_returns_false_on_os_error(self, tmp_path: Path) -> None:
+        """Health check returns False when the base directory is not writable."""
+        from unittest.mock import patch
+
+        store = FileCredentialStore(base_dir=str(tmp_path / "health"))
+        with patch.object(Path, "write_text", side_effect=OSError("permission denied")):
+            result = await store.health_check()
+        assert result is False

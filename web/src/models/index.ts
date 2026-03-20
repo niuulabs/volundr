@@ -57,6 +57,7 @@ export type { MimirStats, MimirConsultation } from './mimir.model';
 
 export type {
   VolundrFeatures,
+  FileRoot,
   ResourceType,
   NodeResourceSummary,
   ClusterResourceInfo,
@@ -96,8 +97,8 @@ export type {
   TemplateRepo,
   VolundrPreset,
   VolundrTemplate,
-  LinearIssueStatus,
-  LinearIssue,
+  TrackerIssueStatus,
+  TrackerIssue,
   ProjectRepoMapping,
   FileTreeEntry,
   VolundrUser,
@@ -134,12 +135,9 @@ export { TASK_TYPES } from './volundr.model';
 
 export type {
   IntegrationType,
-  TrackerProvider,
   IntegrationConnection,
   IntegrationTestResult,
-  TrackerProviderOption,
   CatalogEntry,
   MCPServerSpec,
+  SchemaProperty,
 } from './integration.model';
-
-export { TRACKER_PROVIDERS } from './integration.model';

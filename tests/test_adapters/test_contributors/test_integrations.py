@@ -1,7 +1,6 @@
 """Tests for IntegrationContributor."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -65,13 +64,6 @@ def _linear_connection(*, conn_id="conn-linear", enabled=True):
     )
 
 
-def _mock_user_integration(credentials=None):
-    """Create a mock UserIntegrationService."""
-    ui = AsyncMock()
-    ui.resolve_credentials.return_value = credentials or {}
-    return ui
-
-
 class TestIntegrationContributor:
     async def test_name(self):
         c = IntegrationContributor()
@@ -91,27 +83,39 @@ class TestIntegrationContributor:
         result = await c.contribute(session, ctx)
         assert result.values == {}
 
-    async def test_resolves_mcp_server(self, session, principal):
+    async def test_resolves_mcp_server_with_empty_env(self, session, principal):
+        """MCP server config has empty env — entrypoint sources from manifest."""
         registry = IntegrationRegistry([_linear_definition()])
-        ui = _mock_user_integration({"api_key": "lin_key_123"})
 
         ctx = SessionContext(
             principal=principal,
             integration_connections=(_linear_connection(),),
         )
-        c = IntegrationContributor(
-            integration_registry=registry,
-            user_integration=ui,
-        )
+        c = IntegrationContributor(integration_registry=registry)
         result = await c.contribute(session, ctx)
 
         assert len(result.values["mcpServers"]) == 1
         server = result.values["mcpServers"][0]
         assert server["name"] == "linear"
         assert server["command"] == "npx"
-        assert server["env"]["LINEAR_API_KEY"] == "lin_key_123"
+        assert server["env"] == {}
 
-        ui.resolve_credentials.assert_called_once_with("user-1", "linear-cred")
+    async def test_produces_secret_manifest_for_mcp(self, session, principal):
+        """MCP integration produces manifest with env mappings."""
+        registry = IntegrationRegistry([_linear_definition()])
+
+        ctx = SessionContext(
+            principal=principal,
+            integration_connections=(_linear_connection(),),
+        )
+        c = IntegrationContributor(integration_registry=registry)
+        result = await c.contribute(session, ctx)
+
+        manifest = result.values["secretManifest"]
+        assert "LINEAR_API_KEY" in manifest["env"]
+        entry = manifest["env"]["LINEAR_API_KEY"]
+        assert entry["file"] == "linear-cred"
+        assert entry["key"] == "api_key"
 
     async def test_no_mcp_spec_skipped(self, session, principal):
         defn = IntegrationDefinition(
@@ -142,32 +146,12 @@ class TestIntegrationContributor:
             principal=principal,
             integration_connections=(conn,),
         )
-        c = IntegrationContributor(
-            integration_registry=registry,
-            user_integration=_mock_user_integration(),
-        )
+        c = IntegrationContributor(integration_registry=registry)
         result = await c.contribute(session, ctx)
         assert result.values == {}
 
-    async def test_no_credential_still_builds_config(self, session, principal):
-        """MCP server config should still build with empty credentials."""
-        registry = IntegrationRegistry([_linear_definition()])
-        ui = _mock_user_integration()
-
-        ctx = SessionContext(
-            principal=principal,
-            integration_connections=(_linear_connection(),),
-        )
-        c = IntegrationContributor(
-            integration_registry=registry,
-            user_integration=ui,
-        )
-        result = await c.contribute(session, ctx)
-        assert len(result.values["mcpServers"]) == 1
-        assert result.values["mcpServers"][0]["env"]["LINEAR_API_KEY"] == ""
-
-    async def test_env_from_credentials(self, session, principal):
-        """Non-MCP integration with env_from_credentials produces envSecrets."""
+    async def test_env_from_credentials_produces_manifest(self, session, principal):
+        """Non-MCP integration with env_from_credentials produces secretManifest."""
         defn = IntegrationDefinition(
             slug="anthropic",
             name="Anthropic",
@@ -192,40 +176,70 @@ class TestIntegrationContributor:
             updated_at=datetime.now(tz=UTC),
             slug="anthropic",
         )
-        ui = _mock_user_integration({"api_key": "sk-ant-123"})
 
         ctx = SessionContext(
             principal=principal,
             integration_connections=(conn,),
         )
-        c = IntegrationContributor(
-            integration_registry=registry,
-            user_integration=ui,
-        )
+        c = IntegrationContributor(integration_registry=registry)
         result = await c.contribute(session, ctx)
 
-        assert "envSecrets" in result.values
-        secrets = result.values["envSecrets"]
-        assert len(secrets) == 1
-        assert secrets[0]["envVar"] == "ANTHROPIC_API_KEY"
-        assert secrets[0]["secretName"] == "anthropic-cred"
-        assert secrets[0]["secretKey"] == "api_key"
+        assert "secretManifest" in result.values
+        manifest = result.values["secretManifest"]
+        assert "ANTHROPIC_API_KEY" in manifest["env"]
+        entry = manifest["env"]["ANTHROPIC_API_KEY"]
+        assert entry["file"] == "anthropic-cred"
+        assert entry["key"] == "api_key"
 
-    async def test_no_principal_skips_credential_fetch(self, session):
-        """Without a principal, credentials are empty dicts."""
+    async def test_file_mounts_in_manifest(self, session, principal):
+        """Integration with file_mounts produces files entries in manifest."""
+        defn = IntegrationDefinition(
+            slug="claude-oauth",
+            name="Claude OAuth",
+            description="Claude OAuth credentials",
+            integration_type="ai_provider",
+            adapter="",
+            file_mounts={"/home/devrunner/.claude/credentials.json": ""},
+        )
+        registry = IntegrationRegistry([defn])
+
+        conn = IntegrationConnection(
+            id="conn-claude",
+            user_id="user-1",
+            integration_type="ai_provider",
+            adapter="",
+            credential_name="claude-oauth-cred",
+            config={},
+            enabled=True,
+            created_at=datetime.now(tz=UTC),
+            updated_at=datetime.now(tz=UTC),
+            slug="claude-oauth",
+        )
+
+        ctx = SessionContext(
+            principal=principal,
+            integration_connections=(conn,),
+        )
+        c = IntegrationContributor(integration_registry=registry)
+        result = await c.contribute(session, ctx)
+
+        manifest = result.values["secretManifest"]
+        assert "/home/devrunner/.claude/credentials.json" in manifest["files"]
+        entry = manifest["files"]["/home/devrunner/.claude/credentials.json"]
+        assert entry["file"] == "claude-oauth-cred"
+
+    async def test_without_principal_still_produces_manifest(self, session):
+        """Without a principal, manifest is still produced."""
         registry = IntegrationRegistry([_linear_definition()])
-        ui = _mock_user_integration()
 
         ctx = SessionContext(
             integration_connections=(_linear_connection(),),
         )
-        c = IntegrationContributor(
-            integration_registry=registry,
-            user_integration=ui,
-        )
+        c = IntegrationContributor(integration_registry=registry)
         result = await c.contribute(session, ctx)
 
-        # Still builds MCP config but with empty credential values
+        # MCP server still in values
         assert len(result.values["mcpServers"]) == 1
-        assert result.values["mcpServers"][0]["env"]["LINEAR_API_KEY"] == ""
-        ui.resolve_credentials.assert_not_called()
+        assert result.values["mcpServers"][0]["env"] == {}
+        # Manifest still produced
+        assert "secretManifest" in result.values

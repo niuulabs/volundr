@@ -517,7 +517,23 @@ data:
     ALTER TABLE volundr_presets DROP COLUMN IF EXISTS integration_ids;
     ALTER TABLE volundr_presets DROP COLUMN IF EXISTS source;
 
-  000018_feature_toggles.up.sql: |
+  000018_integration_slug.up.sql: |
+    -- Add slug column to integration_connections for catalog definition references
+    ALTER TABLE integration_connections
+        ADD COLUMN IF NOT EXISTS slug VARCHAR(100) NOT NULL DEFAULT '';
+
+  000018_integration_slug.down.sql: |
+    ALTER TABLE integration_connections DROP COLUMN IF EXISTS slug;
+
+  000019_session_issue_link.up.sql: |
+    -- Add issue tracker URL to sessions for direct linking
+    ALTER TABLE sessions
+        ADD COLUMN IF NOT EXISTS issue_tracker_url VARCHAR(500);
+
+  000019_session_issue_link.down.sql: |
+    ALTER TABLE sessions DROP COLUMN IF EXISTS issue_tracker_url;
+
+  000020_feature_toggles.up.sql: |
     -- Feature toggles: admin-level overrides for which features are available.
     CREATE TABLE IF NOT EXISTS feature_toggles (
         feature_key     TEXT PRIMARY KEY,
@@ -537,7 +553,7 @@ data:
     CREATE INDEX IF NOT EXISTS idx_user_feature_prefs_user
         ON user_feature_preferences(user_id);
 
-  000018_feature_toggles.down.sql: |
+  000020_feature_toggles.down.sql: |
     DROP TABLE IF EXISTS user_feature_preferences;
     DROP TABLE IF EXISTS feature_toggles;
 {{- end }}

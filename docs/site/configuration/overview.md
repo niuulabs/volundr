@@ -24,7 +24,7 @@ The naming differs between them. Helm uses camelCase (`podManager`), config.yaml
 Most infrastructure components are configured by specifying a fully-qualified Python class path and constructor kwargs. You can swap backends without code changes — just update the config.
 
 ```yaml
-# Example: switch pod manager from Farm to Flux
+# Example: configure pod manager
 pod_manager:
   adapter: "volundr.adapters.outbound.flux.FluxPodManager"
   kwargs:

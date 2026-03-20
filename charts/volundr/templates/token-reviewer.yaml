@@ -1,0 +1,37 @@
+{{- if contains "InfisicalAgent" (.Values.secretInjection.adapter | default "") }}
+# Dedicated ServiceAccount for K8s TokenReview API access.
+# Used by the Infisical adapter to validate pod SA tokens when
+# attaching Kubernetes Auth to per-session Machine Identities.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "volundr.fullname" . }}-token-reviewer
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+---
+# Long-lived SA token (auto-populated by K8s)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "volundr.fullname" . }}-token-reviewer
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/service-account.name: {{ include "volundr.fullname" . }}-token-reviewer
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "volundr.fullname" . }}-token-reviewer
+  labels:
+    {{- include "volundr.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "volundr.fullname" . }}-token-reviewer
+    namespace: {{ .Release.Namespace }}
+{{- end }}

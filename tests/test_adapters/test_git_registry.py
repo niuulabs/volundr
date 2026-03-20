@@ -1,5 +1,7 @@
 """Tests for the git provider registry."""
 
+from unittest.mock import AsyncMock, PropertyMock
+
 import pytest
 import respx
 from httpx import Response
@@ -8,7 +10,14 @@ from volundr.adapters.outbound.git_registry import GitProviderRegistry, create_g
 from volundr.adapters.outbound.github import GitHubProvider
 from volundr.adapters.outbound.gitlab import GitLabProvider
 from volundr.config import GitConfig, GitHubConfig, GitLabConfig
-from volundr.domain.models import GitProviderType
+from volundr.domain.models import (
+    CIStatus,
+    GitProviderType,
+    PullRequest,
+    PullRequestStatus,
+    RepoInfo,
+)
+from volundr.domain.ports import GitProvider
 
 
 class TestGitProviderRegistry:
@@ -409,3 +418,348 @@ class TestGitProviderRegistryListConfiguredRepos:
         provider = registry.get_provider("https://github.com/other-org/other-repo")
         assert provider is github_provider
         await github_provider.close()
+
+
+def _make_git_provider_mock(
+    name: str = "MockProvider",
+    provider_type: GitProviderType = GitProviderType.GITHUB,
+    supports_url: str | None = None,
+) -> AsyncMock:
+    """Create a mock that implements GitProvider but NOT GitWorkflowProvider.
+
+    Using spec=GitProvider ensures isinstance(..., GitWorkflowProvider) is False.
+    """
+    mock = AsyncMock(spec=GitProvider)
+    type(mock).name = PropertyMock(return_value=name)
+    type(mock).provider_type = PropertyMock(return_value=provider_type)
+    type(mock).orgs = PropertyMock(return_value=())
+    if supports_url is not None:
+        mock.supports.side_effect = lambda url: supports_url in url
+    else:
+        mock.supports.return_value = False
+    return mock
+
+
+def _make_workflow_provider_mock(
+    name: str = "WorkflowProvider",
+    provider_type: GitProviderType = GitProviderType.GITHUB,
+    supports_url: str | None = None,
+) -> AsyncMock:
+    """Create a mock that implements both GitProvider and GitWorkflowProvider."""
+    mock = AsyncMock(spec=GitHubProvider)
+    type(mock).name = PropertyMock(return_value=name)
+    type(mock).provider_type = PropertyMock(return_value=provider_type)
+    type(mock).orgs = PropertyMock(return_value=())
+    if supports_url is not None:
+        mock.supports.side_effect = lambda url: supports_url in url
+    else:
+        mock.supports.return_value = True
+    return mock
+
+
+class TestValidateRepo:
+    """Tests for validate_repo method."""
+
+    @pytest.mark.asyncio
+    async def test_validate_repo_valid(self):
+        """validate_repo returns True when provider confirms repo is valid."""
+        provider = _make_workflow_provider_mock(supports_url="github.com")
+        provider.validate_repo.return_value = True
+
+        registry = GitProviderRegistry()
+        registry.register(provider)
+
+        result = await registry.validate_repo("https://github.com/org/repo")
+
+        assert result is True
+        provider.validate_repo.assert_awaited_once_with("https://github.com/org/repo")
+
+    @pytest.mark.asyncio
+    async def test_validate_repo_invalid(self):
+        """validate_repo returns False when provider says repo is invalid."""
+        provider = _make_workflow_provider_mock(supports_url="github.com")
+        provider.validate_repo.return_value = False
+
+        registry = GitProviderRegistry()
+        registry.register(provider)
+
+        result = await registry.validate_repo("https://github.com/org/nonexistent")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_validate_repo_no_provider(self):
+        """validate_repo returns False when no provider supports the URL."""
+        registry = GitProviderRegistry()
+
+        result = await registry.validate_repo("https://unknown.com/org/repo")
+
+        assert result is False
+
+
+class TestListRepos:
+    """Tests for list_repos method."""
+
+    @pytest.mark.asyncio
+    async def test_list_repos_multiple_providers(self):
+        """list_repos aggregates repos from all providers."""
+        repo1 = RepoInfo(
+            provider=GitProviderType.GITHUB,
+            org="org1",
+            name="repo1",
+            clone_url="https://github.com/org1/repo1.git",
+            url="https://github.com/org1/repo1",
+        )
+        repo2 = RepoInfo(
+            provider=GitProviderType.GITLAB,
+            org="org1",
+            name="repo2",
+            clone_url="https://gitlab.com/org1/repo2.git",
+            url="https://gitlab.com/org1/repo2",
+        )
+
+        gh_provider = _make_workflow_provider_mock(
+            name="GitHub", provider_type=GitProviderType.GITHUB
+        )
+        gh_provider.list_repos.return_value = [repo1]
+
+        gl_provider = _make_workflow_provider_mock(
+            name="GitLab", provider_type=GitProviderType.GITLAB
+        )
+        gl_provider.list_repos.return_value = [repo2]
+
+        registry = GitProviderRegistry()
+        registry.register(gh_provider)
+        registry.register(gl_provider)
+
+        repos = await registry.list_repos("org1")
+
+        assert len(repos) == 2
+        assert repo1 in repos
+        assert repo2 in repos
+
+    @pytest.mark.asyncio
+    async def test_list_repos_filter_by_type(self):
+        """list_repos filters by provider type when specified."""
+        repo1 = RepoInfo(
+            provider=GitProviderType.GITHUB,
+            org="org1",
+            name="repo1",
+            clone_url="https://github.com/org1/repo1.git",
+            url="https://github.com/org1/repo1",
+        )
+
+        gh_provider = _make_workflow_provider_mock(
+            name="GitHub", provider_type=GitProviderType.GITHUB
+        )
+        gh_provider.list_repos.return_value = [repo1]
+
+        gl_provider = _make_workflow_provider_mock(
+            name="GitLab", provider_type=GitProviderType.GITLAB
+        )
+
+        registry = GitProviderRegistry()
+        registry.register(gh_provider)
+        registry.register(gl_provider)
+
+        repos = await registry.list_repos("org1", provider_type=GitProviderType.GITHUB)
+
+        assert len(repos) == 1
+        assert repos[0] is repo1
+        gl_provider.list_repos.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_list_repos_populates_reverse_lookup(self):
+        """list_repos populates reverse URL lookup for subsequent get_provider calls."""
+        repo = RepoInfo(
+            provider=GitProviderType.GITHUB,
+            org="org1",
+            name="repo1",
+            clone_url="https://github.com/org1/repo1.git",
+            url="https://github.com/org1/repo1",
+        )
+
+        provider = _make_workflow_provider_mock(name="GitHub", provider_type=GitProviderType.GITHUB)
+        provider.list_repos.return_value = [repo]
+
+        registry = GitProviderRegistry()
+        registry.register(provider)
+
+        await registry.list_repos("org1")
+
+        # Now get_provider should find this via reverse lookup
+        found = registry.get_provider("https://github.com/org1/repo1")
+        assert found is provider
+
+
+class TestGetWorkflowProvider:
+    """Tests for _get_workflow_provider error paths."""
+
+    def test_no_provider_found(self):
+        """Raises ValueError when no provider supports the URL."""
+        registry = GitProviderRegistry()
+
+        with pytest.raises(ValueError, match="No git provider found for"):
+            registry._get_workflow_provider("https://unknown.com/org/repo")
+
+    def test_provider_does_not_support_workflow(self):
+        """Raises ValueError when provider doesn't implement GitWorkflowProvider."""
+        provider = _make_git_provider_mock(name="BasicProvider", supports_url="basic.com")
+
+        registry = GitProviderRegistry()
+        registry.register(provider)
+
+        with pytest.raises(ValueError, match="does not support workflow operations"):
+            registry._get_workflow_provider("https://basic.com/org/repo")
+
+
+class TestWorkflowDelegation:
+    """Tests for workflow methods that delegate to _get_workflow_provider."""
+
+    @pytest.fixture
+    def workflow_provider(self) -> AsyncMock:
+        """Create a workflow-capable mock provider."""
+        return _make_workflow_provider_mock(
+            name="GitHub",
+            provider_type=GitProviderType.GITHUB,
+            supports_url="github.com",
+        )
+
+    @pytest.fixture
+    def registry(self, workflow_provider: AsyncMock) -> GitProviderRegistry:
+        """Create registry with a workflow provider."""
+        registry = GitProviderRegistry()
+        registry.register(workflow_provider)
+        return registry
+
+    @pytest.mark.asyncio
+    async def test_create_branch(self, registry: GitProviderRegistry, workflow_provider: AsyncMock):
+        """create_branch delegates to the workflow provider."""
+        workflow_provider.create_branch.return_value = True
+
+        result = await registry.create_branch(
+            "https://github.com/org/repo", "feature-branch", "main"
+        )
+
+        assert result is True
+        workflow_provider.create_branch.assert_awaited_once_with(
+            "https://github.com/org/repo", "feature-branch", "main"
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_pull_request(
+        self, registry: GitProviderRegistry, workflow_provider: AsyncMock
+    ):
+        """create_pull_request delegates to the workflow provider."""
+        pr = PullRequest(
+            number=1,
+            title="Test PR",
+            url="https://github.com/org/repo/pull/1",
+            repo_url="https://github.com/org/repo",
+            provider=GitProviderType.GITHUB,
+            source_branch="feature",
+            target_branch="main",
+            status=PullRequestStatus.OPEN,
+        )
+        workflow_provider.create_pull_request.return_value = pr
+
+        result = await registry.create_pull_request(
+            "https://github.com/org/repo",
+            "Test PR",
+            "Description",
+            "feature",
+            "main",
+            labels=["bug"],
+        )
+
+        assert result is pr
+        workflow_provider.create_pull_request.assert_awaited_once_with(
+            "https://github.com/org/repo",
+            "Test PR",
+            "Description",
+            "feature",
+            "main",
+            ["bug"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_pull_request(
+        self, registry: GitProviderRegistry, workflow_provider: AsyncMock
+    ):
+        """get_pull_request delegates to the workflow provider."""
+        pr = PullRequest(
+            number=42,
+            title="Some PR",
+            url="https://github.com/org/repo/pull/42",
+            repo_url="https://github.com/org/repo",
+            provider=GitProviderType.GITHUB,
+            source_branch="feature",
+            target_branch="main",
+            status=PullRequestStatus.OPEN,
+        )
+        workflow_provider.get_pull_request.return_value = pr
+
+        result = await registry.get_pull_request("https://github.com/org/repo", 42)
+
+        assert result is pr
+        workflow_provider.get_pull_request.assert_awaited_once_with(
+            "https://github.com/org/repo", 42
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_pull_requests(
+        self, registry: GitProviderRegistry, workflow_provider: AsyncMock
+    ):
+        """list_pull_requests delegates to the workflow provider."""
+        workflow_provider.list_pull_requests.return_value = []
+
+        result = await registry.list_pull_requests("https://github.com/org/repo", status="open")
+
+        assert result == []
+        workflow_provider.list_pull_requests.assert_awaited_once_with(
+            "https://github.com/org/repo", "open"
+        )
+
+    @pytest.mark.asyncio
+    async def test_merge_pull_request(
+        self, registry: GitProviderRegistry, workflow_provider: AsyncMock
+    ):
+        """merge_pull_request delegates to the workflow provider."""
+        workflow_provider.merge_pull_request.return_value = True
+
+        result = await registry.merge_pull_request("https://github.com/org/repo", 1, "squash")
+
+        assert result is True
+        workflow_provider.merge_pull_request.assert_awaited_once_with(
+            "https://github.com/org/repo", 1, "squash"
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_ci_status(self, registry: GitProviderRegistry, workflow_provider: AsyncMock):
+        """get_ci_status delegates to the workflow provider."""
+        workflow_provider.get_ci_status.return_value = CIStatus.PASSING
+
+        result = await registry.get_ci_status("https://github.com/org/repo", "main")
+
+        assert result == CIStatus.PASSING
+        workflow_provider.get_ci_status.assert_awaited_once_with(
+            "https://github.com/org/repo", "main"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_branches(self, registry: GitProviderRegistry, workflow_provider: AsyncMock):
+        """list_branches delegates to the provider."""
+        workflow_provider.list_branches.return_value = ["main", "dev", "feature"]
+
+        result = await registry.list_branches("https://github.com/org/repo")
+
+        assert result == ["main", "dev", "feature"]
+        workflow_provider.list_branches.assert_awaited_once_with("https://github.com/org/repo")
+
+    @pytest.mark.asyncio
+    async def test_list_branches_no_provider(self):
+        """list_branches raises ValueError when no provider found."""
+        registry = GitProviderRegistry()
+
+        with pytest.raises(ValueError, match="No git provider found for"):
+            await registry.list_branches("https://unknown.com/org/repo")
