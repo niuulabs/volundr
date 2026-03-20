@@ -197,7 +197,7 @@ export interface IVolundrService {
   /**
    * Delete a session
    */
-  deleteSession(sessionId: string): Promise<void>;
+  deleteSession(sessionId: string, cleanup?: string[]): Promise<void>;
 
   /**
    * Archive a session (stops it first if running)

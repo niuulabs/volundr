@@ -885,12 +885,14 @@ export class ApiVolundrService implements IVolundrService {
     }
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
+  async deleteSession(sessionId: string, cleanup: string[] = []): Promise<void> {
     const session = this.cachedSessions.find(s => s.id === sessionId);
 
     // Manual sessions: no-op on backend, just remove locally
     if (session?.origin !== 'manual') {
-      await api.delete(`/sessions/${sessionId}`);
+      await api.delete(`/sessions/${sessionId}`, {
+        data: { cleanup },
+      });
     }
 
     this.cachedSessions = this.cachedSessions.filter(s => s.id !== sessionId);

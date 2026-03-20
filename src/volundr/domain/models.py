@@ -95,6 +95,13 @@ class QuotaCheck:
     reason: str = ""
 
 
+class CleanupTarget(StrEnum):
+    """Resources that can optionally be cleaned up when deleting a session."""
+
+    WORKSPACE_STORAGE = "workspace_storage"
+    CHRONICLES = "chronicles"
+
+
 class SessionStatus(StrEnum):
     """Status of a coding session."""
 

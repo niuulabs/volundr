@@ -407,6 +407,42 @@ class TestDeleteSession:
         response = client.delete(f"/api/v1/volundr/sessions/{fake_id}")
         assert response.status_code == 404
 
+    async def test_delete_session_with_cleanup_targets(
+        self, client: TestClient, service: SessionService
+    ):
+        """Deletes session with cleanup targets in request body."""
+        session = await service.create_session(
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
+        )
+
+        response = client.request(
+            "DELETE",
+            f"/api/v1/volundr/sessions/{session.id}",
+            json={"cleanup": ["workspace_storage", "chronicles"]},
+        )
+        assert response.status_code == 204
+
+    async def test_delete_session_empty_body_backwards_compatible(
+        self, client: TestClient, service: SessionService
+    ):
+        """Deletes session with empty body (backwards compatible)."""
+        session = await service.create_session(
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
+        )
+
+        response = client.delete(f"/api/v1/volundr/sessions/{session.id}")
+        assert response.status_code == 204
+
 
 class TestStartSession:
     """Tests for POST /api/v1/volundr/sessions/{id}/start."""

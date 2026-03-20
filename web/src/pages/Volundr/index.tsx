@@ -51,6 +51,8 @@ import {
   SessionGroupList,
   FileManager,
 } from '@/components';
+import { DeleteSessionDialog } from '@/components/DeleteSessionDialog';
+import type { CleanupTarget } from '@/components/DeleteSessionDialog';
 import { LaunchWizard } from '@/components/LaunchWizard';
 import type { LaunchConfig } from '@/components/LaunchWizard';
 import { useVolundr, useLocalStorage, useSessionProbe, useDiffViewer, useIdentity } from '@/hooks';
@@ -148,6 +150,9 @@ export function VolundrPage() {
   const [connectName, setConnectName] = useState('');
   const [connectHostname, setConnectHostname] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // Delete session dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Live message count from the WebSocket chat (syncs sidebar badge)
   const [liveChatCount, setLiveChatCount] = useState<number | null>(null);
@@ -440,22 +445,24 @@ export function VolundrPage() {
     }
   };
 
-  const handleDeleteSession = async () => {
+  const handleDeleteSession = () => {
     if (!effectiveSelectedSession) {
       return;
     }
+    setShowDeleteDialog(true);
+  };
 
-    const confirmMessage = isManualSession
-      ? `Remove "${effectiveSelectedSession.name}" from the session list?`
-      : `Are you sure you want to delete session "${effectiveSelectedSession.name}"? This action cannot be undone.`;
-
-    const confirmed = window.confirm(confirmMessage);
-    if (!confirmed) {
+  const handleDeleteConfirm = async (cleanup: CleanupTarget[]) => {
+    if (!effectiveSelectedSession) {
       return;
     }
-
-    await deleteSession(effectiveSelectedSession.id);
+    setShowDeleteDialog(false);
+    await deleteSession(effectiveSelectedSession.id, cleanup);
     setSelectedSession(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteDialog(false);
   };
 
   const handleArchiveSession = async () => {
@@ -1359,6 +1366,14 @@ export function VolundrPage() {
           </div>
         </Modal>
       )}
+
+      <DeleteSessionDialog
+        isOpen={showDeleteDialog}
+        sessionName={effectiveSelectedSession?.name ?? ''}
+        isManual={isManualSession}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
     </div>
   );
 }
