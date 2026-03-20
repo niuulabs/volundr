@@ -1155,11 +1155,7 @@ export function VolundrPage() {
             )}
 
             {activeTab === 'files' && fileManagerEnabled && (
-              <FileManager
-                sessionId={effectiveSelectedSession.id}
-                service={volundrService}
-                className={styles.tabPanel}
-              />
+              <FileManager chatEndpoint={chatEndpoint} className={styles.tabPanel} />
             )}
 
             {activeTab === 'diffs' && (

@@ -1336,52 +1336,6 @@ describe('MockVolundrService', () => {
     });
   });
 
-  describe('getSessionFiles', () => {
-    it('returns root entries when no path specified', async () => {
-      const entries = await service.getSessionFiles('any-session');
-      expect(Array.isArray(entries)).toBe(true);
-      expect(entries.length).toBeGreaterThan(0);
-    });
-
-    it('returns entries with expected properties', async () => {
-      const entries = await service.getSessionFiles('any-session');
-      const entry = entries[0];
-      expect(entry.name).toBeDefined();
-      expect(entry.path).toBeDefined();
-      expect(['file', 'directory']).toContain(entry.type);
-    });
-
-    it('returns children for a valid directory path', async () => {
-      const entries = await service.getSessionFiles('any-session', 'src');
-      expect(Array.isArray(entries)).toBe(true);
-      expect(entries.length).toBeGreaterThan(0);
-      // All children should have paths starting with src/
-      for (const entry of entries) {
-        expect(entry.path.startsWith('src/')).toBe(true);
-      }
-    });
-
-    it('returns empty array for unknown path', async () => {
-      const entries = await service.getSessionFiles('any-session', 'nonexistent');
-      expect(entries).toEqual([]);
-    });
-
-    it('returns copies of entries', async () => {
-      const entries1 = await service.getSessionFiles('any-session');
-      const entries2 = await service.getSessionFiles('any-session');
-      expect(entries1).not.toBe(entries2);
-      expect(entries1[0]).not.toBe(entries2[0]);
-    });
-
-    it('root contains both files and directories', async () => {
-      const entries = await service.getSessionFiles('any-session');
-      const hasFile = entries.some(e => e.type === 'file');
-      const hasDir = entries.some(e => e.type === 'directory');
-      expect(hasFile).toBe(true);
-      expect(hasDir).toBe(true);
-    });
-  });
-
   describe('getClusterResources', () => {
     it('returns resource types including cpu, memory, and gpu', async () => {
       const result = await service.getClusterResources();
