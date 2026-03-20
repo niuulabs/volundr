@@ -3,14 +3,6 @@ import { renderHook, act } from '@testing-library/react';
 import { useDiffViewer } from './useDiffViewer';
 import type { DiffData } from '@/models';
 
-// Mock the adapters module
-const mockGetSessionDiff = vi.fn();
-vi.mock('@/adapters', () => ({
-  volundrService: {
-    getSessionDiff: (...args: unknown[]) => mockGetSessionDiff(...args),
-  },
-}));
-
 vi.mock('@/adapters/api/client', () => ({
   getAccessToken: vi.fn(() => null),
 }));
@@ -35,7 +27,6 @@ const mockDiff: DiffData = {
 describe('useDiffViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSessionDiff.mockResolvedValue(mockDiff);
   });
 
   it('initializes with default state', () => {
@@ -50,22 +41,7 @@ describe('useDiffViewer', () => {
     expect(result.current.filesLoading).toBe(false);
   });
 
-  it('fetches diff when selecting a file (no chatEndpoint, falls back to volundrService)', async () => {
-    const { result } = renderHook(() => useDiffViewer());
-
-    await act(async () => {
-      await result.current.selectFile('session-1', 'src/main.ts');
-    });
-
-    expect(mockGetSessionDiff).toHaveBeenCalledWith('session-1', 'src/main.ts', 'last-commit');
-    expect(result.current.diff).toEqual(mockDiff);
-    expect(result.current.selectedFile).toBe('src/main.ts');
-    expect(result.current.diffLoading).toBe(false);
-  });
-
-  it('sets error when fetch fails', async () => {
-    mockGetSessionDiff.mockRejectedValue(new Error('Network error'));
-
+  it('sets error when selecting a file with no chatEndpoint', async () => {
     const { result } = renderHook(() => useDiffViewer());
 
     await act(async () => {
@@ -73,23 +49,69 @@ describe('useDiffViewer', () => {
     });
 
     expect(result.current.diff).toBeNull();
+    expect(result.current.diffError?.message).toBe('No session endpoint available');
+  });
+
+  it('sets error when fetch fails', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() =>
+      useDiffViewer('wss://sessions.example.com/s/abc-123/session')
+    );
+
+    await act(async () => {
+      await result.current.selectFile('session-1', 'src/main.ts');
+    });
+
+    expect(result.current.diff).toBeNull();
     expect(result.current.diffError?.message).toBe('Network error');
+    fetchSpy.mockRestore();
+  });
+
+  it('sets error when fetch returns non-ok', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useDiffViewer('wss://sessions.example.com/s/abc-123/session')
+    );
+
+    await act(async () => {
+      await result.current.selectFile('abc-123', 'src/main.ts');
+    });
+
+    expect(result.current.diff).toBeNull();
+    expect(result.current.diffError?.message).toBe('Failed to fetch diff: 404');
+
+    fetchSpy.mockRestore();
   });
 
   it('wraps non-Error rejection in Error', async () => {
-    mockGetSessionDiff.mockRejectedValue('string error');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue('string error');
 
-    const { result } = renderHook(() => useDiffViewer());
+    const { result } = renderHook(() =>
+      useDiffViewer('wss://sessions.example.com/s/abc-123/session')
+    );
 
     await act(async () => {
       await result.current.selectFile('session-1', 'src/main.ts');
     });
 
     expect(result.current.diffError?.message).toBe('Failed to fetch diff');
+    fetchSpy.mockRestore();
   });
 
   it('clears diff state', async () => {
-    const { result } = renderHook(() => useDiffViewer());
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockDiff),
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useDiffViewer('wss://sessions.example.com/s/abc-123/session')
+    );
 
     await act(async () => {
       await result.current.selectFile('session-1', 'src/main.ts');
@@ -105,12 +127,20 @@ describe('useDiffViewer', () => {
     expect(result.current.selectedFile).toBeNull();
     expect(result.current.diffError).toBeNull();
     expect(result.current.files).toEqual([]);
+
+    fetchSpy.mockRestore();
   });
 
   it('clears selection and updates base when changing diff base', async () => {
-    const { result } = renderHook(() => useDiffViewer());
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockDiff),
+    } as Response);
 
-    // First select a file
+    const { result } = renderHook(() =>
+      useDiffViewer('wss://sessions.example.com/s/abc-123/session')
+    );
+
     await act(async () => {
       await result.current.selectFile('session-1', 'src/main.ts');
     });
@@ -118,7 +148,6 @@ describe('useDiffViewer', () => {
     expect(result.current.selectedFile).toBe('src/main.ts');
     expect(result.current.diff).toEqual(mockDiff);
 
-    // Change base — should clear selection and diff
     act(() => {
       result.current.setDiffBase('default-branch');
     });
@@ -127,6 +156,8 @@ describe('useDiffViewer', () => {
     expect(result.current.selectedFile).toBeNull();
     expect(result.current.diff).toBeNull();
     expect(result.current.diffError).toBeNull();
+
+    fetchSpy.mockRestore();
   });
 
   it('updates base without errors when no file is selected', () => {
@@ -136,7 +167,6 @@ describe('useDiffViewer', () => {
       result.current.setDiffBase('default-branch');
     });
 
-    expect(mockGetSessionDiff).not.toHaveBeenCalled();
     expect(result.current.diffBase).toBe('default-branch');
   });
 
@@ -196,7 +226,6 @@ describe('useDiffViewer', () => {
       expect.objectContaining({ headers: {} })
     );
     expect(result.current.files).toEqual(mockFiles);
-    expect(mockGetSessionDiff).not.toHaveBeenCalled();
 
     fetchSpy.mockRestore();
   });
@@ -219,27 +248,6 @@ describe('useDiffViewer', () => {
       expect.stringContaining('https://sessions.example.com/s/abc-123/api/diff?'),
       expect.objectContaining({ headers: {} })
     );
-    expect(result.current.diff).toEqual(mockDiff);
-    expect(mockGetSessionDiff).not.toHaveBeenCalled();
-
-    fetchSpy.mockRestore();
-  });
-
-  it('falls back to volundrService when Skuld fetch returns non-ok', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: false,
-      status: 404,
-    } as Response);
-
-    const { result } = renderHook(() =>
-      useDiffViewer('wss://sessions.example.com/s/abc-123/session')
-    );
-
-    await act(async () => {
-      await result.current.selectFile('abc-123', 'src/main.ts');
-    });
-
-    expect(mockGetSessionDiff).toHaveBeenCalledWith('abc-123', 'src/main.ts', 'last-commit');
     expect(result.current.diff).toEqual(mockDiff);
 
     fetchSpy.mockRestore();
@@ -289,7 +297,6 @@ describe('useDiffViewer', () => {
       result.current.setDiffBase('default-branch');
     });
 
-    // Wait for the refetch to complete
     await act(async () => {
       await new Promise(r => setTimeout(r, 10));
     });
@@ -320,7 +327,6 @@ describe('useDiffViewer', () => {
       await result.current.fetchFiles();
     });
 
-    // apiBase is null, so fetch should not be called
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
@@ -388,7 +394,6 @@ describe('useDiffViewer', () => {
       await new Promise(r => setTimeout(r, 10));
     });
 
-    // Non-ok doesn't update files — they stay empty from initial state
     expect(result.current.files).toEqual([]);
     fetchSpy.mockRestore();
   });

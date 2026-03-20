@@ -1,7 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { FileManager } from './FileManager';
-import type { IVolundrService } from '@/ports';
 import type { FileTreeEntry } from '@/models';
 
 const mockEntries: FileTreeEntry[] = [
@@ -22,35 +21,76 @@ const mockEntries: FileTreeEntry[] = [
   },
 ];
 
-const service = {
-  getSessionFiles: vi.fn().mockResolvedValue(mockEntries),
-  downloadSessionFile: vi.fn().mockResolvedValue(new Blob(['content'])),
-  uploadSessionFiles: vi.fn().mockResolvedValue([]),
-  createSessionDirectory: vi
-    .fn()
-    .mockResolvedValue({ name: 'new-dir', path: 'new-dir', type: 'directory' }),
-  deleteSessionFile: vi.fn().mockResolvedValue(undefined),
-  getFeatures: vi.fn().mockResolvedValue({ localMountsEnabled: false, fileManagerEnabled: true }),
-} as unknown as IVolundrService;
+const CHAT_ENDPOINT = 'wss://localhost:8080/s/test-session/session';
+
+vi.mock('@/adapters/api/client', () => ({
+  getAccessToken: vi.fn(() => 'mock-token'),
+}));
+
+function mockFetchResponses(overrides: Partial<Record<string, () => Promise<Response>>> = {}) {
+  return vi.fn((url: string, init?: RequestInit) => {
+    const urlStr = typeof url === 'string' ? url : '';
+
+    if (overrides[urlStr]) {
+      return overrides[urlStr]!();
+    }
+
+    // List files
+    if (
+      urlStr.includes('/api/files') &&
+      !urlStr.includes('/download') &&
+      !urlStr.includes('/upload') &&
+      !urlStr.includes('/mkdir') &&
+      (!init || init.method === undefined || init.method === 'GET')
+    ) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ entries: mockEntries }), { status: 200 })
+      );
+    }
+
+    // Download
+    if (urlStr.includes('/api/files/download')) {
+      return Promise.resolve(new Response('content', { status: 200 }));
+    }
+
+    // Upload
+    if (urlStr.includes('/api/files/upload')) {
+      return Promise.resolve(new Response(JSON.stringify({ entries: [] }), { status: 200 }));
+    }
+
+    // Mkdir
+    if (urlStr.includes('/api/files/mkdir')) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ name: 'new-dir', path: 'new-dir', type: 'directory' }), {
+          status: 200,
+        })
+      );
+    }
+
+    // Delete
+    if (init?.method === 'DELETE') {
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+    }
+
+    return Promise.resolve(new Response('{}', { status: 200 }));
+  }) as unknown as typeof fetch;
+}
 
 describe('FileManager', () => {
+  let originalFetch: typeof fetch;
+
   beforeEach(() => {
-    vi.clearAllMocks();
-    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue(mockEntries);
-    (service.downloadSessionFile as ReturnType<typeof vi.fn>).mockResolvedValue(
-      new Blob(['content'])
-    );
-    (service.uploadSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (service.createSessionDirectory as ReturnType<typeof vi.fn>).mockResolvedValue({
-      name: 'new-dir',
-      path: 'new-dir',
-      type: 'directory',
-    });
-    (service.deleteSessionFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    originalFetch = global.fetch;
+    global.fetch = mockFetchResponses();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 
   it('renders file entries after loading', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
@@ -58,56 +98,69 @@ describe('FileManager', () => {
     expect(screen.getByText('package.json')).toBeTruthy();
   });
 
-  it('calls getSessionFiles with workspace root by default', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+  it('fetches files with workspace root by default', async () => {
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
-      expect(service.getSessionFiles).toHaveBeenCalledWith('test-session', '', 'workspace');
+      expect(screen.getByText('README.md')).toBeTruthy();
     });
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/files?root=workspace'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer mock-token' }),
+      })
+    );
   });
 
   it('switches to home root when Home button is clicked', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('Home'));
     await waitFor(() => {
-      expect(service.getSessionFiles).toHaveBeenCalledWith('test-session', '', 'home');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('root=home'),
+        expect.any(Object)
+      );
     });
   });
 
   it('navigates into a directory when clicked', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('src')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('src'));
     await waitFor(() => {
-      expect(service.getSessionFiles).toHaveBeenCalledWith('test-session', 'src', 'workspace');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('path=src'),
+        expect.any(Object)
+      );
     });
   });
 
   it('selects a file when clicked', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('README.md'));
-    // The row should be selected (has the selected class applied)
     const row = screen.getByText('README.md').closest('[role="button"]');
     expect(row).toBeTruthy();
   });
 
   it('shows empty state when directory is empty', async () => {
-    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    render(<FileManager sessionId="test-session" service={service} />);
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ entries: [] }), { status: 200 }));
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('Empty directory')).toBeTruthy();
     });
   });
 
   it('opens new folder dialog and creates directory', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
@@ -119,98 +172,95 @@ describe('FileManager', () => {
     fireEvent.click(screen.getByTestId('mkdir-submit'));
 
     await waitFor(() => {
-      expect(service.createSessionDirectory).toHaveBeenCalledWith(
-        'test-session',
-        'new-dir',
-        'workspace'
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/files/mkdir'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('new-dir'),
+        })
       );
     });
   });
 
-  it('calls deleteSessionFile when delete is clicked on a selected file', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+  it('calls delete when delete is clicked on a selected file', async () => {
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
-    // Select a file
     fireEvent.click(screen.getByText('README.md'));
-    // Click delete
     fireEvent.click(screen.getByTitle('Delete'));
     await waitFor(() => {
-      expect(service.deleteSessionFile).toHaveBeenCalledWith(
-        'test-session',
-        'README.md',
-        'workspace'
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('path=README.md'),
+        expect.objectContaining({ method: 'DELETE' })
       );
     });
   });
 
   it('renders upload drop zone', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     expect(screen.getByText('Drop files here')).toBeTruthy();
     expect(screen.getByText('or click to browse')).toBeTruthy();
   });
 
   it('uploads files via file input', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     const input = screen.getByTestId('file-input');
     const file = new File(['hello'], 'test.txt', { type: 'text/plain' });
     fireEvent.change(input, { target: { files: [file] } });
     await waitFor(() => {
-      expect(service.uploadSessionFiles).toHaveBeenCalledWith(
-        'test-session',
-        [file],
-        '',
-        'workspace'
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/files/upload'),
+        expect.objectContaining({ method: 'POST' })
       );
     });
   });
 
   it('renders breadcrumb navigation', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('workspace')).toBeTruthy();
     });
   });
 
   it('navigates back via breadcrumb', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('src')).toBeTruthy();
     });
-    // Navigate into src
     fireEvent.click(screen.getByText('src'));
     await waitFor(() => {
-      expect(service.getSessionFiles).toHaveBeenCalledWith('test-session', 'src', 'workspace');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('path=src'),
+        expect.any(Object)
+      );
     });
-    // Click workspace breadcrumb to go back
     fireEvent.click(screen.getByText('workspace'));
     await waitFor(() => {
-      expect(service.getSessionFiles).toHaveBeenCalledWith('test-session', '', 'workspace');
+      const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+      const lastCall = calls[calls.length - 1][0] as string;
+      expect(lastCall).toContain('/api/files?root=workspace');
+      expect(lastCall).not.toContain('path=');
     });
   });
 
-  it('calls downloadSessionFile when download is clicked', async () => {
-    // Mock createObjectURL and revokeObjectURL
+  it('calls download when download is clicked', async () => {
     const mockUrl = 'blob:mock-url';
     const originalCreateObjectURL = URL.createObjectURL;
     const originalRevokeObjectURL = URL.revokeObjectURL;
     URL.createObjectURL = vi.fn().mockReturnValue(mockUrl);
     URL.revokeObjectURL = vi.fn();
 
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
-    // Select file
     fireEvent.click(screen.getByText('README.md'));
-    // Click download
     fireEvent.click(screen.getByTitle('Download'));
     await waitFor(() => {
-      expect(service.downloadSessionFile).toHaveBeenCalledWith(
-        'test-session',
-        'README.md',
-        'workspace'
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/files/download'),
+        expect.any(Object)
       );
     });
 
@@ -219,20 +269,20 @@ describe('FileManager', () => {
   });
 
   it('refreshes entries when refresh button is clicked', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
 
-    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockClear();
+    (global.fetch as ReturnType<typeof vi.fn>).mockClear();
     fireEvent.click(screen.getByTitle('Refresh'));
     await waitFor(() => {
-      expect(service.getSessionFiles).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
   });
 
   it('disables download button when no file is selected', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
@@ -241,7 +291,7 @@ describe('FileManager', () => {
   });
 
   it('disables delete button when nothing is selected', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
@@ -250,108 +300,136 @@ describe('FileManager', () => {
   });
 
   it('displays file sizes in human-readable format', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('1.2 KB')).toBeTruthy();
     });
   });
 
   it('deselects a file when clicking the same file again', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
-    // Select file
     fireEvent.click(screen.getByText('README.md'));
-    const row = screen.getByText('README.md').closest('[role="button"]');
-    expect(row).toBeTruthy();
-    // Click same file again to deselect
     fireEvent.click(screen.getByText('README.md'));
-    // Download button should be disabled again (no selection)
     const downloadBtn = screen.getByTitle('Download');
     expect(downloadBtn).toHaveProperty('disabled', true);
   });
 
   it('handles fetchEntries error by setting entries to empty', async () => {
-    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Network error')
-    );
-    render(<FileManager sessionId="test-session" service={service} />);
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('Empty directory')).toBeTruthy();
     });
   });
 
   it('does nothing when handleDownload is called with no selection', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
-    // Click download without selecting a file (button is disabled but handler has early return)
+    (global.fetch as ReturnType<typeof vi.fn>).mockClear();
     const downloadBtn = screen.getByTitle('Download');
     fireEvent.click(downloadBtn);
-    expect(service.downloadSessionFile).not.toHaveBeenCalled();
+    // Only the list fetch should have been called, not download
+    await waitFor(() => {
+      const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+      const downloadCalls = calls.filter((c: unknown[]) => (c[0] as string).includes('/download'));
+      expect(downloadCalls).toHaveLength(0);
+    });
   });
 
   it('handles download failure gracefully', async () => {
-    (service.downloadSessionFile as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Download failed')
-    );
-    render(<FileManager sessionId="test-session" service={service} />);
+    global.fetch = mockFetchResponses();
+    // Override download to fail
+    const originalFetchFn = global.fetch as ReturnType<typeof vi.fn>;
+    const origImpl = originalFetchFn.getMockImplementation();
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/download')) {
+        return Promise.resolve(new Response('', { status: 500 }));
+      }
+      return origImpl!(url, init);
+    }) as unknown as typeof fetch;
+
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('README.md'));
     fireEvent.click(screen.getByTitle('Download'));
     await waitFor(() => {
-      expect(service.downloadSessionFile).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/download'),
+        expect.any(Object)
+      );
     });
-    // Component should not crash - file list still visible
     expect(screen.getByText('README.md')).toBeTruthy();
   });
 
   it('does nothing when handleDelete is called with no selection', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
+    (global.fetch as ReturnType<typeof vi.fn>).mockClear();
     const deleteBtn = screen.getByTitle('Delete');
     fireEvent.click(deleteBtn);
-    expect(service.deleteSessionFile).not.toHaveBeenCalled();
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const deleteCalls = calls.filter((c: unknown[]) => (c[1] as RequestInit)?.method === 'DELETE');
+    expect(deleteCalls).toHaveLength(0);
   });
 
   it('handles delete failure gracefully', async () => {
-    (service.deleteSessionFile as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Delete failed')
-    );
-    render(<FileManager sessionId="test-session" service={service} />);
+    const baseFetch = mockFetchResponses();
+    const baseFetchImpl = (baseFetch as ReturnType<typeof vi.fn>).getMockImplementation()!;
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        return Promise.reject(new Error('Delete failed'));
+      }
+      return baseFetchImpl(url, init);
+    }) as unknown as typeof fetch;
+
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('README.md'));
     fireEvent.click(screen.getByTitle('Delete'));
     await waitFor(() => {
-      expect(service.deleteSessionFile).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('path=README.md'),
+        expect.objectContaining({ method: 'DELETE' })
+      );
     });
     expect(screen.getByText('README.md')).toBeTruthy();
   });
 
   it('does nothing when handleMkdir is called with empty name', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
     fireEvent.click(screen.getByTitle('New Folder'));
-    // Leave input empty and click Create
+    (global.fetch as ReturnType<typeof vi.fn>).mockClear();
     fireEvent.click(screen.getByTestId('mkdir-submit'));
-    expect(service.createSessionDirectory).not.toHaveBeenCalled();
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const mkdirCalls = calls.filter((c: unknown[]) => (c[0] as string).includes('/mkdir'));
+    expect(mkdirCalls).toHaveLength(0);
   });
 
   it('handles mkdir failure gracefully', async () => {
-    (service.createSessionDirectory as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Mkdir failed')
-    );
-    render(<FileManager sessionId="test-session" service={service} />);
+    const baseFetch = mockFetchResponses();
+    const baseFetchImpl = (baseFetch as ReturnType<typeof vi.fn>).getMockImplementation()!;
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/mkdir')) {
+        return Promise.reject(new Error('Mkdir failed'));
+      }
+      return baseFetchImpl(url, init);
+    }) as unknown as typeof fetch;
+
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
@@ -360,66 +438,74 @@ describe('FileManager', () => {
     fireEvent.change(input, { target: { value: 'fail-dir' } });
     fireEvent.click(screen.getByTestId('mkdir-submit'));
     await waitFor(() => {
-      expect(service.createSessionDirectory).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/mkdir'),
+        expect.any(Object)
+      );
     });
-    // Component should not crash
     expect(screen.getByText('README.md')).toBeTruthy();
   });
 
   it('handles upload failure by setting status to error', async () => {
-    (service.uploadSessionFiles as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Upload failed')
-    );
-    render(<FileManager sessionId="test-session" service={service} />);
+    const baseFetch = mockFetchResponses();
+    const baseFetchImpl = (baseFetch as ReturnType<typeof vi.fn>).getMockImplementation()!;
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/upload')) {
+        return Promise.resolve(new Response('', { status: 500 }));
+      }
+      return baseFetchImpl(url, init);
+    }) as unknown as typeof fetch;
+
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     const input = screen.getByTestId('file-input');
     const file = new File(['hello'], 'bad-file.txt', { type: 'text/plain' });
     fireEvent.change(input, { target: { files: [file] } });
-    await waitFor(() => {
-      expect(service.uploadSessionFiles).toHaveBeenCalled();
-    });
-    // The upload item should show with error status (XCircle icon rendered)
     await waitFor(() => {
       expect(screen.getByText('bad-file.txt')).toBeTruthy();
     });
   });
 
   it('does not upload when drop event has no files', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     const dropZone = screen.getByText('Drop files here').closest('[role="button"]')!;
+    (global.fetch as ReturnType<typeof vi.fn>).mockClear();
     fireEvent.drop(dropZone, {
       dataTransfer: { files: [] },
     });
-    expect(service.uploadSessionFiles).not.toHaveBeenCalled();
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const uploadCalls = calls.filter((c: unknown[]) => (c[0] as string).includes('/upload'));
+    expect(uploadCalls).toHaveLength(0);
   });
 
   it('does not upload when file input change has no files', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     const input = screen.getByTestId('file-input');
+    (global.fetch as ReturnType<typeof vi.fn>).mockClear();
     fireEvent.change(input, { target: { files: null } });
-    expect(service.uploadSessionFiles).not.toHaveBeenCalled();
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const uploadCalls = calls.filter((c: unknown[]) => (c[0] as string).includes('/upload'));
+    expect(uploadCalls).toHaveLength(0);
   });
 
   it('handles Enter keydown on file row', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
     const row = screen.getByText('README.md').closest('[role="button"]')!;
     fireEvent.keyDown(row, { key: 'Enter' });
-    // File should be selected - download button should be enabled
     const downloadBtn = screen.getByTitle('Download');
     expect(downloadBtn).toHaveProperty('disabled', false);
   });
 
   it('handles Enter keydown on drop zone', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     const dropZone = screen.getByText('Drop files here').closest('[role="button"]')!;
-    // Should not throw when pressing Enter on drop zone
     fireEvent.keyDown(dropZone, { key: 'Enter' });
   });
 
   it('handles Enter keydown on mkdir input to submit', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
@@ -428,64 +514,92 @@ describe('FileManager', () => {
     fireEvent.change(input, { target: { value: 'enter-dir' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
-      expect(service.createSessionDirectory).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/mkdir'),
+        expect.any(Object)
+      );
     });
   });
 
   it('handles Escape keydown on mkdir input to close dialog', async () => {
-    render(<FileManager sessionId="test-session" service={service} />);
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('README.md')).toBeTruthy();
     });
     fireEvent.click(screen.getByTitle('New Folder'));
     const input = screen.getByTestId('mkdir-input');
     fireEvent.keyDown(input, { key: 'Escape' });
-    // Dialog should be closed - mkdir input should not be visible
     expect(screen.queryByTestId('mkdir-input')).toBeNull();
   });
 
   it('renders entry with null size as empty string', async () => {
-    const entriesWithNullSize: FileTreeEntry[] = [
-      {
-        name: 'no-size.txt',
-        path: 'no-size.txt',
-        type: 'file',
-        size: null as unknown as number,
-        modified: '2026-03-19T10:00:00Z',
-      },
-    ];
-    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue(entriesWithNullSize);
-    render(<FileManager sessionId="test-session" service={service} />);
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          entries: [
+            {
+              name: 'no-size.txt',
+              path: 'no-size.txt',
+              type: 'file',
+              size: null,
+              modified: '2026-03-19T10:00:00Z',
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('no-size.txt')).toBeTruthy();
     });
   });
 
   it('renders entry with no modified date as empty string', async () => {
-    const entriesNoModified: FileTreeEntry[] = [
-      { name: 'no-date.txt', path: 'no-date.txt', type: 'file', size: 100, modified: '' },
-    ];
-    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue(entriesNoModified);
-    render(<FileManager sessionId="test-session" service={service} />);
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          entries: [
+            { name: 'no-date.txt', path: 'no-date.txt', type: 'file', size: 100, modified: '' },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('no-date.txt')).toBeTruthy();
     });
   });
 
   it('formats 0 bytes correctly', async () => {
-    const entriesZeroSize: FileTreeEntry[] = [
-      {
-        name: 'empty.txt',
-        path: 'empty.txt',
-        type: 'file',
-        size: 0,
-        modified: '2026-03-19T10:00:00Z',
-      },
-    ];
-    (service.getSessionFiles as ReturnType<typeof vi.fn>).mockResolvedValue(entriesZeroSize);
-    render(<FileManager sessionId="test-session" service={service} />);
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          entries: [
+            {
+              name: 'empty.txt',
+              path: 'empty.txt',
+              type: 'file',
+              size: 0,
+              modified: '2026-03-19T10:00:00Z',
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+    render(<FileManager chatEndpoint={CHAT_ENDPOINT} />);
     await waitFor(() => {
       expect(screen.getByText('0 B')).toBeTruthy();
+    });
+  });
+
+  it('does nothing when chatEndpoint is null', async () => {
+    render(<FileManager chatEndpoint={null} />);
+    // Should show empty directory since no fetch is made
+    await waitFor(() => {
+      expect(screen.getByText('Empty directory')).toBeTruthy();
     });
   });
 });

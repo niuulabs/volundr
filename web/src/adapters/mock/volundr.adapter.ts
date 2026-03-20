@@ -7,8 +7,6 @@ import type {
   VolundrMessage,
   VolundrLog,
   SessionChronicle,
-  DiffData,
-  DiffBase,
   PullRequest,
   MergeResult,
   CIStatusValue,
@@ -18,7 +16,6 @@ import type {
   VolundrTemplate,
   TrackerIssue,
   ProjectRepoMapping,
-  FileTreeEntry,
   VolundrIdentity,
   VolundrUser,
   VolundrTenant,
@@ -51,7 +48,6 @@ import {
   mockVolundrMcpServers,
   mockAvailableMcpServers,
   mockAvailableSecrets,
-  mockFileTree,
 } from './data';
 
 /**
@@ -500,106 +496,6 @@ export class MockVolundrService implements IVolundrService {
     };
   }
 
-  async getSessionDiff(_sessionId: string, filePath: string, _base: DiffBase): Promise<DiffData> {
-    // Return realistic mock diff data based on file extension
-    const isNewFile = filePath.endsWith('.test.ts') || filePath.endsWith('.test.tsx');
-
-    if (isNewFile) {
-      return {
-        filePath,
-        hunks: [
-          {
-            oldStart: 0,
-            oldCount: 0,
-            newStart: 1,
-            newCount: 12,
-            lines: [
-              {
-                type: 'add',
-                content: "import { describe, it, expect } from 'vitest';",
-                newLine: 1,
-              },
-              {
-                type: 'add',
-                content: "import { render } from '@testing-library/react';",
-                newLine: 2,
-              },
-              { type: 'add', content: '', newLine: 3 },
-              { type: 'add', content: "describe('Component', () => {", newLine: 4 },
-              { type: 'add', content: "  it('should render', () => {", newLine: 5 },
-              { type: 'add', content: '    const { container } = render(<div />);', newLine: 6 },
-              { type: 'add', content: '    expect(container).toBeDefined();', newLine: 7 },
-              { type: 'add', content: '  });', newLine: 8 },
-              { type: 'add', content: '', newLine: 9 },
-              { type: 'add', content: "  it('should handle props', () => {", newLine: 10 },
-              { type: 'add', content: '    expect(true).toBe(true);', newLine: 11 },
-              { type: 'add', content: '  });', newLine: 12 },
-            ],
-          },
-        ],
-      };
-    }
-
-    return {
-      filePath,
-      hunks: [
-        {
-          oldStart: 1,
-          oldCount: 8,
-          newStart: 1,
-          newCount: 10,
-          lines: [
-            {
-              type: 'context',
-              content: "import { useState } from 'react';",
-              oldLine: 1,
-              newLine: 1,
-            },
-            { type: 'remove', content: "import type { Props } from './types';", oldLine: 2 },
-            { type: 'add', content: "import type { DiffViewerProps } from './types';", newLine: 2 },
-            { type: 'add', content: "import { cn } from '@/utils';", newLine: 3 },
-            { type: 'context', content: '', oldLine: 3, newLine: 4 },
-            { type: 'remove', content: 'export function Component({ data }: Props) {', oldLine: 4 },
-            {
-              type: 'add',
-              content: 'export function DiffViewer({ data, base }: DiffViewerProps) {',
-              newLine: 5,
-            },
-            {
-              type: 'context',
-              content: '  const [selected, setSelected] = useState(null);',
-              oldLine: 5,
-              newLine: 6,
-            },
-            { type: 'context', content: '', oldLine: 6, newLine: 7 },
-            { type: 'context', content: '  return (', oldLine: 7, newLine: 8 },
-          ],
-        },
-        {
-          oldStart: 15,
-          oldCount: 5,
-          newStart: 17,
-          newCount: 7,
-          lines: [
-            { type: 'context', content: '  );', oldLine: 15, newLine: 17 },
-            { type: 'context', content: '}', oldLine: 16, newLine: 18 },
-            { type: 'context', content: '', oldLine: 17, newLine: 19 },
-            { type: 'remove', content: 'export default Component;', oldLine: 18 },
-            { type: 'remove', content: '', oldLine: 19 },
-            { type: 'add', content: 'export default DiffViewer;', newLine: 20 },
-            { type: 'add', content: '', newLine: 21 },
-            {
-              type: 'add',
-              content: "export type { DiffViewerProps } from './types';",
-              newLine: 22,
-            },
-            { type: 'add', content: '', newLine: 23 },
-          ],
-        },
-      ],
-    };
-  }
-
   subscribeChronicle(
     ...[
       ,/* sessionId */
@@ -695,53 +591,6 @@ export class MockVolundrService implements IVolundrService {
 
   async getProjectRepoMappings(): Promise<ProjectRepoMapping[]> {
     return mockProjectRepoMappings.map(m => ({ ...m }));
-  }
-
-  async getSessionFiles(
-    _sessionId: string,
-    path?: string,
-    _root?: import('@/models').FileRoot
-  ): Promise<FileTreeEntry[]> {
-    const dirPath = path ?? '';
-    const entries = mockFileTree[dirPath];
-    if (!entries) {
-      return [];
-    }
-    return entries.map(e => ({ ...e }));
-  }
-
-  async downloadSessionFile(
-    _sessionId: string,
-    _filePath: string,
-    _root?: import('@/models').FileRoot
-  ): Promise<Blob> {
-    return new Blob(['mock file content'], { type: 'application/octet-stream' });
-  }
-
-  async uploadSessionFiles(
-    _sessionId: string,
-    _files: File[],
-    _targetPath: string,
-    _root?: import('@/models').FileRoot
-  ): Promise<FileTreeEntry[]> {
-    return [];
-  }
-
-  async createSessionDirectory(
-    _sessionId: string,
-    path: string,
-    _root?: import('@/models').FileRoot
-  ): Promise<FileTreeEntry> {
-    const name = path.split('/').pop() ?? path;
-    return { name, path, type: 'directory' };
-  }
-
-  async deleteSessionFile(
-    _sessionId: string,
-    _filePath: string,
-    _root?: import('@/models').FileRoot
-  ): Promise<void> {
-    // no-op
   }
 
   async updateTrackerIssueStatus(

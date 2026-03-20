@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { DiffData, DiffBase, SessionFile } from '@/models';
 import { getAccessToken } from '@/adapters/api/client';
-import { volundrService } from '@/adapters';
 
 function buildApiBase(chatEndpoint: string | null): string | null {
   if (!chatEndpoint) {
@@ -72,18 +71,18 @@ export function useDiffViewer(chatEndpoint: string | null = null): UseDiffViewer
   }, [apiBase, diffBase]);
 
   const fetchDiff = useCallback(
-    async (sessionId: string, filePath: string, base: DiffBase): Promise<DiffData> => {
-      if (apiBase) {
-        const params = new URLSearchParams({ file: filePath, base });
-        const response = await fetch(`${apiBase}/api/diff?${params}`, {
-          headers: authHeaders(),
-        });
-        if (response.ok) {
-          return response.json();
-        }
+    async (_sessionId: string, filePath: string, base: DiffBase): Promise<DiffData> => {
+      if (!apiBase) {
+        throw new Error('No session endpoint available');
       }
-      // Fallback: use Volundr API proxy
-      return volundrService.getSessionDiff(sessionId, filePath, base);
+      const params = new URLSearchParams({ file: filePath, base });
+      const response = await fetch(`${apiBase}/api/diff?${params}`, {
+        headers: authHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch diff: ${response.status}`);
+      }
+      return response.json();
     },
     [apiBase]
   );

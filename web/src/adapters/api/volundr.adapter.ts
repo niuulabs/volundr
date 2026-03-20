@@ -10,8 +10,6 @@ import type {
   VolundrLog,
   SessionChronicle,
   ClusterResourceInfo,
-  DiffData,
-  DiffBase,
   SessionStatus,
   RepoProvider,
   PullRequest,
@@ -1003,14 +1001,6 @@ export class ApiVolundrService implements IVolundrService {
     }
   }
 
-  async getSessionDiff(sessionId: string, filePath: string, base: DiffBase): Promise<DiffData> {
-    const params = new URLSearchParams({ file: filePath, base });
-    const response = await api.get<DiffData>(
-      `/chronicles/${encodeURIComponent(sessionId)}/diff?${params}`
-    );
-    return response;
-  }
-
   subscribeChronicle(
     sessionId: string,
     callback: (chronicle: SessionChronicle) => void
@@ -1076,90 +1066,6 @@ export class ApiVolundrService implements IVolundrService {
   async getSessionMcpServers(_sessionId: string): Promise<import('@/models').McpServer[]> {
     // TODO: Implement when backend endpoint is available
     return [];
-  }
-
-  async getSessionFiles(
-    sessionId: string,
-    path?: string,
-    root?: import('@/models').FileRoot
-  ): Promise<import('@/models').FileTreeEntry[]> {
-    const params = new URLSearchParams();
-    if (path) params.set('path', path);
-    if (root) params.set('root', root);
-    const qs = params.toString();
-    const response = await api.get<{ entries: import('@/models').FileTreeEntry[] }>(
-      `/sessions/${sessionId}/files${qs ? `?${qs}` : ''}`
-    );
-    return response.entries;
-  }
-
-  async downloadSessionFile(
-    sessionId: string,
-    path: string,
-    root?: import('@/models').FileRoot
-  ): Promise<Blob> {
-    const params = new URLSearchParams({ path });
-    if (root) params.set('root', root);
-    const token = getAccessToken();
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const response = await fetch(`/api/v1/volundr/sessions/${sessionId}/files/download?${params}`, {
-      headers,
-    });
-    if (!response.ok) {
-      throw new Error(`Download failed: ${response.status}`);
-    }
-    return response.blob();
-  }
-
-  async uploadSessionFiles(
-    sessionId: string,
-    files: File[],
-    targetPath: string,
-    root?: import('@/models').FileRoot
-  ): Promise<import('@/models').FileTreeEntry[]> {
-    const params = new URLSearchParams();
-    if (targetPath) params.set('path', targetPath);
-    if (root) params.set('root', root);
-    const formData = new FormData();
-    for (const file of files) {
-      formData.append('files', file);
-    }
-    const token = getAccessToken();
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const response = await fetch(`/api/v1/volundr/sessions/${sessionId}/files/upload?${params}`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Upload failed: ${text}`);
-    }
-    const data = await response.json();
-    return data.entries;
-  }
-
-  async createSessionDirectory(
-    sessionId: string,
-    path: string,
-    root?: import('@/models').FileRoot
-  ): Promise<import('@/models').FileTreeEntry> {
-    return api.post<import('@/models').FileTreeEntry>(`/sessions/${sessionId}/files/mkdir`, {
-      path,
-      root: root ?? 'workspace',
-    });
-  }
-
-  async deleteSessionFile(
-    sessionId: string,
-    path: string,
-    root?: import('@/models').FileRoot
-  ): Promise<void> {
-    const params = new URLSearchParams({ path });
-    if (root) params.set('root', root);
-    await api.delete(`/sessions/${sessionId}/files?${params}`);
   }
 
   async searchTrackerIssues(

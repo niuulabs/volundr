@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   Upload,
   FolderOpen,
@@ -12,14 +12,13 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import type { IVolundrService } from '@/ports';
 import type { FileTreeEntry, FileRoot } from '@/models';
+import { getAccessToken } from '@/adapters/api/client';
 import { cn } from '@/utils';
 import styles from './FileManager.module.css';
 
 interface FileManagerProps {
-  sessionId: string;
-  service: IVolundrService;
+  chatEndpoint: string | null;
   className?: string;
 }
 
@@ -47,7 +46,27 @@ function formatDate(iso: string): string {
   });
 }
 
-export function FileManager({ sessionId, service, className }: FileManagerProps) {
+function buildApiBase(chatEndpoint: string | null): string | null {
+  if (!chatEndpoint) return null;
+  try {
+    const parsed = new URL(chatEndpoint);
+    const protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+    const basePath = parsed.pathname.replace(/\/(api\/)?session$/, '');
+    return `${protocol}//${parsed.host}${basePath}`;
+  } catch {
+    const basePath = chatEndpoint.replace(/\/(api\/)?session$/, '');
+    return `${window.location.origin}${basePath}`;
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  if (token) return { Authorization: `Bearer ${token}` };
+  return {};
+}
+
+export function FileManager({ chatEndpoint, className }: FileManagerProps) {
+  const apiBase = useMemo(() => buildApiBase(chatEndpoint), [chatEndpoint]);
   const [root, setRoot] = useState<FileRoot>('workspace');
   const [currentPath, setCurrentPath] = useState('');
   const [entries, setEntries] = useState<FileTreeEntry[]>([]);
@@ -60,16 +79,23 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchEntries = useCallback(async () => {
+    if (!apiBase) return;
     setLoading(true);
     try {
-      const files = await service.getSessionFiles(sessionId, currentPath, root);
-      setEntries(files);
+      const params = new URLSearchParams({ root });
+      if (currentPath) params.set('path', currentPath);
+      const response = await fetch(`${apiBase}/api/files?${params}`, {
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error(`${response.status}`);
+      const data = await response.json();
+      setEntries(data.entries ?? []);
     } catch {
       setEntries([]);
     } finally {
       setLoading(false);
     }
-  }, [service, sessionId, currentPath, root]);
+  }, [apiBase, currentPath, root]);
 
   useEffect(() => {
     fetchEntries();
@@ -92,9 +118,14 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
   );
 
   const handleDownload = useCallback(async () => {
-    if (!selected) return;
+    if (!selected || !apiBase) return;
     try {
-      const blob = await service.downloadSessionFile(sessionId, selected, root);
+      const params = new URLSearchParams({ path: selected, root });
+      const response = await fetch(`${apiBase}/api/files/download?${params}`, {
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error(`${response.status}`);
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -106,34 +137,43 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
     } catch {
       // download failed silently
     }
-  }, [service, sessionId, selected, root]);
+  }, [apiBase, selected, root]);
 
   const handleDelete = useCallback(async () => {
-    if (!selected) return;
+    if (!selected || !apiBase) return;
     try {
-      await service.deleteSessionFile(sessionId, selected, root);
+      const params = new URLSearchParams({ path: selected, root });
+      await fetch(`${apiBase}/api/files?${params}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
       setSelected(null);
       fetchEntries();
     } catch {
       // delete failed silently
     }
-  }, [service, sessionId, selected, root, fetchEntries]);
+  }, [apiBase, selected, root, fetchEntries]);
 
   const handleMkdir = useCallback(async () => {
-    if (!mkdirName.trim()) return;
+    if (!mkdirName.trim() || !apiBase) return;
     const dirPath = currentPath ? `${currentPath}/${mkdirName.trim()}` : mkdirName.trim();
     try {
-      await service.createSessionDirectory(sessionId, dirPath, root);
+      await fetch(`${apiBase}/api/files/mkdir`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: dirPath, root }),
+      });
       setShowMkdir(false);
       setMkdirName('');
       fetchEntries();
     } catch {
       // mkdir failed silently
     }
-  }, [service, sessionId, currentPath, root, mkdirName, fetchEntries]);
+  }, [apiBase, currentPath, root, mkdirName, fetchEntries]);
 
   const doUpload = useCallback(
     async (files: File[]) => {
+      if (!apiBase) return;
       const items: UploadItem[] = files.map(f => ({ file: f, status: 'pending' as const }));
       setUploads(prev => [...prev, ...items]);
 
@@ -141,7 +181,16 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
         item.status = 'uploading';
         setUploads(prev => [...prev]);
         try {
-          await service.uploadSessionFiles(sessionId, [item.file], currentPath, root);
+          const params = new URLSearchParams({ root });
+          if (currentPath) params.set('path', currentPath);
+          const formData = new FormData();
+          formData.append('files', item.file);
+          const response = await fetch(`${apiBase}/api/files/upload?${params}`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: formData,
+          });
+          if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
           item.status = 'done';
         } catch (e) {
           item.status = 'error';
@@ -151,7 +200,7 @@ export function FileManager({ sessionId, service, className }: FileManagerProps)
       }
       fetchEntries();
     },
-    [service, sessionId, currentPath, root, fetchEntries]
+    [apiBase, currentPath, root, fetchEntries]
   );
 
   const handleDrop = useCallback(

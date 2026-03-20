@@ -317,7 +317,10 @@ async function doInitWorkbench({
     create: (url: string) => {
       const route = getActiveRoute();
       const rehPrefix = route?.basePath ? `${route.basePath}reh/` : '/reh/';
-      const rewritten = url.replace(/^(wss?:\/\/[^/]+)\//, `$1${rehPrefix}`);
+      // Replace both the host and path prefix: the session gateway may live
+      // on a different domain (e.g. sessions.example.com) than the web UI.
+      const targetHost = route?.hostname ?? STABLE_AUTHORITY;
+      const rewritten = url.replace(/^(wss?:\/\/)[^/]+\//, `$1${targetHost}${rehPrefix}`);
 
       // Append access_token query param for gateway JWT validation,
       // matching the pattern used by chat and terminal WebSockets.
