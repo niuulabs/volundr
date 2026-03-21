@@ -21,6 +21,9 @@ const SettingsPage = lazy(() =>
 const AdminPage = lazy(() =>
   import('@/modules/volundr/pages/Admin').then(m => ({ default: m.AdminPage }))
 );
+const TyrLayout = lazy(() =>
+  import('@/modules/tyr/pages/TyrLayout').then(m => ({ default: m.TyrLayout }))
+);
 
 function PageLoader() {
   return (
@@ -40,6 +43,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Navigate to="/volundr" replace />} />
           <Route path="/volundr" element={<VolundrPage />} />
+          <Route path="/tyr/*" element={<TyrLayout />} />
           <Route path="/settings" element={<SettingsPage service={volundrService} />} />
           <Route path="/admin" element={<AdminPage service={volundrService} />} />
           <Route path="/integrations" element={<Navigate to="/settings" replace />} />

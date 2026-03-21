@@ -21,6 +21,7 @@ import { registerModule } from './shared/registry';
 
 // Product module self-registrations
 import './volundr/register';
+import './tyr/register';
 
 type ModuleComponent = ComponentType<{ service: IVolundrService }>;
 
