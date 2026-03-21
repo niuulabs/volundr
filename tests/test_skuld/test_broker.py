@@ -1848,20 +1848,20 @@ class TestTokenRedactFilter:
 
     def test_filter_attached_during_lifespan(self):
         """Lifespan attaches redact filter to uvicorn loggers."""
-        # The lifespan context attaches filters — verify by running it
         import asyncio
 
         from volundr.skuld.broker import lifespan
 
         async def check():
-            # Clear any existing filters
             for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
                 logging.getLogger(name).filters = []
 
-            async with lifespan(app):
-                for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
-                    logger = logging.getLogger(name)
-                    has_redact = any(isinstance(f, _TokenRedactFilter) for f in logger.filters)
-                    assert has_redact, f"{name} missing _TokenRedactFilter"
+            with patch.object(broker, "startup", new_callable=AsyncMock):
+                with patch.object(broker, "shutdown", new_callable=AsyncMock):
+                    async with lifespan(app):
+                        for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+                            lgr = logging.getLogger(name)
+                            has_redact = any(isinstance(f, _TokenRedactFilter) for f in lgr.filters)
+                            assert has_redact, f"{name} missing _TokenRedactFilter"
 
         asyncio.run(check())
