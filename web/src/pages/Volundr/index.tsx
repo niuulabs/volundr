@@ -13,9 +13,6 @@ import {
   Square,
   Trash2,
   FolderGit2,
-  Globe,
-  Link,
-  Unlink,
   MessageSquare,
   Terminal,
   Code,
@@ -88,7 +85,6 @@ export function VolundrPage() {
     stopSession,
     resumeSession,
     startSession,
-    connectSession,
     deleteSession,
     archiveSession,
     restoreSession: restoreArchivedSession,
@@ -126,7 +122,6 @@ export function VolundrPage() {
   const [activeTab, setActiveTab] = useState<TabId>('chat');
   const [pendingDiffFile, setPendingDiffFile] = useState<string | null>(null);
   const [showLaunchWizard, setShowLaunchWizard] = useState(false);
-  const [showConnectModal, setShowConnectModal] = useState(false);
   const defaultPanels: FeatureModule[] = [
     {
       key: 'chat',
@@ -231,11 +226,6 @@ export function VolundrPage() {
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
 
-  // Connect session form state
-  const [connectName, setConnectName] = useState('');
-  const [connectHostname, setConnectHostname] = useState('');
-  const [isConnecting, setIsConnecting] = useState(false);
-
   // Delete session dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -255,8 +245,6 @@ export function VolundrPage() {
     }
     return sessions.length > 0 ? sessions[0] : null;
   }, [selectedSession, sessions]);
-  const isManualSession = effectiveSelectedSession?.origin === 'manual';
-
   // Resolve the repo URL for PR lookups (session stores org/name, API needs full URL)
   const sessionRepoUrl = useMemo(() => {
     const repo = effectiveSelectedSession ? getRepo(effectiveSelectedSession.source) : '';
@@ -472,10 +460,8 @@ export function VolundrPage() {
       };
     }
 
-    // Fallback: use Volundr API for non-running managed sessions
-    if (effectiveSelectedSession.origin !== 'manual') {
-      getLogs(sessionId);
-    }
+    // Fallback: use Volundr API for non-running sessions
+    getLogs(sessionId);
 
     return undefined;
   }, [
@@ -484,7 +470,6 @@ export function VolundrPage() {
     effectiveSelectedSession?.chatEndpoint,
     effectiveSelectedSession?.status,
     effectiveSelectedSession?.source,
-    effectiveSelectedSession?.origin,
     getLogs,
     fetchSessionHostLogs,
   ]);
@@ -532,10 +517,10 @@ export function VolundrPage() {
 
     return visible.map(f => ({
       id: f.key as TabId,
-      label: f.key === 'code' && isManualSession ? 'IDE' : f.label,
+      label: f.label,
       icon: resolveIcon(f.icon) ?? fallbackIcons[f.key] ?? MessageSquare,
     }));
-  }, [sessionPanels, panelPrefs, isManualSession]);
+  }, [sessionPanels, panelPrefs]);
 
   const selectedModel = effectiveSelectedSession ? models[effectiveSelectedSession.model] : null;
   const isLocal = selectedModel?.provider === 'local';
@@ -657,33 +642,6 @@ export function VolundrPage() {
     [startSession]
   );
 
-  const handleConnectSession = async () => {
-    if (!connectName || !connectHostname) {
-      return;
-    }
-
-    setIsConnecting(true);
-    try {
-      const session = await connectSession({
-        name: connectName,
-        hostname: connectHostname,
-      });
-      setSelectedSession(session);
-      setActiveTab('code');
-      setShowConnectModal(false);
-      setConnectName('');
-      setConnectHostname('');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const handleCloseConnectModal = () => {
-    setShowConnectModal(false);
-    setConnectName('');
-    setConnectHostname('');
-  };
-
   const handlePopout = (tabType: 'terminal' | 'code' | 'chat') => {
     if (effectiveSelectedSession) {
       sessionStorage.setItem(
@@ -791,14 +749,6 @@ export function VolundrPage() {
               >
                 <Plus className={styles.actionBtnIcon} />
                 New Session
-              </button>
-              <button
-                type="button"
-                className={styles.connectButton}
-                onClick={() => setShowConnectModal(true)}
-              >
-                <Link className={styles.actionBtnIcon} />
-                Connect
               </button>
             </div>
           </div>
@@ -1104,7 +1054,6 @@ export function VolundrPage() {
                   <Pencil className={styles.sessionNameEditIcon} />
                 </button>
               )}
-              {isManualSession && <span className={styles.manualTag}>manual</span>}
               <StatusBadge status={effectiveSelectedSession.status} />
               {effectiveSelectedSession.trackerIssue && (
                 <a
@@ -1119,26 +1068,19 @@ export function VolundrPage() {
                 </a>
               )}
               <span className={styles.sessionBarSep} />
-              {isManualSession ? (
-                <div className={styles.repoInfo}>
-                  <Globe className={styles.repoInfoIcon} />
-                  <span>{effectiveSelectedSession.hostname}</span>
-                </div>
-              ) : (
-                <div className={styles.repoInfo}>
-                  <FolderGit2 className={styles.repoInfoIcon} />
-                  <span>{getSourceLabel(effectiveSelectedSession.source)}</span>
-                  {isGitSource(effectiveSelectedSession.source) && (
-                    <>
-                      <span className={styles.branchArrow}>&rarr;</span>
-                      <span className={styles.branchName}>
-                        {getBranch(effectiveSelectedSession.source)}
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-              {!isManualSession && selectedModel && (
+              <div className={styles.repoInfo}>
+                <FolderGit2 className={styles.repoInfoIcon} />
+                <span>{getSourceLabel(effectiveSelectedSession.source)}</span>
+                {isGitSource(effectiveSelectedSession.source) && (
+                  <>
+                    <span className={styles.branchArrow}>&rarr;</span>
+                    <span className={styles.branchName}>
+                      {getBranch(effectiveSelectedSession.source)}
+                    </span>
+                  </>
+                )}
+              </div>
+              {selectedModel && (
                 <span
                   className={styles.modelBadge}
                   style={{ '--model-color': selectedModel.color } as React.CSSProperties}
@@ -1155,21 +1097,13 @@ export function VolundrPage() {
             <div className={styles.sessionBarRight}>
               {effectiveSelectedSession.status === 'running' ? (
                 <button type="button" className={styles.stopButton} onClick={handleStopSession}>
-                  {isManualSession ? (
-                    <Unlink className={styles.actionBtnIcon} />
-                  ) : (
-                    <Square className={styles.actionBtnIcon} />
-                  )}
-                  {isManualSession ? 'Disconnect' : 'Stop'}
+                  <Square className={styles.actionBtnIcon} />
+                  Stop
                 </button>
               ) : (
                 <button type="button" className={styles.startButton} onClick={handleResumeSession}>
-                  {isManualSession ? (
-                    <Link className={styles.actionBtnIcon} />
-                  ) : (
-                    <Play className={styles.actionBtnIcon} />
-                  )}
-                  {isManualSession ? 'Connect' : 'Start'}
+                  <Play className={styles.actionBtnIcon} />
+                  Start
                 </button>
               )}
               <button
@@ -1184,7 +1118,7 @@ export function VolundrPage() {
                 type="button"
                 className={styles.deleteButton}
                 onClick={handleDeleteSession}
-                title={isManualSession ? 'Remove session' : 'Delete session'}
+                title="Delete session"
               >
                 <Trash2 className={styles.deleteButtonIcon} />
               </button>
@@ -1238,9 +1172,7 @@ export function VolundrPage() {
               ) : (
                 <div className={styles.emptyState}>
                   <MessageSquare className={styles.emptyIcon} />
-                  <p>
-                    {isManualSession ? 'Connect the session to chat' : 'Start the session to chat'}
-                  </p>
+                  <p>Start the session to chat</p>
                 </div>
               ))}
 
@@ -1253,11 +1185,7 @@ export function VolundrPage() {
               ) : (
                 <div className={styles.emptyState}>
                   <Terminal className={styles.emptyIcon} />
-                  <p>
-                    {isManualSession
-                      ? 'Connect the session to access terminal'
-                      : 'Start the session to access terminal'}
-                  </p>
+                  <p>Start the session to access terminal</p>
                 </div>
               ))}
 
@@ -1269,11 +1197,7 @@ export function VolundrPage() {
               ) : (
                 <div className={styles.emptyState}>
                   <Code className={styles.emptyIcon} />
-                  <p>
-                    {isManualSession
-                      ? 'Connect the session to access IDE'
-                      : 'Start the session to access IDE'}
-                  </p>
+                  <p>Start the session to access IDE</p>
                 </div>
               ))}
             {isSessionReady && (
@@ -1438,66 +1362,10 @@ export function VolundrPage() {
         </Modal>
       )}
 
-      {showConnectModal && (
-        <Modal
-          isOpen={true}
-          onClose={handleCloseConnectModal}
-          title="Connect to Existing Session"
-          subtitle="Attach to a running Skuld instance by hostname"
-          size="md"
-        >
-          <div className={styles.modalContent}>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Session Name</label>
-              <input
-                type="text"
-                className={styles.formInput}
-                placeholder="skuld-dev-01"
-                value={connectName}
-                onChange={e => setConnectName(e.target.value)}
-                disabled={isConnecting}
-              />
-            </div>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Hostname</label>
-              <input
-                type="text"
-                className={styles.formInput}
-                placeholder="skuld-01.local"
-                value={connectHostname}
-                onChange={e => setConnectHostname(e.target.value)}
-                disabled={isConnecting}
-              />
-              <span className={styles.formHint}>
-                IDE at https://hostname/ &middot; WSS at wss://hostname/ws
-              </span>
-            </div>
-            <div className={styles.modalActions}>
-              <button
-                type="button"
-                className={styles.cancelButton}
-                onClick={handleCloseConnectModal}
-                disabled={isConnecting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={styles.connectSubmitButton}
-                onClick={handleConnectSession}
-                disabled={isConnecting || !connectName || !connectHostname}
-              >
-                {isConnecting ? 'Connecting...' : 'Connect'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
       <DeleteSessionDialog
         isOpen={showDeleteDialog}
         sessionName={effectiveSelectedSession?.name ?? ''}
-        isManual={isManualSession}
+        isManual={false}
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
       />
