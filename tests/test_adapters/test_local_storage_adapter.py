@@ -72,6 +72,24 @@ async def test_create_session_workspace_returns_pvcref_with_path(
     assert Path(ref.name).is_absolute()
 
 
+async def test_create_session_workspace_stores_name_and_source(
+    adapter: LocalStorageAdapter, tmp_path: Path
+) -> None:
+    await adapter.create_session_workspace(
+        "sess-3",
+        "user-1",
+        "tenant-1",
+        name="my-project",
+        source_url="github.com/org/repo",
+        source_ref="main",
+    )
+    meta_path = tmp_path / "workspaces" / "sess-3" / ".volundr-meta.json"
+    meta = json.loads(meta_path.read_text())
+    assert meta["name"] == "my-project"
+    assert meta["source_url"] == "github.com/org/repo"
+    assert meta["source_ref"] == "main"
+
+
 # ------------------------------------------------------------------
 # archive_session_workspace
 # ------------------------------------------------------------------
@@ -90,17 +108,16 @@ async def test_archive_session_workspace(adapter: LocalStorageAdapter, tmp_path:
 # ------------------------------------------------------------------
 
 
-async def test_delete_workspace_removes_dir(adapter: LocalStorageAdapter, tmp_path: Path) -> None:
+async def test_delete_workspace_raises_for_local_storage(
+    adapter: LocalStorageAdapter, tmp_path: Path
+) -> None:
     await adapter.create_session_workspace("sess-1", "user-1")
     ws_dir = tmp_path / "workspaces" / "sess-1"
     assert ws_dir.exists()
-    await adapter.delete_workspace("sess-1")
-    assert not ws_dir.exists()
-
-
-async def test_delete_workspace_nonexistent(adapter: LocalStorageAdapter) -> None:
-    # Should not raise
-    await adapter.delete_workspace("no-such-session")
+    with pytest.raises(RuntimeError, match="locally mounted workspace"):
+        await adapter.delete_workspace("sess-1")
+    # Directory must still exist — local storage is never deleted
+    assert ws_dir.exists()
 
 
 # ------------------------------------------------------------------

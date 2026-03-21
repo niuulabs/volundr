@@ -778,14 +778,16 @@ class WorkspaceResponse(BaseModel):
 
     @classmethod
     def from_workspace(cls, ws, session=None) -> "WorkspaceResponse":
-        source_url = None
-        source_ref = None
-        session_name = None
+        # Prefer workspace-stored metadata; fall back to session lookup.
+        session_name = ws.name
+        source_url = ws.source_url
+        source_ref = ws.source_ref
         if session is not None:
-            session_name = session.name
-            if hasattr(session.source, "repo"):
+            if not session_name:
+                session_name = session.name
+            if not source_url and hasattr(session.source, "repo"):
                 source_url = session.source.repo
-            if hasattr(session.source, "branch"):
+            if not source_ref and hasattr(session.source, "branch"):
                 source_ref = session.source.branch
         return cls(
             id=ws.id,

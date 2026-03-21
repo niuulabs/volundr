@@ -1396,6 +1396,7 @@ export function VolundrPage() {
         isOpen={showDeleteDialog}
         sessionName={effectiveSelectedSession?.name ?? ''}
         isManual={false}
+        isLocalStorage={effectiveSelectedSession?.source?.type === 'local_mount'}
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
       />
