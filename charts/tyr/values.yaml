@@ -1,0 +1,115 @@
+# Tyr — saga coordinator
+# https://github.com/niuulabs/volundr
+
+replicaCount: 1
+revisionHistoryLimit: 10
+
+image:
+  registry: ghcr.io/niuulabs
+  repository: tyr
+  tag: ""  # defaults to appVersion
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+  annotations: {}
+
+config:
+  logLevel: "info"
+  logFormat: "json"
+  host: "0.0.0.0"
+  port: 8000
+  workers: 2
+  extra: {}
+
+database:
+  name: tyr
+  existingSecret: ""
+  createSecret: false
+  username: ""
+  password: ""
+  userKey: "username"
+  passwordKey: "password"
+  minPoolSize: 2
+  maxPoolSize: 10
+  external:
+    enabled: false
+    host: ""
+    port: 5432
+
+volundr:
+  url: "http://volundr:8000"
+
+migrations:
+  enabled: true
+  image:
+    repository: migrate/migrate
+    tag: "v4.18.3"
+    pullPolicy: IfNotPresent
+  resources: {}
+
+livenessProbe:
+  enabled: true
+  path: "/health"
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  path: "/health"
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  enabled: false
+  path: "/health"
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: false
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podLabels: {}
+deploymentAnnotations: {}
+extraEnv: []
+extraVolumeMounts: []
+extraVolumes: []
+
+global:
+  imagePullSecrets: []
+  image:
+    registry: ""
