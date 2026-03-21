@@ -167,7 +167,10 @@ describe('useTyrSessions', () => {
 
     let resolveSessions!: (value: SessionInfo[]) => void;
     vi.mocked(tyrSessionService.getSessions).mockImplementation(
-      () => new Promise<SessionInfo[]>(resolve => { resolveSessions = resolve; })
+      () =>
+        new Promise<SessionInfo[]>(resolve => {
+          resolveSessions = resolve;
+        })
     );
 
     act(() => {
@@ -189,7 +192,10 @@ describe('useTyrSessions', () => {
   it('should not update state after unmount (cancelled flag)', async () => {
     let resolveSessions!: (value: SessionInfo[]) => void;
     vi.mocked(tyrSessionService.getSessions).mockImplementation(
-      () => new Promise<SessionInfo[]>(resolve => { resolveSessions = resolve; })
+      () =>
+        new Promise<SessionInfo[]>(resolve => {
+          resolveSessions = resolve;
+        })
     );
 
     const { unmount } = renderHook(() => useTyrSessions());
@@ -204,7 +210,10 @@ describe('useTyrSessions', () => {
   it('should not set error after unmount when fetch fails', async () => {
     let rejectSessions!: (reason: unknown) => void;
     vi.mocked(tyrSessionService.getSessions).mockImplementation(
-      () => new Promise<SessionInfo[]>((_resolve, reject) => { rejectSessions = reject; })
+      () =>
+        new Promise<SessionInfo[]>((_resolve, reject) => {
+          rejectSessions = reject;
+        })
     );
 
     const { unmount } = renderHook(() => useTyrSessions());

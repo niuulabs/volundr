@@ -18,7 +18,8 @@ export function useTyrSessions(): UseTyrSessionsResult {
   const fetchSessions = useCallback(() => {
     setLoading(true);
     setError(null);
-    tyrSessionService.getSessions()
+    tyrSessionService
+      .getSessions()
       .then(setSessions)
       .catch(e => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -45,7 +46,9 @@ export function useTyrSessions(): UseTyrSessionsResult {
     setLoading(true);
     setError(null);
     fetch();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const approve = useCallback(async (sessionId: string) => {

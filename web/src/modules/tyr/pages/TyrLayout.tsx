@@ -13,13 +13,11 @@ export function TyrLayout() {
   return (
     <div className={styles.layout}>
       <nav className={styles.tabBar}>
-        {tabs.map((tab) => (
+        {tabs.map(tab => (
           <NavLink
             key={tab.to}
             to={tab.to}
-            className={({ isActive }) =>
-              cn(styles.tab, isActive && styles.tabActive)
-            }
+            className={({ isActive }) => cn(styles.tab, isActive && styles.tabActive)}
           >
             {tab.label}
           </NavLink>

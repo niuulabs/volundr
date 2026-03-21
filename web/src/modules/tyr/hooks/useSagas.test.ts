@@ -81,9 +81,7 @@ describe('useSagas', () => {
 
     expect(tyrService.getSagas).toHaveBeenCalledTimes(1);
 
-    const updatedSagas: Saga[] = [
-      { ...mockSagas[0], confidence: 0.95 },
-    ];
+    const updatedSagas: Saga[] = [{ ...mockSagas[0], confidence: 0.95 }];
     vi.mocked(tyrService.getSagas).mockResolvedValue(updatedSagas);
 
     await act(async () => {
@@ -148,7 +146,10 @@ describe('useSagas', () => {
 
     let resolveRefresh!: (value: Saga[]) => void;
     vi.mocked(tyrService.getSagas).mockImplementation(
-      () => new Promise<Saga[]>(resolve => { resolveRefresh = resolve; })
+      () =>
+        new Promise<Saga[]>(resolve => {
+          resolveRefresh = resolve;
+        })
     );
 
     act(() => {
@@ -170,7 +171,10 @@ describe('useSagas', () => {
   it('should not update state after unmount (cancelled flag)', async () => {
     let resolveGetSagas!: (value: Saga[]) => void;
     vi.mocked(tyrService.getSagas).mockImplementation(
-      () => new Promise<Saga[]>(resolve => { resolveGetSagas = resolve; })
+      () =>
+        new Promise<Saga[]>(resolve => {
+          resolveGetSagas = resolve;
+        })
     );
 
     const { result, unmount } = renderHook(() => useSagas());
@@ -188,7 +192,10 @@ describe('useSagas', () => {
   it('should not set error after unmount when fetch fails', async () => {
     let rejectGetSagas!: (reason: unknown) => void;
     vi.mocked(tyrService.getSagas).mockImplementation(
-      () => new Promise<Saga[]>((_resolve, reject) => { rejectGetSagas = reject; })
+      () =>
+        new Promise<Saga[]>((_resolve, reject) => {
+          rejectGetSagas = reject;
+        })
     );
 
     const { unmount } = renderHook(() => useSagas());

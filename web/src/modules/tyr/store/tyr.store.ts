@@ -14,15 +14,15 @@ interface TyrState {
   setError: (error: string | null) => void;
 }
 
-export const useTyrStore = create<TyrState>((set) => ({
+export const useTyrStore = create<TyrState>(set => ({
   sagas: [],
   selectedSaga: null,
   dispatcher: null,
   loading: false,
   error: null,
-  setSagas: (sagas) => set({ sagas }),
-  setSelectedSaga: (saga) => set({ selectedSaga: saga }),
-  setDispatcher: (state) => set({ dispatcher: state }),
-  setLoading: (loading) => set({ loading }),
-  setError: (error) => set({ error }),
+  setSagas: sagas => set({ sagas }),
+  setSelectedSaga: saga => set({ selectedSaga: saga }),
+  setDispatcher: state => set({ dispatcher: state }),
+  setLoading: loading => set({ loading }),
+  setError: error => set({ error }),
 }));

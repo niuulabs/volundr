@@ -56,7 +56,9 @@ export function useDispatcher(): UseDispatcherResult {
     setLoading(true);
     setError(null);
     fetch();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const pause = useCallback(async () => {

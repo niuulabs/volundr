@@ -6,11 +6,7 @@ import type { SessionInfo } from '../../models';
 const mockSession: SessionInfo = {
   session_id: 'sess-abc-123',
   status: 'running',
-  chronicle_lines: [
-    'Cloning repository...',
-    'Installing dependencies...',
-    'Running tests...',
-  ],
+  chronicle_lines: ['Cloning repository...', 'Installing dependencies...', 'Running tests...'],
 };
 
 describe('SessionCard', () => {

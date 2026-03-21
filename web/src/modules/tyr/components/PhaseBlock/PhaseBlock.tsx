@@ -19,7 +19,7 @@ export function PhaseBlock({ phase, className }: PhaseBlockProps) {
       <button
         type="button"
         className={styles.header}
-        onClick={() => setExpanded((prev) => !prev)}
+        onClick={() => setExpanded(prev => !prev)}
         aria-expanded={expanded}
       >
         <span className={styles.phaseNumber}>{phase.number}</span>
@@ -34,12 +34,10 @@ export function PhaseBlock({ phase, className }: PhaseBlockProps) {
       </button>
       {expanded && (
         <div className={styles.content}>
-          {phase.raids.map((raid) => (
+          {phase.raids.map(raid => (
             <RaidRow key={raid.id} raid={raid} />
           ))}
-          {phase.raids.length === 0 && (
-            <div className={styles.empty}>No raids in this phase</div>
-          )}
+          {phase.raids.length === 0 && <div className={styles.empty}>No raids in this phase</div>}
         </div>
       )}
     </div>

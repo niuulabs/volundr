@@ -17,7 +17,8 @@ export function useSagas(): UseSagasResult {
   const fetchSagas = useCallback(() => {
     setLoading(true);
     setError(null);
-    tyrService.getSagas()
+    tyrService
+      .getSagas()
       .then(setSagas)
       .catch(e => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -44,7 +45,9 @@ export function useSagas(): UseSagasResult {
     setLoading(true);
     setError(null);
     fetch();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return { sagas, loading, error, refresh: fetchSagas };

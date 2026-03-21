@@ -6,7 +6,7 @@ export function DispatcherView() {
   const { state, log, loading, error, pause, resume, setThreshold } = useDispatcher();
 
   if (loading) {
-    return <LoadingIndicator label="Loading dispatcher..." />;
+    return <LoadingIndicator messages={["Loading dispatcher..."]} />;
   }
 
   if (error) {
@@ -20,9 +20,7 @@ export function DispatcherView() {
   return (
     <div className={styles.container}>
       <div className={styles.statusStrip} data-running={state.running}>
-        <span className={styles.statusLabel}>
-          {state.running ? 'Running' : 'Paused'}
-        </span>
+        <span className={styles.statusLabel}>{state.running ? 'Running' : 'Paused'}</span>
         <button
           type="button"
           className={styles.toggleButton}
@@ -43,7 +41,7 @@ export function DispatcherView() {
           min={0}
           max={100}
           value={Math.round(state.threshold * 100)}
-          onChange={(e) => setThreshold(Number(e.target.value) / 100)}
+          onChange={e => setThreshold(Number(e.target.value) / 100)}
         />
       </div>
 
@@ -55,9 +53,7 @@ export function DispatcherView() {
               {line}
             </div>
           ))}
-          {log.length === 0 && (
-            <div className={styles.logEmpty}>No log entries</div>
-          )}
+          {log.length === 0 && <div className={styles.logEmpty}>No log entries</div>}
         </div>
       </div>
     </div>

@@ -195,7 +195,10 @@ describe('useDispatcher', () => {
 
     let resolveState!: (value: DispatcherState) => void;
     vi.mocked(dispatcherService.getState).mockImplementation(
-      () => new Promise<DispatcherState>(resolve => { resolveState = resolve; })
+      () =>
+        new Promise<DispatcherState>(resolve => {
+          resolveState = resolve;
+        })
     );
 
     act(() => {
@@ -217,7 +220,7 @@ describe('useDispatcher', () => {
   it('should update state after pause', async () => {
     const pausedState = { ...mockState, running: false };
     vi.mocked(dispatcherService.getState)
-      .mockResolvedValueOnce(mockState)   // initial useEffect call
+      .mockResolvedValueOnce(mockState) // initial useEffect call
       .mockResolvedValueOnce(pausedState); // after pause
 
     const { result } = renderHook(() => useDispatcher());
@@ -255,7 +258,7 @@ describe('useDispatcher', () => {
   it('should update state after setThreshold', async () => {
     const updatedState = { ...mockState, threshold: 0.8 };
     vi.mocked(dispatcherService.getState)
-      .mockResolvedValueOnce(mockState)     // initial
+      .mockResolvedValueOnce(mockState) // initial
       .mockResolvedValueOnce(updatedState); // after setThreshold
 
     const { result } = renderHook(() => useDispatcher());
@@ -274,7 +277,10 @@ describe('useDispatcher', () => {
   it('should not update state after unmount (cancelled flag)', async () => {
     let resolveState!: (value: DispatcherState) => void;
     vi.mocked(dispatcherService.getState).mockImplementation(
-      () => new Promise<DispatcherState>(resolve => { resolveState = resolve; })
+      () =>
+        new Promise<DispatcherState>(resolve => {
+          resolveState = resolve;
+        })
     );
 
     const { unmount } = renderHook(() => useDispatcher());
@@ -289,7 +295,10 @@ describe('useDispatcher', () => {
   it('should not set error after unmount when fetch fails', async () => {
     let rejectState!: (reason: unknown) => void;
     vi.mocked(dispatcherService.getState).mockImplementation(
-      () => new Promise<DispatcherState>((_resolve, reject) => { rejectState = reject; })
+      () =>
+        new Promise<DispatcherState>((_resolve, reject) => {
+          rejectState = reject;
+        })
     );
 
     const { unmount } = renderHook(() => useDispatcher());

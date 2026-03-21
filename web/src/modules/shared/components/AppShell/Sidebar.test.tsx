@@ -53,21 +53,27 @@ describe('Sidebar', () => {
   it('renders settings icon', () => {
     renderSidebar();
 
-    const settingsLink = screen.getAllByRole('link').find(l => l.getAttribute('data-tooltip') === 'Settings');
+    const settingsLink = screen
+      .getAllByRole('link')
+      .find(l => l.getAttribute('data-tooltip') === 'Settings');
     expect(settingsLink).toBeDefined();
   });
 
   it('renders admin icon when isAdmin is true', () => {
     renderSidebar('/', true);
 
-    const adminLink = screen.getAllByRole('link').find(l => l.getAttribute('data-tooltip') === 'Admin');
+    const adminLink = screen
+      .getAllByRole('link')
+      .find(l => l.getAttribute('data-tooltip') === 'Admin');
     expect(adminLink).toBeDefined();
   });
 
   it('does not render admin icon when isAdmin is false', () => {
     renderSidebar('/', false);
 
-    const adminLink = screen.getAllByRole('link').find(l => l.getAttribute('data-tooltip') === 'Admin');
+    const adminLink = screen
+      .getAllByRole('link')
+      .find(l => l.getAttribute('data-tooltip') === 'Admin');
     expect(adminLink).toBeUndefined();
   });
 
@@ -82,7 +88,9 @@ describe('Sidebar', () => {
   it('highlights settings when on settings page', () => {
     renderSidebar('/settings');
 
-    const settingsLink = screen.getAllByRole('link').find(l => l.getAttribute('data-tooltip') === 'Settings');
+    const settingsLink = screen
+      .getAllByRole('link')
+      .find(l => l.getAttribute('data-tooltip') === 'Settings');
     expect(settingsLink?.className).toContain('navItemActive');
   });
 

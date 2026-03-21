@@ -18,7 +18,7 @@ describe('RaidBadge', () => {
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 
-  it.each(cases)('sets data-status="%s"', (status) => {
+  it.each(cases)('sets data-status="%s"', status => {
     const { container } = render(<RaidBadge status={status} />);
     const badge = container.querySelector('[data-status]');
     expect(badge).toHaveAttribute('data-status', status);

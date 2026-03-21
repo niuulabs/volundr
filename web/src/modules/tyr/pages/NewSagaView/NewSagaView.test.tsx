@@ -69,7 +69,7 @@ describe('NewSagaView', () => {
       expect(screen.getByText('Phase Preview')).toBeInTheDocument();
     });
     expect(
-      screen.getByText('No phases generated. Try refining the specification.'),
+      screen.getByText('No phases generated. Try refining the specification.')
     ).toBeInTheDocument();
   });
 

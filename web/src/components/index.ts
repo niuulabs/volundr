@@ -20,7 +20,10 @@ export type { FilterTabsProps } from '@/modules/shared/components/FilterTabs';
 export { SearchInput } from '@/modules/shared/components/SearchInput';
 export type { SearchInputProps } from '@/modules/shared/components/SearchInput';
 export { CollapsibleSection as MythologySection } from '@/modules/shared/components/CollapsibleSection';
-export type { CollapsibleSectionProps as MythologySectionProps, AccentColor } from '@/modules/shared/components/CollapsibleSection';
+export type {
+  CollapsibleSectionProps as MythologySectionProps,
+  AccentColor,
+} from '@/modules/shared/components/CollapsibleSection';
 
 // Molecules (volundr)
 export { ConsciousnessPhaseIndicator } from '@/modules/volundr/components/molecules/ConsciousnessPhaseIndicator';

@@ -13,7 +13,11 @@ export interface RaidRowProps {
 
 const DEFAULT_AUTO_MERGE_THRESHOLD = 0.95;
 
-export function RaidRow({ raid, autoMergeThreshold = DEFAULT_AUTO_MERGE_THRESHOLD, className }: RaidRowProps) {
+export function RaidRow({
+  raid,
+  autoMergeThreshold = DEFAULT_AUTO_MERGE_THRESHOLD,
+  className,
+}: RaidRowProps) {
   const showAutoMerge = raid.confidence >= autoMergeThreshold && raid.status === 'review';
   return (
     <div className={cn(styles.row, className)}>

@@ -56,7 +56,11 @@ export class MockTyrService implements ITyrService {
             tracker_id: `NIU-${Math.floor(Math.random() * 900) + 100}`,
             name: `Scaffold ${spec} infrastructure`,
             description: `Set up the foundational infrastructure for ${spec} in ${repo}.`,
-            acceptance_criteria: ['Port interface defined', 'Adapter stub created', 'Tests passing'],
+            acceptance_criteria: [
+              'Port interface defined',
+              'Adapter stub created',
+              'Tests passing',
+            ],
             declared_files: ['src/ports/new_port.py', 'src/adapters/new_adapter.py'],
             estimate_hours: 3,
             status: 'pending',

@@ -8,7 +8,7 @@ describe('TyrLayout', () => {
     render(
       <MemoryRouter initialEntries={['/tyr/sagas']}>
         <TyrLayout />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.getByText('Sagas')).toBeInTheDocument();
@@ -21,7 +21,7 @@ describe('TyrLayout', () => {
     render(
       <MemoryRouter initialEntries={['/tyr/sagas']}>
         <TyrLayout />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const sagasLink = screen.getByText('Sagas');
@@ -32,7 +32,7 @@ describe('TyrLayout', () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/tyr/sagas']}>
         <TyrLayout />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     // The content area should exist even without outlet content

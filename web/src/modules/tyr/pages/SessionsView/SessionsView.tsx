@@ -7,7 +7,7 @@ export function SessionsView() {
   const { sessions, loading, error, approve } = useTyrSessions();
 
   if (loading) {
-    return <LoadingIndicator label="Loading sessions..." />;
+    return <LoadingIndicator messages={["Loading sessions..."]} />;
   }
 
   if (error) {
@@ -17,17 +17,11 @@ export function SessionsView() {
   return (
     <div className={styles.container}>
       <div className={styles.grid}>
-        {sessions.map((session) => (
-          <SessionCard
-            key={session.session_id}
-            session={session}
-            onApprove={approve}
-          />
+        {sessions.map(session => (
+          <SessionCard key={session.session_id} session={session} onApprove={approve} />
         ))}
       </div>
-      {sessions.length === 0 && (
-        <div className={styles.empty}>No active sessions</div>
-      )}
+      {sessions.length === 0 && <div className={styles.empty}>No active sessions</div>}
     </div>
   );
 }

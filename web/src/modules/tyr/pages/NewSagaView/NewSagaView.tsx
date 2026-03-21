@@ -40,7 +40,7 @@ export function NewSagaView() {
           id="saga-spec"
           className={styles.textarea}
           value={spec}
-          onChange={(e) => setSpec(e.target.value)}
+          onChange={e => setSpec(e.target.value)}
           placeholder="Describe the feature to implement..."
           rows={8}
         />
@@ -53,7 +53,7 @@ export function NewSagaView() {
           type="text"
           className={styles.input}
           value={repo}
-          onChange={(e) => setRepo(e.target.value)}
+          onChange={e => setRepo(e.target.value)}
           placeholder="org/repo"
         />
 
@@ -72,13 +72,11 @@ export function NewSagaView() {
       {preview !== null && (
         <div className={styles.preview}>
           <h3 className={styles.previewHeading}>Phase Preview</h3>
-          {preview.map((phase) => (
+          {preview.map(phase => (
             <PhaseBlock key={phase.id} phase={phase} />
           ))}
           {preview.length === 0 && (
-            <div className={styles.empty}>
-              No phases generated. Try refining the specification.
-            </div>
+            <div className={styles.empty}>No phases generated. Try refining the specification.</div>
           )}
           {preview.length > 0 && (
             <div className={styles.actions}>

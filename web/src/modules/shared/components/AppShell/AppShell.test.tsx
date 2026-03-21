@@ -32,14 +32,18 @@ describe('AppShell', () => {
   it('passes isAdmin to sidebar', () => {
     renderShell(<div>Content</div>, true);
 
-    const adminLink = screen.getAllByRole('link').find(l => l.getAttribute('data-tooltip') === 'Admin');
+    const adminLink = screen
+      .getAllByRole('link')
+      .find(l => l.getAttribute('data-tooltip') === 'Admin');
     expect(adminLink).toBeDefined();
   });
 
   it('does not show admin when isAdmin is false', () => {
     renderShell(<div>Content</div>, false);
 
-    const adminLink = screen.getAllByRole('link').find(l => l.getAttribute('data-tooltip') === 'Admin');
+    const adminLink = screen
+      .getAllByRole('link')
+      .find(l => l.getAttribute('data-tooltip') === 'Admin');
     expect(adminLink).toBeUndefined();
   });
 });

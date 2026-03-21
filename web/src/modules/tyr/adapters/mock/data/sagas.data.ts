@@ -12,7 +12,8 @@ const saga1Phase1Raids = [
     phase_id: saga1Phase1Id,
     tracker_id: 'NIU-101',
     name: 'Add ZFS pool health check port',
-    description: 'Define a health check port for querying ZFS pool status and expose it via the adapter layer.',
+    description:
+      'Define a health check port for querying ZFS pool status and expose it via the adapter layer.',
     acceptance_criteria: [
       'IStorageHealthPort interface defined with getPoolStatus()',
       'ZfsHealthAdapter implements the port using zpool status parsing',
@@ -38,7 +39,8 @@ const saga1Phase1Raids = [
     phase_id: saga1Phase1Id,
     tracker_id: 'NIU-102',
     name: 'Integrate health check into Skoll perception loop',
-    description: 'Wire the storage health port into the Skoll rapid-perception cycle so degraded pools trigger interrupts.',
+    description:
+      'Wire the storage health port into the Skoll rapid-perception cycle so degraded pools trigger interrupts.',
     acceptance_criteria: [
       'Skoll checks storage health every cycle',
       'Degraded pool triggers Priority.HIGH interrupt signal',
@@ -66,7 +68,8 @@ const saga1Phase2Raids = [
     phase_id: saga1Phase2Id,
     tracker_id: 'NIU-103',
     name: 'Add Prometheus metrics for pool health',
-    description: 'Expose storage health metrics via the existing Prometheus endpoint so Grafana dashboards can visualize pool status.',
+    description:
+      'Expose storage health metrics via the existing Prometheus endpoint so Grafana dashboards can visualize pool status.',
     acceptance_criteria: [
       'buri_storage_pool_status gauge metric exposed',
       'buri_storage_pool_errors_total counter metric exposed',
@@ -92,7 +95,8 @@ const saga1Phase2Raids = [
     phase_id: saga1Phase2Id,
     tracker_id: 'NIU-104',
     name: 'Recovery runbook for degraded pools',
-    description: 'Create an automated recovery runbook that Odin can execute when a pool enters degraded state.',
+    description:
+      'Create an automated recovery runbook that Odin can execute when a pool enters degraded state.',
     acceptance_criteria: [
       'Runbook YAML created in runbooks/storage-recovery.yaml',
       'Odin decision handler recognizes storage degradation signals',
@@ -108,7 +112,8 @@ const saga1Phase2Raids = [
     confidence: 0.55,
     session_id: 'sess-1004',
     branch: 'feat/storage-health/recovery-runbook',
-    chronicle_summary: 'Runbook and decision handler implemented. Awaiting human review of recovery logic.',
+    chronicle_summary:
+      'Runbook and decision handler implemented. Awaiting human review of recovery logic.',
     retry_count: 1,
     created_at: '2026-03-19T10:00:00Z',
     updated_at: '2026-03-20T16:45:00Z',
@@ -118,21 +123,21 @@ const saga1Phase2Raids = [
     phase_id: saga1Phase2Id,
     tracker_id: 'NIU-105',
     name: 'E2E test for storage health pipeline',
-    description: 'End-to-end test that simulates pool degradation and validates the full signal chain from Skoll to Odin recovery.',
+    description:
+      'End-to-end test that simulates pool degradation and validates the full signal chain from Skoll to Odin recovery.',
     acceptance_criteria: [
       'E2E test simulates degraded pool via mock adapter',
       'Validates interrupt signal reaches Odin within 5s',
       'Validates recovery runbook is triggered',
     ],
-    declared_files: [
-      'tests/test_e2e/test_storage_pipeline.py',
-    ],
+    declared_files: ['tests/test_e2e/test_storage_pipeline.py'],
     estimate_hours: 3,
     status: 'failed' as const,
     confidence: 0.4,
     session_id: 'sess-1005',
     branch: 'feat/storage-health/e2e-test',
-    chronicle_summary: 'CI failed: nng synapse timeout in e2e harness. Needs retry with increased timeout config.',
+    chronicle_summary:
+      'CI failed: nng synapse timeout in e2e harness. Needs retry with increased timeout config.',
     retry_count: 2,
     created_at: '2026-03-20T09:00:00Z',
     updated_at: '2026-03-21T08:30:00Z',
@@ -150,7 +155,8 @@ const saga2Phase1Raids = [
     phase_id: saga2Phase1Id,
     tracker_id: 'NIU-111',
     name: 'Extract OIDC token validation into identity adapter',
-    description: 'Refactor the auth middleware to use the identity adapter pattern, removing direct Keycloak coupling.',
+    description:
+      'Refactor the auth middleware to use the identity adapter pattern, removing direct Keycloak coupling.',
     acceptance_criteria: [
       'IIdentityPort interface with validate_token() and get_claims()',
       'OidcIdentityAdapter implements the port using generic OIDC discovery',
@@ -176,7 +182,8 @@ const saga2Phase1Raids = [
     phase_id: saga2Phase1Id,
     tracker_id: 'NIU-112',
     name: 'Update Envoy ext_authz filter config',
-    description: 'Update the Envoy configuration to use the new identity adapter endpoint instead of the legacy Keycloak-specific path.',
+    description:
+      'Update the Envoy configuration to use the new identity adapter endpoint instead of the legacy Keycloak-specific path.',
     acceptance_criteria: [
       'Envoy ext_authz points to /auth/validate',
       'Helm chart values updated for new auth endpoint',

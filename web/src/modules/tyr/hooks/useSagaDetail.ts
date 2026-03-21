@@ -67,7 +67,9 @@ export function useSagaDetail(sagaId: string | undefined): UseSagaDetailResult {
       }
     };
     fetch();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [sagaId]);
 
   return { saga, phases, loading, error, refresh: fetchDetail };

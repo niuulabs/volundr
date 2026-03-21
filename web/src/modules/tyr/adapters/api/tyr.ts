@@ -1,7 +1,8 @@
 import type { ITyrService } from '../../ports';
 import type { Saga, Phase } from '../../models';
 
-const _TYR_API_BASE = '/api/tyr';
+// API base path — used when wiring to live API (NIU-190)
+// const TYR_API_BASE = '/api/tyr';
 
 export class ApiTyrService implements ITyrService {
   async getSagas(): Promise<Saga[]> {

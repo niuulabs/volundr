@@ -192,7 +192,10 @@ describe('useSagaDetail', () => {
 
     let resolveSaga!: (value: Saga) => void;
     vi.mocked(tyrService.getSaga).mockImplementation(
-      () => new Promise<Saga>(resolve => { resolveSaga = resolve; })
+      () =>
+        new Promise<Saga>(resolve => {
+          resolveSaga = resolve;
+        })
     );
 
     act(() => {
@@ -214,7 +217,10 @@ describe('useSagaDetail', () => {
   it('should not update state after unmount (cancelled flag)', async () => {
     let resolveSaga!: (value: Saga) => void;
     vi.mocked(tyrService.getSaga).mockImplementation(
-      () => new Promise<Saga>(resolve => { resolveSaga = resolve; })
+      () =>
+        new Promise<Saga>(resolve => {
+          resolveSaga = resolve;
+        })
     );
 
     const { unmount } = renderHook(() => useSagaDetail('saga-001'));
@@ -229,7 +235,10 @@ describe('useSagaDetail', () => {
   it('should not set error after unmount when fetch fails', async () => {
     let rejectSaga!: (reason: unknown) => void;
     vi.mocked(tyrService.getSaga).mockImplementation(
-      () => new Promise<Saga>((_resolve, reject) => { rejectSaga = reject; })
+      () =>
+        new Promise<Saga>((_resolve, reject) => {
+          rejectSaga = reject;
+        })
     );
 
     const { unmount } = renderHook(() => useSagaDetail('saga-001'));

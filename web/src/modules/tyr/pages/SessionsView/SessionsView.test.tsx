@@ -8,12 +8,10 @@ vi.mock('../../hooks', () => ({
 }));
 
 vi.mock('@/modules/shared', () => ({
-  LoadingIndicator: ({ label }: { label?: string }) => (
-    <div data-testid="loading-indicator">{label}</div>
+  LoadingIndicator: ({ messages, label }: { messages?: string[]; label?: string }) => (
+    <div data-testid="loading-indicator">{messages?.[0] ?? label}</div>
   ),
-  StatusBadge: ({ status }: { status: string }) => (
-    <span data-testid="status-badge">{status}</span>
-  ),
+  StatusBadge: ({ status }: { status: string }) => <span data-testid="status-badge">{status}</span>,
 }));
 
 describe('SessionsView', () => {

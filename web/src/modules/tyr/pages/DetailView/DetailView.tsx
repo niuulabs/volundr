@@ -11,7 +11,7 @@ export function DetailView() {
   const { saga, phases, loading, error } = useSagaDetail(id);
 
   if (loading) {
-    return <LoadingIndicator label="Loading saga..." />;
+    return <LoadingIndicator messages={["Loading saga..."]} />;
   }
 
   if (error) {
@@ -39,12 +39,10 @@ export function DetailView() {
         </div>
       </div>
       <div className={styles.phaseList}>
-        {phases.map((phase) => (
+        {phases.map(phase => (
           <PhaseBlock key={phase.id} phase={phase} />
         ))}
-        {phases.length === 0 && (
-          <div className={styles.empty}>No phases defined</div>
-        )}
+        {phases.length === 0 && <div className={styles.empty}>No phases defined</div>}
       </div>
     </div>
   );

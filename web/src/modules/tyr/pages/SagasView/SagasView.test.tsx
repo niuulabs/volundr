@@ -9,12 +9,10 @@ vi.mock('../../hooks', () => ({
 }));
 
 vi.mock('@/modules/shared', () => ({
-  LoadingIndicator: ({ label }: { label?: string }) => (
-    <div data-testid="loading-indicator">{label}</div>
+  LoadingIndicator: ({ messages, label }: { messages?: string[]; label?: string }) => (
+    <div data-testid="loading-indicator">{messages?.[0] ?? label}</div>
   ),
-  StatusBadge: ({ status }: { status: string }) => (
-    <span data-testid="status-badge">{status}</span>
-  ),
+  StatusBadge: ({ status }: { status: string }) => <span data-testid="status-badge">{status}</span>,
   MetricCard: ({ label, value }: { label: string; value: string | number }) => (
     <div data-testid="metric-card">
       <span>{label}</span>
@@ -57,7 +55,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.getByText('Implement auth flow')).toBeInTheDocument();
@@ -69,7 +67,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.getByText('Total Sagas')).toBeInTheDocument();
@@ -81,7 +79,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const matches = screen.getAllByText('82%');
@@ -99,7 +97,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.getByText('Loading sagas...')).toBeInTheDocument();
@@ -116,7 +114,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.getByText('Network error')).toBeInTheDocument();
@@ -133,7 +131,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.getByText('No sagas found')).toBeInTheDocument();
@@ -143,7 +141,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     fireEvent.click(screen.getByText('Implement auth flow'));
@@ -161,7 +159,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.getByText('0%')).toBeInTheDocument();
@@ -203,7 +201,7 @@ describe('SagasView', () => {
     render(
       <MemoryRouter>
         <SagasView />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     // Total: 2, Active: 1
