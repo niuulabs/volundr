@@ -1,5 +1,17 @@
 # Volundr Helm Chart Values
 # Self-hosted Claude Code session manager
+#
+# ── Umbrella Chart Integration ────────────────────────────────────
+# When deployed as a subchart of the niuu umbrella chart, the following
+# global values are propagated automatically:
+#
+#   global.image.registry    - Container registry for all images (API + web)
+#   global.image.tag         - Image tag override for all images
+#   global.imagePullSecrets  - Pull secrets shared across all subcharts
+#   global.domain            - Base domain (used for ingress/gateway hostnames)
+#
+# The chart works identically in standalone and subchart mode.
+# All resource names use the fullname helper which adapts to the release name.
 
 # Global values (can be set by parent chart)
 global:
@@ -7,17 +19,21 @@ global:
   imagePullSecrets: []
   # - ghcr-pull-secret
   image:
-    # -- Global image registry override
+    # -- Global image registry override (applies to both API and web images)
     registry: ""
     # -- Global image repository override
     repository: ""
     # -- Global image tag override
     tag: ""
+  # -- Global base domain (used for ingress hosts and gateway hostname)
+  domain: ""
 
 # -- Override the name of the chart
 nameOverride: ""
 # -- Override the full name of the chart
 fullnameOverride: ""
+# -- Base domain for auto-generated hostnames (overridden by global.domain)
+domain: ""
 
 # -- Number of replicas (ignored if autoscaling is enabled)
 replicaCount: 1
@@ -154,8 +170,8 @@ database:
   maxPoolSize: 20
   # -- Create a secret for database credentials
   createSecret: false
-  # -- Use an existing secret for database credentials
-  existingSecret: "volundr-db"
+  # -- Use an existing secret for database credentials (defaults to {fullname}-db)
+  existingSecret: ""
   # -- Key in secret containing the username
   userKey: username
   # -- Key in secret containing the password
@@ -667,13 +683,13 @@ sessionContributors:
 sessionGateway:
   # -- Enable the shared Gateway resource
   enabled: false
-  # -- Gateway resource name
-  name: "volundr-gateway"
+  # -- Gateway resource name (defaults to {fullname}-gateway)
+  name: ""
   # -- GatewayClass to use (Envoy Gateway default: "eg")
   gatewayClassName: "eg"
-  # -- Hostname for the HTTPS listener (wildcard for session routing)
+  # -- Hostname for the HTTPS listener (defaults to sessions.{domain})
   # external-dns creates a DNS record for this hostname automatically
-  hostname: "sessions.valhalla.asgard.niuu.world"
+  hostname: ""
   # -- cert-manager ClusterIssuer name for TLS certificate provisioning
   certIssuer: "letsencrypt-prod"
   # -- TLS secret name (defaults to "{name}-tls" if not set)
@@ -1129,6 +1145,12 @@ podDisruptionBudget:
   maxUnavailable: ""
   # -- Unhealthy pod eviction policy
   unhealthyPodEvictionPolicy: ""
+
+# Kyverno policies
+kyverno:
+  pvcIsolation:
+    # -- Deploy the PVC isolation ClusterPolicy (requires Kyverno >= 1.9)
+    enabled: false
 
 # Network Policy
 networkPolicy:

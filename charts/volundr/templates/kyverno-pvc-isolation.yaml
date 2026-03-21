@@ -1,4 +1,4 @@
-{{- if contains "K8sStorageAdapter" .Values.storageAdapter.adapter }}
+{{- if .Values.kyverno.pvcIsolation.enabled }}
 # Kyverno policy: enforce PVC mount isolation by owner and session labels.
 #
 # A single rule fetches PVC labels once per volume mount and checks both:
@@ -13,7 +13,7 @@
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
-  name: {{ include "volundr.fullname" . }}-{{ .Release.Namespace }}-pvc-isolation
+  name: {{ include "volundr.fullname" . }}-pvc-isolation
   labels:
     {{- include "volundr.labels" . | nindent 4 }}
   annotations:
