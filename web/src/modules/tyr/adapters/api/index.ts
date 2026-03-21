@@ -1,0 +1,1 @@
+export { ApiTyrService } from './tyr';

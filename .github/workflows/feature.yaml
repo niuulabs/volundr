@@ -1,0 +1,193 @@
+# Runs on every push to feat/* branches:
+# 1. Builds all container images tagged with the feature name
+#    (e.g. feat/tyr-ui → tag "tyr-ui")
+# 2. Packages Helm charts as 0.0.0-<feature>.<N> prerelease versions
+#    (e.g. 0.0.0-tyr-ui.3)
+name: Feature Build
+
+on:
+  push:
+    branches: ['feat/**']
+
+permissions: read-all
+
+env:
+  REGISTRY: ghcr.io
+  CHART_REPO: oci://ghcr.io/${{ github.repository_owner }}/charts
+
+concurrency:
+  group: feature-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Extract feature name from branch for tagging
+  # ---------------------------------------------------------------------------
+  meta:
+    name: Extract Feature Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      chart_version: ${{ steps.tag.outputs.chart_version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Derive tag from branch name
+        id: tag
+        run: |
+          # Strip "feat/" prefix → use remainder as tag
+          # e.g. feat/tyr-ui → tyr-ui, feat/auth/oidc → auth-oidc
+          RAW="${GITHUB_REF_NAME#feat/}"
+          # Replace slashes with dashes for valid Docker tag
+          TAG="${RAW//\//-}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Feature tag: ${TAG}"
+
+          # Compute chart version: 0.0.0-<feature>.<N>
+          # N = number of commits on this branch (gives monotonic build number)
+          N=$(git rev-list --count HEAD)
+          CHART_VERSION="0.0.0-${TAG}.${N}"
+          echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
+          echo "Chart version: ${CHART_VERSION}"
+
+  # ---------------------------------------------------------------------------
+  # Containers — build per platform, then merge manifests
+  # ---------------------------------------------------------------------------
+  build-container-image:
+    name: "Build ${{ matrix.container }} (${{ matrix.platform }})"
+    needs: meta
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: ./containers/${{ matrix.container }}/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.meta.outputs.tag }}-${{ matrix.platform }}
+          build-args: |
+            APP_VERSION=${{ needs.meta.outputs.tag }}-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.container }}
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.vendor=Niuu Labs
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            dev.niuu.feature=${{ needs.meta.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
+          provenance: false
+
+  merge-container-manifests:
+    name: "Manifest ${{ matrix.container }}"
+    needs: [meta, build-container-image]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifests
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}"
+          TAG="${{ needs.meta.outputs.tag }}"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          # Feature tag (mutable, always points to latest push on this feature branch)
+          docker manifest create "${IMAGE}:${TAG}" \
+            "${IMAGE}:${TAG}-amd64" \
+            "${IMAGE}:${TAG}-arm64"
+          docker manifest push "${IMAGE}:${TAG}"
+
+          # Feature + short sha (immutable, for pinning a specific build)
+          docker manifest create "${IMAGE}:${TAG}-${SHORT_SHA}" \
+            "${IMAGE}:${TAG}-amd64" \
+            "${IMAGE}:${TAG}-arm64"
+          docker manifest push "${IMAGE}:${TAG}-${SHORT_SHA}"
+
+  # ---------------------------------------------------------------------------
+  # Helm charts — feature prerelease versions (0.0.0-<feature>.<N>)
+  # ---------------------------------------------------------------------------
+  build-charts:
+    name: Build Helm Charts
+    needs: meta
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+        with:
+          version: v3.14.0
+
+      - name: Update chart versions
+        run: |
+          VERSION="${{ needs.meta.outputs.chart_version }}"
+          TAG="${{ needs.meta.outputs.tag }}"
+
+          for CHART in skuld volundr tyr niuu; do
+            sed -i "s/^version:.*/version: $VERSION/" "charts/${CHART}/Chart.yaml"
+            sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" "charts/${CHART}/Chart.yaml"
+          done
+
+          # Point image tags to the feature tag so the chart deploys feature images
+          for CHART in skuld volundr tyr; do
+            if [ -f "charts/${CHART}/values.yaml" ]; then
+              sed -i "s/^  tag:.*/  tag: \"${TAG}\"/" "charts/${CHART}/values.yaml" || true
+            fi
+          done
+
+      - name: Package Helm charts
+        run: |
+          helm package charts/skuld -d .helm-packages/
+          helm package charts/volundr -d .helm-packages/
+          helm package charts/tyr -d .helm-packages/
+          helm dependency build charts/niuu
+          helm package charts/niuu -d .helm-packages/
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Helm charts to OCI registry
+        run: |
+          helm push .helm-packages/skuld-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/tyr-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-*.tgz ${{ env.CHART_REPO }}

@@ -1,14 +1,14 @@
-export { StatusDot } from './StatusDot';
-export type { StatusDotProps } from './StatusDot';
+export { StatusDot } from '@/modules/shared/components/StatusDot';
+export type { StatusDotProps } from '@/modules/shared/components/StatusDot';
 
-export { StatusBadge } from './StatusBadge';
-export type { StatusBadgeProps } from './StatusBadge';
+export { StatusBadge } from '@/modules/shared/components/StatusBadge';
+export type { StatusBadgeProps } from '@/modules/shared/components/StatusBadge';
 
-export { ProgressRing } from './ProgressRing';
-export type { ProgressRingProps } from './ProgressRing';
+export { ProgressRing } from '@/modules/shared/components/ProgressRing';
+export type { ProgressRingProps } from '@/modules/shared/components/ProgressRing';
 
-export { CircadianIcon } from './CircadianIcon';
-export type { CircadianIconProps } from './CircadianIcon';
+export { CircadianIcon } from '@/modules/volundr/components/atoms/CircadianIcon';
+export type { CircadianIconProps } from '@/modules/volundr/components/atoms/CircadianIcon';
 
-export { OdinEye } from './OdinEye';
-export type { OdinEyeProps } from './OdinEye';
+export { OdinEye } from '@/modules/volundr/components/atoms/OdinEye';
+export type { OdinEyeProps } from '@/modules/volundr/components/atoms/OdinEye';
