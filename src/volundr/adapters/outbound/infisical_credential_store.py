@@ -182,10 +182,9 @@ class InfisicalCredentialStore(CredentialStorePort):
         )
         if response.status_code >= 400 and response.status_code != 404:
             logger.error(
-                "Infisical delete failed for %s (%s): %s",
-                key,
+                "Infisical delete failed for secret in %s (HTTP %s)",
+                folder_path,
                 response.status_code,
-                response.text[:200],
             )
 
     async def _list_secrets_in_folder(self, folder_path: str) -> list[dict]:

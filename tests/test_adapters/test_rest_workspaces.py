@@ -328,7 +328,7 @@ class TestBulkDeleteWorkspaces:
         data = resp.json()
         assert data["deleted"] == 0
         assert len(data["failed"]) == 1
-        assert "storage error" in data["failed"][0]["error"]
+        assert data["failed"][0]["error"] == "Internal error"
 
 
 # ── POST /admin/workspaces/bulk-delete ──────────────────────────
@@ -385,7 +385,7 @@ class TestAdminBulkDelete:
         assert resp.status_code == 200
         data = resp.json()
         assert data["deleted"] == 0
-        assert "k8s error" in data["failed"][0]["error"]
+        assert data["failed"][0]["error"] == "Internal error"
 
 
 # ── GET /admin/workspaces ───────────────────────────────────────
