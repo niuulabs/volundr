@@ -63,7 +63,7 @@
   "dependencies": {
     "@codingame/monaco-vscode-accessibility-service-override": "^28.0.1",
     "@codingame/monaco-vscode-api": "^28.0.1",
-    "@codingame/monaco-vscode-authentication-service-override": "^28.0.1",
+    "@codingame/monaco-vscode-authentication-service-override": "^28.3.1",
     "@codingame/monaco-vscode-comments-service-override": "^28.0.1",
     "@codingame/monaco-vscode-configuration-editing-default-extension": "^28.0.1",
     "@codingame/monaco-vscode-configuration-service-override": "^28.0.1",
