@@ -1,5 +1,4 @@
 import { useParams } from 'react-router-dom';
-import { cn } from '@/modules/shared/utils/classnames';
 import { LoadingIndicator, StatusBadge } from '@/modules/shared';
 import { useSagaDetail } from '../../hooks';
 import { BranchTag } from '../../components/BranchTag';

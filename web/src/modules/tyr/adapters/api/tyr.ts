@@ -1,7 +1,7 @@
 import type { ITyrService } from '../../ports';
 import type { Saga, Phase } from '../../models';
 
-const TYR_API_BASE = '/api/tyr';
+const _TYR_API_BASE = '/api/tyr';
 
 export class ApiTyrService implements ITyrService {
   async getSagas(): Promise<Saga[]> {

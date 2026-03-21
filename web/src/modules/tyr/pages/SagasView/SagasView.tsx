@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { cn } from '@/modules/shared/utils/classnames';
 import { MetricCard, StatusBadge, LoadingIndicator } from '@/modules/shared';
 import { BarChart3, Zap, TrendingUp } from 'lucide-react';
 import { useSagas } from '../../hooks';

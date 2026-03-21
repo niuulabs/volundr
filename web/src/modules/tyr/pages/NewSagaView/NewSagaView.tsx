@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { cn } from '@/modules/shared/utils/classnames';
 import type { Phase } from '../../models';
 import { PhaseBlock } from '../../components/PhaseBlock';
 import styles from './NewSagaView.module.css';

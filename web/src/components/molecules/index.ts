@@ -1,5 +1,5 @@
-export { ConsciousnessPhaseIndicator } from './ConsciousnessPhaseIndicator';
-export type { ConsciousnessPhaseIndicatorProps } from './ConsciousnessPhaseIndicator';
+export { ConsciousnessPhaseIndicator } from '@/modules/volundr/components/molecules/ConsciousnessPhaseIndicator';
+export type { ConsciousnessPhaseIndicatorProps } from '@/modules/volundr/components/molecules/ConsciousnessPhaseIndicator';
 
 export { MetricCard } from './MetricCard';
 export type { MetricCardProps } from './MetricCard';

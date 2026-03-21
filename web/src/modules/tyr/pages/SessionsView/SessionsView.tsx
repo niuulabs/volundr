@@ -1,4 +1,3 @@
-import { cn } from '@/modules/shared/utils/classnames';
 import { LoadingIndicator } from '@/modules/shared';
 import { useTyrSessions } from '../../hooks';
 import { SessionCard } from '../../components/SessionCard';

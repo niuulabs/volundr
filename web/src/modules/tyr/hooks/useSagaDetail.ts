@@ -36,8 +36,39 @@ export function useSagaDetail(sagaId: string | undefined): UseSagaDetailResult {
   }, [sagaId]);
 
   useEffect(() => {
-    fetchDetail();
-  }, [fetchDetail]);
+    let cancelled = false;
+    if (!sagaId) {
+      setSaga(null);
+      setPhases([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const fetch = async () => {
+      try {
+        const [sagaData, phasesData] = await Promise.all([
+          tyrService.getSaga(sagaId),
+          tyrService.getPhases(sagaId),
+        ]);
+        if (!cancelled) {
+          setSaga(sagaData);
+          setPhases(phasesData);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    fetch();
+    return () => { cancelled = true; };
+  }, [sagaId]);
 
   return { saga, phases, loading, error, refresh: fetchDetail };
 }

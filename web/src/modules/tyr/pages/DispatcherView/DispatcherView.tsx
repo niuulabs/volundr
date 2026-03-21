@@ -1,4 +1,3 @@
-import { cn } from '@/modules/shared/utils/classnames';
 import { LoadingIndicator } from '@/modules/shared';
 import { useDispatcher } from '../../hooks';
 import styles from './DispatcherView.module.css';

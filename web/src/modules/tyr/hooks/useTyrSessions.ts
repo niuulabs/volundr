@@ -25,8 +25,28 @@ export function useTyrSessions(): UseTyrSessionsResult {
   }, []);
 
   useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const data = await tyrSessionService.getSessions();
+        if (!cancelled) {
+          setSessions(data);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    setLoading(true);
+    setError(null);
+    fetch();
+    return () => { cancelled = true; };
+  }, []);
 
   const approve = useCallback(async (sessionId: string) => {
     await tyrSessionService.approve(sessionId);

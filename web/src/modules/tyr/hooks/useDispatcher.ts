@@ -32,8 +32,32 @@ export function useDispatcher(): UseDispatcherResult {
   }, []);
 
   useEffect(() => {
-    fetchState();
-  }, [fetchState]);
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const [stateData, logData] = await Promise.all([
+          dispatcherService.getState(),
+          dispatcherService.getLog(),
+        ]);
+        if (!cancelled) {
+          setState(stateData);
+          setLog(logData);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    setLoading(true);
+    setError(null);
+    fetch();
+    return () => { cancelled = true; };
+  }, []);
 
   const pause = useCallback(async () => {
     await dispatcherService.setRunning(false);

@@ -24,8 +24,28 @@ export function useSagas(): UseSagasResult {
   }, []);
 
   useEffect(() => {
-    fetchSagas();
-  }, [fetchSagas]);
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const data = await tyrService.getSagas();
+        if (!cancelled) {
+          setSagas(data);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    setLoading(true);
+    setError(null);
+    fetch();
+    return () => { cancelled = true; };
+  }, []);
 
   return { sagas, loading, error, refresh: fetchSagas };
 }
