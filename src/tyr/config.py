@@ -52,6 +52,12 @@ class LoggingConfig(BaseModel):
     format: str = Field(default="text")
 
 
+class VolundrConfig(BaseModel):
+    """Volundr API connection configuration."""
+
+    url: str = Field(default="http://localhost:8000")
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -73,6 +79,7 @@ class Settings(BaseSettings):
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    volundr: VolundrConfig = Field(default_factory=VolundrConfig)
 
     @classmethod
     def settings_customise_sources(
