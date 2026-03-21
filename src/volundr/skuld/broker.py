@@ -1550,11 +1550,13 @@ def _safe_resolve(base: Path, relative_path: str) -> Path:
     if any(part == ".." for part in cleaned.split("/")):
         raise HTTPException(400, "Path traversal not allowed")
 
-    base_real = os.path.realpath(base)
+    # Canonicalise base and target paths.
+    base_real = os.path.realpath(str(base))
     target_real = os.path.realpath(os.path.join(base_real, cleaned))
 
-    # CodeQL recognises realpath + startswith as a path-injection sanitiser.
-    if target_real != base_real and not target_real.startswith(base_real + os.sep):
+    # Ensure target is within base directory (or equal to it).
+    base_prefix = base_real if base_real.endswith(os.sep) else base_real + os.sep
+    if target_real != base_real and not target_real.startswith(base_prefix):
         raise HTTPException(400, "Path traversal not allowed")
 
     return Path(target_real)
