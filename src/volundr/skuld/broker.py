@@ -1538,30 +1538,26 @@ def _resolve_root(root: str) -> Path:
     return Path(broker.workspace_dir).resolve()
 
 
-def _sanitize_path(relative_path: str) -> str:
-    """Sanitize a user-supplied relative path before using it in filesystem ops.
+def _safe_resolve(base: Path, relative_path: str) -> Path:
+    """Resolve a path safely, raising HTTPException on traversal attempts.
 
-    Rejects null bytes, absolute paths, and '..' components to prevent path
-    traversal.  Returns the cleaned relative path string.
+    Uses os.path.realpath + str.startswith guard so that CodeQL recognises
+    the taint sanitisation (py/path-injection).
     """
     if "\0" in relative_path:
         raise HTTPException(400, "Invalid path")
-    # Normalise separators and strip leading slashes so the path is always
-    # treated as relative.
     cleaned = relative_path.replace("\\", "/").lstrip("/")
-    # Reject any '..' component (handles '..', 'foo/../bar', etc.)
     if any(part == ".." for part in cleaned.split("/")):
         raise HTTPException(400, "Path traversal not allowed")
-    return cleaned
 
+    base_real = os.path.realpath(base)
+    target_real = os.path.realpath(os.path.join(base_real, cleaned))
 
-def _safe_resolve(base: Path, relative_path: str) -> Path:
-    """Resolve a path safely, raising HTTPException on traversal attempts."""
-    sanitized = _sanitize_path(relative_path)
-    target = (base / sanitized).resolve()
-    if not target.is_relative_to(base):
+    # CodeQL recognises realpath + startswith as a path-injection sanitiser.
+    if target_real != base_real and not target_real.startswith(base_real + os.sep):
         raise HTTPException(400, "Path traversal not allowed")
-    return target
+
+    return Path(target_real)
 
 
 def _validate_root(root: str) -> None:
