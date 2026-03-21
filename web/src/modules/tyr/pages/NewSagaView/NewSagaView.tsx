@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Phase } from '../../models';
+import { tyrService } from '../../adapters';
 import { PhaseBlock } from '../../components/PhaseBlock';
 import styles from './NewSagaView.module.css';
 
@@ -9,12 +11,13 @@ export function NewSagaView() {
   const [preview, setPreview] = useState<Phase[] | null>(null);
   const [decomposing, setDecomposing] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const navigate = useNavigate();
 
   const handleDecompose = async () => {
     setDecomposing(true);
     try {
-      // Placeholder: In production, calls tyrService.decompose(spec, repo)
-      setPreview([]);
+      const phases = await tyrService.decompose(spec, repo);
+      setPreview(phases);
     } finally {
       setDecomposing(false);
     }
@@ -23,7 +26,8 @@ export function NewSagaView() {
   const handleCommit = async () => {
     setCommitting(true);
     try {
-      // Placeholder: In production, calls tyrService.createSaga(spec, repo)
+      const saga = await tyrService.createSaga(spec, repo);
+      navigate(`/tyr/sagas/${saga.id}`);
     } finally {
       setCommitting(false);
     }

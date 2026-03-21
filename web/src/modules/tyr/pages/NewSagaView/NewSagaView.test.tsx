@@ -1,65 +1,81 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { NewSagaView } from './NewSagaView';
+
+vi.mock('../../adapters', () => ({
+  tyrService: {
+    decompose: vi.fn(() => Promise.resolve([])),
+    createSaga: vi.fn(() => Promise.resolve({ id: 'new-saga-id', name: 'Test', slug: 'test' })),
+  },
+}));
+
+function renderView() {
+  return render(
+    <MemoryRouter>
+      <NewSagaView />
+    </MemoryRouter>
+  );
+}
 
 describe('NewSagaView', () => {
   it('renders the heading', () => {
-    render(<NewSagaView />);
+    renderView();
     expect(screen.getByText('Create New Saga')).toBeInTheDocument();
   });
 
   it('renders specification textarea', () => {
-    render(<NewSagaView />);
+    renderView();
     expect(screen.getByLabelText('Specification')).toBeInTheDocument();
   });
 
   it('renders repository input', () => {
-    render(<NewSagaView />);
+    renderView();
     expect(screen.getByLabelText('Repository')).toBeInTheDocument();
   });
 
   it('renders decompose button', () => {
-    render(<NewSagaView />);
+    renderView();
     expect(screen.getByText('Decompose')).toBeInTheDocument();
   });
 
   it('decompose button is disabled when fields are empty', () => {
-    render(<NewSagaView />);
+    renderView();
     const button = screen.getByText('Decompose');
     expect(button).toBeDisabled();
   });
 
   it('decompose button is disabled when only spec is filled', async () => {
-    render(<NewSagaView />);
+    renderView();
     const textarea = screen.getByLabelText('Specification');
     await userEvent.type(textarea, 'Some spec');
     expect(screen.getByText('Decompose')).toBeDisabled();
   });
 
   it('decompose button is disabled when only repo is filled', async () => {
-    render(<NewSagaView />);
+    renderView();
     const input = screen.getByLabelText('Repository');
     await userEvent.type(input, 'org/repo');
     expect(screen.getByText('Decompose')).toBeDisabled();
   });
 
   it('decompose button is enabled when both fields are filled', async () => {
-    render(<NewSagaView />);
+    renderView();
     await userEvent.type(screen.getByLabelText('Specification'), 'Some spec');
     await userEvent.type(screen.getByLabelText('Repository'), 'org/repo');
     expect(screen.getByText('Decompose')).toBeEnabled();
   });
 
   it('decompose button is disabled when fields are whitespace only', async () => {
-    render(<NewSagaView />);
+    renderView();
     await userEvent.type(screen.getByLabelText('Specification'), '   ');
     await userEvent.type(screen.getByLabelText('Repository'), '   ');
     expect(screen.getByText('Decompose')).toBeDisabled();
   });
 
-  it('clicking decompose shows preview section with empty phases message', async () => {
-    render(<NewSagaView />);
+  it('clicking decompose shows preview section', async () => {
+    renderView();
     await userEvent.type(screen.getByLabelText('Specification'), 'Build auth');
     await userEvent.type(screen.getByLabelText('Repository'), 'org/repo');
 
@@ -74,12 +90,12 @@ describe('NewSagaView', () => {
   });
 
   it('does not show preview section initially', () => {
-    render(<NewSagaView />);
+    renderView();
     expect(screen.queryByText('Phase Preview')).not.toBeInTheDocument();
   });
 
   it('does not show commit button when preview has zero phases', async () => {
-    render(<NewSagaView />);
+    renderView();
     await userEvent.type(screen.getByLabelText('Specification'), 'Build auth');
     await userEvent.type(screen.getByLabelText('Repository'), 'org/repo');
     await userEvent.click(screen.getByText('Decompose'));
@@ -91,28 +107,26 @@ describe('NewSagaView', () => {
   });
 
   it('shows decomposing text while decompose is in progress', async () => {
-    render(<NewSagaView />);
+    renderView();
     await userEvent.type(screen.getByLabelText('Specification'), 'Build auth');
     await userEvent.type(screen.getByLabelText('Repository'), 'org/repo');
 
-    // Click decompose - the button text should change during the async operation
     fireEvent.click(screen.getByText('Decompose'));
 
-    // After it resolves, it should go back to Decompose
     await waitFor(() => {
       expect(screen.getByText('Decompose')).toBeInTheDocument();
     });
   });
 
   it('updates spec textarea value on change', async () => {
-    render(<NewSagaView />);
+    renderView();
     const textarea = screen.getByLabelText('Specification') as HTMLTextAreaElement;
     await userEvent.type(textarea, 'New feature');
     expect(textarea.value).toBe('New feature');
   });
 
   it('updates repo input value on change', async () => {
-    render(<NewSagaView />);
+    renderView();
     const input = screen.getByLabelText('Repository') as HTMLInputElement;
     await userEvent.type(input, 'niuulabs/app');
     expect(input.value).toBe('niuulabs/app');

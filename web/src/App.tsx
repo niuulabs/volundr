@@ -24,6 +24,21 @@ const AdminPage = lazy(() =>
 const TyrLayout = lazy(() =>
   import('@/modules/tyr/pages/TyrLayout').then(m => ({ default: m.TyrLayout }))
 );
+const SagasView = lazy(() =>
+  import('@/modules/tyr/pages/SagasView').then(m => ({ default: m.SagasView }))
+);
+const SagaDetailView = lazy(() =>
+  import('@/modules/tyr/pages/DetailView').then(m => ({ default: m.DetailView }))
+);
+const NewSagaView = lazy(() =>
+  import('@/modules/tyr/pages/NewSagaView').then(m => ({ default: m.NewSagaView }))
+);
+const DispatcherView = lazy(() =>
+  import('@/modules/tyr/pages/DispatcherView').then(m => ({ default: m.DispatcherView }))
+);
+const TyrSessionsView = lazy(() =>
+  import('@/modules/tyr/pages/SessionsView').then(m => ({ default: m.SessionsView }))
+);
 
 function PageLoader() {
   return (
@@ -43,7 +58,14 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Navigate to="/volundr" replace />} />
           <Route path="/volundr" element={<VolundrPage />} />
-          <Route path="/tyr/*" element={<TyrLayout />} />
+          <Route path="/tyr" element={<TyrLayout />}>
+            <Route index element={<Navigate to="sagas" replace />} />
+            <Route path="sagas" element={<SagasView />} />
+            <Route path="sagas/:id" element={<SagaDetailView />} />
+            <Route path="new" element={<NewSagaView />} />
+            <Route path="dispatcher" element={<DispatcherView />} />
+            <Route path="sessions" element={<TyrSessionsView />} />
+          </Route>
           <Route path="/settings" element={<SettingsPage service={volundrService} />} />
           <Route path="/admin" element={<AdminPage service={volundrService} />} />
           <Route path="/integrations" element={<Navigate to="/settings" replace />} />

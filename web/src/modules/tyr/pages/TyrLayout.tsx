@@ -1,31 +1,39 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { ScrollText, PlusCircle, Radio, Monitor } from 'lucide-react';
 import { cn } from '@/modules/shared/utils/classnames';
 import styles from './TyrLayout.module.css';
 
-const tabs = [
-  { to: '/tyr/sagas', label: 'Sagas' },
-  { to: '/tyr/new', label: 'New Saga' },
-  { to: '/tyr/dispatcher', label: 'Dispatcher' },
-  { to: '/tyr/sessions', label: 'Sessions' },
+const navItems = [
+  { to: '/tyr/sagas', label: 'Sagas', icon: ScrollText },
+  { to: '/tyr/new', label: 'New Saga', icon: PlusCircle },
+  { to: '/tyr/dispatcher', label: 'Dispatcher', icon: Radio },
+  { to: '/tyr/sessions', label: 'Sessions', icon: Monitor },
 ];
 
 export function TyrLayout() {
   return (
     <div className={styles.layout}>
-      <nav className={styles.tabBar}>
-        {tabs.map(tab => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            className={({ isActive }) => cn(styles.tab, isActive && styles.tabActive)}
-          >
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className={styles.content}>
+      <aside className={styles.sidebar}>
+        <h2 className={styles.title}>Tyr</h2>
+        <nav className={styles.nav}>
+          {navItems.map(item => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => cn(styles.navItem, isActive && styles.navItemActive)}
+              >
+                <Icon className={styles.navIcon} />
+                {item.label}
+              </NavLink>
+            );
+          })}
+        </nav>
+      </aside>
+      <main className={styles.content}>
         <Outlet />
-      </div>
+      </main>
     </div>
   );
 }

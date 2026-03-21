@@ -1703,66 +1703,7 @@ describe('VolundrPage', () => {
     });
   });
 
-  describe('Settings navigation', () => {
-    it('renders settings button and navigates on click', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      const settingsButton = screen.getByText('Settings');
-      expect(settingsButton).toBeInTheDocument();
-      fireEvent.click(settingsButton);
-    });
-  });
-
-  describe('Admin navigation', () => {
-    it('does not render admin button when not admin', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-      vi.mocked(useIdentity).mockReturnValue({
-        identity: null,
-        isAdmin: false,
-        loading: false,
-        error: null,
-      });
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      expect(screen.queryByText('Admin')).not.toBeInTheDocument();
-    });
-
-    it('renders admin button when user is admin', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-      vi.mocked(useIdentity).mockReturnValue({
-        identity: {
-          userId: 'u-1',
-          email: 'admin@test.com',
-          tenantId: 't-1',
-          roles: ['volundr:admin'],
-          displayName: 'Admin',
-          status: 'active',
-        },
-        isAdmin: true,
-        loading: false,
-        error: null,
-      });
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByText('Admin')).toBeInTheDocument();
-    });
-  });
+  // Settings and Admin navigation moved to AppShell sidebar (NIU-212)
 
   describe('Empty state New Session button', () => {
     it('opens launch wizard from empty main panel', () => {
