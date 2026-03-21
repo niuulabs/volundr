@@ -1,7 +1,8 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Settings, Shield } from 'lucide-react';
+import { Settings, Shield, LogOut } from 'lucide-react';
 import { getProductModules } from '@/modules/shared/registry';
 import { cn } from '@/modules/shared/utils/classnames';
+import { useAuth } from '@/auth';
 import styles from './Sidebar.module.css';
 
 export interface SidebarProps {
@@ -11,6 +12,7 @@ export interface SidebarProps {
 export function Sidebar({ isAdmin = false }: SidebarProps) {
   const location = useLocation();
   const productModules = getProductModules();
+  const { enabled: authEnabled, logout } = useAuth();
 
   return (
     <nav className={styles.sidebar} aria-label="Main navigation">
@@ -58,6 +60,14 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
             <Shield className={styles.navIcon} />
           </NavLink>
         )}
+
+        {authEnabled && (
+          <button type="button" className={styles.navItem} data-tooltip="Sign out" onClick={logout}>
+            <LogOut className={styles.navIcon} />
+          </button>
+        )}
+
+        <div className={styles.version}>{__APP_VERSION__}</div>
       </div>
     </nav>
   );

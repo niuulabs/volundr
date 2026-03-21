@@ -88,3 +88,27 @@
 .navItem:hover::after {
   opacity: 1;
 }
+
+/* ── Logout button reset ── */
+
+button.navItem {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* ── Version tag ── */
+
+.version {
+  width: 48px;
+  padding: var(--space-1) 0;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
