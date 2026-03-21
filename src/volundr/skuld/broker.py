@@ -1367,6 +1367,11 @@ broker = Broker()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    # Attach JWT redaction filter after uvicorn has configured its loggers
+    _redact_filter = _TokenRedactFilter()
+    for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        logging.getLogger(name).addFilter(_redact_filter)
+
     await broker.startup()
     yield
     await broker.shutdown()
@@ -1875,10 +1880,6 @@ class _TokenRedactFilter(logging.Filter):
 def main() -> None:
     """Run the broker server."""
     import uvicorn
-
-    # Redact JWTs from uvicorn protocol logs
-    for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
-        logging.getLogger(name).addFilter(_TokenRedactFilter())
 
     settings = SkuldSettings()
     logger.info("Starting Skuld broker on %s:%d", settings.host, settings.port)
