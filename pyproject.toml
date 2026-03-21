@@ -50,6 +50,7 @@ dev = [
 volundr = "volundr.main:main"
 skuld = "volundr.skuld.broker:main"
 bifrost = "volundr.bifrost.__main__:main"
+tyr = "tyr.main:main"
 
 [project.urls]
 Homepage = "https://github.com/niuulabs/volundr"
@@ -62,7 +63,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/volundr"]
+packages = ["src/volundr", "src/tyr"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
