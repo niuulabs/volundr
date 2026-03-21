@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 
-from volundr.domain.models import Principal, SessionEvent, SessionEventType
+from volundr.domain.models import SessionEvent, SessionEventType
 from volundr.domain.ports import SessionEventRepository
 from volundr.domain.services.event_ingestion import EventIngestionService
 from volundr.domain.services.session import SessionAccessDeniedError, SessionService
@@ -170,27 +170,15 @@ def create_events_router(
     """Create FastAPI router for event pipeline endpoints."""
     router = APIRouter(prefix="/api/v1/volundr")
 
-    async def _optional_principal(request: Request) -> Principal | None:
-        """Extract principal if identity is configured, else return None."""
-        identity = getattr(request.app.state, "identity", None)
-        if identity is None:
-            return None
-        from volundr.adapters.inbound.auth import extract_principal
-
-        try:
-            return await extract_principal(request)
-        except HTTPException:
-            return None
-
     async def _check_event_access(
         request: Request, session_id: UUID, action: str = "emit_event"
     ) -> None:
         """Check that the caller is authorized to emit events for a session."""
         if session_service is None:
             return
-        principal = await _optional_principal(request)
-        if principal is None:
-            return
+        from volundr.adapters.inbound.auth import extract_principal
+
+        principal = await extract_principal(request)
         session = await session_service.get_session(session_id)
         if session is None:
             return

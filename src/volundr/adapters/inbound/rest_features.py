@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # ── Response / request models ──────────────────────────────────────
 
+
 class FeatureModuleResponse(BaseModel):
     """A single feature module in the catalog."""
 
@@ -59,6 +60,7 @@ class UserPreferencesUpdateRequest(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────
 
+
 def _module_to_response(m: FeatureModule) -> FeatureModuleResponse:
     return FeatureModuleResponse(
         key=m.key,
@@ -81,6 +83,7 @@ def _pref_to_response(p: UserFeaturePreference) -> UserFeaturePreferenceResponse
 
 
 # ── Router factory ─────────────────────────────────────────────────
+
 
 def create_features_router(feature_service: FeatureService) -> APIRouter:
     """Create the feature modules router."""
@@ -163,9 +166,7 @@ def create_features_router(feature_service: FeatureService) -> APIRouter:
             )
             for p in body.preferences
         ]
-        updated = await feature_service.update_user_preferences(
-            principal.user_id, prefs
-        )
+        updated = await feature_service.update_user_preferences(principal.user_id, prefs)
         return [_pref_to_response(p) for p in updated]
 
     return router

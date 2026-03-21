@@ -13,6 +13,7 @@ from volundr.domain.services.feature import (
 
 # ── Fake asyncpg pool for testing ──────────────────────────────────
 
+
 class FakeConnection:
     """Minimal async connection stub for feature service tests."""
 
@@ -60,15 +61,10 @@ class FakePool:
 
     async def fetch(self, query: str, *args):
         if "FROM feature_toggles" in query:
-            return [
-                {"feature_key": k, "enabled": v}
-                for k, v in self._toggles.items()
-            ]
+            return [{"feature_key": k, "enabled": v} for k, v in self._toggles.items()]
         if "FROM user_feature_preferences" in query:
             user_id = args[0]
-            rows = [
-                v for (uid, _), v in self._user_prefs.items() if uid == user_id
-            ]
+            rows = [v for (uid, _), v in self._user_prefs.items() if uid == user_id]
             rows.sort(key=lambda r: r["sort_order"])
             return rows
         return []
@@ -89,23 +85,42 @@ class FakePool:
 
 # ── Fixtures ────────────────────────────────────────────────────────
 
+
 def _default_configs() -> list[FeatureModuleConfig]:
     return [
         FeatureModuleConfig(
-            key="users", label="Users", icon="Users",
-            scope="admin", default_enabled=True, admin_only=True, order=10,
+            key="users",
+            label="Users",
+            icon="Users",
+            scope="admin",
+            default_enabled=True,
+            admin_only=True,
+            order=10,
         ),
         FeatureModuleConfig(
-            key="storage", label="Storage", icon="HardDrive",
-            scope="admin", default_enabled=True, admin_only=True, order=30,
+            key="storage",
+            label="Storage",
+            icon="HardDrive",
+            scope="admin",
+            default_enabled=True,
+            admin_only=True,
+            order=30,
         ),
         FeatureModuleConfig(
-            key="credentials", label="Credentials", icon="KeyRound",
-            scope="user", default_enabled=True, order=10,
+            key="credentials",
+            label="Credentials",
+            icon="KeyRound",
+            scope="user",
+            default_enabled=True,
+            order=10,
         ),
         FeatureModuleConfig(
-            key="appearance", label="Appearance", icon="Palette",
-            scope="user", default_enabled=True, order=40,
+            key="appearance",
+            label="Appearance",
+            icon="Palette",
+            scope="user",
+            default_enabled=True,
+            order=40,
         ),
     ]
 
@@ -121,6 +136,7 @@ def service(pool):
 
 
 # ── Catalog tests ───────────────────────────────────────────────────
+
 
 class TestFeatureCatalog:
     async def test_get_all_features(self, service):
@@ -164,6 +180,7 @@ class TestFeatureCatalog:
 
 # ── Toggle tests ────────────────────────────────────────────────────
 
+
 class TestFeatureToggle:
     async def test_set_feature_enabled(self, service, pool):
         await service.set_feature_enabled("users", False)
@@ -186,6 +203,7 @@ class TestFeatureToggle:
 
 
 # ── User preferences tests ─────────────────────────────────────────
+
 
 class TestUserPreferences:
     async def test_empty_preferences_by_default(self, service):
@@ -217,12 +235,18 @@ class TestUserPreferences:
         assert result[0].feature_key == "appearance"
 
     async def test_preferences_per_user_isolation(self, service):
-        await service.update_user_preferences("user-1", [
-            UserFeaturePreference(feature_key="credentials", visible=False, sort_order=0),
-        ])
-        await service.update_user_preferences("user-2", [
-            UserFeaturePreference(feature_key="appearance", visible=False, sort_order=0),
-        ])
+        await service.update_user_preferences(
+            "user-1",
+            [
+                UserFeaturePreference(feature_key="credentials", visible=False, sort_order=0),
+            ],
+        )
+        await service.update_user_preferences(
+            "user-2",
+            [
+                UserFeaturePreference(feature_key="appearance", visible=False, sort_order=0),
+            ],
+        )
 
         prefs1 = await service.get_user_preferences("user-1")
         prefs2 = await service.get_user_preferences("user-2")

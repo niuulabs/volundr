@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
-from volundr.adapters.inbound.auth import require_role
+from volundr.adapters.inbound.auth import extract_principal, require_role
 from volundr.domain.models import (
     Chronicle,
     ChronicleStatus,
@@ -846,8 +846,8 @@ def create_router(
 
         return principal
 
-    @router.get("/features", tags=["Features"])
-    async def get_features(request: Request) -> dict:
+    @router.get("/feature-flags", tags=["Features"])
+    async def get_feature_flags(request: Request) -> dict:
         """Return feature flags derived from server configuration.
 
         Lets the frontend adapt its UI based on what the backend supports
@@ -1901,9 +1901,9 @@ def create_router(
             )
 
         # Authorization: caller must own the session
-        principal = await _optional_principal(request)
+        principal = await extract_principal(request)
         session = await service.get_session(session_id)
-        if session is not None and principal is not None:
+        if session is not None:
             try:
                 await service._check_access(session, principal, "report_timeline")
             except SessionAccessDeniedError:

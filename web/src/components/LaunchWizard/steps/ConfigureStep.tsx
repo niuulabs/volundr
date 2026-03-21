@@ -151,9 +151,8 @@ export function ConfigureStep({
   const [clusterResources, setClusterResources] = useState<ClusterResourceInfo | null>(null);
 
   useEffect(() => {
-    service
-      .listWorkspaces('archived')
-      .then(setWorkspaces)
+    Promise.all([service.listWorkspaces('archived'), service.listWorkspaces('active')])
+      .then(([archived, active]) => setWorkspaces([...archived, ...active]))
       .catch(() => {});
     service
       .getCredentials()
@@ -973,7 +972,7 @@ export function ConfigureStep({
               <option value="">New workspace</option>
               {filteredWorkspaces.map(ws => (
                 <option key={ws.id} value={ws.id}>
-                  {workspaceLabel(ws)} ({ws.sizeGb}Gi) — archived{' '}
+                  {workspaceLabel(ws)} ({ws.sizeGb}Gi) — {ws.status}{' '}
                   {new Date(ws.archivedAt || ws.createdAt).toLocaleDateString()}
                 </option>
               ))}
@@ -988,12 +987,13 @@ export function ConfigureStep({
                     if (!e.target.checked) onChange({ workspaceId: undefined });
                   }}
                 />
-                <span>Show all archived workspaces</span>
+                <span>Show all existing workspaces</span>
               </label>
             )}
             {selectedWorkspace && (
               <div className={styles.workspaceInfo}>
-                {workspaceLabel(selectedWorkspace)} · {selectedWorkspace.sizeGb}Gi · archived{' '}
+                {workspaceLabel(selectedWorkspace)} · {selectedWorkspace.sizeGb}Gi ·{' '}
+                {selectedWorkspace.status}{' '}
                 {new Date(
                   selectedWorkspace.archivedAt || selectedWorkspace.createdAt
                 ).toLocaleDateString()}
@@ -1001,7 +1001,7 @@ export function ConfigureStep({
             )}
             {filteredWorkspaces.length === 0 && workspaces.length > 0 && !showAllWorkspaces && (
               <div className={styles.workspaceInfo}>
-                No archived workspaces match the selected repository
+                No existing workspaces match the selected repository
               </div>
             )}
           </div>
