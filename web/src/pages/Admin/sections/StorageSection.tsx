@@ -13,6 +13,16 @@ function formatDate(iso: string): string {
   });
 }
 
+function workspaceLabel(ws: VolundrWorkspace): string {
+  if (ws.sessionName) return ws.sessionName;
+  if (ws.sourceUrl) {
+    const repoName = ws.sourceUrl.replace(/.*\//, '').replace(/\.git$/, '');
+    const ref = ws.sourceRef || 'main';
+    return `${repoName} / ${ref}`;
+  }
+  return ws.pvcName;
+}
+
 type StatusFilter = 'all' | WorkspaceStatus;
 
 interface StorageSectionProps {
@@ -27,6 +37,8 @@ export function StorageSection({ service }: StorageSectionProps) {
   const [deleteTarget, setDeleteTarget] = useState<VolundrWorkspace | null>(null);
   const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
   const [settingsToggling, setSettingsToggling] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const loadWorkspaces = useCallback(async () => {
     setLoading(true);
@@ -59,7 +71,28 @@ export function StorageSection({ service }: StorageSectionProps) {
     setSettingsToggling(true);
     try {
       const updated = await service.updateAdminSettings({
-        storage: { homeEnabled: !adminSettings.storage.homeEnabled },
+        storage: {
+          ...adminSettings.storage,
+          homeEnabled: !adminSettings.storage.homeEnabled,
+        },
+      });
+      setAdminSettings(updated);
+    } finally {
+      setSettingsToggling(false);
+    }
+  }, [service, adminSettings]);
+
+  const handleToggleFileManager = useCallback(async () => {
+    if (!adminSettings) {
+      return;
+    }
+    setSettingsToggling(true);
+    try {
+      const updated = await service.updateAdminSettings({
+        storage: {
+          ...adminSettings.storage,
+          fileManagerEnabled: !adminSettings.storage.fileManagerEnabled,
+        },
       });
       setAdminSettings(updated);
     } finally {
@@ -97,6 +130,42 @@ export function StorageSection({ service }: StorageSectionProps) {
     return result;
   }, [workspaces, statusFilter, userFilter]);
 
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [statusFilter, userFilter]);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (selectedIds.size === filteredWorkspaces.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredWorkspaces.map(ws => ws.sessionId)));
+    }
+  }, [selectedIds, filteredWorkspaces]);
+
+  const handleToggleSelect = useCallback((sessionId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      await service.bulkDeleteWorkspaces(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      await loadWorkspaces();
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [selectedIds, service, loadWorkspaces]);
+
   const totalCount = workspaces.length;
   const activeCount = workspaces.filter(w => w.status === 'active').length;
   const archivedCount = workspaces.filter(w => w.status === 'archived').length;
@@ -127,6 +196,27 @@ export function StorageSection({ service }: StorageSectionProps) {
               onClick={handleToggleHomeEnabled}
               disabled={settingsToggling}
               aria-label="Toggle persistent home directories"
+            >
+              <span className={styles.toggleKnob} />
+            </button>
+          </div>
+          <div className={styles.settingRow}>
+            <div className={styles.settingInfo}>
+              <span className={styles.settingLabel}>File Manager</span>
+              <span className={styles.settingDescription}>
+                Show the Files tab in sessions, allowing users to upload, download, and manage files
+                in session workspaces and home directories.
+              </span>
+            </div>
+            <button
+              type="button"
+              className={cn(
+                styles.toggle,
+                adminSettings.storage.fileManagerEnabled && styles.toggleOn
+              )}
+              onClick={handleToggleFileManager}
+              disabled={settingsToggling}
+              aria-label="Toggle file manager"
             >
               <span className={styles.toggleKnob} />
             </button>
@@ -182,6 +272,23 @@ export function StorageSection({ service }: StorageSectionProps) {
         </select>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className={styles.bulkBar}>
+          <span className={styles.bulkBarText}>{selectedIds.size} selected</span>
+          <button
+            type="button"
+            className={cn(styles.actionButton, styles.deleteButton)}
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+          >
+            {bulkDeleting
+              ? 'Deleting...'
+              : `Delete ${selectedIds.size} workspace${selectedIds.size > 1 ? 's' : ''}`}
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       {filteredWorkspaces.length === 0 ? (
         <div className={styles.emptyState}>
@@ -192,9 +299,18 @@ export function StorageSection({ service }: StorageSectionProps) {
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className={styles.tableHeader}>
+                <input
+                  type="checkbox"
+                  className={styles.selectCheckbox}
+                  checked={
+                    filteredWorkspaces.length > 0 && selectedIds.size === filteredWorkspaces.length
+                  }
+                  onChange={handleToggleSelectAll}
+                />
+              </th>
               <th className={styles.tableHeader}>User</th>
-              <th className={styles.tableHeader}>PVC Name</th>
-              <th className={styles.tableHeader}>Session</th>
+              <th className={styles.tableHeader}>Workspace</th>
               <th className={styles.tableHeader}>Size</th>
               <th className={styles.tableHeader}>Status</th>
               <th className={styles.tableHeader}>Created</th>
@@ -203,12 +319,25 @@ export function StorageSection({ service }: StorageSectionProps) {
           </thead>
           <tbody>
             {filteredWorkspaces.map(ws => (
-              <tr key={ws.id} className={styles.tableRow}>
+              <tr
+                key={ws.id}
+                className={cn(styles.tableRow, selectedIds.has(ws.sessionId) && styles.selectedRow)}
+              >
+                <td className={styles.tableCell}>
+                  <input
+                    type="checkbox"
+                    className={styles.selectCheckbox}
+                    checked={selectedIds.has(ws.sessionId)}
+                    onChange={() => handleToggleSelect(ws.sessionId)}
+                  />
+                </td>
                 <td className={cn(styles.tableCell, styles.userCell)} title={ws.ownerId}>
                   {ws.ownerId}
                 </td>
-                <td className={cn(styles.tableCell, styles.pvcName)}>{ws.pvcName}</td>
-                <td className={cn(styles.tableCell, styles.pvcName)}>{ws.sessionId ?? '--'}</td>
+                <td className={cn(styles.tableCell, styles.workspaceCell)}>
+                  <span className={styles.workspaceLabel}>{workspaceLabel(ws)}</span>
+                  <span className={styles.workspacePvc}>{ws.pvcName}</span>
+                </td>
                 <td className={cn(styles.tableCell, styles.sizeCell)}>{ws.sizeGb} GB</td>
                 <td className={styles.tableCell}>
                   <span className={styles.statusBadge} data-status={ws.status}>
@@ -250,8 +379,8 @@ export function StorageSection({ service }: StorageSectionProps) {
         <div className={styles.confirmOverlay}>
           <div className={styles.confirmPanel}>
             <p className={styles.confirmText}>
-              Delete workspace <strong>{deleteTarget.pvcName}</strong>? This action cannot be
-              undone.
+              Delete workspace <strong>{workspaceLabel(deleteTarget)}</strong>? This action cannot
+              be undone.
             </p>
             <div className={styles.confirmActions}>
               <button

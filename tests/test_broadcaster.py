@@ -3,18 +3,24 @@
 import asyncio
 from datetime import datetime
 from decimal import Decimal
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 
 from volundr.adapters.outbound.broadcaster import InMemoryEventBroadcaster
 from volundr.domain.models import (
+    CommitSummary,
     EventType,
+    FileSummary,
     GitSource,
     RealtimeEvent,
     Session,
     SessionStatus,
     Stats,
+    TimelineEvent,
+    TimelineEventType,
+    TimelineResponse,
 )
 
 
@@ -344,3 +350,200 @@ class TestInMemoryEventBroadcaster:
 
         # Should not raise
         await broadcaster.publish_heartbeat()
+
+    @pytest.mark.asyncio
+    async def test_dead_queue_removal(self, broadcaster: InMemoryEventBroadcaster):
+        """Test that broken queues are detected and removed during publish."""
+        # Create a mock queue that raises on put_nowait
+        dead_queue: asyncio.Queue[RealtimeEvent] = MagicMock(spec=asyncio.Queue)
+        dead_queue.full.return_value = False
+        dead_queue.put_nowait.side_effect = RuntimeError("broken queue")
+
+        # Inject the dead queue directly into subscribers
+        broadcaster._subscribers.add(dead_queue)
+        assert broadcaster.subscriber_count == 1
+
+        event = RealtimeEvent(
+            type=EventType.HEARTBEAT,
+            data={},
+            timestamp=datetime.utcnow(),
+        )
+
+        # Publish should not raise, but should remove the dead queue
+        await broadcaster.publish(event)
+
+        assert broadcaster.subscriber_count == 0
+
+    @pytest.mark.asyncio
+    async def test_queue_empty_race_condition(self, broadcaster: InMemoryEventBroadcaster):
+        """Test QueueEmpty race between full() check and get_nowait()."""
+        # Create a mock queue where full() returns True but get_nowait raises QueueEmpty
+        race_queue: asyncio.Queue[RealtimeEvent] = MagicMock(spec=asyncio.Queue)
+        race_queue.full.return_value = True
+        race_queue.get_nowait.side_effect = asyncio.QueueEmpty()
+        race_queue.put_nowait.return_value = None
+
+        broadcaster._subscribers.add(race_queue)
+
+        event = RealtimeEvent(
+            type=EventType.HEARTBEAT,
+            data={},
+            timestamp=datetime.utcnow(),
+        )
+
+        # Should handle the QueueEmpty gracefully and still put the event
+        await broadcaster.publish(event)
+
+        race_queue.get_nowait.assert_called_once()
+        race_queue.put_nowait.assert_called_once_with(event)
+        # Queue should still be a subscriber (not removed)
+        assert broadcaster.subscriber_count == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_chronicle_event_all_fields(self, broadcaster: InMemoryEventBroadcaster):
+        """Test publish_chronicle_event with all optional fields populated."""
+        session_id = uuid4()
+        chronicle_id = uuid4()
+        event_id = uuid4()
+
+        timeline_event = TimelineEvent(
+            id=event_id,
+            chronicle_id=chronicle_id,
+            session_id=session_id,
+            t=42,
+            type=TimelineEventType.FILE,
+            label="src/main.py",
+            tokens=150,
+            action="modified",
+            ins=10,
+            del_=3,
+            hash="abc1234",
+            exit_code=0,
+        )
+
+        timeline = TimelineResponse(
+            events=[timeline_event],
+            files=[
+                FileSummary(path="src/main.py", status="mod", ins=10, del_=3),
+                FileSummary(path="src/utils.py", status="new", ins=25, del_=0),
+            ],
+            commits=[
+                CommitSummary(hash="abc1234", msg="fix bug", time="14:35"),
+            ],
+            token_burn=[0, 50, 100, 150],
+        )
+
+        received: list[RealtimeEvent] = []
+
+        async def collect():
+            async for e in broadcaster.subscribe():
+                received.append(e)
+                break
+
+        task = asyncio.create_task(collect())
+        await asyncio.sleep(0.01)
+
+        await broadcaster.publish_chronicle_event(session_id, timeline_event, timeline)
+
+        await asyncio.wait_for(task, timeout=1.0)
+
+        assert len(received) == 1
+        evt = received[0]
+        assert evt.type == EventType.CHRONICLE_EVENT
+        assert evt.data["session_id"] == str(session_id)
+
+        # Verify event data includes all optional fields
+        event_data = evt.data["event"]
+        assert event_data["t"] == 42
+        assert event_data["type"] == "file"
+        assert event_data["label"] == "src/main.py"
+        assert event_data["tokens"] == 150
+        assert event_data["action"] == "modified"
+        assert event_data["ins"] == 10
+        assert event_data["del"] == 3
+        assert event_data["hash"] == "abc1234"
+        assert event_data["exit"] == 0
+
+        # Verify files
+        assert len(evt.data["files"]) == 2
+        assert evt.data["files"][0] == {
+            "path": "src/main.py",
+            "status": "mod",
+            "ins": 10,
+            "del": 3,
+        }
+        assert evt.data["files"][1] == {
+            "path": "src/utils.py",
+            "status": "new",
+            "ins": 25,
+            "del": 0,
+        }
+
+        # Verify commits
+        assert len(evt.data["commits"]) == 1
+        assert evt.data["commits"][0] == {
+            "hash": "abc1234",
+            "msg": "fix bug",
+            "time": "14:35",
+        }
+
+        # Verify token_burn
+        assert evt.data["token_burn"] == [0, 50, 100, 150]
+
+    @pytest.mark.asyncio
+    async def test_publish_chronicle_event_minimal_fields(
+        self, broadcaster: InMemoryEventBroadcaster
+    ):
+        """Test publish_chronicle_event with only required fields (no optional)."""
+        session_id = uuid4()
+
+        timeline_event = TimelineEvent(
+            id=uuid4(),
+            chronicle_id=uuid4(),
+            session_id=session_id,
+            t=0,
+            type=TimelineEventType.SESSION,
+            label="session started",
+        )
+
+        timeline = TimelineResponse(
+            events=[timeline_event],
+            files=[],
+            commits=[],
+            token_burn=[],
+        )
+
+        received: list[RealtimeEvent] = []
+
+        async def collect():
+            async for e in broadcaster.subscribe():
+                received.append(e)
+                break
+
+        task = asyncio.create_task(collect())
+        await asyncio.sleep(0.01)
+
+        await broadcaster.publish_chronicle_event(session_id, timeline_event, timeline)
+
+        await asyncio.wait_for(task, timeout=1.0)
+
+        assert len(received) == 1
+        evt = received[0]
+        assert evt.type == EventType.CHRONICLE_EVENT
+
+        # Verify event data has only required fields (no optional keys)
+        event_data = evt.data["event"]
+        assert event_data["t"] == 0
+        assert event_data["type"] == "session"
+        assert event_data["label"] == "session started"
+        assert "tokens" not in event_data
+        assert "action" not in event_data
+        assert "ins" not in event_data
+        assert "del" not in event_data
+        assert "hash" not in event_data
+        assert "exit" not in event_data
+
+        # Verify empty lists
+        assert evt.data["files"] == []
+        assert evt.data["commits"] == []
+        assert evt.data["token_burn"] == []

@@ -25,7 +25,7 @@ export interface ApiClient {
   get<T>(endpoint: string): Promise<T>;
   post<T>(endpoint: string, body?: unknown): Promise<T>;
   put<T>(endpoint: string, body: unknown): Promise<T>;
-  delete<T>(endpoint: string): Promise<T>;
+  delete<T>(endpoint: string, body?: unknown): Promise<T>;
 }
 
 /**
@@ -114,8 +114,13 @@ export function createApiClient(basePath: string): ApiClient {
       });
     },
 
-    delete<T>(endpoint: string): Promise<T> {
-      return request<T>(endpoint, { method: 'DELETE' });
+    delete<T>(endpoint: string, body?: unknown): Promise<T> {
+      const opts: RequestInit = { method: 'DELETE' };
+      if (body !== undefined) {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
+      }
+      return request<T>(endpoint, opts);
     },
   };
 }

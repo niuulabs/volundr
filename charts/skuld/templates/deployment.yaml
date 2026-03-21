@@ -16,6 +16,10 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       {{- if .Values.session.name }}
       hostname: {{ .Values.session.name | lower | trunc 63 | trimSuffix "-" | quote }}
@@ -34,6 +38,9 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccountName }}
+      serviceAccountName: {{ .Values.serviceAccountName | quote }}
       {{- end }}
       # Allow time for chronicle summary generation during graceful shutdown
       terminationGracePeriodSeconds: 30
@@ -256,11 +263,20 @@ spec:
               readOnly: true
             {{- end }}
             {{- end }}
+            {{- if .Values.secretManifest }}
+            - name: secret-manifest
+              mountPath: /run/secrets/manifest.json
+              subPath: manifest.json
+              readOnly: true
+            {{- end }}
+            {{- range .Values.extraVolumeMounts }}
+            - {{- toYaml . | nindent 14 }}
+            {{- end }}
         {{- if .Values.reh.enabled }}
         # VS Code REH (Remote Extension Host) server — headless WebSocket-only
         # backend for the VS Code workbench hosted in Hliðskjálf.
         - name: vscode-reh
-          image: "{{ .Values.reh.image.repository }}:{{ .Values.reh.image.tag }}"
+          image: "{{ .Values.reh.image.repository }}:{{ if and .Values.global .Values.global.image .Values.global.image.tag }}{{ .Values.global.image.tag }}{{ else }}{{ .Values.reh.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.reh.image.pullPolicy }}
           securityContext:
             runAsUser: {{ .Values.securityContext.runAsUser }}
@@ -304,11 +320,20 @@ spec:
             - name: home
               mountPath: {{ .Values.homeVolume.mountPath }}
             {{- end }}
+            {{- if .Values.secretManifest }}
+            - name: secret-manifest
+              mountPath: /run/secrets/manifest.json
+              subPath: manifest.json
+              readOnly: true
+            {{- end }}
+            {{- range .Values.extraVolumeMounts }}
+            - {{- toYaml . | nindent 14 }}
+            {{- end }}
         {{- end }}
         {{- if .Values.localServices.enabled }}
         # Devrunner - minimal runtime for local service testing
         - name: devrunner
-          image: "{{ .Values.localServices.devrunner.image.repository }}:{{ .Values.localServices.devrunner.image.tag }}"
+          image: "{{ .Values.localServices.devrunner.image.repository }}:{{ if and .Values.global .Values.global.image .Values.global.image.tag }}{{ .Values.global.image.tag }}{{ else }}{{ .Values.localServices.devrunner.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.localServices.devrunner.image.pullPolicy }}
           securityContext:
             runAsUser: {{ .Values.securityContext.runAsUser }}
@@ -345,6 +370,15 @@ spec:
             {{- if .Values.homeVolume.enabled }}
             - name: home
               mountPath: {{ .Values.homeVolume.mountPath }}
+            {{- end }}
+            {{- if .Values.secretManifest }}
+            - name: secret-manifest
+              mountPath: /run/secrets/manifest.json
+              subPath: manifest.json
+              readOnly: true
+            {{- end }}
+            {{- range .Values.extraVolumeMounts }}
+            - {{- toYaml . | nindent 14 }}
             {{- end }}
         {{- end }}
         {{- if .Values.envoy.enabled }}
@@ -412,4 +446,12 @@ spec:
         - name: terminal-debug
           configMap:
             name: {{ include "skuld.fullname" . }}-terminal-debug
+        {{- end }}
+        {{- if .Values.secretManifest }}
+        - name: secret-manifest
+          configMap:
+            name: {{ include "skuld.fullname" . }}-secret-manifest
+        {{- end }}
+        {{- range .Values.extraVolumes }}
+        - {{- toYaml . | nindent 10 }}
         {{- end }}

@@ -7,8 +7,6 @@ import type {
   VolundrMessage,
   VolundrLog,
   SessionChronicle,
-  DiffData,
-  DiffBase,
   PullRequest,
   MergeResult,
   CIStatusValue,
@@ -16,9 +14,8 @@ import type {
   McpServerConfig,
   VolundrPreset,
   VolundrTemplate,
-  LinearIssue,
+  TrackerIssue,
   ProjectRepoMapping,
-  FileTreeEntry,
   VolundrIdentity,
   VolundrUser,
   VolundrTenant,
@@ -46,12 +43,11 @@ import {
   mockVolundrPullRequests,
   mockVolundrPresets,
   mockVolundrTemplates,
-  mockLinearIssues,
+  mockTrackerIssues,
   mockProjectRepoMappings,
   mockVolundrMcpServers,
   mockAvailableMcpServers,
   mockAvailableSecrets,
-  mockFileTree,
 } from './data';
 
 /**
@@ -124,7 +120,7 @@ export class MockVolundrService implements IVolundrService {
   }
 
   async getFeatures(): Promise<import('@/models').VolundrFeatures> {
-    return { localMountsEnabled: true };
+    return { localMountsEnabled: true, fileManagerEnabled: true };
   }
 
   async getModels(): Promise<Record<string, VolundrModel>> {
@@ -258,7 +254,7 @@ export class MockVolundrService implements IVolundrService {
     model: string;
     templateName?: string;
     taskType?: string;
-    linearIssue?: LinearIssue;
+    trackerIssue?: TrackerIssue;
     terminalRestricted?: boolean;
     credentialNames?: string[];
     integrationIds?: string[];
@@ -274,7 +270,7 @@ export class MockVolundrService implements IVolundrService {
       messageCount: 0,
       tokensUsed: 0,
       taskType: config.taskType,
-      linearIssue: config.linearIssue,
+      trackerIssue: config.trackerIssue,
     };
     this.sessions.unshift(newSession);
     this.stats.totalSessions += 1;
@@ -309,6 +305,20 @@ export class MockVolundrService implements IVolundrService {
     return { ...newSession };
   }
 
+  async updateSession(
+    sessionId: string,
+    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string }
+  ): Promise<VolundrSession> {
+    const session = this.sessions.find(s => s.id === sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    if (updates.name) session.name = updates.name;
+    if (updates.model) session.model = updates.model;
+    this.notifySubscribers();
+    return session;
+  }
+
   async stopSession(sessionId: string): Promise<void> {
     const session = this.sessions.find(s => s.id === sessionId);
     if (session && isSessionActive(session.status)) {
@@ -331,7 +341,7 @@ export class MockVolundrService implements IVolundrService {
     }
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
+  async deleteSession(sessionId: string, _cleanup: string[] = []): Promise<void> {
     const sessionIndex = this.sessions.findIndex(s => s.id === sessionId);
     if (sessionIndex === -1) {
       return;
@@ -486,107 +496,6 @@ export class MockVolundrService implements IVolundrService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async getSessionDiff(_sessionId: string, filePath: string, _base: DiffBase): Promise<DiffData> {
-    // Return realistic mock diff data based on file extension
-    const isNewFile = filePath.endsWith('.test.ts') || filePath.endsWith('.test.tsx');
-
-    if (isNewFile) {
-      return {
-        filePath,
-        hunks: [
-          {
-            oldStart: 0,
-            oldCount: 0,
-            newStart: 1,
-            newCount: 12,
-            lines: [
-              {
-                type: 'add',
-                content: "import { describe, it, expect } from 'vitest';",
-                newLine: 1,
-              },
-              {
-                type: 'add',
-                content: "import { render } from '@testing-library/react';",
-                newLine: 2,
-              },
-              { type: 'add', content: '', newLine: 3 },
-              { type: 'add', content: "describe('Component', () => {", newLine: 4 },
-              { type: 'add', content: "  it('should render', () => {", newLine: 5 },
-              { type: 'add', content: '    const { container } = render(<div />);', newLine: 6 },
-              { type: 'add', content: '    expect(container).toBeDefined();', newLine: 7 },
-              { type: 'add', content: '  });', newLine: 8 },
-              { type: 'add', content: '', newLine: 9 },
-              { type: 'add', content: "  it('should handle props', () => {", newLine: 10 },
-              { type: 'add', content: '    expect(true).toBe(true);', newLine: 11 },
-              { type: 'add', content: '  });', newLine: 12 },
-            ],
-          },
-        ],
-      };
-    }
-
-    return {
-      filePath,
-      hunks: [
-        {
-          oldStart: 1,
-          oldCount: 8,
-          newStart: 1,
-          newCount: 10,
-          lines: [
-            {
-              type: 'context',
-              content: "import { useState } from 'react';",
-              oldLine: 1,
-              newLine: 1,
-            },
-            { type: 'remove', content: "import type { Props } from './types';", oldLine: 2 },
-            { type: 'add', content: "import type { DiffViewerProps } from './types';", newLine: 2 },
-            { type: 'add', content: "import { cn } from '@/utils';", newLine: 3 },
-            { type: 'context', content: '', oldLine: 3, newLine: 4 },
-            { type: 'remove', content: 'export function Component({ data }: Props) {', oldLine: 4 },
-            {
-              type: 'add',
-              content: 'export function DiffViewer({ data, base }: DiffViewerProps) {',
-              newLine: 5,
-            },
-            {
-              type: 'context',
-              content: '  const [selected, setSelected] = useState(null);',
-              oldLine: 5,
-              newLine: 6,
-            },
-            { type: 'context', content: '', oldLine: 6, newLine: 7 },
-            { type: 'context', content: '  return (', oldLine: 7, newLine: 8 },
-          ],
-        },
-        {
-          oldStart: 15,
-          oldCount: 5,
-          newStart: 17,
-          newCount: 7,
-          lines: [
-            { type: 'context', content: '  );', oldLine: 15, newLine: 17 },
-            { type: 'context', content: '}', oldLine: 16, newLine: 18 },
-            { type: 'context', content: '', oldLine: 17, newLine: 19 },
-            { type: 'remove', content: 'export default Component;', oldLine: 18 },
-            { type: 'remove', content: '', oldLine: 19 },
-            { type: 'add', content: 'export default DiffViewer;', newLine: 20 },
-            { type: 'add', content: '', newLine: 21 },
-            {
-              type: 'add',
-              content: "export type { DiffViewerProps } from './types';",
-              newLine: 22,
-            },
-            { type: 'add', content: '', newLine: 23 },
-          ],
-        },
-      ],
-    };
-  }
-
   subscribeChronicle(
     ...[
       ,/* sessionId */
@@ -668,10 +577,9 @@ export class MockVolundrService implements IVolundrService {
     return servers.map(s => ({ ...s }));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async searchLinearIssues(query: string, _projectId?: string): Promise<LinearIssue[]> {
+  async searchTrackerIssues(query: string, _projectId?: string): Promise<TrackerIssue[]> {
     const lower = query.toLowerCase();
-    return mockLinearIssues
+    return mockTrackerIssues
       .filter(
         issue =>
           issue.identifier.toLowerCase().includes(lower) ||
@@ -685,29 +593,20 @@ export class MockVolundrService implements IVolundrService {
     return mockProjectRepoMappings.map(m => ({ ...m }));
   }
 
-  async getSessionFiles(_sessionId: string, path?: string): Promise<FileTreeEntry[]> {
-    const dirPath = path ?? '';
-    const entries = mockFileTree[dirPath];
-    if (!entries) {
-      return [];
-    }
-    return entries.map(e => ({ ...e }));
-  }
-
-  async updateLinearIssueStatus(
+  async updateTrackerIssueStatus(
     issueId: string,
-    status: LinearIssue['status']
-  ): Promise<LinearIssue> {
-    const issue = mockLinearIssues.find(i => i.id === issueId);
+    status: TrackerIssue['status']
+  ): Promise<TrackerIssue> {
+    const issue = mockTrackerIssues.find(i => i.id === issueId);
     if (!issue) {
-      throw new Error(`Linear issue ${issueId} not found`);
+      throw new Error(`Tracker issue ${issueId} not found`);
     }
     issue.status = status;
 
     // Also update any sessions that have this issue linked
     for (const session of this.sessions) {
-      if (session.linearIssue?.id === issueId) {
-        session.linearIssue = { ...issue };
+      if (session.trackerIssue?.id === issueId) {
+        session.trackerIssue = { ...issue };
       }
     }
     this.notifySubscribers();
@@ -781,7 +680,6 @@ export class MockVolundrService implements IVolundrService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deleteTenant(_id: string): Promise<void> {
     // no-op in mock
   }
@@ -815,7 +713,6 @@ export class MockVolundrService implements IVolundrService {
     return { success: true, userId: _userId, homePvc: `home-${_userId}`, errors: [] };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async reprovisionTenant(_tenantId: string): Promise<VolundrProvisioningResult[]> {
     return [
       { success: true, userId: 'user-1', homePvc: 'home-user-1', errors: [] },
@@ -872,7 +769,7 @@ export class MockVolundrService implements IVolundrService {
     {
       slug: 'linear',
       name: 'Linear',
-      description: 'Linear issue tracker',
+      description: 'Issue tracker',
       integration_type: 'issue_tracker',
       adapter: 'volundr.adapters.outbound.linear.LinearAdapter',
       icon: 'linear',
@@ -884,6 +781,8 @@ export class MockVolundrService implements IVolundrService {
         args: ['-y', '@anthropic-ai/linear-mcp-server'],
         env_from_credentials: { LINEAR_API_KEY: 'api_key' },
       },
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
     {
       slug: 'github',
@@ -903,6 +802,8 @@ export class MockVolundrService implements IVolundrService {
         args: ['-y', '@modelcontextprotocol/server-github'],
         env_from_credentials: { GITHUB_PERSONAL_ACCESS_TOKEN: 'personal_access_token' },
       },
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
     {
       slug: 'telegram',
@@ -917,6 +818,8 @@ export class MockVolundrService implements IVolundrService {
       },
       config_schema: {},
       mcp_server: null,
+      auth_type: 'api_key',
+      oauth_scopes: [],
     },
   ];
 
@@ -960,7 +863,6 @@ export class MockVolundrService implements IVolundrService {
     this.mockIntegrations = this.mockIntegrations.filter(i => i.id !== id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async testIntegration(_id: string): Promise<IntegrationTestResult> {
     return {
       success: true,
@@ -1139,12 +1041,135 @@ export class MockVolundrService implements IVolundrService {
     }
   }
 
+  async bulkDeleteWorkspaces(
+    sessionIds: string[]
+  ): Promise<{ deleted: number; failed: Array<{ session_id: string; error: string }> }> {
+    await new Promise(r => setTimeout(r, 300));
+    let deleted = 0;
+    for (const sid of sessionIds) {
+      const ws = this.mockWorkspaces.find(w => w.sessionId === sid);
+      if (ws) {
+        ws.status = 'deleted';
+        deleted++;
+      }
+    }
+    return { deleted, failed: [] };
+  }
+
   async getAdminSettings(): Promise<AdminSettings> {
-    return { storage: { homeEnabled: true } };
+    return { storage: { homeEnabled: true, fileManagerEnabled: true } };
   }
 
   async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
-    return { storage: { homeEnabled: data.storage?.homeEnabled ?? true } };
+    return {
+      storage: {
+        homeEnabled: data.storage?.homeEnabled ?? true,
+        fileManagerEnabled: data.storage?.fileManagerEnabled ?? true,
+      },
+    };
+  }
+
+  async getFeatureModules(
+    _scope?: import('@/models').FeatureScope
+  ): Promise<import('@/models').FeatureModule[]> {
+    if (_scope === 'session') {
+      return [
+        {
+          key: 'chat',
+          label: 'Chat',
+          icon: 'MessageSquare',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 10,
+        },
+        {
+          key: 'terminal',
+          label: 'Terminal',
+          icon: 'Terminal',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 20,
+        },
+        {
+          key: 'code',
+          label: 'Code',
+          icon: 'Code',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 30,
+        },
+        {
+          key: 'files',
+          label: 'Files',
+          icon: 'FolderOpen',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 40,
+        },
+        {
+          key: 'diffs',
+          label: 'Diffs',
+          icon: 'GitCompareArrows',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 50,
+        },
+        {
+          key: 'chronicles',
+          label: 'Chronicles',
+          icon: 'ScrollText',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 60,
+        },
+        {
+          key: 'logs',
+          label: 'Logs',
+          icon: 'FileText',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 70,
+        },
+      ];
+    }
+    return [];
+  }
+
+  async toggleFeature(_key: string, _enabled: boolean): Promise<import('@/models').FeatureModule> {
+    return {
+      key: _key,
+      label: _key,
+      icon: 'settings',
+      scope: 'admin',
+      enabled: _enabled,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 0,
+    };
+  }
+
+  async getUserFeaturePreferences(): Promise<import('@/models').UserFeaturePreference[]> {
+    return [];
+  }
+
+  async updateUserFeaturePreferences(
+    preferences: import('@/models').UserFeaturePreference[]
+  ): Promise<import('@/models').UserFeaturePreference[]> {
+    return preferences;
   }
 
   private notifySubscribers(): void {

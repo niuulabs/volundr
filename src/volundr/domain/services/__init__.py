@@ -7,6 +7,7 @@ Re-exports all public names for backward compatibility so that
 from __future__ import annotations
 
 from .chronicle import ChronicleNotFoundError, ChronicleService
+from .feature import FeatureModule, FeatureService, UserFeaturePreference
 from .git_workflow import ConfidenceScorer, GitWorkflowService
 from .preset import PresetDuplicateNameError, PresetNotFoundError, PresetService
 from .profile import (
@@ -49,6 +50,7 @@ __all__ = [
     "TrackerIssueNotFoundError",
     "TrackerMappingNotFoundError",
     # Services
+    "FeatureService",
     "ChronicleService",
     "ConfidenceScorer",
     "ForgeProfileService",
@@ -63,5 +65,7 @@ __all__ = [
     "TrackerService",
     "WorkspaceService",
     # Data classes
+    "FeatureModule",
+    "UserFeaturePreference",
     "ProviderInfo",
 ]

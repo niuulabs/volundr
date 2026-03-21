@@ -35,5 +35,40 @@ fi
 export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 mkdir -p "$CLAUDE_CONFIG_DIR"
 
+# Source secrets from manifest (no-op if manifest doesn't exist)
+MANIFEST="/run/secrets/manifest.json"
+SECRET_DIR="/run/secrets/user"
+if [ -f "$MANIFEST" ] && [ -d "$SECRET_DIR" ]; then
+    echo "Sourcing secrets from manifest"
+    eval "$(python3 -c "
+import json, os, sys
+manifest = json.load(open('$MANIFEST'))
+for env_var, spec in manifest.get('env', {}).items():
+    fpath = os.path.join('$SECRET_DIR', spec['file'])
+    if not os.path.exists(fpath):
+        continue
+    data = json.load(open(fpath))
+    val = data.get(spec.get('key', ''), '')
+    # Shell-escape single quotes
+    safe = val.replace(\"'\", \"'\\\\''\" )
+    print(f\"export {env_var}='{safe}'\")
+for target, spec in manifest.get('files', {}).items():
+    src = os.path.join('$SECRET_DIR', spec['file'])
+    if os.path.exists(src):
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if not os.path.exists(target):
+            os.symlink(src, target)
+")"
+fi
+
+# Source env vars rendered by Infisical Agent Injector (no-op if file doesn't exist)
+if [ -f /run/secrets/env.sh ]; then
+    echo "Sourcing Infisical agent secrets"
+    . /run/secrets/env.sh
+fi
+
+# Remove leftover Infisical agent access token (no longer needed after init)
+rm -f /home/.infisical-workdir/identity-access-token
+
 echo "=== Starting Broker Service (port 8081) ==="
 exec python -m volundr.skuld

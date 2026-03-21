@@ -249,3 +249,38 @@
 .hiddenInput {
   display: none;
 }
+
+/* ─── Mobile ─── */
+@media (max-width: 768px) {
+  .wrapper {
+    border-radius: var(--radius-lg);
+  }
+
+  .inputArea {
+    padding: var(--space-2) var(--space-3) var(--space-1);
+  }
+
+  .bottomBar {
+    padding: 0 var(--space-2) var(--space-2);
+  }
+
+  .iconBtn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sendBtn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sendIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .btnIcon {
+    width: 20px;
+    height: 20px;
+  }
+}

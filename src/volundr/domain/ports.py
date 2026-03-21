@@ -17,6 +17,7 @@ from volundr.domain.models import (
     Chronicle,
     CIStatus,
     ClusterResourceInfo,
+    CredentialMapping,
     ForgeProfile,
     GitProviderType,
     IntegrationConnection,
@@ -78,6 +79,10 @@ class SessionRepository(ABC):
     @abstractmethod
     async def get(self, session_id: UUID) -> Session | None:
         """Retrieve a session by ID. Returns None if not found."""
+
+    @abstractmethod
+    async def get_many(self, session_ids: list[UUID]) -> dict[UUID, Session]:
+        """Retrieve multiple sessions by ID. Returns a dict mapping ID to Session."""
 
     @abstractmethod
     async def list(
@@ -1208,8 +1213,9 @@ class SecretMountStrategy(ABC):
 class SecretInjectionPort(ABC):
     """Port for generating pod spec additions for secret injection.
 
-    Adapters return pod spec fragments that tell the orchestrator
-    how to configure the CSI driver. Volundr never sees secret values.
+    Adapters return pod spec fragments (annotations, volumes, mounts) that
+    configure how secrets are injected into session pods.  Volundr never
+    sees secret values in production.
     """
 
     @abstractmethod
@@ -1221,12 +1227,32 @@ class SecretInjectionPort(ABC):
         """Return pod spec contributions for secret injection."""
 
     @abstractmethod
+    async def ensure_secret_provider_class(
+        self,
+        user_id: str,
+        credential_mappings: list[CredentialMapping],
+        session_id: str | None = None,
+    ) -> None:
+        """Create or update backend resources to mount the given credentials.
+
+        Each ``CredentialMapping`` describes a credential and how its fields
+        should be rendered (as env vars, files, or both).
+
+        For agent-injector adapters this creates a ConfigMap with Go
+        templates that render credentials directly to env vars and files.
+        For file-based or in-memory adapters this is a no-op.
+        """
+
+    @abstractmethod
     async def provision_user(self, user_id: str) -> None:
         """Create backend resources for a new user."""
 
     @abstractmethod
     async def deprovision_user(self, user_id: str) -> None:
         """Clean up backend resources for a removed user."""
+
+    async def cleanup_session(self, session_id: str) -> None:
+        """Clean up per-session resources (ConfigMaps, etc.). Default no-op."""
 
 
 class ResourceProvider(ABC):

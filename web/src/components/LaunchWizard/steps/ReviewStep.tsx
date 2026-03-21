@@ -15,7 +15,7 @@ import {
   HardDrive,
 } from 'lucide-react';
 import type { VolundrModel, VolundrRepo } from '@/models';
-import { LinearIssueBadge } from '@/components';
+import { TrackerIssueBadge } from '@/components';
 import type { WizardState } from '../LaunchWizard';
 import styles from './ReviewStep.module.css';
 
@@ -88,10 +88,10 @@ export function ReviewStep({ state, repos, models }: ReviewStepProps) {
               {state.template.cliTool === 'claude' ? 'Claude Code' : 'Codex'}
             </span>
           </div>
-          {state.linearIssue && (
+          {state.trackerIssue && (
             <div className={styles.summaryRow}>
-              <span className={styles.summaryLabel}>Linear Issue</span>
-              <LinearIssueBadge issue={state.linearIssue} />
+              <span className={styles.summaryLabel}>Issue</span>
+              <TrackerIssueBadge issue={state.trackerIssue} />
             </div>
           )}
           {template.name && (

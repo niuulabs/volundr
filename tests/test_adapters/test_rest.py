@@ -72,6 +72,7 @@ def app(
         local_mounts = LocalMountsConfig()
 
     app.state.settings = _SettingsStub()
+    app.state.admin_settings = {}
     return app
 
 
@@ -406,6 +407,42 @@ class TestDeleteSession:
         response = client.delete(f"/api/v1/volundr/sessions/{fake_id}")
         assert response.status_code == 404
 
+    async def test_delete_session_with_cleanup_targets(
+        self, client: TestClient, service: SessionService
+    ):
+        """Deletes session with cleanup targets in request body."""
+        session = await service.create_session(
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
+        )
+
+        response = client.request(
+            "DELETE",
+            f"/api/v1/volundr/sessions/{session.id}",
+            json={"cleanup": ["workspace_storage", "chronicles"]},
+        )
+        assert response.status_code == 204
+
+    async def test_delete_session_empty_body_backwards_compatible(
+        self, client: TestClient, service: SessionService
+    ):
+        """Deletes session with empty body (backwards compatible)."""
+        session = await service.create_session(
+            "Test",
+            "claude-sonnet-4",
+            source=GitSource(
+                repo="https://github.com/org/repo",
+                branch="main",
+            ),
+        )
+
+        response = client.delete(f"/api/v1/volundr/sessions/{session.id}")
+        assert response.status_code == 204
+
 
 class TestStartSession:
     """Tests for POST /api/v1/volundr/sessions/{id}/start."""
@@ -498,12 +535,12 @@ class TestStopSession:
         assert "cannot stop" in response.json()["detail"].lower()
 
 
-class TestFeatures:
-    """Tests for GET /api/v1/volundr/features."""
+class TestFeatureFlags:
+    """Tests for GET /api/v1/volundr/feature-flags."""
 
-    def test_features_returns_local_mounts_flag(self, client: TestClient):
+    def test_feature_flags_returns_local_mounts_flag(self, client: TestClient):
         """Returns feature flags including local_mounts_enabled."""
-        response = client.get("/api/v1/volundr/features")  # prefix + /features
+        response = client.get("/api/v1/volundr/feature-flags")
         assert response.status_code == 200
         data = response.json()
         assert "local_mounts_enabled" in data

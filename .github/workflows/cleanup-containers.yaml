@@ -1,6 +1,6 @@
-# Garbage-collects dev container images (pr-* tags) older than 7 days.
+# Garbage-collects dev container images and PR Helm charts older than 2 days.
 # Runs daily at 03:00 UTC.
-name: Cleanup Dev Containers
+name: Cleanup Dev Packages
 
 on:
   schedule:
@@ -9,8 +9,8 @@ on:
 permissions: read-all
 
 jobs:
-  cleanup:
-    name: Clean stale dev images
+  cleanup-containers:
+    name: "Clean stale containers: ${{ matrix.container }}"
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -22,6 +22,7 @@ jobs:
           - skuld-codex
           - devrunner
           - volundr-web
+          - vscode-reh
     steps:
       - name: Delete stale dev container versions
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
@@ -29,7 +30,7 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const container = '${{ matrix.container }}';
-            const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
             const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
               package_type: 'container',
@@ -56,3 +57,48 @@ jobs:
               }
             }
             console.log(`Deleted ${deleted} stale versions of ${container}`);
+
+  cleanup-charts:
+    name: "Clean stale charts: ${{ matrix.chart }}"
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        chart:
+          - charts/skuld
+          - charts/volundr
+    steps:
+      - name: Delete stale PR chart versions
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const chart = '${{ matrix.chart }}';
+            const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
+            const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+              package_type: 'container',
+              package_name: chart,
+              org: owner,
+              per_page: 100,
+            }).catch(() => ({ data: [] }));
+
+            let deleted = 0;
+            for (const version of versions.data) {
+              const tags = version.metadata?.container?.tags || [];
+              const isPr = tags.some(t => t.match(/^0\.0\.0-pr\./));
+              const isOld = new Date(version.updated_at) < cutoff;
+
+              if (isPr && isOld) {
+                console.log(`Deleting ${chart}@${version.id} (tags: ${tags.join(', ')}, updated: ${version.updated_at})`);
+                await github.rest.packages.deletePackageVersionForOrg({
+                  package_type: 'container',
+                  package_name: chart,
+                  org: owner,
+                  package_version_id: version.id,
+                }).catch(e => console.log(`  Failed: ${e.message}`));
+                deleted++;
+              }
+            }
+            console.log(`Deleted ${deleted} stale versions of ${chart}`);

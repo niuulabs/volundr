@@ -12,9 +12,9 @@ global:
     # -- Global image tag override
     tag: ""
 
-# Session configuration (set by Farm ITaaS at deployment time)
+# Session configuration (set by Volundr at deployment time)
 session:
-  # -- Session identifier (UUID, set by Volundr/Farm)
+  # -- Session identifier (UUID, set by Volundr)
   id: ""
   # -- Human-readable session name
   name: ""
@@ -162,7 +162,7 @@ ingress:
     # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     # nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     # nginx.ingress.kubernetes.io/proxy-buffering: "off"
-  # -- Hostname for the session ingress (set by Farm ITaaS, e.g., session-uuid.niuu.world)
+  # -- Hostname for the session ingress (set by Volundr, e.g., session-uuid.niuu.world)
   host: ""
   # Path routing configuration (used by nginx internally)
   paths:
@@ -244,7 +244,7 @@ broker:
 
 # Volundr API (for token usage reporting back to the control plane)
 volundr:
-  # -- URL of the Volundr API service (set by FarmSessionDefinition).
+  # -- URL of the Volundr API service (set by session definition).
   # Use the -internal service to bypass Envoy JWT validation:
   #   http://volundr-internal.volundr.svc.cluster.local
   apiUrl: ""
@@ -360,6 +360,9 @@ gateway:
     allowMethods:
       - GET
       - POST
+      - PUT
+      - DELETE
+      - PATCH
       - OPTIONS
     # -- Allowed request headers
     allowHeaders:
@@ -381,6 +384,8 @@ gateway:
 # Pod configuration
 # -- Extra labels applied to session pods (e.g. volundr/owner for PVC isolation)
 podLabels: {}
+# -- Extra annotations applied to session pods (e.g. for secret injection webhooks)
+podAnnotations: {}
 # -- Node selector for scheduling
 nodeSelector: {}
 # -- Tolerations for scheduling
@@ -390,6 +395,20 @@ affinity: {}
 
 # -- Runtime class name for the pod (e.g., "nvidia", "kata", "gvisor")
 runtimeClassName: ""
+
+# -- Service account name for the pod (set by secret injection contributor)
+serviceAccountName: ""
+
+# -- Extra volumes to add to the pod (e.g., CSI secret volumes)
+extraVolumes: []
+
+# -- Extra volume mounts added to skuld, devrunner, and REH containers
+extraVolumeMounts: []
+
+# -- Secret mapping manifest for file-based credential injection.
+# Rendered into a ConfigMap and mounted at /run/secrets/manifest.json.
+# See containers/skuld/entrypoint.sh for the manifest schema.
+secretManifest: {}
 
 # Security context for the pod
 securityContext:

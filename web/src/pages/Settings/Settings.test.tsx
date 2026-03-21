@@ -5,16 +5,19 @@ import { SettingsPage } from './Settings';
 import type { IVolundrService } from '@/ports';
 import type {
   CatalogEntry,
+  FeatureModule,
   IntegrationConnection,
   SecretTypeInfo,
   StoredCredential,
 } from '@/models';
+// Ensure module registry is populated
+import '@/modules';
 
 const mockCatalog: CatalogEntry[] = [
   {
     slug: 'linear',
     name: 'Linear',
-    description: 'Linear issue tracker',
+    description: 'Issue tracker',
     integration_type: 'issue_tracker',
     adapter: 'volundr.adapters.outbound.linear.LinearAdapter',
     icon: 'linear',
@@ -29,6 +32,8 @@ const mockCatalog: CatalogEntry[] = [
       args: ['-y', '@anthropic-ai/linear-mcp-server'],
       env_from_credentials: { LINEAR_API_KEY: 'api_key' },
     },
+    auth_type: 'api_key',
+    oauth_scopes: [],
   },
   {
     slug: 'github',
@@ -40,6 +45,8 @@ const mockCatalog: CatalogEntry[] = [
     credential_schema: { required: ['token'], properties: { token: { type: 'string' } } },
     config_schema: {},
     mcp_server: null,
+    auth_type: 'api_key',
+    oauth_scopes: [],
   },
 ];
 
@@ -102,6 +109,49 @@ const mockCredentials: StoredCredential[] = [
   },
 ];
 
+const mockUserFeatures: FeatureModule[] = [
+  {
+    key: 'credentials',
+    label: 'Credentials',
+    icon: 'KeyRound',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 10,
+  },
+  {
+    key: 'workspaces',
+    label: 'Workspaces',
+    icon: 'HardDrive',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 20,
+  },
+  {
+    key: 'integrations',
+    label: 'Integrations',
+    icon: 'Link2',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 30,
+  },
+  {
+    key: 'appearance',
+    label: 'Appearance',
+    icon: 'Palette',
+    scope: 'user',
+    enabled: true,
+    defaultEnabled: true,
+    adminOnly: false,
+    order: 40,
+  },
+];
+
 function createMockService(overrides?: Partial<IVolundrService>): IVolundrService {
   return {
     getCredentials: vi.fn().mockResolvedValue([]),
@@ -127,6 +177,10 @@ function createMockService(overrides?: Partial<IVolundrService>): IVolundrServic
       updatedAt: new Date().toISOString(),
       slug: 'github',
     }),
+    getFeatureModules: vi.fn().mockResolvedValue(mockUserFeatures),
+    getUserFeaturePreferences: vi.fn().mockResolvedValue([]),
+    toggleFeature: vi.fn(),
+    updateUserFeaturePreferences: vi.fn(),
     ...overrides,
   } as unknown as IVolundrService;
 }
@@ -140,6 +194,10 @@ function renderSettings(service: IVolundrService) {
 }
 
 async function switchToIntegrationsSection() {
+  // Wait for sections to load from the feature modules API
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /integrations/i })).toBeDefined();
+  });
   const integrationsButton = screen.getByRole('button', { name: /integrations/i });
   fireEvent.click(integrationsButton);
 }
@@ -153,7 +211,9 @@ describe('SettingsPage — Credentials section', () => {
 
   it('renders page title', async () => {
     renderSettings(service);
-    expect(screen.getByText('Settings')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Settings')).toBeDefined();
+    });
   });
 
   it('shows credentials section by default', async () => {
@@ -181,7 +241,10 @@ describe('SettingsPage — Integrations section', () => {
   it('shows loading state when switching to integrations section', async () => {
     renderSettings(service);
     await switchToIntegrationsSection();
-    expect(screen.getByText('Loading integrations...')).toBeDefined();
+    // With lazy-loaded modules, the loading text appears once the component loads
+    await waitFor(() => {
+      expect(screen.getByText('Loading integrations...')).toBeDefined();
+    });
   });
 
   it('loads catalog and connections', async () => {

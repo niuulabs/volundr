@@ -1,8 +1,7 @@
-"""Integration contributor — resolves integrations into MCP servers and env vars."""
+"""Integration contributor — resolves integrations into MCP servers and secret manifest."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -15,30 +14,30 @@ from volundr.domain.ports import (
 
 if TYPE_CHECKING:
     from volundr.domain.services.integration_registry import IntegrationRegistry
-    from volundr.domain.services.user_integration import UserIntegrationService
 
 logger = logging.getLogger(__name__)
 
 
 class IntegrationContributor(SessionContributor):
     """Resolves user-selected integration connections into MCP server configs
-    and/or environment variable injections.
+    and a secret mapping manifest.
 
-    MCP integrations (those with an ``mcp_server`` spec) produce entries in
-    ``mcpServers``.  Non-MCP integrations (e.g. ``ai_provider``) produce
-    ``envSecrets`` entries so their credential values are injected as
-    container env vars.
+    The manifest tells the entrypoint which credential files to read and
+    which env vars / file symlinks to create. Volundr never sees secret
+    values in production — the CSI driver mounts credential files and
+    the entrypoint sources them.
+
+    MCP integrations produce entries in ``mcpServers`` with empty ``env``
+    dicts (MCP processes inherit env vars sourced by the entrypoint).
     """
 
     def __init__(
         self,
         *,
         integration_registry: IntegrationRegistry | None = None,
-        user_integration: UserIntegrationService | None = None,
         **_extra: object,
     ):
         self._registry = integration_registry
-        self._user_integration = user_integration
 
     @property
     def name(self) -> str:
@@ -56,50 +55,54 @@ class IntegrationContributor(SessionContributor):
             return SessionContribution()
 
         active = context.integration_connections
-
-        # Fetch all credentials concurrently via UserIntegrationService
-        if context.principal and self._user_integration:
-            cred_results = await asyncio.gather(
-                *(
-                    self._user_integration.resolve_credentials(
-                        context.principal.user_id,
-                        c.credential_name,
-                    )
-                    for c in active
-                ),
-            )
-        else:
-            cred_results = [{}] * len(active)
-
+        manifest: dict[str, Any] = {"env": {}, "files": {}}
         mcp_servers: list[dict[str, Any]] = []
-        env_secrets: list[dict[str, str]] = []
 
-        for conn, credentials in zip(active, cred_results):
-            # MCP server integration
-            server_config = self._registry.build_mcp_server_config(conn, credentials)
-            if server_config is not None:
-                mcp_servers.append(server_config)
-                continue
-
-            # Non-MCP integration — check for env_from_credentials on definition
+        for conn in active:
             defn = self._registry.get_definition(conn.slug)
-            if defn is None or not defn.env_from_credentials:
+            if defn is None:
                 continue
 
-            for env_var, cred_field in defn.env_from_credentials.items():
-                env_secrets.append(
+            # Build manifest entries from definition's env_from_credentials
+            for env_var, cred_key in defn.env_from_credentials.items():
+                manifest["env"][env_var] = {
+                    "file": conn.credential_name,
+                    "key": cred_key,
+                }
+
+            # MCP server integration
+            if defn.mcp_server is not None:
+                spec = defn.mcp_server
+                # MCP env mappings go into the manifest too
+                for env_var, cred_key in spec.env_from_credentials.items():
+                    manifest["env"][env_var] = {
+                        "file": conn.credential_name,
+                        "key": cred_key,
+                    }
+                # MCP server config with empty env — sourced by entrypoint
+                mcp_servers.append(
                     {
-                        "envVar": env_var,
-                        "secretName": conn.credential_name,
-                        "secretKey": cred_field,
+                        "name": spec.name,
+                        "type": "stdio",
+                        "command": spec.command,
+                        "args": list(spec.args),
+                        "env": {},
                     }
                 )
+
+            # File mounts (e.g., Claude OAuth credentials)
+            for target_path in defn.file_mounts:
+                manifest["files"][target_path] = {
+                    "file": conn.credential_name,
+                }
 
         values: dict[str, Any] = {}
         if mcp_servers:
             values["mcpServers"] = mcp_servers
-        if env_secrets:
-            values["envSecrets"] = env_secrets
+
+        has_manifest = manifest["env"] or manifest["files"]
+        if has_manifest:
+            values["secretManifest"] = manifest
 
         if not values:
             return SessionContribution()

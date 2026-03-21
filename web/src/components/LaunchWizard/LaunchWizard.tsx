@@ -6,7 +6,7 @@ import type {
   VolundrRepo,
   VolundrModel,
   McpServerConfig,
-  LinearIssue,
+  TrackerIssue,
   SessionSource,
   MountMapping,
 } from '@/models';
@@ -25,7 +25,7 @@ export interface LaunchConfig {
   templateName?: string;
   presetId?: string;
   taskType?: string;
-  linearIssue?: LinearIssue;
+  trackerIssue?: TrackerIssue;
   terminalRestricted?: boolean;
   workspaceId?: string;
   credentialNames?: string[];
@@ -45,7 +45,7 @@ export interface WizardState {
   mountPaths: MountMapping[];
   model: string;
   taskType: string;
-  linearIssue?: LinearIssue;
+  trackerIssue?: TrackerIssue;
   workspaceId?: string;
   terminalRestricted: boolean;
   mcpServers: McpServerConfig[];
@@ -73,7 +73,7 @@ export interface LaunchWizardProps {
     preset: Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
   ) => Promise<VolundrPreset>;
   isLaunching: boolean;
-  searchLinearIssues?: (query: string) => Promise<LinearIssue[]>;
+  searchTrackerIssues?: (query: string) => Promise<TrackerIssue[]>;
 }
 
 const STEPS = ['Choose Template', 'Configure', 'Review & Launch'];
@@ -126,7 +126,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
     onLaunch,
     onSavePreset,
     isLaunching,
-    searchLinearIssues,
+    searchTrackerIssues,
   } = props;
   const [step, setStep] = useState(1);
   const [state, setState] = useState<WizardState | null>(null);
@@ -184,7 +184,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
       templateName: state.template.name || undefined,
       presetId: state.preset?.id,
       taskType: state.taskType || undefined,
-      linearIssue: state.linearIssue,
+      trackerIssue: state.trackerIssue,
       terminalRestricted: state.terminalRestricted,
       workspaceId: state.workspaceId,
       credentialNames: state.selectedCredentials.length ? state.selectedCredentials : undefined,
@@ -224,7 +224,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
             availableMcpServers={availableMcpServers}
             availableSecrets={availableSecrets}
             service={service}
-            searchLinearIssues={searchLinearIssues}
+            searchTrackerIssues={searchTrackerIssues}
             localMountsEnabled={localMountsEnabled}
             onChange={updateState}
             onSavePreset={onSavePreset}

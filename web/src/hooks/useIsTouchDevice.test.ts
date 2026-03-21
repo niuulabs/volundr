@@ -111,4 +111,22 @@ describe('useIsTouchDevice', () => {
     const { result } = renderHook(() => useIsTouchDevice(500));
     expect(result.current).toBe(false);
   });
+
+  it('detects touch via maxTouchPoints when ontouchstart is absent', () => {
+    // Remove ontouchstart from window
+    delete (window as Record<string, unknown>).ontouchstart;
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      value: 5,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'innerWidth', {
+      value: 768,
+      writable: true,
+      configurable: true,
+    });
+
+    const { result } = renderHook(() => useIsTouchDevice());
+    expect(result.current).toBe(true);
+  });
 });

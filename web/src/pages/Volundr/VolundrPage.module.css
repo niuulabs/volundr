@@ -95,45 +95,52 @@
   color: var(--color-text-faint);
 }
 
-.sidebarActions {
+.searchRow {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+.searchRow > *:last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.newSessionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-brand);
+  color: white;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--transition-fast);
+}
+
+.newSessionButton:hover {
+  background-color: color-mix(in srgb, var(--color-brand) 80%, white);
+}
+
+.newSessionIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
 }
 
-.actionRow {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.templatesButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  background-color: color-mix(in srgb, var(--color-brand) 8%, transparent);
-  color: var(--color-brand);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  font-family: var(--font-sans);
-  border: 1px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-  width: 100%;
-}
-
-.templatesButton:hover {
-  background-color: color-mix(in srgb, var(--color-brand) 15%, transparent);
-}
-
-.sidebarFilters {
-  padding: 0 var(--space-3) var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.filterRow > *:last-child {
+  flex: 1;
+  min-width: 0;
 }
 
 .sessionsList {
@@ -459,6 +466,15 @@
   gap: var(--space-2);
 }
 
+.versionTag {
+  padding: var(--space-1) var(--space-3);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-faint);
+  text-align: center;
+  user-select: all;
+}
+
 /* ─── Inline Stats (collapsed forge header) ─── */
 .inlineStats {
   display: flex;
@@ -538,16 +554,96 @@
   text-overflow: ellipsis;
 }
 
-.manualTag {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.sessionNameBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.sessionNameBtn:hover .sessionNameEditIcon {
+  opacity: 1;
+}
+
+.sessionNameEditIcon {
+  width: 12px;
+  height: 12px;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.sessionNameForm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sessionNameInput {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-2);
+  outline: none;
+  width: 200px;
+}
+
+.sessionNameInput:focus {
+  border-color: var(--color-accent-cyan);
+}
+
+.sessionNameSave {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--color-accent-emerald);
+  border-radius: var(--radius-sm);
+}
+
+.sessionNameSave:hover {
+  background: color-mix(in srgb, var(--color-accent-emerald) 15%, transparent);
+}
+
+.sessionNameIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.ticketLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--color-accent-cyan);
+  text-decoration: none;
   padding: 1px 6px;
   border-radius: var(--radius-full);
-  background-color: color-mix(in srgb, var(--color-accent-indigo) 15%, transparent);
-  color: var(--color-accent-indigo);
-  border: 1px solid color-mix(in srgb, var(--color-accent-indigo) 30%, transparent);
+  background-color: color-mix(in srgb, var(--color-accent-cyan) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-cyan) 25%, transparent);
   white-space: nowrap;
+  transition: background-color 0.15s;
+}
+
+.ticketLink:hover {
+  background-color: color-mix(in srgb, var(--color-accent-cyan) 20%, transparent);
+}
+
+.ticketLinkIcon {
+  width: 10px;
+  height: 10px;
 }
 
 .sessionBarSep {
@@ -680,28 +776,6 @@
   background-color: color-mix(in srgb, var(--color-brand) 20%, transparent);
 }
 
-.connectButton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  font-family: var(--font-sans);
-  border: 1px solid var(--color-border-subtle);
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-  flex: 1;
-  justify-content: center;
-}
-
-.connectButton:hover {
-  background-color: var(--color-bg-elevated);
-}
-
 .actionBtnIcon {
   width: 14px;
   height: 14px;
@@ -813,6 +887,29 @@
 .statusSelect:focus {
   outline: none;
   border-color: var(--color-brand);
+}
+
+.viewToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.viewToggle:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-brand);
+}
+
+.viewToggleIcon {
+  width: 14px;
+  height: 14px;
 }
 
 /* ─── Tab Bar ─── */
@@ -1141,22 +1238,6 @@
   background-color: color-mix(in srgb, var(--color-brand) 80%, white);
 }
 
-.connectSubmitButton {
-  padding: var(--space-2) var(--space-4);
-  background-color: var(--color-accent-cyan);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
-  color: white;
-  cursor: pointer;
-}
-
-.connectSubmitButton:hover {
-  background-color: color-mix(in srgb, var(--color-accent-cyan) 80%, white);
-}
-
-.connectSubmitButton:disabled,
 .createButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1207,4 +1288,138 @@
 .launchErrorDismiss:hover {
   opacity: 1;
   background-color: color-mix(in srgb, var(--color-accent-red) 10%, transparent);
+}
+
+/* ─── Mobile Top Bar (hidden on desktop) ─── */
+.mobileTopBar {
+  display: none;
+}
+
+.sidebarBackdrop {
+  display: none;
+}
+
+/* ─── Mobile (iPhone Pro: 393×852) ─── */
+@media (max-width: 768px) {
+  /* Sidebar becomes a slide-over overlay */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform var(--transition-slow);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .sidebarBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+  }
+
+  .sidebarRail {
+    display: none;
+  }
+
+  /* Mobile top bar with hamburger */
+  .mobileTopBar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border-subtle);
+    background-color: var(--color-bg-secondary);
+    flex-shrink: 0;
+  }
+
+  .menuButton {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .menuButtonIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mobileSessionName {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  /* Session bar: compact */
+  .sessionBar {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .repoInfo {
+    display: none;
+  }
+
+  .modelBadge {
+    display: none;
+  }
+
+  .sessionBarSep {
+    display: none;
+  }
+
+  /* Tab bar: horizontal scroll, icon-only */
+  .tabBar {
+    padding: var(--space-1) var(--space-2);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .tabBar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    padding: var(--space-2);
+    min-height: 44px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .tabIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .popoutButton {
+    display: none;
+  }
+
+  /* Tab content: remove padding */
+  .tabContent {
+    padding: 0;
+  }
 }

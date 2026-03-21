@@ -1,5 +1,6 @@
 """Tests for Skuld broker service."""
 
+import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from volundr.skuld.broker import (
     Broker,
     _log_buffer,
+    _TokenRedactFilter,
     app,
     broker,
 )
@@ -1762,3 +1764,104 @@ class TestPipelineEventEmission:
         assert len(pipeline_calls) == 1
         payload = pipeline_calls[0][1]["json"]
         assert payload["event_type"] == "session_start"
+
+
+class TestTokenRedactFilter:
+    """Tests for JWT redaction in log output."""
+
+    def test_redacts_access_token_in_msg(self):
+        """access_token values are replaced with [REDACTED]."""
+        f = _TokenRedactFilter()
+        record = logging.LogRecord(
+            name="uvicorn",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="WebSocket /session?access_token=eyJhbGciOiJSUzI1NiJ9.payload.sig [accepted]",
+            args=None,
+            exc_info=None,
+        )
+        f.filter(record)
+        assert "eyJ" not in record.msg
+        assert "access_token=[REDACTED]" in record.msg
+        assert "[accepted]" in record.msg
+
+    def test_leaves_messages_without_token(self):
+        """Messages without access_token are unchanged."""
+        f = _TokenRedactFilter()
+        original = "GET /api/files HTTP/1.1 200"
+        record = logging.LogRecord(
+            name="uvicorn",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=original,
+            args=None,
+            exc_info=None,
+        )
+        f.filter(record)
+        assert record.msg == original
+
+    def test_always_returns_true(self):
+        """Filter returns True (keep the record, just redact)."""
+        f = _TokenRedactFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="access_token=secret",
+            args=None,
+            exc_info=None,
+        )
+        assert f.filter(record) is True
+
+    def test_handles_non_string_msg(self):
+        """Non-string msg is left alone without error."""
+        f = _TokenRedactFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=12345,
+            args=None,
+            exc_info=None,
+        )
+        f.filter(record)
+        assert record.msg == 12345
+
+    def test_redacts_multiple_tokens_in_one_message(self):
+        """Multiple tokens in one message are all redacted."""
+        f = _TokenRedactFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="first access_token=abc123 second access_token=xyz789",
+            args=None,
+            exc_info=None,
+        )
+        f.filter(record)
+        assert record.msg == "first access_token=[REDACTED] second access_token=[REDACTED]"
+
+    def test_filter_attached_during_lifespan(self):
+        """Lifespan attaches redact filter to uvicorn loggers."""
+        import asyncio
+
+        from volundr.skuld.broker import lifespan
+
+        async def check():
+            for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+                logging.getLogger(name).filters = []
+
+            with patch.object(broker, "startup", new_callable=AsyncMock):
+                with patch.object(broker, "shutdown", new_callable=AsyncMock):
+                    async with lifespan(app):
+                        for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+                            lgr = logging.getLogger(name)
+                            has_redact = any(isinstance(f, _TokenRedactFilter) for f in lgr.filters)
+                            assert has_redact, f"{name} missing _TokenRedactFilter"
+
+        asyncio.run(check())

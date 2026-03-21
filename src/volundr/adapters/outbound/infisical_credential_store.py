@@ -1,7 +1,10 @@
 """Infisical CredentialStore adapter.
 
 Implements CredentialStorePort using the Infisical REST API.
-Stores credentials as Infisical secrets with metadata in the comment field.
+Stores each credential field as a separate Infisical secret, organized
+in folders: ``/{owner_type}s/{owner_id}/{credential_name}/{field_name}``.
+
+Metadata is stored as a separate ``__meta__`` secret in the credential folder.
 """
 
 from __future__ import annotations
@@ -18,12 +21,24 @@ from volundr.domain.ports import CredentialStorePort
 
 logger = logging.getLogger(__name__)
 
-# Timeout for Infisical HTTP requests (seconds)
 _HTTP_TIMEOUT = 30.0
+_META_KEY = "__meta__"
 
 
 class InfisicalCredentialStore(CredentialStorePort):
     """Infisical implementation of CredentialStorePort.
+
+    Stores each credential field as a separate Infisical secret so that
+    the Infisical Agent Injector can reference individual fields in Go
+    templates (e.g. ``getSecretByName(proj, env, folder, fieldName)``).
+
+    Folder layout::
+
+        /users/{user_id}/
+            {credential_name}/
+                api_key          → "sk-abc123"
+                org_id           → "org-xyz"
+                __meta__         → JSON metadata blob
 
     Constructor kwargs (from dynamic adapter config):
         site_url: Infisical server URL.
@@ -52,7 +67,6 @@ class InfisicalCredentialStore(CredentialStorePort):
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is not None:
             return self._client
-
         self._client = httpx.AsyncClient(
             base_url=self._site_url,
             timeout=_HTTP_TIMEOUT,
@@ -60,10 +74,8 @@ class InfisicalCredentialStore(CredentialStorePort):
         return self._client
 
     async def _ensure_authenticated(self) -> str:
-        """Authenticate via Universal Auth and return access token."""
         if self._access_token:
             return self._access_token
-
         client = await self._get_client()
         response = await client.post(
             "/api/v1/auth/universal-auth/login",
@@ -73,22 +85,20 @@ class InfisicalCredentialStore(CredentialStorePort):
             },
         )
         if response.status_code >= 400:
-            raise RuntimeError(f"Infisical auth failed ({response.status_code}): {response.text}")
-
-        body = response.json()
-        self._access_token = body["accessToken"]
+            raise RuntimeError(f"Infisical auth failed ({response.status_code})")
+        self._access_token = response.json()["accessToken"]
         return self._access_token
 
     async def _headers(self) -> dict[str, str]:
         token = await self._ensure_authenticated()
         return {"Authorization": f"Bearer {token}"}
 
-    def _secret_key(self, owner_type: str, owner_id: str, name: str) -> str:
-        """Build Infisical secret key from owner/name."""
-        return f"VOLUNDR__{owner_type.upper()}__{owner_id}__{name}".replace("-", "_")
+    def _credential_folder(self, owner_type: str, owner_id: str, name: str) -> str:
+        """Build folder path for a credential's fields."""
+        return f"/{owner_type}s/{owner_id}/{name}"
 
-    def _folder_path(self, owner_type: str, owner_id: str) -> str:
-        """Build Infisical folder path."""
+    def _owner_folder(self, owner_type: str, owner_id: str) -> str:
+        """Build folder path for an owner (lists all credentials)."""
         return f"/{owner_type}s/{owner_id}"
 
     async def _ensure_folder(self, folder_path: str) -> None:
@@ -96,11 +106,10 @@ class InfisicalCredentialStore(CredentialStorePort):
         client = await self._get_client()
         headers = await self._headers()
 
-        # Split path into parts and create each level
         parts = [p for p in folder_path.strip("/").split("/") if p]
         current = "/"
         for part in parts:
-            response = await client.post(
+            await client.post(
                 "/api/v1/folders",
                 headers=headers,
                 json={
@@ -111,69 +120,28 @@ class InfisicalCredentialStore(CredentialStorePort):
                 },
             )
             # 400 means folder already exists — that's fine
-            if response.status_code >= 400 and response.status_code != 400:
-                logger.warning(
-                    "Infisical folder create failed: %s %s",
-                    response.status_code,
-                    response.text,
-                )
             current = f"{current}{part}/" if current.endswith("/") else f"{current}/{part}/"
 
-    async def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-
-    async def store(
+    async def _create_or_update_secret(
         self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-        secret_type: SecretType,
-        data: dict[str, str],
-        metadata: dict | None = None,
-    ) -> StoredCredential:
+        key: str,
+        value: str,
+        folder_path: str,
+        comment: str = "",
+    ) -> None:
+        """Create or update a single Infisical secret."""
         client = await self._get_client()
         headers = await self._headers()
-        now = datetime.now(UTC)
 
-        existing = await self.get(owner_type, owner_id, name)
-        cred_id = existing.id if existing else str(uuid4())
-        created_at = existing.created_at if existing else now
-
-        secret_key = self._secret_key(owner_type, owner_id, name)
-        folder_path = self._folder_path(owner_type, owner_id)
-
-        meta_comment = json.dumps(
-            {
-                "id": cred_id,
-                "name": name,
-                "secret_type": secret_type.value,
-                "keys": list(data.keys()),
-                "metadata": metadata or {},
-                "owner_id": owner_id,
-                "owner_type": owner_type,
-                "created_at": created_at.isoformat(),
-                "updated_at": now.isoformat(),
-            }
-        )
-
-        secret_value = json.dumps(data)
-
-        # Ensure the folder path exists before creating the secret
-        await self._ensure_folder(folder_path)
-
-        # Try create first, fall back to update
         response = await client.post(
-            f"/api/v3/secrets/raw/{secret_key}",
+            f"/api/v3/secrets/raw/{key}",
             headers=headers,
             json={
                 "workspaceId": self._project_id,
                 "environment": self._environment,
                 "secretPath": folder_path,
-                "secretValue": secret_value,
-                "secretComment": meta_comment,
+                "secretValue": value,
+                "secretComment": comment,
                 "type": "shared",
             },
         )
@@ -181,122 +149,31 @@ class InfisicalCredentialStore(CredentialStorePort):
         if response.status_code == 400:
             # Secret may already exist, try update
             response = await client.patch(
-                f"/api/v3/secrets/raw/{secret_key}",
+                f"/api/v3/secrets/raw/{key}",
                 headers=headers,
                 json={
                     "workspaceId": self._project_id,
                     "environment": self._environment,
                     "secretPath": folder_path,
-                    "secretValue": secret_value,
-                    "secretComment": meta_comment,
+                    "secretValue": value,
+                    "secretComment": comment,
                     "type": "shared",
                 },
             )
 
         if response.status_code >= 400:
-            raise RuntimeError(f"Infisical store failed ({response.status_code}): {response.text}")
+            raise RuntimeError(f"Infisical secret write failed for {key} ({response.status_code})")
 
-        return StoredCredential(
-            id=cred_id,
-            name=name,
-            secret_type=secret_type,
-            keys=tuple(data.keys()),
-            metadata=metadata or {},
-            owner_id=owner_id,
-            owner_type=owner_type,
-            created_at=created_at,
-            updated_at=now,
-        )
-
-    async def _get_raw(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-    ) -> dict | None:
-        """Get raw Infisical secret response."""
+    async def _delete_secret(self, key: str, folder_path: str) -> None:
+        """Delete a single Infisical secret."""
         client = await self._get_client()
         headers = await self._headers()
-        secret_key = self._secret_key(owner_type, owner_id, name)
-        folder_path = self._folder_path(owner_type, owner_id)
 
-        response = await client.get(
-            f"/api/v3/secrets/raw/{secret_key}",
+        response = await client.request(
+            "DELETE",
+            f"/api/v3/secrets/raw/{key}",
             headers=headers,
-            params={
-                "workspaceId": self._project_id,
-                "environment": self._environment,
-                "secretPath": folder_path,
-                "type": "shared",
-            },
-        )
-
-        if response.status_code == 404:
-            return None
-        if response.status_code >= 400:
-            logger.error("Infisical get failed: %s %s", response.status_code, response.text)
-            return None
-
-        return response.json().get("secret")
-
-    async def get(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-    ) -> StoredCredential | None:
-        raw = await self._get_raw(owner_type, owner_id, name)
-        if raw is None:
-            return None
-
-        comment = raw.get("secretComment", "")
-        if not comment:
-            return None
-
-        meta = json.loads(comment)
-        return StoredCredential(
-            id=meta["id"],
-            name=meta["name"],
-            secret_type=SecretType(meta["secret_type"]),
-            keys=tuple(meta["keys"]),
-            metadata=meta.get("metadata", {}),
-            owner_id=meta["owner_id"],
-            owner_type=meta["owner_type"],
-            created_at=datetime.fromisoformat(meta["created_at"]),
-            updated_at=datetime.fromisoformat(meta["updated_at"]),
-        )
-
-    async def get_value(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-    ) -> dict[str, str] | None:
-        raw = await self._get_raw(owner_type, owner_id, name)
-        if raw is None:
-            return None
-
-        secret_value = raw.get("secretValue", "")
-        if not secret_value:
-            return None
-
-        return json.loads(secret_value)
-
-    async def delete(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-    ) -> None:
-        client = await self._get_client()
-        headers = await self._headers()
-        secret_key = self._secret_key(owner_type, owner_id, name)
-        folder_path = self._folder_path(owner_type, owner_id)
-
-        response = await client.delete(
-            f"/api/v3/secrets/raw/{secret_key}",
-            headers=headers,
-            params={
+            json={
                 "workspaceId": self._project_id,
                 "environment": self._environment,
                 "secretPath": folder_path,
@@ -305,20 +182,14 @@ class InfisicalCredentialStore(CredentialStorePort):
         )
         if response.status_code >= 400 and response.status_code != 404:
             logger.error(
-                "Infisical delete failed: %s %s",
+                "Infisical delete failed for secret (HTTP %s)",
                 response.status_code,
-                response.text,
             )
 
-    async def list(
-        self,
-        owner_type: str,
-        owner_id: str,
-        secret_type: SecretType | None = None,
-    ) -> list[StoredCredential]:
+    async def _list_secrets_in_folder(self, folder_path: str) -> list[dict]:
+        """List all secrets in a folder."""
         client = await self._get_client()
         headers = await self._headers()
-        folder_path = self._folder_path(owner_type, owner_id)
 
         response = await client.get(
             "/api/v3/secrets/raw",
@@ -332,34 +203,185 @@ class InfisicalCredentialStore(CredentialStorePort):
         if response.status_code == 404:
             return []
         if response.status_code >= 400:
-            logger.error("Infisical list failed: %s %s", response.status_code, response.text)
+            logger.error("Infisical list failed: %s", response.status_code)
             return []
 
-        secrets = response.json().get("secrets", [])
-        results: list[StoredCredential] = []
+        return response.json().get("secrets", [])
 
-        for secret in secrets:
-            comment = secret.get("secretComment", "")
-            if not comment:
-                continue
+    async def _list_subfolders(self, folder_path: str) -> list[str]:
+        """List subfolder names under a folder."""
+        client = await self._get_client()
+        headers = await self._headers()
 
-            try:
-                meta = json.loads(comment)
-            except (json.JSONDecodeError, KeyError):
-                continue
+        response = await client.get(
+            "/api/v1/folders",
+            headers=headers,
+            params={
+                "workspaceId": self._project_id,
+                "environment": self._environment,
+                "path": folder_path,
+            },
+        )
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            logger.error("Infisical folder list failed: %s", response.status_code)
+            return []
 
-            cred = StoredCredential(
-                id=meta["id"],
-                name=meta["name"],
-                secret_type=SecretType(meta["secret_type"]),
-                keys=tuple(meta["keys"]),
-                metadata=meta.get("metadata", {}),
-                owner_id=meta["owner_id"],
-                owner_type=meta["owner_type"],
-                created_at=datetime.fromisoformat(meta["created_at"]),
-                updated_at=datetime.fromisoformat(meta["updated_at"]),
+        folders = response.json().get("folders", [])
+        return [f["name"] for f in folders]
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    # ------------------------------------------------------------------
+    # CredentialStorePort implementation
+    # ------------------------------------------------------------------
+
+    async def store(
+        self,
+        owner_type: str,
+        owner_id: str,
+        name: str,
+        secret_type: SecretType,
+        data: dict[str, str],
+        metadata: dict | None = None,
+    ) -> StoredCredential:
+        now = datetime.now(UTC)
+        existing = await self.get(owner_type, owner_id, name)
+        cred_id = existing.id if existing else str(uuid4())
+        created_at = existing.created_at if existing else now
+
+        folder_path = self._credential_folder(owner_type, owner_id, name)
+        await self._ensure_folder(folder_path)
+
+        # Store each field as a separate secret
+        for field_name, field_value in data.items():
+            await self._create_or_update_secret(
+                key=field_name,
+                value=field_value,
+                folder_path=folder_path,
             )
 
+        # Store metadata as a __meta__ secret
+        meta_json = json.dumps(
+            {
+                "id": cred_id,
+                "name": name,
+                "secret_type": secret_type.value,
+                "keys": list(data.keys()),
+                "metadata": metadata or {},
+                "owner_id": owner_id,
+                "owner_type": owner_type,
+                "created_at": created_at.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+        )
+        await self._create_or_update_secret(
+            key=_META_KEY,
+            value=meta_json,
+            folder_path=folder_path,
+        )
+
+        # Clean up stale fields (fields removed on update)
+        if existing:
+            stale_keys = set(existing.keys) - set(data.keys())
+            for stale_key in stale_keys:
+                await self._delete_secret(stale_key, folder_path)
+
+        return StoredCredential(
+            id=cred_id,
+            name=name,
+            secret_type=secret_type,
+            keys=tuple(data.keys()),
+            metadata=metadata or {},
+            owner_id=owner_id,
+            owner_type=owner_type,
+            created_at=created_at,
+            updated_at=now,
+        )
+
+    async def get(
+        self,
+        owner_type: str,
+        owner_id: str,
+        name: str,
+    ) -> StoredCredential | None:
+        folder_path = self._credential_folder(owner_type, owner_id, name)
+        secrets = await self._list_secrets_in_folder(folder_path)
+
+        for secret in secrets:
+            if secret.get("secretKey") == _META_KEY:
+                return self._parse_meta(secret.get("secretValue", ""))
+
+        return None
+
+    async def get_value(
+        self,
+        owner_type: str,
+        owner_id: str,
+        name: str,
+    ) -> dict[str, str] | None:
+        folder_path = self._credential_folder(owner_type, owner_id, name)
+        secrets = await self._list_secrets_in_folder(folder_path)
+
+        if not secrets:
+            return None
+
+        result: dict[str, str] = {}
+        for secret in secrets:
+            key = secret.get("secretKey", "")
+            if key == _META_KEY:
+                continue
+            result[key] = secret.get("secretValue", "")
+
+        return result if result else None
+
+    async def delete(
+        self,
+        owner_type: str,
+        owner_id: str,
+        name: str,
+    ) -> None:
+        folder_path = self._credential_folder(owner_type, owner_id, name)
+        secrets = await self._list_secrets_in_folder(folder_path)
+
+        for secret in secrets:
+            key = secret.get("secretKey", "")
+            if key:
+                await self._delete_secret(key, folder_path)
+
+        # Delete the folder itself
+        client = await self._get_client()
+        headers = await self._headers()
+        await client.request(
+            "DELETE",
+            "/api/v1/folders",
+            headers=headers,
+            json={
+                "workspaceId": self._project_id,
+                "environment": self._environment,
+                "path": self._owner_folder(owner_type, owner_id),
+                "name": name,
+            },
+        )
+
+    async def list(
+        self,
+        owner_type: str,
+        owner_id: str,
+        secret_type: SecretType | None = None,
+    ) -> list[StoredCredential]:
+        owner_folder = self._owner_folder(owner_type, owner_id)
+        credential_names = await self._list_subfolders(owner_folder)
+
+        results: list[StoredCredential] = []
+        for cred_name in credential_names:
+            cred = await self.get(owner_type, owner_id, cred_name)
+            if cred is None:
+                continue
             if secret_type is not None and cred.secret_type != secret_type:
                 continue
             results.append(cred)
@@ -372,5 +394,26 @@ class InfisicalCredentialStore(CredentialStorePort):
             response = await client.get("/api/status")
             return response.status_code < 400
         except Exception:
-            logger.exception("Infisical health check failed")
+            logger.error("Infisical health check failed")
             return False
+
+    @staticmethod
+    def _parse_meta(meta_value: str) -> StoredCredential | None:
+        if not meta_value:
+            return None
+        try:
+            meta = json.loads(meta_value)
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+        return StoredCredential(
+            id=meta["id"],
+            name=meta["name"],
+            secret_type=SecretType(meta["secret_type"]),
+            keys=tuple(meta["keys"]),
+            metadata=meta.get("metadata", {}),
+            owner_id=meta["owner_id"],
+            owner_type=meta["owner_type"],
+            created_at=datetime.fromisoformat(meta["created_at"]),
+            updated_at=datetime.fromisoformat(meta["updated_at"]),
+        )

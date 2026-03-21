@@ -13,7 +13,7 @@ import type {
   MergeResult,
   VolundrTemplate,
   VolundrPreset,
-  LinearIssue,
+  TrackerIssue,
 } from '@/models';
 
 vi.mock('@/adapters', () => ({
@@ -29,6 +29,7 @@ vi.mock('@/adapters', () => ({
     subscribe: vi.fn(() => vi.fn()),
     subscribeStats: vi.fn(() => vi.fn()),
     startSession: vi.fn(),
+    updateSession: vi.fn(),
     stopSession: vi.fn(),
     resumeSession: vi.fn(),
     deleteSession: vi.fn(),
@@ -46,8 +47,8 @@ vi.mock('@/adapters', () => ({
     createPullRequest: vi.fn(),
     mergePullRequest: vi.fn(),
     getCIStatus: vi.fn(),
-    searchLinearIssues: vi.fn(),
-    updateLinearIssueStatus: vi.fn(),
+    searchTrackerIssues: vi.fn(),
+    updateTrackerIssueStatus: vi.fn(),
     getPresets: vi.fn(),
     getPreset: vi.fn(),
     savePreset: vi.fn(),
@@ -274,7 +275,7 @@ describe('useVolundr', () => {
       await result.current.deleteSession('session-001');
     });
 
-    expect(volundrService.deleteSession).toHaveBeenCalledWith('session-001');
+    expect(volundrService.deleteSession).toHaveBeenCalledWith('session-001', undefined);
     expect(result.current.sessions).toHaveLength(1);
     expect(result.current.sessions.find(s => s.id === 'session-001')).toBeUndefined();
   });
@@ -1396,9 +1397,9 @@ describe('useVolundr', () => {
     });
   });
 
-  describe('searchLinearIssues', () => {
+  describe('searchTrackerIssues', () => {
     it('should return issues from service', async () => {
-      const issues: LinearIssue[] = [
+      const issues: TrackerIssue[] = [
         {
           id: 'issue-1',
           identifier: 'NIU-44',
@@ -1407,7 +1408,7 @@ describe('useVolundr', () => {
           url: 'https://linear.app/issue/NIU-44',
         },
       ];
-      vi.mocked(volundrService.searchLinearIssues).mockResolvedValue(issues);
+      vi.mocked(volundrService.searchTrackerIssues).mockResolvedValue(issues);
 
       const { result } = renderHook(() => useVolundr());
 
@@ -1415,19 +1416,19 @@ describe('useVolundr', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      let returned: LinearIssue[] | undefined;
+      let returned: TrackerIssue[] | undefined;
       await act(async () => {
-        returned = await result.current.searchLinearIssues('NIU-44');
+        returned = await result.current.searchTrackerIssues('NIU-44');
       });
 
-      expect(volundrService.searchLinearIssues).toHaveBeenCalledWith('NIU-44');
+      expect(volundrService.searchTrackerIssues).toHaveBeenCalledWith('NIU-44');
       expect(returned).toEqual(issues);
     });
   });
 
-  describe('updateLinearIssueStatus', () => {
+  describe('updateTrackerIssueStatus', () => {
     it('should update issue status and update matching sessions', async () => {
-      const issue: LinearIssue = {
+      const issue: TrackerIssue = {
         id: 'issue-1',
         identifier: 'NIU-44',
         title: 'Test issue',
@@ -1438,13 +1439,13 @@ describe('useVolundr', () => {
       const sessionsWithIssue: VolundrSession[] = [
         {
           ...mockSessions[0],
-          linearIssue: { ...issue, status: 'todo' },
+          trackerIssue: { ...issue, status: 'todo' },
         },
         mockSessions[1],
       ];
 
       vi.mocked(volundrService.getSessions).mockResolvedValue(sessionsWithIssue);
-      vi.mocked(volundrService.updateLinearIssueStatus).mockResolvedValue(issue);
+      vi.mocked(volundrService.updateTrackerIssueStatus).mockResolvedValue(issue);
 
       const { result } = renderHook(() => useVolundr());
 
@@ -1453,14 +1454,14 @@ describe('useVolundr', () => {
       });
 
       await act(async () => {
-        await result.current.updateLinearIssueStatus('issue-1', 'done');
+        await result.current.updateTrackerIssueStatus('issue-1', 'done');
       });
 
-      expect(volundrService.updateLinearIssueStatus).toHaveBeenCalledWith('issue-1', 'done');
+      expect(volundrService.updateTrackerIssueStatus).toHaveBeenCalledWith('issue-1', 'done');
       // Session with matching issue should be updated
-      expect(result.current.sessions[0].linearIssue?.status).toBe('done');
+      expect(result.current.sessions[0].trackerIssue?.status).toBe('done');
       // Session without issue should be unchanged
-      expect(result.current.sessions[1].linearIssue).toBeUndefined();
+      expect(result.current.sessions[1].trackerIssue).toBeUndefined();
     });
   });
 });

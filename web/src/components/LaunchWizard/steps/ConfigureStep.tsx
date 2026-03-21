@@ -31,7 +31,7 @@ import type {
   McpServerConfig,
   McpServerType,
   CliTool,
-  LinearIssue,
+  TrackerIssue,
   RepoProvider,
   VolundrWorkspace,
   StoredCredential,
@@ -40,7 +40,7 @@ import type {
 } from '@/models';
 import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/ports';
-import { LinearIssueSearch } from '@/components';
+import { TrackerIssueSearch } from '@/components';
 import type { WizardState } from '../LaunchWizard';
 import styles from './ConfigureStep.module.css';
 
@@ -52,7 +52,7 @@ export interface ConfigureStepProps {
   availableMcpServers: McpServerConfig[];
   availableSecrets: string[];
   service: IVolundrService;
-  searchLinearIssues?: (query: string) => Promise<LinearIssue[]>;
+  searchTrackerIssues?: (query: string) => Promise<TrackerIssue[]>;
   localMountsEnabled?: boolean;
   onChange: (updates: Partial<WizardState>) => void;
   onSavePreset: (
@@ -91,6 +91,16 @@ function validateResourceInput(
   return null;
 }
 
+function workspaceLabel(ws: VolundrWorkspace): string {
+  if (ws.sessionName) return ws.sessionName;
+  if (ws.sourceUrl) {
+    const repoName = ws.sourceUrl.replace(/.*\//, '').replace(/\.git$/, '');
+    const ref = ws.sourceRef || 'main';
+    return `${repoName} / ${ref}`;
+  }
+  return ws.pvcName;
+}
+
 const CLI_TOOLS: { value: CliTool; label: string; description: string }[] = [
   { value: 'claude', label: 'Claude Code', description: 'Anthropic Claude CLI agent' },
   { value: 'codex', label: 'Codex', description: 'OpenAI Codex CLI agent' },
@@ -110,7 +120,7 @@ export function ConfigureStep({
   availableMcpServers,
   availableSecrets,
   service,
-  searchLinearIssues,
+  searchTrackerIssues,
   localMountsEnabled = false,
   onChange,
   onSavePreset,
@@ -134,15 +144,15 @@ export function ConfigureStep({
   const [customMcpEnv, setCustomMcpEnv] = useState<Record<string, string>>({});
   const [newEnvKey, setNewEnvKey] = useState('');
   const [newEnvVal, setNewEnvVal] = useState('');
+  const [showAllWorkspaces, setShowAllWorkspaces] = useState(false);
 
   const [credentials, setCredentials] = useState<StoredCredential[]>([]);
   const [integrations, setIntegrations] = useState<IntegrationConnection[]>([]);
   const [clusterResources, setClusterResources] = useState<ClusterResourceInfo | null>(null);
 
   useEffect(() => {
-    service
-      .listWorkspaces('archived')
-      .then(setWorkspaces)
+    Promise.all([service.listWorkspaces('archived'), service.listWorkspaces('active')])
+      .then(([archived, active]) => setWorkspaces([...archived, ...active]))
       .catch(() => {});
     service
       .getCredentials()
@@ -211,6 +221,19 @@ export function ConfigureStep({
   }, [credentials, availableSecrets]);
 
   const selectedWorkspace = workspaces.find(ws => ws.id === state.workspaceId);
+
+  const filteredWorkspaces = useMemo(() => {
+    if (showAllWorkspaces || !state.repo) return workspaces;
+    return workspaces.filter(ws => {
+      if (!ws.sourceUrl) return false;
+      const normalize = (url: string) =>
+        url
+          .replace(/^https?:\/\//, '')
+          .replace(/\.git$/, '')
+          .replace(/\/$/, '');
+      return normalize(ws.sourceUrl) === normalize(state.repo);
+    });
+  }, [workspaces, state.repo, showAllWorkspaces]);
 
   const currentRepo = repos.find(r => r.cloneUrl === state.repo);
   const branches = currentRepo?.branches ?? [];
@@ -393,19 +416,19 @@ export function ConfigureStep({
     }
   }, [state, onChange]);
 
-  const handleLinearSelect = useCallback(
-    (issue: LinearIssue) => {
-      const updates: Partial<WizardState> = { linearIssue: issue };
+  const handleTrackerSelect = useCallback(
+    (issue: TrackerIssue) => {
+      const updates: Partial<WizardState> = { trackerIssue: issue };
       if (!state.name) {
-        updates.name = issue.identifier;
+        updates.name = issue.identifier.toLowerCase();
       }
       onChange(updates);
     },
     [state.name, onChange]
   );
 
-  const handleLinearClear = useCallback(() => {
-    onChange({ linearIssue: undefined });
+  const handleTrackerClear = useCallback(() => {
+    onChange({ trackerIssue: undefined });
   }, [onChange]);
 
   // MCP server management
@@ -736,15 +759,15 @@ export function ConfigureStep({
           )}
         </div>
 
-        {/* Linear Issue */}
-        {searchLinearIssues && (
+        {/* Issue */}
+        {searchTrackerIssues && (
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Linear Issue</label>
-            <LinearIssueSearch
-              onSelect={handleLinearSelect}
-              onClear={handleLinearClear}
-              selectedIssue={state.linearIssue ?? null}
-              onSearch={searchLinearIssues}
+            <label className={styles.formLabel}>Issue</label>
+            <TrackerIssueSearch
+              onSelect={handleTrackerSelect}
+              onClear={handleTrackerClear}
+              selectedIssue={state.trackerIssue ?? null}
+              onSearch={searchTrackerIssues}
             />
           </div>
         )}
@@ -947,19 +970,38 @@ export function ConfigureStep({
               onChange={e => onChange({ workspaceId: e.target.value || undefined })}
             >
               <option value="">New workspace</option>
-              {workspaces.map(ws => (
+              {filteredWorkspaces.map(ws => (
                 <option key={ws.id} value={ws.id}>
-                  {ws.pvcName} ({ws.sizeGb}Gi) — archived{' '}
+                  {workspaceLabel(ws)} ({ws.sizeGb}Gi) — {ws.status}{' '}
                   {new Date(ws.archivedAt || ws.createdAt).toLocaleDateString()}
                 </option>
               ))}
             </select>
+            {state.repo && workspaces.length > 0 && (
+              <label className={styles.workspaceFilterToggle}>
+                <input
+                  type="checkbox"
+                  checked={showAllWorkspaces}
+                  onChange={e => {
+                    setShowAllWorkspaces(e.target.checked);
+                    if (!e.target.checked) onChange({ workspaceId: undefined });
+                  }}
+                />
+                <span>Show all existing workspaces</span>
+              </label>
+            )}
             {selectedWorkspace && (
               <div className={styles.workspaceInfo}>
-                PVC: {selectedWorkspace.pvcName} · {selectedWorkspace.sizeGb}Gi · archived{' '}
+                {workspaceLabel(selectedWorkspace)} · {selectedWorkspace.sizeGb}Gi ·{' '}
+                {selectedWorkspace.status}{' '}
                 {new Date(
                   selectedWorkspace.archivedAt || selectedWorkspace.createdAt
                 ).toLocaleDateString()}
+              </div>
+            )}
+            {filteredWorkspaces.length === 0 && workspaces.length > 0 && !showAllWorkspaces && (
+              <div className={styles.workspaceInfo}>
+                No existing workspaces match the selected repository
               </div>
             )}
           </div>

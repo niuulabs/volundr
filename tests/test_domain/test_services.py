@@ -10,7 +10,16 @@ from tests.conftest import (
     MockGitRegistry,
     MockPodManager,
 )
-from volundr.domain.models import GitProviderType, GitSource, RepoInfo, SessionStatus
+from volundr.adapters.outbound.k8s_storage import InMemoryStorageAdapter
+from volundr.domain.models import (
+    Chronicle,
+    ChronicleStatus,
+    CleanupTarget,
+    GitProviderType,
+    GitSource,
+    RepoInfo,
+    SessionStatus,
+)
 from volundr.domain.services import (
     RepoService,
     RepoValidationError,
@@ -247,8 +256,8 @@ class TestSessionServiceDelete:
     ):
         """Deleting a running session succeeds even if pod stop fails.
 
-        This handles the case where Farm returns an error (e.g., 500) when
-        trying to cancel a task that doesn't exist or has already been cleaned up.
+        This handles the case where the pod manager returns an error when
+        trying to stop pods that don't exist or have already been cleaned up.
         """
         service = SessionService(repository, failing_pod_manager)
         created = await service.create_session(
@@ -293,6 +302,156 @@ class TestSessionServiceDelete:
         # Verify stop was called (even though it failed)
         assert len(failing_pod_manager.stop_calls) == 1
         assert failing_pod_manager.stop_calls[0].id == created.id
+
+
+class TestSessionServiceDeleteCleanup:
+    """Tests for SessionService.delete_session with cleanup_targets."""
+
+    async def test_delete_without_cleanup_preserves_workspace(
+        self, repository: Repo, pod_manager: Pods
+    ):
+        """Default delete (no cleanup targets) does not delete workspace PVC."""
+        storage = InMemoryStorageAdapter()
+        service = SessionService(repository, pod_manager, storage=storage)
+        created = await service.create_session(
+            name="test",
+            model="claude-3-opus",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+        await storage.create_session_workspace(str(created.id), "user1", "tenant1")
+
+        result = await service.delete_session(created.id)
+
+        assert result is True
+        # Workspace PVC still exists (archived by contributor, not deleted)
+        ws = await storage.get_workspace_by_session(str(created.id))
+        assert ws is not None
+
+    async def test_delete_with_workspace_cleanup(self, repository: Repo, pod_manager: Pods):
+        """Deleting with WORKSPACE_STORAGE target removes the PVC."""
+        storage = InMemoryStorageAdapter()
+        service = SessionService(repository, pod_manager, storage=storage)
+        created = await service.create_session(
+            name="test",
+            model="claude-3-opus",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+        await storage.create_session_workspace(str(created.id), "user1", "tenant1")
+
+        result = await service.delete_session(
+            created.id,
+            cleanup_targets=[CleanupTarget.WORKSPACE_STORAGE],
+        )
+
+        assert result is True
+        ws = await storage.get_workspace_by_session(str(created.id))
+        assert ws is None
+
+    async def test_delete_with_chronicle_cleanup(
+        self, repository: Repo, pod_manager: Pods, chronicle_repository
+    ):
+        """Deleting with CHRONICLES target removes session chronicles."""
+        service = SessionService(repository, pod_manager, chronicle_repository=chronicle_repository)
+        created = await service.create_session(
+            name="test",
+            model="claude-3-opus",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+        chronicle = Chronicle(
+            session_id=created.id,
+            status=ChronicleStatus.DRAFT,
+            project="test-project",
+            repo="https://github.com/org/repo",
+            branch="main",
+            model="claude-3-opus",
+        )
+        await chronicle_repository.create(chronicle)
+
+        result = await service.delete_session(
+            created.id,
+            cleanup_targets=[CleanupTarget.CHRONICLES],
+        )
+
+        assert result is True
+        assert await chronicle_repository.get(chronicle.id) is None
+
+    async def test_delete_with_all_cleanup_targets(
+        self, repository: Repo, pod_manager: Pods, chronicle_repository
+    ):
+        """Deleting with all cleanup targets removes both workspace and chronicles."""
+        storage = InMemoryStorageAdapter()
+        service = SessionService(
+            repository,
+            pod_manager,
+            storage=storage,
+            chronicle_repository=chronicle_repository,
+        )
+        created = await service.create_session(
+            name="test",
+            model="claude-3-opus",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+        await storage.create_session_workspace(str(created.id), "user1", "tenant1")
+        chronicle = Chronicle(
+            session_id=created.id,
+            status=ChronicleStatus.DRAFT,
+            project="test-project",
+            repo="https://github.com/org/repo",
+            branch="main",
+            model="claude-3-opus",
+        )
+        await chronicle_repository.create(chronicle)
+
+        result = await service.delete_session(
+            created.id,
+            cleanup_targets=[
+                CleanupTarget.WORKSPACE_STORAGE,
+                CleanupTarget.CHRONICLES,
+            ],
+        )
+
+        assert result is True
+        assert await storage.get_workspace_by_session(str(created.id)) is None
+        assert await chronicle_repository.get(chronicle.id) is None
+
+    async def test_cleanup_failure_does_not_block_deletion(
+        self, repository: Repo, pod_manager: Pods
+    ):
+        """Cleanup failures are logged but deletion still succeeds."""
+        service = SessionService(repository, pod_manager, storage=None)
+        created = await service.create_session(
+            name="test",
+            model="claude-3-opus",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+
+        # Requesting workspace cleanup without a storage port configured
+        # should log a warning but not fail
+        result = await service.delete_session(
+            created.id,
+            cleanup_targets=[CleanupTarget.WORKSPACE_STORAGE],
+        )
+
+        assert result is True
+        assert await repository.get(created.id) is None
+
+    async def test_chronicle_cleanup_no_chronicle_exists(
+        self, repository: Repo, pod_manager: Pods, chronicle_repository
+    ):
+        """Chronicle cleanup is a no-op when no chronicle exists for the session."""
+        service = SessionService(repository, pod_manager, chronicle_repository=chronicle_repository)
+        created = await service.create_session(
+            name="test",
+            model="claude-3-opus",
+            source=GitSource(repo="https://github.com/org/repo", branch="main"),
+        )
+
+        result = await service.delete_session(
+            created.id,
+            cleanup_targets=[CleanupTarget.CHRONICLES],
+        )
+
+        assert result is True
 
 
 class TestSessionServiceStart:

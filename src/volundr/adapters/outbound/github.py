@@ -38,12 +38,16 @@ class GitHubProvider(GitProvider, GitWorkflowProvider):
         name: str,
         base_url: str,
         token: str | None = None,
-        orgs: tuple[str, ...] = (),
+        orgs: tuple[str, ...] | list[str] | str = (),
+        **_extra: object,
     ):
         self._name = name
         self._base_url = base_url.rstrip("/")
         self._token = token
-        self._orgs = orgs
+        if isinstance(orgs, str):
+            self._orgs = tuple(o.strip() for o in orgs.split(",") if o.strip())
+        else:
+            self._orgs = tuple(orgs)
         self._client: httpx.AsyncClient | None = None
         self._token_scopes_checked: bool = False
 

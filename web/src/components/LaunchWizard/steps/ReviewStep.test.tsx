@@ -129,10 +129,10 @@ describe('ReviewStep', () => {
       expect(screen.getByText('Codex')).toBeInTheDocument();
     });
 
-    it('shows linear issue badge when set', () => {
+    it('shows tracker issue badge when set', () => {
       renderStep({
         state: buildState({
-          linearIssue: {
+          trackerIssue: {
             id: '1',
             identifier: 'NIU-99',
             title: 'Test issue',

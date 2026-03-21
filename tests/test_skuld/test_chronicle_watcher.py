@@ -518,6 +518,44 @@ class TestGetHttpClient:
         assert client.headers["x-auth-roles"] == "volundr:service"
         await client.aclose()
 
+    @pytest.mark.asyncio
+    async def test_update_headers_replaces_headers(self, tmp_path):
+        watcher = ChronicleWatcher(
+            session_id="test",
+            watch_dir=tmp_path,
+            api_base_url="http://localhost:9999",
+            http_headers={"x-auth-user-id": "old"},
+        )
+        # Warm up the client
+        client_before = await watcher._get_http_client()
+        assert client_before.headers["x-auth-user-id"] == "old"
+
+        # Update headers (simulates JWT arrival)
+        watcher.update_headers({"Authorization": "Bearer new-token"})
+        assert watcher._http_client is None  # Old client cleared
+
+        # New client picks up new headers
+        client_after = await watcher._get_http_client()
+        assert client_after.headers["authorization"] == "Bearer new-token"
+        assert client_after is not client_before
+
+        await client_after.aclose()
+
+    @pytest.mark.asyncio
+    async def test_update_headers_without_existing_client(self, tmp_path):
+        watcher = ChronicleWatcher(
+            session_id="test",
+            watch_dir=tmp_path,
+            api_base_url="http://localhost:9999",
+            http_headers={"x-auth-user-id": "old"},
+        )
+        # No client created yet — should not raise
+        watcher.update_headers({"Authorization": "Bearer tok"})
+
+        client = await watcher._get_http_client()
+        assert client.headers["authorization"] == "Bearer tok"
+        await client.aclose()
+
 
 # ---------------------------------------------------------------------------
 # Polling fallback
