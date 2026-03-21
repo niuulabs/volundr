@@ -6,6 +6,3 @@ export type { MetricCardProps } from './MetricCard';
 
 export { ResourceBar } from './ResourceBar';
 export type { ResourceBarProps } from './ResourceBar';
-
-export { ChatLoadingIndicator } from './ChatLoadingIndicator';
-export type { ChatLoadingIndicatorProps } from './ChatLoadingIndicator';

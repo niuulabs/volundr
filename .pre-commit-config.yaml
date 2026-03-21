@@ -57,7 +57,7 @@ repos:
 
       - id: eslint
         name: ESLint
-        entry: bash -c 'cd web && npx eslint --fix "$@"' --
+        entry: bash -c 'cd web && npx eslint --fix "${@/#web\//}"' --
         language: system
         files: ^web/src/.*\.(ts|tsx)$
         stages: [pre-commit]

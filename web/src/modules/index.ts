@@ -17,7 +17,7 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import type { IVolundrService } from '@/ports';
-import { registerModule } from './registry';
+import { registerModule } from './shared/registry';
 
 type ModuleComponent = ComponentType<{ service: IVolundrService }>;
 
@@ -117,6 +117,6 @@ registerModule({
 });
 
 // Re-export registry utilities
-export { getModule, getAllModules, registerModule } from './registry';
-export type { ModuleEntry } from './registry';
-export { resolveIcon } from './icons';
+export { getModule, getAllModules, registerModule } from './shared/registry';
+export type { ModuleEntry } from './shared/registry';
+export { resolveIcon } from './shared/registry';

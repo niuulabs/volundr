@@ -1,2 +1,2 @@
-export { StatusBadge } from './StatusBadge';
-export type { StatusBadgeProps } from './StatusBadge';
+export { StatusBadge } from '@/modules/shared/components/StatusBadge';
+export type { StatusBadgeProps } from '@/modules/shared/components/StatusBadge';

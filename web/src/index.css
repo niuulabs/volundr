@@ -2,9 +2,9 @@
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
-@import './styles/tokens.css';
-@import './styles/typography.css';
-@import './styles/utilities.css';
+@import './modules/shared/styles/tokens.css';
+@import './modules/shared/styles/typography.css';
+@import './modules/shared/styles/utilities.css';
 
 /*
  * Map design tokens to shadcn/ui CSS variables used by assistant-ui.
