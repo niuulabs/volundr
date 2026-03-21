@@ -496,7 +496,7 @@ describe('VolundrPage', () => {
         <VolundrPage />
       </MemoryRouter>
     );
-    expect(screen.getByPlaceholderText('Search sessions...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
   });
 
   it('renders status filter dropdown', () => {
@@ -639,7 +639,7 @@ describe('VolundrPage', () => {
       </MemoryRouter>
     );
 
-    const searchInput = screen.getByPlaceholderText('Search sessions...');
+    const searchInput = screen.getByPlaceholderText('Search...');
     fireEvent.change(searchInput, { target: { value: 'printer' } });
 
     // Session name appears in both list and detail panel

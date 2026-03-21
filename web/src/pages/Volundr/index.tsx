@@ -739,13 +739,8 @@ export function VolundrPage() {
             </button>
           </div>
 
-          {/* Search + new session */}
+          {/* New session + search */}
           <div className={styles.searchRow}>
-            <SearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder="Search sessions..."
-            />
             <button
               type="button"
               className={styles.newSessionButton}
@@ -754,6 +749,7 @@ export function VolundrPage() {
             >
               <Plus className={styles.newSessionIcon} />
             </button>
+            <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search..." />
           </div>
 
           {/* Filter + view toggle */}
