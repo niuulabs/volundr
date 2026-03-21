@@ -13,6 +13,9 @@ from datetime import datetime
 from uuid import UUID
 
 from volundr.domain.models import (
+    ANNOT_WORKSPACE_NAME,
+    ANNOT_WORKSPACE_SOURCE_REF,
+    ANNOT_WORKSPACE_SOURCE_URL,
     LABEL_MANAGED_BY,
     LABEL_OWNER,
     LABEL_PVC_TYPE,
@@ -120,6 +123,7 @@ class K8sStorageAdapter(StoragePort):
     def _pvc_to_workspace(self, pvc) -> Workspace:
         """Convert a K8s PVC object to a Workspace domain model."""
         labels = pvc.metadata.labels or {}
+        annotations = pvc.metadata.annotations or {}
         session_id_str = labels.get(LABEL_SESSION_ID, "")
 
         # Parse storage size from spec
@@ -157,6 +161,9 @@ class K8sStorageAdapter(StoragePort):
             status=status,
             size_gb=size_gb,
             created_at=created_at,
+            name=annotations.get(ANNOT_WORKSPACE_NAME),
+            source_url=annotations.get(ANNOT_WORKSPACE_SOURCE_URL),
+            source_ref=annotations.get(ANNOT_WORKSPACE_SOURCE_REF),
         )
 
     async def _label_workspace(
@@ -228,11 +235,14 @@ class K8sStorageAdapter(StoragePort):
         user_id: str = "",
         tenant_id: str = "",
         workspace_gb: int | None = None,
+        name: str | None = None,
+        source_url: str | None = None,
+        source_ref: str | None = None,
     ) -> PVCRef:
         """Create a workspace PVC for a session."""
         api = await self._get_api()
         size = workspace_gb if workspace_gb is not None else self._workspace_size_gb
-        name = self._workspace_pvc_name(session_id)
+        pvc_name = self._workspace_pvc_name(session_id)
         labels = {
             LABEL_SESSION_ID: session_id,
             LABEL_PVC_TYPE: "workspace",
@@ -245,12 +255,24 @@ class K8sStorageAdapter(StoragePort):
             labels[LABEL_TENANT_ID] = tenant_id
 
         pvc = self._build_pvc_manifest(
-            name=name,
+            name=pvc_name,
             storage_gb=size,
             storage_class=self._workspace_storage_class,
             access_mode=self._workspace_access_mode,
             labels=labels,
         )
+
+        # Store workspace metadata as annotations so it persists
+        # independently of the session record.
+        annotations = {}
+        if name:
+            annotations[ANNOT_WORKSPACE_NAME] = name
+        if source_url:
+            annotations[ANNOT_WORKSPACE_SOURCE_URL] = source_url
+        if source_ref:
+            annotations[ANNOT_WORKSPACE_SOURCE_REF] = source_ref
+        if annotations:
+            pvc.metadata.annotations = annotations
 
         await api.create_namespaced_persistent_volume_claim(
             namespace=self._namespace,
@@ -258,11 +280,11 @@ class K8sStorageAdapter(StoragePort):
         )
         logger.info(
             "Created workspace PVC %s in namespace %s",
-            name,
+            pvc_name,
             self._namespace,
         )
 
-        return PVCRef(name=name, namespace=self._namespace)
+        return PVCRef(name=pvc_name, namespace=self._namespace)
 
     async def archive_session_workspace(
         self,

@@ -1061,6 +1061,9 @@ class StoragePort(ABC):
         user_id: str,
         tenant_id: str,
         workspace_gb: int | None = None,
+        name: str | None = None,
+        source_url: str | None = None,
+        source_ref: str | None = None,
     ) -> PVCRef:
         """Create a workspace PVC for a session."""
 

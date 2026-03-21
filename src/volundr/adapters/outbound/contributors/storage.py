@@ -105,10 +105,19 @@ class StorageContributor(SessionContributor):
             return (None, workspace_pvc)
 
         async def _create_workspace() -> str | None:
+            source_url = None
+            source_ref = None
+            if hasattr(session.source, "repo"):
+                source_url = session.source.repo
+            if hasattr(session.source, "branch"):
+                source_ref = session.source.branch
             ws_ref = await self._storage.create_session_workspace(
                 str(session.id),
                 session.owner_id or "",
                 session.tenant_id or "",
+                name=session.name,
+                source_url=source_url,
+                source_ref=source_ref,
             )
             return ws_ref.name if ws_ref else None
 

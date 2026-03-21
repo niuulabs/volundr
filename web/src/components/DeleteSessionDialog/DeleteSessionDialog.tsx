@@ -26,6 +26,7 @@ export interface DeleteSessionDialogProps {
   isOpen: boolean;
   sessionName: string;
   isManual: boolean;
+  isLocalStorage?: boolean;
   onConfirm: (cleanup: CleanupTarget[]) => void;
   onCancel: () => void;
 }
@@ -34,6 +35,7 @@ export const DeleteSessionDialog: FC<DeleteSessionDialogProps> = ({
   isOpen,
   sessionName,
   isManual,
+  isLocalStorage = false,
   onConfirm,
   onCancel,
 }) => {
@@ -89,21 +91,34 @@ export const DeleteSessionDialog: FC<DeleteSessionDialogProps> = ({
           <div className={styles.cleanupSection}>
             <p className={styles.cleanupHeading}>Also clean up:</p>
             <div className={styles.checkboxList}>
-              {CLEANUP_OPTIONS.map(option => (
-                <label key={option.target} className={styles.checkboxItem}>
-                  <input
-                    type="checkbox"
-                    className={styles.checkbox}
-                    checked={selected.has(option.target)}
-                    onChange={() => handleToggle(option.target)}
-                    data-testid={`cleanup-${option.target}`}
-                  />
-                  <div className={styles.checkboxContent}>
-                    <span className={styles.checkboxLabel}>{option.label}</span>
-                    <span className={styles.checkboxHint}>{option.hint}</span>
-                  </div>
-                </label>
-              ))}
+              {CLEANUP_OPTIONS.map(option => {
+                const disabled = option.target === 'workspace_storage' && isLocalStorage;
+                return (
+                  <label
+                    key={option.target}
+                    className={styles.checkboxItem}
+                    data-disabled={disabled || undefined}
+                    title={disabled ? 'Local mounted workspace — manage storage on your machine' : undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      className={styles.checkbox}
+                      checked={selected.has(option.target)}
+                      onChange={() => handleToggle(option.target)}
+                      disabled={disabled}
+                      data-testid={`cleanup-${option.target}`}
+                    />
+                    <div className={styles.checkboxContent}>
+                      <span className={styles.checkboxLabel}>{option.label}</span>
+                      <span className={styles.checkboxHint}>
+                        {disabled
+                          ? 'Local mounted workspace — manage storage on your machine.'
+                          : option.hint}
+                      </span>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
         )}

@@ -24,6 +24,9 @@ class _WorkspaceEntry:
     status: WorkspaceStatus = WorkspaceStatus.ACTIVE
     uid: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    name: str | None = None
+    source_url: str | None = None
+    source_ref: str | None = None
 
 
 class InMemoryStorageAdapter(StoragePort):
@@ -76,16 +79,22 @@ class InMemoryStorageAdapter(StoragePort):
         user_id: str = "",
         tenant_id: str = "",
         workspace_gb: int | None = None,
+        name: str | None = None,
+        source_url: str | None = None,
+        source_ref: str | None = None,
     ) -> PVCRef:
         """Create a workspace PVC for a session."""
         size = workspace_gb if workspace_gb is not None else self._workspace_size_gb
-        name = f"volundr-session-{session_id}-workspace"
-        ref = PVCRef(name=name)
+        pvc_name = f"volundr-session-{session_id}-workspace"
+        ref = PVCRef(name=pvc_name)
         self._session_workspaces[session_id] = _WorkspaceEntry(
             pvc_ref=ref,
             user_id=user_id,
             tenant_id=tenant_id,
             size_gb=size,
+            name=name,
+            source_url=source_url,
+            source_ref=source_ref,
         )
         return ref
 
@@ -138,6 +147,9 @@ class InMemoryStorageAdapter(StoragePort):
             status=entry.status,
             size_gb=entry.size_gb,
             created_at=entry.created_at,
+            name=entry.name,
+            source_url=entry.source_url,
+            source_ref=entry.source_ref,
         )
 
     async def list_workspaces(

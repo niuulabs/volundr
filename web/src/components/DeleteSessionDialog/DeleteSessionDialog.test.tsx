@@ -153,4 +153,43 @@ describe('DeleteSessionDialog', () => {
 
     expect(onCancel).toHaveBeenCalled();
   });
+
+  it('disables workspace_storage checkbox for local storage sessions', () => {
+    render(
+      <DeleteSessionDialog
+        isOpen={true}
+        sessionName="local-session"
+        isManual={false}
+        isLocalStorage={true}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+
+    const wsCheckbox = screen.getByTestId('cleanup-workspace_storage') as HTMLInputElement;
+    expect(wsCheckbox.disabled).toBe(true);
+
+    const chroniclesCheckbox = screen.getByTestId('cleanup-chronicles') as HTMLInputElement;
+    expect(chroniclesCheckbox.disabled).toBe(false);
+
+    expect(screen.getByText('Local mounted workspace — manage storage on your machine.')).toBeInTheDocument();
+  });
+
+  it('does not include disabled workspace_storage in cleanup targets', () => {
+    render(
+      <DeleteSessionDialog
+        isOpen={true}
+        sessionName="local-session"
+        isManual={false}
+        isLocalStorage={true}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('cleanup-chronicles'));
+    fireEvent.click(screen.getByTestId('delete-session-confirm'));
+
+    expect(onConfirm).toHaveBeenCalledWith(['chronicles']);
+  });
 });

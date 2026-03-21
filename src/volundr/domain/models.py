@@ -1102,6 +1102,9 @@ class Workspace:
     created_at: datetime | None = None
     archived_at: datetime | None = None
     deleted_at: datetime | None = None
+    name: str | None = None
+    source_url: str | None = None
+    source_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1122,6 +1125,11 @@ LABEL_PVC_TYPE = "volundr/pvc-type"
 LABEL_TENANT_ID = "volundr/tenant-id"
 LABEL_MANAGED_BY = "app.kubernetes.io/managed-by"
 LABEL_WORKSPACE_STATUS = "volundr/workspace-status"
+
+# Annotation keys for workspace metadata that may exceed label limits.
+ANNOT_WORKSPACE_NAME = "volundr/workspace-name"
+ANNOT_WORKSPACE_SOURCE_URL = "volundr/workspace-source-url"
+ANNOT_WORKSPACE_SOURCE_REF = "volundr/workspace-source-ref"
 
 
 @dataclass(frozen=True)

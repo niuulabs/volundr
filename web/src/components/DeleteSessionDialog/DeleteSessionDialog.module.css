@@ -69,10 +69,19 @@
   cursor: pointer;
 }
 
+.checkboxItem[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .checkbox {
   margin-top: 2px;
   accent-color: var(--color-accent-red);
   cursor: pointer;
+}
+
+.checkbox:disabled {
+  cursor: not-allowed;
 }
 
 .checkboxContent {

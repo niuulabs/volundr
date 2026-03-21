@@ -28,6 +28,9 @@ class _WorkspaceEntry:
     size_gb: int
     status: WorkspaceStatus
     created_at: datetime.datetime
+    name: str | None = None
+    source_url: str | None = None
+    source_ref: str | None = None
 
 
 class LocalStorageAdapter(StoragePort):
@@ -83,6 +86,9 @@ class LocalStorageAdapter(StoragePort):
         user_id: str = "",
         tenant_id: str = "",
         workspace_gb: int = 50,
+        name: str | None = None,
+        source_url: str | None = None,
+        source_ref: str | None = None,
     ) -> PVCRef:
         """Create a workspace directory for a session."""
         ws_path = self._workspaces_dir / session_id
@@ -98,6 +104,9 @@ class LocalStorageAdapter(StoragePort):
             size_gb=workspace_gb,
             status=WorkspaceStatus.ACTIVE,
             created_at=now,
+            name=name,
+            source_url=source_url,
+            source_ref=source_ref,
         )
         self._session_workspaces[session_id] = entry
         self._write_meta(ws_path, entry)
@@ -123,12 +132,16 @@ class LocalStorageAdapter(StoragePort):
         self,
         session_id: str,
     ) -> None:
-        """Permanently delete a session workspace directory."""
-        self._session_workspaces.pop(session_id, None)
-        ws_path = self._workspaces_dir / session_id
-        if ws_path.exists():
-            shutil.rmtree(ws_path)
-        logger.info("Deleted workspace for session %s", session_id)
+        """Refuse to delete local workspace storage.
+
+        Local workspaces are bind-mounted from the user's machine.
+        Deleting them here would destroy data the user manages
+        outside of Volundr.
+        """
+        raise RuntimeError(
+            "Cannot delete a locally mounted workspace. "
+            "Please manage storage on your machine directly."
+        )
 
     async def get_user_storage_usage(
         self,
@@ -158,7 +171,7 @@ class LocalStorageAdapter(StoragePort):
 
     def _write_meta(self, ws_path: Path, entry: _WorkspaceEntry) -> None:
         """Write workspace metadata to a sidecar JSON file."""
-        meta = {
+        meta: dict[str, object] = {
             "session_id": entry.session_id,
             "user_id": entry.user_id,
             "tenant_id": entry.tenant_id,
@@ -166,6 +179,12 @@ class LocalStorageAdapter(StoragePort):
             "size_gb": entry.size_gb,
             "created_at": entry.created_at.isoformat(),
         }
+        if entry.name:
+            meta["name"] = entry.name
+        if entry.source_url:
+            meta["source_url"] = entry.source_url
+        if entry.source_ref:
+            meta["source_ref"] = entry.source_ref
         meta_path = ws_path / _META_FILENAME
         meta_path.write_text(json.dumps(meta, indent=2))
 
@@ -198,6 +217,9 @@ class LocalStorageAdapter(StoragePort):
                 size_gb=meta.get("size_gb", 0),
                 status=WorkspaceStatus(meta.get("status", "active")),
                 created_at=datetime.datetime.fromisoformat(meta["created_at"]),
+                name=meta.get("name"),
+                source_url=meta.get("source_url"),
+                source_ref=meta.get("source_ref"),
             )
 
         # Scan home dirs to reconstruct user PVC refs
