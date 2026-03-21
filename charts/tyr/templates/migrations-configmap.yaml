@@ -1,0 +1,13 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tyr.fullname" . }}-migrations
+  labels:
+    {{- include "tyr.labels" . | nindent 4 }}
+data: {}
+  # Migration SQL files will be added by NIU-216.
+  # Pattern: one key per migration file, e.g.:
+  #   000001_initial_schema.up.sql: |
+  #     CREATE TABLE IF NOT EXISTS sagas ( ... );
+{{- end }}
