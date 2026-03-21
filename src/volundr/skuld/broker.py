@@ -1694,8 +1694,8 @@ async def delete_file(path: str, root: str = "workspace") -> dict:
     try:
         if target.is_dir():
             shutil.rmtree(target)
-        else:
-            target.unlink()
+            return {"deleted": str(target.relative_to(base))}
+        target.unlink()
     except PermissionError:
         raise HTTPException(403, "Permission denied")
 
