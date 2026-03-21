@@ -360,6 +360,9 @@ gateway:
     allowMethods:
       - GET
       - POST
+      - PUT
+      - DELETE
+      - PATCH
       - OPTIONS
     # -- Allowed request headers
     allowHeaders:
