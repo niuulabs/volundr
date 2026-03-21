@@ -1,0 +1,20 @@
+apiVersion: v2
+name: tyr
+description: "Tyr — saga coordinator for multi-session orchestration"
+type: application
+version: 0.1.0-dev1
+appVersion: "0.1.0"
+keywords:
+  - tyr
+  - saga
+  - coordinator
+  - orchestration
+  - ai
+  - kubernetes
+maintainers:
+  - name: Niuu Labs
+    url: https://github.com/niuulabs
+home: https://github.com/niuulabs/volundr
+sources:
+  - https://github.com/niuulabs/volundr
+dependencies: []
