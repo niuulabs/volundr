@@ -1,4 +1,4 @@
-// Package config manages the ~/.volundr/config.yaml configuration file.
+// Package config manages the ~/.niuu/config.yaml configuration file.
 package config
 
 import (
@@ -13,9 +13,13 @@ import (
 
 const (
 	// EnvHome is the environment variable that overrides the config directory.
-	EnvHome = "VOLUNDR_HOME"
-	// DefaultConfigDir is the default directory for volundr configuration.
-	DefaultConfigDir = ".volundr"
+	EnvHome = "NIUU_HOME"
+	// LegacyEnvHome is the deprecated environment variable (checked as fallback).
+	LegacyEnvHome = "VOLUNDR_HOME"
+	// DefaultConfigDir is the default directory for niuu configuration.
+	DefaultConfigDir = ".niuu"
+	// LegacyConfigDir is the deprecated directory (checked as fallback).
+	LegacyConfigDir = ".volundr"
 	// DefaultConfigFile is the default config file name.
 	DefaultConfigFile = "config.yaml"
 	// DefaultDBPort is the default port for embedded PostgreSQL.
@@ -117,17 +121,34 @@ type AnthropicConfig struct {
 	APIKey string `yaml:"api_key"`
 }
 
-// ConfigDir returns the path to the volundr config directory.
-// It checks VOLUNDR_HOME first, falling back to ~/.volundr.
+// ConfigDir returns the path to the niuu config directory.
+// It checks NIUU_HOME, then VOLUNDR_HOME (legacy), then ~/.niuu,
+// falling back to ~/.volundr if the new directory doesn't exist yet.
 func ConfigDir() (string, error) { //nolint:revive // used as config.ConfigDir externally
 	if dir := os.Getenv(EnvHome); dir != "" {
+		return dir, nil
+	}
+	if dir := os.Getenv(LegacyEnvHome); dir != "" {
 		return dir, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("get home directory: %w", err)
 	}
-	return filepath.Join(home, DefaultConfigDir), nil
+
+	newDir := filepath.Join(home, DefaultConfigDir)
+	if _, err := os.Stat(newDir); err == nil {
+		return newDir, nil
+	}
+
+	// Fall back to legacy path if it exists.
+	legacyDir := filepath.Join(home, LegacyConfigDir)
+	if _, err := os.Stat(legacyDir); err == nil {
+		return legacyDir, nil
+	}
+
+	// Neither exists — use the new path (will be created on first write).
+	return newDir, nil
 }
 
 // ConfigPath returns the path to the config file.

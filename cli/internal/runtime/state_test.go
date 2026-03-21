@@ -14,7 +14,7 @@ func TestCheckNotRunning_NoPIDFile(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	// Ensure the .volundr dir exists but has no PID file.
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestCheckNotRunning_StalePIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCheckNotRunning_InvalidPIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestCheckNotRunning_RunningProcess(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestWritePIDFile_RemovePIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestRemoveStateFile_NoFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestRemovePIDFile_NoFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestRemoveStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}

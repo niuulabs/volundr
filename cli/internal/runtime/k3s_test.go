@@ -274,7 +274,7 @@ func TestK3sWriteStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestK3sRuntime_Status_NoPIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestK3sRuntime_Status_PIDFileNoStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestK3sRuntime_Status_WithStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestK3sRuntime_Status_CorruptStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -474,7 +474,7 @@ func TestK3sRuntime_WriteStateFile_ExternalDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -529,7 +529,7 @@ func TestHostKubeconfigPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -718,7 +718,7 @@ func TestK3sRuntime_Logs_HostService(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	logsDir := filepath.Join(volundrDir, "logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		t.Fatalf("create logs dir: %v", err)
@@ -762,7 +762,7 @@ func TestK3sRuntime_Logs_HostServiceMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -779,7 +779,7 @@ func TestK3sRuntime_Down_Cleanup(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir) // ensure kubectl/docker not found
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -821,7 +821,7 @@ func TestK3sRuntime_WriteK3dKubeconfig(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir) // ensure k3d not found
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -873,7 +873,7 @@ func TestK3sRuntime_WriteK3dKubeconfig_0000(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -912,7 +912,7 @@ func TestK3sRuntime_WriteK3dKubeconfig_Localhost(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -950,7 +950,7 @@ func TestK3sRuntime_WriteK3dKubeconfig_NoHostKC(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir) // no k3d available
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1028,7 +1028,7 @@ func TestK3sRuntime_EnsureNamespace_Exists(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1046,7 +1046,7 @@ func TestK3sRuntime_EnsureClusterRunning_K3d(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1072,7 +1072,7 @@ func TestK3sRuntime_EnsureClusterRunning_Native(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1094,7 +1094,7 @@ func TestK3sRuntime_EnsureClusterRunning_NoProvider(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1115,7 +1115,7 @@ func TestK3sRuntime_Logs_KubeService(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1140,7 +1140,7 @@ func TestK3sRuntime_Logs_KubeServiceFollow(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1159,7 +1159,7 @@ func TestK3sRuntime_Down_WithMock(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1201,7 +1201,7 @@ func TestK3sRuntime_EnsureK8sSecrets_WithTokens(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1229,7 +1229,7 @@ func TestK3sRuntime_EnsureK8sSecrets_FallbackToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1258,7 +1258,7 @@ func TestK3sRuntime_EnsureK8sSecrets_NoSecrets(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1278,7 +1278,7 @@ func TestK3sRuntime_WriteHostKubeconfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1301,7 +1301,7 @@ func TestK3sRuntime_StartAPIContainer(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1345,7 +1345,7 @@ func TestK3sRuntime_QueryK8sPodStates_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1372,7 +1372,7 @@ func TestK3sRuntime_QueryK8sPodStates_Failure(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1578,7 +1578,7 @@ func TestOfferInstallK3dDarwin_BrewAvailable_UserAccepts(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1710,7 +1710,7 @@ func TestOfferInstallNativeK3s_AcceptSuccess(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("KUBECONFIG", filepath.Join(tmpDir, "nonexistent"))
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1774,7 +1774,7 @@ func TestEnsureNamespace_NeedCreate(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1794,7 +1794,7 @@ func TestEnsureNamespace_CreateFailAlreadyExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1867,7 +1867,7 @@ func TestInitNativeK3s_Success(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("KUBECONFIG", filepath.Join(tmpDir, "nonexistent"))
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1890,7 +1890,7 @@ func TestInitNativeK3s_ClusterNotReachable(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("KUBECONFIG", filepath.Join(tmpDir, "nonexistent"))
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1918,7 +1918,7 @@ func TestK3sRuntime_Init_K3dProvider(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1951,7 +1951,7 @@ func TestWriteHostKubeconfig_Fail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1969,7 +1969,7 @@ func TestStartAPIContainer_Fail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2000,7 +2000,7 @@ func TestOfferInstallK3dLinux_AcceptSuccess(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2055,7 +2055,7 @@ func TestK3sRuntime_Init_NoProvider(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2083,7 +2083,7 @@ func TestK3sRuntime_Init_NativeProvider(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2112,7 +2112,7 @@ func TestK3sRuntime_Init_HelmNotFound(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2148,7 +2148,7 @@ func TestInitK3d_ClusterListFail(t *testing.T) {
 	// Let's use MOCK_COMMANDS for selective responses.
 	withMockExec(t, `MOCK_COMMANDS=k3d version:::1.0.0|||cluster list:::|||cluster create:::ok|||kubeconfig get:::apiVersion: v1`)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2199,7 +2199,7 @@ func TestEnsureClusterRunning_K3dListFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2223,7 +2223,7 @@ func TestEnsureClusterRunning_NativeFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2247,7 +2247,7 @@ func TestEnsureK8sSecrets_UpsertFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2269,7 +2269,7 @@ func TestK3sRuntime_Up_AlreadyRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2305,7 +2305,7 @@ func TestK3sRuntime_Up_ExternalDB(t *testing.T) {
 		t.Fatalf("create config dir: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2360,7 +2360,7 @@ func TestK3sRuntime_Up_ClusterFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2387,7 +2387,7 @@ func TestEnsureClusterRunning_K3dClusterNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2412,7 +2412,7 @@ func TestK3sRuntime_Up_EmbeddedDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2464,7 +2464,7 @@ func TestK3sRuntime_Up_EmbeddedDB_StartFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2491,7 +2491,7 @@ func TestK3sRuntime_Up_EmbeddedDB_MigrationFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2606,7 +2606,7 @@ func TestK3sRuntime_Down_WithPostgres(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -2626,7 +2626,7 @@ func TestK3sRuntime_Down_WithPostgresStopFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}

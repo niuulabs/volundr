@@ -10,19 +10,17 @@ func TestRootCmd_HasSubcommands(t *testing.T) {
 		t.Fatal("expected root command to have subcommands")
 	}
 
+	// Top-level commands under niuu.
 	expected := map[string]bool{
-		"init":     false,
-		"up":       false,
-		"down":     false,
-		"status":   false,
-		"version":  false,
-		"tui":      false,
-		"sessions": false,
-		"config":   false,
-		"login":    false,
-		"logout":   false,
-		"whoami":   false,
-		"context":  false,
+		"volundr": false,
+		"tyr":     false,
+		"version": false,
+		"tui":     false,
+		"config":  false,
+		"login":   false,
+		"logout":  false,
+		"whoami":  false,
+		"context": false,
 	}
 
 	for _, cmd := range subcmds {
@@ -34,6 +32,29 @@ func TestRootCmd_HasSubcommands(t *testing.T) {
 	for name, found := range expected {
 		if !found {
 			t.Errorf("expected subcommand %q not found", name)
+		}
+	}
+}
+
+func TestVolundrCmd_HasSubcommands(t *testing.T) {
+	subcmds := volundrCmd.Commands()
+	expected := map[string]bool{
+		"init":     false,
+		"up":       false,
+		"down":     false,
+		"status":   false,
+		"sessions": false,
+	}
+
+	for _, cmd := range subcmds {
+		if _, ok := expected[cmd.Name()]; ok {
+			expected[cmd.Name()] = true
+		}
+	}
+
+	for name, found := range expected {
+		if !found {
+			t.Errorf("expected volundr subcommand %q not found", name)
 		}
 	}
 }
@@ -178,5 +199,20 @@ func TestConfigCmd_HasSubcommands(t *testing.T) {
 		if !found {
 			t.Errorf("expected config subcommand %q not found", name)
 		}
+	}
+}
+
+func TestTyrCmd_Properties(t *testing.T) {
+	if tyrCmd.Use != "tyr" {
+		t.Errorf("expected Use %q, got %q", "tyr", tyrCmd.Use)
+	}
+	if tyrCmd.Short == "" {
+		t.Error("expected non-empty Short description")
+	}
+}
+
+func TestRootCmd_UseName(t *testing.T) {
+	if rootCmd.Use != "niuu" {
+		t.Errorf("expected root command Use %q, got %q", "niuu", rootCmd.Use)
 	}
 }

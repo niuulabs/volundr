@@ -33,7 +33,7 @@ func TestLocalRuntime_Status_NoPIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestLocalRuntime_Status_PIDFileNoStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestLocalRuntime_Status_WithStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestLocalRuntime_Status_CorruptStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestLocalRuntime_Logs(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	logsDir := filepath.Join(volundrDir, "logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		t.Fatalf("create logs dir: %v", err)
@@ -213,7 +213,7 @@ func TestLocalRuntime_Logs_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestLocalRuntime_WriteStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestLocalRuntime_WriteStateFile_ExternalDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestLocalRuntime_Down_NoProcess(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestStatusFromStateFile_NoPIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -433,7 +433,7 @@ func TestStatusFromStateFile_StalePID(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -462,7 +462,7 @@ func TestStatusFromStateFile_RunningWithStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -501,7 +501,7 @@ func TestStatusFromStateFile_RunningNoStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -535,7 +535,7 @@ func TestStatusFromStateFile_CorruptStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestStatusFromStateFile_InvalidPID(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -610,7 +610,7 @@ func TestDownFromPID_NoPIDFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -629,7 +629,7 @@ func TestDownFromPID_InvalidPID(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -653,7 +653,7 @@ func TestDownFromPID_StalePID(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -701,7 +701,7 @@ func TestLocalRuntime_Init_CreatesDirs(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	for _, sub := range []string{"data/pg", "logs", "cache"} {
 		dir := filepath.Join(volundrDir, sub)
 		if _, err := os.Stat(dir); err != nil {
@@ -714,7 +714,7 @@ func TestLocalRuntime_Down_NoApiNoPostgres(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -746,7 +746,7 @@ func TestLocalRuntime_StartAPI(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	logsDir := filepath.Join(volundrDir, "logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		t.Fatalf("create logs dir: %v", err)
@@ -784,7 +784,7 @@ func TestLocalRuntime_StartAPI_NoLogsDir(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	// Create config dir but NOT logs dir.
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -811,7 +811,7 @@ func TestLocalRuntime_WriteStateFile_WithAPICmd(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	logsDir := filepath.Join(volundrDir, "logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		t.Fatalf("create logs dir: %v", err)
@@ -866,7 +866,7 @@ func TestDownFromPID_ReadError(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -896,7 +896,7 @@ func TestLocalRuntime_Down_WithApiCmd(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	logsDir := filepath.Join(volundrDir, "logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		t.Fatalf("create logs dir: %v", err)
@@ -948,7 +948,7 @@ func TestLocalRuntime_Up_AlreadyRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -972,7 +972,7 @@ func TestLocalRuntime_Up_ExternalDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	logsDir := filepath.Join(volundrDir, "logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		t.Fatalf("create logs dir: %v", err)
@@ -1035,7 +1035,7 @@ func TestLocalRuntime_Init_ExternalDB(t *testing.T) {
 	}
 
 	// Verify directories were created.
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	for _, sub := range []string{"data/pg", "logs", "cache"} {
 		dir := filepath.Join(volundrDir, sub)
 		if _, err := os.Stat(dir); err != nil {
@@ -1048,7 +1048,7 @@ func TestDownFromPID_SuccessPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1143,7 +1143,7 @@ func TestLocalRuntime_Up_EmbeddedDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	logsDir := filepath.Join(volundrDir, "logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		t.Fatalf("create logs dir: %v", err)
@@ -1207,7 +1207,7 @@ func TestLocalRuntime_Up_EmbeddedDB_StartFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1234,7 +1234,7 @@ func TestLocalRuntime_Up_EmbeddedDB_MigrationFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1274,7 +1274,7 @@ func TestLocalRuntime_Down_WithPostgres(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1292,7 +1292,7 @@ func TestLocalRuntime_Down_WithPostgresStopFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1314,7 +1314,7 @@ func TestLocalRuntime_Up_StartAPIFail(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	// Create config dir but NOT logs dir, so startAPI fails.
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1419,7 +1419,7 @@ func TestDownFromPID_SuccessWithRunningProcess(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}

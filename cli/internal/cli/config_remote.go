@@ -16,7 +16,7 @@ func init() {
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage CLI configuration",
-	Long: `Manage CLI configuration stored in ~/.config/volundr/config.yaml.
+	Long: `Manage CLI configuration stored in ~/.config/niuu/config.yaml.
 
 Global keys: theme
 Context keys (require --context): server, token, issuer, client-id`,

@@ -288,14 +288,14 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           VERSION="${{ needs.tag.outputs.version }}"
-          BINARY="volundr-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BINARY="niuu-${{ matrix.goos }}-${{ matrix.goarch }}"
           go build -tags embed_web \
             -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=${VERSION}" \
-            -o "dist/${BINARY}" ./cmd/volundr
+            -o "dist/${BINARY}" ./cmd/niuu
 
       - name: Upload artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
-          name: volundr-dev-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: cli/dist/volundr-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: niuu-dev-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: cli/dist/niuu-${{ matrix.goos }}-${{ matrix.goarch }}
           retention-days: 14

@@ -541,7 +541,7 @@ func TestDockerRuntime_Status_NoDocker(t *testing.T) {
 	// Ensure docker command can't be found.
 	t.Setenv("PATH", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestDockerRuntime_Status_WithStateFile(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -626,7 +626,7 @@ func TestDockerRuntime_Down_NoComposeFile(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -648,7 +648,7 @@ func TestDockerRuntime_Down_WithComposeFile(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PATH", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestDockerRuntime_Status_ContainerRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -770,7 +770,7 @@ func TestDockerRuntime_Status_WithStateFileMerge(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -816,7 +816,7 @@ func TestDockerRuntime_Status_CorruptStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -877,7 +877,7 @@ func TestDockerRuntime_Down_SuccessWithMock(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -981,7 +981,7 @@ func TestDockerRuntime_Down_NetworkNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1001,7 +1001,7 @@ func TestDockerRuntime_Up_ExternalDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1060,7 +1060,7 @@ func TestDockerRuntime_Up_AlreadyRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1087,7 +1087,7 @@ func TestDockerRuntime_Up_ComposeUpFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1128,7 +1128,7 @@ func TestDockerRuntime_Up_NetworkFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1273,7 +1273,7 @@ func TestDockerRuntime_Up_EmbeddedDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1329,7 +1329,7 @@ func TestDockerRuntime_Up_EmbeddedDB_StartFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1356,7 +1356,7 @@ func TestDockerRuntime_Up_EmbeddedDB_MigrationFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1396,7 +1396,7 @@ func TestDockerRuntime_Down_WithPostgres(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}
@@ -1416,7 +1416,7 @@ func TestDockerRuntime_Down_WithPostgresStopFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
-	volundrDir := filepath.Join(tmpDir, ".volundr")
+	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
 	}

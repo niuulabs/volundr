@@ -29,7 +29,7 @@ func init() {
 func runUp(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("load config (run 'volundr init' first): %w", err)
+		return fmt.Errorf("load config (run 'niuu volundr init' first): %w", err)
 	}
 
 	if runtimeFlag != "" {
@@ -41,8 +41,17 @@ func runUp(_ *cobra.Command, _ []string) error {
 	}
 
 	// Load credentials and inject API key into config if available.
+	// Try the current passphrase first, then fall back to the legacy one.
 	machineKey := machinePassphrase()
 	creds, err := config.LoadCredentials(machineKey)
+	if err != nil {
+		legacyKey := legacyMachinePassphrase()
+		creds, err = config.LoadCredentials(legacyKey)
+		if err == nil {
+			fmt.Println("Warning: credentials were encrypted with the legacy passphrase.")
+			fmt.Println("Run 'niuu volundr init' to re-encrypt with the new key.")
+		}
+	}
 	if err == nil && creds.AnthropicAPIKey != "" && cfg.Anthropic.APIKey == "" {
 		cfg.Anthropic.APIKey = creds.AnthropicAPIKey
 	}

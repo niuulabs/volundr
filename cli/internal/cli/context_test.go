@@ -18,9 +18,11 @@ func setupTestConfig(t *testing.T, cfg *remote.Config) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("NIUU_HOME", "")
+	t.Setenv("VOLUNDR_HOME", "")
 
 	if cfg != nil {
-		configDir := filepath.Join(tmpDir, ".config", "volundr")
+		configDir := filepath.Join(tmpDir, ".config", "niuu")
 		if err := os.MkdirAll(configDir, 0o750); err != nil { //nolint:gosec // test directory
 			t.Fatalf("mkdir: %v", err)
 		}

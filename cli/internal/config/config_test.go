@@ -226,9 +226,24 @@ func TestGeneratePassword(t *testing.T) {
 }
 
 func TestConfigDir(t *testing.T) {
-	t.Run("uses VOLUNDR_HOME when set", func(t *testing.T) {
+	t.Run("uses NIUU_HOME when set", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		t.Setenv(EnvHome, tmpDir)
+		t.Setenv(LegacyEnvHome, "")
+
+		dir, err := ConfigDir()
+		if err != nil {
+			t.Fatalf("ConfigDir() error: %v", err)
+		}
+		if dir != tmpDir {
+			t.Errorf("ConfigDir() = %q, want %q", dir, tmpDir)
+		}
+	})
+
+	t.Run("falls back to VOLUNDR_HOME", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv(EnvHome, "")
+		t.Setenv(LegacyEnvHome, tmpDir)
 
 		dir, err := ConfigDir()
 		if err != nil {
@@ -241,6 +256,7 @@ func TestConfigDir(t *testing.T) {
 
 	t.Run("falls back to home directory", func(t *testing.T) {
 		t.Setenv(EnvHome, "")
+		t.Setenv(LegacyEnvHome, "")
 
 		dir, err := ConfigDir()
 		if err != nil {
@@ -376,9 +392,10 @@ func TestValidateDBPortOutOfRange(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigWithVOLUNDR_HOME(t *testing.T) {
+func TestDefaultConfigWithNIUU_HOME(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(EnvHome, tmpDir)
+	t.Setenv(LegacyEnvHome, "")
 
 	cfg, err := DefaultConfig()
 	if err != nil {
@@ -404,6 +421,7 @@ func TestDefaultConfigWithVOLUNDR_HOME(t *testing.T) {
 
 func TestConfigDirErrorWhenNoHome(t *testing.T) {
 	t.Setenv(EnvHome, "")
+	t.Setenv(LegacyEnvHome, "")
 	t.Setenv("HOME", "")
 
 	_, err := ConfigDir()
@@ -414,6 +432,7 @@ func TestConfigDirErrorWhenNoHome(t *testing.T) {
 
 func TestConfigPathErrorWhenNoHome(t *testing.T) {
 	t.Setenv(EnvHome, "")
+	t.Setenv(LegacyEnvHome, "")
 	t.Setenv("HOME", "")
 
 	_, err := ConfigPath()
@@ -424,6 +443,7 @@ func TestConfigPathErrorWhenNoHome(t *testing.T) {
 
 func TestDefaultConfigErrorWhenNoHome(t *testing.T) {
 	t.Setenv(EnvHome, "")
+	t.Setenv(LegacyEnvHome, "")
 	t.Setenv("HOME", "")
 
 	_, err := DefaultConfig()
@@ -434,6 +454,7 @@ func TestDefaultConfigErrorWhenNoHome(t *testing.T) {
 
 func TestLoadErrorWhenNoHome(t *testing.T) {
 	t.Setenv(EnvHome, "")
+	t.Setenv(LegacyEnvHome, "")
 	t.Setenv("HOME", "")
 
 	_, err := Load()
@@ -444,6 +465,7 @@ func TestLoadErrorWhenNoHome(t *testing.T) {
 
 func TestSaveErrorWhenNoHome(t *testing.T) {
 	t.Setenv(EnvHome, "")
+	t.Setenv(LegacyEnvHome, "")
 	t.Setenv("HOME", "")
 
 	cfg := &Config{Runtime: "local"}
@@ -454,6 +476,7 @@ func TestSaveErrorWhenNoHome(t *testing.T) {
 
 func TestExistsErrorWhenNoHome(t *testing.T) {
 	t.Setenv(EnvHome, "")
+	t.Setenv(LegacyEnvHome, "")
 	t.Setenv("HOME", "")
 
 	_, err := Exists()

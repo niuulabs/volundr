@@ -107,8 +107,26 @@ func TestMachinePassphrase(t *testing.T) {
 		t.Errorf("expected deterministic passphrase, got %q and %q", passphrase, passphrase2)
 	}
 
+	// Should start with "niuu-"
+	if len(passphrase) < 5 || passphrase[:5] != "niuu-" {
+		t.Errorf("expected passphrase to start with 'niuu-', got %q", passphrase)
+	}
+}
+
+func TestLegacyMachinePassphrase(t *testing.T) {
+	passphrase := legacyMachinePassphrase()
+	if passphrase == "" {
+		t.Error("expected non-empty passphrase")
+	}
+
 	// Should start with "volundr-"
 	if len(passphrase) < 8 || passphrase[:8] != "volundr-" {
-		t.Errorf("expected passphrase to start with 'volundr-', got %q", passphrase)
+		t.Errorf("expected legacy passphrase to start with 'volundr-', got %q", passphrase)
+	}
+
+	// New and legacy should differ.
+	newPassphrase := machinePassphrase()
+	if passphrase == newPassphrase {
+		t.Error("expected legacy and new passphrases to differ")
 	}
 }

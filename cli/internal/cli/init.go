@@ -21,7 +21,7 @@ var initRuntimeFlag string
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "First-time setup wizard",
-	Long:  `Runs the interactive setup wizard, creating ~/.volundr/ with config and credentials.`,
+	Long:  `Runs the interactive setup wizard, creating ~/.niuu/ with config and credentials.`,
 	RunE:  runInit,
 }
 
@@ -253,7 +253,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println("Run 'volundr up' to start.")
+	fmt.Println("Run 'niuu volundr up' to start.")
 
 	return nil
 }
@@ -318,6 +318,20 @@ func installInstructionsForOS(tool, goos, goarch string) string {
 // machinePassphrase generates a deterministic passphrase from machine identity.
 // In production this would use a more robust machine fingerprint.
 func machinePassphrase() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "niuu-default"
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "/tmp"
+	}
+	return fmt.Sprintf("niuu-%s-%s", hostname, homeDir)
+}
+
+// legacyMachinePassphrase returns the old "volundr-" prefixed passphrase
+// used before the niuu rename. Used as a fallback when loading credentials.
+func legacyMachinePassphrase() string {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "volundr-default"

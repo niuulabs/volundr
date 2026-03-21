@@ -526,15 +526,38 @@ func TestConfigDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv(envHome, "")
+	t.Setenv(envHomeLegacy, "")
 
 	dir, err := ConfigDir()
 	if err != nil {
 		t.Fatalf("config dir: %v", err)
 	}
 
-	expected := filepath.Join(tmpDir, ".config", "volundr")
+	expected := filepath.Join(tmpDir, ".config", "niuu")
 	if dir != expected {
 		t.Errorf("expected %q, got %q", expected, dir)
+	}
+}
+
+func TestConfigDir_LegacyFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
+	t.Setenv(envHomeLegacy, "")
+
+	// Create the legacy directory so it's picked up as fallback.
+	legacyPath := filepath.Join(tmpDir, ".config", "volundr")
+	if err := os.MkdirAll(legacyPath, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	dir, err := ConfigDir()
+	if err != nil {
+		t.Fatalf("config dir: %v", err)
+	}
+
+	if dir != legacyPath {
+		t.Errorf("expected legacy fallback %q, got %q", legacyPath, dir)
 	}
 }
 
@@ -542,13 +565,14 @@ func TestConfigPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv(envHome, "")
+	t.Setenv(envHomeLegacy, "")
 
 	path, err := ConfigPath()
 	if err != nil {
 		t.Fatalf("config path: %v", err)
 	}
 
-	expected := filepath.Join(tmpDir, ".config", "volundr", "config.yaml")
+	expected := filepath.Join(tmpDir, ".config", "niuu", "config.yaml")
 	if path != expected {
 		t.Errorf("expected %q, got %q", expected, path)
 	}

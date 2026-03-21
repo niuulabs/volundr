@@ -22,7 +22,7 @@ import (
 var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Launch the interactive TUI",
-	Long:  "Launch the full-screen terminal user interface for Volundr.",
+	Long:  "Launch the full-screen terminal user interface.",
 	RunE: func(_ *cobra.Command, _ []string) error {
 		return runTUI()
 	},
@@ -670,7 +670,7 @@ func (m tuiModel) View() tea.View { //nolint:gocritic // tea.Model interface req
 		v.Content = lipgloss.NewStyle().
 			Foreground(theme.AccentAmber).
 			Bold(true).
-			Render("\n  Loading Volundr...")
+			Render("\n  Loading niuu...")
 		return v
 	}
 
@@ -733,8 +733,8 @@ func appendCmd(cmds []tea.Cmd, cmd tea.Cmd) []tea.Cmd {
 	return cmds
 }
 
-// debugTUI enables TUI message logging. Set VOLUNDR_TUI_DEBUG=1 to enable.
-var debugTUI = os.Getenv("VOLUNDR_TUI_DEBUG") == "1"
+// debugTUI enables TUI message logging. Set NIUU_TUI_DEBUG=1 to enable.
+var debugTUI = os.Getenv("NIUU_TUI_DEBUG") == "1" || os.Getenv("VOLUNDR_TUI_DEBUG") == "1"
 
 func debugLogMsg(msg tea.Msg) {
 	// Skip high-frequency noise.
@@ -742,7 +742,7 @@ func debugLogMsg(msg tea.Msg) {
 		return
 	}
 
-	f, err := os.OpenFile("/tmp/volundr-tui-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // debug log in /tmp, not sensitive
+	f, err := os.OpenFile("/tmp/niuu-tui-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // debug log in /tmp, not sensitive
 	if err != nil {
 		return
 	}

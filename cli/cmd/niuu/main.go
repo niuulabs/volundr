@@ -1,4 +1,4 @@
-// Package main is the entry point for the volundr CLI binary.
+// Package main is the entry point for the niuu CLI binary.
 package main
 
 import (

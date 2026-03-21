@@ -27,11 +27,11 @@ var whoamiCmd = &cobra.Command{
 		}
 
 		if ctx.Token == "" {
-			return fmt.Errorf("not logged in on context %q — run: volundr login --context %s", ctxKey, ctxKey)
+			return fmt.Errorf("not logged in on context %q — run: niuu login --context %s", ctxKey, ctxKey)
 		}
 
 		if ctx.Issuer == "" {
-			return fmt.Errorf("no issuer configured on context %q — run: volundr login --context %s --issuer <url>", ctxKey, ctxKey)
+			return fmt.Errorf("no issuer configured on context %q — run: niuu login --context %s --issuer <url>", ctxKey, ctxKey)
 		}
 
 		client := auth.NewOIDCClient(ctx.Issuer)

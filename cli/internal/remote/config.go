@@ -1,5 +1,5 @@
-// Package remote manages CLI configuration for the Volundr remote client.
-// Configuration is stored in $VOLUNDR_HOME/remotes.yaml (or ~/.config/volundr/config.yaml as fallback).
+// Package remote manages CLI configuration for the niuu remote client.
+// Configuration is stored in $NIUU_HOME/remotes.yaml (or ~/.config/niuu/config.yaml as fallback).
 package remote
 
 import (
@@ -12,12 +12,16 @@ import (
 
 const (
 	// Environment variable that overrides the config directory.
-	envHome = "VOLUNDR_HOME"
-	// Config file name within VOLUNDR_HOME.
+	envHome = "NIUU_HOME"
+	// Legacy environment variable (checked as fallback).
+	envHomeLegacy = "VOLUNDR_HOME"
+	// Config file name within NIUU_HOME.
 	remotesFile = "remotes.yaml"
-	// Fallback directory when VOLUNDR_HOME is not set.
+	// Default directory when NIUU_HOME is not set.
+	defaultDir = ".config/niuu"
+	// Legacy directory (checked as fallback).
 	legacyDir = ".config/volundr"
-	// Config file name in the legacy directory.
+	// Config file name in the config directory.
 	legacyFile = "config.yaml"
 )
 
@@ -47,30 +51,61 @@ func DefaultConfig() *Config {
 }
 
 // ConfigDir returns the configuration directory path.
-// It checks VOLUNDR_HOME first, falling back to ~/.config/volundr.
+// It checks NIUU_HOME, then VOLUNDR_HOME (legacy), then ~/.config/niuu,
+// falling back to ~/.config/volundr if the new directory doesn't exist yet.
 func ConfigDir() (string, error) {
 	if dir := os.Getenv(envHome); dir != "" {
+		return dir, nil
+	}
+	if dir := os.Getenv(envHomeLegacy); dir != "" {
 		return dir, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, legacyDir), nil
+
+	newDir := filepath.Join(home, defaultDir)
+	if _, err := os.Stat(newDir); err == nil {
+		return newDir, nil
+	}
+
+	// Fall back to legacy path if it exists.
+	legacy := filepath.Join(home, legacyDir)
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy, nil
+	}
+
+	// Neither exists — use the new path.
+	return newDir, nil
 }
 
 // ConfigPath returns the full path to the config file.
-// When VOLUNDR_HOME is set, uses $VOLUNDR_HOME/remotes.yaml.
-// Otherwise falls back to ~/.config/volundr/config.yaml.
+// When NIUU_HOME is set, uses $NIUU_HOME/remotes.yaml.
+// Otherwise falls back to ~/.config/niuu/config.yaml (or legacy ~/.config/volundr/config.yaml).
 func ConfigPath() (string, error) {
 	if dir := os.Getenv(envHome); dir != "" {
+		return filepath.Join(dir, remotesFile), nil
+	}
+	if dir := os.Getenv(envHomeLegacy); dir != "" {
 		return filepath.Join(dir, remotesFile), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, legacyDir, legacyFile), nil
+
+	newDir := filepath.Join(home, defaultDir)
+	if _, err := os.Stat(newDir); err == nil {
+		return filepath.Join(newDir, legacyFile), nil
+	}
+
+	legacy := filepath.Join(home, legacyDir)
+	if _, err := os.Stat(legacy); err == nil {
+		return filepath.Join(legacy, legacyFile), nil
+	}
+
+	return filepath.Join(newDir, legacyFile), nil
 }
 
 // legacyConfig represents the old flat config format for migration purposes.
@@ -245,7 +280,7 @@ func (c *Config) ResolveContext(key string) (*Context, string, error) {
 	}
 
 	if len(c.Contexts) == 0 {
-		return nil, "", fmt.Errorf("no contexts configured — run: volundr context add <name> --server <url>")
+		return nil, "", fmt.Errorf("no contexts configured — run: niuu context add <name> --server <url>")
 	}
 
 	if len(c.Contexts) == 1 {

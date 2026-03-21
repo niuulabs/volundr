@@ -317,9 +317,9 @@ func resolveAuthConfig(rctx *remote.Context) (issuer, clientID string, err error
 	if issuer == "" || clientID == "" {
 		return "", "", fmt.Errorf("could not determine auth configuration\n\n" +
 			"Either configure a server and let it be discovered automatically:\n" +
-			"  volundr context add <name> --server <url>\n\n" +
+			"  niuu context add <name> --server <url>\n\n" +
 			"Or provide flags explicitly:\n" +
-			"  volundr login --issuer <url> --client-id <id>")
+			"  niuu login --issuer <url> --client-id <id>")
 	}
 
 	return issuer, clientID, nil

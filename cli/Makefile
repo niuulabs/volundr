@@ -1,4 +1,4 @@
-BINARY := volundr
+BINARY := niuu
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=$(VERSION)"
 WEB_DIR := ../web
@@ -12,19 +12,19 @@ BUILD_TAGS := embed_web,embed_migrations
 
 # build compiles the CLI with the embedded frontend and migrations for the current platform.
 build: web migrations
-	go build -tags $(BUILD_TAGS) $(LDFLAGS) -o bin/$(BINARY) ./cmd/volundr
+	go build -tags $(BUILD_TAGS) $(LDFLAGS) -o bin/$(BINARY) ./cmd/niuu
 
 # build-dev compiles without the frontend or embedded migrations (placeholder page, filesystem migrations).
 build-dev:
-	go build $(LDFLAGS) -o bin/$(BINARY) ./cmd/volundr
+	go build $(LDFLAGS) -o bin/$(BINARY) ./cmd/niuu
 
 # build-all cross-compiles for all supported platforms with embedded frontend and migrations.
 build-all: web migrations
 	@mkdir -p $(DIST_DIR)
-	GOOS=darwin  GOARCH=amd64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-amd64   ./cmd/volundr
-	GOOS=darwin  GOARCH=arm64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-arm64   ./cmd/volundr
-	GOOS=linux   GOARCH=amd64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-linux-amd64    ./cmd/volundr
-	GOOS=linux   GOARCH=arm64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-linux-arm64    ./cmd/volundr
+	GOOS=darwin  GOARCH=amd64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-amd64   ./cmd/niuu
+	GOOS=darwin  GOARCH=arm64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-arm64   ./cmd/niuu
+	GOOS=linux   GOARCH=amd64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-linux-amd64    ./cmd/niuu
+	GOOS=linux   GOARCH=arm64 go build -tags $(BUILD_TAGS) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-linux-arm64    ./cmd/niuu
 	@echo "Built binaries:"
 	@ls -lh $(DIST_DIR)/
 
