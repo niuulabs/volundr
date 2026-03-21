@@ -1539,11 +1539,17 @@ def _resolve_root(root: str) -> Path:
 
 
 def _sanitize_relative(relative_path: str) -> str:
-    """Sanitize user-supplied path: reject NUL, normalize, reject absolute."""
+    """Sanitize user-supplied path: reject NUL, normalize, reject traversal/absolute."""
     if "\0" in relative_path:
         raise HTTPException(400, "Invalid path")
     normalised = os.path.normpath(relative_path)
+    # Disallow absolute paths
     if os.path.isabs(normalised):
+        raise HTTPException(400, "Path traversal not allowed")
+    # Disallow parent-directory references that could escape the base directory
+    # (for example "foo/../../etc/passwd").
+    parts = [p for p in normalised.split(os.sep) if p not in (".", "")]
+    if any(part == os.pardir for part in parts):
         raise HTTPException(400, "Path traversal not allowed")
     return normalised
 
