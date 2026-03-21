@@ -220,6 +220,7 @@ export const mockSagas: Saga[] = [
     status: 'active',
     confidence: 0.72,
     created_at: '2026-03-18T08:30:00Z',
+    phase_summary: { total: 2, completed: 1 },
   },
   {
     id: saga2Id,
@@ -232,6 +233,7 @@ export const mockSagas: Saga[] = [
     status: 'active',
     confidence: 0.59,
     created_at: '2026-03-19T10:00:00Z',
+    phase_summary: { total: 1, completed: 0 },
   },
 ];
 
@@ -295,6 +297,10 @@ export const mockSessions: SessionInfo[] = [
       '[09:18] Adding storage health check to perception cycle',
       '[09:22] Running tests... 14/16 passing',
     ],
+    branch: 'feat/storage-health/skoll-integration',
+    confidence: 0.72,
+    raid_name: 'Integrate health check into Skoll perception loop',
+    saga_name: 'Storage Health Observer',
   },
   {
     session_id: 'sess-1004',
@@ -305,6 +311,10 @@ export const mockSessions: SessionInfo[] = [
       '[14:12] Implemented Odin decision handler',
       '[14:30] All tests passing. Waiting for human review.',
     ],
+    branch: 'feat/storage-health/recovery-runbook',
+    confidence: 0.55,
+    raid_name: 'Recovery runbook for degraded pools',
+    saga_name: 'Storage Health Observer',
   },
   {
     session_id: 'sess-2001',
@@ -315,6 +325,10 @@ export const mockSessions: SessionInfo[] = [
       '[11:10] Defining IIdentityPort interface',
       '[11:25] Implementing OidcIdentityAdapter',
     ],
+    branch: 'feat/auth-rewrite/identity-adapter',
+    confidence: 0.68,
+    raid_name: 'Extract OIDC token validation into identity adapter',
+    saga_name: 'Auth Middleware Rewrite',
   },
 ];
 

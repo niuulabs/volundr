@@ -31,6 +31,7 @@ export class MockTyrService implements ITyrService {
       status: 'active',
       confidence: 0.5,
       created_at: new Date().toISOString(),
+      phase_summary: { total: 0, completed: 0 },
     };
     return saga;
   }

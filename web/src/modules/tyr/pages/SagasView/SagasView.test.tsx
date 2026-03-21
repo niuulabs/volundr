@@ -43,6 +43,7 @@ describe('SagasView', () => {
           status: 'active',
           confidence: 0.82,
           created_at: '2026-01-01T00:00:00Z',
+          phase_summary: { total: 3, completed: 1 },
         },
       ],
       loading: false,
@@ -148,6 +149,16 @@ describe('SagasView', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/tyr/sagas/saga-1');
   });
 
+  it('renders phase progress for each saga', () => {
+    render(
+      <MemoryRouter>
+        <SagasView />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('1/3 phases')).toBeInTheDocument();
+  });
+
   it('computes avg confidence as 0 when sagas list is empty', () => {
     vi.mocked(hooks.useSagas).mockReturnValue({
       sagas: [],
@@ -179,6 +190,7 @@ describe('SagasView', () => {
           status: 'active',
           confidence: 0.9,
           created_at: '2026-01-01T00:00:00Z',
+          phase_summary: { total: 2, completed: 1 },
         },
         {
           id: 'saga-2',
@@ -191,6 +203,7 @@ describe('SagasView', () => {
           status: 'completed',
           confidence: 1.0,
           created_at: '2026-01-01T00:00:00Z',
+          phase_summary: { total: 3, completed: 3 },
         },
       ],
       loading: false,

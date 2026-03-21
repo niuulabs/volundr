@@ -14,6 +14,7 @@ export interface Saga {
   status: SagaStatus;
   confidence: number;
   created_at: string;
+  phase_summary: SagaPhaseSummary;
 }
 
 export interface Phase {
@@ -62,8 +63,17 @@ export interface DispatcherState {
   updated_at: string;
 }
 
+export interface SagaPhaseSummary {
+  total: number;
+  completed: number;
+}
+
 export interface SessionInfo {
   session_id: string;
   status: string;
   chronicle_lines: string[];
+  branch: string | null;
+  confidence: number;
+  raid_name: string;
+  saga_name: string;
 }

@@ -17,11 +17,19 @@ const mockSessions: SessionInfo[] = [
     session_id: 'sess-1002',
     status: 'running',
     chronicle_lines: ['[09:15] Started raid NIU-102'],
+    branch: 'feat/storage-health/skoll-integration',
+    confidence: 0.72,
+    raid_name: 'Integrate health check into Skoll perception loop',
+    saga_name: 'Storage Health Observer',
   },
   {
     session_id: 'sess-1004',
     status: 'review',
     chronicle_lines: ['[14:00] Started raid NIU-104'],
+    branch: 'feat/storage-health/recovery-runbook',
+    confidence: 0.55,
+    raid_name: 'Recovery runbook for degraded pools',
+    saga_name: 'Storage Health Observer',
   },
 ];
 
@@ -101,7 +109,15 @@ describe('useTyrSessions', () => {
     expect(tyrSessionService.getSessions).toHaveBeenCalledTimes(1);
 
     const updatedSessions: SessionInfo[] = [
-      { session_id: 'sess-1005', status: 'running', chronicle_lines: ['new'] },
+      {
+        session_id: 'sess-1005',
+        status: 'running',
+        chronicle_lines: ['new'],
+        branch: 'feat/new-branch',
+        confidence: 0.6,
+        raid_name: 'New raid',
+        saga_name: 'New saga',
+      },
     ];
     vi.mocked(tyrSessionService.getSessions).mockResolvedValue(updatedSessions);
 

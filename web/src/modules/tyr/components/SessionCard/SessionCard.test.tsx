@@ -7,6 +7,10 @@ const mockSession: SessionInfo = {
   session_id: 'sess-abc-123',
   status: 'running',
   chronicle_lines: ['Cloning repository...', 'Installing dependencies...', 'Running tests...'],
+  branch: 'feat/test-branch',
+  confidence: 0.75,
+  raid_name: 'Add test infrastructure',
+  saga_name: 'Test Saga',
 };
 
 describe('SessionCard', () => {
@@ -44,5 +48,41 @@ describe('SessionCard', () => {
   it('renders session status badge', () => {
     render(<SessionCard session={mockSession} />);
     expect(screen.getByText('running')).toBeInTheDocument();
+  });
+
+  it('renders raid name and saga name', () => {
+    render(<SessionCard session={mockSession} />);
+    expect(screen.getByText('Add test infrastructure')).toBeInTheDocument();
+    expect(screen.getByText('Test Saga')).toBeInTheDocument();
+  });
+
+  it('renders branch tag when branch is present', () => {
+    render(<SessionCard session={mockSession} />);
+    expect(screen.getByText('feat/test-branch')).toBeInTheDocument();
+  });
+
+  it('does not render branch tag when branch is null', () => {
+    render(<SessionCard session={{ ...mockSession, branch: null }} />);
+    expect(screen.queryByText('feat/test-branch')).not.toBeInTheDocument();
+  });
+
+  it('renders confidence badge', () => {
+    render(<SessionCard session={mockSession} />);
+    expect(screen.getByText('75%')).toBeInTheDocument();
+  });
+
+  it('renders review button for review status when onReview is provided', () => {
+    const onReview = vi.fn();
+    const reviewSession = { ...mockSession, status: 'review' };
+    render(<SessionCard session={reviewSession} onReview={onReview} onApprove={vi.fn()} />);
+    const btn = screen.getByText('Review');
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onReview).toHaveBeenCalledWith('sess-abc-123');
+  });
+
+  it('does not render review button for non-review status', () => {
+    render(<SessionCard session={mockSession} onReview={vi.fn()} />);
+    expect(screen.queryByText('Review')).not.toBeInTheDocument();
   });
 });

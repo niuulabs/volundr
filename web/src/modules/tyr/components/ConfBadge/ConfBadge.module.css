@@ -1,9 +1,9 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  border-radius: 10px;
-  padding: 2px 8px;
+  gap: var(--space-1);
+  border-radius: var(--radius-lg);
+  padding: 2px var(--space-2);
 }
 
 .value {

@@ -26,7 +26,7 @@
   font-weight: 500;
   color: var(--color-accent-emerald);
   background-color: color-mix(in srgb, var(--color-accent-emerald) 15%, transparent);
-  padding: 1px 6px;
+  padding: 1px var(--space-1);
   border-radius: var(--radius-sm);
   white-space: nowrap;
 }

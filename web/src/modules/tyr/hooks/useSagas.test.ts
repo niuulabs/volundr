@@ -26,6 +26,7 @@ const mockSagas: Saga[] = [
     status: 'active',
     confidence: 0.72,
     created_at: '2026-03-18T08:30:00Z',
+    phase_summary: { total: 2, completed: 1 },
   },
 ];
 

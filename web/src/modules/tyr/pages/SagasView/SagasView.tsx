@@ -52,6 +52,22 @@ export function SagasView() {
               <BranchTag source={saga.feature_branch} />
               <ConfBadge value={saga.confidence} />
             </div>
+            <div className={styles.phaseProgress}>
+              <div className={styles.phaseTrack}>
+                <div
+                  className={styles.phaseFill}
+                  style={{
+                    width:
+                      saga.phase_summary.total > 0
+                        ? `${(saga.phase_summary.completed / saga.phase_summary.total) * 100}%`
+                        : '0%',
+                  }}
+                />
+              </div>
+              <span className={styles.phaseLabel}>
+                {saga.phase_summary.completed}/{saga.phase_summary.total} phases
+              </span>
+            </div>
           </button>
         ))}
         {sagas.length === 0 && <div className={styles.empty}>No sagas found</div>}

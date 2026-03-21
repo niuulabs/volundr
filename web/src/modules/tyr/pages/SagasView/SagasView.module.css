@@ -74,6 +74,33 @@
   font-size: var(--text-sm);
 }
 
+.phaseProgress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.phaseTrack {
+  flex: 1;
+  height: 4px;
+  background-color: var(--color-bg-elevated);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.phaseFill {
+  height: 100%;
+  background-color: var(--color-accent-cyan);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-fast);
+}
+
+.phaseLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .error {
   padding: var(--space-4);
   color: var(--color-accent-red);

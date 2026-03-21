@@ -4,6 +4,7 @@ export type {
   RaidStatus,
   ConfidenceEventType,
   Saga,
+  SagaPhaseSummary,
   Phase,
   Raid,
   ConfidenceEvent,
