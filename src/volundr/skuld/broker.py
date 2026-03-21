@@ -1557,16 +1557,18 @@ def _safe_resolve(base: Path, relative_path: str) -> Path:
     if os.path.isabs(normalised):
         raise HTTPException(400, "Path traversal not allowed")
 
-    # Canonicalise base and target paths.
-    base_real = os.path.realpath(str(base))
-    target_real = os.path.realpath(os.path.join(base_real, normalised))
+    # Canonicalise base and target paths using pathlib.
+    base_resolved = base.resolve()
+    candidate = (base_resolved / normalised).resolve()
 
     # Ensure target is within base directory (or equal to it).
-    base_prefix = base_real if base_real.endswith(os.sep) else base_real + os.sep
-    if target_real != base_real and not target_real.startswith(base_prefix):
+    try:
+        candidate.relative_to(base_resolved)
+    except ValueError:
+        # candidate is outside of base_resolved
         raise HTTPException(400, "Path traversal not allowed")
 
-    return Path(target_real)
+    return candidate
 
 
 def _validate_root(root: str) -> None:
