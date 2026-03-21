@@ -223,6 +223,53 @@
   flex-shrink: 0;
 }
 
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background-color: var(--color-text-faint);
+}
+
+.dot_running {
+  background-color: var(--color-accent-emerald);
+}
+
+.dot_error {
+  background-color: var(--color-accent-red);
+}
+
+.dot_starting {
+  background-color: var(--color-brand);
+}
+
+.dot_stopped {
+  background-color: var(--color-text-faint);
+}
+
+.compactIcons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.compactLink {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-faint);
+  transition: color var(--transition-fast);
+}
+
+.compactLink:hover {
+  color: var(--color-text-primary);
+}
+
+.compactLinkIcon {
+  width: 12px;
+  height: 12px;
+}
+
 .compactTime {
   font-size: var(--text-xs);
   color: var(--color-text-faint);

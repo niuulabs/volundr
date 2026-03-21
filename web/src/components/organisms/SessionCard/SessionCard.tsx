@@ -1,10 +1,10 @@
 import type { CSSProperties } from 'react';
-import { GitBranch, Globe, MessageSquare, Zap, Server } from 'lucide-react';
+import { GitBranch, Globe, MessageSquare, Zap, Server, ExternalLink, Ticket } from 'lucide-react';
 import type { VolundrSession, VolundrModel } from '@/models';
 import { StatusBadge } from '@/components/atoms/StatusBadge';
 import { TrackerIssueBadge } from '@/components/molecules/TrackerIssueBadge';
 import { cn, formatTime, formatTokens } from '@/utils';
-import { getSourceLabel, getBranch, isGitSource } from '@/utils/source';
+import { getRepo, getSourceLabel, getBranch, isGitSource } from '@/utils/source';
 import styles from './SessionCard.module.css';
 
 export interface SessionCardProps {
@@ -36,6 +36,8 @@ export function SessionCard({
   const tokens = formatTokens(session.tokensUsed);
 
   if (compact) {
+    const repoUrl = isGitSource(session.source) ? getRepo(session.source) : '';
+
     return (
       <div
         className={cn(
@@ -48,8 +50,34 @@ export function SessionCard({
         role={onClick ? 'button' : undefined}
         tabIndex={onClick ? 0 : undefined}
       >
-        <StatusBadge status={session.status} />
+        <span className={cn(styles.statusDot, styles[`dot_${session.status}`])} />
         <span className={styles.compactName}>{session.name}</span>
+        <span className={styles.compactIcons}>
+          {repoUrl && (
+            <a
+              href={repoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.compactLink}
+              onClick={e => e.stopPropagation()}
+              title="Open repository"
+            >
+              <ExternalLink className={styles.compactLinkIcon} />
+            </a>
+          )}
+          {session.trackerIssue && (
+            <a
+              href={session.trackerIssue.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.compactLink}
+              onClick={e => e.stopPropagation()}
+              title={session.trackerIssue.identifier}
+            >
+              <Ticket className={styles.compactLinkIcon} />
+            </a>
+          )}
+        </span>
         <span className={styles.compactStats}>
           <MessageSquare className={styles.statIcon} />
           {session.messageCount}
