@@ -2,16 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
-vi.mock('@/pages/Volundr', () => ({
+vi.mock('@/modules/volundr/pages/Volundr', () => ({
   VolundrPage: () => <div data-testid="volundr-page">Volundr Page</div>,
 }));
 
-vi.mock('@/pages/Volundr/VolundrPopout', () => ({
+vi.mock('@/modules/volundr/pages/Volundr/VolundrPopout', () => ({
   VolundrPopout: () => <div data-testid="volundr-popout">Volundr Popout</div>,
 }));
 
-import { VolundrPage } from '@/pages/Volundr';
-import { VolundrPopout } from '@/pages/Volundr/VolundrPopout';
+import { VolundrPage } from '@/modules/volundr/pages/Volundr';
+import { VolundrPopout } from '@/modules/volundr/pages/Volundr/VolundrPopout';
 
 function TestApp({ initialRoute = '/' }: { initialRoute?: string }) {
   return (

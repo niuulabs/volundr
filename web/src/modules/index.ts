@@ -16,7 +16,7 @@ import {
   ToggleLeft,
   LayoutDashboard,
 } from 'lucide-react';
-import type { IVolundrService } from '@/ports';
+import type { IVolundrService } from '@/modules/volundr/ports';
 import { registerModule } from './shared/registry';
 
 type ModuleComponent = ComponentType<{ service: IVolundrService }>;
@@ -26,7 +26,7 @@ type ModuleComponent = ComponentType<{ service: IVolundrService }>;
 registerModule({
   key: 'users',
   load: () =>
-    import('@/pages/Admin/sections/UsersSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/UsersSection').then(m => ({
       default: m.UsersSection,
     })),
   icon: Users,
@@ -35,7 +35,7 @@ registerModule({
 registerModule({
   key: 'tenants',
   load: () =>
-    import('@/pages/Admin/sections/TenantsSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/TenantsSection').then(m => ({
       default: m.TenantsSection,
     })),
   icon: Building2,
@@ -44,7 +44,7 @@ registerModule({
 registerModule({
   key: 'storage',
   load: () =>
-    import('@/pages/Admin/sections/StorageSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/StorageSection').then(m => ({
       default: m.StorageSection,
     })),
   icon: HardDrive,
@@ -53,7 +53,7 @@ registerModule({
 registerModule({
   key: 'resources',
   load: () =>
-    import('@/pages/Admin/sections/ResourcesSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/ResourcesSection').then(m => ({
       default: m.ResourcesSection,
     })),
   icon: Cpu,
@@ -62,7 +62,7 @@ registerModule({
 registerModule({
   key: 'feature-management',
   load: () =>
-    import('@/pages/Admin/sections/FeatureManagementSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/FeatureManagementSection').then(m => ({
       default: m.FeatureManagementSection,
     })),
   icon: ToggleLeft,
@@ -73,7 +73,7 @@ registerModule({
 registerModule({
   key: 'credentials',
   load: () =>
-    import('@/pages/Settings/sections/CredentialsSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/CredentialsSection').then(m => ({
       default: m.CredentialsSection,
     })),
   icon: KeyRound,
@@ -82,7 +82,7 @@ registerModule({
 registerModule({
   key: 'workspaces',
   load: () =>
-    import('@/pages/Settings/sections/WorkspacesSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/WorkspacesSection').then(m => ({
       default: m.WorkspacesSection,
     })),
   icon: HardDrive,
@@ -91,7 +91,7 @@ registerModule({
 registerModule({
   key: 'integrations',
   load: () =>
-    import('@/pages/Settings/sections/IntegrationsSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/IntegrationsSection').then(m => ({
       default: m.IntegrationsSection,
     })),
   icon: Link2,
@@ -100,7 +100,7 @@ registerModule({
 registerModule({
   key: 'appearance',
   load: () =>
-    import('@/pages/Settings/sections/AppearanceSection').then(
+    import('@/modules/volundr/pages/Settings/sections/AppearanceSection').then(
       // AppearanceSection ignores the service prop — cast is safe
       m => ({ default: m.AppearanceSection as unknown as ModuleComponent })
     ),
@@ -110,7 +110,7 @@ registerModule({
 registerModule({
   key: 'layout',
   load: () =>
-    import('@/pages/Settings/sections/LayoutSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/LayoutSection').then(m => ({
       default: m.LayoutSection,
     })),
   icon: LayoutDashboard,

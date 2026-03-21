@@ -2,19 +2,23 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/auth';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { volundrService } from '@/adapters';
+import { volundrService } from '@/modules/volundr/adapters';
 // Initialize module registry (registers all built-in feature modules)
 import '@/modules';
 import styles from './App.module.css';
 
-const VolundrPage = lazy(() => import('@/pages/Volundr').then(m => ({ default: m.VolundrPage })));
+const VolundrPage = lazy(() =>
+  import('@/modules/volundr/pages/Volundr').then(m => ({ default: m.VolundrPage }))
+);
 const VolundrPopout = lazy(() =>
-  import('@/pages/Volundr/VolundrPopout').then(m => ({ default: m.VolundrPopout }))
+  import('@/modules/volundr/pages/Volundr/VolundrPopout').then(m => ({ default: m.VolundrPopout }))
 );
 const SettingsPage = lazy(() =>
-  import('@/pages/Settings').then(m => ({ default: m.SettingsPage }))
+  import('@/modules/volundr/pages/Settings').then(m => ({ default: m.SettingsPage }))
 );
-const AdminPage = lazy(() => import('@/pages/Admin').then(m => ({ default: m.AdminPage })));
+const AdminPage = lazy(() =>
+  import('@/modules/volundr/pages/Admin').then(m => ({ default: m.AdminPage }))
+);
 
 function PageLoader() {
   return (

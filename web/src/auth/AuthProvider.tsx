@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import type { User } from 'oidc-client-ts';
-import { setTokenProvider } from '@/adapters/api/client';
+import { setTokenProvider } from '@/modules/volundr/adapters/api/client';
 import { loadRuntimeConfig } from '@/config';
 import { getOidcConfig, getUserManager, type OidcConfig } from './oidc';
 import { AuthContext, type AuthContextValue } from './AuthContext';
