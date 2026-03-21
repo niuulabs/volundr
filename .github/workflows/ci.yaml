@@ -85,7 +85,7 @@ jobs:
           echo "web=true" >> $GITHUB_OUTPUT
           echo "go=true" >> $GITHUB_OUTPUT
           echo "helm=true" >> $GITHUB_OUTPUT
-          echo 'names=["volundr","skuld","skuld-codex","devrunner","volundr-web","vscode-reh"]' >> $GITHUB_OUTPUT
+          echo 'names=["volundr","skuld","skuld-codex","devrunner","volundr-web","vscode-reh","tyr"]' >> $GITHUB_OUTPUT
           echo "any=true" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------

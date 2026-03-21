@@ -35,7 +35,7 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -76,7 +76,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
     steps:
       - name: Log in to Container Registry
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
