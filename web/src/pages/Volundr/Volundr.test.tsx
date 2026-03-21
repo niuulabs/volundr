@@ -455,7 +455,7 @@ describe('VolundrPage', () => {
         <VolundrPage />
       </MemoryRouter>
     );
-    expect(screen.getByText('New Session')).toBeInTheDocument();
+    expect(screen.getByTitle('New Session')).toBeInTheDocument();
   });
 
   it('renders metrics cards when forge stats expanded', () => {
@@ -623,9 +623,8 @@ describe('VolundrPage', () => {
       </MemoryRouter>
     );
 
-    // Click the first "New Session" button (in sidebar)
-    const newButtons = screen.getAllByText('New Session');
-    fireEvent.click(newButtons[0]);
+    // Click the "New Session" button (in sidebar)
+    fireEvent.click(screen.getByTitle('New Session'));
 
     expect(screen.getByRole('heading', { name: 'Launch Session' })).toBeInTheDocument();
     expect(screen.getByTestId('launch-wizard')).toBeInTheDocument();
@@ -918,7 +917,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       fireEvent.click(screen.getByTestId('wizard-launch'));
 
       await waitFor(() => {
@@ -945,7 +944,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       expect(screen.getByRole('heading', { name: 'Launch Session' })).toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('wizard-launch'));
@@ -965,7 +964,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       fireEvent.click(screen.getByTestId('wizard-launch'));
 
       await waitFor(() => {
@@ -985,7 +984,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       fireEvent.click(screen.getByTestId('wizard-launch'));
 
       await waitFor(() => {
@@ -1002,7 +1001,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
 
       expect(screen.getByTestId('wizard-template-full-stack-dev')).toBeInTheDocument();
     });
@@ -1763,10 +1762,8 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      // There may be multiple "New Session" buttons (sidebar + empty panel)
-      const newButtons = screen.getAllByText('New Session');
-      // Click the last one (empty main panel button)
-      fireEvent.click(newButtons[newButtons.length - 1]);
+      // Click the "New Session" button in the empty main panel
+      fireEvent.click(screen.getByText('New Session'));
 
       expect(screen.getByRole('heading', { name: 'Launch Session' })).toBeInTheDocument();
     });

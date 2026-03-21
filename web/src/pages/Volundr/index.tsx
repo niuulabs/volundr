@@ -739,27 +739,25 @@ export function VolundrPage() {
             </button>
           </div>
 
-          {/* Action buttons */}
-          <div className={styles.sidebarActions}>
-            <div className={styles.actionRow}>
-              <button
-                type="button"
-                className={styles.newButton}
-                onClick={() => setShowLaunchWizard(true)}
-              >
-                <Plus className={styles.actionBtnIcon} />
-                New Session
-              </button>
-            </div>
-          </div>
-
-          {/* Search + filter */}
-          <div className={styles.sidebarFilters}>
+          {/* Search + new session */}
+          <div className={styles.searchRow}>
             <SearchInput
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder="Search sessions..."
             />
+            <button
+              type="button"
+              className={styles.newSessionButton}
+              onClick={() => setShowLaunchWizard(true)}
+              title="New Session"
+            >
+              <Plus className={styles.newSessionIcon} />
+            </button>
+          </div>
+
+          {/* Filter + view toggle */}
+          <div className={styles.filterRow}>
             <select
               className={styles.statusSelect}
               value={statusFilter}
@@ -771,7 +769,6 @@ export function VolundrPage() {
                 </option>
               ))}
             </select>
-
             <button
               type="button"
               className={styles.viewToggle}
