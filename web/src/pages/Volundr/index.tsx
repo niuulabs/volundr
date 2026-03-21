@@ -35,6 +35,8 @@ import {
   Check,
   ExternalLink,
   FolderOpen,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   MetricCard,
@@ -215,6 +217,7 @@ export function VolundrPage() {
     'volundr-sidebar-collapsed',
     false
   );
+  const [compactCards, setCompactCards] = useLocalStorage('volundr-compact-cards', false);
   const [statsCollapsed, setStatsCollapsed] = useLocalStorage('volundr-stats-collapsed', true);
   const [archivedCollapsed, setArchivedCollapsed] = useLocalStorage(
     'volundr-archived-collapsed',
@@ -818,6 +821,19 @@ export function VolundrPage() {
                 </option>
               ))}
             </select>
+
+            <button
+              type="button"
+              className={styles.viewToggle}
+              onClick={() => setCompactCards(!compactCards)}
+              title={compactCards ? 'Expanded view' : 'Compact view'}
+            >
+              {compactCards ? (
+                <LayoutGrid className={styles.viewToggleIcon} />
+              ) : (
+                <List className={styles.viewToggleIcon} />
+              )}
+            </button>
           </div>
 
           {/* Session list — grouped by repository */}
@@ -841,6 +857,7 @@ export function VolundrPage() {
                         : session
                     }
                     model={models[session.model]}
+                    compact={compactCards}
                   />
                 </div>
               )}

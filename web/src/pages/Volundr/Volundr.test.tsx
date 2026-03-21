@@ -1029,12 +1029,9 @@ describe('VolundrPage', () => {
 
     it('renders inline stats when stats panel is collapsed', () => {
       // Override: sidebar expanded (false), stats collapsed (true), archived collapsed (true)
-      let callCount = 0;
-      vi.mocked(useLocalStorage).mockImplementation(() => {
-        callCount++;
-        // 1st call = sidebar (false), 2nd call = stats collapsed (true), 3rd call = archived collapsed (true)
-        if (callCount % 3 === 2) return [true, vi.fn()];
-        if (callCount % 3 === 0) return [true, vi.fn()];
+      vi.mocked(useLocalStorage).mockImplementation((key: string) => {
+        if (key === 'volundr-stats-collapsed') return [true, vi.fn()];
+        if (key === 'volundr-archived-collapsed') return [true, vi.fn()];
         return [false, vi.fn()];
       });
 

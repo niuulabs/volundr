@@ -14,6 +14,8 @@ export interface SessionCardProps {
   model?: VolundrModel;
   /** Whether this card is selected */
   selected?: boolean;
+  /** Compact single-line view for dense session lists */
+  compact?: boolean;
   /** Click handler */
   onClick?: () => void;
   /** Additional CSS class */
@@ -24,6 +26,7 @@ export function SessionCard({
   session,
   model,
   selected = false,
+  compact = false,
   onClick,
   className,
 }: SessionCardProps) {
@@ -31,6 +34,30 @@ export function SessionCard({
   const isLocal = model?.provider === 'local';
   const lastActiveTime = formatTime(session.lastActive);
   const tokens = formatTokens(session.tokensUsed);
+
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          styles.compact,
+          styles[session.status],
+          selected && styles.selected,
+          className
+        )}
+        onClick={onClick}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+      >
+        <StatusBadge status={session.status} />
+        <span className={styles.compactName}>{session.name}</span>
+        <span className={styles.compactStats}>
+          <MessageSquare className={styles.statIcon} />
+          {session.messageCount}
+        </span>
+        <span className={styles.compactTime}>{lastActiveTime}</span>
+      </div>
+    );
+  }
 
   return (
     <div
