@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Hammer,
   Activity,
@@ -25,9 +24,6 @@ import {
   Archive,
   RotateCcw,
   GitCompareArrows,
-  Settings,
-  Shield,
-  LogOut,
   Menu,
   Pencil,
   Check,
@@ -53,8 +49,6 @@ import { useVolundr } from '@/modules/volundr/hooks/useVolundr';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSessionProbe } from '@/modules/volundr/hooks/useSessionStartingPoll';
 import { useDiffViewer } from '@/modules/volundr/hooks/useDiffViewer';
-import { useIdentity } from '@/hooks/useIdentity';
-import { useAuth } from '@/auth';
 import { volundrService } from '@/modules/volundr/adapters';
 import { getAccessToken } from '@/modules/volundr/adapters/api/client';
 import type {
@@ -119,9 +113,6 @@ export function VolundrPage() {
     searchTrackerIssues,
     updateTrackerIssueStatus,
   } = useVolundr();
-  const navigate = useNavigate();
-  const { isAdmin } = useIdentity(volundrService);
-  const { enabled: authEnabled, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedSession, setSelectedSession] = useState<VolundrSession | null>(null);
@@ -884,34 +875,6 @@ export function VolundrPage() {
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Settings & Admin buttons */}
-          <div className={styles.sidebarActions}>
-            <button
-              type="button"
-              className={styles.settingsButton}
-              onClick={() => navigate('/settings')}
-            >
-              <Settings className={styles.settingsButtonIcon} />
-              <span className={styles.settingsButtonLabel}>Settings</span>
-            </button>
-            {isAdmin && (
-              <button
-                type="button"
-                className={styles.settingsButton}
-                onClick={() => navigate('/admin')}
-              >
-                <Shield className={styles.settingsButtonIcon} />
-                <span className={styles.settingsButtonLabel}>Admin</span>
-              </button>
-            )}
-            {authEnabled && (
-              <button type="button" className={styles.settingsButton} onClick={logout}>
-                <LogOut className={styles.settingsButtonIcon} />
-                <span className={styles.settingsButtonLabel}>Sign out</span>
-              </button>
             )}
           </div>
 
