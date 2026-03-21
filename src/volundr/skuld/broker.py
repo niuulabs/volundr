@@ -1554,13 +1554,30 @@ def _sanitize_relative(relative_path: str) -> str:
     return normalised
 
 
-def _check_within_base(base_real: str, target_real: str) -> None:
-    """Raise if target_real is not under base_real.
+def _check_within_base(base: Path, target: Path) -> None:
+    """Raise if ``target`` is not under ``base`` (after resolving both).
 
-    Uses ``os.path.realpath`` + ``str.startswith`` which CodeQL models
-    as a recognised path-injection sanitiser (py/path-injection).
+    This uses ``Path.resolve()`` and an ancestor check instead of string
+    prefix comparison, which is robust against edge cases such as
+    symlinks and makes the containment more explicit.
     """
-    if target_real != base_real and not target_real.startswith(base_real + os.sep):
+    base_resolved = base.resolve()
+    target_resolved = target.resolve()
+    try:
+        # Python 3.9+: use is_relative_to if available
+        is_relative = target_resolved.is_relative_to(base_resolved)  # type: ignore[attr-defined]
+    except AttributeError:
+        # Fallback for older Python: walk parents of target_resolved
+        current = target_resolved
+        is_relative = False
+        while True:
+            if current == base_resolved:
+                is_relative = True
+                break
+            if current.parent == current:
+                break
+            current = current.parent
+    if not is_relative:
         raise HTTPException(400, "Path traversal not allowed")
 
 
@@ -1689,22 +1706,21 @@ async def mkdir(body: MkdirRequest) -> dict:
     _validate_root(body.root)
     base = _resolve_root(body.root)
     sanitized = _sanitize_relative(body.path)
-    base_real = os.path.realpath(str(base))
-    target_real = os.path.realpath(os.path.join(base_real, sanitized))
-    _check_within_base(base_real, target_real)
+    target = (base / sanitized).resolve()
+    _check_within_base(base, target)
 
-    if os.path.exists(target_real):
+    if target.exists():
         raise HTTPException(409, "Path already exists")
 
     try:
-        os.makedirs(target_real, exist_ok=False)
+        target.mkdir(parents=False, exist_ok=False)
     except PermissionError:
         raise HTTPException(403, "Permission denied")
 
-    stat = os.stat(target_real)
+    stat = target.stat()
     return {
-        "name": os.path.basename(target_real),
-        "path": os.path.relpath(target_real, base_real),
+        "name": target.name,
+        "path": str(target.relative_to(base)),
         "type": "directory",
         "size": stat.st_size,
         "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
