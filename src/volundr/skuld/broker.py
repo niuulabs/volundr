@@ -1538,37 +1538,24 @@ def _resolve_root(root: str) -> Path:
     return Path(broker.workspace_dir).resolve()
 
 
-def _safe_resolve(base: Path, relative_path: str) -> Path:
-    """Resolve a path safely, raising HTTPException on traversal attempts.
-
-    Normalises the user-supplied path and enforces that the resolved target
-    remains within the given base directory. This follows the containment
-    pattern recommended for preventing path traversal.
-    """
-    # Reject NUL bytes outright.
+def _sanitize_relative(relative_path: str) -> str:
+    """Sanitize user-supplied path: reject NUL, normalize, reject absolute."""
     if "\0" in relative_path:
         raise HTTPException(400, "Invalid path")
-
-    # Normalise the user-supplied relative path to eliminate '..' segments
-    # and redundant separators.
     normalised = os.path.normpath(relative_path)
-
-    # Guard against absolute paths after normalisation.
     if os.path.isabs(normalised):
         raise HTTPException(400, "Path traversal not allowed")
+    return normalised
 
-    # Canonicalise base and target paths using pathlib.
-    base_resolved = base.resolve()
-    candidate = (base_resolved / normalised).resolve()
 
-    # Ensure target is within base directory (or equal to it).
-    try:
-        candidate.relative_to(base_resolved)
-    except ValueError:
-        # candidate is outside of base_resolved
+def _check_within_base(base_real: str, target_real: str) -> None:
+    """Raise if target_real is not under base_real.
+
+    Uses ``os.path.realpath`` + ``str.startswith`` which CodeQL models
+    as a recognised path-injection sanitiser (py/path-injection).
+    """
+    if target_real != base_real and not target_real.startswith(base_real + os.sep):
         raise HTTPException(400, "Path traversal not allowed")
-
-    return candidate
 
 
 def _validate_root(root: str) -> None:
@@ -1582,7 +1569,11 @@ async def list_files(path: str = "", root: str = "workspace") -> dict:
     """List files and directories in a session root (workspace or home)."""
     _validate_root(root)
     base = _resolve_root(root)
-    target = _safe_resolve(base, path)
+    sanitized = _sanitize_relative(path)
+    base_real = os.path.realpath(str(base))
+    target_real = os.path.realpath(os.path.join(base_real, sanitized))
+    _check_within_base(base_real, target_real)
+    target = Path(target_real)
 
     if not target.is_dir():
         raise HTTPException(404, "Directory not found")
@@ -1617,14 +1608,17 @@ async def download_file(path: str, root: str = "workspace") -> FileResponse:
     """Download a single file from the session."""
     _validate_root(root)
     base = _resolve_root(root)
-    target = _safe_resolve(base, path)
+    sanitized = _sanitize_relative(path)
+    base_real = os.path.realpath(str(base))
+    target_real = os.path.realpath(os.path.join(base_real, sanitized))
+    _check_within_base(base_real, target_real)
 
-    if not target.is_file():
+    if not os.path.isfile(target_real):
         raise HTTPException(404, "File not found")
 
     return FileResponse(
-        path=str(target),
-        filename=target.name,
+        path=target_real,
+        filename=os.path.basename(target_real),
         media_type="application/octet-stream",
     )
 
@@ -1638,9 +1632,12 @@ async def upload_files(
     """Upload files to a target directory in the session."""
     _validate_root(root)
     base = _resolve_root(root)
-    target_dir = _safe_resolve(base, path)
+    sanitized = _sanitize_relative(path)
+    base_real = os.path.realpath(str(base))
+    dir_real = os.path.realpath(os.path.join(base_real, sanitized))
+    _check_within_base(base_real, dir_real)
 
-    if not target_dir.is_dir():
+    if not os.path.isdir(dir_real):
         raise HTTPException(404, "Target directory not found")
 
     max_size = broker._settings.max_upload_size_bytes
@@ -1649,8 +1646,9 @@ async def upload_files(
         if upload.filename is None:
             continue
         # Prevent path traversal in filenames
-        safe_name = Path(upload.filename).name
-        dest = _safe_resolve(base, str(Path(path) / safe_name))
+        safe_name = os.path.basename(upload.filename)
+        dest_real = os.path.realpath(os.path.join(dir_real, safe_name))
+        _check_within_base(base_real, dest_real)
 
         content = await upload.read()
         if len(content) > max_size:
@@ -1658,12 +1656,13 @@ async def upload_files(
                 413,
                 f"File {safe_name} exceeds maximum upload size ({max_size} bytes)",
             )
-        dest.write_bytes(content)
-        stat = dest.stat()
+        with open(dest_real, "wb") as f:
+            f.write(content)
+        stat = os.stat(dest_real)
         uploaded.append(
             {
                 "name": safe_name,
-                "path": str(dest.relative_to(base)),
+                "path": os.path.relpath(dest_real, base_real),
                 "type": "file",
                 "size": stat.st_size,
                 "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
@@ -1683,20 +1682,23 @@ async def mkdir(body: MkdirRequest) -> dict:
     """Create a directory."""
     _validate_root(body.root)
     base = _resolve_root(body.root)
-    target = _safe_resolve(base, body.path)
+    sanitized = _sanitize_relative(body.path)
+    base_real = os.path.realpath(str(base))
+    target_real = os.path.realpath(os.path.join(base_real, sanitized))
+    _check_within_base(base_real, target_real)
 
-    if target.exists():
+    if os.path.exists(target_real):
         raise HTTPException(409, "Path already exists")
 
     try:
-        target.mkdir(parents=True, exist_ok=False)
+        os.makedirs(target_real, exist_ok=False)
     except PermissionError:
         raise HTTPException(403, "Permission denied")
 
-    stat = target.stat()
+    stat = os.stat(target_real)
     return {
-        "name": target.name,
-        "path": str(target.relative_to(base)),
+        "name": os.path.basename(target_real),
+        "path": os.path.relpath(target_real, base_real),
         "type": "directory",
         "size": stat.st_size,
         "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
@@ -1710,20 +1712,23 @@ async def delete_file(path: str, root: str = "workspace") -> dict:
     if not path:
         raise HTTPException(400, "Cannot delete root directory")
     base = _resolve_root(root)
-    target = _safe_resolve(base, path)
+    sanitized = _sanitize_relative(path)
+    base_real = os.path.realpath(str(base))
+    target_real = os.path.realpath(os.path.join(base_real, sanitized))
+    _check_within_base(base_real, target_real)
 
-    if not target.exists():
+    if not os.path.exists(target_real):
         raise HTTPException(404, "Path not found")
 
     try:
-        if target.is_dir():
-            shutil.rmtree(target)
-            return {"deleted": str(target.relative_to(base))}
-        target.unlink()
+        if os.path.isdir(target_real):
+            shutil.rmtree(target_real)
+            return {"deleted": os.path.relpath(target_real, base_real)}
+        os.unlink(target_real)
     except PermissionError:
         raise HTTPException(403, "Permission denied")
 
-    return {"deleted": str(target.relative_to(base))}
+    return {"deleted": os.path.relpath(target_real, base_real)}
 
 
 def _parse_diff_output(raw: str, file_path: str) -> dict:
