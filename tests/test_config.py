@@ -695,7 +695,10 @@ class TestFeatureModuleConfig:
 
     def test_defaults(self):
         config = FeatureModuleConfig(
-            key="test", label="Test", icon="Settings", scope="user",
+            key="test",
+            label="Test",
+            icon="Settings",
+            scope="user",
         )
         assert config.default_enabled is True
         assert config.admin_only is False

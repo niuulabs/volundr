@@ -1367,6 +1367,11 @@ broker = Broker()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    # Attach JWT redaction filter after uvicorn has configured its loggers
+    _redact_filter = _TokenRedactFilter()
+    for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        logging.getLogger(name).addFilter(_redact_filter)
+
     await broker.startup()
     yield
     await broker.shutdown()
@@ -1859,6 +1864,17 @@ async def get_diff_files(
         files.append({"path": path, "status": "mod", "ins": ins, "del": del_})
 
     return {"files": files}
+
+
+class _TokenRedactFilter(logging.Filter):
+    """Redact access_token values from log messages to prevent JWT leaks."""
+
+    _pattern = re.compile(r"access_token=[^\s\"&]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if hasattr(record, "msg") and isinstance(record.msg, str):
+            record.msg = self._pattern.sub("access_token=[REDACTED]", record.msg)
+        return True
 
 
 def main() -> None:

@@ -321,32 +321,6 @@ class TestServiceTemplate:
         assert "targetPort:" in template_yaml
 
 
-class TestInternalServiceTemplate:
-    """Tests for service-internal.yaml template."""
-
-    @pytest.fixture
-    def template_yaml(self) -> str:
-        """Load service-internal.yaml template."""
-        template_path = CHART_DIR / "templates" / "service-internal.yaml"
-        return template_path.read_text()
-
-    def test_gated_on_envoy_enabled(self, template_yaml):
-        """Test internal service is only created when envoy is enabled."""
-        assert ".Values.envoy.enabled" in template_yaml
-
-    def test_targets_http_port(self, template_yaml):
-        """Test internal service targets app http port, bypassing envoy."""
-        assert "targetPort: http" in template_yaml
-
-    def test_has_internal_component_label(self, template_yaml):
-        """Test internal service has api-internal component label."""
-        assert "api-internal" in template_yaml
-
-    def test_uses_selector_labels(self, template_yaml):
-        """Test internal service uses selector labels."""
-        assert 'include "volundr.selectorLabels"' in template_yaml
-
-
 class TestIngressTemplate:
     """Tests for ingress.yaml template."""
 

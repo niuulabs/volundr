@@ -14,6 +14,13 @@ import {
   ToggleLeft,
   LayoutDashboard,
   Settings,
+  MessageSquare,
+  Terminal,
+  Code,
+  FolderOpen,
+  GitCompareArrows,
+  ScrollText,
+  FileText,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -28,6 +35,13 @@ const iconMap: Record<string, LucideIcon> = {
   ToggleLeft,
   LayoutDashboard,
   Settings,
+  MessageSquare,
+  Terminal,
+  Code,
+  FolderOpen,
+  GitCompareArrows,
+  ScrollText,
+  FileText,
 };
 
 export function resolveIcon(name: string): LucideIcon | undefined {

@@ -535,12 +535,12 @@ class TestStopSession:
         assert "cannot stop" in response.json()["detail"].lower()
 
 
-class TestFeatures:
-    """Tests for GET /api/v1/volundr/features."""
+class TestFeatureFlags:
+    """Tests for GET /api/v1/volundr/feature-flags."""
 
-    def test_features_returns_local_mounts_flag(self, client: TestClient):
+    def test_feature_flags_returns_local_mounts_flag(self, client: TestClient):
         """Returns feature flags including local_mounts_enabled."""
-        response = client.get("/api/v1/volundr/features")  # prefix + /features
+        response = client.get("/api/v1/volundr/feature-flags")
         assert response.status_code == 200
         data = response.json()
         assert "local_mounts_enabled" in data

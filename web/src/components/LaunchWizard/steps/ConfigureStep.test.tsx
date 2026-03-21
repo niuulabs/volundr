@@ -1927,7 +1927,11 @@ describe('ConfigureStep', () => {
     it('shows workspace section when archived workspaces exist', async () => {
       const service = {
         ...mockService,
-        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
       } as unknown as import('@/ports').IVolundrService;
 
       renderStep({ service });
@@ -1946,7 +1950,11 @@ describe('ConfigureStep', () => {
     it('shows workspace dropdown with readable labels', async () => {
       const service = {
         ...mockService,
-        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
       } as unknown as import('@/ports').IVolundrService;
 
       renderStep({ service });
@@ -1964,7 +1972,11 @@ describe('ConfigureStep', () => {
     it('filters workspaces by source-compatibility when repo is selected', async () => {
       const service = {
         ...mockService,
-        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
       } as unknown as import('@/ports').IVolundrService;
 
       renderStep({
@@ -1984,10 +1996,14 @@ describe('ConfigureStep', () => {
       expect(screen.queryByText(/other-repo \/ develop/)).not.toBeInTheDocument();
     });
 
-    it('shows all workspaces when "Show all archived workspaces" is checked', async () => {
+    it('shows all workspaces when "Show all existing workspaces" is checked', async () => {
       const service = {
         ...mockService,
-        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
       } as unknown as import('@/ports').IVolundrService;
 
       renderStep({
@@ -2005,8 +2021,8 @@ describe('ConfigureStep', () => {
       // Initially only matching workspace visible
       expect(screen.queryByText(/other-repo \/ develop/)).not.toBeInTheDocument();
 
-      // Check "Show all archived workspaces"
-      fireEvent.click(screen.getByText('Show all archived workspaces'));
+      // Check "Show all existing workspaces"
+      fireEvent.click(screen.getByText('Show all existing workspaces'));
 
       // Both should now be visible
       expect(screen.getByText(/my-feature/)).toBeInTheDocument();
@@ -2016,7 +2032,11 @@ describe('ConfigureStep', () => {
     it('shows message when no workspaces match selected repo', async () => {
       const service = {
         ...mockService,
-        listWorkspaces: vi.fn().mockResolvedValue(mockArchivedWorkspaces),
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
       } as unknown as import('@/ports').IVolundrService;
 
       renderStep({
@@ -2029,7 +2049,7 @@ describe('ConfigureStep', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('No archived workspaces match the selected repository')
+          screen.getByText('No existing workspaces match the selected repository')
         ).toBeInTheDocument();
       });
     });

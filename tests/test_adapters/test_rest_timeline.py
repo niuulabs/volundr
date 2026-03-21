@@ -14,6 +14,7 @@ from tests.conftest import (
     MockPodManager,
 )
 from volundr.adapters.inbound.rest import create_router
+from volundr.adapters.outbound.identity import AllowAllIdentityAdapter
 from volundr.domain.models import GitSource, TimelineEvent, TimelineEventType
 from volundr.domain.services import ChronicleService, SessionService
 
@@ -49,6 +50,7 @@ def chronicle_svc_no_timeline(
 @pytest.fixture
 def app(session_service: SessionService, chronicle_svc: ChronicleService) -> FastAPI:
     app = FastAPI()
+    app.state.identity = AllowAllIdentityAdapter(user_repository=None)
     router = create_router(session_service, chronicle_service=chronicle_svc)
     app.include_router(router)
     return app
@@ -64,6 +66,7 @@ def app_no_timeline(
     session_service: SessionService, chronicle_svc_no_timeline: ChronicleService
 ) -> FastAPI:
     app = FastAPI()
+    app.state.identity = AllowAllIdentityAdapter(user_repository=None)
     router = create_router(session_service, chronicle_service=chronicle_svc_no_timeline)
     app.include_router(router)
     return app

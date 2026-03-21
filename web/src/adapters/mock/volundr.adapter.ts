@@ -1072,6 +1072,80 @@ export class MockVolundrService implements IVolundrService {
   async getFeatureModules(
     _scope?: import('@/models').FeatureScope
   ): Promise<import('@/models').FeatureModule[]> {
+    if (_scope === 'session') {
+      return [
+        {
+          key: 'chat',
+          label: 'Chat',
+          icon: 'MessageSquare',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 10,
+        },
+        {
+          key: 'terminal',
+          label: 'Terminal',
+          icon: 'Terminal',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 20,
+        },
+        {
+          key: 'code',
+          label: 'Code',
+          icon: 'Code',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 30,
+        },
+        {
+          key: 'files',
+          label: 'Files',
+          icon: 'FolderOpen',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 40,
+        },
+        {
+          key: 'diffs',
+          label: 'Diffs',
+          icon: 'GitCompareArrows',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 50,
+        },
+        {
+          key: 'chronicles',
+          label: 'Chronicles',
+          icon: 'ScrollText',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 60,
+        },
+        {
+          key: 'logs',
+          label: 'Logs',
+          icon: 'FileText',
+          scope: 'session',
+          enabled: true,
+          defaultEnabled: true,
+          adminOnly: false,
+          order: 70,
+        },
+      ];
+    }
     return [];
   }
 

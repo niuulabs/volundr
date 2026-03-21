@@ -276,7 +276,7 @@ spec:
         # VS Code REH (Remote Extension Host) server — headless WebSocket-only
         # backend for the VS Code workbench hosted in Hliðskjálf.
         - name: vscode-reh
-          image: "{{ .Values.reh.image.repository }}:{{ .Values.reh.image.tag }}"
+          image: "{{ .Values.reh.image.repository }}:{{ if and .Values.global .Values.global.image .Values.global.image.tag }}{{ .Values.global.image.tag }}{{ else }}{{ .Values.reh.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.reh.image.pullPolicy }}
           securityContext:
             runAsUser: {{ .Values.securityContext.runAsUser }}
@@ -333,7 +333,7 @@ spec:
         {{- if .Values.localServices.enabled }}
         # Devrunner - minimal runtime for local service testing
         - name: devrunner
-          image: "{{ .Values.localServices.devrunner.image.repository }}:{{ .Values.localServices.devrunner.image.tag }}"
+          image: "{{ .Values.localServices.devrunner.image.repository }}:{{ if and .Values.global .Values.global.image .Values.global.image.tag }}{{ .Values.global.image.tag }}{{ else }}{{ .Values.localServices.devrunner.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.localServices.devrunner.image.pullPolicy }}
           securityContext:
             runAsUser: {{ .Values.securityContext.runAsUser }}

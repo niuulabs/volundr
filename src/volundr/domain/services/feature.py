@@ -71,16 +71,18 @@ class FeatureService:
             if not include_disabled and not enabled:
                 continue
 
-            modules.append(FeatureModule(
-                key=cfg.key,
-                label=cfg.label,
-                icon=cfg.icon,
-                scope=cfg.scope,
-                enabled=enabled,
-                default_enabled=cfg.default_enabled,
-                admin_only=cfg.admin_only,
-                order=cfg.order,
-            ))
+            modules.append(
+                FeatureModule(
+                    key=cfg.key,
+                    label=cfg.label,
+                    icon=cfg.icon,
+                    scope=cfg.scope,
+                    enabled=enabled,
+                    default_enabled=cfg.default_enabled,
+                    admin_only=cfg.admin_only,
+                    order=cfg.order,
+                )
+            )
 
         modules.sort(key=lambda m: m.order)
         return modules

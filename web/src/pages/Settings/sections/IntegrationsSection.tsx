@@ -5,6 +5,7 @@ import { cn } from '@/utils';
 import { IntegrationCard } from '@/components/IntegrationCard';
 import { CredentialForm as IntegrationCredentialForm } from '@/components/CredentialForm';
 import type { IVolundrService } from '@/ports';
+import { getAccessToken } from '@/adapters/api/client';
 import styles from '../Settings.module.css';
 
 /* ------------------------------------------------------------------ */
@@ -62,8 +63,13 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
     async (entry: CatalogEntry) => {
       if (entry.auth_type === 'oauth2_authorization_code') {
         try {
+          const headers: Record<string, string> = {};
+          const token = getAccessToken();
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
           const resp = await fetch(`/api/v1/volundr/integrations/oauth/${entry.slug}/authorize`, {
-            credentials: 'include',
+            headers,
           });
           if (!resp.ok) {
             setIntegrationFormError('Failed to start OAuth flow');

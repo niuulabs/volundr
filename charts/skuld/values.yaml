@@ -28,7 +28,7 @@ image:
   # -- Skuld broker image repository
   repository: ghcr.io/niuulabs/skuld
   # -- Skuld broker image tag
-  tag: "dev-45"
+  tag: "latest"
   # -- Image pull policy
   pullPolicy: Always
 
@@ -79,7 +79,7 @@ reh:
     # -- REH server image repository (built with download-reh.sh baked in)
     repository: ghcr.io/niuulabs/vscode-reh
     # -- REH server image tag (must match @codingame/monaco-vscode-api version)
-    tag: "dev-45"
+    tag: "latest"
     # -- REH server image pull policy
     pullPolicy: Always
   # -- Port for the REH WebSocket server
@@ -122,7 +122,7 @@ localServices:
       # -- Devrunner image repository
       repository: ghcr.io/niuulabs/devrunner
       # -- Devrunner image tag
-      tag: "dev-45"
+      tag: "latest"
       # -- Devrunner image pull policy
       pullPolicy: Always
     resources:
@@ -360,6 +360,9 @@ gateway:
     allowMethods:
       - GET
       - POST
+      - PUT
+      - DELETE
+      - PATCH
       - OPTIONS
     # -- Allowed request headers
     allowHeaders:
