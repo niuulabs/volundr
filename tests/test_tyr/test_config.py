@@ -3,33 +3,40 @@
 from tyr.config import DatabaseConfig, LoggingConfig, Settings
 
 
-def test_default_settings() -> None:
-    """Default settings are created without errors."""
-    settings = Settings()
+class TestDatabaseConfig:
+    def test_defaults(self) -> None:
+        config = DatabaseConfig()
+        assert config.host == "localhost"
+        assert config.port == 5432
+        assert config.user == "tyr"
+        assert config.password == "tyr"
+        assert config.name == "tyr"
+        assert config.min_pool_size == 5
+        assert config.max_pool_size == 20
 
-    assert settings.database.host == "localhost"
-    assert settings.database.port == 5432
-    assert settings.database.name == "tyr"
-    assert settings.logging.level == "info"
-    assert settings.logging.format == "text"
+    def test_dsn(self) -> None:
+        config = DatabaseConfig(host="db", port=5433, user="u", password="p", name="mydb")
+        assert config.dsn == "postgresql://u:p@db:5433/mydb"
 
-
-def test_database_dsn() -> None:
-    """Database DSN is correctly formatted."""
-    config = DatabaseConfig(
-        host="db.example.com",
-        port=5433,
-        user="myuser",
-        password="mypass",
-        name="mydb",
-    )
-
-    assert config.dsn == "postgresql://myuser:mypass@db.example.com:5433/mydb"
+    def test_custom_values(self) -> None:
+        config = DatabaseConfig(host="prod-db", min_pool_size=10, max_pool_size=50)
+        assert config.host == "prod-db"
+        assert config.min_pool_size == 10
 
 
-def test_logging_config_defaults() -> None:
-    """Logging config has sensible defaults."""
-    config = LoggingConfig()
+class TestLoggingConfig:
+    def test_defaults(self) -> None:
+        config = LoggingConfig()
+        assert config.level == "info"
+        assert config.format == "text"
 
-    assert config.level == "info"
-    assert config.format == "text"
+
+class TestSettings:
+    def test_defaults(self) -> None:
+        settings = Settings()
+        assert isinstance(settings.database, DatabaseConfig)
+        assert isinstance(settings.logging, LoggingConfig)
+
+    def test_nested_override(self) -> None:
+        settings = Settings(database=DatabaseConfig(host="custom-host"))
+        assert settings.database.host == "custom-host"

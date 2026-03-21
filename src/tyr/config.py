@@ -10,6 +10,8 @@ Environment variable override format:
 - Use double underscore for nested fields: DATABASE__HOST
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -34,6 +36,8 @@ class DatabaseConfig(BaseModel):
     user: str = Field(default="tyr")
     password: str = Field(default="tyr")
     name: str = Field(default="tyr")
+    min_pool_size: int = Field(default=5)
+    max_pool_size: int = Field(default=20)
 
     @property
     def dsn(self) -> str:
