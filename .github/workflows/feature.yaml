@@ -1,0 +1,122 @@
+# Runs on every push to feat/* branches:
+# Builds all container images tagged with the feature name extracted from
+# the branch (e.g. feat/tyr-ui → tag "tyr-ui").
+# No versioning, no Helm charts, no CLI — just images for testing.
+name: Feature Build
+
+on:
+  push:
+    branches: ['feat/**']
+
+permissions: read-all
+
+env:
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: feature-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Extract feature name from branch for tagging
+  # ---------------------------------------------------------------------------
+  meta:
+    name: Extract Feature Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Derive tag from branch name
+        id: tag
+        run: |
+          # Strip "feat/" prefix → use remainder as tag
+          # e.g. feat/tyr-ui → tyr-ui, feat/auth/oidc → auth-oidc
+          RAW="${GITHUB_REF_NAME#feat/}"
+          # Replace slashes with dashes for valid Docker tag
+          TAG="${RAW//\//-}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Feature tag: ${TAG}"
+
+  # ---------------------------------------------------------------------------
+  # Containers — build per platform, then merge manifests
+  # ---------------------------------------------------------------------------
+  build-container-image:
+    name: "Build ${{ matrix.container }} (${{ matrix.platform }})"
+    needs: meta
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: ./containers/${{ matrix.container }}/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.meta.outputs.tag }}-${{ matrix.platform }}
+          build-args: |
+            APP_VERSION=${{ needs.meta.outputs.tag }}-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.container }}
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.vendor=Niuu Labs
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            dev.niuu.feature=${{ needs.meta.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
+          provenance: false
+
+  merge-container-manifests:
+    name: "Manifest ${{ matrix.container }}"
+    needs: [meta, build-container-image]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifests
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}"
+          TAG="${{ needs.meta.outputs.tag }}"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          # Feature tag (mutable, always points to latest push on this feature branch)
+          docker manifest create "${IMAGE}:${TAG}" \
+            "${IMAGE}:${TAG}-amd64" \
+            "${IMAGE}:${TAG}-arm64"
+          docker manifest push "${IMAGE}:${TAG}"
+
+          # Feature + short sha (immutable, for pinning a specific build)
+          docker manifest create "${IMAGE}:${TAG}-${SHORT_SHA}" \
+            "${IMAGE}:${TAG}-amd64" \
+            "${IMAGE}:${TAG}-arm64"
+          docker manifest push "${IMAGE}:${TAG}-${SHORT_SHA}"
