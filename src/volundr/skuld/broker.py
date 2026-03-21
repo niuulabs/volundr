@@ -1541,18 +1541,25 @@ def _resolve_root(root: str) -> Path:
 def _safe_resolve(base: Path, relative_path: str) -> Path:
     """Resolve a path safely, raising HTTPException on traversal attempts.
 
-    Uses os.path.realpath + str.startswith guard so that CodeQL recognises
-    the taint sanitisation (py/path-injection).
+    Normalises the user-supplied path and enforces that the resolved target
+    remains within the given base directory. This follows the containment
+    pattern recommended for preventing path traversal.
     """
+    # Reject NUL bytes outright.
     if "\0" in relative_path:
         raise HTTPException(400, "Invalid path")
-    cleaned = relative_path.replace("\\", "/").lstrip("/")
-    if any(part == ".." for part in cleaned.split("/")):
+
+    # Normalise the user-supplied relative path to eliminate '..' segments
+    # and redundant separators.
+    normalised = os.path.normpath(relative_path)
+
+    # Guard against absolute paths after normalisation.
+    if os.path.isabs(normalised):
         raise HTTPException(400, "Path traversal not allowed")
 
     # Canonicalise base and target paths.
     base_real = os.path.realpath(str(base))
-    target_real = os.path.realpath(os.path.join(base_real, cleaned))
+    target_real = os.path.realpath(os.path.join(base_real, normalised))
 
     # Ensure target is within base directory (or equal to it).
     base_prefix = base_real if base_real.endswith(os.sep) else base_real + os.sep
