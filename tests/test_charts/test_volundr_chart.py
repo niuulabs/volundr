@@ -321,7 +321,6 @@ class TestServiceTemplate:
         assert "targetPort:" in template_yaml
 
 
-
 class TestIngressTemplate:
     """Tests for ingress.yaml template."""
 
