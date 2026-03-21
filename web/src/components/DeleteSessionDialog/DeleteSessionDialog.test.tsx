@@ -172,7 +172,9 @@ describe('DeleteSessionDialog', () => {
     const chroniclesCheckbox = screen.getByTestId('cleanup-chronicles') as HTMLInputElement;
     expect(chroniclesCheckbox.disabled).toBe(false);
 
-    expect(screen.getByText('Local mounted workspace — manage storage on your machine.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Local mounted workspace — manage storage on your machine.')
+    ).toBeInTheDocument();
   });
 
   it('does not include disabled workspace_storage in cleanup targets', () => {

@@ -7,3 +7,24 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+
+      - id: ruff-check
+        name: Ruff lint
+        entry: ruff check --fix
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: Ruff format
+        entry: ruff format
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: prettier
+        name: Prettier format
+        entry: npx prettier --write
+        language: system
+        files: ^web/src/.*\.(ts|tsx|css)$
+        stages: [pre-commit]

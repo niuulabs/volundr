@@ -98,7 +98,11 @@ export const DeleteSessionDialog: FC<DeleteSessionDialogProps> = ({
                     key={option.target}
                     className={styles.checkboxItem}
                     data-disabled={disabled || undefined}
-                    title={disabled ? 'Local mounted workspace — manage storage on your machine' : undefined}
+                    title={
+                      disabled
+                        ? 'Local mounted workspace — manage storage on your machine'
+                        : undefined
+                    }
                   >
                     <input
                       type="checkbox"
