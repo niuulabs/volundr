@@ -148,12 +148,16 @@ class TestSaga:
             tracker_id="LIN-100",
             tracker_type="linear",
             slug="my-saga",
+            name="My Saga",
             repo="niuulabs/volundr",
             feature_branch="feat/my-saga",
+            status=SagaStatus.ACTIVE,
             confidence=0.9,
             created_at=NOW,
         )
         assert saga.tracker_id == "LIN-100"
+        assert saga.name == "My Saga"
+        assert saga.status == SagaStatus.ACTIVE
         assert saga.confidence == 0.9
 
     def test_frozen(self) -> None:
@@ -162,8 +166,10 @@ class TestSaga:
             tracker_id="LIN-100",
             tracker_type="linear",
             slug="s",
+            name="S",
             repo="r",
             feature_branch="f",
+            status=SagaStatus.ACTIVE,
             confidence=0.5,
             created_at=NOW,
         )
@@ -193,6 +199,8 @@ class TestRaid:
             phase_id=uuid4(),
             tracker_id="LIN-102",
             name="Raid 1",
+            description="Implement the feature",
+            acceptance_criteria=["Tests pass", "Coverage > 85%"],
             declared_files=["src/foo.py"],
             estimate_hours=2.0,
             status=RaidStatus.PENDING,
@@ -204,6 +212,8 @@ class TestRaid:
             created_at=NOW,
             updated_at=NOW,
         )
+        assert raid.description == "Implement the feature"
+        assert len(raid.acceptance_criteria) == 2
         assert raid.declared_files == ["src/foo.py"]
         assert raid.estimate_hours == 2.0
         assert raid.session_id is None

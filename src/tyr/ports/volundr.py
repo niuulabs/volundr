@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from tyr.domain.models import Raid, SessionInfo
+from tyr.domain.models import PRStatus, Raid, SessionInfo
 
 
 class VolundrPort(ABC):
@@ -21,3 +21,6 @@ class VolundrPort(ABC):
 
     @abstractmethod
     async def get_chronicle_summary(self, session_id: str) -> str: ...
+
+    @abstractmethod
+    async def get_pr_status(self, session_id: str) -> PRStatus: ...

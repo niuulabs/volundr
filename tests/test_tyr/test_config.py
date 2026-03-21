@@ -27,8 +27,8 @@ class TestDatabaseConfig:
 class TestLoggingConfig:
     def test_defaults(self) -> None:
         config = LoggingConfig()
-        assert config.level == "INFO"
-        assert config.format == "json"
+        assert config.level == "info"
+        assert config.format == "text"
 
 
 class TestSettings:

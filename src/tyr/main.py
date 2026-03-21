@@ -71,12 +71,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 app = create_app()
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     """Run the Tyr API server."""
+    import os
+
     import uvicorn
 
-    uvicorn.run("tyr.main:app", host="0.0.0.0", port=8001, reload=True)  # noqa: S104
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8081"))
+    workers = int(os.environ.get("WORKERS", "4"))
+
+    uvicorn.run(
+        "tyr.main:app",
+        host=host,
+        port=port,
+        workers=workers,
+        access_log=False,
+    )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

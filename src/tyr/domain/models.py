@@ -76,8 +76,10 @@ class Saga:
     tracker_id: str
     tracker_type: str
     slug: str
+    name: str
     repo: str
     feature_branch: str
+    status: SagaStatus
     confidence: float
     created_at: datetime
 
@@ -99,6 +101,8 @@ class Raid:
     phase_id: UUID
     tracker_id: str
     name: str
+    description: str
+    acceptance_criteria: list[str]
     declared_files: list[str]
     estimate_hours: float | None
     status: RaidStatus

@@ -45,6 +45,7 @@ class TestVolundrPort:
             "get_session",
             "stop_session",
             "get_chronicle_summary",
+            "get_pr_status",
         }
         abstract_methods = {
             name
