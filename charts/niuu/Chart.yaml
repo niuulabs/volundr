@@ -1,0 +1,25 @@
+apiVersion: v2
+name: niuu
+description: "Niuu AI Platform — umbrella chart"
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - niuu
+  - ai
+  - platform
+maintainers:
+  - name: Niuu Labs
+    url: https://github.com/niuulabs
+home: https://github.com/niuulabs/volundr
+sources:
+  - https://github.com/niuulabs/volundr
+dependencies:
+  - name: volundr
+    version: ">=0.1.0-0"
+    repository: "file://../volundr"
+    condition: volundr.enabled
+  - name: tyr
+    version: ">=0.1.0-0"
+    repository: "file://../tyr"
+    condition: tyr.enabled

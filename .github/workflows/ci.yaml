@@ -326,6 +326,14 @@ jobs:
       - name: Lint volundr chart
         run: helm lint charts/volundr/
 
+      - name: Lint tyr chart
+        run: helm lint charts/tyr/
+
+      - name: Lint niuu umbrella chart
+        run: |
+          helm dependency build charts/niuu
+          helm lint charts/niuu/
+
   # ---------------------------------------------------------------------------
   # Containers — build per platform natively, then merge manifests
   # ---------------------------------------------------------------------------
@@ -432,13 +440,19 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" charts/volundr/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/volundr/Chart.yaml
 
-          cat charts/skuld/Chart.yaml
-          cat charts/volundr/Chart.yaml
+          sed -i "s/^version:.*/version: $VERSION/" charts/tyr/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/tyr/Chart.yaml
+
+          sed -i "s/^version:.*/version: $VERSION/" charts/niuu/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu/Chart.yaml
 
       - name: Package Helm charts
         run: |
           helm package charts/skuld -d .helm-packages/
           helm package charts/volundr -d .helm-packages/
+          helm package charts/tyr -d .helm-packages/
+          helm dependency build charts/niuu
+          helm package charts/niuu -d .helm-packages/
 
       - name: Log in to Container Registry
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
@@ -451,6 +465,8 @@ jobs:
         run: |
           helm push .helm-packages/skuld-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
           helm push .helm-packages/volundr-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+          helm push .helm-packages/tyr-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+          helm push .helm-packages/niuu-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
   # ---------------------------------------------------------------------------
   # Security — container vulnerability scanning

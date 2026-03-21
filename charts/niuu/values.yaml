@@ -1,0 +1,11 @@
+global:
+  imagePullSecrets: []
+  image:
+    registry: ghcr.io/niuulabs
+  domain: niuu.world
+
+volundr:
+  enabled: true
+
+tyr:
+  enabled: false  # false until NIU-214 creates the tyr chart
