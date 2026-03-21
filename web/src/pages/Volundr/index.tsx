@@ -752,19 +752,8 @@ export function VolundrPage() {
             <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search..." />
           </div>
 
-          {/* Filter + view toggle */}
+          {/* View toggle + filter */}
           <div className={styles.filterRow}>
-            <select
-              className={styles.statusSelect}
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-            >
-              {STATUS_OPTIONS.map(opt => (
-                <option key={opt} value={opt}>
-                  {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                </option>
-              ))}
-            </select>
             <button
               type="button"
               className={styles.viewToggle}
@@ -777,6 +766,17 @@ export function VolundrPage() {
                 <List className={styles.viewToggleIcon} />
               )}
             </button>
+            <select
+              className={styles.statusSelect}
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              {STATUS_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>
+                  {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Session list — grouped by repository */}

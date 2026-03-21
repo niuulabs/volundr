@@ -138,6 +138,11 @@
   padding: var(--space-2) var(--space-3);
 }
 
+.filterRow > *:last-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .sessionsList {
   flex: 1;
   overflow-y: auto;
