@@ -1,0 +1,19 @@
+# Niuu AI Platform — umbrella chart values
+#
+# Global values propagate to all subcharts:
+#   global.image.registry    → volundr.image, volundr.web.image, tyr.image
+#   global.image.tag         → all image tags
+#   global.imagePullSecrets  → all pod specs
+#   global.domain            → ingress/gateway hostname generation
+
+global:
+  imagePullSecrets: []
+  image:
+    registry: ghcr.io/niuulabs
+  domain: niuu.world
+
+volundr:
+  enabled: true
+
+tyr:
+  enabled: true

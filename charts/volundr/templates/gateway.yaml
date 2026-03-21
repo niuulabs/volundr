@@ -10,7 +10,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: {{ .Values.sessionGateway.name }}
+  name: {{ include "volundr.sessionGateway.name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     helm.sh/chart: {{ include "volundr.chart" . }}
@@ -31,11 +31,11 @@ spec:
     - name: https
       protocol: HTTPS
       port: 443
-      hostname: {{ .Values.sessionGateway.hostname | quote }}
+      hostname: {{ include "volundr.sessionGateway.hostname" . | quote }}
       tls:
         mode: Terminate
         certificateRefs:
-          - name: {{ .Values.sessionGateway.tlsSecretName | default (printf "%s-tls" .Values.sessionGateway.name) }}
+          - name: {{ .Values.sessionGateway.tlsSecretName | default (printf "%s-tls" (include "volundr.sessionGateway.name" .)) }}
       allowedRoutes:
         namespaces:
           from: {{ .Values.sessionGateway.allowedRouteNamespaces | default "All" }}
@@ -43,7 +43,7 @@ spec:
     - name: http
       protocol: HTTP
       port: 80
-      hostname: {{ .Values.sessionGateway.hostname | quote }}
+      hostname: {{ include "volundr.sessionGateway.hostname" . | quote }}
       allowedRoutes:
         namespaces:
           from: {{ .Values.sessionGateway.allowedRouteNamespaces | default "All" }}
@@ -54,7 +54,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: {{ .Values.sessionGateway.name }}-http-redirect
+  name: {{ include "volundr.sessionGateway.name" . }}-http-redirect
   namespace: {{ .Release.Namespace }}
   labels:
     helm.sh/chart: {{ include "volundr.chart" . }}
@@ -64,7 +64,7 @@ metadata:
     app.kubernetes.io/part-of: volundr
 spec:
   parentRefs:
-    - name: {{ .Values.sessionGateway.name }}
+    - name: {{ include "volundr.sessionGateway.name" . }}
       namespace: {{ .Release.Namespace }}
       sectionName: http
   rules:

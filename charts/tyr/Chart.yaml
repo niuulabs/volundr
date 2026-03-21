@@ -1,14 +1,13 @@
 apiVersion: v2
 name: tyr
-description: "Tyr — saga coordinator for multi-session orchestration"
+description: "Tyr — saga coordinator for multi-repo campaign orchestration"
 type: application
-version: 0.1.0-dev1
+version: 0.1.0
 appVersion: "0.1.0"
 keywords:
   - tyr
   - saga
   - coordinator
-  - orchestration
   - ai
   - kubernetes
 maintainers:

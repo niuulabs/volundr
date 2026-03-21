@@ -562,7 +562,7 @@ class TestNewValuesDefaults:
         """Test database is configured."""
         db = values_yaml["database"]
         assert db["name"] == "volundr"
-        assert db["existingSecret"] == "volundr-db"
+        assert db["existingSecret"] == ""
         assert db["external"]["enabled"] is True
 
     def test_pod_manager_configured(self, values_yaml):
