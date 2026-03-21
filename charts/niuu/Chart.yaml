@@ -16,10 +16,10 @@ sources:
   - https://github.com/niuulabs/volundr
 dependencies:
   - name: volundr
-    version: ">=0.1.0-0"
+    version: ">=0.0.0-0"
     repository: "file://../volundr"
     condition: volundr.enabled
   - name: tyr
-    version: ">=0.1.0-0"
+    version: ">=0.0.0-0"
     repository: "file://../tyr"
     condition: tyr.enabled
