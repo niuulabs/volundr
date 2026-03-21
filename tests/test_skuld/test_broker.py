@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 
 from volundr.skuld.broker import (
     Broker,
-    _TokenRedactFilter,
     _log_buffer,
+    _TokenRedactFilter,
     app,
     broker,
 )
@@ -1773,9 +1773,13 @@ class TestTokenRedactFilter:
         """access_token values are replaced with [REDACTED]."""
         f = _TokenRedactFilter()
         record = logging.LogRecord(
-            name="uvicorn", level=logging.INFO, pathname="", lineno=0,
-            msg='WebSocket /session?access_token=eyJhbGciOiJSUzI1NiJ9.payload.sig [accepted]',
-            args=None, exc_info=None,
+            name="uvicorn",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="WebSocket /session?access_token=eyJhbGciOiJSUzI1NiJ9.payload.sig [accepted]",
+            args=None,
+            exc_info=None,
         )
         f.filter(record)
         assert "eyJ" not in record.msg
@@ -1787,8 +1791,13 @@ class TestTokenRedactFilter:
         f = _TokenRedactFilter()
         original = "GET /api/files HTTP/1.1 200"
         record = logging.LogRecord(
-            name="uvicorn", level=logging.INFO, pathname="", lineno=0,
-            msg=original, args=None, exc_info=None,
+            name="uvicorn",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=original,
+            args=None,
+            exc_info=None,
         )
         f.filter(record)
         assert record.msg == original
@@ -1797,8 +1806,13 @@ class TestTokenRedactFilter:
         """Filter returns True (keep the record, just redact)."""
         f = _TokenRedactFilter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="access_token=secret", args=None, exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="access_token=secret",
+            args=None,
+            exc_info=None,
         )
         assert f.filter(record) is True
 
@@ -1806,8 +1820,13 @@ class TestTokenRedactFilter:
         """Non-string msg is left alone without error."""
         f = _TokenRedactFilter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg=12345, args=None, exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=12345,
+            args=None,
+            exc_info=None,
         )
         f.filter(record)
         assert record.msg == 12345
@@ -1816,9 +1835,13 @@ class TestTokenRedactFilter:
         """Multiple tokens in one message are all redacted."""
         f = _TokenRedactFilter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
             msg="first access_token=abc123 second access_token=xyz789",
-            args=None, exc_info=None,
+            args=None,
+            exc_info=None,
         )
         f.filter(record)
         assert record.msg == "first access_token=[REDACTED] second access_token=[REDACTED]"
@@ -1827,6 +1850,7 @@ class TestTokenRedactFilter:
         """Lifespan attaches redact filter to uvicorn loggers."""
         # The lifespan context attaches filters — verify by running it
         import asyncio
+
         from volundr.skuld.broker import lifespan
 
         async def check():
@@ -1837,9 +1861,7 @@ class TestTokenRedactFilter:
             async with lifespan(app):
                 for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
                     logger = logging.getLogger(name)
-                    has_redact = any(
-                        isinstance(f, _TokenRedactFilter) for f in logger.filters
-                    )
+                    has_redact = any(isinstance(f, _TokenRedactFilter) for f in logger.filters)
                     assert has_redact, f"{name} missing _TokenRedactFilter"
 
         asyncio.run(check())
