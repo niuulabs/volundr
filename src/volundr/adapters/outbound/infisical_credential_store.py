@@ -169,10 +169,11 @@ class InfisicalCredentialStore(CredentialStorePort):
         client = await self._get_client()
         headers = await self._headers()
 
-        response = await client.delete(
+        response = await client.request(
+            "DELETE",
             f"/api/v3/secrets/raw/{key}",
             headers=headers,
-            params={
+            json={
                 "workspaceId": self._project_id,
                 "environment": self._environment,
                 "secretPath": folder_path,
@@ -181,8 +182,10 @@ class InfisicalCredentialStore(CredentialStorePort):
         )
         if response.status_code >= 400 and response.status_code != 404:
             logger.error(
-                "Infisical delete failed with status code: %s",
+                "Infisical delete failed for %s (%s): %s",
+                key,
                 response.status_code,
+                response.text[:200],
             )
 
     async def _list_secrets_in_folder(self, folder_path: str) -> list[dict]:
@@ -355,10 +358,11 @@ class InfisicalCredentialStore(CredentialStorePort):
         # Delete the folder itself
         client = await self._get_client()
         headers = await self._headers()
-        await client.delete(
+        await client.request(
+            "DELETE",
             "/api/v1/folders",
             headers=headers,
-            params={
+            json={
                 "workspaceId": self._project_id,
                 "environment": self._environment,
                 "path": self._owner_folder(owner_type, owner_id),
