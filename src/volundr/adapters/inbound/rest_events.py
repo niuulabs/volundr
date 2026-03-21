@@ -5,12 +5,13 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 
 from volundr.domain.models import SessionEvent, SessionEventType
 from volundr.domain.ports import SessionEventRepository
 from volundr.domain.services.event_ingestion import EventIngestionService
+from volundr.domain.services.session import SessionAccessDeniedError, SessionService
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +165,30 @@ class SinkHealthResponse(BaseModel):
 def create_events_router(
     ingestion_service: EventIngestionService,
     event_repository: SessionEventRepository,
+    session_service: SessionService | None = None,
 ) -> APIRouter:
     """Create FastAPI router for event pipeline endpoints."""
     router = APIRouter(prefix="/api/v1/volundr")
+
+    async def _check_event_access(
+        request: Request, session_id: UUID, action: str = "emit_event"
+    ) -> None:
+        """Check that the caller is authorized to emit events for a session."""
+        if session_service is None:
+            return
+        from volundr.adapters.inbound.auth import extract_principal
+
+        principal = await extract_principal(request)
+        session = await session_service.get_session(session_id)
+        if session is None:
+            return
+        try:
+            await session_service._check_access(session, principal, action)
+        except SessionAccessDeniedError:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Not authorized to emit events for session {session_id}",
+            )
 
     @router.post(
         "/events",
@@ -174,8 +196,9 @@ def create_events_router(
         status_code=status.HTTP_201_CREATED,
         tags=["Events"],
     )
-    async def ingest_event(data: EventIngestRequest) -> SessionEventResponse:
+    async def ingest_event(request: Request, data: EventIngestRequest) -> SessionEventResponse:
         """Ingest a single session event into the pipeline."""
+        await _check_event_access(request, data.session_id)
         try:
             event_type = SessionEventType(data.event_type)
         except ValueError:
@@ -206,8 +229,17 @@ def create_events_router(
         status_code=status.HTTP_201_CREATED,
         tags=["Events"],
     )
-    async def ingest_event_batch(data: EventBatchRequest) -> list[SessionEventResponse]:
+    async def ingest_event_batch(
+        request: Request, data: EventBatchRequest
+    ) -> list[SessionEventResponse]:
         """Ingest a batch of session events into the pipeline."""
+        # Check access for all unique session IDs in the batch
+        checked_sessions: set[UUID] = set()
+        for item in data.events:
+            if item.session_id not in checked_sessions:
+                await _check_event_access(request, item.session_id)
+                checked_sessions.add(item.session_id)
+
         events: list[SessionEvent] = []
         for item in data.events:
             try:

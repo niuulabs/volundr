@@ -13,7 +13,7 @@ Völundr is a self-hosted Claude Code session manager. Users create sessions, pi
 - Python / FastAPI
 - Hexagonal architecture with adapter pattern
 - PostgreSQL (raw SQL, no ORM)
-- Farm (ITaaS) for session orchestration
+- Flux for session orchestration
 
 ---
 
@@ -24,7 +24,7 @@ Völundr is a self-hosted Claude Code session manager. Users create sessions, pi
 │                          VÖLUNDR                                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   Volundr UI ──────► Volundr (API) ───────► Farm (ITaaS)    │
+│   Volundr UI ──────► Volundr (API) ───────► Flux    │
 │      ✅ DONE                🔨 WIP                ✅ DONE       │
 │                                 │                               │
 │                                 │     Flux/Fleet + Helm         │
@@ -64,7 +64,7 @@ INBOUND ADAPTERS          CORE DOMAIN              OUTBOUND ADAPTERS
 └─────────────┘          │                 │      └─────────────────┘
                          │                 │
                          │                 │      ┌─────────────────┐
-                         │                 │─────►│ Farm Adapter    │
+                         │                 │─────►│ Pod Manager    │
                          │                 │      │ (ITaaS API)     │
                          └─────────────────┘      └─────────────────┘
                                  │
@@ -389,7 +389,7 @@ Volundr returns the chat endpoint URL when starting a session. UI connects direc
 **Priority**: MEDIUM — Required for full session lifecycle
 
 #### 6.1 Enhanced Start Response
-**File:** `src/volundr/adapters/outbound/farm.py`
+**File:** `src/volundr/adapters/outbound/flux.py`
 
 - [x] Extract `pod_name` from Farm task response
 - [x] Pass repo URL and branch to Farm task payload
@@ -559,7 +559,7 @@ Phase 2 (Stats)         Phase 3 (Token API)          Phase 4 (Models)
 | `src/volundr/domain/services.py` | Update SessionService, add StatsService |
 | `src/volundr/adapters/inbound/rest.py` | Update schemas, add stats/usage endpoints |
 | `src/volundr/adapters/outbound/postgres.py` | Handle new session fields |
-| `src/volundr/adapters/outbound/farm.py` | Return pod_name, pass git info |
+| `src/volundr/adapters/outbound/flux.py` | Return pod_name, pass git info |
 | `src/volundr/infrastructure/database.py` | Add new tables and columns |
 | `src/volundr/config.py` | Add GitConfig, ModelConfig |
 | `src/volundr/main.py` | Wire up new services and adapters |

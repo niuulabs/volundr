@@ -107,14 +107,14 @@ class PodManagerConfig(BaseModel):
     Example YAML::
 
         pod_manager:
-          adapter: "volundr.adapters.outbound.farm.FarmPodManager"
-          base_url: "http://farm-tasks.default.svc.cluster.local"
-          timeout: 30
+          adapter: "volundr.adapters.outbound.flux.FluxPodManager"
+          namespace: "volundr"
+          chart_name: "skuld"
           ...
     """
 
     adapter: str = Field(
-        default="volundr.adapters.outbound.farm.FarmPodManager",
+        default="volundr.adapters.outbound.flux.FluxPodManager",
         description="Fully-qualified class path for the PodManager adapter.",
     )
     kwargs: dict[str, Any] = Field(
@@ -560,6 +560,32 @@ class SessionContributorConfig(BaseModel):
     )
 
 
+class OAuthSpecConfig(BaseModel):
+    """OAuth2 provider specification in config."""
+
+    authorize_url: str
+    token_url: str
+    revoke_url: str = ""
+    scopes: list[str] = Field(default_factory=list)
+    token_field_mapping: dict[str, str] = Field(default_factory=dict)
+    extra_authorize_params: dict[str, str] = Field(default_factory=dict)
+    extra_token_params: dict[str, str] = Field(default_factory=dict)
+
+
+class OAuthClientConfig(BaseModel):
+    """Client credentials for a single OAuth integration."""
+
+    client_id: str
+    client_secret: str
+
+
+class OAuthConfig(BaseModel):
+    """Top-level OAuth configuration."""
+
+    redirect_base_url: str = ""
+    clients: dict[str, OAuthClientConfig] = Field(default_factory=dict)
+
+
 class IntegrationDefinitionConfig(BaseModel):
     """A single integration definition in the catalog."""
 
@@ -573,6 +599,9 @@ class IntegrationDefinitionConfig(BaseModel):
     config_schema: dict[str, Any] = Field(default_factory=dict)
     mcp_server: dict[str, Any] | None = None
     env_from_credentials: dict[str, str] = Field(default_factory=dict)
+    auth_type: str = "api_key"
+    oauth: OAuthSpecConfig | None = None
+    file_mounts: dict[str, str] = Field(default_factory=dict)
 
 
 def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
@@ -657,6 +686,14 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
                 "args": ["-y", "@modelcontextprotocol/server-linear"],
                 "env_from_credentials": {"LINEAR_API_KEY": "api_key"},
             },
+            auth_type="oauth2_authorization_code",
+            oauth=OAuthSpecConfig(
+                authorize_url="https://linear.app/oauth/authorize",
+                token_url="https://api.linear.app/oauth/token",
+                revoke_url="https://api.linear.app/oauth/revoke",
+                scopes=["read", "write", "issues:create", "comments:create"],
+                token_field_mapping={"api_key": "access_token"},
+            ),
         ),
         IntegrationDefinitionConfig(
             slug="anthropic",
@@ -691,6 +728,192 @@ class IntegrationsConfig(BaseModel):
     definitions: list[IntegrationDefinitionConfig] = Field(
         default_factory=_default_integration_definitions,
     )
+
+
+class FeatureModuleConfig(BaseModel):
+    """A single feature module definition.
+
+    Each entry defines a UI module that can be toggled on/off by admins
+    and reordered/hidden by users. The ``key`` maps to a frontend component
+    registered in the module registry.
+
+    Example YAML::
+
+        features:
+          - key: users
+            label: Users
+            icon: Users
+            scope: admin
+            default_enabled: true
+            order: 10
+    """
+
+    key: str = Field(description="Unique module identifier, e.g. 'users', 'storage'")
+    label: str = Field(description="Display name shown in navigation")
+    icon: str = Field(description="Lucide icon name, e.g. 'Users', 'HardDrive'")
+    scope: str = Field(description="'admin' or 'user' — which page this module appears on")
+    default_enabled: bool = Field(
+        default=True,
+        description="Whether this module is enabled by default for all users",
+    )
+    admin_only: bool = Field(
+        default=False,
+        description="Whether this module is only visible to admin users",
+    )
+    order: int = Field(
+        default=0,
+        description="Default sort order (lower = higher in nav)",
+    )
+
+
+def _default_feature_modules() -> list[FeatureModuleConfig]:
+    """Return the built-in feature module catalog."""
+    return [
+        # Admin-scoped modules
+        FeatureModuleConfig(
+            key="users",
+            label="Users",
+            icon="Users",
+            scope="admin",
+            default_enabled=True,
+            admin_only=True,
+            order=10,
+        ),
+        FeatureModuleConfig(
+            key="tenants",
+            label="Tenants",
+            icon="Building2",
+            scope="admin",
+            default_enabled=True,
+            admin_only=True,
+            order=20,
+        ),
+        FeatureModuleConfig(
+            key="storage",
+            label="Storage",
+            icon="HardDrive",
+            scope="admin",
+            default_enabled=True,
+            admin_only=True,
+            order=30,
+        ),
+        FeatureModuleConfig(
+            key="resources",
+            label="Resources",
+            icon="Cpu",
+            scope="admin",
+            default_enabled=True,
+            admin_only=True,
+            order=40,
+        ),
+        FeatureModuleConfig(
+            key="feature-management",
+            label="Features",
+            icon="ToggleLeft",
+            scope="admin",
+            default_enabled=True,
+            admin_only=True,
+            order=50,
+        ),
+        # Session-scoped modules (main page panels)
+        FeatureModuleConfig(
+            key="chat",
+            label="Chat",
+            icon="MessageSquare",
+            scope="session",
+            default_enabled=True,
+            order=10,
+        ),
+        FeatureModuleConfig(
+            key="terminal",
+            label="Terminal",
+            icon="Terminal",
+            scope="session",
+            default_enabled=True,
+            order=20,
+        ),
+        FeatureModuleConfig(
+            key="code",
+            label="Code",
+            icon="Code",
+            scope="session",
+            default_enabled=True,
+            order=30,
+        ),
+        FeatureModuleConfig(
+            key="files",
+            label="Files",
+            icon="FolderOpen",
+            scope="session",
+            default_enabled=True,
+            order=40,
+        ),
+        FeatureModuleConfig(
+            key="diffs",
+            label="Diffs",
+            icon="GitCompareArrows",
+            scope="session",
+            default_enabled=True,
+            order=50,
+        ),
+        FeatureModuleConfig(
+            key="chronicles",
+            label="Chronicles",
+            icon="ScrollText",
+            scope="session",
+            default_enabled=True,
+            order=60,
+        ),
+        FeatureModuleConfig(
+            key="logs",
+            label="Logs",
+            icon="FileText",
+            scope="session",
+            default_enabled=True,
+            order=70,
+        ),
+        # User-scoped modules
+        FeatureModuleConfig(
+            key="credentials",
+            label="Credentials",
+            icon="KeyRound",
+            scope="user",
+            default_enabled=True,
+            order=10,
+        ),
+        FeatureModuleConfig(
+            key="workspaces",
+            label="Workspaces",
+            icon="HardDrive",
+            scope="user",
+            default_enabled=True,
+            order=20,
+        ),
+        FeatureModuleConfig(
+            key="integrations",
+            label="Integrations",
+            icon="Link2",
+            scope="user",
+            default_enabled=True,
+            order=30,
+        ),
+        FeatureModuleConfig(
+            key="appearance",
+            label="Appearance",
+            icon="Palette",
+            scope="user",
+            default_enabled=True,
+            order=40,
+        ),
+        FeatureModuleConfig(
+            key="layout",
+            label="Layout",
+            icon="LayoutDashboard",
+            scope="user",
+            default_enabled=True,
+            order=50,
+        ),
+    ]
 
 
 class AuthDiscoveryConfig(BaseModel):
@@ -764,12 +987,17 @@ class Settings(BaseSettings):
     linear: LinearConfig = Field(default_factory=LinearConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
+    oauth: OAuthConfig = Field(default_factory=OAuthConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)
     mcp_servers: list[MCPServerEntry] = Field(default_factory=list)
+    features: list[FeatureModuleConfig] = Field(
+        default_factory=_default_feature_modules,
+        description="Feature module catalog — defines available UI modules.",
+    )
 
     @classmethod
     def settings_customise_sources(

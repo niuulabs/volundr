@@ -25,9 +25,10 @@ class PostgresPresetRepository(PresetRepository):
                 (id, name, description, is_default, cli_tool, workload_type,
                  model, system_prompt, resource_config, mcp_servers,
                  terminal_sidecar, skills, rules, env_vars, env_secret_refs,
+                 source, integration_ids, setup_scripts,
                  workload_config, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                    $13, $14, $15, $16, $17, $18)
+                    $13, $14, $15, $16, $17, $18, $19, $20, $21)
             """,
             preset.id,
             preset.name,
@@ -44,6 +45,9 @@ class PostgresPresetRepository(PresetRepository):
             json.dumps(preset.rules),
             json.dumps(preset.env_vars),
             json.dumps(preset.env_secret_refs),
+            json.dumps(preset.source.model_dump()) if preset.source else None,
+            json.dumps(preset.integration_ids),
+            json.dumps(preset.setup_scripts),
             json.dumps(preset.workload_config),
             preset.created_at,
             preset.updated_at,
@@ -105,7 +109,8 @@ class PostgresPresetRepository(PresetRepository):
                 workload_type = $6, model = $7, system_prompt = $8,
                 resource_config = $9, mcp_servers = $10, terminal_sidecar = $11,
                 skills = $12, rules = $13, env_vars = $14, env_secret_refs = $15,
-                workload_config = $16, updated_at = $17
+                source = $16, integration_ids = $17, setup_scripts = $18,
+                workload_config = $19, updated_at = $20
             WHERE id = $1
             """,
             preset.id,
@@ -123,6 +128,9 @@ class PostgresPresetRepository(PresetRepository):
             json.dumps(preset.rules),
             json.dumps(preset.env_vars),
             json.dumps(preset.env_secret_refs),
+            json.dumps(preset.source.model_dump()) if preset.source else None,
+            json.dumps(preset.integration_ids),
+            json.dumps(preset.setup_scripts),
             json.dumps(preset.workload_config),
             preset.updated_at,
         )
@@ -176,6 +184,15 @@ class PostgresPresetRepository(PresetRepository):
             env_secret_refs=json.loads(row["env_secret_refs"])
             if isinstance(row["env_secret_refs"], str)
             else row["env_secret_refs"],
+            source=json.loads(row["source"])
+            if isinstance(row.get("source"), str)
+            else row.get("source"),
+            integration_ids=json.loads(row["integration_ids"])
+            if isinstance(row.get("integration_ids"), str)
+            else (row.get("integration_ids") or []),
+            setup_scripts=json.loads(row["setup_scripts"])
+            if isinstance(row.get("setup_scripts"), str)
+            else (row.get("setup_scripts") or []),
             workload_config=json.loads(row["workload_config"])
             if isinstance(row["workload_config"], str)
             else row["workload_config"],

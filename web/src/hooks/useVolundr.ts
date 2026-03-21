@@ -12,8 +12,8 @@ import type {
   VolundrPreset,
   VolundrTemplate,
   McpServerConfig,
-  LinearIssue,
-  LinearIssueStatus,
+  TrackerIssue,
+  TrackerIssueStatus,
 } from '@/models';
 import { volundrService } from '@/adapters';
 
@@ -38,7 +38,7 @@ interface UseVolundrResult {
     model: string;
     templateName?: string;
     taskType?: string;
-    linearIssue?: LinearIssue;
+    trackerIssue?: TrackerIssue;
     terminalRestricted?: boolean;
     workspaceId?: string;
     credentialNames?: string[];
@@ -46,9 +46,10 @@ interface UseVolundrResult {
     resourceConfig?: Record<string, string | undefined>;
   }) => Promise<VolundrSession>;
   connectSession: (config: { name: string; hostname: string }) => Promise<VolundrSession>;
+  updateSession: (sessionId: string, updates: { name?: string }) => Promise<VolundrSession>;
   stopSession: (sessionId: string) => Promise<void>;
   resumeSession: (sessionId: string) => Promise<void>;
-  deleteSession: (sessionId: string) => Promise<void>;
+  deleteSession: (sessionId: string, cleanup?: string[]) => Promise<void>;
   archiveSession: (sessionId: string) => Promise<void>;
   restoreSession: (sessionId: string) => Promise<void>;
   archivedSessions: VolundrSession[];
@@ -88,9 +89,9 @@ interface UseVolundrResult {
   createPullRequest: (sessionId: string, title?: string, targetBranch?: string) => Promise<void>;
   mergePullRequest: (prNumber: number, repoUrl: string) => Promise<void>;
   refreshCIStatus: (prNumber: number, repoUrl: string, branch: string) => Promise<void>;
-  // Linear issue methods
-  searchLinearIssues: (query: string) => Promise<LinearIssue[]>;
-  updateLinearIssueStatus: (issueId: string, status: LinearIssueStatus) => Promise<void>;
+  // Tracker issue methods
+  searchTrackerIssues: (query: string) => Promise<TrackerIssue[]>;
+  updateTrackerIssueStatus: (issueId: string, status: TrackerIssueStatus) => Promise<void>;
 }
 
 export function useVolundr(): UseVolundrResult {
@@ -215,7 +216,7 @@ export function useVolundr(): UseVolundrResult {
       model: string;
       templateName?: string;
       taskType?: string;
-      linearIssue?: LinearIssue;
+      trackerIssue?: TrackerIssue;
       terminalRestricted?: boolean;
       workspaceId?: string;
       credentialNames?: string[];
@@ -229,6 +230,12 @@ export function useVolundr(): UseVolundrResult {
 
   const connectSession = useCallback(async (config: { name: string; hostname: string }) => {
     return volundrService.connectSession(config);
+  }, []);
+
+  const updateSession = useCallback(async (sessionId: string, updates: { name?: string }) => {
+    const updated = await volundrService.updateSession(sessionId, updates);
+    setSessions(prev => prev.map(s => (s.id === sessionId ? updated : s)));
+    return updated;
   }, []);
 
   const stopSession = useCallback(async (sessionId: string) => {
@@ -245,8 +252,8 @@ export function useVolundr(): UseVolundrResult {
     );
   }, []);
 
-  const deleteSession = useCallback(async (sessionId: string) => {
-    await volundrService.deleteSession(sessionId);
+  const deleteSession = useCallback(async (sessionId: string, cleanup?: string[]) => {
+    await volundrService.deleteSession(sessionId, cleanup);
     setSessions(prev => prev.filter(s => s.id !== sessionId));
   }, []);
 
@@ -450,16 +457,16 @@ export function useVolundr(): UseVolundrResult {
     }
   }, []);
 
-  const searchLinearIssues = useCallback(async (query: string): Promise<LinearIssue[]> => {
-    return volundrService.searchLinearIssues(query);
+  const searchTrackerIssues = useCallback(async (query: string): Promise<TrackerIssue[]> => {
+    return volundrService.searchTrackerIssues(query);
   }, []);
 
-  const updateLinearIssueStatus = useCallback(
-    async (issueId: string, status: LinearIssueStatus) => {
-      const updated = await volundrService.updateLinearIssueStatus(issueId, status);
+  const updateTrackerIssueStatus = useCallback(
+    async (issueId: string, status: TrackerIssueStatus) => {
+      const updated = await volundrService.updateTrackerIssueStatus(issueId, status);
       // Update sessions that reference this issue
       setSessions(prev =>
-        prev.map(s => (s.linearIssue?.id === issueId ? { ...s, linearIssue: updated } : s))
+        prev.map(s => (s.trackerIssue?.id === issueId ? { ...s, trackerIssue: updated } : s))
       );
     },
     []
@@ -482,6 +489,7 @@ export function useVolundr(): UseVolundrResult {
     markSessionRunning,
     startSession,
     connectSession,
+    updateSession,
     stopSession,
     resumeSession,
     deleteSession,
@@ -514,7 +522,7 @@ export function useVolundr(): UseVolundrResult {
     createPullRequest,
     mergePullRequest,
     refreshCIStatus,
-    searchLinearIssues,
-    updateLinearIssueStatus,
+    searchTrackerIssues,
+    updateTrackerIssueStatus,
   };
 }

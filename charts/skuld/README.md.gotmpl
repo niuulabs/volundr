@@ -28,8 +28,8 @@ Skuld is the session runtime for [Volundr](../volundr/). Each session deploys as
 Skuld is **not installed manually**. It is deployed automatically by the Volundr control plane:
 
 1. A user creates a session in Volundr
-2. Volundr submits a task to Farm ITaaS (or creates a Flux HelmRelease)
-3. Farm deploys a Skuld Helm release with session-specific values
+2. Volundr creates a Flux HelmRelease for the session
+3. Flux deploys a Skuld Helm release with session-specific values
 4. The session pod starts, clones the git repo (if configured), and accepts connections
 5. On session stop, the pod generates a chronicle summary and is deleted
 

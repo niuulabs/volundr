@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/auth';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { volundrService } from '@/adapters';
+// Initialize module registry (registers all built-in feature modules)
+import '@/modules';
 import styles from './App.module.css';
 
 const VolundrPage = lazy(() => import('@/pages/Volundr').then(m => ({ default: m.VolundrPage })));

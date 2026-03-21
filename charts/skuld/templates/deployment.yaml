@@ -16,6 +16,10 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       {{- if .Values.session.name }}
       hostname: {{ .Values.session.name | lower | trunc 63 | trimSuffix "-" | quote }}
@@ -34,6 +38,9 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccountName }}
+      serviceAccountName: {{ .Values.serviceAccountName | quote }}
       {{- end }}
       # Allow time for chronicle summary generation during graceful shutdown
       terminationGracePeriodSeconds: 30
@@ -69,8 +76,18 @@ spec:
               mkdir -p "$HOME_DIR/vscode-data/User"
               mkdir -p "$HOME_DIR/.config"
 
-              # Ensure the non-root user owns the home directory tree
-              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR"
+              # Ensure the non-root user owns the home directory tree.
+              # Ignore transient errors from stale sockets/files on hostPath
+              # volumes that vanish mid-traversal.
+              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/tmp/chown.err || true
+              if [ -s /tmp/chown.err ]; then
+                grep -Ev 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err >&2 || true
+                if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err; then
+                  echo "ERROR: chown encountered unexpected errors" >&2
+                  cat /tmp/chown.err >&2
+                  exit 1
+                fi
+              fi
 
               # Symlink each credential file from the K8s secret into $DEST_DIR/
               # Full volume mounts auto-update when the secret changes (~60s),
@@ -246,80 +263,54 @@ spec:
               readOnly: true
             {{- end }}
             {{- end }}
-        {{- if .Values.codeServer.enabled }}
-        # code-server - VS Code IDE in browser
-        - name: code-server
-          image: "{{ .Values.codeServer.image.repository }}:{{ .Values.codeServer.image.tag }}"
-          imagePullPolicy: {{ .Values.codeServer.image.pullPolicy }}
+            {{- if .Values.secretManifest }}
+            - name: secret-manifest
+              mountPath: /run/secrets/manifest.json
+              subPath: manifest.json
+              readOnly: true
+            {{- end }}
+            {{- range .Values.extraVolumeMounts }}
+            - {{- toYaml . | nindent 14 }}
+            {{- end }}
+        {{- if .Values.reh.enabled }}
+        # VS Code REH (Remote Extension Host) server — headless WebSocket-only
+        # backend for the VS Code workbench hosted in Hliðskjálf.
+        - name: vscode-reh
+          image: "{{ .Values.reh.image.repository }}:{{ if and .Values.global .Values.global.image .Values.global.image.tag }}{{ .Values.global.image.tag }}{{ else }}{{ .Values.reh.image.tag }}{{ end }}"
+          imagePullPolicy: {{ .Values.reh.image.pullPolicy }}
           securityContext:
             runAsUser: {{ .Values.securityContext.runAsUser }}
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
           ports:
-            - name: ide
-              containerPort: {{ .Values.codeServer.port }}
+            - name: reh
+              containerPort: {{ .Values.reh.port }}
               protocol: TCP
-          # Override entrypoint to skip fixuid; copy VS Code settings from ConfigMap before starting
-          command: ["dumb-init", "--", "/bin/sh", "-c"]
+          command: ["/opt/vscode-reh/bin/reh-server"]
           args:
-            - |
-              mkdir -p /home/coder/.local/share/code-server/User
-              {{- if .Values.homeVolume.enabled }}
-              # Use persistent VS Code settings from home PVC; seed from defaults on first run
-              if [ -f "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" ]; then
-                ln -sf "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" /home/coder/.local/share/code-server/User/settings.json
-              else
-                cp /etc/vscode-defaults/settings.json "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json"
-                ln -sf "{{ .Values.homeVolume.mountPath }}/vscode-data/User/settings.json" /home/coder/.local/share/code-server/User/settings.json
-              fi
-              # Symlink credential dir into the coder home so terminal access works
-              ln -sfn "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}" "/home/coder/{{ .Values.homeVolume.credentialFiles.destDir }}"
-              {{- else }}
-              cp /etc/vscode-defaults/settings.json /home/coder/.local/share/code-server/User/settings.json
-              {{- end }}
-              exec /usr/bin/code-server \
-                --bind-addr=0.0.0.0:{{ .Values.codeServer.port }} \
-                --auth={{ if .Values.codeServer.password }}password{{ else }}none{{ end }} \
-                --disable-telemetry \
-                {{ include "skuld.workspacePath" . | quote }}
+            - "--host=0.0.0.0"
+            - "--port={{ .Values.reh.port }}"
+            - "--without-connection-token"
+            - "--accept-server-license-terms"
           env:
             - name: SESSION_ID
               value: {{ .Values.session.id | quote }}
             {{- if .Values.homeVolume.enabled }}
             - name: HOME
               value: {{ .Values.homeVolume.mountPath | quote }}
-            {{- if eq (toString .Values.broker.cliType) "codex" }}
-            - name: CODEX_HOME
-              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
-            {{- else }}
-            - name: CLAUDE_CONFIG_DIR
-              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
-            {{- end }}
-            {{- end }}
-            {{- if .Values.codeServer.password }}
-            - name: PASSWORD
-              value: {{ .Values.codeServer.password | quote }}
-            {{- end }}
-            {{- if .Values.codeServer.extensions }}
-            - name: EXTENSIONS
-              value: {{ .Values.codeServer.extensions | quote }}
             {{- end }}
           livenessProbe:
-            httpGet:
-              path: /healthz
-              port: ide
+            tcpSocket:
+              port: reh
             initialDelaySeconds: 10
             periodSeconds: 30
-            timeoutSeconds: 10
           readinessProbe:
-            httpGet:
-              path: /healthz
-              port: ide
+            tcpSocket:
+              port: reh
             initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 5
           resources:
-            {{- toYaml .Values.codeServer.resources | nindent 12 }}
+            {{- toYaml .Values.reh.resources | nindent 12 }}
           volumeMounts:
             {{- if .Values.persistence.enabled }}
             - name: sessions
@@ -328,20 +319,21 @@ spec:
             {{- if .Values.homeVolume.enabled }}
             - name: home
               mountPath: {{ .Values.homeVolume.mountPath }}
-            {{- if .Values.homeVolume.credentialFiles.secretName }}
-            - name: credential-files
-              mountPath: {{ .Values.homeVolume.credentialFiles.secretMountPath }}
+            {{- end }}
+            {{- if .Values.secretManifest }}
+            - name: secret-manifest
+              mountPath: /run/secrets/manifest.json
+              subPath: manifest.json
               readOnly: true
             {{- end }}
+            {{- range .Values.extraVolumeMounts }}
+            - {{- toYaml . | nindent 14 }}
             {{- end }}
-            - name: vscode-settings
-              mountPath: /etc/vscode-defaults
-              readOnly: true
         {{- end }}
         {{- if .Values.localServices.enabled }}
         # Devrunner - minimal runtime for local service testing
         - name: devrunner
-          image: "{{ .Values.localServices.devrunner.image.repository }}:{{ .Values.localServices.devrunner.image.tag }}"
+          image: "{{ .Values.localServices.devrunner.image.repository }}:{{ if and .Values.global .Values.global.image .Values.global.image.tag }}{{ .Values.global.image.tag }}{{ else }}{{ .Values.localServices.devrunner.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.localServices.devrunner.image.pullPolicy }}
           securityContext:
             runAsUser: {{ .Values.securityContext.runAsUser }}
@@ -378,6 +370,15 @@ spec:
             {{- if .Values.homeVolume.enabled }}
             - name: home
               mountPath: {{ .Values.homeVolume.mountPath }}
+            {{- end }}
+            {{- if .Values.secretManifest }}
+            - name: secret-manifest
+              mountPath: /run/secrets/manifest.json
+              subPath: manifest.json
+              readOnly: true
+            {{- end }}
+            {{- range .Values.extraVolumeMounts }}
+            - {{- toYaml . | nindent 14 }}
             {{- end }}
         {{- end }}
         {{- if .Values.envoy.enabled }}
@@ -441,13 +442,16 @@ spec:
             secretName: {{ .Values.homeVolume.credentialFiles.secretName }}
         {{- end }}
         {{- end }}
-        {{- if .Values.codeServer.enabled }}
-        - name: vscode-settings
-          configMap:
-            name: {{ include "skuld.fullname" . }}-vscode-settings
-        {{- end }}
         {{- if and .Values.localServices.enabled .Values.localServices.terminal.debug }}
         - name: terminal-debug
           configMap:
             name: {{ include "skuld.fullname" . }}-terminal-debug
+        {{- end }}
+        {{- if .Values.secretManifest }}
+        - name: secret-manifest
+          configMap:
+            name: {{ include "skuld.fullname" . }}-secret-manifest
+        {{- end }}
+        {{- range .Values.extraVolumes }}
+        - {{- toYaml . | nindent 10 }}
         {{- end }}

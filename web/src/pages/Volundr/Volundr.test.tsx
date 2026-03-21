@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { VolundrPage } from './index';
-import { useAuth } from '@/auth';
 import type {
   VolundrSession,
   VolundrMessage,
@@ -69,6 +68,27 @@ vi.mock('@/components/SessionChat', () => ({
   SessionChat: ({ url, className }: { url: string | null; className?: string }) => (
     <div data-testid="session-chat" data-url={url ?? ''} className={className}>
       Mock Chat
+    </div>
+  ),
+}));
+
+vi.mock('@/components/EditorPanel/EditorPanel', () => ({
+  EditorPanel: ({
+    hostname,
+    sessionId,
+    className,
+  }: {
+    hostname: string | null;
+    sessionId: string | null;
+    className?: string;
+  }) => (
+    <div
+      data-testid="editor-panel"
+      data-hostname={hostname ?? ''}
+      data-session-id={sessionId ?? ''}
+      className={className}
+    >
+      {hostname && sessionId ? 'Mock Editor' : 'Start a session to access the editor'}
     </div>
   ),
 }));
@@ -317,7 +337,6 @@ describe('VolundrPage', () => {
   const refreshSession = vi.fn();
   const markSessionRunning = vi.fn();
   const startSession = vi.fn();
-  const connectSession = vi.fn();
   const refresh = vi.fn();
   const getMessages = vi.fn();
   const sendMessage = vi.fn();
@@ -345,15 +364,15 @@ describe('VolundrPage', () => {
     createPullRequest: vi.fn(),
     mergePullRequest: vi.fn(),
     refreshCIStatus: vi.fn(),
-    searchLinearIssues: vi.fn().mockResolvedValue([]),
-    updateLinearIssueStatus: vi.fn().mockResolvedValue(undefined),
+    searchTrackerIssues: vi.fn().mockResolvedValue([]),
+    updateTrackerIssueStatus: vi.fn().mockResolvedValue(undefined),
     loading: false,
     error: null,
     getSession,
     refreshSession,
     markSessionRunning,
     startSession,
-    connectSession,
+    updateSession: vi.fn().mockResolvedValue(mockSessions[0]),
     stopSession,
     resumeSession,
     deleteSession,
@@ -390,7 +409,6 @@ describe('VolundrPage', () => {
     getLogs.mockResolvedValue(undefined);
     openCodeServer.mockResolvedValue(undefined);
     getCodeServerUrl.mockResolvedValue('https://code.skuld.local/forge-7f3a2b1c');
-    connectSession.mockResolvedValue(mockSessions[0]);
   });
 
   it('shows loading state when loading', () => {
@@ -437,7 +455,7 @@ describe('VolundrPage', () => {
         <VolundrPage />
       </MemoryRouter>
     );
-    expect(screen.getByText('New Session')).toBeInTheDocument();
+    expect(screen.getByTitle('New Session')).toBeInTheDocument();
   });
 
   it('renders metrics cards when forge stats expanded', () => {
@@ -478,7 +496,7 @@ describe('VolundrPage', () => {
         <VolundrPage />
       </MemoryRouter>
     );
-    expect(screen.getByPlaceholderText('Search sessions...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
   });
 
   it('renders status filter dropdown', () => {
@@ -605,9 +623,8 @@ describe('VolundrPage', () => {
       </MemoryRouter>
     );
 
-    // Click the first "New Session" button (in sidebar)
-    const newButtons = screen.getAllByText('New Session');
-    fireEvent.click(newButtons[0]);
+    // Click the "New Session" button (in sidebar)
+    fireEvent.click(screen.getByTitle('New Session'));
 
     expect(screen.getByRole('heading', { name: 'Launch Session' })).toBeInTheDocument();
     expect(screen.getByTestId('launch-wizard')).toBeInTheDocument();
@@ -622,7 +639,7 @@ describe('VolundrPage', () => {
       </MemoryRouter>
     );
 
-    const searchInput = screen.getByPlaceholderText('Search sessions...');
+    const searchInput = screen.getByPlaceholderText('Search...');
     fireEvent.change(searchInput, { target: { value: 'printer' } });
 
     // Session name appears in both list and detail panel
@@ -736,9 +753,9 @@ describe('VolundrPage', () => {
     });
   });
 
-  // New tests for IDE functionality
-  describe('IDE functionality', () => {
-    it('loads IDE iframe when code tab is active and session is running', async () => {
+  // Tests for embedded editor panel (VS Code workbench via REH)
+  describe('Editor panel', () => {
+    it('renders EditorPanel when code tab is active and session is running', async () => {
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -747,32 +764,25 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      // Switch to Code tab
-      const codeTab = screen.getByText('Code');
-      fireEvent.click(codeTab);
+      fireEvent.click(screen.getByText('Code'));
 
-      await waitFor(() => {
-        expect(getCodeServerUrl).toHaveBeenCalledWith('forge-7f3a2b1c');
-      });
-
-      await waitFor(() => {
-        const iframe = document.querySelector('iframe');
-        expect(iframe).toBeTruthy();
-        expect(iframe?.src).toContain('code.skuld.local');
-      });
+      const panel = await screen.findByTestId('editor-panel');
+      expect(panel).toBeInTheDocument();
+      expect(panel).toHaveAttribute('data-hostname', 'skuld-7f3a2b1c.volundr.local');
+      expect(panel).toHaveAttribute('data-session-id', 'forge-7f3a2b1c');
     });
 
-    it('shows open-in-new-tab link when auth is enabled', async () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-      vi.mocked(useAuth).mockReturnValue({
-        enabled: true,
-        authenticated: true,
-        loading: false,
-        user: null,
-        accessToken: 'test-token',
-        login: vi.fn(),
-        logout: vi.fn(),
-      });
+    it('shows empty state when session is not running', () => {
+      vi.mocked(useVolundr).mockReturnValue(
+        createMockHookReturn({
+          sessions: [
+            {
+              ...mockSessions[0],
+              status: 'stopped',
+            },
+          ],
+        })
+      );
 
       render(
         <MemoryRouter>
@@ -780,29 +790,9 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      const codeTab = screen.getByText('Code');
-      fireEvent.click(codeTab);
+      fireEvent.click(screen.getByText('Code'));
 
-      await waitFor(() => {
-        const link = screen.getByText('Open IDE in new tab');
-        expect(link).toBeTruthy();
-        expect(link.closest('a')).toHaveAttribute(
-          'href',
-          expect.stringContaining('code.skuld.local')
-        );
-        expect(link.closest('a')).toHaveAttribute('target', '_blank');
-      });
-
-      // Restore default mock
-      vi.mocked(useAuth).mockReturnValue({
-        enabled: false,
-        authenticated: true,
-        loading: false,
-        user: null,
-        accessToken: null,
-        login: vi.fn(),
-        logout: vi.fn(),
-      });
+      expect(screen.getByText('Start the session to access IDE')).toBeInTheDocument();
     });
   });
 
@@ -865,9 +855,6 @@ describe('VolundrPage', () => {
   // New tests for delete functionality
   describe('Delete functionality', () => {
     it('calls deleteSession when Delete button clicked', async () => {
-      // Mock window.confirm to return true
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -880,17 +867,20 @@ describe('VolundrPage', () => {
       const deleteButton = screen.getByTitle('Delete session');
       fireEvent.click(deleteButton);
 
+      // Dialog should now be open
       await waitFor(() => {
-        expect(deleteSession).toHaveBeenCalledWith('forge-7f3a2b1c');
+        expect(screen.getByTestId('delete-session-dialog')).toBeInTheDocument();
       });
 
-      confirmSpy.mockRestore();
+      // Confirm deletion
+      fireEvent.click(screen.getByTestId('delete-session-confirm'));
+
+      await waitFor(() => {
+        expect(deleteSession).toHaveBeenCalledWith('forge-7f3a2b1c', []);
+      });
     });
 
     it('does not call deleteSession when confirmation is cancelled', async () => {
-      // Mock window.confirm to return false
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -903,10 +893,15 @@ describe('VolundrPage', () => {
       fireEvent.click(deleteButton);
 
       await waitFor(() => {
-        expect(deleteSession).not.toHaveBeenCalled();
+        expect(screen.getByTestId('delete-session-dialog')).toBeInTheDocument();
       });
 
-      confirmSpy.mockRestore();
+      // Cancel deletion
+      fireEvent.click(screen.getByTestId('delete-session-cancel'));
+
+      await waitFor(() => {
+        expect(deleteSession).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -922,7 +917,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       fireEvent.click(screen.getByTestId('wizard-launch'));
 
       await waitFor(() => {
@@ -949,7 +944,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       expect(screen.getByRole('heading', { name: 'Launch Session' })).toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('wizard-launch'));
@@ -969,7 +964,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       fireEvent.click(screen.getByTestId('wizard-launch'));
 
       await waitFor(() => {
@@ -989,7 +984,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
       fireEvent.click(screen.getByTestId('wizard-launch'));
 
       await waitFor(() => {
@@ -1006,7 +1001,7 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getAllByText('New Session')[0]);
+      fireEvent.click(screen.getByTitle('New Session'));
 
       expect(screen.getByTestId('wizard-template-full-stack-dev')).toBeInTheDocument();
     });
@@ -1030,12 +1025,9 @@ describe('VolundrPage', () => {
 
     it('renders inline stats when stats panel is collapsed', () => {
       // Override: sidebar expanded (false), stats collapsed (true), archived collapsed (true)
-      let callCount = 0;
-      vi.mocked(useLocalStorage).mockImplementation(() => {
-        callCount++;
-        // 1st call = sidebar (false), 2nd call = stats collapsed (true), 3rd call = archived collapsed (true)
-        if (callCount % 3 === 2) return [true, vi.fn()];
-        if (callCount % 3 === 0) return [true, vi.fn()];
+      vi.mocked(useLocalStorage).mockImplementation((key: string) => {
+        if (key === 'volundr-stats-collapsed') return [true, vi.fn()];
+        if (key === 'volundr-archived-collapsed') return [true, vi.fn()];
         return [false, vi.fn()];
       });
 
@@ -1143,384 +1135,6 @@ describe('VolundrPage', () => {
       fireEvent.click(screen.getByText('Code'));
 
       expect(screen.getByText('Start the session to access IDE')).toBeInTheDocument();
-    });
-  });
-
-  // Tests for Connect Session
-  describe('Connect existing session', () => {
-    it('renders Connect button', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-      expect(screen.getByText('Connect')).toBeInTheDocument();
-    });
-
-    it('opens connect modal when Connect clicked', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Connect'));
-
-      expect(screen.getByText('Connect to Existing Session')).toBeInTheDocument();
-      expect(
-        screen.getByText('Attach to a running Skuld instance by hostname')
-      ).toBeInTheDocument();
-    });
-
-    it('renders connect modal form fields', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Connect'));
-
-      expect(screen.getByPlaceholderText('skuld-dev-01')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('skuld-01.local')).toBeInTheDocument();
-    });
-
-    it('closes connect modal when Cancel clicked', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Connect'));
-      expect(screen.getByText('Connect to Existing Session')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByText('Cancel'));
-      expect(screen.queryByText('Connect to Existing Session')).not.toBeInTheDocument();
-    });
-
-    it('disables Connect button when fields are empty', () => {
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Connect'));
-
-      // The modal submit button is the disabled one (sidebar button is not disabled)
-      const connectBtns = screen.getAllByRole('button', { name: 'Connect' });
-      const submitBtn = connectBtns.find(btn => btn.hasAttribute('disabled'));
-      expect(submitBtn).toBeInTheDocument();
-      expect(submitBtn).toBeDisabled();
-    });
-
-    it('calls connectSession with form values', async () => {
-      const manualSession: VolundrSession = {
-        id: 'manual-abc12345',
-        name: 'my-skuld',
-        source: { type: 'git', repo: '', branch: '' },
-        status: 'running',
-        model: 'external',
-        lastActive: Date.now(),
-        messageCount: 0,
-        tokensUsed: 0,
-        origin: 'manual',
-        hostname: 'skuld-01.local',
-      };
-      connectSession.mockResolvedValue(manualSession);
-
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Connect'));
-
-      fireEvent.change(screen.getByPlaceholderText('skuld-dev-01'), {
-        target: { value: 'my-skuld' },
-      });
-      fireEvent.change(screen.getByPlaceholderText('skuld-01.local'), {
-        target: { value: 'skuld-01.local' },
-      });
-
-      // Click the modal submit button (the enabled one after filling form)
-      const connectBtns = screen.getAllByRole('button', { name: 'Connect' });
-      const submitBtn =
-        connectBtns.find(btn => !btn.hasAttribute('disabled') && btn.closest('[class*="modal"]')) ??
-        connectBtns[connectBtns.length - 1];
-      fireEvent.click(submitBtn);
-
-      await waitFor(() => {
-        expect(connectSession).toHaveBeenCalledWith({
-          name: 'my-skuld',
-          hostname: 'skuld-01.local',
-        });
-      });
-    });
-
-    it('closes connect modal after successful connection', async () => {
-      const manualSession: VolundrSession = {
-        id: 'manual-abc12345',
-        name: 'my-skuld',
-        source: { type: 'git', repo: '', branch: '' },
-        status: 'running',
-        model: 'external',
-        lastActive: Date.now(),
-        messageCount: 0,
-        tokensUsed: 0,
-        origin: 'manual',
-        hostname: 'skuld-01.local',
-      };
-      connectSession.mockResolvedValue(manualSession);
-
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Connect'));
-
-      fireEvent.change(screen.getByPlaceholderText('skuld-dev-01'), {
-        target: { value: 'my-skuld' },
-      });
-      fireEvent.change(screen.getByPlaceholderText('skuld-01.local'), {
-        target: { value: 'skuld-01.local' },
-      });
-
-      // Click the modal submit button
-      const connectBtns = screen.getAllByRole('button', { name: 'Connect' });
-      const submitBtn = connectBtns[connectBtns.length - 1];
-      fireEvent.click(submitBtn);
-
-      await waitFor(() => {
-        expect(screen.queryByText('Connect to Existing Session')).not.toBeInTheDocument();
-      });
-    });
-  });
-
-  // Tests for manual session UI
-  describe('Manual session UI', () => {
-    const manualSession: VolundrSession = {
-      id: 'manual-abc12345',
-      name: 'my-skuld-dev',
-      source: { type: 'git', repo: '', branch: '' },
-      status: 'running',
-      model: 'external',
-      lastActive: Date.now(),
-      messageCount: 0,
-      tokensUsed: 0,
-      origin: 'manual',
-      hostname: 'skuld-01.local',
-    };
-
-    it('shows manual tag in detail header', () => {
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [manualSession],
-          activeSessions: [manualSession],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      // "manual" appears in both SessionCard badge and detail header tag
-      expect(screen.getAllByText('manual').length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('shows hostname instead of repo in detail header', () => {
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [manualSession],
-          activeSessions: [manualSession],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      expect(screen.getAllByText('skuld-01.local').length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('shows Disconnect button for running manual session', () => {
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [manualSession],
-          activeSessions: [manualSession],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByText('Disconnect')).toBeInTheDocument();
-    });
-
-    it('shows Connect button for stopped manual session', () => {
-      const stoppedManual = { ...manualSession, status: 'stopped' as const };
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [stoppedManual],
-          activeSessions: [],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      // The detail panel action area should show a "Connect" button (not the header "Connect")
-      const connectButtons = screen.getAllByRole('button', { name: /Connect/ });
-      expect(connectButtons.length).toBeGreaterThanOrEqual(2); // header + detail panel
-    });
-
-    it('shows IDE tab label for manual sessions', () => {
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [manualSession],
-          activeSessions: [manualSession],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByText('IDE')).toBeInTheDocument();
-    });
-
-    it('shows remove confirmation for manual session delete', () => {
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [manualSession],
-          activeSessions: [manualSession],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      const deleteButton = screen.getByTitle('Remove session');
-      fireEvent.click(deleteButton);
-
-      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Remove'));
-
-      confirmSpy.mockRestore();
-    });
-
-    it('shows connect-specific empty state for chat when disconnected', () => {
-      const stoppedManual = { ...manualSession, status: 'stopped' as const };
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [stoppedManual],
-          activeSessions: [],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByText('Connect the session to chat')).toBeInTheDocument();
-    });
-
-    it('shows connect-specific empty state for terminal when disconnected', () => {
-      const stoppedManual = { ...manualSession, status: 'stopped' as const };
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [stoppedManual],
-          activeSessions: [],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Terminal'));
-
-      expect(screen.getByText('Connect the session to access terminal')).toBeInTheDocument();
-    });
-
-    it('shows connect-specific empty state for IDE when disconnected', () => {
-      const stoppedManual = { ...manualSession, status: 'stopped' as const };
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [stoppedManual],
-          activeSessions: [],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('IDE'));
-
-      expect(screen.getByText('Connect the session to access IDE')).toBeInTheDocument();
-    });
-
-    it('shows logs loading for manual sessions (fetches from session host)', () => {
-      vi.mocked(useVolundr).mockReturnValue(
-        createMockHookReturn({
-          sessions: [manualSession],
-          activeSessions: [manualSession],
-          logs: [],
-        })
-      );
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Logs'));
-
-      // Manual sessions now attempt to fetch from the session host's /api/logs
-      // With no data returned yet, the empty state is shown
-      expect(screen.getByText('No logs available')).toBeInTheDocument();
     });
   });
 
@@ -2029,11 +1643,9 @@ describe('VolundrPage', () => {
     });
   });
 
-  // Tests for IDE states
-  describe('IDE states', () => {
-    it('shows loading state while IDE URL is being resolved', () => {
-      getCodeServerUrl.mockReturnValue(new Promise(() => {})); // never resolves
-
+  // Tests for editor panel states
+  describe('Editor panel states', () => {
+    it('renders EditorPanel with session hostname when code tab is active', async () => {
       vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
 
       render(
@@ -2044,25 +1656,8 @@ describe('VolundrPage', () => {
 
       fireEvent.click(screen.getByText('Code'));
 
-      expect(screen.getByText('Connecting to IDE...')).toBeInTheDocument();
-    });
-
-    it('shows not available when getCodeServerUrl returns null', async () => {
-      getCodeServerUrl.mockResolvedValue(null);
-
-      vi.mocked(useVolundr).mockReturnValue(createMockHookReturn());
-
-      render(
-        <MemoryRouter>
-          <VolundrPage />
-        </MemoryRouter>
-      );
-
-      fireEvent.click(screen.getByText('Code'));
-
-      await waitFor(() => {
-        expect(screen.getByText('IDE not available for this session')).toBeInTheDocument();
-      });
+      const panel = await screen.findByTestId('editor-panel');
+      expect(panel).toHaveAttribute('data-hostname', 'skuld-7f3a2b1c.volundr.local');
     });
 
     it('opens popout window for code tab', () => {
@@ -2167,10 +1762,8 @@ describe('VolundrPage', () => {
         </MemoryRouter>
       );
 
-      // There may be multiple "New Session" buttons (sidebar + empty panel)
-      const newButtons = screen.getAllByText('New Session');
-      // Click the last one (empty main panel button)
-      fireEvent.click(newButtons[newButtons.length - 1]);
+      // Click the "New Session" button in the empty main panel
+      fireEvent.click(screen.getByText('New Session'));
 
       expect(screen.getByRole('heading', { name: 'Launch Session' })).toBeInTheDocument();
     });

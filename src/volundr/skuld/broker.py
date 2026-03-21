@@ -6,11 +6,13 @@ Supports two transport modes (selected via config):
 """
 
 import asyncio
+import base64
 import collections
 import json
 import logging
 import os
 import re
+import shutil
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -19,8 +21,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from volundr.config import LoggingConfig
 from volundr.skuld.channels import (
@@ -285,6 +289,71 @@ class SessionArtifacts:
         self.turn_count += 1
 
 
+# ---------------------------------------------------------------------------
+# JWT helpers
+# ---------------------------------------------------------------------------
+
+_AUTH_HEADER = "authorization"
+_BEARER_PREFIX = "bearer "
+
+# Headers injected by Envoy sidecar after JWT validation
+_ENVOY_USER_ID_HEADER = "x-auth-user-id"
+_ENVOY_EMAIL_HEADER = "x-auth-email"
+_ENVOY_TENANT_HEADER = "x-auth-tenant"
+_ENVOY_ROLES_HEADER = "x-auth-roles"
+
+
+def _decode_jwt_claims(token: str) -> dict:
+    """Decode JWT payload without signature verification.
+
+    Skuld does not verify signatures — that is Envoy's / the API gateway's
+    job.  We only decode to extract user identity claims for API forwarding.
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return {}
+        # JWT base64url → standard base64
+        payload_b64 = parts[1]
+        # Add padding
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        payload_bytes = base64.urlsafe_b64decode(payload_b64)
+        return json.loads(payload_bytes)
+    except Exception:
+        return {}
+
+
+def _extract_bearer_token(headers: dict[str, str]) -> str | None:
+    """Extract Bearer token from an Authorization header value."""
+    auth = headers.get(_AUTH_HEADER, "")
+    if auth.lower().startswith(_BEARER_PREFIX):
+        return auth[len(_BEARER_PREFIX) :].strip()
+    return None
+
+
+def _extract_token_from_websocket(websocket: WebSocket) -> str | None:
+    """Extract JWT from WebSocket connection.
+
+    Checks (in order):
+    1. Authorization header (Bearer token) — preferred, works with Envoy
+    2. x-auth-* headers injected by Envoy sidecar
+    3. access_token query parameter — browser fallback
+    """
+    headers = {k.lower(): v for k, v in websocket.headers.items()}
+
+    # 1. Bearer token from Authorization header
+    token = _extract_bearer_token(headers)
+    if token:
+        return token
+
+    # 2. If Envoy headers are present, we don't have the raw JWT but we
+    #    have the validated claims — return None (caller uses headers instead)
+    # This case is handled separately in the broker
+
+    # 3. Query parameter fallback (browser WebSocket can't set headers)
+    return websocket.query_params.get("access_token")
+
+
 CONVERSATION_HISTORY_DIR = ".skuld"
 CONVERSATION_HISTORY_FILE = "conversation.json"
 
@@ -332,6 +401,7 @@ class Broker:
         self.service_manager: ServiceManager | None = None
         self._channels = ChannelRegistry()
         self._http_client: httpx.AsyncClient | None = None
+        self._http_client_jwt: str | None = None  # JWT used to create _http_client
         self._artifacts = SessionArtifacts()
         self._session_start_reported = False
         self._event_sequence = 0
@@ -339,6 +409,10 @@ class Broker:
         self._pending_assistant_content: str = ""
         self._pending_assistant_parts: list[dict] = []
         self._chronicle_watcher: ChronicleWatcher | None = None
+
+        # JWT identity state — populated on first browser WebSocket connection
+        self._user_jwt: str | None = None
+        self._user_claims: dict = {}
 
     def _conversation_history_path(self) -> Path:
         """Return the path to the conversation history file."""
@@ -413,6 +487,7 @@ class Broker:
                             workspace_dir=self.workspace_dir,
                             sdk_port=self._settings.port,
                             session_id=self.session_id,
+                            model=self.model,
                             skip_permissions=self._settings.skip_permissions,
                             agent_teams=self._settings.agent_teams,
                         )
@@ -453,12 +528,7 @@ class Broker:
                 session_id=self.session_id,
                 watch_dir=watch_dir,
                 api_base_url=self.volundr_api_url,
-                http_headers={
-                    "x-auth-user-id": self._settings.service_user_id,
-                    "x-auth-email": f"{self._settings.service_user_id}@internal",
-                    "x-auth-tenant": self._settings.service_tenant_id,
-                    "x-auth-roles": "volundr:service",
-                },
+                http_headers=self._build_auth_headers(),
                 debounce_ms=self._settings.chronicle_watcher_debounce_ms,
             )
             asyncio.create_task(self._chronicle_watcher.start())
@@ -772,19 +842,41 @@ class Broker:
 
                 await self._transport.send_message(message)
 
+    def _build_auth_headers(self) -> dict[str, str]:
+        """Build authentication headers for Volundr API calls.
+
+        Uses the user's JWT when available (preferred), falling back to
+        service identity headers for backward compatibility.
+        """
+        if self._user_jwt:
+            return {"Authorization": f"Bearer {self._user_jwt}"}
+
+        # Fallback: service identity (e.g. during shutdown with no JWT)
+        logger.debug("No user JWT available, falling back to service identity headers")
+        return {
+            "x-auth-user-id": self._settings.service_user_id,
+            "x-auth-email": f"{self._settings.service_user_id}@internal",
+            "x-auth-tenant": self._settings.service_tenant_id,
+            "x-auth-roles": "volundr:service",
+        }
+
     async def _get_http_client(self) -> httpx.AsyncClient:
-        """Lazy-init HTTP client for Volundr API calls."""
+        """Lazy-init HTTP client for Volundr API calls.
+
+        Recreates the client when the JWT changes so the Authorization
+        header stays current.
+        """
+        if self._http_client is not None and self._http_client_jwt != self._user_jwt:
+            await self._http_client.aclose()
+            self._http_client = None
+
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(
                 base_url=self.volundr_api_url,
                 timeout=10.0,
-                headers={
-                    "x-auth-user-id": self._settings.service_user_id,
-                    "x-auth-email": f"{self._settings.service_user_id}@internal",
-                    "x-auth-tenant": self._settings.service_tenant_id,
-                    "x-auth-roles": "volundr:service",
-                },
+                headers=self._build_auth_headers(),
             )
+            self._http_client_jwt = self._user_jwt
         return self._http_client
 
     def _next_sequence(self) -> int:
@@ -1128,8 +1220,39 @@ class Broker:
         except Exception:
             logger.warning("Failed to initialize Telegram channel", exc_info=True)
 
+    def _update_jwt_from_websocket(self, websocket: WebSocket) -> None:
+        """Extract and store JWT from an incoming WebSocket connection.
+
+        Prefers the Authorization header (set by Envoy or reverse proxy),
+        then falls back to the access_token query parameter (browser).
+        Updates the stored JWT on each connection so token refreshes
+        propagate automatically.
+        """
+        try:
+            token = _extract_token_from_websocket(websocket)
+        except Exception:
+            logger.debug("Failed to extract JWT from WebSocket", exc_info=True)
+            return
+        if not token:
+            if self._user_jwt is None:
+                logger.warning("No JWT found on WebSocket connection")
+            return
+
+        self._user_jwt = token
+        self._user_claims = _decode_jwt_claims(token)
+
+        user_id = self._user_claims.get("sub", "unknown")
+        logger.info("JWT updated from WebSocket connection (sub=%s)", user_id)
+
+        # Propagate new auth headers to the chronicle watcher
+        if self._chronicle_watcher is not None:
+            self._chronicle_watcher.update_headers(self._build_auth_headers())
+
     async def handle_websocket(self, websocket: WebSocket) -> None:
         """Handle a browser WebSocket connection at /session."""
+        # Extract JWT before accepting — headers are available pre-accept
+        self._update_jwt_from_websocket(websocket)
+
         await websocket.accept()
         channel = WebSocketChannel(websocket)
         self._channels.add(channel)
@@ -1244,6 +1367,11 @@ broker = Broker()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    # Attach JWT redaction filter after uvicorn has configured its loggers
+    _redact_filter = _TokenRedactFilter()
+    for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        logging.getLogger(name).addFilter(_redact_filter)
+
     await broker.startup()
     yield
     await broker.shutdown()
@@ -1410,15 +1538,33 @@ _SKIP_NAMES = frozenset(
 _SHOW_HIDDEN = frozenset({".github", ".claude", ".vscode"})
 
 
-@app.get("/api/files")
-async def list_files(path: str = "") -> dict:
-    """List files and directories in the session workspace."""
-    workspace = Path(broker.workspace_dir).resolve()
-    target = (workspace / path).resolve()
+def _resolve_root(root: str) -> Path:
+    """Return the resolved base directory for the given root name."""
+    if root == "home":
+        return Path(broker._settings.home_path).resolve()
+    return Path(broker.workspace_dir).resolve()
 
-    # Security: path traversal protection
-    if not str(target).startswith(str(workspace)):
+
+def _safe_resolve(base: Path, relative_path: str) -> Path:
+    """Resolve a path safely, raising HTTPException on traversal attempts."""
+    target = (base / relative_path).resolve()
+    if not str(target).startswith(str(base)):
         raise HTTPException(400, "Path traversal not allowed")
+    return target
+
+
+def _validate_root(root: str) -> None:
+    """Validate root parameter is exactly 'workspace' or 'home'."""
+    if root not in ("workspace", "home"):
+        raise HTTPException(400, "root must be 'workspace' or 'home'")
+
+
+@app.get("/api/files")
+async def list_files(path: str = "", root: str = "workspace") -> dict:
+    """List files and directories in a session root (workspace or home)."""
+    _validate_root(root)
+    base = _resolve_root(root)
+    target = _safe_resolve(base, path)
 
     if not target.is_dir():
         raise HTTPException(404, "Directory not found")
@@ -1434,15 +1580,132 @@ async def list_files(path: str = "") -> dict:
             continue
         if item.name in _SKIP_NAMES:
             continue
+        stat = item.stat(follow_symlinks=False)
         entries.append(
             {
                 "name": item.name,
-                "path": str(item.relative_to(workspace)),
+                "path": str(item.relative_to(base)),
                 "type": "directory" if item.is_dir() else "file",
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
             }
         )
 
     return {"entries": entries}
+
+
+@app.get("/api/files/download")
+async def download_file(path: str, root: str = "workspace") -> FileResponse:
+    """Download a single file from the session."""
+    _validate_root(root)
+    base = _resolve_root(root)
+    target = _safe_resolve(base, path)
+
+    if not target.is_file():
+        raise HTTPException(404, "File not found")
+
+    return FileResponse(
+        path=str(target),
+        filename=target.name,
+        media_type="application/octet-stream",
+    )
+
+
+@app.post("/api/files/upload")
+async def upload_files(
+    files: list[UploadFile],
+    path: str = "",
+    root: str = "workspace",
+) -> dict:
+    """Upload files to a target directory in the session."""
+    _validate_root(root)
+    base = _resolve_root(root)
+    target_dir = _safe_resolve(base, path)
+
+    if not target_dir.is_dir():
+        raise HTTPException(404, "Target directory not found")
+
+    max_size = broker._settings.max_upload_size_bytes
+    uploaded: list[dict] = []
+    for upload in files:
+        if upload.filename is None:
+            continue
+        # Prevent path traversal in filenames
+        safe_name = Path(upload.filename).name
+        dest = _safe_resolve(base, str(Path(path) / safe_name))
+
+        content = await upload.read()
+        if len(content) > max_size:
+            raise HTTPException(
+                413,
+                f"File {safe_name} exceeds maximum upload size ({max_size} bytes)",
+            )
+        dest.write_bytes(content)
+        stat = dest.stat()
+        uploaded.append(
+            {
+                "name": safe_name,
+                "path": str(dest.relative_to(base)),
+                "type": "file",
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+            }
+        )
+
+    return {"entries": uploaded}
+
+
+class MkdirRequest(BaseModel):
+    path: str
+    root: str = "workspace"
+
+
+@app.post("/api/files/mkdir")
+async def mkdir(body: MkdirRequest) -> dict:
+    """Create a directory."""
+    _validate_root(body.root)
+    base = _resolve_root(body.root)
+    target = _safe_resolve(base, body.path)
+
+    if target.exists():
+        raise HTTPException(409, "Path already exists")
+
+    try:
+        target.mkdir(parents=True, exist_ok=False)
+    except PermissionError:
+        raise HTTPException(403, "Permission denied")
+
+    stat = target.stat()
+    return {
+        "name": target.name,
+        "path": str(target.relative_to(base)),
+        "type": "directory",
+        "size": stat.st_size,
+        "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+    }
+
+
+@app.delete("/api/files")
+async def delete_file(path: str, root: str = "workspace") -> dict:
+    """Delete a file or directory."""
+    _validate_root(root)
+    if not path:
+        raise HTTPException(400, "Cannot delete root directory")
+    base = _resolve_root(root)
+    target = _safe_resolve(base, path)
+
+    if not target.exists():
+        raise HTTPException(404, "Path not found")
+
+    try:
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+    except PermissionError:
+        raise HTTPException(403, "Permission denied")
+
+    return {"deleted": str(target.relative_to(base))}
 
 
 def _parse_diff_output(raw: str, file_path: str) -> dict:
@@ -1601,6 +1864,17 @@ async def get_diff_files(
         files.append({"path": path, "status": "mod", "ins": ins, "del": del_})
 
     return {"files": files}
+
+
+class _TokenRedactFilter(logging.Filter):
+    """Redact access_token values from log messages to prevent JWT leaks."""
+
+    _pattern = re.compile(r"access_token=[^\s\"&]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if hasattr(record, "msg") and isinstance(record.msg, str):
+            record.msg = self._pattern.sub("access_token=[REDACTED]", record.msg)
+        return True
 
 
 def main() -> None:

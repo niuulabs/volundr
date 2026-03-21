@@ -495,19 +495,10 @@ func (r *DockerRuntime) generateDockerConfig(cfg *config.Config) (string, error)
 			"name":     cfg.Database.Name,
 		},
 		PodManager: map[string]interface{}{
-			"adapter": "volundr.adapters.outbound.docker_pod_manager.DockerPodManager",
+			"adapter": "volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
 			"kwargs": map[string]interface{}{
-				"network":           dockerImageOrDefault(cfg.Docker.Network, "volundr-net"),
-				"skuld_image":       dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuulabs/skuld:latest"),
-				"code_server_image": dockerImageOrDefault(cfg.Docker.CodeServerImage, "ghcr.io/niuulabs/code-server:latest"),
-				"ttyd_image":        dockerImageOrDefault(cfg.Docker.TtydImage, "ghcr.io/niuulabs/devrunner:latest"),
-				"compose_dir":       containerStoragePath + "/sessions",
-				"gateway_domain":    "",
-				"db_host":           dbHost,
-				"db_port":           cfg.Database.Port,
-				"db_user":           cfg.Database.User,
-				"db_password":       cfg.Database.Password,
-				"db_name":           cfg.Database.Name,
+				"namespace":   "default",
+				"skuld_image": dockerImageOrDefault(cfg.Docker.SkuldImage, "ghcr.io/niuulabs/skuld:latest"),
 			},
 		},
 		CredentialStore: map[string]interface{}{

@@ -98,7 +98,7 @@ Session creation is a two-phase process: record creation followed by pod provisi
    - Build a `SessionContext` from the request metadata (principal, template name, credentials, integrations).
    - Run 10+ contributors sequentially. Each returns a `SessionContribution` (Helm values + pod spec additions).
    - Deep-merge all contributions into a single `SessionSpec`.
-6. `PodManager.start()` submits the merged spec to the backend (Farm, Flux, or direct K8s).
+6. `PodManager.start()` submits the merged spec to the backend (Flux or direct K8s).
 7. Session transitions to `PROVISIONING`. A background task polls readiness.
 8. When all containers report ready, session transitions to `RUNNING`.
 

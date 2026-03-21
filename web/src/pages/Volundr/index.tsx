@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Hammer,
@@ -13,9 +13,6 @@ import {
   Square,
   Trash2,
   FolderGit2,
-  Globe,
-  Link,
-  Unlink,
   MessageSquare,
   Terminal,
   Code,
@@ -32,6 +29,12 @@ import {
   Shield,
   LogOut,
   Menu,
+  Pencil,
+  Check,
+  ExternalLink,
+  FolderOpen,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   MetricCard,
@@ -46,22 +49,30 @@ import {
   StatusBadge,
   StatusDot,
   SessionGroupList,
+  FileManager,
 } from '@/components';
+import { DeleteSessionDialog } from '@/components/DeleteSessionDialog';
+import type { CleanupTarget } from '@/components/DeleteSessionDialog';
 import { LaunchWizard } from '@/components/LaunchWizard';
 import type { LaunchConfig } from '@/components/LaunchWizard';
 import { useVolundr, useLocalStorage, useSessionProbe, useDiffViewer, useIdentity } from '@/hooks';
 import { useAuth } from '@/auth';
 import { volundrService } from '@/adapters';
 import { getAccessToken } from '@/adapters/api/client';
-import type { VolundrSession, VolundrLog } from '@/models';
+import type { VolundrSession, VolundrLog, FeatureModule, UserFeaturePreference } from '@/models';
 import { isSessionBooting, isSessionActive } from '@/models';
+import { resolveIcon } from '@/modules/icons';
 import { formatTokens, cn } from '@/utils';
 import { getRepo, getBranch, getSourceLabel, isGitSource } from '@/utils/source';
 import styles from './VolundrPage.module.css';
 
+const EditorPanel = lazy(() =>
+  import('@/components/EditorPanel/EditorPanel').then(m => ({ default: m.EditorPanel }))
+);
+
 const STATUS_OPTIONS = ['all', 'running', 'stopped', 'error'];
 
-type TabId = 'chat' | 'terminal' | 'code' | 'diffs' | 'chronicles' | 'logs';
+type TabId = 'chat' | 'terminal' | 'code' | 'files' | 'diffs' | 'chronicles' | 'logs';
 
 export function VolundrPage() {
   const {
@@ -71,10 +82,10 @@ export function VolundrPage() {
     repos,
     templates,
     loading,
+    updateSession,
     stopSession,
     resumeSession,
     startSession,
-    connectSession,
     deleteSession,
     archiveSession,
     restoreSession: restoreArchivedSession,
@@ -84,7 +95,6 @@ export function VolundrPage() {
     logs,
     logLoading,
     getLogs,
-    getCodeServerUrl,
     chronicle,
     chronicleLoading,
     getChronicle,
@@ -101,8 +111,8 @@ export function VolundrPage() {
     presets,
     saveTemplate,
     savePreset,
-    searchLinearIssues,
-    updateLinearIssueStatus,
+    searchTrackerIssues,
+    updateTrackerIssueStatus,
   } = useVolundr();
   const navigate = useNavigate();
   const { isAdmin } = useIdentity(volundrService);
@@ -113,11 +123,97 @@ export function VolundrPage() {
   const [activeTab, setActiveTab] = useState<TabId>('chat');
   const [pendingDiffFile, setPendingDiffFile] = useState<string | null>(null);
   const [showLaunchWizard, setShowLaunchWizard] = useState(false);
-  const [showConnectModal, setShowConnectModal] = useState(false);
+  const defaultPanels: FeatureModule[] = [
+    {
+      key: 'chat',
+      label: 'Chat',
+      icon: 'MessageSquare',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 10,
+    },
+    {
+      key: 'terminal',
+      label: 'Terminal',
+      icon: 'Terminal',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 20,
+    },
+    {
+      key: 'code',
+      label: 'Code',
+      icon: 'Code',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 30,
+    },
+    {
+      key: 'files',
+      label: 'Files',
+      icon: 'FolderOpen',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 40,
+    },
+    {
+      key: 'diffs',
+      label: 'Diffs',
+      icon: 'GitCompareArrows',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 50,
+    },
+    {
+      key: 'chronicles',
+      label: 'Chronicles',
+      icon: 'ScrollText',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 60,
+    },
+    {
+      key: 'logs',
+      label: 'Logs',
+      icon: 'FileText',
+      scope: 'session',
+      enabled: true,
+      defaultEnabled: true,
+      adminOnly: false,
+      order: 70,
+    },
+  ];
+  const [sessionPanels, setSessionPanels] = useState<FeatureModule[]>(defaultPanels);
+  const [panelPrefs, setPanelPrefs] = useState<UserFeaturePreference[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      volundrService.getFeatureModules('session'),
+      volundrService.getUserFeaturePreferences(),
+    ]).then(([panels, prefs]) => {
+      if (panels.length > 0) {
+        setSessionPanels(panels);
+      }
+      setPanelPrefs(prefs);
+    });
+  }, []);
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage(
     'volundr-sidebar-collapsed',
     false
   );
+  const [compactCards, setCompactCards] = useLocalStorage('volundr-compact-cards', false);
   const [statsCollapsed, setStatsCollapsed] = useLocalStorage('volundr-stats-collapsed', true);
   const [archivedCollapsed, setArchivedCollapsed] = useLocalStorage(
     'volundr-archived-collapsed',
@@ -129,14 +225,12 @@ export function VolundrPage() {
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
-  // Connect session form state
-  const [connectName, setConnectName] = useState('');
-  const [connectHostname, setConnectHostname] = useState('');
-  const [isConnecting, setIsConnecting] = useState(false);
+  // Session name editing state
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
 
-  // IDE state
-  const [ideUrl, setIdeUrl] = useState<string | null>(null);
-  const [ideLoading, setIdeLoading] = useState(false);
+  // Delete session dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Live message count from the WebSocket chat (syncs sidebar badge)
   const [liveChatCount, setLiveChatCount] = useState<number | null>(null);
@@ -154,8 +248,6 @@ export function VolundrPage() {
     }
     return sessions.length > 0 ? sessions[0] : null;
   }, [selectedSession, sessions]);
-  const isManualSession = effectiveSelectedSession?.origin === 'manual';
-
   // Resolve the repo URL for PR lookups (session stores org/name, API needs full URL)
   const sessionRepoUrl = useMemo(() => {
     const repo = effectiveSelectedSession ? getRepo(effectiveSelectedSession.source) : '';
@@ -371,10 +463,8 @@ export function VolundrPage() {
       };
     }
 
-    // Fallback: use Volundr API for non-running managed sessions
-    if (effectiveSelectedSession.origin !== 'manual') {
-      getLogs(sessionId);
-    }
+    // Fallback: use Volundr API for non-running sessions
+    getLogs(sessionId);
 
     return undefined;
   }, [
@@ -383,47 +473,8 @@ export function VolundrPage() {
     effectiveSelectedSession?.chatEndpoint,
     effectiveSelectedSession?.status,
     effectiveSelectedSession?.source,
-    effectiveSelectedSession?.origin,
     getLogs,
     fetchSessionHostLogs,
-  ]);
-
-  // Resolve IDE URL when code tab is active and session is running.
-  useEffect(() => {
-    if (
-      activeTab !== 'code' ||
-      !effectiveSelectedSession?.id ||
-      effectiveSelectedSession.status !== 'running'
-    ) {
-      setIdeUrl(null);
-      setIdeLoading(false);
-      return;
-    }
-
-    if (effectiveSelectedSession.origin === 'manual' && effectiveSelectedSession.hostname) {
-      setIdeUrl(`https://${effectiveSelectedSession.hostname}/`);
-      setIdeLoading(false);
-      return;
-    }
-
-    setIdeLoading(true);
-    getCodeServerUrl(effectiveSelectedSession.id)
-      .then(url => {
-        setIdeUrl(url);
-        setIdeLoading(false);
-      })
-      .catch(() => {
-        setIdeUrl(null);
-        setIdeLoading(false);
-      });
-  }, [
-    activeTab,
-    effectiveSelectedSession?.id,
-    effectiveSelectedSession?.status,
-    effectiveSelectedSession?.source,
-    effectiveSelectedSession?.hostname,
-    effectiveSelectedSession?.origin,
-    getCodeServerUrl,
   ]);
 
   const filteredSessions = sessions.filter(session => {
@@ -436,15 +487,43 @@ export function VolundrPage() {
     return true;
   });
 
-  const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
-    { id: 'chat', label: 'Chat', icon: MessageSquare },
-    { id: 'terminal', label: 'Terminal', icon: Terminal },
+  const tabs = useMemo(() => {
+    const prefMap = new Map(panelPrefs.map(p => [p.featureKey, p]));
 
-    { id: 'code', label: isManualSession ? 'IDE' : 'Code', icon: Code },
-    { id: 'diffs', label: 'Diffs', icon: GitCompareArrows },
-    { id: 'chronicles', label: 'Chronicles', icon: ScrollText },
-    { id: 'logs', label: 'Logs', icon: FileText },
-  ];
+    // Filter to enabled + visible panels
+    const visible = sessionPanels.filter(f => {
+      if (!f.enabled) return false;
+      const pref = prefMap.get(f.key);
+      if (pref && !pref.visible) return false;
+      return true;
+    });
+
+    // Sort by user preference, then default order
+    visible.sort((a, b) => {
+      const prefA = prefMap.get(a.key);
+      const prefB = prefMap.get(b.key);
+      const orderA = prefA !== undefined ? prefA.sortOrder : a.order;
+      const orderB = prefB !== undefined ? prefB.sortOrder : b.order;
+      return orderA - orderB;
+    });
+
+    // Icon fallback map for panels that need special handling
+    const fallbackIcons: Record<string, typeof MessageSquare> = {
+      chat: MessageSquare,
+      terminal: Terminal,
+      code: Code,
+      files: FolderOpen,
+      diffs: GitCompareArrows,
+      chronicles: ScrollText,
+      logs: FileText,
+    };
+
+    return visible.map(f => ({
+      id: f.key as TabId,
+      label: f.label,
+      icon: resolveIcon(f.icon) ?? fallbackIcons[f.key] ?? MessageSquare,
+    }));
+  }, [sessionPanels, panelPrefs]);
 
   const selectedModel = effectiveSelectedSession ? models[effectiveSelectedSession.model] : null;
   const isLocal = selectedModel?.provider === 'local';
@@ -467,22 +546,24 @@ export function VolundrPage() {
     }
   };
 
-  const handleDeleteSession = async () => {
+  const handleDeleteSession = () => {
     if (!effectiveSelectedSession) {
       return;
     }
+    setShowDeleteDialog(true);
+  };
 
-    const confirmMessage = isManualSession
-      ? `Remove "${effectiveSelectedSession.name}" from the session list?`
-      : `Are you sure you want to delete session "${effectiveSelectedSession.name}"? This action cannot be undone.`;
-
-    const confirmed = window.confirm(confirmMessage);
-    if (!confirmed) {
+  const handleDeleteConfirm = async (cleanup: CleanupTarget[]) => {
+    if (!effectiveSelectedSession) {
       return;
     }
-
-    await deleteSession(effectiveSelectedSession.id);
+    setShowDeleteDialog(false);
+    await deleteSession(effectiveSelectedSession.id, cleanup);
     setSelectedSession(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteDialog(false);
   };
 
   const handleArchiveSession = async () => {
@@ -545,7 +626,7 @@ export function VolundrPage() {
           model: config.model,
           templateName: config.templateName,
           taskType: config.taskType,
-          linearIssue: config.linearIssue,
+          trackerIssue: config.trackerIssue,
           terminalRestricted: config.terminalRestricted,
           workspaceId: config.workspaceId,
           credentialNames: config.credentialNames,
@@ -563,33 +644,6 @@ export function VolundrPage() {
     },
     [startSession]
   );
-
-  const handleConnectSession = async () => {
-    if (!connectName || !connectHostname) {
-      return;
-    }
-
-    setIsConnecting(true);
-    try {
-      const session = await connectSession({
-        name: connectName,
-        hostname: connectHostname,
-      });
-      setSelectedSession(session);
-      setActiveTab('code');
-      setShowConnectModal(false);
-      setConnectName('');
-      setConnectHostname('');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const handleCloseConnectModal = () => {
-    setShowConnectModal(false);
-    setConnectName('');
-    setConnectHostname('');
-  };
 
   const handlePopout = (tabType: 'terminal' | 'code' | 'chat') => {
     if (effectiveSelectedSession) {
@@ -688,35 +742,33 @@ export function VolundrPage() {
             </button>
           </div>
 
-          {/* Action buttons */}
-          <div className={styles.sidebarActions}>
-            <div className={styles.actionRow}>
-              <button
-                type="button"
-                className={styles.newButton}
-                onClick={() => setShowLaunchWizard(true)}
-              >
-                <Plus className={styles.actionBtnIcon} />
-                New Session
-              </button>
-              <button
-                type="button"
-                className={styles.connectButton}
-                onClick={() => setShowConnectModal(true)}
-              >
-                <Link className={styles.actionBtnIcon} />
-                Connect
-              </button>
-            </div>
+          {/* New session + search */}
+          <div className={styles.searchRow}>
+            <button
+              type="button"
+              className={styles.newSessionButton}
+              onClick={() => setShowLaunchWizard(true)}
+              title="New Session"
+            >
+              <Plus className={styles.newSessionIcon} />
+            </button>
+            <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search..." />
           </div>
 
-          {/* Search + filter */}
-          <div className={styles.sidebarFilters}>
-            <SearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder="Search sessions..."
-            />
+          {/* View toggle + filter */}
+          <div className={styles.filterRow}>
+            <button
+              type="button"
+              className={styles.viewToggle}
+              onClick={() => setCompactCards(!compactCards)}
+              title={compactCards ? 'Expanded view' : 'Compact view'}
+            >
+              {compactCards ? (
+                <LayoutGrid className={styles.viewToggleIcon} />
+              ) : (
+                <List className={styles.viewToggleIcon} />
+              )}
+            </button>
             <select
               className={styles.statusSelect}
               value={statusFilter}
@@ -754,6 +806,7 @@ export function VolundrPage() {
                         : session
                     }
                     model={models[session.model]}
+                    compact={compactCards}
                   />
                 </div>
               )}
@@ -946,6 +999,7 @@ export function VolundrPage() {
               </div>
             )}
           </div>
+          <div className={styles.versionTag}>{__APP_VERSION__}</div>
         </div>
       )}
 
@@ -974,30 +1028,77 @@ export function VolundrPage() {
           {/* Session bar */}
           <div className={styles.sessionBar}>
             <div className={styles.sessionBarLeft}>
-              <span className={styles.sessionName}>{effectiveSelectedSession.name}</span>
-              {isManualSession && <span className={styles.manualTag}>manual</span>}
-              <StatusBadge status={effectiveSelectedSession.status} />
-              <span className={styles.sessionBarSep} />
-              {isManualSession ? (
-                <div className={styles.repoInfo}>
-                  <Globe className={styles.repoInfoIcon} />
-                  <span>{effectiveSelectedSession.hostname}</span>
-                </div>
+              {editingName ? (
+                <form
+                  className={styles.sessionNameForm}
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    const trimmed = editNameValue.trim();
+                    if (trimmed && trimmed !== effectiveSelectedSession.name) {
+                      await updateSession(effectiveSelectedSession.id, { name: trimmed });
+                    }
+                    setEditingName(false);
+                  }}
+                >
+                  <input
+                    className={styles.sessionNameInput}
+                    value={editNameValue}
+                    onChange={e => setEditNameValue(e.target.value)}
+                    onBlur={() => setEditingName(false)}
+                    onKeyDown={e => {
+                      if (e.key === 'Escape') setEditingName(false);
+                    }}
+                    autoFocus
+                    maxLength={63}
+                  />
+                  <button
+                    type="submit"
+                    className={styles.sessionNameSave}
+                    onMouseDown={e => e.preventDefault()}
+                  >
+                    <Check className={styles.sessionNameIcon} />
+                  </button>
+                </form>
               ) : (
-                <div className={styles.repoInfo}>
-                  <FolderGit2 className={styles.repoInfoIcon} />
-                  <span>{getSourceLabel(effectiveSelectedSession.source)}</span>
-                  {isGitSource(effectiveSelectedSession.source) && (
-                    <>
-                      <span className={styles.branchArrow}>&rarr;</span>
-                      <span className={styles.branchName}>
-                        {getBranch(effectiveSelectedSession.source)}
-                      </span>
-                    </>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  className={styles.sessionNameBtn}
+                  onClick={() => {
+                    setEditNameValue(effectiveSelectedSession.name);
+                    setEditingName(true);
+                  }}
+                >
+                  <span className={styles.sessionName}>{effectiveSelectedSession.name}</span>
+                  <Pencil className={styles.sessionNameEditIcon} />
+                </button>
               )}
-              {!isManualSession && selectedModel && (
+              <StatusBadge status={effectiveSelectedSession.status} />
+              {effectiveSelectedSession.trackerIssue && (
+                <a
+                  href={effectiveSelectedSession.trackerIssue.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.ticketLink}
+                  title={effectiveSelectedSession.trackerIssue.title}
+                >
+                  {effectiveSelectedSession.trackerIssue.identifier}
+                  <ExternalLink className={styles.ticketLinkIcon} />
+                </a>
+              )}
+              <span className={styles.sessionBarSep} />
+              <div className={styles.repoInfo}>
+                <FolderGit2 className={styles.repoInfoIcon} />
+                <span>{getSourceLabel(effectiveSelectedSession.source)}</span>
+                {isGitSource(effectiveSelectedSession.source) && (
+                  <>
+                    <span className={styles.branchArrow}>&rarr;</span>
+                    <span className={styles.branchName}>
+                      {getBranch(effectiveSelectedSession.source)}
+                    </span>
+                  </>
+                )}
+              </div>
+              {selectedModel && (
                 <span
                   className={styles.modelBadge}
                   style={{ '--model-color': selectedModel.color } as React.CSSProperties}
@@ -1014,21 +1115,13 @@ export function VolundrPage() {
             <div className={styles.sessionBarRight}>
               {effectiveSelectedSession.status === 'running' ? (
                 <button type="button" className={styles.stopButton} onClick={handleStopSession}>
-                  {isManualSession ? (
-                    <Unlink className={styles.actionBtnIcon} />
-                  ) : (
-                    <Square className={styles.actionBtnIcon} />
-                  )}
-                  {isManualSession ? 'Disconnect' : 'Stop'}
+                  <Square className={styles.actionBtnIcon} />
+                  Stop
                 </button>
               ) : (
                 <button type="button" className={styles.startButton} onClick={handleResumeSession}>
-                  {isManualSession ? (
-                    <Link className={styles.actionBtnIcon} />
-                  ) : (
-                    <Play className={styles.actionBtnIcon} />
-                  )}
-                  {isManualSession ? 'Connect' : 'Start'}
+                  <Play className={styles.actionBtnIcon} />
+                  Start
                 </button>
               )}
               <button
@@ -1043,7 +1136,7 @@ export function VolundrPage() {
                 type="button"
                 className={styles.deleteButton}
                 onClick={handleDeleteSession}
-                title={isManualSession ? 'Remove session' : 'Delete session'}
+                title="Delete session"
               >
                 <Trash2 className={styles.deleteButtonIcon} />
               </button>
@@ -1097,9 +1190,7 @@ export function VolundrPage() {
               ) : (
                 <div className={styles.emptyState}>
                   <MessageSquare className={styles.emptyIcon} />
-                  <p>
-                    {isManualSession ? 'Connect the session to chat' : 'Start the session to chat'}
-                  </p>
+                  <p>Start the session to chat</p>
                 </div>
               ))}
 
@@ -1112,73 +1203,36 @@ export function VolundrPage() {
               ) : (
                 <div className={styles.emptyState}>
                   <Terminal className={styles.emptyIcon} />
-                  <p>
-                    {isManualSession
-                      ? 'Connect the session to access terminal'
-                      : 'Start the session to access terminal'}
-                  </p>
+                  <p>Start the session to access terminal</p>
                 </div>
               ))}
 
             {activeTab === 'code' &&
-              (isSessionReady ? (
-                ideLoading ? (
-                  <div className={styles.emptyState}>
-                    <Code className={styles.emptyIcon} />
-                    <p>Connecting to IDE...</p>
-                  </div>
-                ) : ideUrl ? (
-                  authEnabled ? (
-                    <div className={styles.emptyState}>
-                      <Code className={styles.emptyIcon} />
-                      <p>VS Code IDE is available for this session</p>
-                      <a
-                        href={(() => {
-                          const token = getAccessToken();
-                          if (!token) return ideUrl;
-                          const sep = ideUrl.includes('?') ? '&' : '?';
-                          return `${ideUrl}${sep}access_token=${encodeURIComponent(token)}`;
-                        })()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.ideOpenButton}
-                      >
-                        Open IDE in new tab
-                      </a>
-                      <span className={styles.ideUrlHint}>{ideUrl}</span>
-                    </div>
-                  ) : (
-                    <div className={styles.iframeContainer}>
-                      <div className={styles.iframeToolbar}>
-                        <span className={styles.iframeUrlLabel}>{ideUrl}</span>
-                      </div>
-                      <iframe
-                        className={styles.sessionIframe}
-                        src={ideUrl}
-                        title={`IDE - ${effectiveSelectedSession.name}`}
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                      />
-                    </div>
-                  )
-                ) : (
-                  <div className={styles.emptyState}>
-                    <Code className={styles.emptyIcon} />
-                    <p>IDE not available for this session</p>
-                  </div>
-                )
-              ) : isSessionBooting(effectiveSelectedSession.status) ||
-                (isRunning && !connectionVerified) ? (
+              !isSessionReady &&
+              (isSessionBooting(effectiveSelectedSession.status) ||
+              (isRunning && !connectionVerified) ? (
                 <SessionStartingIndicator className={styles.tabPanel} />
               ) : (
                 <div className={styles.emptyState}>
                   <Code className={styles.emptyIcon} />
-                  <p>
-                    {isManualSession
-                      ? 'Connect the session to access IDE'
-                      : 'Start the session to access IDE'}
-                  </p>
+                  <p>Start the session to access IDE</p>
                 </div>
               ))}
+            {isSessionReady && (
+              <Suspense fallback={null}>
+                <EditorPanel
+                  hostname={effectiveSelectedSession.hostname ?? null}
+                  sessionId={effectiveSelectedSession.id}
+                  codeEndpoint={effectiveSelectedSession.codeEndpoint}
+                  className={styles.tabPanel}
+                  hidden={activeTab !== 'code'}
+                />
+              </Suspense>
+            )}
+
+            {activeTab === 'files' && (
+              <FileManager chatEndpoint={chatEndpoint} className={styles.tabPanel} />
+            )}
 
             {activeTab === 'diffs' && (
               <SessionDiffs
@@ -1221,8 +1275,8 @@ export function VolundrPage() {
                 onCreatePR={createPullRequest}
                 onMergePR={mergePullRequest}
                 onRefreshCI={refreshCIStatus}
-                linearIssue={effectiveSelectedSession.linearIssue}
-                onLinearStatusChange={updateLinearIssueStatus}
+                trackerIssue={effectiveSelectedSession.trackerIssue}
+                onTrackerStatusChange={updateTrackerIssueStatus}
                 onNavigateToDiff={(filePath: string) => {
                   setPendingDiffFile(filePath);
                   setActiveTab('diffs');
@@ -1321,7 +1375,7 @@ export function VolundrPage() {
             }}
             onSavePreset={savePreset}
             isLaunching={isLaunching}
-            searchLinearIssues={searchLinearIssues}
+            searchTrackerIssues={searchTrackerIssues}
           />
           {launchError && (
             <div className={styles.launchError}>
@@ -1338,61 +1392,13 @@ export function VolundrPage() {
         </Modal>
       )}
 
-      {showConnectModal && (
-        <Modal
-          isOpen={true}
-          onClose={handleCloseConnectModal}
-          title="Connect to Existing Session"
-          subtitle="Attach to a running Skuld instance by hostname"
-          size="md"
-        >
-          <div className={styles.modalContent}>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Session Name</label>
-              <input
-                type="text"
-                className={styles.formInput}
-                placeholder="skuld-dev-01"
-                value={connectName}
-                onChange={e => setConnectName(e.target.value)}
-                disabled={isConnecting}
-              />
-            </div>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Hostname</label>
-              <input
-                type="text"
-                className={styles.formInput}
-                placeholder="skuld-01.local"
-                value={connectHostname}
-                onChange={e => setConnectHostname(e.target.value)}
-                disabled={isConnecting}
-              />
-              <span className={styles.formHint}>
-                IDE at https://hostname/ &middot; WSS at wss://hostname/ws
-              </span>
-            </div>
-            <div className={styles.modalActions}>
-              <button
-                type="button"
-                className={styles.cancelButton}
-                onClick={handleCloseConnectModal}
-                disabled={isConnecting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={styles.connectSubmitButton}
-                onClick={handleConnectSession}
-                disabled={isConnecting || !connectName || !connectHostname}
-              >
-                {isConnecting ? 'Connecting...' : 'Connect'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteSessionDialog
+        isOpen={showDeleteDialog}
+        sessionName={effectiveSelectedSession?.name ?? ''}
+        isManual={false}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
     </div>
   );
 }

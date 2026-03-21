@@ -11,10 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
-from volundr.adapters.inbound.auth import require_role
+from volundr.adapters.inbound.auth import extract_principal, require_role
 from volundr.domain.models import (
     Chronicle,
     ChronicleStatus,
+    CleanupTarget,
     GitProviderType,
     GitSource,
     Model,
@@ -130,6 +131,16 @@ class SessionCreate(BaseModel):
         default_factory=dict,
         description="Resource allocation overrides (cpu, memory, gpu)",
     )
+    issue_id: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Issue tracker ID to link to the session",
+    )
+    issue_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="URL of the linked issue in the tracker",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -212,6 +223,15 @@ class SessionStart(BaseModel):
     }
 
 
+class DeleteSessionBody(BaseModel):
+    """Optional request body for session deletion with cleanup targets."""
+
+    cleanup: list[CleanupTarget] = Field(
+        default_factory=list,
+        description="Resources to permanently delete alongside the session",
+    )
+
+
 class SessionResponse(BaseModel):
     """Response model for a session."""
 
@@ -224,7 +244,7 @@ class SessionResponse(BaseModel):
         description="Skuld chat proxy URL (null when not running)",
     )
     code_endpoint: str | None = Field(
-        description="Code-server IDE URL (null when not running)",
+        description="Editor IDE URL (null when not running)",
     )
     created_at: str = Field(description="ISO 8601 creation timestamp")
     updated_at: str = Field(description="ISO 8601 last update timestamp")
@@ -240,6 +260,10 @@ class SessionResponse(BaseModel):
     tracker_issue_id: str | None = Field(
         default=None,
         description="Linked issue tracker identifier",
+    )
+    issue_tracker_url: str | None = Field(
+        default=None,
+        description="Web URL for the linked issue in the tracker",
     )
     preset_id: UUID | None = Field(
         default=None,
@@ -306,6 +330,7 @@ class SessionResponse(BaseModel):
             pod_name=session.pod_name,
             error=session.error,
             tracker_issue_id=session.tracker_issue_id,
+            issue_tracker_url=session.issue_tracker_url,
             preset_id=session.preset_id,
             archived_at=(session.archived_at.isoformat() if session.archived_at else None),
             owner_id=session.owner_id,
@@ -317,7 +342,7 @@ class SessionEndpoints(BaseModel):
     """Response model for session endpoints after start."""
 
     chat_endpoint: str = Field(description="Skuld chat proxy URL")
-    code_endpoint: str = Field(description="Code-server IDE URL")
+    code_endpoint: str = Field(description="Editor IDE URL")
 
 
 class ModelInfo(BaseModel):
@@ -747,9 +772,21 @@ class WorkspaceResponse(BaseModel):
     deleted_at: str | None = Field(
         description="ISO 8601 deletion timestamp",
     )
+    session_name: str | None = Field(None, description="Name of the associated session")
+    source_url: str | None = Field(None, description="Git repository URL if applicable")
+    source_ref: str | None = Field(None, description="Git branch/ref if applicable")
 
     @classmethod
-    def from_workspace(cls, ws) -> "WorkspaceResponse":
+    def from_workspace(cls, ws, session=None) -> "WorkspaceResponse":
+        source_url = None
+        source_ref = None
+        session_name = None
+        if session is not None:
+            session_name = session.name
+            if hasattr(session.source, "repo"):
+                source_url = session.source.repo
+            if hasattr(session.source, "branch"):
+                source_ref = session.source.branch
         return cls(
             id=ws.id,
             session_id=ws.session_id,
@@ -761,6 +798,9 @@ class WorkspaceResponse(BaseModel):
             created_at=ws.created_at.isoformat() if ws.created_at else "",
             archived_at=ws.archived_at.isoformat() if ws.archived_at else None,
             deleted_at=ws.deleted_at.isoformat() if ws.deleted_at else None,
+            session_name=session_name,
+            source_url=source_url,
+            source_ref=source_ref,
         )
 
 
@@ -806,16 +846,18 @@ def create_router(
 
         return principal
 
-    @router.get("/features", tags=["Features"])
-    async def get_features(request: Request) -> dict:
+    @router.get("/feature-flags", tags=["Features"])
+    async def get_feature_flags(request: Request) -> dict:
         """Return feature flags derived from server configuration.
 
         Lets the frontend adapt its UI based on what the backend supports
         (e.g. local mounts are only meaningful in k3s / CLI mode).
         """
         settings = request.app.state.settings
+        admin = request.app.state.admin_settings
         return {
             "local_mounts_enabled": settings.local_mounts.enabled,
+            "file_manager_enabled": admin.get("storage", {}).get("file_manager_enabled", True),
         }
 
     @router.get("/auth/config", tags=["Auth"])
@@ -981,6 +1023,8 @@ def create_router(
                 preset_id=data.preset_id,
                 principal=principal,
                 workspace_id=data.workspace_id,
+                tracker_issue_id=data.issue_id,
+                issue_tracker_url=data.issue_url,
             )
         except RepoValidationError as e:
             raise HTTPException(
@@ -1075,12 +1119,19 @@ def create_router(
         tags=["Sessions"],
     )
     async def delete_session(
-        request: Request, session_id: UUID = Path(description="Unique session identifier")
+        request: Request,
+        session_id: UUID = Path(description="Unique session identifier"),
+        body: DeleteSessionBody | None = None,
     ) -> None:
-        """Delete a session."""
+        """Delete a session with optional resource cleanup."""
         principal = await _optional_principal(request)
+        cleanup_targets = body.cleanup if body else []
         try:
-            deleted = await service.delete_session(session_id, principal=principal)
+            deleted = await service.delete_session(
+                session_id,
+                principal=principal,
+                cleanup_targets=cleanup_targets,
+            )
         except SessionAccessDeniedError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -1282,6 +1333,7 @@ def create_router(
         tags=["Sessions"],
     )
     async def report_token_usage(
+        request: Request,
         session_id: UUID = Path(description="Unique session identifier"),
         data: TokenUsageReport = ...,
     ) -> TokenUsageResponse:
@@ -1291,6 +1343,18 @@ def create_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Token service not available",
             )
+
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_usage")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report usage for session {session_id}",
+                )
 
         provider = ModelProvider(data.provider)
 
@@ -1385,168 +1449,6 @@ def create_router(
             )
         except httpx.RequestError as e:
             logger.warning("Log proxy connection failed for session %s: %s", session_id, e)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not connect to session pod: {e}",
-            )
-
-    @router.get(
-        "/sessions/{session_id}/diff",
-        responses={
-            400: {"model": ErrorResponse},
-            404: {"model": ErrorResponse},
-            502: {"model": ErrorResponse},
-        },
-        tags=["Sessions"],
-    )
-    async def get_session_diff(
-        session_id: UUID = Path(description="Unique session identifier"),
-        file: str | None = Query(
-            default=None,
-            description="File path relative to workspace (optional)",
-        ),
-        base: str = Query(
-            default="last-commit",
-            description="Diff base mode: last-commit or default-branch",
-        ),
-    ) -> dict:
-        """Get git diff from a session workspace via Skuld.
-
-        Proxies to the session pod's ``GET /api/diff`` endpoint.
-
-        - **last-commit**: ``git diff HEAD`` (uncommitted changes)
-        - **default-branch**: ``git diff main...HEAD`` (full branch diff)
-        """
-        if base not in ("last-commit", "default-branch"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Invalid base parameter: {base}. Must be 'last-commit' or 'default-branch'"
-                ),
-            )
-
-        session = await service.get_session(session_id)
-        if session is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session not found: {session_id}",
-            )
-
-        if not session.chat_endpoint:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} has no active endpoint",
-            )
-
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
-
-        params: dict[str, str] = {"base": base}
-        if file is not None:
-            params["file"] = file
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{base_url}/api/diff",
-                    params=params,
-                )
-                response.raise_for_status()
-                return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "Diff proxy failed for session %s: %s",
-                session_id,
-                e,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=(f"Failed to fetch diff from session pod: {e.response.status_code}"),
-            )
-        except httpx.RequestError as e:
-            logger.warning(
-                "Diff proxy connection failed for session %s: %s",
-                session_id,
-                e,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not connect to session pod: {e}",
-            )
-
-    @router.get(
-        "/sessions/{session_id}/files",
-        responses={
-            400: {"model": ErrorResponse},
-            404: {"model": ErrorResponse},
-            502: {"model": ErrorResponse},
-        },
-        tags=["Sessions"],
-    )
-    async def list_session_files(
-        session_id: UUID = Path(description="Unique session identifier"),
-        path: str = Query(
-            default="",
-            description="Relative directory path within the workspace",
-        ),
-    ) -> dict:
-        """List files in a session workspace via Skuld.
-
-        Proxies to the session pod's ``GET /api/files`` endpoint.
-        Respects .gitignore and excludes noise directories.
-        Directories are sorted before files, both alphabetical.
-        """
-        if ".." in path or path.startswith("/"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=("Invalid path: must be relative and cannot contain '..'"),
-            )
-
-        session = await service.get_session(session_id)
-        if session is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session not found: {session_id}",
-            )
-
-        if not session.chat_endpoint:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} has no active endpoint",
-            )
-
-        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
-        if base_url.endswith("/session"):
-            base_url = base_url[: -len("/session")]
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                params: dict[str, str] = {}
-                if path:
-                    params["path"] = path
-                response = await client.get(
-                    f"{base_url}/api/files",
-                    params=params,
-                )
-                response.raise_for_status()
-                return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "Files proxy failed for session %s: %s",
-                session_id,
-                e,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=(f"Failed to list files from session pod: {e.response.status_code}"),
-            )
-        except httpx.RequestError as e:
-            logger.warning(
-                "Files proxy connection failed for session %s: %s",
-                session_id,
-                e,
-            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Could not connect to session pod: {e}",
@@ -1660,6 +1562,7 @@ def create_router(
         tags=["Chronicles"],
     )
     async def report_chronicle(
+        request: Request,
         session_id: UUID = Path(description="Unique session identifier"),
         data: BrokerChronicleReport = ...,
     ) -> ChronicleResponse:
@@ -1673,6 +1576,19 @@ def create_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Chronicle service not available",
             )
+
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_chronicle")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report chronicle for session {session_id}",
+                )
+
         try:
             chronicle = await chronicle_service.create_or_update_from_broker(
                 session_id=session_id,
@@ -1973,6 +1889,7 @@ def create_router(
         tags=["Timeline"],
     )
     async def add_timeline_event(
+        request: Request,
         session_id: UUID = Path(description="Session identifier for timeline lookup"),
         data: TimelineEventCreate = ...,
     ) -> TimelineEventResponse:
@@ -1982,6 +1899,18 @@ def create_router(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Chronicle service not available",
             )
+
+        # Authorization: caller must own the session
+        principal = await extract_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None:
+            try:
+                await service._check_access(session, principal, "report_timeline")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report timeline for session {session_id}",
+                )
 
         chronicle = await chronicle_service.get_chronicle_by_session(session_id)
         if chronicle is None:
@@ -2139,7 +2068,12 @@ def create_router(
         workspace_service = request.app.state.workspace_service
         ws_status = WorkspaceStatus(status_filter) if status_filter else None
         workspaces = await workspace_service.list_workspaces(principal.user_id, ws_status)
-        return [WorkspaceResponse.from_workspace(ws) for ws in workspaces]
+        session_ids = [ws.session_id for ws in workspaces]
+        sessions_map = await session_service._repository.get_many(session_ids)
+        return [
+            WorkspaceResponse.from_workspace(ws, sessions_map.get(ws.session_id))
+            for ws in workspaces
+        ]
 
     @router.delete(
         "/workspaces/{session_id}",
@@ -2188,6 +2122,77 @@ def create_router(
             workspaces = await workspace_service.list_workspaces(user_id, ws_status)
         else:
             workspaces = await workspace_service.list_all_workspaces(ws_status)
-        return [WorkspaceResponse.from_workspace(ws) for ws in workspaces]
+        session_ids = [ws.session_id for ws in workspaces]
+        sessions_map = await session_service._repository.get_many(session_ids)
+        return [
+            WorkspaceResponse.from_workspace(ws, sessions_map.get(ws.session_id))
+            for ws in workspaces
+        ]
+
+    @router.post(
+        "/workspaces/bulk-delete",
+        status_code=status.HTTP_200_OK,
+        tags=["Workspaces"],
+    )
+    async def bulk_delete_workspaces(
+        request: Request,
+        body: dict,
+    ):
+        """Delete multiple workspaces by session IDs."""
+        principal = await _optional_principal(request)
+        session_ids = body.get("session_ids", [])
+        if not session_ids:
+            return {"deleted": 0, "failed": []}
+
+        workspace_service = request.app.state.workspace_service
+        user_workspaces = await workspace_service.list_workspaces(
+            principal.user_id if principal else "",
+        )
+        owned_session_ids = {str(ws.session_id) for ws in user_workspaces}
+
+        deleted = 0
+        failed = []
+        for sid in session_ids:
+            if str(sid) not in owned_session_ids:
+                failed.append({"session_id": sid, "error": "Not found or not owned"})
+                continue
+            try:
+                ok = await workspace_service.delete_workspace_by_session(str(sid))
+                if ok:
+                    deleted += 1
+                else:
+                    failed.append({"session_id": sid, "error": "Not found"})
+            except Exception as e:
+                failed.append({"session_id": sid, "error": str(e)})
+        return {"deleted": deleted, "failed": failed}
+
+    @router.post(
+        "/admin/workspaces/bulk-delete",
+        status_code=status.HTTP_200_OK,
+        tags=["Admin"],
+    )
+    async def admin_bulk_delete_workspaces(
+        request: Request,
+        body: dict,
+        _: Principal = Depends(require_role("volundr:admin")),
+    ):
+        """Delete multiple workspaces by session IDs (admin)."""
+        session_ids = body.get("session_ids", [])
+        if not session_ids:
+            return {"deleted": 0, "failed": []}
+
+        workspace_service = request.app.state.workspace_service
+        deleted = 0
+        failed = []
+        for sid in session_ids:
+            try:
+                ok = await workspace_service.delete_workspace_by_session(str(sid))
+                if ok:
+                    deleted += 1
+                else:
+                    failed.append({"session_id": sid, "error": "Not found"})
+            except Exception as e:
+                failed.append({"session_id": sid, "error": str(e)})
+        return {"deleted": deleted, "failed": failed}
 
     return router

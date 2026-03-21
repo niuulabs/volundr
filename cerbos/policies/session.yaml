@@ -29,6 +29,12 @@ resourcePolicy:
             request.resource.attr.tenant_id == "" ||
             request.resource.attr.tenant_id == request.principal.attr.tenant_id
 
+    # Owners can report session telemetry (Skuld broker calls)
+    - actions: ["report_usage", "report_timeline", "report_chronicle", "emit_event"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - owner
+
     # Developers can create sessions (no resource ownership yet)
     - actions: ["create"]
       effect: EFFECT_ALLOW

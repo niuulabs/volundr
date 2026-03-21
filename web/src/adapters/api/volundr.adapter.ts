@@ -1,3 +1,4 @@
+import { rewriteOrigin } from '@/utils';
 import type { IVolundrService } from '@/ports';
 import type {
   SessionSource,
@@ -9,8 +10,6 @@ import type {
   VolundrLog,
   SessionChronicle,
   ClusterResourceInfo,
-  DiffData,
-  DiffBase,
   SessionStatus,
   RepoProvider,
   PullRequest,
@@ -39,6 +38,9 @@ import type {
   VolundrProvisioningResult,
   AdminSettings,
   AdminStorageSettings,
+  FeatureModule,
+  FeatureScope,
+  UserFeaturePreference,
 } from '@/models';
 import { createApiClient, ApiClientError, getAccessToken } from './client';
 import type {
@@ -77,6 +79,8 @@ import type {
   ApiSecretTypeInfoResponse,
   ApiWorkspaceResponse,
   ApiClusterResourceInfo,
+  ApiFeatureModuleResponse,
+  ApiUserFeaturePreferenceResponse,
 } from './volundr.types';
 
 /**
@@ -146,6 +150,18 @@ function mapSessionStatus(apiStatus: ApiSessionStatus): SessionStatus {
 }
 
 /**
+ * Map a tracker issue status string to the TrackerIssueStatus union.
+ */
+function mapTrackerStatus(status: string): import('@/models').TrackerIssueStatus {
+  const lower = status.toLowerCase().replace(/\s+/g, '_');
+  const valid = ['backlog', 'todo', 'in_progress', 'done', 'cancelled'] as const;
+  if ((valid as readonly string[]).includes(lower)) {
+    return lower as import('@/models').TrackerIssueStatus;
+  }
+  return 'todo';
+}
+
+/**
  * Extract the host (hostname + port) from an endpoint URL.
  * Returns undefined when the URL is missing or unparseable.
  */
@@ -154,7 +170,8 @@ function extractHost(endpoint: string | null | undefined): string | undefined {
     return undefined;
   }
   try {
-    return new URL(endpoint).host;
+    const rewritten = rewriteOrigin(endpoint);
+    return new URL(rewritten).host;
   } catch {
     return undefined;
   }
@@ -195,11 +212,20 @@ function transformSession(api: ApiSessionResponse): VolundrSession {
     podName: api.pod_name ?? undefined,
     error: api.error ?? undefined,
     hostname: extractHost(api.chat_endpoint) ?? extractHost(api.code_endpoint),
-    chatEndpoint: api.chat_endpoint ?? undefined,
-    codeEndpoint: api.code_endpoint ?? undefined,
+    chatEndpoint: api.chat_endpoint ? rewriteOrigin(api.chat_endpoint) : undefined,
+    codeEndpoint: api.code_endpoint ? rewriteOrigin(api.code_endpoint) : undefined,
     taskType: api.task_type ?? undefined,
     ownerId: api.owner_id ?? undefined,
     tenantId: api.tenant_id ?? undefined,
+    trackerIssue: api.tracker_issue_id
+      ? {
+          id: api.tracker_issue_id,
+          identifier: api.tracker_issue_id,
+          title: '',
+          status: 'todo',
+          url: api.issue_tracker_url ?? '',
+        }
+      : undefined,
   };
 }
 
@@ -429,6 +455,9 @@ function transformPreset(apiPreset: ApiPresetResponse): VolundrPreset {
     rules: apiPreset.rules ?? [],
     envVars: apiPreset.env_vars ?? {},
     envSecretRefs: apiPreset.env_secret_refs ?? [],
+    source: apiPreset.source ? transformSource(apiPreset.source) : null,
+    integrationIds: apiPreset.integration_ids ?? [],
+    setupScripts: apiPreset.setup_scripts ?? [],
     workloadConfig: apiPreset.workload_config ?? {},
   };
 }
@@ -437,20 +466,36 @@ function transformPreset(apiPreset: ApiPresetResponse): VolundrPreset {
  * Transform SSE session payload to UI model
  */
 function transformSSESession(payload: SSESessionPayload): VolundrSession {
+  const source: import('@/models').SessionSource = payload.source
+    ? transformSource(payload.source)
+    : { type: 'git', repo: payload.repo ?? '', branch: payload.branch ?? 'main' };
+
   return {
     id: payload.id,
     name: payload.name,
     model: payload.model,
     status: mapSessionStatus(payload.status),
-    source: transformSource(payload.source),
+    source,
     lastActive: new Date(payload.last_active).getTime(),
     messageCount: payload.message_count,
     tokensUsed: payload.tokens_used,
     podName: payload.pod_name ?? undefined,
     error: payload.error ?? undefined,
     hostname: extractHost(payload.chat_endpoint) ?? extractHost(payload.code_endpoint),
-    chatEndpoint: payload.chat_endpoint ?? undefined,
-    codeEndpoint: payload.code_endpoint ?? undefined,
+    chatEndpoint: payload.chat_endpoint ? rewriteOrigin(payload.chat_endpoint) : undefined,
+    codeEndpoint: payload.code_endpoint ? rewriteOrigin(payload.code_endpoint) : undefined,
+    taskType: payload.task_type ?? undefined,
+    ownerId: payload.owner_id ?? undefined,
+    tenantId: payload.tenant_id ?? undefined,
+    trackerIssue: payload.tracker_issue_id
+      ? {
+          id: payload.tracker_issue_id,
+          identifier: payload.tracker_issue_id,
+          title: '',
+          status: 'todo',
+          url: payload.issue_tracker_url ?? '',
+        }
+      : undefined,
   };
 }
 
@@ -518,10 +563,16 @@ export class ApiVolundrService implements IVolundrService {
 
   async getFeatures(): Promise<import('@/models').VolundrFeatures> {
     try {
-      const response = await api.get<{ local_mounts_enabled: boolean }>('/features');
-      return { localMountsEnabled: response.local_mounts_enabled };
+      const response = await api.get<{
+        local_mounts_enabled: boolean;
+        file_manager_enabled: boolean;
+      }>('/feature-flags');
+      return {
+        localMountsEnabled: response.local_mounts_enabled,
+        fileManagerEnabled: response.file_manager_enabled ?? true,
+      };
     } catch {
-      return { localMountsEnabled: false };
+      return { localMountsEnabled: false, fileManagerEnabled: true };
     }
   }
 
@@ -652,6 +703,17 @@ export class ApiVolundrService implements IVolundrService {
       rules: preset.rules,
       env_vars: preset.envVars,
       env_secret_refs: preset.envSecretRefs,
+      source: preset.source
+        ? preset.source.type === 'git'
+          ? { type: 'git' as const, repo: preset.source.repo, branch: preset.source.branch }
+          : {
+              type: 'local_mount' as const,
+              paths: preset.source.paths,
+              node_selector: preset.source.node_selector,
+            }
+        : null,
+      integration_ids: preset.integrationIds,
+      setup_scripts: preset.setupScripts,
       workload_config: preset.workloadConfig,
     };
 
@@ -714,6 +776,7 @@ export class ApiVolundrService implements IVolundrService {
     credentialNames?: string[];
     integrationIds?: string[];
     resourceConfig?: Record<string, string | undefined>;
+    trackerIssue?: import('@/models').TrackerIssue;
   }): Promise<VolundrSession> {
     const createRequest: ApiSessionCreate = {
       name: config.name,
@@ -726,6 +789,8 @@ export class ApiVolundrService implements IVolundrService {
       credential_names: config.credentialNames?.length ? config.credentialNames : undefined,
       integration_ids: config.integrationIds?.length ? config.integrationIds : undefined,
       resource_config: config.resourceConfig,
+      issue_id: config.trackerIssue?.identifier ?? null,
+      issue_url: config.trackerIssue?.url ?? null,
     };
 
     const response = await api.post<ApiSessionResponse>('/sessions', createRequest);
@@ -771,6 +836,17 @@ export class ApiVolundrService implements IVolundrService {
     return session;
   }
 
+  async updateSession(
+    sessionId: string,
+    updates: { name?: string; model?: string; branch?: string; tracker_issue_id?: string }
+  ): Promise<VolundrSession> {
+    const resp = await api.put<ApiSessionResponse>(`/sessions/${sessionId}`, updates);
+    const session = transformSession(resp);
+    this.cachedSessions = this.cachedSessions.map(s => (s.id === sessionId ? session : s));
+    this.notifySessionSubscribers();
+    return session;
+  }
+
   async stopSession(sessionId: string): Promise<void> {
     const session = this.cachedSessions.find(s => s.id === sessionId);
 
@@ -809,12 +885,13 @@ export class ApiVolundrService implements IVolundrService {
     }
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
+  async deleteSession(sessionId: string, cleanup: string[] = []): Promise<void> {
     const session = this.cachedSessions.find(s => s.id === sessionId);
 
     // Manual sessions: no-op on backend, just remove locally
     if (session?.origin !== 'manual') {
-      await api.delete(`/sessions/${sessionId}`);
+      const body = cleanup.length > 0 ? { cleanup } : undefined;
+      await api.delete(`/sessions/${sessionId}`, body);
     }
 
     this.cachedSessions = this.cachedSessions.filter(s => s.id !== sessionId);
@@ -907,7 +984,7 @@ export class ApiVolundrService implements IVolundrService {
       if (response.status !== 'running') {
         return null;
       }
-      return response.code_endpoint;
+      return response.code_endpoint ? rewriteOrigin(response.code_endpoint) : null;
     } catch (error) {
       if (error instanceof ApiClientError && (error.status === 404 || error.status === 422)) {
         return null;
@@ -928,14 +1005,6 @@ export class ApiVolundrService implements IVolundrService {
       }
       throw error;
     }
-  }
-
-  async getSessionDiff(sessionId: string, filePath: string, base: DiffBase): Promise<DiffData> {
-    const params = new URLSearchParams({ file: filePath, base });
-    const response = await api.get<DiffData>(
-      `/chronicles/${encodeURIComponent(sessionId)}/diff?${params}`
-    );
-    return response;
   }
 
   subscribeChronicle(
@@ -1000,26 +1069,42 @@ export class ApiVolundrService implements IVolundrService {
     return mapCIStatus(response.status) ?? 'unknown';
   }
 
-  /* eslint-disable @typescript-eslint/no-unused-vars */
   async getSessionMcpServers(_sessionId: string): Promise<import('@/models').McpServer[]> {
     // TODO: Implement when backend endpoint is available
     return [];
   }
 
-  async getSessionFiles(
-    _sessionId: string,
-    _path?: string
-  ): Promise<import('@/models').FileTreeEntry[]> {
-    // TODO: Implement when backend endpoint is available
-    return [];
-  }
-
-  async searchLinearIssues(
-    _query: string,
+  async searchTrackerIssues(
+    query: string,
     _projectId?: string
-  ): Promise<import('@/models').LinearIssue[]> {
-    // TODO: Implement when backend endpoint is available
-    return [];
+  ): Promise<import('@/models').TrackerIssue[]> {
+    interface TrackerIssue {
+      id: string;
+      identifier: string;
+      title: string;
+      status: string;
+      assignee?: string;
+      labels?: string[];
+      priority?: number;
+      url: string;
+    }
+    try {
+      const results = await api.get<TrackerIssue[]>(
+        `/issues/search?q=${encodeURIComponent(query)}`
+      );
+      return results.map(issue => ({
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+        status: mapTrackerStatus(issue.status),
+        assignee: issue.assignee ?? undefined,
+        labels: issue.labels ?? [],
+        priority: issue.priority ?? 0,
+        url: issue.url,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   async getProjectRepoMappings(): Promise<import('@/models').ProjectRepoMapping[]> {
@@ -1027,14 +1112,34 @@ export class ApiVolundrService implements IVolundrService {
     return [];
   }
 
-  async updateLinearIssueStatus(
-    _issueId: string,
-    _status: import('@/models').LinearIssueStatus
-  ): Promise<import('@/models').LinearIssue> {
-    // TODO: Implement when backend endpoint is available
-    throw new Error('Not implemented');
+  async updateTrackerIssueStatus(
+    issueId: string,
+    issueStatus: import('@/models').TrackerIssueStatus
+  ): Promise<import('@/models').TrackerIssue> {
+    interface TrackerIssue {
+      id: string;
+      identifier: string;
+      title: string;
+      status: string;
+      assignee?: string;
+      labels?: string[];
+      priority?: number;
+      url: string;
+    }
+    const issue = await api.post<TrackerIssue>(`/issues/${issueId}/status`, {
+      status: issueStatus,
+    });
+    return {
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      status: mapTrackerStatus(issue.status),
+      assignee: issue.assignee ?? undefined,
+      labels: issue.labels ?? [],
+      priority: issue.priority ?? 0,
+      url: issue.url,
+    };
   }
-  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   async getIdentity(): Promise<VolundrIdentity> {
     const response = await api.get<ApiIdentityResponse>('/me');
@@ -1343,7 +1448,6 @@ export class ApiVolundrService implements IVolundrService {
     return response.map(this.mapWorkspace);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async restoreWorkspace(_id: string): Promise<void> {
     // No-op: restore is handled by StorageContributor on session create.
   }
@@ -1353,22 +1457,103 @@ export class ApiVolundrService implements IVolundrService {
     await api.delete(`/workspaces/${id}`);
   }
 
+  async bulkDeleteWorkspaces(
+    sessionIds: string[]
+  ): Promise<{ deleted: number; failed: Array<{ session_id: string; error: string }> }> {
+    return api.post<{ deleted: number; failed: Array<{ session_id: string; error: string }> }>(
+      '/workspaces/bulk-delete',
+      { session_ids: sessionIds }
+    );
+  }
+
   async getAdminSettings(): Promise<AdminSettings> {
-    const response = await api.get<{ storage: { home_enabled: boolean } }>('/admin/settings');
+    const response = await api.get<{
+      storage: { home_enabled: boolean; file_manager_enabled: boolean };
+    }>('/admin/settings');
     return {
-      storage: { homeEnabled: response.storage.home_enabled },
+      storage: {
+        homeEnabled: response.storage.home_enabled,
+        fileManagerEnabled: response.storage.file_manager_enabled ?? true,
+      },
     };
   }
 
   async updateAdminSettings(data: { storage?: AdminStorageSettings }): Promise<AdminSettings> {
     const body: Record<string, unknown> = {};
     if (data.storage) {
-      body.storage = { home_enabled: data.storage.homeEnabled };
+      body.storage = {
+        home_enabled: data.storage.homeEnabled,
+        file_manager_enabled: data.storage.fileManagerEnabled,
+      };
     }
-    const response = await api.put<{ storage: { home_enabled: boolean } }>('/admin/settings', body);
+    const response = await api.put<{
+      storage: { home_enabled: boolean; file_manager_enabled: boolean };
+    }>('/admin/settings', body);
     return {
-      storage: { homeEnabled: response.storage.home_enabled },
+      storage: {
+        homeEnabled: response.storage.home_enabled,
+        fileManagerEnabled: response.storage.file_manager_enabled ?? true,
+      },
     };
+  }
+
+  async getFeatureModules(scope?: FeatureScope): Promise<FeatureModule[]> {
+    const params = scope ? `?scope=${scope}` : '';
+    const response = await api.get<ApiFeatureModuleResponse[]>(`/features${params}`);
+    return response.map(f => ({
+      key: f.key,
+      label: f.label,
+      icon: f.icon,
+      scope: f.scope as FeatureScope,
+      enabled: f.enabled,
+      defaultEnabled: f.default_enabled,
+      adminOnly: f.admin_only,
+      order: f.order,
+    }));
+  }
+
+  async toggleFeature(key: string, enabled: boolean): Promise<FeatureModule> {
+    const f = await api.put<ApiFeatureModuleResponse>(`/features/${key}/toggle`, { enabled });
+    return {
+      key: f.key,
+      label: f.label,
+      icon: f.icon,
+      scope: f.scope as FeatureScope,
+      enabled: f.enabled,
+      defaultEnabled: f.default_enabled,
+      adminOnly: f.admin_only,
+      order: f.order,
+    };
+  }
+
+  async getUserFeaturePreferences(): Promise<UserFeaturePreference[]> {
+    const response = await api.get<ApiUserFeaturePreferenceResponse[]>('/features/preferences');
+    return response.map(p => ({
+      featureKey: p.feature_key,
+      visible: p.visible,
+      sortOrder: p.sort_order,
+    }));
+  }
+
+  async updateUserFeaturePreferences(
+    preferences: UserFeaturePreference[]
+  ): Promise<UserFeaturePreference[]> {
+    const body = {
+      preferences: preferences.map(p => ({
+        feature_key: p.featureKey,
+        visible: p.visible,
+        sort_order: p.sortOrder,
+      })),
+    };
+    const response = await api.put<ApiUserFeaturePreferenceResponse[]>(
+      '/features/preferences',
+      body
+    );
+    return response.map(p => ({
+      featureKey: p.feature_key,
+      visible: p.visible,
+      sortOrder: p.sort_order,
+    }));
   }
 
   private mapWorkspace(w: ApiWorkspaceResponse): VolundrWorkspace {
@@ -1382,6 +1567,9 @@ export class ApiVolundrService implements IVolundrService {
       status: w.status,
       createdAt: w.created_at,
       archivedAt: w.archived_at ?? undefined,
+      sessionName: w.session_name ?? undefined,
+      sourceUrl: w.source_url ?? undefined,
+      sourceRef: w.source_ref ?? undefined,
     };
   }
 
@@ -1503,7 +1691,15 @@ export class ApiVolundrService implements IVolundrService {
         if (idx === -1) {
           this.cachedSessions = [session, ...this.cachedSessions];
         } else {
-          this.cachedSessions[idx] = session;
+          // Merge: preserve fields not carried by SSE (e.g. trackerIssue, taskType)
+          const existing = this.cachedSessions[idx];
+          const defined = Object.fromEntries(
+            Object.entries(session).filter(([, v]) => v !== undefined)
+          );
+          this.cachedSessions[idx] = {
+            ...existing,
+            ...defined,
+          };
         }
         this.notifySessionSubscribers();
         break;

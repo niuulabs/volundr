@@ -29,3 +29,4 @@ export { useIsTouchDevice } from './useIsTouchDevice';
 export { useKeyboardOffset } from './useKeyboardOffset';
 export { useIdentity } from './useIdentity';
 export type { UseIdentityResult } from './useIdentity';
+export { useFeatureModules } from './useFeatureModules';

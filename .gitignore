@@ -228,3 +228,6 @@ uv.lock
 cli/coverage.out
 cli/coverage_test.out
 docs/site/openapi.json
+
+# Devrunner local services
+.services/

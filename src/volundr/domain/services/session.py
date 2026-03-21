@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from volundr.domain.models import (
+    CleanupTarget,
     GitSource,
     IntegrationConnection,
     Principal,
@@ -20,6 +21,7 @@ from volundr.domain.models import (
 )
 from volundr.domain.ports import (
     AuthorizationPort,
+    ChronicleRepository,
     EventBroadcaster,
     IntegrationRepository,
     PodManager,
@@ -28,6 +30,7 @@ from volundr.domain.ports import (
     SessionContribution,
     SessionContributor,
     SessionRepository,
+    StoragePort,
     TemplateProvider,
 )
 
@@ -91,6 +94,8 @@ class SessionService:
         provisioning_timeout: float = 300.0,
         provisioning_initial_delay: float = 5.0,
         integration_repo: IntegrationRepository | None = None,
+        storage: StoragePort | None = None,
+        chronicle_repository: ChronicleRepository | None = None,
     ):
         self._repository = repository
         self._pod_manager = pod_manager
@@ -104,6 +109,8 @@ class SessionService:
         self._provisioning_initial_delay = provisioning_initial_delay
         self._provisioning_tasks: dict[UUID, asyncio.Task] = {}
         self._integration_repo = integration_repo
+        self._storage = storage
+        self._chronicle_repository = chronicle_repository
 
     async def create_session(
         self,
@@ -114,6 +121,8 @@ class SessionService:
         preset_id: UUID | None = None,
         principal: Principal | None = None,
         workspace_id: UUID | None = None,
+        tracker_issue_id: str | None = None,
+        issue_tracker_url: str | None = None,
     ) -> Session:
         """Create a new session.
 
@@ -184,6 +193,8 @@ class SessionService:
             owner_id=principal.user_id if principal else None,
             tenant_id=principal.tenant_id if principal else None,
             workspace_id=workspace_id,
+            tracker_issue_id=tracker_issue_id,
+            issue_tracker_url=issue_tracker_url,
         )
         created = await self._repository.create(session)
 
@@ -362,18 +373,25 @@ class SessionService:
         self,
         session_id: UUID,
         principal: Principal | None = None,
+        cleanup_targets: list[CleanupTarget] | None = None,
     ) -> bool:
         """Delete a session.
 
         If the session is running, attempts to stop its pods first. Pod stop
         failures are logged but do not prevent session deletion, since the
         primary goal is to clean up the session record.
+
+        Optional *cleanup_targets* lists additional resources to permanently
+        remove (e.g. workspace PVC, chronicles).  An empty/None list preserves
+        the current default behaviour (archive workspace, keep chronicles).
         """
         session = await self._repository.get(session_id)
         if session is None:
             return False
 
         await self._check_access(session, principal, "delete")
+
+        targets = set(cleanup_targets or [])
 
         # Cancel provisioning task if active
         self._cancel_provisioning_task(session_id)
@@ -382,9 +400,6 @@ class SessionService:
             try:
                 await self._pod_manager.stop(session)
             except Exception as e:
-                # Log the error but continue with deletion.
-                # The session should be deleted even if we can't stop its pods
-                # (e.g., task already cleaned up in Farm, network issues, etc.)
                 logger.warning(
                     "Failed to stop pods for session %s during deletion: %s. "
                     "Proceeding with session deletion.",
@@ -397,10 +412,73 @@ class SessionService:
 
         deleted = await self._repository.delete(session_id)
 
+        # Run optional resource cleanup after session record is gone
+        if deleted:
+            await self._run_targeted_cleanup(session_id, targets)
+
         if deleted and self._broadcaster is not None:
             await self._broadcaster.publish_session_deleted(session_id)
 
         return deleted
+
+    async def _run_targeted_cleanup(
+        self,
+        session_id: UUID,
+        targets: set[CleanupTarget],
+    ) -> None:
+        """Run user-selected resource cleanup after session deletion.
+
+        Each target is handled independently; failures are logged but do not
+        block other cleanup actions.
+        """
+        if not targets:
+            return
+
+        if CleanupTarget.WORKSPACE_STORAGE in targets:
+            await self._cleanup_workspace_storage(session_id)
+
+        if CleanupTarget.CHRONICLES in targets:
+            await self._cleanup_chronicles(session_id)
+
+    async def _cleanup_workspace_storage(self, session_id: UUID) -> None:
+        if self._storage is None:
+            logger.warning(
+                "Workspace storage cleanup requested for session %s but no storage port configured",
+                session_id,
+            )
+            return
+        try:
+            await self._storage.delete_workspace(str(session_id))
+            logger.info("Deleted workspace PVC for session %s", session_id)
+        except Exception:
+            logger.warning(
+                "Failed to delete workspace PVC for session %s",
+                session_id,
+                exc_info=True,
+            )
+
+    async def _cleanup_chronicles(self, session_id: UUID) -> None:
+        if self._chronicle_repository is None:
+            logger.warning(
+                "Chronicle cleanup requested for session %s but no chronicle repository configured",
+                session_id,
+            )
+            return
+        try:
+            chronicle = await self._chronicle_repository.get_by_session(session_id)
+            if chronicle is not None:
+                await self._chronicle_repository.delete(chronicle.id)
+                logger.info(
+                    "Deleted chronicle %s for session %s",
+                    chronicle.id,
+                    session_id,
+                )
+        except Exception:
+            logger.warning(
+                "Failed to delete chronicles for session %s",
+                session_id,
+                exc_info=True,
+            )
 
     async def start_session(
         self,
@@ -610,8 +688,8 @@ class SessionService:
             await self._broadcaster.publish_session_updated(stopping)
 
         try:
-            stopped_in_farm = await self._pod_manager.stop(session)
-            if not stopped_in_farm:
+            stopped = await self._pod_manager.stop(session)
+            if not stopped:
                 logger.warning(
                     "Pod manager could not find/cancel pods for session %s "
                     "(may already be stopped or task ID mismatch)",

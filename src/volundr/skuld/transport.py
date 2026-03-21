@@ -283,6 +283,7 @@ class SdkWebSocketTransport(CLITransport):
         sdk_port: int,
         session_id: str,
         *,
+        model: str = "",
         skip_permissions: bool = True,
         agent_teams: bool = False,
     ) -> None:
@@ -290,6 +291,7 @@ class SdkWebSocketTransport(CLITransport):
         self.workspace_dir = workspace_dir
         self._sdk_port = sdk_port
         self._broker_session_id = session_id
+        self._model = model
         self._skip_permissions = skip_permissions
         self._agent_teams = agent_teams
         self._process: asyncio.subprocess.Process | None = None
@@ -331,6 +333,8 @@ class SdkWebSocketTransport(CLITransport):
             "stream-json",
             "--verbose",
         ]
+        if self._model:
+            cmd.extend(["--model", self._model])
         if self._skip_permissions:
             cmd.extend(["--permission-mode", "bypassPermissions"])
         cmd.extend(["-p", "placeholder"])

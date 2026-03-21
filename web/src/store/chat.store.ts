@@ -67,7 +67,6 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>()(
 
       clearSession: url => {
         set(state => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { [url]: _removed, ...rest } = state.sessions;
           return { sessions: rest };
         });

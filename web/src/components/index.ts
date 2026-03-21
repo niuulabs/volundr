@@ -36,14 +36,14 @@ export type { MessageCostFooterProps } from './molecules/MessageCostFooter';
 export { SessionStartingIndicator } from './molecules/SessionStartingIndicator';
 export type { SessionStartingIndicatorProps } from './molecules/SessionStartingIndicator';
 
-export { LinearIssueBadge } from './molecules/LinearIssueBadge';
-export type { LinearIssueBadgeProps } from './molecules/LinearIssueBadge';
+export { TrackerIssueBadge } from './molecules/TrackerIssueBadge';
+export type { TrackerIssueBadgeProps } from './molecules/TrackerIssueBadge';
 
-export { LinearIssueSearch } from './molecules/LinearIssueSearch';
-export type { LinearIssueSearchProps } from './molecules/LinearIssueSearch';
+export { TrackerIssueSearch } from './molecules/TrackerIssueSearch';
+export type { TrackerIssueSearchProps } from './molecules/TrackerIssueSearch';
 
-export { LinearIssueSection } from './molecules/LinearIssueSection';
-export type { LinearIssueSectionProps } from './molecules/LinearIssueSection';
+export { TrackerIssueSection } from './molecules/TrackerIssueSection';
+export type { TrackerIssueSectionProps } from './molecules/TrackerIssueSection';
 
 // Organisms
 export { OdinStatusBar } from './organisms/OdinStatusBar';
@@ -89,6 +89,9 @@ export type { SessionChroniclesProps } from './SessionChronicles';
 export { SessionDiffs } from './SessionDiffs';
 export type { SessionDiffsProps } from './SessionDiffs';
 
+export { EditorPanel } from './EditorPanel';
+export type { EditorPanelProps } from './EditorPanel';
+
 // Session group list
 export { SessionGroupList } from './SessionGroupList';
 
@@ -103,6 +106,9 @@ export type { TemplateBrowserProps } from './TemplateBrowser';
 // Launch wizard
 export { LaunchWizard } from './LaunchWizard';
 export type { LaunchWizardProps, LaunchConfig } from './LaunchWizard';
+
+// File manager
+export { FileManager } from './FileManager';
 
 // Integration components
 export { IntegrationCard } from './IntegrationCard';

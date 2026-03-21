@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { ConfigureStep } from './ConfigureStep';
 import type { ConfigureStepProps } from './ConfigureStep';
@@ -101,6 +101,36 @@ function buildState(overrides: Partial<WizardState> = {}): WizardState {
 }
 
 let onChange: ReturnType<typeof vi.fn>;
+
+const mockArchivedWorkspaces = [
+  {
+    id: 'ws-1',
+    pvcName: 'ws-pvc-001',
+    sessionId: 'session-1',
+    ownerId: 'user-1',
+    tenantId: 'tenant-1',
+    sizeGb: 10,
+    status: 'archived',
+    createdAt: '2026-01-15T10:00:00Z',
+    archivedAt: '2026-02-01T09:00:00Z',
+    sessionName: 'my-feature',
+    sourceUrl: 'https://github.com/org/repo-one.git',
+    sourceRef: 'main',
+  },
+  {
+    id: 'ws-2',
+    pvcName: 'ws-pvc-002',
+    sessionId: 'session-2',
+    ownerId: 'user-1',
+    tenantId: 'tenant-1',
+    sizeGb: 5,
+    status: 'archived',
+    createdAt: '2026-01-10T10:00:00Z',
+    archivedAt: '2026-01-20T09:00:00Z',
+    sourceUrl: 'https://github.com/org/other-repo.git',
+    sourceRef: 'develop',
+  },
+];
 
 const mockService = {
   listWorkspaces: vi.fn().mockResolvedValue([]),
@@ -222,17 +252,17 @@ describe('ConfigureStep', () => {
     });
   });
 
-  describe('Linear issue search', () => {
-    it('does not render Linear search when searchLinearIssues is not provided', () => {
+  describe('Tracker issue search', () => {
+    it('does not render tracker search when searchTrackerIssues is not provided', () => {
       renderStep();
 
-      expect(screen.queryByText('Linear Issue')).not.toBeInTheDocument();
+      expect(screen.queryByText('Issue')).not.toBeInTheDocument();
     });
 
-    it('renders Linear search when searchLinearIssues is provided', () => {
-      renderStep({ searchLinearIssues: vi.fn().mockResolvedValue([]) });
+    it('renders tracker search when searchTrackerIssues is provided', () => {
+      renderStep({ searchTrackerIssues: vi.fn().mockResolvedValue([]) });
 
-      expect(screen.getByText('Linear Issue')).toBeInTheDocument();
+      expect(screen.getByText('Issue')).toBeInTheDocument();
     });
   });
 
@@ -679,6 +709,9 @@ describe('ConfigureStep', () => {
       rules: [],
       envVars: { NODE_ENV: 'test' },
       envSecretRefs: ['GITHUB_TOKEN'],
+      source: null,
+      integrationIds: [],
+      setupScripts: [],
       workloadConfig: {},
     };
 
@@ -705,6 +738,109 @@ describe('ConfigureStep', () => {
           model: 'claude-opus',
           systemPrompt: 'Be concise.',
           taskType: 'skuld-claude',
+        })
+      );
+    });
+
+    it('restores source from preset when repo is available', () => {
+      const presetWithSource = {
+        ...mockPreset,
+        source: {
+          type: 'git' as const,
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+        },
+      };
+      renderStep({ presets: [presetWithSource] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+        })
+      );
+    });
+
+    it('shows warning when preset repo is unavailable', () => {
+      const presetWithMissingRepo = {
+        ...mockPreset,
+        source: {
+          type: 'git' as const,
+          repo: 'https://github.com/org/deleted-repo.git',
+          branch: 'main',
+        },
+      };
+      renderStep({ presets: [presetWithMissingRepo] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(expect.not.objectContaining({ sourceType: 'git' }));
+    });
+
+    it('filters out unavailable credentials from preset', () => {
+      const presetWithMissingCreds = {
+        ...mockPreset,
+        envSecretRefs: ['GITHUB_TOKEN', 'DELETED_SECRET'],
+      };
+      renderStep({
+        presets: [presetWithMissingCreds],
+        availableSecrets: ['GITHUB_TOKEN', 'NPM_TOKEN'],
+      });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedCredentials: ['GITHUB_TOKEN'],
+        })
+      );
+    });
+
+    it('restores local mount source from preset', () => {
+      const presetWithMount = {
+        ...mockPreset,
+        source: {
+          type: 'local_mount' as const,
+          paths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+        },
+      };
+      renderStep({ presets: [presetWithMount] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceType: 'local_mount',
+          mountPaths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+        })
+      );
+    });
+
+    it('restores setup scripts from preset', () => {
+      const presetWithScripts = {
+        ...mockPreset,
+        setupScripts: ['npm install', 'npm run build'],
+      };
+      renderStep({ presets: [presetWithScripts] });
+
+      const selects = document.querySelectorAll('select');
+      const presetSelect = Array.from(selects).find(s => s.value === '')!;
+      fireEvent.change(presetSelect, { target: { value: 'p1' } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          setupScripts: ['npm install', 'npm run build'],
         })
       );
     });
@@ -785,6 +921,81 @@ describe('ConfigureStep', () => {
           yamlMode: false,
           model: 'claude-opus',
           systemPrompt: 'Hello',
+        })
+      );
+    });
+
+    it('serializes source to YAML when repo is set', () => {
+      renderStep({
+        state: buildState({
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+        }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      fireEvent.click(screen.getByText('Edit as YAML'));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          yamlMode: true,
+          yamlContent: expect.stringContaining('source:'),
+        })
+      );
+    });
+
+    it('parses local mount source from YAML back to form mode', () => {
+      const yamlWithMount = [
+        'model: claude-opus',
+        'source:',
+        '  type: local_mount',
+        '  paths:',
+        '    - host_path: /data',
+        '      mount_path: /workspace',
+        '      read_only: true',
+        '',
+      ].join('\n');
+      renderStep({
+        state: buildState({ yamlMode: true, yamlContent: yamlWithMount }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      fireEvent.click(screen.getByText('Form View'));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          yamlMode: false,
+          sourceType: 'local_mount',
+        })
+      );
+    });
+
+    it('parses source from YAML back to form mode', () => {
+      const yamlWithSource = [
+        'model: claude-opus',
+        'source:',
+        '  type: git',
+        '  repo: https://github.com/org/repo-one.git',
+        '  branch: develop',
+        'integration_ids:',
+        '  - integ-1',
+        'setup_scripts:',
+        '  - npm install',
+        '',
+      ].join('\n');
+      renderStep({
+        state: buildState({ yamlMode: true, yamlContent: yamlWithSource }),
+      });
+      fireEvent.click(screen.getByText('Advanced Configuration'));
+      fireEvent.click(screen.getByText('Form View'));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          yamlMode: false,
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+          selectedIntegrations: ['integ-1'],
+          setupScripts: ['npm install'],
         })
       );
     });
@@ -1086,6 +1297,73 @@ describe('ConfigureStep', () => {
       fireEvent.click(screen.getByText('Save'));
 
       expect(onSavePreset).toHaveBeenCalledWith(expect.objectContaining({ name: 'My Preset' }));
+    });
+
+    it('includes git source in saved preset when repo is set', async () => {
+      const onSavePreset = vi.fn().mockResolvedValue({ id: 'new-p2', name: 'With Repo' });
+      renderStep({
+        onSavePreset,
+        state: buildState({
+          sourceType: 'git',
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'develop',
+          selectedIntegrations: ['integ-1'],
+          setupScripts: ['npm install'],
+        }),
+      });
+      fireEvent.click(screen.getByText('Save as Preset'));
+      fireEvent.change(screen.getByPlaceholderText('Preset name'), {
+        target: { value: 'With Repo' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSavePreset).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: { type: 'git', repo: 'https://github.com/org/repo-one.git', branch: 'develop' },
+          integrationIds: ['integ-1'],
+          setupScripts: ['npm install'],
+        })
+      );
+    });
+
+    it('includes local mount source in saved preset', async () => {
+      const onSavePreset = vi.fn().mockResolvedValue({ id: 'new-p3', name: 'With Mount' });
+      renderStep({
+        onSavePreset,
+        state: buildState({
+          sourceType: 'local_mount',
+          mountPaths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+        }),
+      });
+      fireEvent.click(screen.getByText('Save as Preset'));
+      fireEvent.change(screen.getByPlaceholderText('Preset name'), {
+        target: { value: 'With Mount' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSavePreset).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: {
+            type: 'local_mount',
+            paths: [{ host_path: '/data', mount_path: '/workspace', read_only: true }],
+          },
+        })
+      );
+    });
+
+    it('saves null source when no repo is set', async () => {
+      const onSavePreset = vi.fn().mockResolvedValue({ id: 'new-p4', name: 'No Source' });
+      renderStep({
+        onSavePreset,
+        state: buildState({ sourceType: 'git', repo: '', branch: '' }),
+      });
+      fireEvent.click(screen.getByText('Save as Preset'));
+      fireEvent.change(screen.getByPlaceholderText('Preset name'), {
+        target: { value: 'No Source' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSavePreset).toHaveBeenCalledWith(expect.objectContaining({ source: null }));
     });
 
     it('hides form when cancel is clicked', () => {
@@ -1642,6 +1920,138 @@ describe('ConfigureStep', () => {
           'GPU is shared between the AI broker and your workload via NVIDIA time-slicing'
         )
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('workspace section', () => {
+    it('shows workspace section when archived workspaces exist', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service });
+
+      expect(await screen.findByText('Workspace')).toBeInTheDocument();
+      expect(screen.getByText('New workspace')).toBeInTheDocument();
+    });
+
+    it('does not show workspace section when no archived workspaces', () => {
+      renderStep();
+
+      // "Workspace" heading should not be present (only workspace-unrelated labels)
+      expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
+    });
+
+    it('shows workspace dropdown with readable labels', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({ service });
+
+      // Wait for workspaces to load
+      await waitFor(() => {
+        // sessionName for ws-1
+        expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      });
+
+      // repo/branch fallback for ws-2
+      expect(screen.getByText(/other-repo \/ develop/)).toBeInTheDocument();
+    });
+
+    it('filters workspaces by source-compatibility when repo is selected', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'main',
+        }),
+      });
+
+      await waitFor(() => {
+        // matching workspace should appear
+        expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      });
+
+      // non-matching workspace should be filtered out
+      expect(screen.queryByText(/other-repo \/ develop/)).not.toBeInTheDocument();
+    });
+
+    it('shows all workspaces when "Show all existing workspaces" is checked', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({
+          repo: 'https://github.com/org/repo-one.git',
+          branch: 'main',
+        }),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      });
+
+      // Initially only matching workspace visible
+      expect(screen.queryByText(/other-repo \/ develop/)).not.toBeInTheDocument();
+
+      // Check "Show all existing workspaces"
+      fireEvent.click(screen.getByText('Show all existing workspaces'));
+
+      // Both should now be visible
+      expect(screen.getByText(/my-feature/)).toBeInTheDocument();
+      expect(screen.getByText(/other-repo \/ develop/)).toBeInTheDocument();
+    });
+
+    it('shows message when no workspaces match selected repo', async () => {
+      const service = {
+        ...mockService,
+        listWorkspaces: vi
+          .fn()
+          .mockImplementation((status?: string) =>
+            Promise.resolve(status === 'archived' ? mockArchivedWorkspaces : [])
+          ),
+      } as unknown as import('@/ports').IVolundrService;
+
+      renderStep({
+        service,
+        state: buildState({
+          repo: 'https://github.com/org/nonexistent-repo.git',
+          branch: 'main',
+        }),
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('No existing workspaces match the selected repository')
+        ).toBeInTheDocument();
+      });
     });
   });
 });

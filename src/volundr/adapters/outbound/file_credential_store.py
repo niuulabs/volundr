@@ -129,6 +129,53 @@ class FileCredentialStore(CredentialStorePort):
             "updated_at": cred.updated_at.isoformat(),
         }
 
+    def _individual_path(self, owner_type: str, owner_id: str, name: str) -> Path:
+        """Path for an individual credential JSON file (for direct mounting)."""
+        return self._base_dir / owner_type / owner_id / f"{name}.json"
+
+    def _write_individual_credential(
+        self,
+        owner_type: str,
+        owner_id: str,
+        name: str,
+        data: dict[str, str],
+    ) -> None:
+        """Write an individual credential JSON file alongside the main store.
+
+        These files are mounted directly into pods by FileSecretInjectionAdapter
+        and read by the entrypoint's manifest-based secret sourcing.
+        """
+        path = self._individual_path(owner_type, owner_id, name)
+        payload = json.dumps(data).encode()
+        if self._fernet is not None:
+            payload = self._fernet.encrypt(payload)
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+        closed = False
+        try:
+            os.write(fd, payload)
+            os.close(fd)
+            closed = True
+            os.replace(tmp_path, path)
+        except BaseException:
+            if not closed:
+                os.close(fd)
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
+
+    def _delete_individual_credential(
+        self,
+        owner_type: str,
+        owner_id: str,
+        name: str,
+    ) -> None:
+        """Remove the individual credential file if it exists."""
+        path = self._individual_path(owner_type, owner_id, name)
+        if path.exists():
+            path.unlink()
+
     # ------------------------------------------------------------------
     # CredentialStorePort implementation
     # ------------------------------------------------------------------
@@ -169,6 +216,9 @@ class FileCredentialStore(CredentialStorePort):
             file_data["values"][name] = dict(data)
             self._write_file(path, file_data)
 
+            # Write individual credential file for direct mounting
+            self._write_individual_credential(owner_type, owner_id, name, data)
+
         logger.debug("Stored credential %s for %s/%s", name, owner_type, owner_id)
         return credential
 
@@ -207,6 +257,7 @@ class FileCredentialStore(CredentialStorePort):
             file_data["metadata"].pop(name, None)
             file_data["values"].pop(name, None)
             self._write_file(path, file_data)
+            self._delete_individual_credential(owner_type, owner_id, name)
 
         logger.debug("Deleted credential %s for %s/%s", name, owner_type, owner_id)
 

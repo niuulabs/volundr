@@ -215,7 +215,8 @@ describe('ApiVolundrService', () => {
 
       const sessions = await service.getSessions();
 
-      expect(sessions[0].hostname).toBe('localhost:8080');
+      // rewriteOrigin rewrites backend URLs to browser origin (jsdom = localhost:3000)
+      expect(sessions[0].hostname).toBe('localhost:3000');
     });
 
     it('handles null endpoints gracefully', async () => {
@@ -553,6 +554,7 @@ describe('ApiVolundrService', () => {
             id: mockSSESession.id,
             name: mockSSESession.name,
             status: 'running',
+            // Non-loopback host is preserved (gateway domain)
             hostname: 'session-abc.volundr.example.com',
           }),
         ])
@@ -579,6 +581,104 @@ describe('ApiVolundrService', () => {
       const lastCall = callback.mock.calls[callback.mock.calls.length - 1][0];
       expect(lastCall[0].status).toBe('stopped');
       expect(lastCall[0].tokensUsed).toBe(2000);
+    });
+
+    it('handles session_created with tracker issue fields', async () => {
+      const callback = vi.fn();
+      service.subscribe(callback);
+      await vi.waitFor(() => {
+        expect(MockSSEStream.instances).toHaveLength(1);
+      });
+
+      const eventSource = MockSSEStream.instances[0];
+      const sessionWithTracker: SSESessionPayload = {
+        ...mockSSESession,
+        tracker_issue_id: 'NIU-42',
+        issue_tracker_url: 'https://linear.app/niuu/issue/NIU-42',
+      };
+      await eventSource.simulateEvent('session_created', sessionWithTracker);
+
+      const lastCall = callback.mock.calls[callback.mock.calls.length - 1][0];
+      expect(lastCall[0].trackerIssue).toEqual(
+        expect.objectContaining({
+          id: 'NIU-42',
+          identifier: 'NIU-42',
+          url: 'https://linear.app/niuu/issue/NIU-42',
+        })
+      );
+    });
+
+    it('preserves tracker issue on SSE update via merge', async () => {
+      const callback = vi.fn();
+      service.subscribe(callback);
+      await vi.waitFor(() => {
+        expect(MockSSEStream.instances).toHaveLength(1);
+      });
+
+      const eventSource = MockSSEStream.instances[0];
+
+      // Create session with tracker
+      const sessionWithTracker: SSESessionPayload = {
+        ...mockSSESession,
+        tracker_issue_id: 'NIU-42',
+        issue_tracker_url: 'https://linear.app/niuu/issue/NIU-42',
+      };
+      await eventSource.simulateEvent('session_created', sessionWithTracker);
+
+      // Update session without tracker fields (simulates legacy SSE)
+      const updateWithoutTracker: SSESessionPayload = {
+        ...mockSSESession,
+        tokens_used: 3000,
+      };
+      await eventSource.simulateEvent('session_updated', updateWithoutTracker);
+
+      const lastCall = callback.mock.calls[callback.mock.calls.length - 1][0];
+      expect(lastCall[0].tokensUsed).toBe(3000);
+      // trackerIssue should be preserved from the original session
+      expect(lastCall[0].trackerIssue).toEqual(
+        expect.objectContaining({
+          id: 'NIU-42',
+          identifier: 'NIU-42',
+        })
+      );
+    });
+
+    it('handles SSE session with flat repo/branch fields (no source)', async () => {
+      const callback = vi.fn();
+      service.subscribe(callback);
+      await vi.waitFor(() => {
+        expect(MockSSEStream.instances).toHaveLength(1);
+      });
+
+      const eventSource = MockSSEStream.instances[0];
+      const flatSession: SSESessionPayload = {
+        id: '550e8400-e29b-41d4-a716-446655440099',
+        name: 'Flat Fields Session',
+        model: 'claude-sonnet-4-20250514',
+        repo: 'https://github.com/org/repo',
+        branch: 'develop',
+        status: 'running',
+        chat_endpoint: null,
+        code_endpoint: null,
+        created_at: '2026-02-03T12:00:00',
+        updated_at: '2026-02-03T12:05:00',
+        last_active: '2026-02-03T12:05:00',
+        message_count: 0,
+        tokens_used: 0,
+        pod_name: null,
+        error: null,
+      };
+      await eventSource.simulateEvent('session_created', flatSession);
+
+      const lastCall = callback.mock.calls[callback.mock.calls.length - 1][0];
+      const created = lastCall.find(
+        (s: { id: string }) => s.id === '550e8400-e29b-41d4-a716-446655440099'
+      );
+      expect(created.source).toEqual({
+        type: 'git',
+        repo: 'https://github.com/org/repo',
+        branch: 'develop',
+      });
     });
 
     it('handles session_deleted events', async () => {
@@ -915,7 +1015,8 @@ describe('ApiVolundrService', () => {
       mockFetch.mockReturnValueOnce(mockResponse(mockApiSession));
       const url = await service.getCodeServerUrl(sessions[0].id);
 
-      expect(url).toBe(mockApiSession.code_endpoint);
+      // rewriteOrigin rewrites backend URLs to browser origin
+      expect(url).toBe('http://localhost:3000/code');
     });
 
     it('returns null for stopped managed session', async () => {
@@ -2328,6 +2429,192 @@ describe('ApiVolundrService', () => {
       });
 
       // Should not crash
+    });
+  });
+
+  describe('getTemplates', () => {
+    it('returns transformed templates from API', async () => {
+      const apiTemplate = {
+        name: 'default',
+        description: 'Default template',
+        is_default: true,
+        repos: [{ repo: 'org/repo' }],
+        setup_scripts: ['npm install'],
+        workspace_layout: {},
+        cli_tool: 'claude',
+        workload_type: 'development',
+        model: 'claude-sonnet-4-20250514',
+        system_prompt: 'You are helpful',
+        resource_config: { cpu: '2' },
+        mcp_servers: [{ name: 'fs', type: 'stdio', command: 'mcp-fs', args: ['--root', '/'] }],
+        env_vars: { NODE_ENV: 'production' },
+        env_secret_refs: ['my-secret'],
+        workload_config: { timeout: 300 },
+        terminal_sidecar: { enabled: true, allowed_commands: ['ls', 'cat'] },
+        skills: [{ name: 'test-skill' }],
+        rules: [{ inline: 'be helpful' }],
+      };
+      mockFetch.mockReturnValueOnce(mockResponse([apiTemplate]));
+
+      const templates = await service.getTemplates();
+
+      expect(templates).toHaveLength(1);
+      expect(templates[0].name).toBe('default');
+      expect(templates[0].isDefault).toBe(true);
+      expect(templates[0].cliTool).toBe('claude');
+      expect(templates[0].terminalSidecar.enabled).toBe(true);
+      expect(templates[0].terminalSidecar.allowedCommands).toEqual(['ls', 'cat']);
+      expect(templates[0].skills).toEqual([{ name: 'test-skill' }]);
+      expect(templates[0].rules).toEqual([{ inline: 'be helpful' }]);
+      expect(templates[0].envVars).toEqual({ NODE_ENV: 'production' });
+    });
+
+    it('handles template with null/undefined optional fields', async () => {
+      const apiTemplate = {
+        name: 'minimal',
+        description: '',
+        is_default: false,
+        repos: [],
+        setup_scripts: [],
+        workspace_layout: {},
+        cli_tool: null,
+        workload_type: null,
+        model: null,
+        system_prompt: null,
+        resource_config: null,
+        mcp_servers: null,
+        env_vars: null,
+        env_secret_refs: null,
+        workload_config: null,
+        terminal_sidecar: null,
+        skills: null,
+        rules: null,
+      };
+      mockFetch.mockReturnValueOnce(mockResponse([apiTemplate]));
+
+      const templates = await service.getTemplates();
+
+      expect(templates[0].cliTool).toBe('claude');
+      expect(templates[0].workloadType).toBe('development');
+      expect(templates[0].resourceConfig).toEqual({});
+      expect(templates[0].mcpServers).toEqual([]);
+      expect(templates[0].envVars).toEqual({});
+      expect(templates[0].envSecretRefs).toEqual([]);
+      expect(templates[0].workloadConfig).toEqual({});
+      expect(templates[0].terminalSidecar).toEqual({ enabled: false, allowedCommands: [] });
+      expect(templates[0].skills).toEqual([]);
+      expect(templates[0].rules).toEqual([]);
+    });
+  });
+
+  describe('getPresets', () => {
+    it('returns transformed presets from API', async () => {
+      const apiPreset = {
+        id: 'preset-1',
+        name: 'My Preset',
+        description: 'A preset',
+        is_default: false,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+        cli_tool: 'codex',
+        workload_type: 'development',
+        model: 'claude-sonnet-4-20250514',
+        system_prompt: 'hello',
+        resource_config: { gpu: '1' },
+        mcp_servers: [],
+        terminal_sidecar: { enabled: false, allowed_commands: [] },
+        skills: [],
+        rules: [],
+        env_vars: {},
+        env_secret_refs: [],
+        workload_config: {},
+      };
+      mockFetch.mockReturnValueOnce(mockResponse([apiPreset]));
+
+      const presets = await service.getPresets();
+
+      expect(presets).toHaveLength(1);
+      expect(presets[0].id).toBe('preset-1');
+      expect(presets[0].cliTool).toBe('codex');
+      expect(presets[0].terminalSidecar.enabled).toBe(false);
+    });
+
+    it('handles preset with null/undefined optional fields', async () => {
+      const apiPreset = {
+        id: 'preset-2',
+        name: 'Minimal',
+        description: '',
+        is_default: false,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+        cli_tool: null,
+        workload_type: null,
+        model: null,
+        system_prompt: null,
+        resource_config: null,
+        mcp_servers: null,
+        terminal_sidecar: null,
+        skills: null,
+        rules: null,
+        env_vars: null,
+        env_secret_refs: null,
+        workload_config: null,
+      };
+      mockFetch.mockReturnValueOnce(mockResponse([apiPreset]));
+
+      const presets = await service.getPresets();
+
+      expect(presets[0].cliTool).toBe('claude');
+      expect(presets[0].workloadType).toBe('development');
+      expect(presets[0].resourceConfig).toEqual({});
+      expect(presets[0].mcpServers).toEqual([]);
+      expect(presets[0].terminalSidecar).toEqual({ enabled: false, allowedCommands: [] });
+      expect(presets[0].skills).toEqual([]);
+      expect(presets[0].rules).toEqual([]);
+      expect(presets[0].envVars).toEqual({});
+      expect(presets[0].envSecretRefs).toEqual([]);
+      expect(presets[0].workloadConfig).toEqual({});
+    });
+  });
+
+  describe('mapTrackerStatus and transformSession with tracker issue', () => {
+    it('transforms session with tracker_issue_id and issue_tracker_url', async () => {
+      const sessionWithTracker: ApiSessionResponse = {
+        ...mockApiSession,
+        tracker_issue_id: 'NIU-42',
+        issue_tracker_url: 'https://linear.app/issue/NIU-42',
+      };
+      mockFetch.mockReturnValueOnce(mockResponse([sessionWithTracker]));
+
+      const sessions = await service.getSessions();
+
+      expect(sessions[0].trackerIssue).toEqual({
+        id: 'NIU-42',
+        identifier: 'NIU-42',
+        title: '',
+        status: 'todo',
+        url: 'https://linear.app/issue/NIU-42',
+      });
+    });
+
+    it('transforms session with local_mount source', async () => {
+      const sessionWithMount: ApiSessionResponse = {
+        ...mockApiSession,
+        source: {
+          type: 'local_mount',
+          paths: [{ host_path: '/code', mount_path: '/workspace', read_only: false }],
+          node_selector: { 'kubernetes.io/hostname': 'node1' },
+        },
+      };
+      mockFetch.mockReturnValueOnce(mockResponse([sessionWithMount]));
+
+      const sessions = await service.getSessions();
+
+      expect(sessions[0].source.type).toBe('local_mount');
+      if (sessions[0].source.type === 'local_mount') {
+        expect(sessions[0].source.paths).toHaveLength(1);
+        expect(sessions[0].source.node_selector).toEqual({ 'kubernetes.io/hostname': 'node1' });
+      }
     });
   });
 });

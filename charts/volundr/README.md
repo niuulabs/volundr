@@ -12,7 +12,7 @@ Helm chart for deploying **Volundr** — a self-hosted Claude Code session manag
 - Helm 3.8+
 - PostgreSQL database
 - ReadWriteMany-capable storage class (e.g., Longhorn, NFS, EFS)
-- (Optional) NVIDIA Farm or Flux for session orchestration
+- (Optional) Flux for session orchestration
 - (Optional) Envoy Gateway + GatewayClass for session routing
 - (Optional) Kyverno for multi-tenant PVC isolation
 
@@ -71,7 +71,7 @@ Volundr uses a **dynamic adapter pattern** for all pluggable subsystems. Each ad
 
 **How it works:**
 
-1. The `adapter` value is a fully-qualified Python class path (e.g., `volundr.adapters.outbound.farm.FarmPodManager`).
+1. The `adapter` value is a fully-qualified Python class path (e.g., `volundr.adapters.outbound.flux.FluxPodManager`).
 2. At startup, Volundr dynamically imports the class using `importlib`.
 3. All keys under `kwargs` are passed to the class constructor as keyword arguments.
 4. **No code changes** are required to swap backends -- only update the Helm values.
@@ -204,60 +204,29 @@ Selects how Volundr deploys session pods. Uses the [dynamic adapter pattern](#ar
 
 | Adapter | Class | Description |
 |---------|-------|-------------|
-| Farm (default) | `volundr.adapters.outbound.farm.FarmPodManager` | Submits tasks to NVIDIA Farm; Farm agents deploy Skuld Helm releases |
-| Flux | `volundr.adapters.outbound.flux.FluxPodManager` | Creates HelmRelease CRs directly; Flux reconciles them into session pods |
+| Flux (default) | `volundr.adapters.outbound.flux.FluxPodManager` | Creates HelmRelease CRs directly; Flux reconciles them into session pods |
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `podManager.adapter` | string | `"volundr.adapters.outbound.farm.FarmPodManager"` | Fully-qualified class path for the PodManager adapter |
+| `podManager.adapter` | string | `"volundr.adapters.outbound.flux.FluxPodManager"` | Fully-qualified class path for the PodManager adapter |
 | `podManager.existingSecret` | string | `""` | Existing secret containing the backend API token (mounted as `POD_MANAGER_TOKEN` env var) |
 | `podManager.tokenKey` | string | `"token"` | Key in secret containing the token |
 | `podManager.kwargs` | object | See below | All kwargs forwarded to the adapter constructor |
 
-**FarmPodManager kwargs (default):**
+**FluxPodManager kwargs (default):**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `podManager.kwargs.base_url` | string | `"http://farm-tasks.default.svc.cluster.local"` | Farm Tasks API base URL |
-| `podManager.kwargs.timeout` | int | `30` | API timeout in seconds |
-| `podManager.kwargs.task_type` | string | `"skuld-claude"` | Task type for session submissions |
-| `podManager.kwargs.user` | string | `"volundr"` | User identifier for task submissions |
-| `podManager.kwargs.labels` | list | `["session"]` | Labels for agent routing |
+| `podManager.kwargs.namespace` | string | `"default"` | Kubernetes namespace for HelmReleases |
+| `podManager.kwargs.chart_name` | string | `"skuld"` | Helm chart name |
+| `podManager.kwargs.chart_version` | string | `"0.1.0"` | Helm chart version |
+| `podManager.kwargs.source_ref_kind` | string | `"HelmRepository"` | Source reference kind |
+| `podManager.kwargs.source_ref_name` | string | `"skuld"` | Source reference name |
 | `podManager.kwargs.base_domain` | string | `"skuld.valhalla.asgard.niuu.world"` | Base domain for session endpoint URLs |
 | `podManager.kwargs.chat_scheme` | string | `"wss"` | WebSocket scheme for chat endpoints |
 | `podManager.kwargs.code_scheme` | string | `"https"` | HTTPS scheme for code-server endpoints |
 | `podManager.kwargs.chat_path` | string | `"/session"` | Path for chat WebSocket endpoint |
 | `podManager.kwargs.code_path` | string | `"/"` | Path for code-server endpoint |
-
-<details>
-<summary>FluxPodManager kwargs (alternative)</summary>
-
-```yaml
-podManager:
-  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
-  kwargs:
-    namespace: "default"
-    chart_name: "skuld"
-    chart_version: "0.55.0"
-    source_ref_kind: "HelmRepository"
-    source_ref_name: "skuld"
-    source_ref_namespace: ""
-    timeout: "5m"
-    interval: "5m"
-    base_domain: "skuld.valhalla.asgard.niuu.world"
-    chat_scheme: "wss"
-    code_scheme: "https"
-    chat_path: "/session"
-    code_path: "/"
-    session_defaults:
-      session:
-        model: "claude-sonnet-4-20250514"
-      image:
-        repository: "ghcr.io/niuulabs/skuld"
-        tag: "latest"
-```
-
-</details>
 
 ### Chronicle
 
@@ -623,7 +592,7 @@ The shared `Gateway` resource that all session `HTTPRoute`s attach to. Requires 
 |-----|------|---------|-------------|
 | `existingSecrets.anthropic` | string | `"volundr-anthropic-api"` | Name of the secret containing Anthropic API credentials. Expected keys: `ANTHROPIC_API_KEY`, optionally `ANTHROPIC_BASE_URL` |
 
-### Session Definitions (FarmSessionDefinition CRs)
+### Session Definitions
 
 Session definitions are Kubernetes custom resources that describe how session pods are built. They reference a Helm chart (Skuld) and provide default values that can be overridden per-session.
 
@@ -796,7 +765,6 @@ Session definitions are Kubernetes custom resources that describe how session po
 | `networkPolicy.enabled` | bool | `false` | Enable NetworkPolicy |
 | `networkPolicy.ingressFrom` | list | `[]` | Custom ingress from selectors |
 | `networkPolicy.databasePodSelector` | object | `{}` | Database pod selector for egress |
-| `networkPolicy.farmPodSelector` | object | `{}` | Farm pod selector for egress |
 | `networkPolicy.extraIngress` | list | `[]` | Extra ingress rules |
 | `networkPolicy.extraEgress` | list | `[]` | Extra egress rules |
 
@@ -857,7 +825,7 @@ This chart expects secrets to be created externally (via External Secrets or man
 
 | Secret Name | Keys | Used By |
 |-------------|------|---------|
-| Pod manager token (configurable) | `token` | `podManager.existingSecret` -- API token for Farm/Flux backend |
+| Pod manager token (configurable) | `token` | `podManager.existingSecret` -- API token for Flux backend |
 | GitHub token (configurable) | `token` | `git.github.existingSecret` -- GitHub API access |
 | GitLab token (configurable) | `token` | `git.gitlab.existingSecret` -- GitLab API access |
 | `claude-credentials` | (credential files) | Session pods -- Claude credential files symlinked into `$HOME/.claude/` |
@@ -1047,7 +1015,7 @@ Sessions are stored at `/volundr/sessions/{uuid}/`:
 
 ### From 0.1.x to 0.2.x
 
-Version 0.2.0 adds the full Volundr service deployment. If you were only using the FarmSessionDefinition CRD, no changes are required.
+Version 0.2.0 adds the full Volundr service deployment.
 
 New features in 0.2.0:
 - Full deployment with liveness/readiness probes

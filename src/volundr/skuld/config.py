@@ -46,7 +46,7 @@ class TelegramConfig(BaseModel):
 
 
 class SkuldSessionConfig(BaseModel):
-    """Per-session configuration (set by Farm ITaaS at pod creation)."""
+    """Per-session configuration (set by Volundr at pod creation)."""
 
     id: str = Field(default="unknown")
     name: str = Field(default="unknown")
@@ -92,6 +92,7 @@ class SkuldSettings(BaseSettings):
     persistence_mount_path: str = Field(default="/volundr/sessions")
     chronicle_watcher_enabled: bool = Field(default=True)
     chronicle_watcher_debounce_ms: int = Field(default=500)
+    max_upload_size_bytes: int = Field(default=104_857_600)  # 100 MB
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
     @model_validator(mode="after")
@@ -159,6 +160,11 @@ class SkuldSettings(BaseSettings):
         if self.session.workspace_dir:
             return self.session.workspace_dir
         return f"{self.persistence_mount_path}/{self.session.id}/workspace"
+
+    @property
+    def home_path(self) -> str:
+        """Resolved home directory path for the session."""
+        return f"{self.persistence_mount_path}/{self.session.id}/home"
 
     @classmethod
     def settings_customise_sources(

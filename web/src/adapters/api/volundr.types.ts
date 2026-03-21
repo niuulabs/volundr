@@ -43,6 +43,8 @@ export interface ApiSessionResponse {
   pod_name: string | null;
   error: string | null;
   task_type?: string | null;
+  tracker_issue_id?: string | null;
+  issue_tracker_url?: string | null;
   owner_id?: string | null;
   tenant_id?: string | null;
 }
@@ -98,6 +100,8 @@ export interface ApiSessionCreate {
   credential_names?: string[];
   integration_ids?: string[];
   resource_config?: Record<string, string | undefined>;
+  issue_id?: string | null;
+  issue_url?: string | null;
 }
 
 /**
@@ -236,7 +240,11 @@ export interface SSESessionPayload {
   id: string;
   name: string;
   model: string;
-  source: ApiSessionSource;
+  /** Flat repo/branch fields (legacy) */
+  repo?: string;
+  branch?: string;
+  /** Nested source object (when present) */
+  source?: ApiSessionSource;
   status: ApiSessionStatus;
   chat_endpoint: string | null;
   code_endpoint: string | null;
@@ -247,6 +255,11 @@ export interface SSESessionPayload {
   tokens_used: number;
   pod_name: string | null;
   error: string | null;
+  tracker_issue_id?: string | null;
+  issue_tracker_url?: string | null;
+  task_type?: string | null;
+  owner_id?: string | null;
+  tenant_id?: string | null;
 }
 
 /**
@@ -399,6 +412,9 @@ export interface ApiPresetResponse {
   rules: Array<{ path?: string; inline?: string }>;
   env_vars: Record<string, string>;
   env_secret_refs: string[];
+  source: ApiSessionSource | null;
+  integration_ids: string[];
+  setup_scripts: string[];
   workload_config: Record<string, string | number | boolean | undefined>;
 }
 
@@ -426,6 +442,9 @@ export interface ApiPresetCreate {
   rules: Array<{ path?: string; inline?: string }>;
   env_vars: Record<string, string>;
   env_secret_refs: string[];
+  source: ApiSessionSource | null;
+  integration_ids: string[];
+  setup_scripts: string[];
   workload_config: Record<string, string | number | boolean | undefined>;
 }
 
@@ -562,6 +581,9 @@ export interface ApiWorkspaceResponse {
   created_at: string;
   archived_at: string | null;
   deleted_at: string | null;
+  session_name: string | null;
+  source_url: string | null;
+  source_ref: string | null;
 }
 
 /**
@@ -585,4 +607,27 @@ export interface ApiSecretTypeInfoResponse {
     required: boolean;
   }>;
   default_mount_type: string;
+}
+
+/**
+ * Feature module response from API
+ */
+export interface ApiFeatureModuleResponse {
+  key: string;
+  label: string;
+  icon: string;
+  scope: string;
+  enabled: boolean;
+  default_enabled: boolean;
+  admin_only: boolean;
+  order: number;
+}
+
+/**
+ * User feature preference response from API
+ */
+export interface ApiUserFeaturePreferenceResponse {
+  feature_key: string;
+  visible: boolean;
+  sort_order: number;
 }

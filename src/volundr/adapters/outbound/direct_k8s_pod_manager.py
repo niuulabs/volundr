@@ -41,7 +41,7 @@ DEFAULT_POLL_INTERVAL = 2.0
 DEFAULT_READINESS_TIMEOUT = 300.0
 
 # Nginx config template for the session pod entry point.
-# Routes requests to skuld broker (8081), code-server (8443), and terminal (7681).
+# Routes requests to skuld broker (8081), vscode-reh (8445), and terminal (7681).
 NGINX_CONF_TEMPLATE = """\
 worker_processes auto;
 error_log /dev/stderr warn;
@@ -70,8 +70,8 @@ http {{
         server 127.0.0.1:8081;
     }}
 
-    upstream codeserver {{
-        server 127.0.0.1:8443;
+    upstream reh {{
+        server 127.0.0.1:8445;
     }}
 
     server {{
@@ -148,9 +148,23 @@ http {{
             return 200 '{{"services":[],"hint":"use svc start to add services"}}';
         }}
 
-        # Default catch-all -> code-server IDE
+        # VS Code REH: WebSocket RPC for editor workbench
+        location /reh/ {{
+            proxy_pass http://reh/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }}
+
+        # Default catch-all -> broker
         location / {{
-            proxy_pass http://codeserver/;
+            proxy_pass http://broker/;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
@@ -185,7 +199,7 @@ class DirectK8sPodManager(PodManager):
         ingress_backend: str = "k3d-volundr-serverlb",
         external_url: str = "http://127.0.0.1:8080",
         skuld_image: str = "ghcr.io/niuulabs/skuld:0.2.0",
-        code_server_image: str = "codercom/code-server:latest",
+        reh_image: str = "ghcr.io/niuulabs/vscode-reh:latest",
         nginx_image: str = "nginx:alpine",
         devrunner_image: str = "ghcr.io/niuulabs/devrunner:0.2.0",
         db_host: str = "host.k3d.internal",
@@ -206,7 +220,7 @@ class DirectK8sPodManager(PodManager):
         self._ingress_backend = ingress_backend
         self._external_url = external_url.rstrip("/")
         self._skuld_image = skuld_image
-        self._code_server_image = code_server_image
+        self._reh_image = reh_image
         self._nginx_image = nginx_image
         self._devrunner_image = devrunner_image
         self._db_host = db_host
@@ -264,7 +278,7 @@ class DirectK8sPodManager(PodManager):
         return f"ws://{self._ingress_backend}{self._session_path(session)}/session"
 
     def _code_endpoint(self, session: Session) -> str:
-        """Build the code-server endpoint URL."""
+        """Build the editor endpoint URL."""
         return f"http://{self._ingress_backend}{self._session_path(session)}/"
 
     def _build_labels(self, session: Session) -> dict[str, str]:
@@ -296,9 +310,11 @@ class DirectK8sPodManager(PodManager):
             env.append({"name": "GIT_BRANCH", "value": git_config["branch"]})
 
         # Handle session metadata from spec values.
+        # Emit SKULD__SESSION__MODEL for pydantic-settings and MODEL for legacy fallback.
         session_config = spec.values.get("session", {})
         if session_config.get("model"):
-            env.append({"name": "SESSION_MODEL", "value": session_config["model"]})
+            env.append({"name": "SKULD__SESSION__MODEL", "value": session_config["model"]})
+            env.append({"name": "MODEL", "value": session_config["model"]})
 
         # Handle extra env passthrough.
         extra_env = spec.values.get("env", {})
@@ -306,16 +322,8 @@ class DirectK8sPodManager(PodManager):
             for k, v in extra_env.items():
                 env.append({"name": k, "value": str(v)})
 
-        # Inject secrets from K8s secrets (matches Helm chart envSecrets pattern).
-        env_secrets = [
-            {
-                "envVar": "ANTHROPIC_API_KEY",
-                "secretName": "anthropic-api-key",
-                "secretKey": "api-key",
-            },
-            {"envVar": "GITHUB_TOKEN", "secretName": "github-token", "secretKey": "token"},
-        ]
-        for es in env_secrets:
+        # Inject secrets from contributor-provided envSecrets.
+        for es in spec.values.get("envSecrets", []):
             env.append(
                 {
                     "name": es["envVar"],
@@ -376,7 +384,7 @@ class DirectK8sPodManager(PodManager):
         session: Session,
         spec: SessionSpec,
     ) -> list[dict[str, Any]]:
-        """Build init containers: permissions fix + optional git clone."""
+        """Build init containers: permissions fix, optional home-setup, optional git clone."""
         containers: list[dict[str, Any]] = [
             {
                 "name": "init-permissions",
@@ -385,10 +393,13 @@ class DirectK8sPodManager(PodManager):
                     "sh",
                     "-c",
                     (
-                        "chown -R 1000:1000 /volundr 2>/tmp/chown.err; rc=$?; "
+                        "chown -R 1000:1000 /volundr 2>/tmp/chown.err || true; "
                         "if [ -s /tmp/chown.err ]; then "
-                        "grep -v 'Invalid argument' /tmp/chown.err >&2; "
-                        "if grep -qv 'Invalid argument' /tmp/chown.err; then exit $rc; fi; "
+                        "grep -Ev 'Invalid argument|No such file or directory|Stale file handle' "
+                        "/tmp/chown.err >&2; "
+                        "if grep -qEv 'Invalid argument|No such file"
+                        " or directory|Stale file handle' "
+                        "/tmp/chown.err; then exit 1; fi; "
                         "fi"
                     ),
                 ],
@@ -500,7 +511,7 @@ fi
             "requests": {"memory": "256Mi", "cpu": "100m"},
             "limits": {"memory": "1Gi", "cpu": "500m"},
         }
-        code_server_res = {
+        reh_res = {
             "requests": {"memory": "256Mi", "cpu": "100m"},
             "limits": {"memory": "2Gi", "cpu": "1000m"},
         }
@@ -549,6 +560,11 @@ fi
         pod_spec: dict[str, Any] = {
             "hostname": safe_hostname,
             "terminationGracePeriodSeconds": 30,
+            **(
+                {"serviceAccountName": spec.pod_spec.service_account}
+                if spec.pod_spec and spec.pod_spec.service_account
+                else {}
+            ),
             "securityContext": {
                 "fsGroup": 1000,
             },
@@ -583,23 +599,29 @@ fi
                     "resources": skuld_res,
                 },
                 {
-                    "name": "code-server",
-                    "image": self._code_server_image,
-                    "ports": [{"containerPort": 8443, "name": "ide"}],
-                    "command": ["dumb-init", "--", "/usr/bin/code-server"],
-                    "args": [
-                        "--bind-addr=0.0.0.0:8443",
-                        "--auth=none",
-                        "--disable-telemetry",
-                        f"/volundr/sessions/{session.id}/workspace",
-                    ],
-                    "env": home_env,
+                    "name": "vscode-reh",
+                    "image": self._reh_image,
+                    "ports": [{"containerPort": 8445, "name": "reh"}],
+                    "env": [
+                        {"name": "SESSION_ID", "value": str(session.id)},
+                    ]
+                    + home_env,
                     "securityContext": {
                         "runAsUser": 1000,
                         "allowPrivilegeEscalation": False,
                     },
                     "volumeMounts": workload_mounts,
-                    "resources": code_server_res,
+                    "resources": reh_res,
+                    "livenessProbe": {
+                        "tcpSocket": {"port": 8445},
+                        "initialDelaySeconds": 10,
+                        "periodSeconds": 30,
+                    },
+                    "readinessProbe": {
+                        "tcpSocket": {"port": 8445},
+                        "initialDelaySeconds": 5,
+                        "periodSeconds": 10,
+                    },
                 },
                 {
                     "name": "devrunner",

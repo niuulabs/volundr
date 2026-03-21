@@ -149,7 +149,7 @@ func (r *Router) Handler() http.Handler {
 	webHandler := web.Handler(r.webConfig)
 	mux.Handle("/", webHandler)
 
-	return mux
+	return web.WithCrossOriginIsolation(mux)
 }
 
 // ListenAndServe starts the proxy server.

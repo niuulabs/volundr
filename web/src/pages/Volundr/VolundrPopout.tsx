@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   Hammer,
@@ -12,13 +12,15 @@ import {
   Globe,
 } from 'lucide-react';
 import { StatusBadge, SessionTerminal, SessionChat, SessionStartingIndicator } from '@/components';
-import { useAuth } from '@/auth';
-import { getAccessToken } from '@/adapters/api/client';
 import { useVolundr, useBroadcastChannel, useSessionProbe } from '@/hooks';
 import type { VolundrSession } from '@/models';
 import { isSessionBooting } from '@/models';
 import { getSourceLabel, getBranch, isGitSource } from '@/utils/source';
 import styles from './VolundrPopout.module.css';
+
+const EditorPanel = lazy(() =>
+  import('@/components/EditorPanel/EditorPanel').then(m => ({ default: m.EditorPanel }))
+);
 
 type TabType = 'terminal' | 'code' | 'chat';
 
@@ -27,8 +29,7 @@ export function VolundrPopout() {
   const sessionId = searchParams.get('session');
   const tabType = (searchParams.get('tab') as TabType) || 'terminal';
 
-  const { sessions, models, loading, getCodeServerUrl, markSessionRunning } = useVolundr();
-  const { enabled: authEnabled } = useAuth();
+  const { sessions, models, loading, markSessionRunning } = useVolundr();
   const { subscribe } = useBroadcastChannel('volundr-sync');
 
   // Try to find the session from the fetched list first; fall back to
@@ -58,32 +59,6 @@ export function VolundrPopout() {
   const selectedModel = session ? models[session.model] : null;
   const isLocal = selectedModel?.provider === 'local';
   const isManual = session?.origin === 'manual';
-
-  // IDE state for code tab - track which session the URL was fetched for
-  const [fetchedIde, setFetchedIde] = useState<{ sessionId: string; url: string | null } | null>(
-    null
-  );
-
-  const shouldLoadIde = tabType === 'code' && !!session?.id && session.status === 'running';
-
-  // For manual sessions, derive the IDE URL directly from the hostname —
-  // just like terminal/chat derive their WebSocket URLs.  This avoids a
-  // service call that races against the initial data fetch and may fail
-  // in a fresh popout window whose service instance has no cached data yet.
-  const directIdeUrl = useMemo(() => {
-    if (!shouldLoadIde || !session) {
-      return null;
-    }
-    if (session.origin === 'manual' && session.hostname) {
-      return `https://${session.hostname}/`;
-    }
-    return null;
-  }, [shouldLoadIde, session]);
-
-  const ideUrl =
-    directIdeUrl ??
-    (shouldLoadIde && fetchedIde?.sessionId === session?.id ? fetchedIde.url : null);
-  const ideLoading = !directIdeUrl && shouldLoadIde && fetchedIde?.sessionId !== session?.id;
 
   const sessionHost = session?.hostname ?? null;
   const sessionChatEndpoint = session?.chatEndpoint ?? null;
@@ -152,32 +127,6 @@ export function VolundrPopout() {
       document.title = 'Hlidskjalf';
     };
   }, [session, tabType]);
-
-  // Resolve IDE URL when code tab and session is running.
-  // Skip when the URL can be derived directly (manual sessions).
-  useEffect(() => {
-    if (!shouldLoadIde || !session?.id || directIdeUrl) {
-      return;
-    }
-
-    let cancelled = false;
-
-    getCodeServerUrl(session.id)
-      .then(url => {
-        if (!cancelled) {
-          setFetchedIde({ sessionId: session.id, url });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFetchedIde({ sessionId: session.id, url: null });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shouldLoadIde, session?.id, directIdeUrl, getCodeServerUrl]);
 
   // Subscribe to cross-window updates
   useEffect(() => {
@@ -310,47 +259,14 @@ export function VolundrPopout() {
             </div>
           )
         ) : isSessionReady ? (
-          ideLoading ? (
-            <div className={styles.emptyState}>
-              <Code className={styles.emptyIcon} />
-              <p>Connecting to IDE...</p>
-            </div>
-          ) : ideUrl ? (
-            authEnabled ? (
-              <div className={styles.emptyState}>
-                <Code className={styles.emptyIcon} />
-                <p>VS Code IDE is available for this session</p>
-                <a
-                  href={(() => {
-                    const token = getAccessToken();
-                    if (!token) return ideUrl;
-                    const sep = ideUrl.includes('?') ? '&' : '?';
-                    return `${ideUrl}${sep}access_token=${encodeURIComponent(token)}`;
-                  })()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.ideOpenButton}
-                >
-                  Open IDE in new tab
-                </a>
-                <span className={styles.ideUrlHint}>{ideUrl}</span>
-              </div>
-            ) : (
-              <div className={styles.iframeContainer}>
-                <iframe
-                  className={styles.sessionIframe}
-                  src={ideUrl}
-                  title={`IDE - ${session.name}`}
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                />
-              </div>
-            )
-          ) : (
-            <div className={styles.emptyState}>
-              <Code className={styles.emptyIcon} />
-              <p>IDE not available for this session</p>
-            </div>
-          )
+          <Suspense fallback={null}>
+            <EditorPanel
+              hostname={session.hostname ?? null}
+              sessionId={session.id}
+              codeEndpoint={session.codeEndpoint}
+              className={styles.fullPanel}
+            />
+          </Suspense>
         ) : session.status === 'starting' ||
           session.status === 'provisioning' ||
           (isRunning && !connectionVerified) ? (
