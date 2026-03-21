@@ -297,7 +297,6 @@ _AUTH_HEADER = "authorization"
 _BEARER_PREFIX = "bearer "
 
 
-
 def _decode_jwt_claims(token: str) -> dict:
     """Decode JWT payload without signature verification.
 
@@ -1539,9 +1538,27 @@ def _resolve_root(root: str) -> Path:
     return Path(broker.workspace_dir).resolve()
 
 
+def _sanitize_path(relative_path: str) -> str:
+    """Sanitize a user-supplied relative path before using it in filesystem ops.
+
+    Rejects null bytes, absolute paths, and '..' components to prevent path
+    traversal.  Returns the cleaned relative path string.
+    """
+    if "\0" in relative_path:
+        raise HTTPException(400, "Invalid path")
+    # Normalise separators and strip leading slashes so the path is always
+    # treated as relative.
+    cleaned = relative_path.replace("\\", "/").lstrip("/")
+    # Reject any '..' component (handles '..', 'foo/../bar', etc.)
+    if any(part == ".." for part in cleaned.split("/")):
+        raise HTTPException(400, "Path traversal not allowed")
+    return cleaned
+
+
 def _safe_resolve(base: Path, relative_path: str) -> Path:
     """Resolve a path safely, raising HTTPException on traversal attempts."""
-    target = (base / relative_path).resolve()
+    sanitized = _sanitize_path(relative_path)
+    target = (base / sanitized).resolve()
     if not target.is_relative_to(base):
         raise HTTPException(400, "Path traversal not allowed")
     return target

@@ -69,7 +69,8 @@ jobs:
             clean=$(echo "$line" | sed 's/ (#[0-9]*)$//')
 
             # Extract type and description
-            if [[ "$clean" =~ ^([a-z]+)(\([^)]*\))?!?:[[:space:]]*(.+)$ ]]; then
+            COMMIT_RE='^([a-z]+)(\([^)]*\))?!?:[[:space:]]*(.+)$'
+            if [[ "$clean" =~ $COMMIT_RE ]]; then
               type="${BASH_REMATCH[1]}"
               scope="${BASH_REMATCH[2]}"
               desc="${BASH_REMATCH[3]}"

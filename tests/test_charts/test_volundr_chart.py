@@ -404,7 +404,8 @@ class TestRbacTemplate:
 
     def test_has_flux_api_group(self, template_yaml):
         """Test template has Flux API group permissions."""
-        assert 'apiGroups: ["helm.toolkit.fluxcd.io"]' in template_yaml
+        flux_api_group = "helm.toolkit.fluxcd.io"
+        assert f'apiGroups: ["{flux_api_group}"]' in template_yaml
 
     def test_has_cluster_wide_conditional(self, template_yaml):
         """Test template has cluster-wide conditional."""

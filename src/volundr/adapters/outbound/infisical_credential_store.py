@@ -182,8 +182,7 @@ class InfisicalCredentialStore(CredentialStorePort):
         )
         if response.status_code >= 400 and response.status_code != 404:
             logger.error(
-                "Infisical delete failed for secret in %s (HTTP %s)",
-                folder_path,
+                "Infisical delete failed for secret (HTTP %s)",
                 response.status_code,
             )
 
@@ -395,7 +394,7 @@ class InfisicalCredentialStore(CredentialStorePort):
             response = await client.get("/api/status")
             return response.status_code < 400
         except Exception:
-            logger.exception("Infisical health check failed")
+            logger.error("Infisical health check failed")
             return False
 
     @staticmethod
