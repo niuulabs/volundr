@@ -1,31 +1,58 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SagasView } from './SagasView';
+import * as hooks from '../../hooks';
 
 vi.mock('../../hooks', () => ({
-  useSagas: () => ({
-    sagas: [
-      {
-        id: 'saga-1',
-        tracker_id: 'PROJ-100',
-        tracker_type: 'linear',
-        slug: 'my-saga',
-        name: 'Implement auth flow',
-        repo: 'niuulabs/app',
-        feature_branch: 'feat/auth',
-        status: 'active',
-        confidence: 0.82,
-        created_at: '2026-01-01T00:00:00Z',
-      },
-    ],
-    loading: false,
-    error: null,
-    refresh: vi.fn(),
-  }),
+  useSagas: vi.fn(),
 }));
 
+vi.mock('@/modules/shared', () => ({
+  LoadingIndicator: ({ label }: { label?: string }) => (
+    <div data-testid="loading-indicator">{label}</div>
+  ),
+  StatusBadge: ({ status }: { status: string }) => (
+    <span data-testid="status-badge">{status}</span>
+  ),
+  MetricCard: ({ label, value }: { label: string; value: string | number }) => (
+    <div data-testid="metric-card">
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  ),
+}));
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
 describe('SagasView', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    vi.mocked(hooks.useSagas).mockReturnValue({
+      sagas: [
+        {
+          id: 'saga-1',
+          tracker_id: 'PROJ-100',
+          tracker_type: 'linear',
+          slug: 'my-saga',
+          name: 'Implement auth flow',
+          repo: 'niuulabs/app',
+          feature_branch: 'feat/auth',
+          status: 'active',
+          confidence: 0.82,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    } as ReturnType<typeof hooks.useSagas>);
+  });
+
   it('renders saga data', () => {
     render(
       <MemoryRouter>
@@ -59,5 +86,128 @@ describe('SagasView', () => {
 
     const matches = screen.getAllByText('82%');
     expect(matches.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders loading indicator when loading', () => {
+    vi.mocked(hooks.useSagas).mockReturnValue({
+      sagas: [],
+      loading: true,
+      error: null,
+      refresh: vi.fn(),
+    } as ReturnType<typeof hooks.useSagas>);
+
+    render(
+      <MemoryRouter>
+        <SagasView />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Loading sagas...')).toBeInTheDocument();
+  });
+
+  it('renders error message when error occurs', () => {
+    vi.mocked(hooks.useSagas).mockReturnValue({
+      sagas: [],
+      loading: false,
+      error: 'Network error',
+      refresh: vi.fn(),
+    } as ReturnType<typeof hooks.useSagas>);
+
+    render(
+      <MemoryRouter>
+        <SagasView />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Network error')).toBeInTheDocument();
+  });
+
+  it('renders empty state when no sagas exist', () => {
+    vi.mocked(hooks.useSagas).mockReturnValue({
+      sagas: [],
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    } as ReturnType<typeof hooks.useSagas>);
+
+    render(
+      <MemoryRouter>
+        <SagasView />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('No sagas found')).toBeInTheDocument();
+  });
+
+  it('navigates to saga detail on card click', () => {
+    render(
+      <MemoryRouter>
+        <SagasView />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByText('Implement auth flow'));
+    expect(mockNavigate).toHaveBeenCalledWith('/tyr/sagas/saga-1');
+  });
+
+  it('computes avg confidence as 0 when sagas list is empty', () => {
+    vi.mocked(hooks.useSagas).mockReturnValue({
+      sagas: [],
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    } as ReturnType<typeof hooks.useSagas>);
+
+    render(
+      <MemoryRouter>
+        <SagasView />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  it('computes active sagas count correctly with mixed statuses', () => {
+    vi.mocked(hooks.useSagas).mockReturnValue({
+      sagas: [
+        {
+          id: 'saga-1',
+          tracker_id: 'PROJ-100',
+          tracker_type: 'linear',
+          slug: 'a',
+          name: 'Active saga',
+          repo: 'org/repo',
+          feature_branch: 'feat/a',
+          status: 'active',
+          confidence: 0.9,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        {
+          id: 'saga-2',
+          tracker_id: 'PROJ-101',
+          tracker_type: 'linear',
+          slug: 'b',
+          name: 'Completed saga',
+          repo: 'org/repo',
+          feature_branch: 'feat/b',
+          status: 'completed',
+          confidence: 1.0,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    } as ReturnType<typeof hooks.useSagas>);
+
+    render(
+      <MemoryRouter>
+        <SagasView />
+      </MemoryRouter>,
+    );
+
+    // Total: 2, Active: 1
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 });

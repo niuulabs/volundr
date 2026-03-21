@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Hammer, Swords } from 'lucide-react';
 import { Sidebar } from './Sidebar';
-import { registerProductModule, getProductModules } from '@/modules/shared/registry';
+import { getProductModules } from '@/modules/shared/registry';
 
 vi.mock('@/modules/shared/registry', () => {
   const modules: Array<{
