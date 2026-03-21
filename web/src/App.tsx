@@ -2,7 +2,9 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/auth';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { useIdentity } from '@/hooks/useIdentity';
 import { volundrService } from '@/modules/volundr/adapters';
+import { AppShell } from '@/modules/shared/components/AppShell';
 // Initialize module registry (registers all built-in feature modules)
 import '@/modules';
 import styles from './App.module.css';
@@ -30,20 +32,20 @@ function PageLoader() {
 }
 
 function AppContent() {
+  const { isAdmin } = useIdentity(volundrService);
+
   return (
-    <div className={styles.app}>
-      <main className={styles.main}>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/" element={<VolundrPage />} />
-            <Route path="/volundr" element={<VolundrPage />} />
-            <Route path="/settings" element={<SettingsPage service={volundrService} />} />
-            <Route path="/admin" element={<AdminPage service={volundrService} />} />
-            <Route path="/integrations" element={<Navigate to="/settings" replace />} />
-          </Routes>
-        </Suspense>
-      </main>
-    </div>
+    <AppShell isAdmin={isAdmin}>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/volundr" replace />} />
+          <Route path="/volundr" element={<VolundrPage />} />
+          <Route path="/settings" element={<SettingsPage service={volundrService} />} />
+          <Route path="/admin" element={<AdminPage service={volundrService} />} />
+          <Route path="/integrations" element={<Navigate to="/settings" replace />} />
+        </Routes>
+      </Suspense>
+    </AppShell>
   );
 }
 

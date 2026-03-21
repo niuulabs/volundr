@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 vi.mock('@/modules/volundr/pages/Volundr', () => ({
   VolundrPage: () => <div data-testid="volundr-page">Volundr Page</div>,
@@ -10,8 +10,13 @@ vi.mock('@/modules/volundr/pages/Volundr/VolundrPopout', () => ({
   VolundrPopout: () => <div data-testid="volundr-popout">Volundr Popout</div>,
 }));
 
+vi.mock('@/modules/shared/registry', () => ({
+  getProductModules: vi.fn(() => []),
+}));
+
 import { VolundrPage } from '@/modules/volundr/pages/Volundr';
 import { VolundrPopout } from '@/modules/volundr/pages/Volundr/VolundrPopout';
+import { AppShell } from '@/modules/shared/components/AppShell';
 
 function TestApp({ initialRoute = '/' }: { initialRoute?: string }) {
   return (
@@ -19,15 +24,24 @@ function TestApp({ initialRoute = '/' }: { initialRoute?: string }) {
       <Routes>
         <Route path="/volundr/popout" element={<VolundrPopout />} />
         <Route path="/popout" element={<VolundrPopout />} />
-        <Route path="/volundr" element={<VolundrPage />} />
-        <Route path="/" element={<VolundrPage />} />
+        <Route
+          path="/*"
+          element={
+            <AppShell>
+              <Routes>
+                <Route path="/" element={<Navigate to="/volundr" replace />} />
+                <Route path="/volundr" element={<VolundrPage />} />
+              </Routes>
+            </AppShell>
+          }
+        />
       </Routes>
     </MemoryRouter>
   );
 }
 
 describe('App', () => {
-  it('renders Volundr page at /', () => {
+  it('redirects / to /volundr', () => {
     render(<TestApp />);
     expect(screen.getByTestId('volundr-page')).toBeInTheDocument();
   });
@@ -37,13 +51,20 @@ describe('App', () => {
     expect(screen.getByTestId('volundr-page')).toBeInTheDocument();
   });
 
-  it('renders popout at /volundr/popout', () => {
+  it('renders popout at /volundr/popout without shell', () => {
     render(<TestApp initialRoute="/volundr/popout" />);
     expect(screen.getByTestId('volundr-popout')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Main navigation')).not.toBeInTheDocument();
   });
 
-  it('renders popout at /popout', () => {
+  it('renders popout at /popout without shell', () => {
     render(<TestApp initialRoute="/popout" />);
     expect(screen.getByTestId('volundr-popout')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Main navigation')).not.toBeInTheDocument();
+  });
+
+  it('renders sidebar on non-popout routes', () => {
+    render(<TestApp initialRoute="/volundr" />);
+    expect(screen.getByLabelText('Main navigation')).toBeInTheDocument();
   });
 });

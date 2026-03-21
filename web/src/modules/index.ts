@@ -19,6 +19,9 @@ import {
 import type { IVolundrService } from '@/modules/volundr/ports';
 import { registerModule } from './shared/registry';
 
+// Product module self-registrations
+import './volundr/register';
+
 type ModuleComponent = ComponentType<{ service: IVolundrService }>;
 
 // ── Admin modules ──────────────────────────────────────────────────
@@ -118,5 +121,6 @@ registerModule({
 
 // Re-export registry utilities
 export { getModule, getAllModules, registerModule } from './shared/registry';
-export type { ModuleEntry } from './shared/registry';
+export { registerProductModule, getProductModules } from './shared/registry';
+export type { ModuleEntry, ProductModule } from './shared/registry';
 export { resolveIcon } from './shared/registry';

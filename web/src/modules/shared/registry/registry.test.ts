@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { Settings } from 'lucide-react';
 import type { IVolundrService } from '@/ports';
-import { registerModule, getModule, getAllModules } from './registry';
+import {
+  registerModule,
+  getModule,
+  getAllModules,
+  registerProductModule,
+  getProductModules,
+} from './registry';
 
 const dummyLoad = () =>
   Promise.resolve({
@@ -47,5 +53,51 @@ describe('Module Registry', () => {
 
     const entry = getModule('overwrite-test');
     expect(entry!.load).toBe(loadB);
+  });
+});
+
+describe('Product Module Registry', () => {
+  it('registers and retrieves a product module', () => {
+    const dummyProductLoad = () =>
+      Promise.resolve({ default: (() => null) as unknown as React.ComponentType });
+
+    registerProductModule({
+      key: 'test-product',
+      label: 'Test Product',
+      icon: Settings,
+      basePath: '/test',
+      load: dummyProductLoad,
+    });
+
+    const modules = getProductModules();
+    const found = modules.find(m => m.key === 'test-product');
+    expect(found).toBeDefined();
+    expect(found!.label).toBe('Test Product');
+    expect(found!.basePath).toBe('/test');
+    expect(found!.icon).toBe(Settings);
+  });
+
+  it('returns all registered product modules', () => {
+    const dummyProductLoad = () =>
+      Promise.resolve({ default: (() => null) as unknown as React.ComponentType });
+
+    registerProductModule({
+      key: 'product-a',
+      label: 'Product A',
+      icon: Settings,
+      basePath: '/a',
+      load: dummyProductLoad,
+    });
+    registerProductModule({
+      key: 'product-b',
+      label: 'Product B',
+      icon: Settings,
+      basePath: '/b',
+      load: dummyProductLoad,
+    });
+
+    const modules = getProductModules();
+    expect(modules.some(m => m.key === 'product-a')).toBe(true);
+    expect(modules.some(m => m.key === 'product-b')).toBe(true);
   });
 });

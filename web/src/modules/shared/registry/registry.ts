@@ -32,3 +32,23 @@ export function getModule(key: string): ModuleEntry | undefined {
 export function getAllModules(): Map<string, ModuleEntry> {
   return registry;
 }
+
+// ── Product module registry ─────────────────────────────────────────
+
+export interface ProductModule {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  basePath: string;
+  load: () => Promise<{ default: ComponentType }>;
+}
+
+const productRegistry: ProductModule[] = [];
+
+export function registerProductModule(entry: ProductModule): void {
+  productRegistry.push(entry);
+}
+
+export function getProductModules(): ProductModule[] {
+  return productRegistry;
+}

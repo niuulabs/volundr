@@ -29,10 +29,16 @@ export type { CollapsibleSectionProps, AccentColor } from './components/Collapsi
 export { LoadingIndicator } from './components/LoadingIndicator';
 export type { LoadingIndicatorProps } from './components/LoadingIndicator';
 
+export { AppShell } from './components/AppShell';
+export type { AppShellProps } from './components/AppShell';
+export { Sidebar } from './components/AppShell';
+export type { SidebarProps } from './components/AppShell';
+
 // Utils
 export { cn } from './utils/classnames';
 
 // Registry
 export { registerModule, getModule, getAllModules } from './registry';
-export type { ModuleEntry } from './registry';
+export { registerProductModule, getProductModules } from './registry';
+export type { ModuleEntry, ProductModule } from './registry';
 export { resolveIcon } from './registry';
