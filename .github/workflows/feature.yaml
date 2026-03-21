@@ -1,7 +1,8 @@
 # Runs on every push to feat/* branches:
-# Builds all container images tagged with the feature name extracted from
-# the branch (e.g. feat/tyr-ui → tag "tyr-ui").
-# No versioning, no Helm charts, no CLI — just images for testing.
+# 1. Builds all container images tagged with the feature name
+#    (e.g. feat/tyr-ui → tag "tyr-ui")
+# 2. Packages Helm charts as 0.0.0-<feature>.<N> prerelease versions
+#    (e.g. 0.0.0-tyr-ui.3)
 name: Feature Build
 
 on:
@@ -12,6 +13,7 @@ permissions: read-all
 
 env:
   REGISTRY: ghcr.io
+  CHART_REPO: oci://ghcr.io/${{ github.repository_owner }}/charts
 
 concurrency:
   group: feature-${{ github.ref }}
@@ -26,7 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      chart_version: ${{ steps.tag.outputs.chart_version }}
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
       - name: Derive tag from branch name
         id: tag
         run: |
@@ -37,6 +44,13 @@ jobs:
           TAG="${RAW//\//-}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Feature tag: ${TAG}"
+
+          # Compute chart version: 0.0.0-<feature>.<N>
+          # N = number of commits on this branch (gives monotonic build number)
+          N=$(git rev-list --count HEAD)
+          CHART_VERSION="0.0.0-${TAG}.${N}"
+          echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
+          echo "Chart version: ${CHART_VERSION}"
 
   # ---------------------------------------------------------------------------
   # Containers — build per platform, then merge manifests
@@ -120,3 +134,60 @@ jobs:
             "${IMAGE}:${TAG}-amd64" \
             "${IMAGE}:${TAG}-arm64"
           docker manifest push "${IMAGE}:${TAG}-${SHORT_SHA}"
+
+  # ---------------------------------------------------------------------------
+  # Helm charts — feature prerelease versions (0.0.0-<feature>.<N>)
+  # ---------------------------------------------------------------------------
+  build-charts:
+    name: Build Helm Charts
+    needs: meta
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+        with:
+          version: v3.14.0
+
+      - name: Update chart versions
+        run: |
+          VERSION="${{ needs.meta.outputs.chart_version }}"
+          TAG="${{ needs.meta.outputs.tag }}"
+
+          for CHART in skuld volundr tyr niuu; do
+            sed -i "s/^version:.*/version: $VERSION/" "charts/${CHART}/Chart.yaml"
+            sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" "charts/${CHART}/Chart.yaml"
+          done
+
+          # Point image tags to the feature tag so the chart deploys feature images
+          for CHART in skuld volundr tyr; do
+            if [ -f "charts/${CHART}/values.yaml" ]; then
+              sed -i "s/^  tag:.*/  tag: \"${TAG}\"/" "charts/${CHART}/values.yaml" || true
+            fi
+          done
+
+      - name: Package Helm charts
+        run: |
+          helm package charts/skuld -d .helm-packages/
+          helm package charts/volundr -d .helm-packages/
+          helm package charts/tyr -d .helm-packages/
+          helm dependency build charts/niuu
+          helm package charts/niuu -d .helm-packages/
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Helm charts to OCI registry
+        run: |
+          helm push .helm-packages/skuld-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/tyr-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-*.tgz ${{ env.CHART_REPO }}
