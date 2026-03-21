@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: trufflehog
         name: TruffleHog secret scan
-        entry: bash -c 'trufflehog git file://. --since-commit HEAD --only-verified --fail'
+        entry: bash -c 'export PATH="${GOPATH:-$HOME/go}/bin:$PATH"; trufflehog git file://. --since-commit HEAD --only-verified --fail'
         language: system
         pass_filenames: false
         stages: [pre-commit]
@@ -41,7 +41,7 @@ repos:
 
       - id: golangci-lint
         name: golangci-lint
-        entry: bash -c 'cd cli && golangci-lint run ./...'
+        entry: bash -c 'export PATH="${GOPATH:-$HOME/go}/bin:$PATH"; cd cli && golangci-lint run ./...'
         language: system
         pass_filenames: false
         files: ^cli/.*\.go$
