@@ -11,7 +11,7 @@ export function DetailView() {
   const { saga, phases, loading, error } = useSagaDetail(id);
 
   if (loading) {
-    return <LoadingIndicator messages={["Loading saga..."]} />;
+    return <LoadingIndicator messages={['Loading saga...']} />;
   }
 
   if (error) {

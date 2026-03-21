@@ -6,7 +6,7 @@ export function DispatcherView() {
   const { state, log, loading, error, pause, resume, setThreshold } = useDispatcher();
 
   if (loading) {
-    return <LoadingIndicator messages={["Loading dispatcher..."]} />;
+    return <LoadingIndicator messages={['Loading dispatcher...']} />;
   }
 
   if (error) {

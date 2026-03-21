@@ -7,7 +7,7 @@ export function SessionsView() {
   const { sessions, loading, error, approve } = useTyrSessions();
 
   if (loading) {
-    return <LoadingIndicator messages={["Loading sessions..."]} />;
+    return <LoadingIndicator messages={['Loading sessions...']} />;
   }
 
   if (error) {

@@ -11,7 +11,7 @@ export function SagasView() {
   const navigate = useNavigate();
 
   if (loading) {
-    return <LoadingIndicator messages={["Loading sagas..."]} />;
+    return <LoadingIndicator messages={['Loading sagas...']} />;
   }
 
   if (error) {

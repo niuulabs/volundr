@@ -18,7 +18,11 @@ export { useWebSocket } from '@/hooks/useWebSocket';
 export type { WebSocketStatus } from '@/hooks/useWebSocket';
 export { useSessionProbe } from '@/modules/volundr/hooks/useSessionStartingPoll';
 export { useSkuldChat } from '@/modules/volundr/hooks/useSkuldChat';
-export type { SkuldChatMessage, ChatMessageMeta, ChatMessageRole } from '@/modules/volundr/hooks/useSkuldChat';
+export type {
+  SkuldChatMessage,
+  ChatMessageMeta,
+  ChatMessageRole,
+} from '@/modules/volundr/hooks/useSkuldChat';
 export { useDiffViewer } from '@/modules/volundr/hooks/useDiffViewer';
 export type { UseDiffViewerResult } from '@/modules/volundr/hooks/useDiffViewer';
 
