@@ -1289,3 +1289,137 @@
   opacity: 1;
   background-color: color-mix(in srgb, var(--color-accent-red) 10%, transparent);
 }
+
+/* ─── Mobile Top Bar (hidden on desktop) ─── */
+.mobileTopBar {
+  display: none;
+}
+
+.sidebarBackdrop {
+  display: none;
+}
+
+/* ─── Mobile (iPhone Pro: 393×852) ─── */
+@media (max-width: 768px) {
+  /* Sidebar becomes a slide-over overlay */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform var(--transition-slow);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .sidebarBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+  }
+
+  .sidebarRail {
+    display: none;
+  }
+
+  /* Mobile top bar with hamburger */
+  .mobileTopBar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border-subtle);
+    background-color: var(--color-bg-secondary);
+    flex-shrink: 0;
+  }
+
+  .menuButton {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .menuButtonIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mobileSessionName {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  /* Session bar: compact */
+  .sessionBar {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .repoInfo {
+    display: none;
+  }
+
+  .modelBadge {
+    display: none;
+  }
+
+  .sessionBarSep {
+    display: none;
+  }
+
+  /* Tab bar: horizontal scroll, icon-only */
+  .tabBar {
+    padding: var(--space-1) var(--space-2);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .tabBar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    padding: var(--space-2);
+    min-height: 44px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .tabIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .popoutButton {
+    display: none;
+  }
+
+  /* Tab content: remove padding */
+  .tabContent {
+    padding: 0;
+  }
+}

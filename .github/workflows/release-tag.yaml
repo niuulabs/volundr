@@ -128,25 +128,28 @@ jobs:
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           LAST_VERSION=${LAST_TAG#v}
 
-          # Get all commit messages since last tag (or all if no tag)
+          # Collect commit subjects since last tag, skipping merge commits.
+          # This ensures version detection works regardless of merge strategy
+          # (merge commit, squash, rebase) by looking at the actual feature
+          # commits rather than the merge commit message.
           if [ "$LAST_TAG" = "v0.0.0" ]; then
-            COMMIT_MSGS=$(git log --pretty=%B HEAD)
+            COMMIT_SUBJECTS=$(git log --no-merges --pretty=format:"%s" HEAD)
           else
-            COMMIT_MSGS=$(git log --pretty=%B ${LAST_TAG}..HEAD)
+            COMMIT_SUBJECTS=$(git log --no-merges --pretty=format:"%s" ${LAST_TAG}..HEAD)
           fi
 
           echo "Last version: $LAST_VERSION"
-          echo "Commit messages since last release:"
-          echo "$COMMIT_MSGS"
+          echo "Commit subjects since last release:"
+          echo "$COMMIT_SUBJECTS"
           echo "---"
 
-          # Determine version bump type from conventional commits
+          # Determine version bump type from conventional commit subjects
           VERSION_TYPE="none"
-          if echo "$COMMIT_MSGS" | grep -qiE "^feat(\(.+\))?!:|^BREAKING CHANGE:"; then
+          if echo "$COMMIT_SUBJECTS" | grep -qiE "^feat(\(.+\))?!:|^BREAKING CHANGE:"; then
             VERSION_TYPE="major"
-          elif echo "$COMMIT_MSGS" | grep -qiE "^(feat|refactor)(\(.+\))?:"; then
+          elif echo "$COMMIT_SUBJECTS" | grep -qiE "^(feat|refactor)(\(.+\))?:"; then
             VERSION_TYPE="minor"
-          elif echo "$COMMIT_MSGS" | grep -qiE "^(fix|style)(\(.+\))?:"; then
+          elif echo "$COMMIT_SUBJECTS" | grep -qiE "^(fix|style)(\(.+\))?:"; then
             VERSION_TYPE="patch"
           fi
 

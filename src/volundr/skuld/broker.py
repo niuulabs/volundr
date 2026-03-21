@@ -296,11 +296,6 @@ class SessionArtifacts:
 _AUTH_HEADER = "authorization"
 _BEARER_PREFIX = "bearer "
 
-# Headers injected by Envoy sidecar after JWT validation
-_ENVOY_USER_ID_HEADER = "x-auth-user-id"
-_ENVOY_EMAIL_HEADER = "x-auth-email"
-_ENVOY_TENANT_HEADER = "x-auth-tenant"
-_ENVOY_ROLES_HEADER = "x-auth-roles"
 
 
 def _decode_jwt_claims(token: str) -> dict:
@@ -346,9 +341,8 @@ def _extract_token_from_websocket(websocket: WebSocket) -> str | None:
     if token:
         return token
 
-    # 2. If Envoy headers are present, we don't have the raw JWT but we
-    #    have the validated claims — return None (caller uses headers instead)
-    # This case is handled separately in the broker
+    # 2. If Envoy x-auth-* headers are present, we don't have the raw JWT
+    #    but we have the validated claims — return None (caller uses headers).
 
     # 3. Query parameter fallback (browser WebSocket can't set headers)
     return websocket.query_params.get("access_token")
@@ -1548,7 +1542,7 @@ def _resolve_root(root: str) -> Path:
 def _safe_resolve(base: Path, relative_path: str) -> Path:
     """Resolve a path safely, raising HTTPException on traversal attempts."""
     target = (base / relative_path).resolve()
-    if not str(target).startswith(str(base)):
+    if not target.is_relative_to(base):
         raise HTTPException(400, "Path traversal not allowed")
     return target
 
@@ -1700,8 +1694,8 @@ async def delete_file(path: str, root: str = "workspace") -> dict:
     try:
         if target.is_dir():
             shutil.rmtree(target)
-        else:
-            target.unlink()
+            return {"deleted": str(target.relative_to(base))}
+        target.unlink()
     except PermissionError:
         raise HTTPException(403, "Permission denied")
 

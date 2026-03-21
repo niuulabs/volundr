@@ -2162,8 +2162,9 @@ def create_router(
                     deleted += 1
                 else:
                     failed.append({"session_id": sid, "error": "Not found"})
-            except Exception as e:
-                failed.append({"session_id": sid, "error": str(e)})
+            except Exception:
+                logger.exception("Failed to delete workspace for session %s", sid)
+                failed.append({"session_id": sid, "error": "Internal error"})
         return {"deleted": deleted, "failed": failed}
 
     @router.post(
@@ -2191,8 +2192,9 @@ def create_router(
                     deleted += 1
                 else:
                     failed.append({"session_id": sid, "error": "Not found"})
-            except Exception as e:
-                failed.append({"session_id": sid, "error": str(e)})
+            except Exception:
+                logger.exception("Failed to delete workspace for session %s", sid)
+                failed.append({"session_id": sid, "error": "Internal error"})
         return {"deleted": deleted, "failed": failed}
 
     return router
