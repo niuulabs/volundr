@@ -10,6 +10,7 @@ import logging
 
 from niuu.adapters.linear import GraphQLError, LinearGraphQLClient
 from niuu.domain.models import LINEAR_API_URL
+from niuu.domain.models import CacheEntry as _CacheEntry  # noqa: F401 — re-exported for tests
 from volundr.domain.models import TrackerConnectionStatus, TrackerIssue
 from volundr.domain.ports import IssueTrackerProvider
 
