@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { ScrollText, PlusCircle, Radio, Monitor } from 'lucide-react';
+import { ScrollText, PlusCircle, Radio, Monitor, Download } from 'lucide-react';
 import { cn } from '@/modules/shared/utils/classnames';
 import styles from './TyrLayout.module.css';
 
 const navItems = [
   { to: '/tyr/sagas', label: 'Sagas', icon: ScrollText },
   { to: '/tyr/new', label: 'New Saga', icon: PlusCircle },
+  { to: '/tyr/import', label: 'Import', icon: Download },
   { to: '/tyr/dispatcher', label: 'Dispatcher', icon: Radio },
   { to: '/tyr/sessions', label: 'Sessions', icon: Monitor },
 ];

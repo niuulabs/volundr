@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { MetricCard, StatusBadge, LoadingIndicator } from '@/modules/shared';
-import { BarChart3, Zap, TrendingUp } from 'lucide-react';
+import { BarChart3, Zap, TrendingUp, Download } from 'lucide-react';
 import { useSagas } from '../../hooks';
 import { ConfBadge } from '../../components/ConfBadge';
 import { BranchTag } from '../../components/BranchTag';
@@ -33,6 +33,16 @@ export function SagasView() {
           icon={TrendingUp}
           iconColor="amber"
         />
+      </div>
+      <div className={styles.importAction}>
+        <button
+          type="button"
+          className={styles.importButton}
+          onClick={() => navigate('/tyr/import')}
+        >
+          <Download className={styles.importIcon} />
+          Import from Tracker
+        </button>
       </div>
       <div className={styles.list}>
         {sagas.map(saga => (

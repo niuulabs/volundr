@@ -148,6 +148,52 @@ class PRStatus:
 
 
 # ---------------------------------------------------------------------------
+# Tracker browsing models (read-only, pre-import)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TrackerProject:
+    """A project from an external tracker (read-only browsing model)."""
+
+    id: str
+    name: str
+    description: str
+    status: str
+    url: str
+    milestone_count: int
+    issue_count: int
+
+
+@dataclass(frozen=True)
+class TrackerMilestone:
+    """A milestone from an external tracker (read-only browsing model)."""
+
+    id: str
+    project_id: str
+    name: str
+    description: str
+    sort_order: int
+    progress: float
+
+
+@dataclass(frozen=True)
+class TrackerIssue:
+    """An issue from an external tracker (read-only browsing model)."""
+
+    id: str
+    identifier: str
+    title: str
+    description: str
+    status: str
+    assignee: str | None
+    labels: list[str]
+    priority: int
+    url: str
+    milestone_id: str | None
+
+
+# ---------------------------------------------------------------------------
 # Spec structures (LLM decomposition output)
 # ---------------------------------------------------------------------------
 

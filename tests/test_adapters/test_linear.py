@@ -25,7 +25,8 @@ class TestCacheEntry:
 
     def test_expired(self):
         entry = _CacheEntry("val", ttl=0.0)
-        # TTL=0 means it expires immediately
+        # Force expiry by setting expires_at to the past
+        entry.expires_at = 0.0
         assert entry.expired
 
 
@@ -106,23 +107,25 @@ class TestCache:
 
     def test_get_cached_expired(self):
         adapter = _make_adapter()
-        adapter._set_cached("key", "value", ttl=0.0)
+        adapter._set_cached("key", "value", ttl=60.0)
+        # Force expiry by setting expires_at to the past
+        adapter._gql._cache["key"].expires_at = 0.0
         assert adapter._get_cached("key") is None
 
 
 class TestGraphQL:
     async def test_successful_query(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"data": {"viewer": {"id": "1"}}})
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"viewer": {"id": "1"}}})
 
         result = await adapter._graphql("query { viewer { id } }")
         assert result == {"viewer": {"id": "1"}}
 
     async def test_query_with_variables(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"data": {"issue": {"id": "1"}}})
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issue": {"id": "1"}}})
 
         result = await adapter._graphql(
             "query($id: String!) { issue(id: $id) { id } }",
@@ -132,8 +135,10 @@ class TestGraphQL:
 
     async def test_api_error(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"errors": [{"message": "Not found"}]})
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"errors": [{"message": "Not found"}]}
+        )
 
         with pytest.raises(LinearAPIError, match="Not found"):
             await adapter._graphql("query { bad }")
@@ -142,8 +147,8 @@ class TestGraphQL:
 class TestCheckConnection:
     async def test_successful(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
             {
                 "data": {
                     "viewer": {"id": "1", "name": "Test", "email": "test@test.com"},
@@ -159,8 +164,8 @@ class TestCheckConnection:
 
     async def test_cached(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
             {
                 "data": {
                     "viewer": {"id": "1", "name": "Test", "email": "t@t.com"},
@@ -174,12 +179,12 @@ class TestCheckConnection:
 
         assert result.connected is True
         # Should only have called the API once due to caching
-        assert adapter._client.post.call_count == 1
+        assert adapter._gql._client.post.call_count == 1
 
     async def test_connection_error(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.side_effect = Exception("Connection refused")
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.side_effect = Exception("Connection refused")
 
         result = await adapter.check_connection()
         assert result.connected is False
@@ -188,8 +193,8 @@ class TestCheckConnection:
 class TestSearchIssues:
     async def test_search(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
             {"data": {"searchIssues": {"nodes": [_issue_node()]}}}
         )
 
@@ -199,15 +204,15 @@ class TestSearchIssues:
 
     async def test_search_with_project(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
             {"data": {"searchIssues": {"nodes": []}}}
         )
 
         issues = await adapter.search_issues("test", project_id="proj-1")
         assert len(issues) == 0
 
-        call_args = adapter._client.post.call_args
+        call_args = adapter._gql._client.post.call_args
         payload = call_args[1]["json"]
         assert "project:proj-1" in payload["variables"]["term"]
 
@@ -215,8 +220,8 @@ class TestSearchIssues:
 class TestGetRecentIssues:
     async def test_get_recent(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response(
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
             {"data": {"issues": {"nodes": [_issue_node(), _issue_node(identifier="TEST-2")]}}}
         )
 
@@ -227,8 +232,8 @@ class TestGetRecentIssues:
 class TestGetIssue:
     async def test_get_existing(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"data": {"issue": _issue_node()}})
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issue": _issue_node()}})
 
         issue = await adapter.get_issue("issue-1")
         assert issue is not None
@@ -236,16 +241,18 @@ class TestGetIssue:
 
     async def test_get_missing(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"data": {"issue": None}})
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issue": None}})
 
         issue = await adapter.get_issue("nonexistent")
         assert issue is None
 
     async def test_get_api_error(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"errors": [{"message": "Not found"}]})
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"errors": [{"message": "Not found"}]}
+        )
 
         issue = await adapter.get_issue("bad-id")
         assert issue is None
@@ -254,12 +261,12 @@ class TestGetIssue:
 class TestUpdateIssueStatus:
     async def test_update_success(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
+        adapter._gql._client = AsyncMock()
 
         # Call 1: get issue team
         # Call 2: get team states
         # Call 3: update issue
-        adapter._client.post.side_effect = [
+        adapter._gql._client.post.side_effect = [
             _mock_response({"data": {"issue": {"team": {"id": "team-1"}}}}),
             _mock_response(
                 {
@@ -297,16 +304,16 @@ class TestUpdateIssueStatus:
 
     async def test_update_issue_not_found(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.return_value = _mock_response({"data": {"issue": None}})
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issue": None}})
 
         with pytest.raises(LinearAPIError, match="Issue not found"):
             await adapter.update_issue_status("bad-id", "Done")
 
     async def test_update_status_not_found(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
-        adapter._client.post.side_effect = [
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.side_effect = [
             _mock_response({"data": {"issue": {"team": {"id": "team-1"}}}}),
             _mock_response(
                 {
@@ -345,8 +352,8 @@ class TestLinearAdapterConstructor:
 class TestClose:
     async def test_close(self):
         adapter = _make_adapter()
-        adapter._client = AsyncMock()
+        adapter._gql._client = AsyncMock()
 
         await adapter.close()
 
-        adapter._client.aclose.assert_called_once()
+        adapter._gql._client.aclose.assert_called_once()
