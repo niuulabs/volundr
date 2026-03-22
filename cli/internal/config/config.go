@@ -34,20 +34,16 @@ const (
 	DefaultDBName = "volundr"
 )
 
-// DockerConfig holds Docker runtime settings.
-type DockerConfig struct {
-	APIImage   string `yaml:"api_image"`
-	SkuldImage string `yaml:"skuld_image"`
-	RehImage   string `yaml:"reh_image"`
-	TtydImage  string `yaml:"ttyd_image"`
-	Network    string `yaml:"network"`
-}
-
 // K3sConfig holds k3s/k3d runtime settings.
 type K3sConfig struct {
-	Kubeconfig string `yaml:"kubeconfig"` // default: auto-detect
-	Namespace  string `yaml:"namespace"`  // default: volundr
-	Provider   string `yaml:"provider"`   // "auto", "k3d", "native" (default: auto)
+	Kubeconfig string `yaml:"kubeconfig"`            // default: auto-detect
+	Namespace  string `yaml:"namespace"`             // default: volundr
+	Provider   string `yaml:"provider"`              // "auto", "k3d", "native" (default: auto)
+	APIImage   string `yaml:"api_image,omitempty"`   // default: ghcr.io/niuulabs/volundr:latest
+	SkuldImage string `yaml:"skuld_image,omitempty"` // default: ghcr.io/niuulabs/skuld:latest
+	RehImage   string `yaml:"reh_image,omitempty"`   // default: ghcr.io/niuulabs/vscode-reh:latest
+	TtydImage  string `yaml:"ttyd_image,omitempty"`  // default: ghcr.io/niuulabs/devrunner:latest
+	Network    string `yaml:"network,omitempty"`     // default: volundr-net
 }
 
 // GitHubInstanceConfig holds settings for a single GitHub instance.
@@ -87,7 +83,6 @@ type Config struct {
 	Database    DatabaseConfig    `yaml:"database"`
 	Anthropic   AnthropicConfig   `yaml:"anthropic"`
 	Git         GitConfig         `yaml:"git,omitempty"`
-	Docker      DockerConfig      `yaml:"docker,omitempty"`
 	K3s         K3sConfig         `yaml:"k3s,omitempty"`
 	LocalMounts LocalMountsConfig `yaml:"local_mounts,omitempty"`
 }
@@ -190,17 +185,15 @@ func DefaultConfig() (*Config, error) {
 			Name:     DefaultDBName,
 		},
 		Anthropic: AnthropicConfig{},
-		Docker: DockerConfig{
+		K3s: K3sConfig{
+			Kubeconfig: "",
+			Namespace:  "volundr",
+			Provider:   "auto",
 			APIImage:   "ghcr.io/niuulabs/volundr:latest",
 			SkuldImage: "ghcr.io/niuulabs/skuld:latest",
 			RehImage:   "ghcr.io/niuulabs/vscode-reh:latest",
 			TtydImage:  "ghcr.io/niuulabs/devrunner:latest",
 			Network:    "volundr-net",
-		},
-		K3s: K3sConfig{
-			Kubeconfig: "",
-			Namespace:  "volundr",
-			Provider:   "auto",
 		},
 	}, nil
 }
@@ -275,8 +268,8 @@ func Exists() (bool, error) {
 
 // Validate checks the config for correctness.
 func (c *Config) Validate() error {
-	if c.Runtime != "local" && c.Runtime != "docker" && c.Runtime != "k3s" {
-		return fmt.Errorf("invalid runtime %q: must be local, docker, or k3s", c.Runtime)
+	if c.Runtime != "local" && c.Runtime != "k3s" {
+		return fmt.Errorf("invalid runtime %q: must be local or k3s", c.Runtime)
 	}
 
 	if c.Listen.Port < 1 || c.Listen.Port > 65535 {

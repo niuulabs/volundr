@@ -241,15 +241,15 @@ func TestServiceStatusJSON(t *testing.T) {
 
 func TestStackStatus(t *testing.T) {
 	s := StackStatus{
-		Runtime: "docker",
+		Runtime: "k3s",
 		Services: []ServiceStatus{
 			{Name: "api", State: StateRunning},
 			{Name: "postgres", State: StateRunning},
 		},
 	}
 
-	if s.Runtime != "docker" {
-		t.Errorf("expected runtime 'docker', got %q", s.Runtime)
+	if s.Runtime != "k3s" {
+		t.Errorf("expected runtime 'k3s', got %q", s.Runtime)
 	}
 	if len(s.Services) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(s.Services))

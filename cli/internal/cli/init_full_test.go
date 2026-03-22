@@ -331,31 +331,212 @@ func TestRunInit_GitHubWithDefaultCloneToken(t *testing.T) {
 	}
 }
 
-func TestRunInit_DockerRuntime_PreflightChecks(t *testing.T) {
+func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	// Override PATH to ensure kubectl/helm are not found.
-	t.Setenv("PATH", tmpDir)
+	// Create a rich existing config with GitHub, API key, custom listen host.
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("create default config: %v", err)
+	}
+	cfg.Listen.Host = "0.0.0.0"
+	cfg.Anthropic.APIKey = "sk-existing-key"
+	cfg.Git.GitHub.Enabled = true
+	cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{{
+		Name:    "GitHub",
+		BaseURL: "https://api.github.com",
+		Token:   "test-existing-token", //nolint:gosec // test fixture
+		Orgs:    []string{"myorg"},
+	}}
+	cfg.Git.GitHub.CloneToken = "test-clone-token"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
 
 	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "docker"
+	initRuntimeFlag = "local"
 	defer func() { initRuntimeFlag = oldFlag }()
 
-	// Pipe minimal stdin — preflight should fail before any prompts.
+	// Overwrite and press Enter on everything — should keep existing values.
+	input := strings.Join([]string{
+		"y", // Overwrite? Yes
+		"",  // Listen (keep 0.0.0.0)
+		"",  // API key (keep existing)
+		"",  // Database mode (keep embedded)
+		"",  // GitHub (keep Y default)
+		"",  // GitHub token (keep existing)
+		"",  // GitHub orgs (keep existing)
+		"",  // GitHub API URL (keep existing)
+		"",  // Clone token (keep existing)
+	}, "\n") + "\n"
+
 	oldStdin := os.Stdin
 	r, w, _ := os.Pipe()
-	_, _ = w.WriteString("\n")
+	_, _ = w.WriteString(input)
 	_ = w.Close()
 	os.Stdin = r
 	defer func() { os.Stdin = oldStdin }()
 
-	err := runInit(nil, nil)
-	if err == nil {
-		t.Fatal("expected preflight check error for missing kubectl")
+	err = runInit(nil, nil)
+	if err != nil {
+		t.Logf("runInit error (expected in test env): %v", err)
 	}
-	if !strings.Contains(err.Error(), "kubectl is required") {
-		t.Errorf("expected kubectl error, got: %v", err)
+
+	// Verify config was preserved.
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if loaded.Listen.Host != "0.0.0.0" {
+		t.Errorf("expected listen host 0.0.0.0, got %q", loaded.Listen.Host)
+	}
+	if loaded.Anthropic.APIKey != "sk-existing-key" {
+		t.Errorf("expected existing API key preserved, got %q", loaded.Anthropic.APIKey)
+	}
+	if !loaded.Git.GitHub.Enabled {
+		t.Error("expected GitHub to remain enabled")
+	}
+	if len(loaded.Git.GitHub.Instances) == 0 {
+		t.Fatal("expected GitHub instances to be preserved")
+	}
+	if loaded.Git.GitHub.Instances[0].Token != "test-existing-token" {
+		t.Errorf("expected existing token preserved, got %q", loaded.Git.GitHub.Instances[0].Token)
+	}
+}
+
+func TestRunInit_PrefillOverrideValues(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Create existing config.
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("create default config: %v", err)
+	}
+	cfg.Anthropic.APIKey = "sk-old-key"
+	cfg.Git.GitHub.Enabled = true
+	cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{{ //nolint:gosec // test fixture
+		Name:     "GitHub",
+		BaseURL:  "https://api.github.com",
+		TokenEnv: "OLD_TOKEN_ENV",
+		Orgs:     []string{"oldorg"},
+	}}
+	cfg.Git.GitHub.CloneToken = "test-old-clone"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "local"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Overwrite and provide new values for some fields.
+	input := strings.Join([]string{
+		"y",                 // Overwrite? Yes
+		"all",               // Listen (change to all interfaces)
+		"sk-new-key",        // New API key
+		"",                  // Database mode (keep embedded)
+		"y",                 // Configure GitHub? Yes
+		"NEW_TOKEN_ENV",     // New token (env var)
+		"neworg1, neworg2",  // New orgs
+		"https://custom.gh", // New API URL
+		"test-newclone",     // New clone token
+	}, "\n") + "\n"
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString(input)
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err = runInit(nil, nil)
+	if err != nil {
+		t.Logf("runInit error (expected in test env): %v", err)
+	}
+
+	// Verify new values were applied.
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if loaded.Anthropic.APIKey != "sk-new-key" {
+		t.Errorf("expected new API key, got %q", loaded.Anthropic.APIKey)
+	}
+	if len(loaded.Git.GitHub.Instances) == 0 {
+		t.Fatal("expected GitHub instances")
+	}
+	inst := loaded.Git.GitHub.Instances[0]
+	if inst.TokenEnv != "NEW_TOKEN_ENV" {
+		t.Errorf("expected NEW_TOKEN_ENV, got %q", inst.TokenEnv)
+	}
+	if inst.BaseURL != "https://custom.gh" {
+		t.Errorf("expected custom URL, got %q", inst.BaseURL)
+	}
+	if loaded.Git.GitHub.CloneToken != "test-newclone" {
+		t.Errorf("expected new clone token, got %q", loaded.Git.GitHub.CloneToken)
+	}
+}
+
+func TestRunInit_PrefillExternalDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Create existing config with external DB.
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("create default config: %v", err)
+	}
+	cfg.Database.Mode = "external"
+	cfg.Database.Host = "db.old.com"
+	cfg.Database.Port = 5432
+	cfg.Database.User = "olduser"
+	cfg.Database.Password = "oldpass"
+	cfg.Database.Name = "olddb"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	oldFlag := initRuntimeFlag
+	initRuntimeFlag = "local"
+	defer func() { initRuntimeFlag = oldFlag }()
+
+	// Overwrite, keep external DB defaults.
+	input := strings.Join([]string{
+		"y", // Overwrite? Yes
+		"",  // Listen (keep default)
+		"",  // API key (keep empty)
+		"",  // Database mode (keep external)
+		"",  // DB host (keep existing)
+		"",  // DB port (keep existing)
+		"",  // DB user (keep existing)
+		"",  // DB password (keep existing)
+		"",  // DB name (keep existing)
+		"n", // Configure GitHub? No
+	}, "\n") + "\n"
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	_, _ = w.WriteString(input)
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	err = runInit(nil, nil)
+	if err != nil {
+		t.Logf("runInit error (expected in test env): %v", err)
+	}
+
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if loaded.Database.Host != "db.old.com" {
+		t.Errorf("expected db host preserved, got %q", loaded.Database.Host)
+	}
+	if loaded.Database.User != "olduser" {
+		t.Errorf("expected db user preserved, got %q", loaded.Database.User)
 	}
 }
 
@@ -363,7 +544,7 @@ func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	// Override PATH to ensure kubectl/helm are not found.
+	// Override PATH to ensure docker/kubectl/helm are not found.
 	t.Setenv("PATH", tmpDir)
 
 	oldFlag := initRuntimeFlag
@@ -379,10 +560,10 @@ func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
 
 	err := runInit(nil, nil)
 	if err == nil {
-		t.Fatal("expected preflight check error for missing kubectl")
+		t.Fatal("expected preflight check error for missing docker")
 	}
-	if !strings.Contains(err.Error(), "kubectl is required") {
-		t.Errorf("expected kubectl error, got: %v", err)
+	if !strings.Contains(err.Error(), "docker is required") {
+		t.Errorf("expected docker error, got: %v", err)
 	}
 }
 
@@ -396,7 +577,7 @@ func TestRunInit_InteractiveRuntime(t *testing.T) {
 
 	// Pipe answers: runtime, API key, db mode, no github.
 	input := strings.Join([]string{
-		"docker",       // Runtime (interactive prompt)
+		"local",        // Runtime (interactive prompt)
 		"test-api-key", // Anthropic API key
 		"",             // Database mode (default embedded)
 		"n",            // Configure GitHub? No

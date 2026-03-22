@@ -23,7 +23,7 @@ var upCmd = &cobra.Command{
 }
 
 func init() {
-	upCmd.Flags().StringVar(&runtimeFlag, "runtime", "", "Override runtime (local, docker, k3s)")
+	upCmd.Flags().StringVar(&runtimeFlag, "runtime", "", "Override runtime (local, k3s)")
 }
 
 func runUp(_ *cobra.Command, _ []string) error {

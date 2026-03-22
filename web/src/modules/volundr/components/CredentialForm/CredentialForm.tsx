@@ -102,11 +102,11 @@ function TagInput({ value, onChange, placeholder }: TagInputProps) {
 }
 
 export function CredentialForm({ entry, onSubmit, onCancel, error }: CredentialFormProps) {
-  const credentialProps = entry.credential_schema.properties ?? {};
-  const configProps = entry.config_schema.properties ?? {};
+  const credentialProps = entry.credential_schema?.properties ?? {};
+  const configProps = entry.config_schema?.properties ?? {};
   const credentialFields = Object.keys(credentialProps);
   const configFields = Object.keys(configProps);
-  const requiredFields = new Set(entry.credential_schema.required ?? []);
+  const requiredFields = new Set(entry.credential_schema?.required ?? []);
 
   const [credentialName, setCredentialName] = useState(`${entry.slug}-credentials`);
   const [credentials, setCredentials] = useState<Record<string, string>>(() => {

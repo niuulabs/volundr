@@ -1005,9 +1005,9 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 				"ingress_class":   "traefik",
 				"ingress_backend": fmt.Sprintf("k3d-%s-serverlb", k3sClusterName),
 				"storage_path":    k3sNodeStoragePath,
-				"skuld_image":     cfg.Docker.SkuldImage,
-				"reh_image":       cfg.Docker.RehImage,
-				"devrunner_image": cfg.Docker.TtydImage,
+				"skuld_image":     cfg.K3s.SkuldImage,
+				"reh_image":       cfg.K3s.RehImage,
+				"devrunner_image": cfg.K3s.TtydImage,
 				"db_host":         "host.k3d.internal",
 				"db_port":         cfg.Database.Port,
 				"db_user":         cfg.Database.User,
@@ -1107,7 +1107,7 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 	}
 
 	data := k3sComposeData{
-		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr:latest"),
+		APIImage:        imageOrDefault(cfg.K3s.APIImage, "ghcr.io/niuulabs/volundr:latest"),
 		ContainerName:   k3sContainerName,
 		APIPort:         k3sAPIInternalPort,
 		DBHost:          dbHost,

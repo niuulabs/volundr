@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
@@ -142,4 +143,24 @@ type Runtime interface {
 
 	// Logs streams logs for a service.
 	Logs(ctx context.Context, service string, follow bool) (io.ReadCloser, error)
+}
+
+// cmdReadCloser wraps a ReadCloser and waits for the command to finish on Close.
+type cmdReadCloser struct {
+	cmd *exec.Cmd
+	io.ReadCloser
+}
+
+func (c *cmdReadCloser) Close() error {
+	err := c.ReadCloser.Close()
+	_ = c.cmd.Wait()
+	return err
+}
+
+// imageOrDefault returns image if non-empty, otherwise defaultImage.
+func imageOrDefault(image, defaultImage string) string {
+	if image != "" {
+		return image
+	}
+	return defaultImage
 }

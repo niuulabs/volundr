@@ -26,27 +26,30 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initRuntimeFlag, "runtime", "", "Set runtime (local, docker, k3s)")
+	initCmd.Flags().StringVar(&initRuntimeFlag, "runtime", "", "Set runtime (local, k3s)")
 }
 
 func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Println("Volundr - Self-hosted AI development environment")
 	fmt.Println()
 
-	// Check if already initialized.
+	reader := bufio.NewReader(os.Stdin)
+
+	// Check if already initialized — load existing config for prefill defaults.
+	var existing *config.Config
 	exists, err := config.Exists()
 	if err != nil {
 		return fmt.Errorf("check existing config: %w", err)
 	}
 	if exists {
 		fmt.Print("Configuration already exists. Overwrite? [y/N]: ")
-		reader := bufio.NewReader(os.Stdin)
 		answer, _ := reader.ReadString('\n')
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "y" && answer != "yes" {
 			fmt.Println("Aborted.")
 			return nil
 		}
+		existing, _ = config.Load()
 	}
 
 	cfg, err := config.DefaultConfig()
@@ -54,14 +57,18 @@ func runInit(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("create default config: %w", err)
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	// If there's an existing config, use it as the base so the user can
+	// press Enter to keep their current values.
+	if existing != nil {
+		cfg = existing
+	}
 
 	// Apply --runtime flag or prompt interactively.
 	if initRuntimeFlag != "" {
 		cfg.Runtime = initRuntimeFlag
 		fmt.Printf("Runtime: %s\n", cfg.Runtime)
 	} else {
-		fmt.Printf("Runtime [local/docker/k3s] (local): ")
+		fmt.Printf("Runtime [local/k3s] (%s): ", cfg.Runtime)
 		runtimeStr, _ := reader.ReadString('\n')
 		runtimeStr = strings.TrimSpace(runtimeStr)
 		if runtimeStr != "" {
@@ -70,9 +77,15 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	// Preflight checks for container runtimes.
-	if cfg.Runtime == "docker" || cfg.Runtime == "k3s" {
+	if cfg.Runtime == "k3s" {
 		fmt.Println()
 		fmt.Println("Checking prerequisites...")
+
+		if err := checkCommand("docker", "version"); err != nil {
+			return fmt.Errorf("docker is required but not found in PATH.\n\nInstall instructions:\n%s",
+				installInstructions("docker"))
+		}
+		fmt.Println("  docker   ... ok")
 
 		if err := checkCommand("kubectl", "version", "--client"); err != nil {
 			return fmt.Errorf("kubectl is required but not found in PATH.\n\nInstall instructions:\n%s",
@@ -89,11 +102,15 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	// Prompt for listen host.
-	fmt.Print("Listen on [localhost/all/IP address] (localhost): ")
+	listenDefault := listenHostLabel(cfg.Listen.Host)
+	fmt.Printf("Listen on [localhost/all/IP address] (%s): ", listenDefault)
 	listenAnswer, _ := reader.ReadString('\n')
 	listenAnswer = strings.TrimSpace(listenAnswer)
 	switch strings.ToLower(listenAnswer) {
-	case "", "localhost":
+	case "":
+		fmt.Printf("  Binding to %s\n", cfg.Listen.Host)
+	case "localhost":
+		cfg.Listen.Host = "127.0.0.1"
 		fmt.Println("  Binding to localhost only (127.0.0.1)")
 	case "all", "all interfaces":
 		cfg.Listen.Host = "0.0.0.0"
@@ -105,13 +122,20 @@ func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Println()
 
 	// Prompt for Anthropic API key.
-	fmt.Print("Anthropic API key: ")
+	if cfg.Anthropic.APIKey != "" {
+		masked := maskKey(cfg.Anthropic.APIKey)
+		fmt.Printf("Anthropic API key (%s): ", masked)
+	} else {
+		fmt.Print("Anthropic API key: ")
+	}
 	apiKey, _ := reader.ReadString('\n')
 	apiKey = strings.TrimSpace(apiKey)
-	cfg.Anthropic.APIKey = apiKey
+	if apiKey != "" {
+		cfg.Anthropic.APIKey = apiKey
+	}
 
 	// Prompt for database mode.
-	fmt.Printf("Database mode [embedded/external] (embedded): ")
+	fmt.Printf("Database mode [embedded/external] (%s): ", cfg.Database.Mode)
 	dbMode, _ := reader.ReadString('\n')
 	dbMode = strings.TrimSpace(dbMode)
 	if dbMode != "" {
@@ -119,11 +143,14 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	if cfg.Database.Mode == "external" {
-		fmt.Print("Database host: ")
+		fmt.Printf("Database host (%s): ", defaultStr(cfg.Database.Host, "none"))
 		host, _ := reader.ReadString('\n')
-		cfg.Database.Host = strings.TrimSpace(host)
+		host = strings.TrimSpace(host)
+		if host != "" {
+			cfg.Database.Host = host
+		}
 
-		fmt.Printf("Database port [5432]: ")
+		fmt.Printf("Database port (%d): ", cfg.Database.Port)
 		portStr, _ := reader.ReadString('\n')
 		portStr = strings.TrimSpace(portStr)
 		if portStr != "" {
@@ -131,44 +158,95 @@ func runInit(_ *cobra.Command, _ []string) error {
 			if _, err := fmt.Sscanf(portStr, "%d", &port); err == nil {
 				cfg.Database.Port = port
 			}
-		} else {
-			cfg.Database.Port = 5432
 		}
 
-		fmt.Print("Database user: ")
+		fmt.Printf("Database user (%s): ", defaultStr(cfg.Database.User, "none"))
 		user, _ := reader.ReadString('\n')
-		cfg.Database.User = strings.TrimSpace(user)
+		user = strings.TrimSpace(user)
+		if user != "" {
+			cfg.Database.User = user
+		}
 
-		fmt.Print("Database password: ")
+		fmt.Printf("Database password (%s): ", defaultStr(maskKey(cfg.Database.Password), "none"))
 		password, _ := reader.ReadString('\n')
-		cfg.Database.Password = strings.TrimSpace(password)
+		password = strings.TrimSpace(password)
+		if password != "" {
+			cfg.Database.Password = password
+		}
 
-		fmt.Print("Database name: ")
+		fmt.Printf("Database name (%s): ", defaultStr(cfg.Database.Name, "none"))
 		name, _ := reader.ReadString('\n')
-		cfg.Database.Name = strings.TrimSpace(name)
+		name = strings.TrimSpace(name)
+		if name != "" {
+			cfg.Database.Name = name
+		}
 	}
 
 	// Prompt for GitHub configuration.
+	// Determine defaults from existing config if available.
+	var existingGH *config.GitHubInstanceConfig
+	if cfg.Git.GitHub.Enabled && len(cfg.Git.GitHub.Instances) > 0 {
+		existingGH = &cfg.Git.GitHub.Instances[0]
+	}
+
 	fmt.Println()
-	fmt.Print("Configure GitHub access? [y/N]: ")
+	ghDefault := "N"
+	if cfg.Git.GitHub.Enabled {
+		ghDefault = "Y"
+	}
+	fmt.Printf("Configure GitHub access? [y/N] (%s): ", ghDefault)
 	ghAnswer, _ := reader.ReadString('\n')
 	ghAnswer = strings.TrimSpace(strings.ToLower(ghAnswer))
+	if ghAnswer == "" {
+		if cfg.Git.GitHub.Enabled {
+			ghAnswer = "y"
+		} else {
+			ghAnswer = "n"
+		}
+	}
 	if ghAnswer == "y" || ghAnswer == "yes" {
 		cfg.Git.GitHub.Enabled = true
 
-		fmt.Print("GitHub token (or env var name like GITHUB_TOKEN): ")
+		// Show existing token hint.
+		existingTokenHint := ""
+		if existingGH != nil {
+			if existingGH.TokenEnv != "" {
+				existingTokenHint = existingGH.TokenEnv
+			} else if existingGH.Token != "" {
+				existingTokenHint = maskKey(existingGH.Token)
+			}
+		}
+		if existingTokenHint != "" {
+			fmt.Printf("GitHub token (or env var name like GITHUB_TOKEN) (%s): ", existingTokenHint)
+		} else {
+			fmt.Print("GitHub token (or env var name like GITHUB_TOKEN): ")
+		}
 		token, _ := reader.ReadString('\n')
 		token = strings.TrimSpace(token)
 
-		fmt.Print("GitHub organizations (comma-separated, optional): ")
+		// Show existing orgs.
+		existingOrgs := ""
+		if existingGH != nil && len(existingGH.Orgs) > 0 {
+			existingOrgs = strings.Join(existingGH.Orgs, ", ")
+		}
+		if existingOrgs != "" {
+			fmt.Printf("GitHub organizations (comma-separated, optional) (%s): ", existingOrgs)
+		} else {
+			fmt.Print("GitHub organizations (comma-separated, optional): ")
+		}
 		orgsStr, _ := reader.ReadString('\n')
 		orgsStr = strings.TrimSpace(orgsStr)
 
-		fmt.Print("GitHub API URL (default: https://api.github.com): ")
+		// Show existing base URL.
+		existingURL := "https://api.github.com"
+		if existingGH != nil && existingGH.BaseURL != "" {
+			existingURL = existingGH.BaseURL
+		}
+		fmt.Printf("GitHub API URL (%s): ", existingURL)
 		baseURL, _ := reader.ReadString('\n')
 		baseURL = strings.TrimSpace(baseURL)
 		if baseURL == "" {
-			baseURL = "https://api.github.com"
+			baseURL = existingURL
 		}
 
 		instance := config.GitHubInstanceConfig{
@@ -184,6 +262,10 @@ func runInit(_ *cobra.Command, _ []string) error {
 			} else {
 				instance.Token = token
 			}
+		} else if existingGH != nil {
+			// Keep existing token if user pressed Enter.
+			instance.Token = existingGH.Token
+			instance.TokenEnv = existingGH.TokenEnv
 		}
 
 		if orgsStr != "" {
@@ -193,6 +275,9 @@ func runInit(_ *cobra.Command, _ []string) error {
 					instance.Orgs = append(instance.Orgs, org)
 				}
 			}
+		} else if existingGH != nil && len(existingGH.Orgs) > 0 {
+			// Keep existing orgs if user pressed Enter.
+			instance.Orgs = existingGH.Orgs
 		}
 
 		cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{instance}
@@ -200,15 +285,23 @@ func runInit(_ *cobra.Command, _ []string) error {
 		// Ask for the session clone token (used by skuld pods).
 		// Default to the same token as the API.
 		apiToken := instance.Token
-		if apiToken != "" {
+		existingClone := cfg.Git.GitHub.CloneToken
+		switch {
+		case existingClone != "":
+			fmt.Printf("GitHub token for session repo cloning (%s): ", maskKey(existingClone))
+		case apiToken != "":
 			fmt.Printf("GitHub token for session repo cloning (default: same as above): ")
-		} else {
+		default:
 			fmt.Print("GitHub token for session repo cloning: ")
 		}
 		cloneToken, _ := reader.ReadString('\n')
 		cloneToken = strings.TrimSpace(cloneToken)
 		if cloneToken == "" {
-			cloneToken = apiToken
+			if existingClone != "" {
+				cloneToken = existingClone
+			} else {
+				cloneToken = apiToken
+			}
 		}
 		if cloneToken != "" {
 			cfg.Git.GitHub.CloneToken = cloneToken
@@ -232,10 +325,10 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 	fmt.Println("  config.yaml        ... done")
 
-	// Save credentials if an API key was provided.
-	if apiKey != "" {
+	// Save credentials if an API key is configured (new or existing).
+	if cfg.Anthropic.APIKey != "" {
 		creds := &config.Credentials{
-			AnthropicAPIKey: apiKey,
+			AnthropicAPIKey: cfg.Anthropic.APIKey,
 		}
 		// Use a machine-derived key for now (no passphrase prompt in phase 1).
 		machineKey := machinePassphrase()
@@ -312,6 +405,35 @@ func installInstructionsForOS(tool, goos, goarch string) string {
 		}
 	default:
 		return ""
+	}
+}
+
+// maskKey returns a masked version of a secret string, showing only the last 4
+// characters. Returns "****" for short or empty strings.
+func maskKey(s string) string {
+	if len(s) <= 4 {
+		return "****"
+	}
+	return "****" + s[len(s)-4:]
+}
+
+// defaultStr returns s if non-empty, otherwise the fallback.
+func defaultStr(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
+// listenHostLabel returns a human-readable label for a listen host address.
+func listenHostLabel(host string) string {
+	switch host {
+	case "127.0.0.1", "localhost", "":
+		return "localhost"
+	case "0.0.0.0":
+		return "all"
+	default:
+		return host
 	}
 }
 
