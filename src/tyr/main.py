@@ -18,9 +18,11 @@ from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
+from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
@@ -102,6 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
     app.include_router(create_dispatch_router())
+    app.include_router(create_events_router(settings.events.keepalive_interval))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -142,6 +145,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return volundr_adapter
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr
+
+            # Wire event bus
+            event_bus = EventBus(max_clients=settings.events.max_sse_clients)
+            app.state.event_bus = event_bus
+
+            async def _resolve_event_bus() -> EventBus:
+                return event_bus
+
+            app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
             logger.info("Tyr started — database pool ready")
             yield

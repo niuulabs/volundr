@@ -94,6 +94,13 @@ class TrackerConfig(BaseModel):
     rate_limit_max_retries: int = Field(default=3)
 
 
+class EventsConfig(BaseModel):
+    """SSE event stream configuration."""
+
+    max_sse_clients: int = Field(default=10)
+    keepalive_interval: float = Field(default=15.0)
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -124,6 +131,7 @@ class Settings(BaseSettings):
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
+    events: EventsConfig = Field(default_factory=EventsConfig)
 
     @classmethod
     def settings_customise_sources(
