@@ -73,7 +73,7 @@ class TestConfidenceEventType:
         assert ConfidenceEventType.HUMAN_REJECT == "human_reject"
 
     def test_member_count(self) -> None:
-        assert len(ConfidenceEventType) == 5
+        assert len(ConfidenceEventType) == 6
 
 
 # ---------------------------------------------------------------------------

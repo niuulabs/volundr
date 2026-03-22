@@ -42,6 +42,7 @@ class ConfidenceEventType(StrEnum):
     SCOPE_BREACH = "scope_breach"
     RETRY = "retry"
     HUMAN_REJECT = "human_reject"
+    HUMAN_APPROVED = "human_approved"
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +53,14 @@ RAID_TRANSITIONS: dict[RaidStatus, frozenset[RaidStatus]] = {
     RaidStatus.PENDING: frozenset({RaidStatus.QUEUED}),
     RaidStatus.QUEUED: frozenset({RaidStatus.RUNNING, RaidStatus.FAILED}),
     RaidStatus.RUNNING: frozenset({RaidStatus.REVIEW, RaidStatus.MERGED, RaidStatus.FAILED}),
-    RaidStatus.REVIEW: frozenset({RaidStatus.QUEUED, RaidStatus.MERGED, RaidStatus.FAILED}),
+    RaidStatus.REVIEW: frozenset(
+        {
+            RaidStatus.PENDING,
+            RaidStatus.QUEUED,
+            RaidStatus.MERGED,
+            RaidStatus.FAILED,
+        }
+    ),
     RaidStatus.MERGED: frozenset(),
     RaidStatus.FAILED: frozenset({RaidStatus.QUEUED}),
 }

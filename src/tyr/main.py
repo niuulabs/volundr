@@ -14,11 +14,14 @@ from niuu.domain.models import IntegrationType
 from niuu.ports.credentials import CredentialStorePort
 from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class, resolve_secret_kwargs
+from tyr.adapters.postgres_raids import PostgresRaidRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
+from tyr.api.raids import create_raids_router, resolve_raid_repo
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
+from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
@@ -97,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- Routers --
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
+    app.include_router(create_raids_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -128,6 +132,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return saga_repo
 
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
+
+            # Wire raid repository
+            raid_repo = PostgresRaidRepository(pool)
+            app.state.raid_repo = raid_repo
+
+            async def _resolve_raid_repo() -> RaidRepository:
+                return raid_repo
+
+            app.dependency_overrides[resolve_raid_repo] = _resolve_raid_repo
 
             logger.info("Tyr started — database pool ready")
             yield
