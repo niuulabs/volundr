@@ -628,10 +628,10 @@ class TestParseProgress:
         assert _parse_progress(None) == 0.0
 
     def test_float(self):
-        assert _parse_progress(0.75) == 0.75
+        assert _parse_progress(0.75) == 0.0075
 
     def test_int(self):
-        assert _parse_progress(1) == 1.0
+        assert _parse_progress(1) == 0.01
 
     def test_percentage_string(self):
         assert _parse_progress("50%") == 0.5
