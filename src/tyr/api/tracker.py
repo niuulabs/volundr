@@ -14,8 +14,6 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from niuu.domain.models import RepoInfo
-from niuu.ports.git import GitProvider
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -73,12 +71,6 @@ async def resolve_trackers() -> list[TrackerPort]:
     )
 
 
-async def resolve_git_providers() -> list[GitProvider]:
-    """Default dependency — overridden by the composition root."""
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Git provider adapters not configured",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -155,20 +147,6 @@ def create_tracker_router() -> APIRouter:
             except Exception:
                 continue
         return []
-
-    @router.get("/repos", response_model=list[RepoInfo])
-    async def list_repos(
-        providers: list[GitProvider] = Depends(resolve_git_providers),
-    ) -> list[RepoInfo]:
-        """List repos from all connected source control integrations."""
-        results: list[RepoInfo] = []
-        for provider in providers:
-            try:
-                repos = await provider.list_repos("")
-                results.extend(repos)
-            except Exception:
-                logger.warning("list_repos failed for provider %s", provider.name, exc_info=True)
-        return results
 
     @router.post("/import", response_model=SagaResponse)
     async def import_project(

@@ -29,3 +29,15 @@ data:
 
     volundr:
       url: {{ .Values.volundr.url | quote }}
+
+    credential_store:
+      adapter: {{ .Values.credentialStore.adapter | quote }}
+      kwargs: {{ .Values.credentialStore.kwargs | toJson }}
+      {{- if .Values.credentialStore.secretKwargs }}
+      secret_kwargs_env:
+        {{- range .Values.credentialStore.secretKwargs }}
+        {{ .kwarg }}: CREDENTIAL_STORE_SK_{{ .kwarg | upper }}
+        {{- end }}
+      {{- else }}
+      secret_kwargs_env: {}
+      {{- end }}

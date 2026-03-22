@@ -21,6 +21,7 @@ export function ImportView() {
     selectProject,
     clearProject,
     toggleRepo,
+    setBranch,
     importProject,
   } = useTrackerBrowser();
 
@@ -138,7 +139,12 @@ export function ImportView() {
             <h3 className={styles.importHeading}>Import as Saga</h3>
             <div className={styles.formRow}>
               <label className={styles.label}>Repositories</label>
-              <RepoSelector repos={repos} selected={selectedRepos} onToggle={toggleRepo} />
+              <RepoSelector
+                repos={repos}
+                selected={selectedRepos}
+                onToggle={toggleRepo}
+                onBranchChange={setBranch}
+              />
             </div>
             <div className={styles.actions}>
               <button

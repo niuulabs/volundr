@@ -87,6 +87,7 @@ import type {
  * API client for Volundr service
  */
 const api = createApiClient('/api/v1/volundr');
+const niuuApi = createApiClient('/api/v1/niuu');
 
 /**
  * SSE stream endpoint
@@ -588,7 +589,7 @@ export class ApiVolundrService implements IVolundrService {
   }
 
   async getRepos(): Promise<VolundrRepo[]> {
-    const response = await api.get<ApiReposResponse>('/repos');
+    const response = await niuuApi.get<ApiReposResponse>('/repos');
     return Object.values(response).flat().map(transformRepo);
   }
 

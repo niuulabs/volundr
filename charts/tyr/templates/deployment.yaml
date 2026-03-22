@@ -58,6 +58,13 @@ spec:
                   key: {{ .Values.database.passwordKey | default "password" }}
             - name: VOLUNDR_URL
               value: {{ .Values.volundr.url | quote }}
+            {{- range .Values.credentialStore.secretKwargs }}
+            - name: CREDENTIAL_STORE_SK_{{ .kwarg | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -102,6 +109,41 @@ spec:
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+        {{- if .Values.envoy.enabled }}
+        - name: envoy
+          image: "{{ .Values.envoy.image.repository }}:{{ .Values.envoy.image.tag }}"
+          imagePullPolicy: {{ .Values.envoy.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: envoy
+              containerPort: {{ .Values.envoy.port }}
+              protocol: TCP
+          {{- with .Values.envoy.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.envoy.port }}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.envoy.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 15
+        {{- end }}
       {{- if .Values.migrations.enabled }}
       initContainers:
         - name: migrate
@@ -141,6 +183,11 @@ spec:
         - name: config
           configMap:
             name: {{ include "tyr.fullname" . }}
+        {{- if .Values.envoy.enabled }}
+        - name: envoy-config
+          configMap:
+            name: {{ include "tyr.fullname" . }}-envoy
+        {{- end }}
         {{- if .Values.migrations.enabled }}
         - name: migrations
           configMap:

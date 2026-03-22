@@ -1,5 +1,5 @@
 import type { ITrackerBrowserService } from '../../ports';
-import type { TrackerProject, TrackerMilestone, TrackerIssue, Saga, RepoInfo } from '../../models';
+import type { TrackerProject, TrackerMilestone, TrackerIssue, Saga } from '../../models';
 
 const MOCK_DELAY_MS = 150;
 
@@ -21,33 +21,6 @@ const mockProjects: TrackerProject[] = [
     url: 'https://linear.app/niuu/project/tyr-saga-coordinator-179a14777c7b',
     milestone_count: 8,
     issue_count: 24,
-  },
-];
-
-const mockRepos: RepoInfo[] = [
-  {
-    provider: 'github',
-    org: 'niuulabs',
-    name: 'volundr',
-    clone_url: 'git@github.com:niuulabs/volundr.git',
-    url: 'https://github.com/niuulabs/volundr',
-    default_branch: 'main',
-  },
-  {
-    provider: 'github',
-    org: 'niuulabs',
-    name: 'bifrost',
-    clone_url: 'git@github.com:niuulabs/bifrost.git',
-    url: 'https://github.com/niuulabs/bifrost',
-    default_branch: 'main',
-  },
-  {
-    provider: 'github',
-    org: 'niuulabs',
-    name: 'niuu-infra',
-    clone_url: 'git@github.com:niuulabs/niuu-infra.git',
-    url: 'https://github.com/niuulabs/niuu-infra',
-    default_branch: 'main',
   },
 ];
 
@@ -496,11 +469,6 @@ export class MockTrackerBrowserService implements ITrackerBrowserService {
         .map(i => ({ ...i, labels: [...i.labels] }));
     }
     return issues.map(i => ({ ...i, labels: [...i.labels] }));
-  }
-
-  async listRepos(): Promise<RepoInfo[]> {
-    await delay();
-    return [...mockRepos];
   }
 
   async importProject(projectId: string, repos: string[]): Promise<Saga> {

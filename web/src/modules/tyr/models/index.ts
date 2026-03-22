@@ -12,4 +12,10 @@ export type {
   SessionInfo,
 } from './saga';
 
-export type { TrackerProject, TrackerMilestone, TrackerIssue, RepoInfo } from './tracker';
+export type {
+  TrackerProject,
+  TrackerMilestone,
+  TrackerIssue,
+  RepoInfo,
+  SelectedRepo,
+} from './tracker';

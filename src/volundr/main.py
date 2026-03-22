@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from niuu.adapters.inbound.rest_repos import create_repos_router
 from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.inbound.rest_admin_settings import create_admin_settings_router
 from volundr.adapters.inbound.rest_credentials import create_credentials_router
@@ -553,6 +554,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 git_registry,
                 user_integration=user_integration_service,
             )
+
+            # TODO: extract niuu shared service to its own process — for now
+            # volundr hosts the /api/v1/niuu endpoints alongside its own.
+            niuu_repos_router = create_repos_router(repo_service)
+            app.include_router(niuu_repos_router)
+
             chronicle_repository = PostgresChronicleRepository(pool)
             timeline_repository = PostgresTimelineRepository(pool)
             chronicle_service = ChronicleService(

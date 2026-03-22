@@ -24,6 +24,12 @@ export interface RepoInfo {
   clone_url: string;
   url: string;
   default_branch: string;
+  branches: string[];
+}
+
+export interface SelectedRepo {
+  repoId: string;
+  branch: string;
 }
 
 export interface TrackerIssue {
