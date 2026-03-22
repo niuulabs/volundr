@@ -41,10 +41,10 @@ export class ApiTrackerBrowserService implements ITrackerBrowserService {
   }
 
   async importProject(projectId: string, repo: string, featureBranch: string): Promise<Saga> {
-    const res = await fetch(`${TRACKER_API_BASE}/projects/${projectId}/import`, {
+    const res = await fetch(`${TRACKER_API_BASE}/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo, feature_branch: featureBranch }),
+      body: JSON.stringify({ project_id: projectId, repo, feature_branch: featureBranch }),
     });
     if (!res.ok) {
       throw new Error(`Failed to import project: ${res.statusText}`);

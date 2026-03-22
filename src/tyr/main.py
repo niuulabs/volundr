@@ -29,18 +29,16 @@ def _create_tracker_adapter(settings: Settings) -> TrackerPort | None:
 
     try:
         import importlib
+        import os
 
         module_path, class_name = cfg.adapter.rsplit(".", 1)
         module = importlib.import_module(module_path)
         cls = getattr(module, class_name)
 
-        # api_key comes from env for now (TRACKER__API_KEY would need
-        # to be added to config, or resolved from credential store)
-        import os
-
-        api_key = os.environ.get("LINEAR_API_KEY", "")
+        api_key = cfg.api_key or os.environ.get("LINEAR_API_KEY", "")
         if not api_key:
-            logger.warning("LINEAR_API_KEY not set, tracker adapter may fail")
+            logger.warning("No tracker API key configured (set TRACKER__API_KEY or LINEAR_API_KEY)")
+            return None
 
         return cls(
             api_key=api_key,
