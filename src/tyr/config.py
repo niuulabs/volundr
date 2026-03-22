@@ -13,6 +13,7 @@ Environment variable override format:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 from pydantic_settings import (
@@ -58,6 +59,16 @@ class VolundrConfig(BaseModel):
     url: str = Field(default="http://localhost:8000")
 
 
+class CredentialStoreConfig(BaseModel):
+    """Dynamic credential store adapter configuration."""
+
+    adapter: str = Field(
+        default="niuu.adapters.memory_credential_store.MemoryCredentialStore",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(default_factory=dict)
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
@@ -88,6 +99,7 @@ class Settings(BaseSettings):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     volundr: VolundrConfig = Field(default_factory=VolundrConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
+    credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
 
     @classmethod
     def settings_customise_sources(

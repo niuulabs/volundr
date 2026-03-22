@@ -750,7 +750,7 @@ class TestListProviders:
 
 
 class TestListRepos:
-    """Tests for GET /api/v1/volundr/repos."""
+    """Tests for GET /api/v1/niuu/repos."""
 
     @pytest.fixture
     def repos(self) -> list[RepoInfo]:
@@ -785,16 +785,17 @@ class TestListRepos:
         return RepoService(registry)
 
     @pytest.fixture
-    def repos_client(self, service: SessionService, repo_service: RepoService) -> TestClient:
-        """Create a test client with repo_service."""
+    def repos_client(self, repo_service: RepoService) -> TestClient:
+        """Create a test client with niuu repos router."""
+        from niuu.adapters.inbound.rest_repos import create_repos_router
+
         app = FastAPI()
-        router = create_router(service, repo_service=repo_service)
-        app.include_router(router)
+        app.include_router(create_repos_router(repo_service))
         return TestClient(app)
 
     def test_list_repos_success(self, repos_client: TestClient):
         """Returns repos grouped by provider name."""
-        response = repos_client.get("/api/v1/volundr/repos")
+        response = repos_client.get("/api/v1/niuu/repos")
         assert response.status_code == 200
         data = response.json()
         assert "GitHub" in data
@@ -804,27 +805,29 @@ class TestListRepos:
         assert data["GitHub"][0]["org"] == "my-org"
         assert data["GitHub"][1]["name"] == "repo2"
 
-    def test_list_repos_without_service(self, service: SessionService):
+    def test_list_repos_without_service(self):
         """Returns 503 when repo service is not available."""
+        from niuu.adapters.inbound.rest_repos import create_repos_router
+
         app = FastAPI()
-        router = create_router(service, repo_service=None)
-        app.include_router(router)
+        app.include_router(create_repos_router(None))
         client = TestClient(app)
 
-        response = client.get("/api/v1/volundr/repos")
+        response = client.get("/api/v1/niuu/repos")
         assert response.status_code == 503
         assert "not available" in response.json()["detail"].lower()
 
-    def test_list_repos_empty_when_no_orgs(self, service: SessionService):
+    def test_list_repos_empty_when_no_orgs(self):
         """Returns empty dict when no providers have orgs configured."""
+        from niuu.adapters.inbound.rest_repos import create_repos_router
+
         gh = MockGitProvider(name="GitHub")
         registry = MockGitRegistry([gh])
         repo_service = RepoService(registry)
         app = FastAPI()
-        router = create_router(service, repo_service=repo_service)
-        app.include_router(router)
+        app.include_router(create_repos_router(repo_service))
         client = TestClient(app)
 
-        response = client.get("/api/v1/volundr/repos")
+        response = client.get("/api/v1/niuu/repos")
         assert response.status_code == 200
         assert response.json() == {}
