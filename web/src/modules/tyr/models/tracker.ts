@@ -17,6 +17,15 @@ export interface TrackerMilestone {
   progress: number;
 }
 
+export interface RepoInfo {
+  provider: string;
+  org: string;
+  name: string;
+  clone_url: string;
+  url: string;
+  default_branch: string;
+}
+
 export interface TrackerIssue {
   id: string;
   identifier: string;

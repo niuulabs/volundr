@@ -92,6 +92,11 @@ class GitHubProvider(GitProvider, GitWorkflowProvider):
         return self._name
 
     @property
+    def base_url(self) -> str:
+        """Return the base URL for this provider instance."""
+        return self._base_url
+
+    @property
     def orgs(self) -> tuple[str, ...]:
         """Return configured organizations."""
         return self._orgs

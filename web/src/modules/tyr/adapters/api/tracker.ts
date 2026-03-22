@@ -1,5 +1,5 @@
 import type { ITrackerBrowserService } from '../../ports';
-import type { TrackerProject, TrackerMilestone, TrackerIssue, Saga } from '../../models';
+import type { TrackerProject, TrackerMilestone, TrackerIssue, Saga, RepoInfo } from '../../models';
 
 const TRACKER_API_BASE = '/api/v1/tyr/tracker';
 
@@ -40,11 +40,19 @@ export class ApiTrackerBrowserService implements ITrackerBrowserService {
     return res.json();
   }
 
-  async importProject(projectId: string, repo: string, featureBranch: string): Promise<Saga> {
+  async listRepos(): Promise<RepoInfo[]> {
+    const res = await fetch(`${TRACKER_API_BASE}/repos`);
+    if (!res.ok) {
+      throw new Error(`Failed to list repos: ${res.statusText}`);
+    }
+    return res.json();
+  }
+
+  async importProject(projectId: string, repos: string[]): Promise<Saga> {
     const res = await fetch(`${TRACKER_API_BASE}/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: projectId, repo, feature_branch: featureBranch }),
+      body: JSON.stringify({ project_id: projectId, repos }),
     });
     if (!res.ok) {
       throw new Error(`Failed to import project: ${res.statusText}`);

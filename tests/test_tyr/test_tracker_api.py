@@ -63,8 +63,7 @@ class MockTracker(TrackerPort):
             tracker_type="mock",
             slug="test",
             name="Test",
-            repo="",
-            feature_branch="",
+            repos=[],
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
@@ -283,16 +282,15 @@ class TestImportProject:
             "/api/v1/tyr/tracker/import",
             json={
                 "project_id": "proj-1",
-                "repo": "org/repo",
-                "feature_branch": "feat/import",
+                "repos": ["org/repo"],
             },
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["tracker_id"] == "proj-1"
         assert data["name"] == "Alpha"
-        assert data["repo"] == "org/repo"
-        assert data["feature_branch"] == "feat/import"
+        assert data["repos"] == ["org/repo"]
+        assert data["feature_branch"] == "feat/alpha"
         assert data["status"] == "ACTIVE"
         assert data["phase_count"] == 2
         assert data["raid_count"] == 2
@@ -302,8 +300,7 @@ class TestImportProject:
             "/api/v1/tyr/tracker/import",
             json={
                 "project_id": "nonexistent",
-                "repo": "org/repo",
-                "feature_branch": "feat/x",
+                "repos": ["org/repo"],
             },
         )
         assert resp.status_code == 404

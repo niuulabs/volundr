@@ -71,6 +71,28 @@ class StoredCredential:
     updated_at: datetime
 
 
+class GitProviderType(StrEnum):
+    """Type of git hosting provider."""
+
+    GITHUB = "github"
+    GITLAB = "gitlab"
+    BITBUCKET = "bitbucket"
+    GENERIC = "generic"
+
+
+@dataclass(frozen=True)
+class RepoInfo:
+    """Information about a git repository."""
+
+    provider: GitProviderType
+    org: str
+    name: str
+    clone_url: str
+    url: str  # Web URL for the repo
+    default_branch: str = "main"
+    branches: tuple[str, ...] = ()
+
+
 class CacheEntry:
     """Simple TTL cache entry."""
 

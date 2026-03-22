@@ -1,5 +1,5 @@
 import type { ITrackerBrowserService } from '../../ports';
-import type { TrackerProject, TrackerMilestone, TrackerIssue, Saga } from '../../models';
+import type { TrackerProject, TrackerMilestone, TrackerIssue, Saga, RepoInfo } from '../../models';
 
 const MOCK_DELAY_MS = 150;
 
@@ -21,6 +21,33 @@ const mockProjects: TrackerProject[] = [
     url: 'https://linear.app/niuu/project/tyr-saga-coordinator-179a14777c7b',
     milestone_count: 8,
     issue_count: 24,
+  },
+];
+
+const mockRepos: RepoInfo[] = [
+  {
+    provider: 'github',
+    org: 'niuulabs',
+    name: 'volundr',
+    clone_url: 'git@github.com:niuulabs/volundr.git',
+    url: 'https://github.com/niuulabs/volundr',
+    default_branch: 'main',
+  },
+  {
+    provider: 'github',
+    org: 'niuulabs',
+    name: 'bifrost',
+    clone_url: 'git@github.com:niuulabs/bifrost.git',
+    url: 'https://github.com/niuulabs/bifrost',
+    default_branch: 'main',
+  },
+  {
+    provider: 'github',
+    org: 'niuulabs',
+    name: 'niuu-infra',
+    clone_url: 'git@github.com:niuulabs/niuu-infra.git',
+    url: 'https://github.com/niuulabs/niuu-infra',
+    default_branch: 'main',
   },
 ];
 
@@ -471,20 +498,29 @@ export class MockTrackerBrowserService implements ITrackerBrowserService {
     return issues.map(i => ({ ...i, labels: [...i.labels] }));
   }
 
-  async importProject(projectId: string, repo: string, featureBranch: string): Promise<Saga> {
+  async listRepos(): Promise<RepoInfo[]> {
+    await delay();
+    return [...mockRepos];
+  }
+
+  async importProject(projectId: string, repos: string[]): Promise<Saga> {
     await delay(500);
     const project = mockProjects.find(p => p.id === projectId);
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
     }
+    const slug = project.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .slice(0, 40);
     return {
       id: crypto.randomUUID(),
       tracker_id: project.id,
       tracker_type: 'linear',
-      slug: 'tyr-saga-coordinator',
+      slug,
       name: project.name,
-      repo,
-      feature_branch: featureBranch,
+      repos,
+      feature_branch: `feat/${slug}`,
       status: 'active',
       confidence: 0.0,
       created_at: new Date().toISOString(),

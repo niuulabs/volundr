@@ -14,6 +14,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from niuu.domain.models import RepoInfo
+from niuu.ports.git import GitProvider
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -39,8 +41,7 @@ class ImportRequest(BaseModel):
     """Request body for importing a project as a saga."""
 
     project_id: str = Field(description="External tracker project ID")
-    repo: str = Field(description="Repository (org/repo)")
-    feature_branch: str = Field(description="Feature branch name")
+    repos: list[str] = Field(description="Repositories (org/repo)")
 
 
 class SagaResponse(BaseModel):
@@ -49,7 +50,7 @@ class SagaResponse(BaseModel):
     id: str
     tracker_id: str
     name: str
-    repo: str
+    repos: list[str]
     feature_branch: str
     status: str
     phase_count: int
@@ -69,6 +70,14 @@ async def resolve_trackers() -> list[TrackerPort]:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Tracker adapters not configured",
+    )
+
+
+async def resolve_git_providers() -> list[GitProvider]:
+    """Default dependency — overridden by the composition root."""
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Git provider adapters not configured",
     )
 
 
@@ -147,6 +156,20 @@ def create_tracker_router() -> APIRouter:
                 continue
         return []
 
+    @router.get("/repos", response_model=list[RepoInfo])
+    async def list_repos(
+        providers: list[GitProvider] = Depends(resolve_git_providers),
+    ) -> list[RepoInfo]:
+        """List repos from all connected source control integrations."""
+        results: list[RepoInfo] = []
+        for provider in providers:
+            try:
+                repos = await provider.list_repos("")
+                results.extend(repos)
+            except Exception:
+                logger.warning("list_repos failed for provider %s", provider.name, exc_info=True)
+        return results
+
     @router.post("/import", response_model=SagaResponse)
     async def import_project(
         body: ImportRequest,
@@ -186,8 +209,7 @@ def create_tracker_router() -> APIRouter:
             tracker_type="linear",
             slug=project.name.lower().replace(" ", "-").replace("—", "-"),
             name=project.name,
-            repo=body.repo,
-            feature_branch=body.feature_branch,
+            repos=body.repos,
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
@@ -243,7 +265,7 @@ def create_tracker_router() -> APIRouter:
             id=str(saga.id),
             tracker_id=saga.tracker_id,
             name=saga.name,
-            repo=saga.repo,
+            repos=saga.repos,
             feature_branch=saga.feature_branch,
             status=saga.status.value,
             phase_count=len(phases),

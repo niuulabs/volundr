@@ -5,8 +5,8 @@ CREATE TABLE IF NOT EXISTS sagas (
     tracker_id    TEXT NOT NULL,
     tracker_type  TEXT NOT NULL,
     slug          TEXT NOT NULL UNIQUE,
-    repo          TEXT NOT NULL,
-    feature_branch TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    repos         TEXT[] NOT NULL DEFAULT '{}',
     confidence    FLOAT DEFAULT 0,
     created_at    TIMESTAMPTZ DEFAULT NOW()
 );

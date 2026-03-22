@@ -439,6 +439,10 @@ class MockGitProvider(GitProvider):
         return self._name
 
     @property
+    def base_url(self) -> str:
+        return f"https://{self._supported_hosts[0]}"
+
+    @property
     def orgs(self) -> tuple[str, ...]:
         return self._orgs
 

@@ -14,6 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from niuu.ports.credentials import CredentialStorePort  # noqa: F401
+from niuu.ports.git import GitProvider as _NiuuGitProvider  # noqa: F401
 from niuu.ports.integrations import IntegrationRepository  # noqa: F401
 from volundr.domain.models import (
     Chronicle,
@@ -21,7 +22,6 @@ from volundr.domain.models import (
     ClusterResourceInfo,
     CredentialMapping,
     ForgeProfile,
-    GitProviderType,
     IntegrationConnection,
     MCPServerConfig,
     Model,
@@ -278,26 +278,13 @@ class PricingProvider(ABC):
         """
 
 
-class GitProvider(ABC):
-    """Port for git repository operations.
+class GitProvider(_NiuuGitProvider):
+    """Extended git provider port with Volundr-specific operations.
 
-    Each instance represents a single git provider endpoint (e.g., github.com,
-    gitlab.com, or a self-hosted GitLab instance). Multiple instances can be
-    registered to support multiple providers/instances simultaneously.
+    Inherits read-only operations (list_repos, list_branches, provider_type,
+    name, base_url) from niuu's GitProvider and adds Volundr-specific methods
+    for repo validation, parsing, and URL generation.
     """
-
-    @property
-    @abstractmethod
-    def provider_type(self) -> GitProviderType:
-        """Return the type of this git provider."""
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Return a human-readable name for this provider instance.
-
-        Examples: 'GitHub', 'GitLab', 'GitLab (self-hosted)'
-        """
 
     @property
     @abstractmethod
@@ -346,32 +333,6 @@ class GitProvider(ABC):
 
         Returns:
             Authenticated clone URL, or None if not supported.
-        """
-
-    @abstractmethod
-    async def list_repos(self, org: str) -> list[RepoInfo]:
-        """List all repositories in an organization/group.
-
-        Args:
-            org: Organization or group name.
-
-        Returns:
-            List of repositories in the organization.
-        """
-
-    @abstractmethod
-    async def list_branches(self, repo_url: str) -> list[str]:
-        """List all branches for a specific repository.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            List of branch names.
-
-        Raises:
-            GitAuthError: If authentication fails.
-            GitRepoNotFoundError: If the repository is not found.
         """
 
 

@@ -13,9 +13,10 @@ from niuu.adapters.memory_credential_store import MemoryCredentialStore
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
 from niuu.domain.models import IntegrationType
 from niuu.ports.credentials import CredentialStorePort
+from niuu.ports.git import GitProvider
 from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class
-from tyr.api.tracker import create_tracker_router, resolve_trackers
+from tyr.api.tracker import create_tracker_router, resolve_git_providers, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
 from tyr.ports.tracker import TrackerPort
@@ -77,6 +78,50 @@ async def _resolve_tracker_adapters(
     return adapters
 
 
+async def _resolve_git_provider_adapters(
+    request: Request,
+    integration_repo: IntegrationRepository,
+    credential_store: CredentialStorePort,
+) -> list[GitProvider]:
+    """Resolve GitProvider adapters from the user's source control integrations.
+
+    Uses dynamic adapter pattern: config specifies fully-qualified class path,
+    credentials + config are passed as **kwargs to the constructor.
+    """
+    user_id = request.headers.get("X-User-ID", "default")
+
+    connections = await integration_repo.list_connections(
+        user_id,
+        integration_type=IntegrationType.SOURCE_CONTROL,
+    )
+
+    adapters: list[GitProvider] = []
+    for conn in connections:
+        if not conn.enabled:
+            continue
+        try:
+            cred = await credential_store.get_value(
+                "user",
+                conn.user_id,
+                conn.credential_name,
+            )
+            if cred is None:
+                continue
+
+            cls = import_class(conn.adapter)
+            kwargs = {**cred, **conn.config}
+            adapter = cls(**kwargs)
+            adapters.append(adapter)
+        except Exception:
+            logger.warning(
+                "Failed to create git provider adapter for connection %s",
+                conn.id,
+                exc_info=True,
+            )
+
+    return adapters
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     if settings is None:
@@ -111,6 +156,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return await _resolve_tracker_adapters(request, integration_repo, credential_store)
 
             app.dependency_overrides[resolve_trackers] = _resolve
+
+            # Override the git provider resolver dependency with real wiring
+            async def _resolve_git(request: Request) -> list[GitProvider]:
+                return await _resolve_git_provider_adapters(
+                    request, integration_repo, credential_store
+                )
+
+            app.dependency_overrides[resolve_git_providers] = _resolve_git
 
             logger.info("Tyr started — database pool ready")
             yield

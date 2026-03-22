@@ -31,7 +31,7 @@ export function DetailView() {
         </div>
         <div className={styles.headerMeta}>
           <BranchTag source={saga.feature_branch} />
-          <span className={styles.repo}>{saga.repo}</span>
+          <span className={styles.repo}>{saga.repos.join(', ')}</span>
           <span className={styles.trackerId}>{saga.tracker_id}</span>
         </div>
         <div className={styles.confBarWrapper}>

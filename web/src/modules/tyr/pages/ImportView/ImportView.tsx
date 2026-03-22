@@ -5,6 +5,7 @@ import { LoadingIndicator } from '@/modules/shared';
 import { useTrackerBrowser } from '../../hooks';
 import { ProjectCard } from '../../components/ProjectCard';
 import { MilestoneRow } from '../../components/MilestoneRow';
+import { RepoSelector } from '../../components/RepoSelector';
 import styles from './ImportView.module.css';
 
 export function ImportView() {
@@ -13,16 +14,17 @@ export function ImportView() {
     selectedProject,
     milestones,
     issues,
+    repos,
+    selectedRepos,
     loading,
     error,
     selectProject,
     clearProject,
+    toggleRepo,
     importProject,
   } = useTrackerBrowser();
 
   const navigate = useNavigate();
-  const [repo, setRepo] = useState('');
-  const [featureBranch, setFeatureBranch] = useState('');
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
 
@@ -41,7 +43,7 @@ export function ImportView() {
   const handleImport = async () => {
     setImporting(true);
     try {
-      await importProject(repo, featureBranch);
+      await importProject();
       navigate('/tyr/sagas');
     } catch {
       // error is set by the hook
@@ -135,37 +137,15 @@ export function ImportView() {
           <div className={styles.importForm}>
             <h3 className={styles.importHeading}>Import as Saga</h3>
             <div className={styles.formRow}>
-              <label className={styles.label} htmlFor="import-repo">
-                Repository
-              </label>
-              <input
-                id="import-repo"
-                type="text"
-                className={styles.input}
-                value={repo}
-                onChange={e => setRepo(e.target.value)}
-                placeholder="org/repo"
-              />
-            </div>
-            <div className={styles.formRow}>
-              <label className={styles.label} htmlFor="import-branch">
-                Feature Branch
-              </label>
-              <input
-                id="import-branch"
-                type="text"
-                className={styles.input}
-                value={featureBranch}
-                onChange={e => setFeatureBranch(e.target.value)}
-                placeholder="feat/my-feature"
-              />
+              <label className={styles.label}>Repositories</label>
+              <RepoSelector repos={repos} selected={selectedRepos} onToggle={toggleRepo} />
             </div>
             <div className={styles.actions}>
               <button
                 type="button"
                 className={styles.importButton}
                 onClick={handleImport}
-                disabled={!repo.trim() || !featureBranch.trim() || importing}
+                disabled={selectedRepos.length === 0 || importing}
               >
                 {importing ? 'Importing...' : 'Import as Saga'}
               </button>

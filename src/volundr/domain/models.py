@@ -12,9 +12,11 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import (  # noqa: F401
+    GitProviderType,
     IntegrationConnection,
     IntegrationType,
     Principal,
+    RepoInfo,
     SecretType,
     StoredCredential,
 )
@@ -127,28 +129,6 @@ class EventType(StrEnum):
     CHRONICLE_EVENT = "chronicle_event"
     PR_CREATED = "pr_created"
     PR_MERGED = "pr_merged"
-
-
-class GitProviderType(StrEnum):
-    """Type of git hosting provider."""
-
-    GITHUB = "github"
-    GITLAB = "gitlab"
-    BITBUCKET = "bitbucket"
-    GENERIC = "generic"
-
-
-@dataclass(frozen=True)
-class RepoInfo:
-    """Information about a git repository."""
-
-    provider: GitProviderType
-    org: str
-    name: str
-    clone_url: str
-    url: str  # Web URL for the repo
-    default_branch: str = "main"
-    branches: tuple[str, ...] = ()
 
 
 class ModelProvider(StrEnum):
