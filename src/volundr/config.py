@@ -686,14 +686,7 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
                 "args": ["-y", "@modelcontextprotocol/server-linear"],
                 "env_from_credentials": {"LINEAR_API_KEY": "api_key"},
             },
-            auth_type="oauth2_authorization_code",
-            oauth=OAuthSpecConfig(
-                authorize_url="https://linear.app/oauth/authorize",
-                token_url="https://api.linear.app/oauth/token",
-                revoke_url="https://api.linear.app/oauth/revoke",
-                scopes=["read", "write", "issues:create", "comments:create"],
-                token_field_mapping={"api_key": "access_token"},
-            ),
+            auth_type="api_key",
         ),
         IntegrationDefinitionConfig(
             slug="anthropic",
