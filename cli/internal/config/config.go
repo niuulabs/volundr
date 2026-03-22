@@ -37,13 +37,13 @@ const (
 // K3sConfig holds k3s/k3d runtime settings.
 type K3sConfig struct {
 	Kubeconfig string `yaml:"kubeconfig"`            // default: auto-detect
-	Namespace  string `yaml:"namespace"`              // default: volundr
-	Provider   string `yaml:"provider"`               // "auto", "k3d", "native" (default: auto)
-	APIImage   string `yaml:"api_image,omitempty"`    // default: ghcr.io/niuulabs/volundr:latest
-	SkuldImage string `yaml:"skuld_image,omitempty"`  // default: ghcr.io/niuulabs/skuld:latest
-	RehImage   string `yaml:"reh_image,omitempty"`    // default: ghcr.io/niuulabs/vscode-reh:latest
-	TtydImage  string `yaml:"ttyd_image,omitempty"`   // default: ghcr.io/niuulabs/devrunner:latest
-	Network    string `yaml:"network,omitempty"`      // default: volundr-net
+	Namespace  string `yaml:"namespace"`             // default: volundr
+	Provider   string `yaml:"provider"`              // "auto", "k3d", "native" (default: auto)
+	APIImage   string `yaml:"api_image,omitempty"`   // default: ghcr.io/niuulabs/volundr:latest
+	SkuldImage string `yaml:"skuld_image,omitempty"` // default: ghcr.io/niuulabs/skuld:latest
+	RehImage   string `yaml:"reh_image,omitempty"`   // default: ghcr.io/niuulabs/vscode-reh:latest
+	TtydImage  string `yaml:"ttyd_image,omitempty"`  // default: ghcr.io/niuulabs/devrunner:latest
+	Network    string `yaml:"network,omitempty"`     // default: volundr-net
 }
 
 // GitHubInstanceConfig holds settings for a single GitHub instance.

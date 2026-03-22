@@ -33,6 +33,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Println("Volundr - Self-hosted AI development environment")
 	fmt.Println()
 
+	reader := bufio.NewReader(os.Stdin)
+
 	// Check if already initialized — load existing config for prefill defaults.
 	var existing *config.Config
 	exists, err := config.Exists()
@@ -41,7 +43,6 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 	if exists {
 		fmt.Print("Configuration already exists. Overwrite? [y/N]: ")
-		reader := bufio.NewReader(os.Stdin)
 		answer, _ := reader.ReadString('\n')
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "y" && answer != "yes" {
@@ -61,8 +62,6 @@ func runInit(_ *cobra.Command, _ []string) error {
 	if existing != nil {
 		cfg = existing
 	}
-
-	reader := bufio.NewReader(os.Stdin)
 
 	// Apply --runtime flag or prompt interactively.
 	if initRuntimeFlag != "" {
@@ -287,11 +286,12 @@ func runInit(_ *cobra.Command, _ []string) error {
 		// Default to the same token as the API.
 		apiToken := instance.Token
 		existingClone := cfg.Git.GitHub.CloneToken
-		if existingClone != "" {
+		switch {
+		case existingClone != "":
 			fmt.Printf("GitHub token for session repo cloning (%s): ", maskKey(existingClone))
-		} else if apiToken != "" {
+		case apiToken != "":
 			fmt.Printf("GitHub token for session repo cloning (default: same as above): ")
-		} else {
+		default:
 			fmt.Print("GitHub token for session repo cloning: ")
 		}
 		cloneToken, _ := reader.ReadString('\n')
