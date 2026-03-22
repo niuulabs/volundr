@@ -1,76 +1,81 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Saga, Phase } from '../models';
-import { tyrService } from '../adapters';
+import { createApiClient } from '@/modules/shared/api/client';
+
+const api = createApiClient('/api/v1/tyr/sagas');
+
+export interface SagaRaid {
+  id: string;
+  identifier: string;
+  title: string;
+  status: string;
+  status_type: string;
+  assignee: string | null;
+  labels: string[];
+  priority: number;
+  priority_label: string;
+  estimate: number | null;
+  url: string;
+}
+
+export interface SagaPhase {
+  id: string;
+  name: string;
+  description: string;
+  sort_order: number;
+  progress: number;
+  target_date: string | null;
+  raids: SagaRaid[];
+}
+
+export interface SagaDetail {
+  id: string;
+  tracker_id: string;
+  tracker_type: string;
+  slug: string;
+  name: string;
+  description: string;
+  repos: string[];
+  feature_branch: string;
+  status: string;
+  progress: number;
+  url: string;
+  phases: SagaPhase[];
+}
 
 interface UseSagaDetailResult {
-  saga: Saga | null;
-  phases: Phase[];
+  detail: SagaDetail | null;
   loading: boolean;
   error: string | null;
   refresh: () => void;
 }
 
 export function useSagaDetail(sagaId: string | undefined): UseSagaDetailResult {
-  const [saga, setSaga] = useState<Saga | null>(null);
-  const [phases, setPhases] = useState<Phase[]>([]);
+  const [detail, setDetail] = useState<SagaDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDetail = useCallback(() => {
+  const fetchDetail = useCallback(async () => {
     if (!sagaId) {
-      setSaga(null);
-      setPhases([]);
+      setDetail(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     setError(null);
-    Promise.all([tyrService.getSaga(sagaId), tyrService.getPhases(sagaId)])
-      .then(([sagaData, phasesData]) => {
-        setSaga(sagaData);
-        setPhases(phasesData);
-      })
-      .catch(e => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+    try {
+      const data = await api.get<SagaDetail>(`/${sagaId}`);
+      setDetail(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   }, [sagaId]);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!sagaId) {
-      setSaga(null);
-      setPhases([]);
-      setLoading(false);
-      return;
-    }
+    fetchDetail();
+  }, [fetchDetail]);
 
-    setLoading(true);
-    setError(null);
-    const fetch = async () => {
-      try {
-        const [sagaData, phasesData] = await Promise.all([
-          tyrService.getSaga(sagaId),
-          tyrService.getPhases(sagaId),
-        ]);
-        if (!cancelled) {
-          setSaga(sagaData);
-          setPhases(phasesData);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-    fetch();
-    return () => {
-      cancelled = true;
-    };
-  }, [sagaId]);
-
-  return { saga, phases, loading, error, refresh: fetchDetail };
+  return { detail, loading, error, refresh: fetchDetail };
 }

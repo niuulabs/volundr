@@ -167,6 +167,10 @@ class TrackerProject:
     url: str
     milestone_count: int
     issue_count: int
+    slug: str = ""
+    progress: float = 0.0
+    start_date: str | None = None
+    target_date: str | None = None
 
 
 @dataclass(frozen=True)
@@ -179,6 +183,7 @@ class TrackerMilestone:
     description: str
     sort_order: int
     progress: float
+    target_date: str | None = None
 
 
 @dataclass(frozen=True)
@@ -190,11 +195,14 @@ class TrackerIssue:
     title: str
     description: str
     status: str
-    assignee: str | None
-    labels: list[str]
-    priority: int
-    url: str
-    milestone_id: str | None
+    status_type: str = ""
+    assignee: str | None = None
+    labels: list[str] = None  # type: ignore[assignment]
+    priority: int = 0
+    priority_label: str = ""
+    estimate: float | None = None
+    url: str = ""
+    milestone_id: str | None = None
 
 
 # ---------------------------------------------------------------------------

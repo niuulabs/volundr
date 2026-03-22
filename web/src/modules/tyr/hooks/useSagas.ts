@@ -1,54 +1,57 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Saga } from '../models';
-import { tyrService } from '../adapters';
+import { createApiClient } from '@/modules/shared/api/client';
+
+const api = createApiClient('/api/v1/tyr/sagas');
+
+export interface SagaListItem {
+  id: string;
+  tracker_id: string;
+  tracker_type: string;
+  slug: string;
+  name: string;
+  repos: string[];
+  feature_branch: string;
+  status: string;
+  progress: number;
+  milestone_count: number;
+  issue_count: number;
+  url: string;
+}
 
 interface UseSagasResult {
-  sagas: Saga[];
+  sagas: SagaListItem[];
   loading: boolean;
   error: string | null;
   refresh: () => void;
+  deleteSaga: (id: string) => Promise<void>;
 }
 
 export function useSagas(): UseSagasResult {
-  const [sagas, setSagas] = useState<Saga[]>([]);
+  const [sagas, setSagas] = useState<SagaListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSagas = useCallback(() => {
+  const fetchSagas = useCallback(async () => {
     setLoading(true);
     setError(null);
-    tyrService
-      .getSagas()
-      .then(setSagas)
-      .catch(e => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+    try {
+      const data = await api.get<SagaListItem[]>('');
+      setSagas(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const fetch = async () => {
-      try {
-        const data = await tyrService.getSagas();
-        if (!cancelled) {
-          setSagas(data);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-    setLoading(true);
-    setError(null);
-    fetch();
-    return () => {
-      cancelled = true;
-    };
+    fetchSagas();
+  }, [fetchSagas]);
+
+  const deleteSaga = useCallback(async (id: string) => {
+    await api.delete(`/${id}`);
+    setSagas(prev => prev.filter(s => s.id !== id));
   }, []);
 
-  return { sagas, loading, error, refresh: fetchSagas };
+  return { sagas, loading, error, refresh: fetchSagas, deleteSaga };
 }

@@ -16,6 +16,7 @@ export function ImportView() {
     issues,
     repos,
     selectedRepos,
+    importedTrackerIds,
     loading,
     error,
     selectProject,
@@ -73,6 +74,7 @@ export function ImportView() {
             <ProjectCard
               key={project.id}
               project={project}
+              imported={importedTrackerIds.has(project.id)}
               onClick={() => selectProject(project.id)}
             />
           ))}

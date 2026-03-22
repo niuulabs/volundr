@@ -14,9 +14,12 @@ from niuu.domain.models import IntegrationType
 from niuu.ports.credentials import CredentialStorePort
 from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class, resolve_secret_kwargs
+from tyr.adapters.postgres_sagas import PostgresSagaRepository
+from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
+from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
@@ -92,8 +95,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.settings = settings
 
-    # -- Tracker browsing router --
+    # -- Routers --
     app.include_router(create_tracker_router())
+    app.include_router(create_sagas_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -116,6 +120,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return await _resolve_tracker_adapters(request, integration_repo, credential_store)
 
             app.dependency_overrides[resolve_trackers] = _resolve
+
+            # Wire saga repository
+            saga_repo = PostgresSagaRepository(pool)
+            app.state.saga_repo = saga_repo
+
+            async def _resolve_saga_repo() -> SagaRepository:
+                return saga_repo
+
+            app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
 
             logger.info("Tyr started — database pool ready")
             yield
