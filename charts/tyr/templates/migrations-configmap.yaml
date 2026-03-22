@@ -115,4 +115,12 @@ data:
     ALTER TABLE sagas DROP COLUMN IF EXISTS repos;
     ALTER TABLE sagas DROP COLUMN IF EXISTS name;
     ALTER TABLE sagas DROP COLUMN IF EXISTS status;
+  000004_raid_description.up.sql: |
+    -- Add description and acceptance_criteria columns to raids for NativeAdapter
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS acceptance_criteria TEXT[] NOT NULL DEFAULT '{}';
+
+  000004_raid_description.down.sql: |
+    ALTER TABLE raids DROP COLUMN IF EXISTS acceptance_criteria;
+    ALTER TABLE raids DROP COLUMN IF EXISTS description;
 {{- end }}
