@@ -331,39 +331,11 @@ func TestRunInit_GitHubWithDefaultCloneToken(t *testing.T) {
 	}
 }
 
-func TestRunInit_DockerRuntime_PreflightChecks(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv(config.EnvHome, tmpDir)
-
-	// Override PATH to ensure kubectl/helm are not found.
-	t.Setenv("PATH", tmpDir)
-
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "docker"
-	defer func() { initRuntimeFlag = oldFlag }()
-
-	// Pipe minimal stdin — preflight should fail before any prompts.
-	oldStdin := os.Stdin
-	r, w, _ := os.Pipe()
-	_, _ = w.WriteString("\n")
-	_ = w.Close()
-	os.Stdin = r
-	defer func() { os.Stdin = oldStdin }()
-
-	err := runInit(nil, nil)
-	if err == nil {
-		t.Fatal("expected preflight check error for missing kubectl")
-	}
-	if !strings.Contains(err.Error(), "kubectl is required") {
-		t.Errorf("expected kubectl error, got: %v", err)
-	}
-}
-
 func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	// Override PATH to ensure kubectl/helm are not found.
+	// Override PATH to ensure docker/kubectl/helm are not found.
 	t.Setenv("PATH", tmpDir)
 
 	oldFlag := initRuntimeFlag
@@ -379,10 +351,10 @@ func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
 
 	err := runInit(nil, nil)
 	if err == nil {
-		t.Fatal("expected preflight check error for missing kubectl")
+		t.Fatal("expected preflight check error for missing docker")
 	}
-	if !strings.Contains(err.Error(), "kubectl is required") {
-		t.Errorf("expected kubectl error, got: %v", err)
+	if !strings.Contains(err.Error(), "docker is required") {
+		t.Errorf("expected docker error, got: %v", err)
 	}
 }
 
@@ -396,7 +368,7 @@ func TestRunInit_InteractiveRuntime(t *testing.T) {
 
 	// Pipe answers: runtime, API key, db mode, no github.
 	input := strings.Join([]string{
-		"docker",       // Runtime (interactive prompt)
+		"local",        // Runtime (interactive prompt)
 		"test-api-key", // Anthropic API key
 		"",             // Database mode (default embedded)
 		"n",            // Configure GitHub? No

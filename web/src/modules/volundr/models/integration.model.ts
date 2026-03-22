@@ -44,7 +44,7 @@ export interface CatalogEntry {
     required?: string[];
     properties?: Record<string, SchemaProperty>;
   };
-  config_schema: {
+  config_schema?: {
     properties?: Record<string, SchemaProperty>;
   };
   mcp_server: MCPServerSpec | null;

@@ -124,9 +124,9 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "docker runtime is valid",
+			name:    "docker runtime is invalid",
 			modify:  func(c *Config) { c.Runtime = "docker" },
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "k3s runtime is valid",
@@ -407,10 +407,6 @@ func TestDefaultConfigWithNIUU_HOME(t *testing.T) {
 		t.Errorf("DataDir = %q, want %q", cfg.Database.DataDir, expectedDataDir)
 	}
 
-	// Verify Docker defaults.
-	if cfg.Docker.Network != "volundr-net" {
-		t.Errorf("Docker.Network = %q, want %q", cfg.Docker.Network, "volundr-net")
-	}
 	if cfg.K3s.Provider != "auto" {
 		t.Errorf("K3s.Provider = %q, want %q", cfg.K3s.Provider, "auto")
 	}
