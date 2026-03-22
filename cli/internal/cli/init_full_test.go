@@ -416,12 +416,12 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 	}
 	cfg.Anthropic.APIKey = "sk-old-key"
 	cfg.Git.GitHub.Enabled = true
-	cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{{
+	cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{{ //nolint:gosec // test fixture
 		Name:     "GitHub",
 		BaseURL:  "https://api.github.com",
 		TokenEnv: "OLD_TOKEN_ENV",
 		Orgs:     []string{"oldorg"},
-	}} //nolint:gosec // test fixture
+	}}
 	cfg.Git.GitHub.CloneToken = "test-old-clone"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
