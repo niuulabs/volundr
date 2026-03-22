@@ -20,7 +20,7 @@ const mockSaga: Saga = {
   tracker_type: 'linear',
   slug: 'storage-health',
   name: 'Storage Health Observer',
-  repo: 'github.com/niuulabs/volundr',
+  repos: ['github.com/niuulabs/volundr'],
   feature_branch: 'feat/storage-health',
   status: 'active',
   confidence: 0.72,
