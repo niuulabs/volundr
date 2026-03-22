@@ -184,6 +184,50 @@ class TestGetSaga:
         assert resp.status_code == 404
 
 
+class TestGetSagaErrors:
+    def test_tracker_unavailable(self, saga_repo: MockSagaRepo):
+        """Returns 502 when tracker can't find the project."""
+
+        class FailingTracker(MockTracker):
+            async def get_project(self, project_id: str) -> TrackerProject:
+                raise ConnectionError("Tracker down")
+
+            async def get_project_full(self, project_id: str):
+                raise ConnectionError("Tracker down")
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        failing = FailingTracker()
+        app.dependency_overrides[resolve_trackers] = lambda: [failing]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        client = TestClient(app)
+
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.get(f"/api/v1/tyr/sagas/{saga_id}")
+        assert resp.status_code == 502
+
+    def test_list_with_tracker_error(self, saga_repo: MockSagaRepo):
+        """List sagas gracefully handles tracker errors."""
+
+        class FailingTracker(MockTracker):
+            async def list_projects(self) -> list[TrackerProject]:
+                raise ConnectionError("Tracker down")
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        failing = FailingTracker()
+        app.dependency_overrides[resolve_trackers] = lambda: [failing]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        client = TestClient(app)
+
+        resp = client.get("/api/v1/tyr/sagas")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        # Falls back to DB name
+        assert data[0]["name"] == "Alpha"
+
+
 class TestDeleteSaga:
     def test_delete_existing(self, client: TestClient, saga_repo: MockSagaRepo):
         saga_id = str(saga_repo.sagas[0].id)

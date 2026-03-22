@@ -127,6 +127,14 @@ class MockTracker(TrackerPort):
             issues = [i for i in issues if i.milestone_id == milestone_id]
         return issues
 
+    async def get_project_full(
+        self, project_id: str
+    ) -> tuple[TrackerProject, list[TrackerMilestone], list[TrackerIssue]]:
+        project = await self.get_project(project_id)
+        milestones = await self.list_milestones(project_id)
+        issues = await self.list_issues(project_id)
+        return project, milestones, issues
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
