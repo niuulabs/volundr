@@ -143,4 +143,80 @@ describe('DetailView', () => {
     renderDetailView();
     expect(screen.getByText('niuulabs/app')).toBeInTheDocument();
   });
+
+  it('renders progress percentage', () => {
+    renderDetailView();
+    expect(screen.getByText('50%')).toBeInTheDocument();
+  });
+
+  it('renders Linear link', () => {
+    renderDetailView();
+    expect(screen.getByText('Linear')).toBeInTheDocument();
+  });
+
+  it('renders different raid status colors', () => {
+    const detailWithStatuses = {
+      ...mockDetail,
+      phases: [
+        {
+          ...mockDetail.phases[0],
+          raids: [
+            { ...mockDetail.phases[0].raids[0], status: 'Done', status_type: 'completed' },
+            {
+              id: 'i-2',
+              identifier: 'A-2',
+              title: 'Started task',
+              status: 'In Progress',
+              status_type: 'started',
+              assignee: 'Dev',
+              labels: [],
+              priority: 2,
+              priority_label: 'High',
+              estimate: null,
+              url: '',
+            },
+            {
+              id: 'i-3',
+              identifier: 'A-3',
+              title: 'Cancelled task',
+              status: 'Cancelled',
+              status_type: 'cancelled',
+              assignee: null,
+              labels: [],
+              priority: 4,
+              priority_label: '',
+              estimate: null,
+              url: '',
+            },
+            {
+              id: 'i-4',
+              identifier: 'A-4',
+              title: 'Backlog task',
+              status: 'Backlog',
+              status_type: 'backlog',
+              assignee: null,
+              labels: [],
+              priority: 0,
+              priority_label: '',
+              estimate: null,
+              url: '',
+            },
+          ],
+        },
+      ],
+    };
+    vi.mocked(hooks.useSagaDetail).mockReturnValue({
+      detail: detailWithStatuses,
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    renderDetailView();
+    expect(screen.getByText('Done')).toBeInTheDocument();
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
+    expect(screen.getByText('Backlog')).toBeInTheDocument();
+    expect(screen.getByText('High')).toBeInTheDocument();
+    expect(screen.getByText('Dev')).toBeInTheDocument();
+  });
 });

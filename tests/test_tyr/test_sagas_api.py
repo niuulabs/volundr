@@ -18,11 +18,8 @@ from tyr.domain.models import (
     TrackerMilestone,
     TrackerProject,
 )
-from tyr.ports.saga_repository import SagaRepository
-from tyr.ports.tracker import TrackerPort
 
 from .test_tracker_api import MockSagaRepo, MockTracker
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
