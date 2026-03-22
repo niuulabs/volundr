@@ -344,12 +344,12 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 	cfg.Anthropic.APIKey = "sk-existing-key"
 	cfg.Git.GitHub.Enabled = true
 	cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{{
-		Name:     "GitHub",
-		BaseURL:  "https://api.github.com",
-		Token:    "ghp_existingtoken",
-		Orgs:     []string{"myorg"},
+		Name:    "GitHub",
+		BaseURL: "https://api.github.com",
+		Token:   "test-existing-token", //nolint:gosec // test fixture
+		Orgs:    []string{"myorg"},
 	}}
-	cfg.Git.GitHub.CloneToken = "ghp_clonetoken"
+	cfg.Git.GitHub.CloneToken = "test-clone-token"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 	if len(loaded.Git.GitHub.Instances) == 0 {
 		t.Fatal("expected GitHub instances to be preserved")
 	}
-	if loaded.Git.GitHub.Instances[0].Token != "ghp_existingtoken" {
+	if loaded.Git.GitHub.Instances[0].Token != "test-existing-token" {
 		t.Errorf("expected existing token preserved, got %q", loaded.Git.GitHub.Instances[0].Token)
 	}
 }
@@ -417,12 +417,12 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 	cfg.Anthropic.APIKey = "sk-old-key"
 	cfg.Git.GitHub.Enabled = true
 	cfg.Git.GitHub.Instances = []config.GitHubInstanceConfig{{
-		Name:    "GitHub",
-		BaseURL: "https://api.github.com",
+		Name:     "GitHub",
+		BaseURL:  "https://api.github.com",
 		TokenEnv: "OLD_TOKEN_ENV",
-		Orgs:    []string{"oldorg"},
-	}}
-	cfg.Git.GitHub.CloneToken = "ghp_oldclone"
+		Orgs:     []string{"oldorg"},
+	}} //nolint:gosec // test fixture
+	cfg.Git.GitHub.CloneToken = "test-old-clone"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 		"NEW_TOKEN_ENV",     // New token (env var)
 		"neworg1, neworg2",  // New orgs
 		"https://custom.gh", // New API URL
-		"ghp_newclone",      // New clone token
+		"test-newclone",     // New clone token
 	}, "\n") + "\n"
 
 	oldStdin := os.Stdin
@@ -474,7 +474,7 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 	if inst.BaseURL != "https://custom.gh" {
 		t.Errorf("expected custom URL, got %q", inst.BaseURL)
 	}
-	if loaded.Git.GitHub.CloneToken != "ghp_newclone" {
+	if loaded.Git.GitHub.CloneToken != "test-newclone" {
 		t.Errorf("expected new clone token, got %q", loaded.Git.GitHub.CloneToken)
 	}
 }
@@ -504,16 +504,16 @@ func TestRunInit_PrefillExternalDB(t *testing.T) {
 
 	// Overwrite, keep external DB defaults.
 	input := strings.Join([]string{
-		"y",  // Overwrite? Yes
-		"",   // Listen (keep default)
-		"",   // API key (keep empty)
-		"",   // Database mode (keep external)
-		"",   // DB host (keep existing)
-		"",   // DB port (keep existing)
-		"",   // DB user (keep existing)
-		"",   // DB password (keep existing)
-		"",   // DB name (keep existing)
-		"n",  // Configure GitHub? No
+		"y", // Overwrite? Yes
+		"",  // Listen (keep default)
+		"",  // API key (keep empty)
+		"",  // Database mode (keep external)
+		"",  // DB host (keep existing)
+		"",  // DB port (keep existing)
+		"",  // DB user (keep existing)
+		"",  // DB password (keep existing)
+		"",  // DB name (keep existing)
+		"n", // Configure GitHub? No
 	}, "\n") + "\n"
 
 	oldStdin := os.Stdin
