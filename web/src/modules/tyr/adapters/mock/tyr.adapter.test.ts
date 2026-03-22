@@ -23,7 +23,8 @@ describe('MockTyrService', () => {
       expect(saga.id).toBeDefined();
       expect(saga.name).toBeDefined();
       expect(saga.tracker_id).toBeDefined();
-      expect(saga.repo).toBeDefined();
+      expect(saga.repos).toBeDefined();
+      expect(saga.repos.length).toBeGreaterThan(0);
       expect(saga.feature_branch).toBeDefined();
       expect(saga.status).toBeDefined();
       expect(saga.confidence).toBeGreaterThanOrEqual(0);
@@ -102,7 +103,7 @@ describe('MockTyrService', () => {
 
       expect(saga.id).toBeDefined();
       expect(saga.name).toBe('Test Feature');
-      expect(saga.repo).toBe('github.com/test/repo');
+      expect(saga.repos).toContain('github.com/test/repo');
       expect(saga.status).toBe('active');
       expect(saga.tracker_id).toMatch(/^NIU-\d+$/);
     });
