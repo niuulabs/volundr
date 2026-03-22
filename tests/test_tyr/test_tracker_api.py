@@ -25,6 +25,7 @@ from tyr.domain.models import (
     TrackerMilestone,
     TrackerProject,
 )
+from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
 # ---------------------------------------------------------------------------
@@ -126,6 +127,14 @@ class MockTracker(TrackerPort):
             issues = [i for i in issues if i.milestone_id == milestone_id]
         return issues
 
+    async def get_project_full(
+        self, project_id: str
+    ) -> tuple[TrackerProject, list[TrackerMilestone], list[TrackerIssue]]:
+        project = await self.get_project(project_id)
+        milestones = await self.list_milestones(project_id)
+        issues = await self.list_issues(project_id)
+        return project, milestones, issues
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -206,11 +215,33 @@ def mock_tracker() -> MockTracker:
     return tracker
 
 
+class MockSagaRepo(SagaRepository):
+    """In-memory saga repository for tests."""
+
+    def __init__(self) -> None:
+        self.sagas: list[Saga] = []
+
+    async def save_saga(self, saga: Saga) -> None:
+        self.sagas.append(saga)
+
+    async def list_sagas(self) -> list[Saga]:
+        return list(self.sagas)
+
+    async def get_saga(self, saga_id) -> Saga | None:
+        return next((s for s in self.sagas if s.id == saga_id), None)
+
+    async def delete_saga(self, saga_id) -> bool:
+        before = len(self.sagas)
+        self.sagas = [s for s in self.sagas if s.id != saga_id]
+        return len(self.sagas) < before
+
+
 @pytest.fixture
 def client(mock_tracker: MockTracker) -> TestClient:
     app = FastAPI()
     app.include_router(create_tracker_router())
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+    app.state.saga_repo = MockSagaRepo()
     return TestClient(app)
 
 
@@ -293,7 +324,7 @@ class TestImportProject:
         assert data["feature_branch"] == "feat/alpha"
         assert data["status"] == "ACTIVE"
         assert data["phase_count"] == 2
-        assert data["raid_count"] == 2
+        assert data["raid_count"] == 5
 
     def test_project_not_found(self, client: TestClient):
         resp = client.post(

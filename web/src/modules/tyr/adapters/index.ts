@@ -10,12 +10,11 @@ import type { IDispatcherService } from '../ports';
 import type { ITyrSessionService } from '../ports';
 import type { ITrackerBrowserService } from '../ports';
 
-const useRealApi = import.meta.env.VITE_USE_REAL_TYR_API === 'true';
-const useMockTracker = import.meta.env.VITE_USE_MOCK_TRACKER === 'true';
+const useMocks = import.meta.env.VITE_USE_MOCK_TYR === 'true';
 
-export const tyrService: ITyrService = useRealApi ? new ApiTyrService() : new MockTyrService();
+export const tyrService: ITyrService = useMocks ? new MockTyrService() : new ApiTyrService();
 export const dispatcherService: IDispatcherService = new MockDispatcherService();
 export const tyrSessionService: ITyrSessionService = new MockTyrSessionService();
-export const trackerService: ITrackerBrowserService = useMockTracker
+export const trackerService: ITrackerBrowserService = useMocks
   ? new MockTrackerBrowserService()
   : new ApiTrackerBrowserService();

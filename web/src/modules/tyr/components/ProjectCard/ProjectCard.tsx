@@ -1,20 +1,24 @@
 import { cn } from '@/modules/shared/utils/classnames';
-import { StatusBadge } from '@/modules/shared';
 import type { TrackerProject } from '../../models';
 import styles from './ProjectCard.module.css';
 
 export interface ProjectCardProps {
   project: TrackerProject;
+  imported?: boolean;
   onClick: () => void;
   className?: string;
 }
 
-export function ProjectCard({ project, onClick, className }: ProjectCardProps) {
+export function ProjectCard({ project, imported, onClick, className }: ProjectCardProps) {
   return (
-    <button type="button" className={cn(styles.card, className)} onClick={onClick}>
+    <button
+      type="button"
+      className={cn(styles.card, imported && styles.imported, className)}
+      onClick={onClick}
+    >
       <div className={styles.header}>
         <span className={styles.name}>{project.name}</span>
-        <StatusBadge status={project.status} />
+        {imported && <span className={styles.importedBadge}>Imported</span>}
       </div>
       <p className={styles.description}>{project.description}</p>
       <div className={styles.meta}>

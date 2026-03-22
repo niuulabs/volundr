@@ -10,6 +10,12 @@ import type {
 import { trackerService } from '../adapters';
 
 const niuuApi = createApiClient('/api/v1/niuu');
+const sagasApi = createApiClient('/api/v1/tyr/sagas');
+
+interface ImportedSaga {
+  id: string;
+  tracker_id: string;
+}
 
 interface UseTrackerBrowserResult {
   projects: TrackerProject[];
@@ -19,6 +25,7 @@ interface UseTrackerBrowserResult {
   selectedMilestone: string | null;
   repos: RepoInfo[];
   selectedRepos: SelectedRepo[];
+  importedTrackerIds: Set<string>;
   loading: boolean;
   error: string | null;
   selectProject(projectId: string): void;
@@ -37,6 +44,7 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
   const [selectedMilestone, setSelectedMilestone] = useState<string | null>(null);
   const [repos, setRepos] = useState<RepoInfo[]>([]);
   const [selectedRepos, setSelectedRepos] = useState<SelectedRepo[]>([]);
+  const [importedTrackerIds, setImportedTrackerIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,14 +52,16 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
     let cancelled = false;
     const load = async () => {
       try {
-        const [projectData, reposByProvider] = await Promise.all([
+        const [projectData, reposByProvider, sagas] = await Promise.all([
           trackerService.listProjects(),
           niuuApi.get<Record<string, RepoInfo[]>>('/repos'),
+          sagasApi.get<ImportedSaga[]>(''),
         ]);
         if (!cancelled) {
           setProjects(projectData);
           const flatRepos = Object.values(reposByProvider).flat();
           setRepos(flatRepos);
+          setImportedTrackerIds(new Set(sagas.map(s => s.tracker_id)));
         }
       } catch (e) {
         if (!cancelled) {
@@ -149,6 +159,7 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
     selectedMilestone,
     repos,
     selectedRepos,
+    importedTrackerIds,
     loading,
     error,
     selectProject,

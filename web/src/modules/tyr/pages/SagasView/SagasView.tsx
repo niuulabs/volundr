@@ -1,13 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { MetricCard, StatusBadge, LoadingIndicator } from '@/modules/shared';
-import { BarChart3, Zap, TrendingUp, Download } from 'lucide-react';
+import { LoadingIndicator } from '@/modules/shared';
+import { Download, Trash2 } from 'lucide-react';
 import { useSagas } from '../../hooks';
-import { ConfBadge } from '../../components/ConfBadge';
 import { BranchTag } from '../../components/BranchTag';
 import styles from './SagasView.module.css';
 
 export function SagasView() {
-  const { sagas, loading, error } = useSagas();
+  const { sagas, loading, error, deleteSaga } = useSagas();
   const navigate = useNavigate();
 
   if (loading) {
@@ -18,22 +17,17 @@ export function SagasView() {
     return <div className={styles.error}>{error}</div>;
   }
 
-  const activeSagas = sagas.filter(s => s.status === 'active');
-  const avgConfidence =
-    sagas.length > 0 ? sagas.reduce((sum, s) => sum + s.confidence, 0) / sagas.length : 0;
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await deleteSaga(id);
+    } catch {
+      // handled by hook
+    }
+  };
 
   return (
     <div className={styles.container}>
-      <div className={styles.stats}>
-        <MetricCard label="Total Sagas" value={sagas.length} icon={BarChart3} iconColor="cyan" />
-        <MetricCard label="Active" value={activeSagas.length} icon={Zap} iconColor="emerald" />
-        <MetricCard
-          label="Avg Confidence"
-          value={`${Math.round(avgConfidence * 100)}%`}
-          icon={TrendingUp}
-          iconColor="amber"
-        />
-      </div>
       <div className={styles.importAction}>
         <button
           type="button"
@@ -45,42 +39,54 @@ export function SagasView() {
         </button>
       </div>
       <div className={styles.list}>
-        {sagas.map(saga => (
-          <button
-            key={saga.id}
-            type="button"
-            className={styles.sagaCard}
-            onClick={() => navigate(`/tyr/sagas/${saga.id}`)}
-          >
-            <div className={styles.sagaHeader}>
-              <span className={styles.sagaName}>{saga.name}</span>
-              <StatusBadge status={saga.status} />
-            </div>
-            <div className={styles.sagaMeta}>
-              <span className={styles.trackerId}>{saga.tracker_id}</span>
-              <span className={styles.repo}>{saga.repos.join(', ')}</span>
-              <BranchTag source={saga.feature_branch} />
-              <ConfBadge value={saga.confidence} />
-            </div>
-            <div className={styles.phaseProgress}>
-              <div className={styles.phaseTrack}>
-                <div
-                  className={styles.phaseFill}
-                  style={{
-                    width:
-                      saga.phase_summary.total > 0
-                        ? `${(saga.phase_summary.completed / saga.phase_summary.total) * 100}%`
-                        : '0%',
-                  }}
-                />
+        {sagas.map(saga => {
+          const progressPercent = Math.round(saga.progress * 100);
+          return (
+            <button
+              key={saga.id}
+              type="button"
+              className={styles.sagaCard}
+              onClick={() => navigate(`/tyr/sagas/${saga.id}`)}
+            >
+              <div className={styles.sagaHeader}>
+                <span className={styles.sagaName}>{saga.name}</span>
+                <span className={styles.sagaStatus}>{saga.status}</span>
+                <button
+                  type="button"
+                  className={styles.deleteButton}
+                  onClick={e => handleDelete(e, saga.id)}
+                  aria-label={`Delete ${saga.name}`}
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
-              <span className={styles.phaseLabel}>
-                {saga.phase_summary.completed}/{saga.phase_summary.total} phases
-              </span>
-            </div>
-          </button>
-        ))}
-        {sagas.length === 0 && <div className={styles.empty}>No sagas found</div>}
+              <div className={styles.sagaMeta}>
+                <span className={styles.repo}>{saga.repos.join(', ')}</span>
+                <BranchTag source={saga.feature_branch} />
+                <span className={styles.stat}>{saga.milestone_count} milestones</span>
+                <span className={styles.stat}>{saga.issue_count} issues</span>
+                {saga.url && (
+                  <a
+                    href={saga.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.trackerLink}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    Linear
+                  </a>
+                )}
+              </div>
+              <div className={styles.progressRow}>
+                <span className={styles.progressTrack}>
+                  <span className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
+                </span>
+                <span className={styles.progressLabel}>{progressPercent}%</span>
+              </div>
+            </button>
+          );
+        })}
+        {sagas.length === 0 && <div className={styles.empty}>No sagas imported yet</div>}
       </div>
     </div>
   );

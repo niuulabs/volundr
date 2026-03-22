@@ -8,26 +8,25 @@ via a FastAPI dependency. Supports multiple trackers in parallel.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
-from tyr.domain.models import (
-    Phase,
-    PhaseStatus,
-    Raid,
-    RaidStatus,
-    Saga,
-    SagaStatus,
-    TrackerIssue,
-    TrackerMilestone,
-    TrackerProject,
-)
+from tyr.domain.models import Saga, SagaStatus, TrackerIssue, TrackerMilestone, TrackerProject
+from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
+
+
+def _slugify(name: str) -> str:
+    """Convert a project name to a clean slug for branch names."""
+    slug = name.lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    return slug.strip("-")
 
 
 # ---------------------------------------------------------------------------
@@ -69,8 +68,6 @@ async def resolve_trackers() -> list[TrackerPort]:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Tracker adapters not configured",
     )
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -150,42 +147,36 @@ def create_tracker_router() -> APIRouter:
 
     @router.post("/import", response_model=SagaResponse)
     async def import_project(
+        request: Request,
         body: ImportRequest,
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> SagaResponse:
-        """Import a tracker project as a Saga with Phases and Raids.
+        """Import a tracker project as a Saga reference.
 
-        Creates local references to existing tracker entities.
-        The tracker remains source of truth.
+        Only stores the link between the tracker project and Tyr's
+        execution context. All display data is fetched live from the
+        tracker at read time.
         """
-        # Find the adapter that owns this project
         project: TrackerProject | None = None
-        owning_adapter: TrackerPort | None = None
         for adapter in adapters:
             try:
                 project = await adapter.get_project(body.project_id)
-                owning_adapter = adapter
                 break
             except Exception:
                 continue
 
-        if project is None or owning_adapter is None:
+        if project is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Project not found: {body.project_id}",
             )
 
-        milestones = await owning_adapter.list_milestones(body.project_id)
-        issues = await owning_adapter.list_issues(body.project_id)
-
         now = datetime.now(UTC)
-        saga_id = uuid4()
-
         saga = Saga(
-            id=saga_id,
+            id=uuid4(),
             tracker_id=project.id,
             tracker_type="linear",
-            slug=project.name.lower().replace(" ", "-").replace("—", "-"),
+            slug=project.slug or _slugify(project.name),
             name=project.name,
             repos=body.repos,
             status=SagaStatus.ACTIVE,
@@ -193,49 +184,12 @@ def create_tracker_router() -> APIRouter:
             created_at=now,
         )
 
-        phases: list[Phase] = []
-        for i, ms in enumerate(milestones):
-            phase = Phase(
-                id=uuid4(),
-                saga_id=saga_id,
-                tracker_id=ms.id,
-                number=i + 1,
-                name=ms.name,
-                status=PhaseStatus.PENDING,
-                confidence=0.0,
-            )
-            phases.append(phase)
-
-        milestone_to_phase = {p.tracker_id: p.id for p in phases}
-
-        raids: list[Raid] = []
-        for issue in issues:
-            phase_id = milestone_to_phase.get(issue.milestone_id or "", uuid4())
-            raid = Raid(
-                id=uuid4(),
-                phase_id=phase_id,
-                tracker_id=issue.id,
-                name=issue.title,
-                description=issue.description,
-                acceptance_criteria=[],
-                declared_files=[],
-                estimate_hours=None,
-                status=RaidStatus.PENDING,
-                confidence=0.0,
-                session_id=None,
-                branch=None,
-                chronicle_summary=None,
-                retry_count=0,
-                created_at=now,
-                updated_at=now,
-            )
-            raids.append(raid)
+        saga_repo: SagaRepository = request.app.state.saga_repo
+        await saga_repo.save_saga(saga)
 
         logger.info(
-            "Imported saga '%s' with %d phases and %d raids from project %s",
+            "Imported saga '%s' from project %s",
             saga.name,
-            len(phases),
-            len(raids),
             project.id,
         )
 
@@ -246,8 +200,8 @@ def create_tracker_router() -> APIRouter:
             repos=saga.repos,
             feature_branch=saga.feature_branch,
             status=saga.status.value,
-            phase_count=len(phases),
-            raid_count=len(raids),
+            phase_count=project.milestone_count,
+            raid_count=project.issue_count,
         )
 
     return router

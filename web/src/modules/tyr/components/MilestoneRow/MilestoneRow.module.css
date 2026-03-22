@@ -72,7 +72,7 @@
 .progressFill {
   display: block;
   height: 100%;
-  background-color: var(--color-accent-cyan);
+  background-color: var(--color-brand);
   border-radius: var(--radius-full);
   transition: width var(--transition-fast);
 }

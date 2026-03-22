@@ -100,4 +100,19 @@ data:
 
   000002_integration_connections.down.sql: |
     DROP TABLE IF EXISTS integration_connections;
+
+  000003_saga_repos_array.up.sql: |
+    -- Fix sagas table: rename repo→repos as array, add name and status columns
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS repos TEXT[] NOT NULL DEFAULT '{}';
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE';
+    UPDATE sagas SET repos = ARRAY[repo] WHERE repo IS NOT NULL AND repo != '';
+    ALTER TABLE sagas DROP COLUMN IF EXISTS repo;
+
+  000003_saga_repos_array.down.sql: |
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS repo TEXT NOT NULL DEFAULT '';
+    UPDATE sagas SET repo = repos[1] WHERE array_length(repos, 1) > 0;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS repos;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS name;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS status;
 {{- end }}
