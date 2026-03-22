@@ -37,6 +37,10 @@ export type { SidebarProps } from './components/AppShell';
 // Utils
 export { cn } from './utils/classnames';
 
+// API Client
+export { createApiClient, getAccessToken, setTokenProvider, ApiClientError } from './api/client';
+export type { ApiClient, ApiError } from './api/client';
+
 // Registry
 export { registerModule, getModule, getAllModules } from './registry';
 export { registerProductModule, getProductModules } from './registry';

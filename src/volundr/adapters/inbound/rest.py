@@ -1473,42 +1473,6 @@ def create_router(
         return [ProviderResponse.from_provider_info(p) for p in providers]
 
     @router.get(
-        "/repos",
-        response_model=dict[str, list[RepoResponse]],
-        responses={503: {"model": ErrorResponse}},
-        tags=["Repositories"],
-    )
-    async def list_repos(
-        request: Request,
-    ) -> dict[str, list[RepoResponse]]:
-        """List repositories from all providers visible to the current user.
-
-        Combines shared/org-level providers with the user's own integration
-        connections. Credentials are resolved on-the-fly and never cached.
-        """
-        if repo_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Repo service not available",
-            )
-        user_id = await _optional_user_id(request)
-        repos_by_provider = await repo_service.list_repos(user_id=user_id)
-        return {
-            provider_name: [
-                RepoResponse(
-                    provider=repo.provider,
-                    org=repo.org,
-                    name=repo.name,
-                    url=repo.url,
-                    default_branch=repo.default_branch,
-                    branches=list(repo.branches),
-                )
-                for repo in repos
-            ]
-            for provider_name, repos in repos_by_provider.items()
-        }
-
-    @router.get(
         "/repos/branches",
         response_model=list[str],
         responses={

@@ -100,7 +100,7 @@ query ListMilestones($projectId: String!) {
 """
 
 _LIST_ISSUES_QUERY = """
-query ListIssues($projectId: String!, $first: Int!) {
+query ListIssues($projectId: ID!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
     first: $first
@@ -123,7 +123,7 @@ query ListIssues($projectId: String!, $first: Int!) {
 """
 
 _LIST_ISSUES_BY_MILESTONE_QUERY = """
-query ListIssuesByMilestone($projectId: String!, $milestoneId: String!, $first: Int!) {
+query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
   issues(
     filter: {
       project: { id: { eq: $projectId } }
@@ -149,7 +149,7 @@ query ListIssuesByMilestone($projectId: String!, $milestoneId: String!, $first: 
 """
 
 _CREATE_PROJECT_QUERY = """
-mutation CreateProject($name: String!, $description: String, $teamIds: [String!]!) {
+mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
   projectCreate(input: { name: $name, description: $description, teamIds: $teamIds }) {
     project { id }
     success
@@ -158,7 +158,7 @@ mutation CreateProject($name: String!, $description: String, $teamIds: [String!]
 """
 
 _CREATE_MILESTONE_QUERY = """
-mutation CreateMilestone($name: String!, $projectId: String!, $sortOrder: Float!) {
+mutation CreateMilestone($name: String!, $projectId: ID!, $sortOrder: Float!) {
   projectMilestoneCreate(input: { name: $name, projectId: $projectId, sortOrder: $sortOrder }) {
     projectMilestone { id }
     success
@@ -170,9 +170,9 @@ _CREATE_ISSUE_QUERY = """
 mutation CreateIssue(
   $title: String!,
   $description: String,
-  $projectId: String!,
-  $projectMilestoneId: String,
-  $teamId: String!
+  $projectId: ID!,
+  $projectMilestoneId: ID,
+  $teamId: ID!
 ) {
   issueCreate(input: {
     title: $title,
@@ -261,7 +261,7 @@ class LinearTrackerAdapter(TrackerPort):
     def __init__(
         self,
         api_key: str,
-        team_id: str,
+        team_id: str | None = None,
         api_url: str = LINEAR_API_URL,
         cache_ttl: float = 30.0,
         max_retries: int = 3,
@@ -275,9 +275,21 @@ class LinearTrackerAdapter(TrackerPort):
             max_retries=max_retries,
         )
 
+    async def _get_team_id(self) -> str:
+        """Return the configured team ID, or discover the first available team."""
+        if self._team_id:
+            return self._team_id
+        data = await self._gql.query("{ teams { nodes { id } } }")
+        nodes = data.get("teams", {}).get("nodes", [])
+        if not nodes:
+            raise GraphQLError("No Linear teams accessible with this API key")
+        self._team_id = nodes[0]["id"]
+        return self._team_id
+
     # -- CRUD: create --
 
     async def create_saga(self, saga: Saga) -> str:
+        team_id = await self._get_team_id()
         data = await self._gql.query(
             _CREATE_PROJECT_QUERY,
             {
@@ -287,7 +299,7 @@ class LinearTrackerAdapter(TrackerPort):
                     f"Repos: {', '.join(saga.repos)}\n"
                     f"Branch: {saga.feature_branch}"
                 ),
-                "teamIds": [self._team_id],
+                "teamIds": [team_id],
             },
         )
         project = data.get("projectCreate", {}).get("project")
@@ -327,7 +339,7 @@ class LinearTrackerAdapter(TrackerPort):
                 "description": description,
                 "projectId": raid.tracker_id,
                 "projectMilestoneId": str(raid.phase_id) if raid.phase_id else None,
-                "teamId": self._team_id,
+                "teamId": await self._get_team_id(),
             },
         )
         issue = data.get("issueCreate", {}).get("issue")
@@ -420,6 +432,7 @@ class LinearTrackerAdapter(TrackerPort):
         data = await self._gql.query(_LIST_MILESTONES_QUERY, {"projectId": project_id})
         nodes = data.get("project", {}).get("projectMilestones", {}).get("nodes", [])
         milestones = [self._node_to_tracker_milestone(n, project_id) for n in nodes]
+        milestones.sort(key=lambda m: m.sort_order)
         self._gql.set_cached(cache_key, milestones)
         return milestones
 
@@ -565,11 +578,15 @@ class LinearTrackerAdapter(TrackerPort):
 
 
 def _parse_progress(value: object) -> float:
-    """Parse a progress value that may be a string like '100%' or a float."""
+    """Parse a Linear progress value and return a 0.0–1.0 float.
+
+    Linear returns progress as a percentage float (e.g. 8.33 = 8.33%),
+    or occasionally as a string like '100%'.
+    """
     if value is None:
         return 0.0
-    if isinstance(value, (int, float)):
-        return float(value)
     if isinstance(value, str):
         return float(value.rstrip("%")) / 100.0
+    if isinstance(value, (int, float)):
+        return float(value) / 100.0
     return 0.0
