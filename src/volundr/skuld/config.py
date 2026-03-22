@@ -52,6 +52,8 @@ class SkuldSessionConfig(BaseModel):
     name: str = Field(default="unknown")
     model: str = Field(default="claude-sonnet-4-20250514")
     workspace_dir: str | None = Field(default=None)
+    system_prompt: str = Field(default="")
+    initial_prompt: str = Field(default="")
 
 
 class SkuldSettings(BaseSettings):
@@ -126,6 +128,16 @@ class SkuldSettings(BaseSettings):
             val = os.environ.get("WORKSPACE_DIR")
             if val:
                 self.session.workspace_dir = val
+
+        if not self.session.system_prompt:
+            val = os.environ.get("SESSION_SYSTEM_PROMPT")
+            if val:
+                self.session.system_prompt = val
+
+        if not self.session.initial_prompt:
+            val = os.environ.get("SESSION_INITIAL_PROMPT")
+            if val:
+                self.session.initial_prompt = val
 
         if self.host == "0.0.0.0":
             val = os.environ.get("HOST")

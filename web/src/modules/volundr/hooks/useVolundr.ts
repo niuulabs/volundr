@@ -44,6 +44,8 @@ interface UseVolundrResult {
     credentialNames?: string[];
     integrationIds?: string[];
     resourceConfig?: Record<string, string | undefined>;
+    systemPrompt?: string;
+    initialPrompt?: string;
   }) => Promise<VolundrSession>;
   connectSession: (config: { name: string; hostname: string }) => Promise<VolundrSession>;
   updateSession: (sessionId: string, updates: { name?: string }) => Promise<VolundrSession>;
@@ -222,6 +224,8 @@ export function useVolundr(): UseVolundrResult {
       credentialNames?: string[];
       integrationIds?: string[];
       resourceConfig?: Record<string, string | undefined>;
+      systemPrompt?: string;
+      initialPrompt?: string;
     }) => {
       return volundrService.startSession(config);
     },

@@ -131,6 +131,16 @@ class SessionCreate(BaseModel):
         default_factory=dict,
         description="Resource allocation overrides (cpu, memory, gpu)",
     )
+    system_prompt: str = Field(
+        default="",
+        max_length=100_000,
+        description="System prompt appended to Claude's default instructions",
+    )
+    initial_prompt: str = Field(
+        default="",
+        max_length=100_000,
+        description="Initial user message sent when the CLI starts",
+    )
     issue_id: str | None = Field(
         default=None,
         max_length=255,
@@ -1044,6 +1054,8 @@ def create_router(
                 credential_names=data.credential_names,
                 integration_ids=data.integration_ids,
                 resource_config=data.resource_config or None,
+                system_prompt=data.system_prompt,
+                initial_prompt=data.initial_prompt,
             )
             return SessionResponse.from_session(started)
         except SessionStateError as e:

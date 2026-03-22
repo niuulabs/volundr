@@ -316,6 +316,15 @@ class DirectK8sPodManager(PodManager):
             env.append({"name": "SKULD__SESSION__MODEL", "value": session_config["model"]})
             env.append({"name": "MODEL", "value": session_config["model"]})
 
+        if session_config.get("systemPrompt"):
+            env.append(
+                {"name": "SKULD__SESSION__SYSTEM_PROMPT", "value": session_config["systemPrompt"]}
+            )
+        if session_config.get("initialPrompt"):
+            env.append(
+                {"name": "SKULD__SESSION__INITIAL_PROMPT", "value": session_config["initialPrompt"]}
+            )
+
         # Handle extra env passthrough.
         extra_env = spec.values.get("env", {})
         if isinstance(extra_env, dict):

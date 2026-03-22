@@ -646,6 +646,9 @@ sessionContributors:
   - adapter: "volundr.adapters.outbound.contributors.template.TemplateContributor"
     kwargs: {}
     secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.prompt.PromptContributor"
+    kwargs: {}
+    secretKwargs: []
   - adapter: "volundr.adapters.outbound.contributors.git.GitContributor"
     kwargs: {}
     secretKwargs: []

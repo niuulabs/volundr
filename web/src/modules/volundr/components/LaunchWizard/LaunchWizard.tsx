@@ -31,6 +31,8 @@ export interface LaunchConfig {
   credentialNames?: string[];
   integrationIds?: string[];
   resourceConfig?: Record<string, string | undefined>;
+  systemPrompt?: string;
+  initialPrompt?: string;
 }
 
 export type SourceType = 'git' | 'local_mount';
@@ -190,6 +192,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
       credentialNames: state.selectedCredentials.length ? state.selectedCredentials : undefined,
       integrationIds: state.selectedIntegrations.length ? state.selectedIntegrations : undefined,
       resourceConfig: Object.keys(resourceConfig).length > 0 ? resourceConfig : undefined,
+      systemPrompt: state.systemPrompt || undefined,
     });
   }, [state, onLaunch]);
 

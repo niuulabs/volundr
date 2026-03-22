@@ -778,6 +778,8 @@ export class ApiVolundrService implements IVolundrService {
     integrationIds?: string[];
     resourceConfig?: Record<string, string | undefined>;
     trackerIssue?: import('@/models').TrackerIssue;
+    systemPrompt?: string;
+    initialPrompt?: string;
   }): Promise<VolundrSession> {
     const createRequest: ApiSessionCreate = {
       name: config.name,
@@ -790,6 +792,8 @@ export class ApiVolundrService implements IVolundrService {
       credential_names: config.credentialNames?.length ? config.credentialNames : undefined,
       integration_ids: config.integrationIds?.length ? config.integrationIds : undefined,
       resource_config: config.resourceConfig,
+      system_prompt: config.systemPrompt,
+      initial_prompt: config.initialPrompt,
       issue_id: config.trackerIssue?.identifier ?? null,
       issue_url: config.trackerIssue?.url ?? null,
     };
