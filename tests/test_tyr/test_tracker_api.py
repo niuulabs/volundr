@@ -65,6 +65,7 @@ class MockTracker(TrackerPort):
             slug="test",
             name="Test",
             repos=[],
+            feature_branch="feat/test",
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,

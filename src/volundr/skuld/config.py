@@ -50,7 +50,7 @@ class SkuldSessionConfig(BaseModel):
 
     id: str = Field(default="unknown")
     name: str = Field(default="unknown")
-    model: str = Field(default="claude-sonnet-4-20250514")
+    model: str = Field(default="claude-sonnet-4-6")
     workspace_dir: str | None = Field(default=None)
     system_prompt: str = Field(default="")
     initial_prompt: str = Field(default="")
@@ -119,7 +119,7 @@ class SkuldSettings(BaseSettings):
             if val:
                 self.session.name = val
 
-        if self.session.model == "claude-sonnet-4-20250514":
+        if self.session.model == "claude-sonnet-4-6":
             val = os.environ.get("MODEL")
             if val:
                 self.session.model = val

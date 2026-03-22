@@ -118,7 +118,7 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
         if (existing) {
           return prev.filter(r => r.repoId !== repoId);
         }
-        const repo = repos.find(r => `${r.org}/${r.name}` === repoId);
+        const repo = repos.find(r => r.url === repoId);
         return [...prev, { repoId, branch: repo?.default_branch ?? 'main' }];
       });
     },

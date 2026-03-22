@@ -12,6 +12,12 @@ data:
       id: {{ .Values.session.id | quote }}
       name: {{ .Values.session.name | quote }}
       model: {{ .Values.session.model | quote }}
+      {{- if .Values.session.systemPrompt }}
+      system_prompt: {{ .Values.session.systemPrompt | quote }}
+      {{- end }}
+      {{- if .Values.session.initialPrompt }}
+      initial_prompt: {{ .Values.session.initialPrompt | quote }}
+      {{- end }}
 
     transport: {{ .Values.broker.transport | default "sdk" | quote }}
     skip_permissions: {{ .Values.broker.skipPermissions | default true }}

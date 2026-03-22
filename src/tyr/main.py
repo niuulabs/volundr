@@ -15,12 +15,17 @@ from niuu.ports.credentials import CredentialStorePort
 from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class, resolve_secret_kwargs
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
+from tyr.adapters.volundr_http import VolundrHTTPAdapter
+from tyr.api.dispatch import create_dispatch_router
+from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
+from tyr.api.dispatch import resolve_volundr
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
+from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- Routers --
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
+    app.include_router(create_dispatch_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -128,6 +134,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return saga_repo
 
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
+            app.dependency_overrides[dispatch_resolve_saga_repo] = _resolve_saga_repo
+
+            # Wire Volundr adapter
+            volundr_adapter = VolundrHTTPAdapter(settings.volundr.url)
+
+            async def _resolve_volundr() -> VolundrPort:
+                return volundr_adapter
+
+            app.dependency_overrides[resolve_volundr] = _resolve_volundr
 
             logger.info("Tyr started — database pool ready")
             yield

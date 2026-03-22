@@ -29,7 +29,7 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
   const selectedIds = selected.map(r => r.repoId);
 
   const available = repos.filter(repo => {
-    const repoId = `${repo.org}/${repo.name}`;
+    const repoId = repo.url;
     if (selectedIds.includes(repoId)) {
       return false;
     }
@@ -57,7 +57,7 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
         {open && available.length > 0 && (
           <div className={styles.dropdown}>
             {available.map(repo => {
-              const repoId = `${repo.org}/${repo.name}`;
+              const repoId = repo.url;
               return (
                 <button
                   key={repoId}
@@ -89,11 +89,12 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
       {selected.length > 0 && (
         <div className={styles.selectedList}>
           {selected.map(sel => {
-            const repo = repos.find(r => `${r.org}/${r.name}` === sel.repoId);
+            const repo = repos.find(r => r.url === sel.repoId);
             const branches = repo?.branches ?? [];
+            const displayName = repo ? `${repo.org}/${repo.name}` : sel.repoId;
             return (
               <div key={sel.repoId} className={styles.selectedItem}>
-                <span className={styles.repoName}>{sel.repoId}</span>
+                <span className={styles.repoName}>{displayName}</span>
                 {branches.length > 0 ? (
                   <select
                     className={styles.branchSelect}

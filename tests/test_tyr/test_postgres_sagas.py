@@ -35,6 +35,7 @@ def saga() -> Saga:
         slug="alpha",
         name="Alpha",
         repos=["org/repo"],
+            feature_branch="feat/alpha",
         status=SagaStatus.ACTIVE,
         confidence=0.0,
         created_at=datetime.now(UTC),

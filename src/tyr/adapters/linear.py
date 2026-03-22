@@ -645,6 +645,7 @@ class LinearTrackerAdapter(TrackerPort):
             slug=node.get("name", "").lower().replace(" ", "-"),
             name=node.get("name", ""),
             repos=[],
+            feature_branch="feat/test",
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,

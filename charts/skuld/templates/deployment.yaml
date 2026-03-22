@@ -134,10 +134,11 @@ spec:
               {{- else }}
               AUTH_URL="$REPO_URL"
               {{- end }}
-              if [ -d "$WORKSPACE/.git" ]; then
-                echo "Workspace already contains a git repository, skipping clone"
+              if [ -d "$WORKSPACE/.git" ] && git -C "$WORKSPACE" rev-parse HEAD >/dev/null 2>&1; then
+                echo "Workspace already contains a valid git repository, skipping clone"
               else
-                # Use init+fetch+checkout instead of clone (works with non-empty directories)
+                # Clean up any broken .git state
+                rm -rf "$WORKSPACE/.git"
                 mkdir -p "$WORKSPACE"
                 git init "$WORKSPACE"
                 git -C "$WORKSPACE" remote add origin "$AUTH_URL"
@@ -242,6 +243,14 @@ spec:
             {{- range .Values.envVars }}
             - name: {{ .name }}
               value: {{ .value | quote }}
+            {{- end }}
+            {{- if .Values.session.systemPrompt }}
+            - name: SESSION_SYSTEM_PROMPT
+              value: {{ .Values.session.systemPrompt | quote }}
+            {{- end }}
+            {{- if .Values.session.initialPrompt }}
+            - name: SESSION_INITIAL_PROMPT
+              value: {{ .Values.session.initialPrompt | quote }}
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

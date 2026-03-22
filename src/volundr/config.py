@@ -944,6 +944,18 @@ class GitConfig(BaseModel):
     workflow: GitWorkflowConfig = Field(default_factory=GitWorkflowConfig)
 
 
+class AIModelConfig(BaseModel):
+    """Available AI model — configured via Helm values.
+
+    Mirrors niuu.domain.models.AIModelConfig but as a pydantic model
+    for settings deserialization.
+    """
+
+    id: str
+    name: str
+    cost_per_million_tokens: float = 0.0
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -984,6 +996,7 @@ class Settings(BaseSettings):
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
+    models: list[AIModelConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)
     mcp_servers: list[MCPServerEntry] = Field(default_factory=list)
