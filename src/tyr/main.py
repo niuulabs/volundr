@@ -9,48 +9,19 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
-from tyr.api.tracker import create_tracker_router
+from niuu.adapters.memory_credential_store import MemoryCredentialStore
+from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
+from niuu.domain.models import IntegrationType
+from niuu.ports.credentials import CredentialStorePort
+from niuu.ports.git import GitProvider
+from niuu.ports.integrations import IntegrationRepository
+from niuu.utils import import_class
+from tyr.api.tracker import create_tracker_router, resolve_git_providers, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
 from tyr.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
-
-
-def _create_tracker_adapter(settings: Settings) -> TrackerPort | None:
-    """Create a tracker adapter from config using dynamic import.
-
-    Returns None if no adapter is configured (e.g. no team_id).
-    """
-    cfg = settings.tracker
-    if not cfg.team_id:
-        logger.info("No tracker team_id configured, tracker browsing disabled")
-        return None
-
-    try:
-        import importlib
-
-        module_path, class_name = cfg.adapter.rsplit(".", 1)
-        module = importlib.import_module(module_path)
-        cls = getattr(module, class_name)
-
-        # api_key comes from env for now (TRACKER__API_KEY would need
-        # to be added to config, or resolved from credential store)
-        import os
-
-        api_key = os.environ.get("LINEAR_API_KEY", "")
-        if not api_key:
-            logger.warning("LINEAR_API_KEY not set, tracker adapter may fail")
-
-        return cls(
-            api_key=api_key,
-            team_id=cfg.team_id,
-            cache_ttl=cfg.cache_ttl_seconds,
-            max_retries=cfg.rate_limit_max_retries,
-        )
-    except Exception:
-        logger.exception("Failed to create tracker adapter")
-        return None
 
 
 def _configure_logging(settings: Settings) -> None:
@@ -61,6 +32,94 @@ def _configure_logging(settings: Settings) -> None:
         if settings.logging.format == "text"
         else "%(message)s",
     )
+
+
+async def _resolve_tracker_adapters(
+    request: Request,
+    integration_repo: IntegrationRepository,
+    credential_store: CredentialStorePort,
+) -> list[TrackerPort]:
+    """Resolve TrackerPort adapters from the user's integration credentials.
+
+    Uses dynamic adapter pattern: config specifies fully-qualified class path,
+    credentials + config are passed as **kwargs to the constructor.
+    """
+    user_id = request.headers.get("X-User-ID", "default")
+
+    connections = await integration_repo.list_connections(
+        user_id,
+        integration_type=IntegrationType.ISSUE_TRACKER,
+    )
+
+    adapters: list[TrackerPort] = []
+    for conn in connections:
+        if not conn.enabled:
+            continue
+        try:
+            cred = await credential_store.get_value(
+                "user",
+                conn.user_id,
+                conn.credential_name,
+            )
+            if cred is None:
+                continue
+
+            cls = import_class(conn.adapter)
+            kwargs = {**cred, **conn.config}
+            adapter = cls(**kwargs)
+            adapters.append(adapter)
+        except Exception:
+            logger.warning(
+                "Failed to create tracker adapter for connection %s",
+                conn.id,
+                exc_info=True,
+            )
+
+    return adapters
+
+
+async def _resolve_git_provider_adapters(
+    request: Request,
+    integration_repo: IntegrationRepository,
+    credential_store: CredentialStorePort,
+) -> list[GitProvider]:
+    """Resolve GitProvider adapters from the user's source control integrations.
+
+    Uses dynamic adapter pattern: config specifies fully-qualified class path,
+    credentials + config are passed as **kwargs to the constructor.
+    """
+    user_id = request.headers.get("X-User-ID", "default")
+
+    connections = await integration_repo.list_connections(
+        user_id,
+        integration_type=IntegrationType.SOURCE_CONTROL,
+    )
+
+    adapters: list[GitProvider] = []
+    for conn in connections:
+        if not conn.enabled:
+            continue
+        try:
+            cred = await credential_store.get_value(
+                "user",
+                conn.user_id,
+                conn.credential_name,
+            )
+            if cred is None:
+                continue
+
+            cls = import_class(conn.adapter)
+            kwargs = {**cred, **conn.config}
+            adapter = cls(**kwargs)
+            adapters.append(adapter)
+        except Exception:
+            logger.warning(
+                "Failed to create git provider adapter for connection %s",
+                conn.id,
+                exc_info=True,
+            )
+
+    return adapters
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -78,10 +137,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.settings = settings
 
-    # -- Wire tracker adapter --
-    tracker_adapter = _create_tracker_adapter(settings)
-    if tracker_adapter:
-        app.include_router(create_tracker_router(tracker_adapter))
+    # -- Tracker browsing router --
+    app.include_router(create_tracker_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -89,10 +146,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings = app.state.settings
         async with database_pool(settings.database) as pool:
             app.state.pool = pool
+
+            # Wire shared credential/integration infrastructure
+            integration_repo = PostgresIntegrationRepository(pool)
+            credential_store = MemoryCredentialStore()
+
+            # Override the tracker resolver dependency with real wiring
+            async def _resolve(request: Request) -> list[TrackerPort]:
+                return await _resolve_tracker_adapters(request, integration_repo, credential_store)
+
+            app.dependency_overrides[resolve_trackers] = _resolve
+
+            # Override the git provider resolver dependency with real wiring
+            async def _resolve_git(request: Request) -> list[GitProvider]:
+                return await _resolve_git_provider_adapters(
+                    request, integration_repo, credential_store
+                )
+
+            app.dependency_overrides[resolve_git_providers] = _resolve_git
+
             logger.info("Tyr started — database pool ready")
             yield
-            if tracker_adapter and hasattr(tracker_adapter, "close"):
-                await tracker_adapter.close()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan

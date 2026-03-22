@@ -1,4 +1,8 @@
-"""Tests for tracker REST API endpoints."""
+"""Tests for tracker REST API endpoints.
+
+Tests the tracker browsing endpoints by overriding the
+_resolve_tracker_adapters FastAPI dependency with a mock TrackerPort.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tyr.api.tracker import create_tracker_router
+from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -56,11 +60,10 @@ class MockTracker(TrackerPort):
         return Saga(
             id=uuid4(),
             tracker_id=saga_id,
-            tracker_type="linear",
+            tracker_type="mock",
             slug="test",
             name="Test",
-            repo="",
-            feature_branch="",
+            repos=[],
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
@@ -206,8 +209,8 @@ def mock_tracker() -> MockTracker:
 @pytest.fixture
 def client(mock_tracker: MockTracker) -> TestClient:
     app = FastAPI()
-    router = create_tracker_router(mock_tracker)
-    app.include_router(router)
+    app.include_router(create_tracker_router())
+    app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     return TestClient(app)
 
 
@@ -218,7 +221,7 @@ def client(mock_tracker: MockTracker) -> TestClient:
 
 class TestListProjects:
     def test_returns_all(self, client: TestClient):
-        resp = client.get("/api/tracker/projects")
+        resp = client.get("/api/v1/tyr/tracker/projects")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 2
@@ -228,47 +231,47 @@ class TestListProjects:
 
 class TestGetProject:
     def test_found(self, client: TestClient):
-        resp = client.get("/api/tracker/projects/proj-1")
+        resp = client.get("/api/v1/tyr/tracker/projects/proj-1")
         assert resp.status_code == 200
         data = resp.json()
         assert data["id"] == "proj-1"
         assert data["name"] == "Alpha"
 
     def test_not_found(self, client: TestClient):
-        resp = client.get("/api/tracker/projects/nonexistent")
+        resp = client.get("/api/v1/tyr/tracker/projects/nonexistent")
         assert resp.status_code == 404
 
 
 class TestListMilestones:
     def test_returns_milestones(self, client: TestClient):
-        resp = client.get("/api/tracker/projects/proj-1/milestones")
+        resp = client.get("/api/v1/tyr/tracker/projects/proj-1/milestones")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 2
         assert data[0]["name"] == "Phase 1"
 
     def test_empty_milestones(self, client: TestClient):
-        resp = client.get("/api/tracker/projects/proj-2/milestones")
+        resp = client.get("/api/v1/tyr/tracker/projects/proj-2/milestones")
         assert resp.status_code == 200
         assert resp.json() == []
 
 
 class TestListIssues:
     def test_all_issues(self, client: TestClient):
-        resp = client.get("/api/tracker/projects/proj-1/issues")
+        resp = client.get("/api/v1/tyr/tracker/projects/proj-1/issues")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 2
 
     def test_filtered_by_milestone(self, client: TestClient):
-        resp = client.get("/api/tracker/projects/proj-1/issues?milestone_id=ms-1")
+        resp = client.get("/api/v1/tyr/tracker/projects/proj-1/issues?milestone_id=ms-1")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 1
         assert data[0]["identifier"] == "ALPHA-1"
 
     def test_no_matching_milestone(self, client: TestClient):
-        resp = client.get("/api/tracker/projects/proj-1/issues?milestone_id=nonexistent")
+        resp = client.get("/api/v1/tyr/tracker/projects/proj-1/issues?milestone_id=nonexistent")
         assert resp.status_code == 200
         assert resp.json() == []
 
@@ -276,31 +279,28 @@ class TestListIssues:
 class TestImportProject:
     def test_success(self, client: TestClient):
         resp = client.post(
-            "/api/tracker/import",
+            "/api/v1/tyr/tracker/import",
             json={
                 "project_id": "proj-1",
-                "repo": "org/repo",
-                "feature_branch": "feat/import",
+                "repos": ["org/repo"],
             },
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["tracker_id"] == "proj-1"
         assert data["name"] == "Alpha"
-        assert data["repo"] == "org/repo"
-        assert data["feature_branch"] == "feat/import"
+        assert data["repos"] == ["org/repo"]
+        assert data["feature_branch"] == "feat/alpha"
         assert data["status"] == "ACTIVE"
         assert data["phase_count"] == 2
         assert data["raid_count"] == 2
 
-    def test_project_not_found(self, client: TestClient, mock_tracker: MockTracker):
-        """Import with a nonexistent project raises ValueError (unhandled)."""
-        with pytest.raises(ValueError, match="Project not found"):
-            client.post(
-                "/api/tracker/import",
-                json={
-                    "project_id": "nonexistent",
-                    "repo": "org/repo",
-                    "feature_branch": "feat/x",
-                },
-            )
+    def test_project_not_found(self, client: TestClient):
+        resp = client.post(
+            "/api/v1/tyr/tracker/import",
+            json={
+                "project_id": "nonexistent",
+                "repos": ["org/repo"],
+            },
+        )
+        assert resp.status_code == 404

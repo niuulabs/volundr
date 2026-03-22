@@ -9,7 +9,7 @@ export interface Saga {
   tracker_type: string;
   slug: string;
   name: string;
-  repo: string;
+  repos: string[];
   feature_branch: string;
   status: SagaStatus;
   confidence: number;

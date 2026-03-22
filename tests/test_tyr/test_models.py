@@ -149,8 +149,7 @@ class TestSaga:
             tracker_type="linear",
             slug="my-saga",
             name="My Saga",
-            repo="niuulabs/volundr",
-            feature_branch="feat/my-saga",
+            repos=["niuulabs/volundr"],
             status=SagaStatus.ACTIVE,
             confidence=0.9,
             created_at=NOW,
@@ -159,6 +158,8 @@ class TestSaga:
         assert saga.name == "My Saga"
         assert saga.status == SagaStatus.ACTIVE
         assert saga.confidence == 0.9
+        assert saga.repos == ["niuulabs/volundr"]
+        assert saga.feature_branch == "feat/my-saga"
 
     def test_frozen(self) -> None:
         saga = Saga(
@@ -167,8 +168,7 @@ class TestSaga:
             tracker_type="linear",
             slug="s",
             name="S",
-            repo="r",
-            feature_branch="f",
+            repos=["r"],
             status=SagaStatus.ACTIVE,
             confidence=0.5,
             created_at=NOW,

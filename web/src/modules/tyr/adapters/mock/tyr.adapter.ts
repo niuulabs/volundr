@@ -26,7 +26,7 @@ export class MockTyrService implements ITyrService {
       tracker_type: 'linear',
       slug: spec.toLowerCase().replace(/\s+/g, '-').slice(0, 40),
       name: spec,
-      repo,
+      repos: [repo],
       feature_branch: `feat/${spec.toLowerCase().replace(/\s+/g, '-').slice(0, 30)}`,
       status: 'active',
       confidence: 0.5,

@@ -3,8 +3,94 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
+
+
+@dataclass(frozen=True)
+class Principal:
+    """Authenticated identity extracted from JWT."""
+
+    user_id: str
+    email: str
+    tenant_id: str
+    roles: list[str]
+
+
+class IntegrationType(StrEnum):
+    """Category of integration."""
+
+    SOURCE_CONTROL = "source_control"
+    ISSUE_TRACKER = "issue_tracker"
+    MESSAGING = "messaging"
+    AI_PROVIDER = "ai_provider"
+
+
+@dataclass(frozen=True)
+class IntegrationConnection:
+    """A configured integration connection (e.g., issue tracker)."""
+
+    id: str
+    user_id: str
+    integration_type: IntegrationType
+    adapter: str  # fully-qualified class path
+    credential_name: str  # reference to stored credential
+    config: dict  # adapter-specific config
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    slug: str = ""  # references IntegrationDefinition.slug
+
+
+class SecretType(StrEnum):
+    """Type of stored credential."""
+
+    API_KEY = "api_key"
+    OAUTH_TOKEN = "oauth_token"
+    GIT_CREDENTIAL = "git_credential"
+    SSH_KEY = "ssh_key"
+    TLS_CERT = "tls_cert"
+    GENERIC = "generic"
+
+
+@dataclass(frozen=True)
+class StoredCredential:
+    """Metadata for a stored credential (never contains secret values)."""
+
+    id: str
+    name: str
+    secret_type: SecretType
+    keys: tuple[str, ...]
+    metadata: dict
+    owner_id: str
+    owner_type: str  # "user" | "tenant"
+    created_at: datetime
+    updated_at: datetime
+
+
+class GitProviderType(StrEnum):
+    """Type of git hosting provider."""
+
+    GITHUB = "github"
+    GITLAB = "gitlab"
+    BITBUCKET = "bitbucket"
+    GENERIC = "generic"
+
+
+@dataclass(frozen=True)
+class RepoInfo:
+    """Information about a git repository."""
+
+    provider: GitProviderType
+    org: str
+    name: str
+    clone_url: str
+    url: str  # Web URL for the repo
+    default_branch: str = "main"
+    branches: tuple[str, ...] = ()
 
 
 class CacheEntry:

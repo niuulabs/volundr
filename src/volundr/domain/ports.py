@@ -13,15 +13,16 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from niuu.ports.credentials import CredentialStorePort  # noqa: F401
+from niuu.ports.git import GitProvider as _NiuuGitProvider  # noqa: F401
+from niuu.ports.integrations import IntegrationRepository  # noqa: F401
 from volundr.domain.models import (
     Chronicle,
     CIStatus,
     ClusterResourceInfo,
     CredentialMapping,
     ForgeProfile,
-    GitProviderType,
     IntegrationConnection,
-    IntegrationType,
     MCPServerConfig,
     Model,
     ModelProvider,
@@ -45,7 +46,6 @@ from volundr.domain.models import (
     SessionStatus,
     Stats,
     StorageQuota,
-    StoredCredential,
     Tenant,
     TenantMembership,
     TimelineEvent,
@@ -278,26 +278,13 @@ class PricingProvider(ABC):
         """
 
 
-class GitProvider(ABC):
-    """Port for git repository operations.
+class GitProvider(_NiuuGitProvider):
+    """Extended git provider port with Volundr-specific operations.
 
-    Each instance represents a single git provider endpoint (e.g., github.com,
-    gitlab.com, or a self-hosted GitLab instance). Multiple instances can be
-    registered to support multiple providers/instances simultaneously.
+    Inherits read-only operations (list_repos, list_branches, provider_type,
+    name, base_url) from niuu's GitProvider and adds Volundr-specific methods
+    for repo validation, parsing, and URL generation.
     """
-
-    @property
-    @abstractmethod
-    def provider_type(self) -> GitProviderType:
-        """Return the type of this git provider."""
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Return a human-readable name for this provider instance.
-
-        Examples: 'GitHub', 'GitLab', 'GitLab (self-hosted)'
-        """
 
     @property
     @abstractmethod
@@ -346,32 +333,6 @@ class GitProvider(ABC):
 
         Returns:
             Authenticated clone URL, or None if not supported.
-        """
-
-    @abstractmethod
-    async def list_repos(self, org: str) -> list[RepoInfo]:
-        """List all repositories in an organization/group.
-
-        Args:
-            org: Organization or group name.
-
-        Returns:
-            List of repositories in the organization.
-        """
-
-    @abstractmethod
-    async def list_branches(self, repo_url: str) -> list[str]:
-        """List all branches for a specific repository.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            List of branch names.
-
-        Raises:
-            GitAuthError: If authentication fails.
-            GitRepoNotFoundError: If the repository is not found.
         """
 
 
@@ -789,33 +750,6 @@ class IssueTrackerProvider(ABC):
         """Update the status of an issue."""
 
 
-class IntegrationRepository(ABC):
-    """Port for integration connection persistence."""
-
-    @abstractmethod
-    async def list_connections(
-        self,
-        user_id: str,
-        integration_type: IntegrationType | None = None,
-    ) -> list[IntegrationConnection]:
-        """List connections for a user, optionally filtered by type."""
-
-    @abstractmethod
-    async def get_connection(self, connection_id: str) -> IntegrationConnection | None:
-        """Get a single connection by ID."""
-
-    @abstractmethod
-    async def save_connection(
-        self,
-        connection: IntegrationConnection,
-    ) -> IntegrationConnection:
-        """Create or update a connection."""
-
-    @abstractmethod
-    async def delete_connection(self, connection_id: str) -> None:
-        """Delete a connection by ID."""
-
-
 class ProjectMappingRepository(ABC):
     """Port for project mapping persistence (repo URL -> tracker project)."""
 
@@ -1135,62 +1069,6 @@ class GatewayPort(ABC):
             JWT/auth config needed by Skuld's HTTPRoute template.
             Empty dict when gateway routing is not configured.
         """
-
-
-class CredentialStorePort(ABC):
-    """Port for pluggable credential storage (Vault, Infisical, memory)."""
-
-    @abstractmethod
-    async def store(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-        secret_type: SecretType,
-        data: dict[str, str],
-        metadata: dict | None = None,
-    ) -> StoredCredential:
-        """Store a credential. Overwrites if name already exists."""
-
-    @abstractmethod
-    async def get(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-    ) -> StoredCredential | None:
-        """Get credential metadata by name. Returns None if not found."""
-
-    @abstractmethod
-    async def get_value(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-    ) -> dict[str, str] | None:
-        """Get credential secret data by name. Returns None if not found."""
-
-    @abstractmethod
-    async def delete(
-        self,
-        owner_type: str,
-        owner_id: str,
-        name: str,
-    ) -> None:
-        """Delete a credential. No-op if not found."""
-
-    @abstractmethod
-    async def list(
-        self,
-        owner_type: str,
-        owner_id: str,
-        secret_type: SecretType | None = None,
-    ) -> list[StoredCredential]:
-        """List credentials for an owner, optionally filtered by type."""
-
-    @abstractmethod
-    async def health_check(self) -> bool:
-        """Check if the credential store backend is reachable."""
 
 
 class SecretMountStrategy(ABC):

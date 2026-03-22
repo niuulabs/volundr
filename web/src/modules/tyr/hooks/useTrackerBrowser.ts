@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TrackerProject, TrackerMilestone, TrackerIssue } from '../models';
+import type { TrackerProject, TrackerMilestone, TrackerIssue, RepoInfo } from '../models';
 import { trackerService } from '../adapters';
 
 interface UseTrackerBrowserResult {
@@ -8,12 +8,15 @@ interface UseTrackerBrowserResult {
   milestones: TrackerMilestone[];
   issues: TrackerIssue[];
   selectedMilestone: string | null;
+  repos: RepoInfo[];
+  selectedRepos: string[];
   loading: boolean;
   error: string | null;
   selectProject(projectId: string): void;
   clearProject(): void;
   filterByMilestone(milestoneId: string | null): void;
-  importProject(repo: string, featureBranch: string): Promise<void>;
+  toggleRepo(repoId: string): void;
+  importProject(): Promise<void>;
 }
 
 export function useTrackerBrowser(): UseTrackerBrowserResult {
@@ -22,16 +25,22 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
   const [milestones, setMilestones] = useState<TrackerMilestone[]>([]);
   const [issues, setIssues] = useState<TrackerIssue[]>([]);
   const [selectedMilestone, setSelectedMilestone] = useState<string | null>(null);
+  const [repos, setRepos] = useState<RepoInfo[]>([]);
+  const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const fetch = async () => {
+    const load = async () => {
       try {
-        const data = await trackerService.listProjects();
+        const [projectData, repoData] = await Promise.all([
+          trackerService.listProjects(),
+          trackerService.listRepos(),
+        ]);
         if (!cancelled) {
-          setProjects(data);
+          setProjects(projectData);
+          setRepos(repoData);
         }
       } catch (e) {
         if (!cancelled) {
@@ -45,7 +54,7 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
     };
     setLoading(true);
     setError(null);
-    fetch();
+    load();
     return () => {
       cancelled = true;
     };
@@ -81,24 +90,33 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
     setSelectedMilestone(milestoneId);
   }, []);
 
-  const importProject = useCallback(
-    async (repo: string, featureBranch: string) => {
-      if (!selectedProject) {
-        return;
+  const toggleRepo = useCallback((repoId: string) => {
+    setSelectedRepos(prev => {
+      if (prev.includes(repoId)) {
+        return prev.filter(r => r !== repoId);
       }
-      setLoading(true);
-      setError(null);
-      try {
-        await trackerService.importProject(selectedProject.id, repo, featureBranch);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        throw e;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [selectedProject]
-  );
+      return [...prev, repoId];
+    });
+  }, []);
+
+  const importProject = useCallback(async () => {
+    if (!selectedProject) {
+      return;
+    }
+    if (selectedRepos.length === 0) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await trackerService.importProject(selectedProject.id, selectedRepos);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProject, selectedRepos]);
 
   return {
     projects,
@@ -106,11 +124,14 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
     milestones,
     issues,
     selectedMilestone,
+    repos,
+    selectedRepos,
     loading,
     error,
     selectProject,
     clearProject,
     filterByMilestone,
+    toggleRepo,
     importProject,
   };
 }

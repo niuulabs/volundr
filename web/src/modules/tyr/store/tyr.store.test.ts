@@ -8,7 +8,7 @@ const mockSaga: Saga = {
   tracker_type: 'linear',
   slug: 'test-saga',
   name: 'Test Saga',
-  repo: 'github.com/test/repo',
+  repos: ['github.com/test/repo'],
   feature_branch: 'feat/test',
   status: 'active',
   confidence: 0.8,

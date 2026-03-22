@@ -283,7 +283,9 @@ class LinearTrackerAdapter(TrackerPort):
             {
                 "name": saga.name,
                 "description": (
-                    f"Saga: {saga.slug}\nRepo: {saga.repo}\nBranch: {saga.feature_branch}"
+                    f"Saga: {saga.slug}\n"
+                    f"Repos: {', '.join(saga.repos)}\n"
+                    f"Branch: {saga.feature_branch}"
                 ),
                 "teamIds": [self._team_id],
             },
@@ -519,8 +521,7 @@ class LinearTrackerAdapter(TrackerPort):
             tracker_type="linear",
             slug=node.get("name", "").lower().replace(" ", "-"),
             name=node.get("name", ""),
-            repo="",
-            feature_branch="",
+            repos=[],
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,

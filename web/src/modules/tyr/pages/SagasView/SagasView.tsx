@@ -58,7 +58,7 @@ export function SagasView() {
             </div>
             <div className={styles.sagaMeta}>
               <span className={styles.trackerId}>{saga.tracker_id}</span>
-              <span className={styles.repo}>{saga.repo}</span>
+              <span className={styles.repo}>{saga.repos.join(', ')}</span>
               <BranchTag source={saga.feature_branch} />
               <ConfBadge value={saga.confidence} />
             </div>
