@@ -483,6 +483,8 @@ class Broker:
                             model=self.model,
                             skip_permissions=self._settings.skip_permissions,
                             agent_teams=self._settings.agent_teams,
+                            system_prompt=self._settings.session.system_prompt,
+                            initial_prompt=self._settings.session.initial_prompt,
                         )
 
     async def startup(self) -> None:

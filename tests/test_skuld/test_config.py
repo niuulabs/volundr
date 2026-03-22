@@ -194,3 +194,37 @@ class TestSkuldSettings:
         monkeypatch.setenv("SKULD__AGENT_TEAMS", "true")
         s = SkuldSettings()
         assert s.agent_teams is True
+
+    def test_session_prompt_defaults_empty(self):
+        config = SkuldSessionConfig()
+        assert config.system_prompt == ""
+        assert config.initial_prompt == ""
+
+    def test_session_prompt_explicit(self):
+        config = SkuldSessionConfig(
+            system_prompt="You are an agent.",
+            initial_prompt="Fix the bug.",
+        )
+        assert config.system_prompt == "You are an agent."
+        assert config.initial_prompt == "Fix the bug."
+
+    def test_legacy_env_system_prompt(self, monkeypatch):
+        monkeypatch.delenv("SKULD__SESSION__SYSTEM_PROMPT", raising=False)
+        monkeypatch.setenv("SESSION_SYSTEM_PROMPT", "legacy system prompt")
+
+        s = SkuldSettings()
+        assert s.session.system_prompt == "legacy system prompt"
+
+    def test_legacy_env_initial_prompt(self, monkeypatch):
+        monkeypatch.delenv("SKULD__SESSION__INITIAL_PROMPT", raising=False)
+        monkeypatch.setenv("SESSION_INITIAL_PROMPT", "legacy initial prompt")
+
+        s = SkuldSettings()
+        assert s.session.initial_prompt == "legacy initial prompt"
+
+    def test_prefixed_env_prompt_takes_precedence(self, monkeypatch):
+        monkeypatch.setenv("SKULD__SESSION__SYSTEM_PROMPT", "prefixed")
+        monkeypatch.setenv("SESSION_SYSTEM_PROMPT", "legacy")
+
+        s = SkuldSettings()
+        assert s.session.system_prompt == "prefixed"

@@ -100,6 +100,8 @@ export interface ApiSessionCreate {
   credential_names?: string[];
   integration_ids?: string[];
   resource_config?: Record<string, string | undefined>;
+  system_prompt?: string;
+  initial_prompt?: string;
   issue_id?: string | null;
   issue_url?: string | null;
 }

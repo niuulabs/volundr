@@ -259,6 +259,8 @@ export class MockVolundrService implements IVolundrService {
     credentialNames?: string[];
     integrationIds?: string[];
     resourceConfig?: Record<string, string | undefined>;
+    systemPrompt?: string;
+    initialPrompt?: string;
   }): Promise<VolundrSession> {
     const newSession: VolundrSession = {
       id: `forge-${crypto.randomUUID().substring(0, 8)}`,

@@ -167,6 +167,8 @@ export interface IVolundrService {
     credentialNames?: string[];
     integrationIds?: string[];
     resourceConfig?: Record<string, string | undefined>;
+    systemPrompt?: string;
+    initialPrompt?: string;
   }): Promise<VolundrSession>;
 
   /**

@@ -1185,6 +1185,8 @@ class SessionContext:
     integration_ids: tuple[str, ...] = ()
     integration_connections: tuple[IntegrationConnection, ...] = ()
     resource_config: dict = field(default_factory=dict)
+    system_prompt: str = ""
+    initial_prompt: str = ""
 
 
 @dataclass(frozen=True)

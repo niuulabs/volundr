@@ -924,6 +924,104 @@ class TestSdkWebSocketTransport:
 
         callback.assert_called_once_with(hook_msg)
 
+    # --- System prompt and initial prompt ---
+
+    def test_init_prompt_defaults_empty(self, transport):
+        assert transport._system_prompt == ""
+        assert transport._initial_prompt == ""
+
+    def test_init_stores_prompts(self, tmp_path):
+        t = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            system_prompt="You are an agent.",
+            initial_prompt="Fix the bug.",
+        )
+        assert t._system_prompt == "You are an agent."
+        assert t._initial_prompt == "Fix the bug."
+
+    @pytest.mark.asyncio
+    async def test_spawn_with_system_prompt(self, tmp_path):
+        t = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            system_prompt="You are an agent.",
+        )
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await t.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--append-system-prompt" in call_args
+            idx = call_args.index("--append-system-prompt")
+            assert call_args[idx + 1] == "You are an agent."
+
+    @pytest.mark.asyncio
+    async def test_spawn_without_system_prompt_omits_flag(self, transport):
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--append-system-prompt" not in call_args
+
+    @pytest.mark.asyncio
+    async def test_spawn_with_initial_prompt_replaces_placeholder(self, tmp_path):
+        t = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            initial_prompt="Break down ticket TK-123.",
+        )
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await t.start()
+
+            call_args = mock_exec.call_args[0]
+            idx = call_args.index("-p")
+            assert call_args[idx + 1] == "Break down ticket TK-123."
+            assert "placeholder" not in call_args
+
+    @pytest.mark.asyncio
+    async def test_spawn_without_initial_prompt_uses_placeholder(self, transport):
+        with patch(
+            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            idx = call_args.index("-p")
+            assert call_args[idx + 1] == "placeholder"
+
 
 # ---------------------------------------------------------------------------
 # _map_codex_tool

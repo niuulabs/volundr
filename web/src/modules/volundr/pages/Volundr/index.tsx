@@ -628,6 +628,8 @@ export function VolundrPage() {
           credentialNames: config.credentialNames,
           integrationIds: config.integrationIds,
           resourceConfig: config.resourceConfig,
+          systemPrompt: config.systemPrompt,
+          initialPrompt: config.initialPrompt,
         });
         setSelectedSession(session);
         setShowLaunchWizard(false);

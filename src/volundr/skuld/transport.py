@@ -286,6 +286,8 @@ class SdkWebSocketTransport(CLITransport):
         model: str = "",
         skip_permissions: bool = True,
         agent_teams: bool = False,
+        system_prompt: str = "",
+        initial_prompt: str = "",
     ) -> None:
         super().__init__()
         self.workspace_dir = workspace_dir
@@ -294,6 +296,8 @@ class SdkWebSocketTransport(CLITransport):
         self._model = model
         self._skip_permissions = skip_permissions
         self._agent_teams = agent_teams
+        self._system_prompt = system_prompt
+        self._initial_prompt = initial_prompt
         self._process: asyncio.subprocess.Process | None = None
         self._cli_ws: WebSocket | None = None
         self._cli_connected = asyncio.Event()
@@ -337,7 +341,9 @@ class SdkWebSocketTransport(CLITransport):
             cmd.extend(["--model", self._model])
         if self._skip_permissions:
             cmd.extend(["--permission-mode", "bypassPermissions"])
-        cmd.extend(["-p", "placeholder"])
+        if self._system_prompt:
+            cmd.extend(["--append-system-prompt", self._system_prompt])
+        cmd.extend(["-p", self._initial_prompt or "placeholder"])
         if resume_id:
             cmd.extend(["--resume", resume_id])
 
