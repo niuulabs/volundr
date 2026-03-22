@@ -200,6 +200,7 @@ def create_sagas_router() -> APIRouter:
             issues_by_milestone.setdefault(key, []).append(issue)
 
         phase_responses: list[PhaseResponse] = []
+
         def _issue_to_raid(i: TrackerIssue) -> RaidResponse:
             return RaidResponse(
                 id=i.id,

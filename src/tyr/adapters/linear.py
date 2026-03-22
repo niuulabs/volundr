@@ -67,23 +67,31 @@ _PROJECT_FIELDS = """
       issues { nodes { id } }
 """
 
-_LIST_PROJECTS_QUERY = """
+_LIST_PROJECTS_QUERY = (
+    """
 query ListProjects($first: Int!) {
   projects(first: $first) {
     nodes {
-""" + _PROJECT_FIELDS + """
+"""
+    + _PROJECT_FIELDS
+    + """
     }
   }
 }
 """
+)
 
-_GET_PROJECT_QUERY = """
+_GET_PROJECT_QUERY = (
+    """
 query GetProject($id: String!) {
   project(id: $id) {
-""" + _PROJECT_FIELDS + """
+"""
+    + _PROJECT_FIELDS
+    + """
   }
 }
 """
+)
 
 _LIST_MILESTONES_QUERY = """
 query ListMilestones($projectId: String!) {
@@ -159,7 +167,8 @@ _ISSUE_FIELDS = """
       projectMilestone { id }
 """
 
-_LIST_ISSUES_QUERY = """
+_LIST_ISSUES_QUERY = (
+    """
 query ListIssues($projectId: ID!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
@@ -167,13 +176,17 @@ query ListIssues($projectId: ID!, $first: Int!) {
     orderBy: updatedAt
   ) {
     nodes {
-""" + _ISSUE_FIELDS + """
+"""
+    + _ISSUE_FIELDS
+    + """
     }
   }
 }
 """
+)
 
-_LIST_ISSUES_BY_MILESTONE_QUERY = """
+_LIST_ISSUES_BY_MILESTONE_QUERY = (
+    """
 query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
   issues(
     filter: {
@@ -184,11 +197,14 @@ query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
     orderBy: updatedAt
   ) {
     nodes {
-""" + _ISSUE_FIELDS + """
+"""
+    + _ISSUE_FIELDS
+    + """
     }
   }
 }
 """
+)
 
 _CREATE_PROJECT_QUERY = """
 mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
@@ -508,9 +524,7 @@ class LinearTrackerAdapter(TrackerPort):
         self, project_id: str
     ) -> tuple[TrackerProject, list[TrackerMilestone], list[TrackerIssue]]:
         """Fetch project, milestones, and issues in a single GraphQL call."""
-        data = await self._gql.query(
-            _GET_PROJECT_FULL_QUERY, {"id": project_id, "issueFirst": 250}
-        )
+        data = await self._gql.query(_GET_PROJECT_FULL_QUERY, {"id": project_id, "issueFirst": 250})
         project_node = data.get("project")
         if project_node is None:
             raise GraphQLError(f"Project not found: {project_id}")

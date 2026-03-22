@@ -9,15 +9,8 @@ vi.mock('../../hooks', () => ({
 }));
 
 vi.mock('@/modules/shared', () => ({
-  LoadingIndicator: ({ messages, label }: { messages?: string[]; label?: string }) => (
-    <div data-testid="loading-indicator">{messages?.[0] ?? label}</div>
-  ),
-  StatusBadge: ({ status }: { status: string }) => <span data-testid="status-badge">{status}</span>,
-  MetricCard: ({ label, value }: { label: string; value: string | number }) => (
-    <div data-testid="metric-card">
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
+  LoadingIndicator: ({ messages }: { messages?: string[] }) => (
+    <div data-testid="loading-indicator">{messages?.[0]}</div>
   ),
 }));
 
@@ -27,29 +20,31 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
+const mockSaga = {
+  id: 'saga-1',
+  tracker_id: 'proj-1',
+  tracker_type: 'linear',
+  slug: 'my-saga',
+  name: 'Implement auth flow',
+  repos: ['niuulabs/app'],
+  feature_branch: 'feat/my-saga',
+  status: 'started',
+  progress: 0.5,
+  milestone_count: 3,
+  issue_count: 10,
+  url: 'https://linear.app/proj-1',
+};
+
 describe('SagasView', () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     vi.mocked(hooks.useSagas).mockReturnValue({
-      sagas: [
-        {
-          id: 'saga-1',
-          tracker_id: 'PROJ-100',
-          tracker_type: 'linear',
-          slug: 'my-saga',
-          name: 'Implement auth flow',
-          repos: ['niuulabs/app'],
-          feature_branch: 'feat/my-saga',
-          status: 'active',
-          confidence: 0.82,
-          created_at: '2026-01-01T00:00:00Z',
-          phase_summary: { total: 3, completed: 1 },
-        },
-      ],
+      sagas: [mockSaga],
       loading: false,
       error: null,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagas>);
+      deleteSaga: vi.fn(),
+    });
   });
 
   it('renders saga data', () => {
@@ -58,33 +53,19 @@ describe('SagasView', () => {
         <SagasView />
       </MemoryRouter>
     );
-
     expect(screen.getByText('Implement auth flow')).toBeInTheDocument();
-    expect(screen.getByText('PROJ-100')).toBeInTheDocument();
     expect(screen.getByText('niuulabs/app')).toBeInTheDocument();
+    expect(screen.getByText('3 milestones')).toBeInTheDocument();
+    expect(screen.getByText('10 issues')).toBeInTheDocument();
   });
 
-  it('renders metric cards', () => {
+  it('shows progress', () => {
     render(
       <MemoryRouter>
         <SagasView />
       </MemoryRouter>
     );
-
-    expect(screen.getByText('Total Sagas')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Avg Confidence')).toBeInTheDocument();
-  });
-
-  it('shows confidence values', () => {
-    render(
-      <MemoryRouter>
-        <SagasView />
-      </MemoryRouter>
-    );
-
-    const matches = screen.getAllByText('82%');
-    expect(matches.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
   it('renders loading indicator when loading', () => {
@@ -93,49 +74,46 @@ describe('SagasView', () => {
       loading: true,
       error: null,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagas>);
-
+      deleteSaga: vi.fn(),
+    });
     render(
       <MemoryRouter>
         <SagasView />
       </MemoryRouter>
     );
-
     expect(screen.getByText('Loading sagas...')).toBeInTheDocument();
   });
 
-  it('renders error message when error occurs', () => {
+  it('renders error message', () => {
     vi.mocked(hooks.useSagas).mockReturnValue({
       sagas: [],
       loading: false,
       error: 'Network error',
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagas>);
-
+      deleteSaga: vi.fn(),
+    });
     render(
       <MemoryRouter>
         <SagasView />
       </MemoryRouter>
     );
-
     expect(screen.getByText('Network error')).toBeInTheDocument();
   });
 
-  it('renders empty state when no sagas exist', () => {
+  it('renders empty state', () => {
     vi.mocked(hooks.useSagas).mockReturnValue({
       sagas: [],
       loading: false,
       error: null,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagas>);
-
+      deleteSaga: vi.fn(),
+    });
     render(
       <MemoryRouter>
         <SagasView />
       </MemoryRouter>
     );
-
-    expect(screen.getByText('No sagas found')).toBeInTheDocument();
+    expect(screen.getByText('No sagas imported yet')).toBeInTheDocument();
   });
 
   it('navigates to saga detail on card click', () => {
@@ -144,81 +122,17 @@ describe('SagasView', () => {
         <SagasView />
       </MemoryRouter>
     );
-
     fireEvent.click(screen.getByText('Implement auth flow'));
     expect(mockNavigate).toHaveBeenCalledWith('/tyr/sagas/saga-1');
   });
 
-  it('renders phase progress for each saga', () => {
+  it('navigates to import on button click', () => {
     render(
       <MemoryRouter>
         <SagasView />
       </MemoryRouter>
     );
-
-    expect(screen.getByText('1/3 phases')).toBeInTheDocument();
-  });
-
-  it('computes avg confidence as 0 when sagas list is empty', () => {
-    vi.mocked(hooks.useSagas).mockReturnValue({
-      sagas: [],
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagas>);
-
-    render(
-      <MemoryRouter>
-        <SagasView />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText('0%')).toBeInTheDocument();
-  });
-
-  it('computes active sagas count correctly with mixed statuses', () => {
-    vi.mocked(hooks.useSagas).mockReturnValue({
-      sagas: [
-        {
-          id: 'saga-1',
-          tracker_id: 'PROJ-100',
-          tracker_type: 'linear',
-          slug: 'a',
-          name: 'Active saga',
-          repos: ['org/repo'],
-          feature_branch: 'feat/a',
-          status: 'active',
-          confidence: 0.9,
-          created_at: '2026-01-01T00:00:00Z',
-          phase_summary: { total: 2, completed: 1 },
-        },
-        {
-          id: 'saga-2',
-          tracker_id: 'PROJ-101',
-          tracker_type: 'linear',
-          slug: 'b',
-          name: 'Completed saga',
-          repos: ['org/repo'],
-          feature_branch: 'feat/b',
-          status: 'completed',
-          confidence: 1.0,
-          created_at: '2026-01-01T00:00:00Z',
-          phase_summary: { total: 3, completed: 3 },
-        },
-      ],
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagas>);
-
-    render(
-      <MemoryRouter>
-        <SagasView />
-      </MemoryRouter>
-    );
-
-    // Total: 2, Active: 1
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Import from Tracker'));
+    expect(mockNavigate).toHaveBeenCalledWith('/tyr/import');
   });
 });

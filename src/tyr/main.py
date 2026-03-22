@@ -79,7 +79,6 @@ async def _resolve_tracker_adapters(
     return adapters
 
 
-
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     if settings is None:

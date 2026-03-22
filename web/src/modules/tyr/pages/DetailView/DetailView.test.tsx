@@ -9,11 +9,49 @@ vi.mock('../../hooks', () => ({
 }));
 
 vi.mock('@/modules/shared', () => ({
-  LoadingIndicator: ({ messages, label }: { messages?: string[]; label?: string }) => (
-    <div data-testid="loading-indicator">{messages?.[0] ?? label}</div>
+  LoadingIndicator: ({ messages }: { messages?: string[] }) => (
+    <div data-testid="loading-indicator">{messages?.[0]}</div>
   ),
-  StatusBadge: ({ status }: { status: string }) => <span data-testid="status-badge">{status}</span>,
 }));
+
+const mockDetail = {
+  id: 'saga-1',
+  tracker_id: 'proj-1',
+  tracker_type: 'linear',
+  slug: 'auth-flow',
+  name: 'Implement auth flow',
+  description: 'Auth flow project',
+  repos: ['niuulabs/app'],
+  feature_branch: 'feat/auth',
+  status: 'started',
+  progress: 0.5,
+  url: 'https://linear.app/proj-1',
+  phases: [
+    {
+      id: 'ms-1',
+      name: 'Foundation',
+      description: '',
+      sort_order: 1,
+      progress: 1.0,
+      target_date: null,
+      raids: [
+        {
+          id: 'i-1',
+          identifier: 'A-1',
+          title: 'Setup task',
+          status: 'Done',
+          status_type: 'completed',
+          assignee: null,
+          labels: [],
+          priority: 1,
+          priority_label: 'Urgent',
+          estimate: 2,
+          url: '',
+        },
+      ],
+    },
+  ],
+};
 
 function renderDetailView() {
   return render(
@@ -28,34 +66,11 @@ function renderDetailView() {
 describe('DetailView', () => {
   beforeEach(() => {
     vi.mocked(hooks.useSagaDetail).mockReturnValue({
-      saga: {
-        id: 'saga-1',
-        tracker_id: 'PROJ-100',
-        tracker_type: 'linear',
-        slug: 'auth-flow',
-        name: 'Implement auth flow',
-        repos: ['niuulabs/app'],
-        feature_branch: 'feat/auth',
-        status: 'active',
-        confidence: 0.72,
-        created_at: '2026-01-01T00:00:00Z',
-      },
-      phases: [
-        {
-          id: 'phase-1',
-          saga_id: 'saga-1',
-          tracker_id: 'PROJ-101',
-          number: 1,
-          name: 'Foundation',
-          status: 'active',
-          confidence: 0.8,
-          raids: [],
-        },
-      ],
+      detail: mockDetail,
       loading: false,
       error: null,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagaDetail>);
+    });
   });
 
   it('renders saga name', () => {
@@ -73,72 +88,59 @@ describe('DetailView', () => {
     expect(screen.getByText('feat/auth')).toBeInTheDocument();
   });
 
+  it('renders raid data', () => {
+    renderDetailView();
+    expect(screen.getByText('A-1')).toBeInTheDocument();
+    expect(screen.getByText('Setup task')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
+  });
+
   it('renders loading indicator when loading', () => {
     vi.mocked(hooks.useSagaDetail).mockReturnValue({
-      saga: null,
-      phases: [],
+      detail: null,
       loading: true,
       error: null,
       refresh: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useSagaDetail>);
-
+    });
     renderDetailView();
     expect(screen.getByText('Loading saga...')).toBeInTheDocument();
   });
 
-  it('renders error message when error occurs', () => {
+  it('renders error message', () => {
     vi.mocked(hooks.useSagaDetail).mockReturnValue({
-      saga: null,
-      phases: [],
+      detail: null,
       loading: false,
-      error: 'Failed to load saga',
+      error: 'Failed to load',
       refresh: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useSagaDetail>);
-
+    });
     renderDetailView();
-    expect(screen.getByText('Failed to load saga')).toBeInTheDocument();
+    expect(screen.getByText('Failed to load')).toBeInTheDocument();
   });
 
-  it('renders empty state when saga is null', () => {
+  it('renders empty state when detail is null', () => {
     vi.mocked(hooks.useSagaDetail).mockReturnValue({
-      saga: null,
-      phases: [],
+      detail: null,
       loading: false,
       error: null,
       refresh: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useSagaDetail>);
-
+    });
     renderDetailView();
     expect(screen.getByText('Saga not found')).toBeInTheDocument();
   });
 
-  it('renders empty phases message when phases array is empty', () => {
+  it('renders empty phases message', () => {
     vi.mocked(hooks.useSagaDetail).mockReturnValue({
-      saga: {
-        id: 'saga-1',
-        tracker_id: 'PROJ-100',
-        tracker_type: 'linear',
-        slug: 'auth-flow',
-        name: 'Implement auth flow',
-        repos: ['niuulabs/app'],
-        feature_branch: 'feat/auth',
-        status: 'active',
-        confidence: 0.72,
-        created_at: '2026-01-01T00:00:00Z',
-      },
-      phases: [],
+      detail: { ...mockDetail, phases: [] },
       loading: false,
       error: null,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useSagaDetail>);
-
+    });
     renderDetailView();
-    expect(screen.getByText('No phases defined')).toBeInTheDocument();
+    expect(screen.getByText('No phases')).toBeInTheDocument();
   });
 
-  it('renders repo and tracker id', () => {
+  it('renders repo', () => {
     renderDetailView();
     expect(screen.getByText('niuulabs/app')).toBeInTheDocument();
-    expect(screen.getByText('PROJ-100')).toBeInTheDocument();
   });
 });
