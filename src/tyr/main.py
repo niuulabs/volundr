@@ -9,10 +9,48 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
+from tyr.api.tracker import create_tracker_router
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
+from tyr.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
+
+
+def _create_tracker_adapter(settings: Settings) -> TrackerPort | None:
+    """Create a tracker adapter from config using dynamic import.
+
+    Returns None if no adapter is configured (e.g. no team_id).
+    """
+    cfg = settings.tracker
+    if not cfg.team_id:
+        logger.info("No tracker team_id configured, tracker browsing disabled")
+        return None
+
+    try:
+        import importlib
+
+        module_path, class_name = cfg.adapter.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        cls = getattr(module, class_name)
+
+        # api_key comes from env for now (TRACKER__API_KEY would need
+        # to be added to config, or resolved from credential store)
+        import os
+
+        api_key = os.environ.get("LINEAR_API_KEY", "")
+        if not api_key:
+            logger.warning("LINEAR_API_KEY not set, tracker adapter may fail")
+
+        return cls(
+            api_key=api_key,
+            team_id=cfg.team_id,
+            cache_ttl=cfg.cache_ttl_seconds,
+            max_retries=cfg.rate_limit_max_retries,
+        )
+    except Exception:
+        logger.exception("Failed to create tracker adapter")
+        return None
 
 
 def _configure_logging(settings: Settings) -> None:
@@ -40,6 +78,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.settings = settings
 
+    # -- Wire tracker adapter --
+    tracker_adapter = _create_tracker_adapter(settings)
+    if tracker_adapter:
+        app.include_router(create_tracker_router(tracker_adapter))
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Manage application lifecycle."""
@@ -48,6 +91,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.pool = pool
             logger.info("Tyr started — database pool ready")
             yield
+            if tracker_adapter and hasattr(tracker_adapter, "close"):
+                await tracker_adapter.close()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan

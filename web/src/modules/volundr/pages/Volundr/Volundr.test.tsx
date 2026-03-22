@@ -166,7 +166,6 @@ vi.mock('@/modules/volundr/components/SessionGroupList', () => ({
 
 import { useVolundr } from '@/modules/volundr/hooks/useVolundr';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { useIdentity } from '@/hooks/useIdentity';
 
 const mockStats = {
   activeSessions: 3,

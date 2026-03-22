@@ -24,7 +24,13 @@ class TestTrackerPort:
             "update_raid_state",
             "close_raid",
             "get_saga",
+            "get_phase",
+            "get_raid",
             "list_pending_raids",
+            "list_projects",
+            "get_project",
+            "list_milestones",
+            "list_issues",
         }
         abstract_methods = {
             name

@@ -1,0 +1,306 @@
+"""Tests for tracker REST API endpoints."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from tyr.api.tracker import create_tracker_router
+from tyr.domain.models import (
+    Phase,
+    PhaseStatus,
+    Raid,
+    RaidStatus,
+    Saga,
+    SagaStatus,
+    TrackerIssue,
+    TrackerMilestone,
+    TrackerProject,
+)
+from tyr.ports.tracker import TrackerPort
+
+# ---------------------------------------------------------------------------
+# Mock TrackerPort implementation
+# ---------------------------------------------------------------------------
+
+
+class MockTracker(TrackerPort):
+    """In-memory mock tracker for API tests."""
+
+    def __init__(self) -> None:
+        self.projects: list[TrackerProject] = []
+        self.milestones: dict[str, list[TrackerMilestone]] = {}
+        self.issues: dict[str, list[TrackerIssue]] = {}
+
+    async def create_saga(self, saga: Saga) -> str:
+        return "saga-created"
+
+    async def create_phase(self, phase: Phase) -> str:
+        return "phase-created"
+
+    async def create_raid(self, raid: Raid) -> str:
+        return "raid-created"
+
+    async def update_raid_state(self, raid_id: str, state: RaidStatus) -> None:
+        pass
+
+    async def close_raid(self, raid_id: str) -> None:
+        pass
+
+    async def get_saga(self, saga_id: str) -> Saga:
+        now = datetime.now(UTC)
+        return Saga(
+            id=uuid4(),
+            tracker_id=saga_id,
+            tracker_type="linear",
+            slug="test",
+            name="Test",
+            repo="",
+            feature_branch="",
+            status=SagaStatus.ACTIVE,
+            confidence=0.0,
+            created_at=now,
+        )
+
+    async def get_phase(self, tracker_id: str) -> Phase:
+        return Phase(
+            id=uuid4(),
+            saga_id=UUID(int=0),
+            tracker_id=tracker_id,
+            number=1,
+            name="P1",
+            status=PhaseStatus.PENDING,
+            confidence=0.0,
+        )
+
+    async def get_raid(self, tracker_id: str) -> Raid:
+        now = datetime.now(UTC)
+        return Raid(
+            id=uuid4(),
+            phase_id=UUID(int=0),
+            tracker_id=tracker_id,
+            name="R1",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=None,
+            status=RaidStatus.PENDING,
+            confidence=0.0,
+            session_id=None,
+            branch=None,
+            chronicle_summary=None,
+            retry_count=0,
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def list_pending_raids(self, phase_id: str) -> list[Raid]:
+        return []
+
+    async def list_projects(self) -> list[TrackerProject]:
+        return self.projects
+
+    async def get_project(self, project_id: str) -> TrackerProject:
+        for p in self.projects:
+            if p.id == project_id:
+                return p
+        raise ValueError(f"Project not found: {project_id}")
+
+    async def list_milestones(self, project_id: str) -> list[TrackerMilestone]:
+        return self.milestones.get(project_id, [])
+
+    async def list_issues(
+        self,
+        project_id: str,
+        milestone_id: str | None = None,
+    ) -> list[TrackerIssue]:
+        issues = self.issues.get(project_id, [])
+        if milestone_id:
+            issues = [i for i in issues if i.milestone_id == milestone_id]
+        return issues
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_tracker() -> MockTracker:
+    tracker = MockTracker()
+    tracker.projects = [
+        TrackerProject(
+            id="proj-1",
+            name="Alpha",
+            description="First project",
+            status="started",
+            url="https://linear.app/proj-1",
+            milestone_count=2,
+            issue_count=5,
+        ),
+        TrackerProject(
+            id="proj-2",
+            name="Beta",
+            description="Second project",
+            status="planned",
+            url="https://linear.app/proj-2",
+            milestone_count=0,
+            issue_count=0,
+        ),
+    ]
+    tracker.milestones = {
+        "proj-1": [
+            TrackerMilestone(
+                id="ms-1",
+                project_id="proj-1",
+                name="Phase 1",
+                description="First phase",
+                sort_order=1,
+                progress=0.5,
+            ),
+            TrackerMilestone(
+                id="ms-2",
+                project_id="proj-1",
+                name="Phase 2",
+                description="Second phase",
+                sort_order=2,
+                progress=0.0,
+            ),
+        ],
+    }
+    tracker.issues = {
+        "proj-1": [
+            TrackerIssue(
+                id="i-1",
+                identifier="ALPHA-1",
+                title="Setup",
+                description="Initial setup",
+                status="Todo",
+                assignee="Dev",
+                labels=["setup"],
+                priority=1,
+                url="https://linear.app/i-1",
+                milestone_id="ms-1",
+            ),
+            TrackerIssue(
+                id="i-2",
+                identifier="ALPHA-2",
+                title="Build",
+                description="Build things",
+                status="In Progress",
+                assignee=None,
+                labels=[],
+                priority=2,
+                url="https://linear.app/i-2",
+                milestone_id="ms-2",
+            ),
+        ],
+    }
+    return tracker
+
+
+@pytest.fixture
+def client(mock_tracker: MockTracker) -> TestClient:
+    app = FastAPI()
+    router = create_tracker_router(mock_tracker)
+    app.include_router(router)
+    return TestClient(app)
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+class TestListProjects:
+    def test_returns_all(self, client: TestClient):
+        resp = client.get("/api/tracker/projects")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+        assert data[0]["id"] == "proj-1"
+        assert data[1]["id"] == "proj-2"
+
+
+class TestGetProject:
+    def test_found(self, client: TestClient):
+        resp = client.get("/api/tracker/projects/proj-1")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == "proj-1"
+        assert data["name"] == "Alpha"
+
+    def test_not_found(self, client: TestClient):
+        resp = client.get("/api/tracker/projects/nonexistent")
+        assert resp.status_code == 404
+
+
+class TestListMilestones:
+    def test_returns_milestones(self, client: TestClient):
+        resp = client.get("/api/tracker/projects/proj-1/milestones")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+        assert data[0]["name"] == "Phase 1"
+
+    def test_empty_milestones(self, client: TestClient):
+        resp = client.get("/api/tracker/projects/proj-2/milestones")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+
+class TestListIssues:
+    def test_all_issues(self, client: TestClient):
+        resp = client.get("/api/tracker/projects/proj-1/issues")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+
+    def test_filtered_by_milestone(self, client: TestClient):
+        resp = client.get("/api/tracker/projects/proj-1/issues?milestone_id=ms-1")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["identifier"] == "ALPHA-1"
+
+    def test_no_matching_milestone(self, client: TestClient):
+        resp = client.get("/api/tracker/projects/proj-1/issues?milestone_id=nonexistent")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+
+class TestImportProject:
+    def test_success(self, client: TestClient):
+        resp = client.post(
+            "/api/tracker/import",
+            json={
+                "project_id": "proj-1",
+                "repo": "org/repo",
+                "feature_branch": "feat/import",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["tracker_id"] == "proj-1"
+        assert data["name"] == "Alpha"
+        assert data["repo"] == "org/repo"
+        assert data["feature_branch"] == "feat/import"
+        assert data["status"] == "ACTIVE"
+        assert data["phase_count"] == 2
+        assert data["raid_count"] == 2
+
+    def test_project_not_found(self, client: TestClient, mock_tracker: MockTracker):
+        """Import with a nonexistent project raises ValueError (unhandled)."""
+        with pytest.raises(ValueError, match="Project not found"):
+            client.post(
+                "/api/tracker/import",
+                json={
+                    "project_id": "nonexistent",
+                    "repo": "org/repo",
+                    "feature_branch": "feat/x",
+                },
+            )

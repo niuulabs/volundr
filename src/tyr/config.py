@@ -58,6 +58,15 @@ class VolundrConfig(BaseModel):
     url: str = Field(default="http://localhost:8000")
 
 
+class TrackerConfig(BaseModel):
+    """Tracker adapter configuration."""
+
+    adapter: str = Field(default="tyr.adapters.linear.LinearTrackerAdapter")
+    team_id: str = Field(default="")
+    cache_ttl_seconds: float = Field(default=30.0)
+    rate_limit_max_retries: int = Field(default=3)
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -80,6 +89,7 @@ class Settings(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     volundr: VolundrConfig = Field(default_factory=VolundrConfig)
+    tracker: TrackerConfig = Field(default_factory=TrackerConfig)
 
     @classmethod
     def settings_customise_sources(

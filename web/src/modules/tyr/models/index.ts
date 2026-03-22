@@ -11,3 +11,5 @@ export type {
   DispatcherState,
   SessionInfo,
 } from './saga';
+
+export type { TrackerProject, TrackerMilestone, TrackerIssue } from './tracker';

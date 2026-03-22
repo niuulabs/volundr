@@ -39,6 +39,9 @@ const DispatcherView = lazy(() =>
 const TyrSessionsView = lazy(() =>
   import('@/modules/tyr/pages/SessionsView').then(m => ({ default: m.SessionsView }))
 );
+const ImportView = lazy(() =>
+  import('@/modules/tyr/pages/ImportView').then(m => ({ default: m.ImportView }))
+);
 
 function PageLoader() {
   return (
@@ -63,6 +66,7 @@ function AppContent() {
             <Route path="sagas" element={<SagasView />} />
             <Route path="sagas/:id" element={<SagaDetailView />} />
             <Route path="new" element={<NewSagaView />} />
+            <Route path="import" element={<ImportView />} />
             <Route path="dispatcher" element={<DispatcherView />} />
             <Route path="sessions" element={<TyrSessionsView />} />
           </Route>
