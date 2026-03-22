@@ -61,9 +61,6 @@ class VolundrConfig(BaseModel):
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
-    adapter: str = Field(default="tyr.adapters.linear.LinearTrackerAdapter")
-    api_key: str = Field(default="")
-    team_id: str = Field(default="")
     cache_ttl_seconds: float = Field(default=30.0)
     rate_limit_max_retries: int = Field(default=3)
 

@@ -1,7 +1,7 @@
 import type { ITrackerBrowserService } from '../../ports';
 import type { TrackerProject, TrackerMilestone, TrackerIssue, Saga } from '../../models';
 
-const TRACKER_API_BASE = '/api/tracker';
+const TRACKER_API_BASE = '/api/v1/tyr/tracker';
 
 export class ApiTrackerBrowserService implements ITrackerBrowserService {
   async listProjects(): Promise<TrackerProject[]> {
