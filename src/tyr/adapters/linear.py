@@ -146,12 +146,6 @@ query GetProjectFull($id: String!, $issueFirst: Int!) {
           estimate
           url
           projectMilestone { id }
-          relations {
-            nodes {
-              type
-              relatedIssue { identifier state { type } }
-            }
-          }
         }
       }
   }
@@ -171,12 +165,26 @@ _ISSUE_FIELDS = """
       estimate
       url
       projectMilestone { id }
+"""
+
+_LIST_ISSUE_RELATIONS_QUERY = """
+query ListIssueRelations($projectId: ID!, $first: Int!) {
+  issues(
+    filter: { project: { id: { eq: $projectId } } }
+    first: $first
+  ) {
+    nodes {
+      identifier
+      state { type }
       relations {
         nodes {
           type
-          relatedIssue { identifier state { type } }
+          relatedIssue { identifier }
         }
       }
+    }
+  }
+}
 """
 
 _LIST_ISSUES_QUERY = (
@@ -558,6 +566,25 @@ class LinearTrackerAdapter(TrackerPort):
 
         return project, milestones, issues
 
+    async def get_blocked_identifiers(self, project_id: str) -> set[str]:
+        """Fetch issue relations and return identifiers blocked by incomplete issues."""
+        data = await self._gql.query(
+            _LIST_ISSUE_RELATIONS_QUERY, {"projectId": project_id, "first": 250}
+        )
+        nodes = data.get("issues", {}).get("nodes", [])
+
+        blocked: set[str] = set()
+        for node in nodes:
+            state_type = (node.get("state") or {}).get("type", "")
+            if state_type == "completed":
+                continue
+            for rel in (node.get("relations") or {}).get("nodes", []):
+                if rel.get("type") == "blocks":
+                    target = (rel.get("relatedIssue") or {}).get("identifier", "")
+                    if target:
+                        blocked.add(target)
+        return blocked
+
     # -- Internal helpers --
 
     async def _resolve_state_id(self, issue_id: str, state_name: str) -> str:
@@ -631,14 +658,6 @@ class LinearTrackerAdapter(TrackerPort):
     @staticmethod
     def _node_to_tracker_issue(node: dict) -> TrackerIssue:
         state = node.get("state") or {}
-
-        # Extract identifiers of issues this one blocks
-        blocks: list[str] = []
-        for rel in (node.get("relations") or {}).get("nodes", []):
-            if rel.get("type") == "blocks":
-                related = rel.get("relatedIssue") or {}
-                blocks.append(related.get("identifier", ""))
-
         return TrackerIssue(
             id=node["id"],
             identifier=node.get("identifier", ""),
@@ -653,7 +672,6 @@ class LinearTrackerAdapter(TrackerPort):
             estimate=node.get("estimate"),
             url=node.get("url", ""),
             milestone_id=(node.get("projectMilestone") or {}).get("id"),
-            blocks=blocks,
         )
 
     @staticmethod
