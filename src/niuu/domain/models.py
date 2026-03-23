@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -91,6 +91,70 @@ class RepoInfo:
     url: str  # Web URL for the repo
     default_branch: str = "main"
     branches: tuple[str, ...] = ()
+
+
+# ---------------------------------------------------------------------------
+# Tracker browsing models (shared between Volundr and Tyr)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TrackerProject:
+    """A project from an external tracker (read-only browsing model)."""
+
+    id: str
+    name: str
+    description: str
+    status: str
+    url: str
+    milestone_count: int
+    issue_count: int
+    slug: str = ""
+    progress: float = 0.0
+    start_date: str | None = None
+    target_date: str | None = None
+
+
+@dataclass(frozen=True)
+class TrackerMilestone:
+    """A milestone from an external tracker (read-only browsing model)."""
+
+    id: str
+    project_id: str
+    name: str
+    description: str
+    sort_order: int
+    progress: float
+    target_date: str | None = None
+
+
+@dataclass(frozen=True)
+class TrackerIssue:
+    """An issue from an external tracker (read-only browsing model)."""
+
+    id: str
+    identifier: str
+    title: str
+    status: str
+    description: str = ""
+    status_type: str = ""
+    assignee: str | None = None
+    labels: list[str] = field(default_factory=list)
+    priority: int = 0
+    priority_label: str = ""
+    estimate: float | None = None
+    url: str = ""
+    milestone_id: str | None = None
+
+
+@dataclass
+class TrackerConnectionStatus:
+    """Connection status for an issue tracker."""
+
+    connected: bool
+    provider: str
+    workspace: str | None = None
+    user: str | None = None
 
 
 class CacheEntry:

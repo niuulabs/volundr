@@ -18,6 +18,17 @@ class TestTrackerPort:
 
     def test_methods_exist(self) -> None:
         methods = {
+            # From niuu TrackerPort (shared)
+            "check_connection",
+            "search_issues",
+            "get_recent_issues",
+            "get_issue",
+            "update_issue_status",
+            "list_projects",
+            "get_project",
+            "list_milestones",
+            "list_issues",
+            # Tyr-specific CRUD
             "create_saga",
             "create_phase",
             "create_raid",
@@ -27,17 +38,13 @@ class TestTrackerPort:
             "get_phase",
             "get_raid",
             "list_pending_raids",
-            "list_projects",
-            "get_project",
-            "list_milestones",
-            "list_issues",
         }
-        abstract_methods = {
+        public_methods = {
             name
             for name, _ in inspect.getmembers(TrackerPort, predicate=inspect.isfunction)
             if not name.startswith("_")
         }
-        assert methods == abstract_methods
+        assert methods == public_methods
 
 
 class TestVolundrPort:

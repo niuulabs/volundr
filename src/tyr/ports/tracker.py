@@ -1,22 +1,24 @@
-"""Tracker port — interface for issue/work-item tracking systems."""
+"""Tracker port — Tyr-specific extension of the shared TrackerPort.
+
+Adds saga/phase/raid CRUD operations on top of the shared browsing and
+issue management interface from niuu.
+"""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
+from niuu.ports.tracker import TrackerPort as _NiuuTrackerPort
 from tyr.domain.models import (
     Phase,
     Raid,
     RaidStatus,
     Saga,
-    TrackerIssue,
-    TrackerMilestone,
-    TrackerProject,
 )
 
 
-class TrackerPort(ABC):
-    """Abstract interface for tracker integration (Linear, Jira, etc.)."""
+class TrackerPort(_NiuuTrackerPort):
+    """Tyr tracker port — extends the shared TrackerPort with saga CRUD."""
 
     # -- CRUD: create entities in the external tracker --
 
@@ -50,21 +52,3 @@ class TrackerPort(ABC):
 
     @abstractmethod
     async def list_pending_raids(self, phase_id: str) -> list[Raid]: ...
-
-    # -- Browsing: read-only access to external tracker hierarchy --
-
-    @abstractmethod
-    async def list_projects(self) -> list[TrackerProject]: ...
-
-    @abstractmethod
-    async def get_project(self, project_id: str) -> TrackerProject: ...
-
-    @abstractmethod
-    async def list_milestones(self, project_id: str) -> list[TrackerMilestone]: ...
-
-    @abstractmethod
-    async def list_issues(
-        self,
-        project_id: str,
-        milestone_id: str | None = None,
-    ) -> list[TrackerIssue]: ...

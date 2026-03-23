@@ -1,6 +1,6 @@
-"""Linear tracker adapter.
+"""Linear tracker adapter for Tyr.
 
-Implements TrackerPort using the Linear GraphQL API.
+Extends the shared LinearTrackerBase with saga/phase/raid CRUD operations.
 Maps: Project=Saga, Milestone=Phase, Issue=Raid.
 """
 
@@ -10,7 +10,9 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from niuu.adapters.linear import GraphQLError, LinearGraphQLClient
+from niuu.adapters import linear_tracker as _lt
+from niuu.adapters.linear import GraphQLError
+from niuu.adapters.linear_tracker import LinearTrackerBase
 from niuu.domain.models import LINEAR_API_URL
 from tyr.domain.models import (
     Phase,
@@ -19,9 +21,6 @@ from tyr.domain.models import (
     RaidStatus,
     Saga,
     SagaStatus,
-    TrackerIssue,
-    TrackerMilestone,
-    TrackerProject,
 )
 from tyr.ports.tracker import TrackerPort
 
@@ -50,161 +49,8 @@ _LINEAR_TO_RAID: dict[str, RaidStatus] = {
 }
 
 # ---------------------------------------------------------------------------
-# GraphQL queries
+# GraphQL mutations (saga/phase/raid specific)
 # ---------------------------------------------------------------------------
-
-_PROJECT_FIELDS = """
-      id
-      name
-      description
-      state
-      url
-      startDate
-      targetDate
-      progress
-      slugId
-      projectMilestones { nodes { id progress } }
-      issues { nodes { id } }
-"""
-
-_LIST_PROJECTS_QUERY = (
-    """
-query ListProjects($first: Int!) {
-  projects(first: $first) {
-    nodes {
-"""
-    + _PROJECT_FIELDS
-    + """
-    }
-  }
-}
-"""
-)
-
-_GET_PROJECT_QUERY = (
-    """
-query GetProject($id: String!) {
-  project(id: $id) {
-"""
-    + _PROJECT_FIELDS
-    + """
-  }
-}
-"""
-)
-
-_LIST_MILESTONES_QUERY = """
-query ListMilestones($projectId: String!) {
-  project(id: $projectId) {
-    projectMilestones {
-      nodes {
-        id
-        name
-        description
-        sortOrder
-        progress
-        targetDate
-      }
-    }
-  }
-}
-"""
-
-_GET_PROJECT_FULL_QUERY = """
-query GetProjectFull($id: String!, $issueFirst: Int!) {
-  project(id: $id) {
-      id
-      name
-      description
-      state
-      url
-      startDate
-      targetDate
-      progress
-      projectMilestones {
-        nodes {
-          id
-          name
-          description
-          sortOrder
-          progress
-          targetDate
-        }
-      }
-      issueCount: issues { nodes { id } }
-      issuesFull: issues(first: $issueFirst) {
-        nodes {
-          id
-          identifier
-          title
-          description
-          state { name type }
-          assignee { name }
-          labels { nodes { name } }
-          priority
-          priorityLabel
-          estimate
-          url
-          projectMilestone { id }
-        }
-      }
-  }
-}
-"""
-
-_ISSUE_FIELDS = """
-      id
-      identifier
-      title
-      description
-      state { name type }
-      assignee { name }
-      labels { nodes { name } }
-      priority
-      priorityLabel
-      estimate
-      url
-      projectMilestone { id }
-"""
-
-_LIST_ISSUES_QUERY = (
-    """
-query ListIssues($projectId: ID!, $first: Int!) {
-  issues(
-    filter: { project: { id: { eq: $projectId } } }
-    first: $first
-    orderBy: updatedAt
-  ) {
-    nodes {
-"""
-    + _ISSUE_FIELDS
-    + """
-    }
-  }
-}
-"""
-)
-
-_LIST_ISSUES_BY_MILESTONE_QUERY = (
-    """
-query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
-  issues(
-    filter: {
-      project: { id: { eq: $projectId } }
-      projectMilestone: { id: { eq: $milestoneId } }
-    }
-    first: $first
-    orderBy: updatedAt
-  ) {
-    nodes {
-"""
-    + _ISSUE_FIELDS
-    + """
-    }
-  }
-}
-"""
-)
 
 _CREATE_PROJECT_QUERY = """
 mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
@@ -286,24 +132,6 @@ mutation UpdateIssueState($issueId: String!, $stateId: String!) {
 }
 """
 
-_ISSUE_TEAM_QUERY = """
-query IssueTeam($id: String!) {
-  issue(id: $id) {
-    team { id }
-  }
-}
-"""
-
-_TEAM_STATES_QUERY = """
-query TeamStates($teamId: String!) {
-  team(id: $teamId) {
-    states {
-      nodes { id name }
-    }
-  }
-}
-"""
-
 _ADD_COMMENT_QUERY = """
 mutation AddComment($issueId: String!, $body: String!) {
   commentCreate(input: { issueId: $issueId, body: $body }) {
@@ -313,8 +141,12 @@ mutation AddComment($issueId: String!, $body: String!) {
 """
 
 
-class LinearTrackerAdapter(TrackerPort):
-    """Linear tracker adapter: Project=Saga, Milestone=Phase, Issue=Raid."""
+class LinearTrackerAdapter(LinearTrackerBase, TrackerPort):
+    """Linear tracker adapter: Project=Saga, Milestone=Phase, Issue=Raid.
+
+    Inherits all browsing and issue management from LinearTrackerBase,
+    adds saga/phase/raid CRUD operations.
+    """
 
     def __init__(
         self,
@@ -325,13 +157,13 @@ class LinearTrackerAdapter(TrackerPort):
         max_retries: int = 3,
         **_extra: object,
     ) -> None:
-        self._team_id = team_id
-        self._gql = LinearGraphQLClient(
+        super().__init__(
             api_key=api_key,
             api_url=api_url,
             cache_ttl=cache_ttl,
             max_retries=max_retries,
         )
+        self._team_id = team_id
 
     async def _get_team_id(self) -> str:
         """Return the configured team ID, or discover the first available team."""
@@ -431,7 +263,7 @@ class LinearTrackerAdapter(TrackerPort):
     # -- Read: domain entities --
 
     async def get_saga(self, saga_id: str) -> Saga:
-        data = await self._gql.query(_GET_PROJECT_QUERY, {"id": saga_id})
+        data = await self._gql.query(_lt._GET_PROJECT_QUERY, {"id": saga_id})
         project = data.get("project")
         if project is None:
             raise GraphQLError(f"Project not found: {saga_id}")
@@ -453,187 +285,14 @@ class LinearTrackerAdapter(TrackerPort):
 
     async def list_pending_raids(self, phase_id: str) -> list[Raid]:
         data = await self._gql.query(
-            _LIST_ISSUES_BY_MILESTONE_QUERY,
+            _lt._LIST_ISSUES_BY_MILESTONE_QUERY,
             {"projectId": "", "milestoneId": phase_id, "first": 100},
         )
         nodes = data.get("issues", {}).get("nodes", [])
         raids = [self._issue_to_raid(n) for n in nodes]
         return [r for r in raids if r.status in (RaidStatus.PENDING, RaidStatus.QUEUED)]
 
-    # -- Browsing --
-
-    async def list_projects(self) -> list[TrackerProject]:
-        cache_key = "projects:all"
-        cached = self._gql.get_cached(cache_key)
-        if cached is not None:
-            return cached  # type: ignore[return-value]
-
-        data = await self._gql.query(_LIST_PROJECTS_QUERY, {"first": 50})
-        nodes = data.get("projects", {}).get("nodes", [])
-        projects = [self._node_to_tracker_project(n) for n in nodes]
-        self._gql.set_cached(cache_key, projects)
-        return projects
-
-    async def get_project(self, project_id: str) -> TrackerProject:
-        data = await self._gql.query(_GET_PROJECT_QUERY, {"id": project_id})
-        project = data.get("project")
-        if project is None:
-            raise GraphQLError(f"Project not found: {project_id}")
-        return self._node_to_tracker_project(project)
-
-    async def list_milestones(self, project_id: str) -> list[TrackerMilestone]:
-        cache_key = f"milestones:{project_id}"
-        cached = self._gql.get_cached(cache_key)
-        if cached is not None:
-            return cached  # type: ignore[return-value]
-
-        data = await self._gql.query(_LIST_MILESTONES_QUERY, {"projectId": project_id})
-        nodes = data.get("project", {}).get("projectMilestones", {}).get("nodes", [])
-        milestones = [self._node_to_tracker_milestone(n, project_id) for n in nodes]
-        milestones.sort(key=lambda m: m.sort_order)
-        self._gql.set_cached(cache_key, milestones)
-        return milestones
-
-    async def list_issues(
-        self,
-        project_id: str,
-        milestone_id: str | None = None,
-    ) -> list[TrackerIssue]:
-        cache_key = f"issues:{project_id}:{milestone_id}"
-        cached = self._gql.get_cached(cache_key)
-        if cached is not None:
-            return cached  # type: ignore[return-value]
-
-        if milestone_id:
-            data = await self._gql.query(
-                _LIST_ISSUES_BY_MILESTONE_QUERY,
-                {"projectId": project_id, "milestoneId": milestone_id, "first": 100},
-            )
-        else:
-            data = await self._gql.query(
-                _LIST_ISSUES_QUERY,
-                {"projectId": project_id, "first": 100},
-            )
-
-        nodes = data.get("issues", {}).get("nodes", [])
-        issues = [self._node_to_tracker_issue(n) for n in nodes]
-        self._gql.set_cached(cache_key, issues)
-        return issues
-
-    async def get_project_full(
-        self, project_id: str
-    ) -> tuple[TrackerProject, list[TrackerMilestone], list[TrackerIssue]]:
-        """Fetch project, milestones, and issues in a single GraphQL call."""
-        data = await self._gql.query(_GET_PROJECT_FULL_QUERY, {"id": project_id, "issueFirst": 250})
-        project_node = data.get("project")
-        if project_node is None:
-            raise GraphQLError(f"Project not found: {project_id}")
-
-        # The full query uses aliased fields to avoid conflicts
-        # Restore standard keys for _node_to_tracker_project
-        project_for_counts = {
-            **project_node,
-            "issues": project_node.get("issueCount", {}),
-        }
-        project = self._node_to_tracker_project(project_for_counts)
-
-        ms_nodes = project_node.get("projectMilestones", {}).get("nodes", [])
-        milestones = [self._node_to_tracker_milestone(n, project_id) for n in ms_nodes]
-        milestones.sort(key=lambda m: m.sort_order)
-
-        issue_nodes = project_node.get("issuesFull", {}).get("nodes", [])
-        issues = [self._node_to_tracker_issue(n) for n in issue_nodes]
-
-        return project, milestones, issues
-
-    # -- Internal helpers --
-
-    async def _resolve_state_id(self, issue_id: str, state_name: str) -> str:
-        """Resolve a Linear workflow state ID by name for an issue's team."""
-        team_data = await self._gql.query(_ISSUE_TEAM_QUERY, {"id": issue_id})
-        issue_node = team_data.get("issue")
-        if issue_node is None:
-            raise GraphQLError(f"Issue not found: {issue_id}")
-        team_id = issue_node["team"]["id"]
-
-        states_data = await self._gql.query(_TEAM_STATES_QUERY, {"teamId": team_id})
-        states = states_data.get("team", {}).get("states", {}).get("nodes", [])
-        for s in states:
-            if s["name"].lower() == state_name.lower():
-                return s["id"]
-
-        available = [s["name"] for s in states]
-        raise GraphQLError(f"State '{state_name}' not found. Available: {', '.join(available)}")
-
-    async def close(self) -> None:
-        """Close the underlying HTTP client."""
-        await self._gql.close()
-
-    # -- Conversion helpers --
-
-    @staticmethod
-    def _node_to_tracker_project(node: dict) -> TrackerProject:
-        ms_nodes = node.get("projectMilestones", {}).get("nodes", [])
-        # Calculate progress as average of milestone progress
-        if ms_nodes:
-            ms_progress = [_parse_progress(m.get("progress")) for m in ms_nodes]
-            progress = sum(ms_progress) / len(ms_progress)
-        else:
-            progress = _parse_progress(node.get("progress"))
-
-        # Extract slug from URL: .../project/{slug}-{slugId}
-        slug = ""
-        url = node.get("url", "")
-        slug_id = node.get("slugId", "")
-        if url and slug_id:
-            path_part = url.rsplit("/", 1)[-1]
-            if path_part.endswith(f"-{slug_id}"):
-                slug = path_part[: -(len(slug_id) + 1)]
-
-        return TrackerProject(
-            id=node["id"],
-            name=node.get("name", ""),
-            description=node.get("description") or "",
-            status=node.get("state", ""),
-            url=url,
-            milestone_count=len(ms_nodes),
-            issue_count=len(node.get("issues", {}).get("nodes", [])),
-            slug=slug,
-            progress=progress,
-            start_date=node.get("startDate"),
-            target_date=node.get("targetDate"),
-        )
-
-    @staticmethod
-    def _node_to_tracker_milestone(node: dict, project_id: str) -> TrackerMilestone:
-        return TrackerMilestone(
-            id=node["id"],
-            project_id=project_id,
-            name=node.get("name", ""),
-            description=node.get("description") or "",
-            sort_order=int(node.get("sortOrder", 0)),
-            progress=_parse_progress(node.get("progress")),
-            target_date=node.get("targetDate"),
-        )
-
-    @staticmethod
-    def _node_to_tracker_issue(node: dict) -> TrackerIssue:
-        state = node.get("state") or {}
-        return TrackerIssue(
-            id=node["id"],
-            identifier=node.get("identifier", ""),
-            title=node.get("title", ""),
-            description=node.get("description") or "",
-            status=state.get("name", "Unknown"),
-            status_type=state.get("type", ""),
-            assignee=(node.get("assignee") or {}).get("name"),
-            labels=[n["name"] for n in (node.get("labels") or {}).get("nodes", [])],
-            priority=node.get("priority", 0),
-            priority_label=node.get("priorityLabel", ""),
-            estimate=node.get("estimate"),
-            url=node.get("url", ""),
-            milestone_id=(node.get("projectMilestone") or {}).get("id"),
-        )
+    # -- Conversion helpers (saga-specific) --
 
     @staticmethod
     def _project_to_saga(node: dict) -> Saga:
@@ -685,18 +344,3 @@ class LinearTrackerAdapter(TrackerPort):
             created_at=now,
             updated_at=now,
         )
-
-
-def _parse_progress(value: object) -> float:
-    """Parse a Linear progress value and return a 0.0–1.0 float.
-
-    Linear returns progress as a percentage float (e.g. 8.33 = 8.33%),
-    or occasionally as a string like '100%'.
-    """
-    if value is None:
-        return 0.0
-    if isinstance(value, str):
-        return float(value.rstrip("%")) / 100.0
-    if isinstance(value, (int, float)):
-        return float(value) / 100.0
-    return 0.0

@@ -12,8 +12,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from niuu.domain.models import TrackerIssue, TrackerProject
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import TrackerIssue, TrackerProject
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 

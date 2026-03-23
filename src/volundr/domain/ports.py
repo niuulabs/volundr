@@ -50,8 +50,6 @@ from volundr.domain.models import (
     TenantMembership,
     TimelineEvent,
     TokenUsageRecord,
-    TrackerConnectionStatus,
-    TrackerIssue,
     TranslatedResources,
     User,
     Workspace,
@@ -706,48 +704,10 @@ class SecretValidationError(Exception):
     """Raised when a secret name fails validation."""
 
 
-class IssueTrackerProvider(ABC):
-    """Port for external issue tracker integration.
-
-    Supports Linear, Jira, GitHub Issues, or any other tracker.
-    """
-
-    @property
-    @abstractmethod
-    def provider_name(self) -> str:
-        """Return the name of this provider (e.g., 'linear', 'jira')."""
-
-    @abstractmethod
-    async def check_connection(self) -> TrackerConnectionStatus:
-        """Check the connection status to the issue tracker."""
-
-    @abstractmethod
-    async def search_issues(
-        self,
-        query: str,
-        project_id: str | None = None,
-    ) -> list[TrackerIssue]:
-        """Search issues by query string."""
-
-    @abstractmethod
-    async def get_recent_issues(
-        self,
-        project_id: str,
-        limit: int = 10,
-    ) -> list[TrackerIssue]:
-        """Get recent issues for a project."""
-
-    @abstractmethod
-    async def get_issue(self, issue_id: str) -> TrackerIssue | None:
-        """Get a single issue by ID or identifier."""
-
-    @abstractmethod
-    async def update_issue_status(
-        self,
-        issue_id: str,
-        status: str,
-    ) -> TrackerIssue:
-        """Update the status of an issue."""
+# IssueTrackerProvider is now an alias for the shared niuu TrackerPort.
+# Existing Volundr code and adapters (Jira, Linear) continue to work
+# because TrackerPort has the same abstract methods.
+from niuu.ports.tracker import TrackerPort as IssueTrackerProvider  # noqa: F401, E402
 
 
 class ProjectMappingRepository(ABC):

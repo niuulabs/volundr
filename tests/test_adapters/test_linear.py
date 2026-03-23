@@ -8,10 +8,11 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from niuu.adapters.linear_tracker import node_to_tracker_issue
+from niuu.domain.models import CacheEntry as _CacheEntry
 from volundr.adapters.outbound.linear import (
     LinearAdapter,
     LinearAPIError,
-    _CacheEntry,
 )
 
 # --- CacheEntry tests ---
@@ -70,7 +71,7 @@ class TestProviderName:
 class TestNodeToIssue:
     def test_converts_full_node(self):
         node = _issue_node()
-        issue = LinearAdapter._node_to_issue(node)
+        issue = node_to_tracker_issue(node)
 
         assert issue.identifier == "TEST-1"
         assert issue.title == "Test Issue"
@@ -81,17 +82,17 @@ class TestNodeToIssue:
 
     def test_handles_missing_assignee(self):
         node = _issue_node(assignee=None)
-        issue = LinearAdapter._node_to_issue(node)
+        issue = node_to_tracker_issue(node)
         assert issue.assignee is None
 
     def test_handles_missing_labels(self):
         node = _issue_node(labels=None)
-        issue = LinearAdapter._node_to_issue(node)
+        issue = node_to_tracker_issue(node)
         assert issue.labels == []
 
     def test_handles_missing_state(self):
         node = _issue_node(state={})
-        issue = LinearAdapter._node_to_issue(node)
+        issue = node_to_tracker_issue(node)
         assert issue.status == "Unknown"
 
 
@@ -331,7 +332,7 @@ class TestUpdateIssueStatus:
             ),
         ]
 
-        with pytest.raises(LinearAPIError, match="Status 'Invalid' not found"):
+        with pytest.raises(LinearAPIError, match="State 'Invalid' not found"):
             await adapter.update_issue_status("issue-1", "Invalid")
 
 

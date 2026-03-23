@@ -7,6 +7,12 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from niuu.domain.models import (
+    TrackerConnectionStatus,
+    TrackerIssue,
+    TrackerMilestone,
+    TrackerProject,
+)
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -14,9 +20,6 @@ from tyr.domain.models import (
     RaidStatus,
     Saga,
     SagaStatus,
-    TrackerIssue,
-    TrackerMilestone,
-    TrackerProject,
 )
 from tyr.ports.tracker import TrackerPort
 
@@ -29,6 +32,14 @@ class TestTrackerPortAbstract:
 
     def test_has_all_abstract_methods(self):
         expected_methods = {
+            # From niuu TrackerPort (core issue ops)
+            "provider_name",
+            "check_connection",
+            "search_issues",
+            "get_recent_issues",
+            "get_issue",
+            "update_issue_status",
+            # Tyr-specific CRUD
             "create_saga",
             "create_phase",
             "create_raid",
@@ -38,10 +49,6 @@ class TestTrackerPortAbstract:
             "get_phase",
             "get_raid",
             "list_pending_raids",
-            "list_projects",
-            "get_project",
-            "list_milestones",
-            "list_issues",
         }
         actual = set(TrackerPort.__abstractmethods__)
         assert actual == expected_methods
@@ -49,6 +56,25 @@ class TestTrackerPortAbstract:
 
 class ConcreteTracker(TrackerPort):
     """Minimal concrete implementation to verify the interface contract."""
+
+    @property
+    def provider_name(self) -> str:
+        return "test"
+
+    async def check_connection(self) -> TrackerConnectionStatus:
+        return TrackerConnectionStatus(connected=True, provider="test")
+
+    async def search_issues(self, query: str, project_id: str | None = None) -> list[TrackerIssue]:
+        return []
+
+    async def get_recent_issues(self, project_id: str, limit: int = 10) -> list[TrackerIssue]:
+        return []
+
+    async def get_issue(self, issue_id: str) -> TrackerIssue | None:
+        return None
+
+    async def update_issue_status(self, issue_id: str, status: str) -> TrackerIssue:
+        return TrackerIssue(id=issue_id, identifier="", title="", status=status)
 
     async def create_saga(self, saga: Saga) -> str:
         return "saga-1"

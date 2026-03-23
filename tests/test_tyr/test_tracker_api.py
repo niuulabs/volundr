@@ -13,6 +13,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from niuu.domain.models import (
+    TrackerConnectionStatus,
+    TrackerIssue,
+    TrackerMilestone,
+    TrackerProject,
+)
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.domain.models import (
     Phase,
@@ -21,9 +27,6 @@ from tyr.domain.models import (
     RaidStatus,
     Saga,
     SagaStatus,
-    TrackerIssue,
-    TrackerMilestone,
-    TrackerProject,
 )
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
@@ -40,6 +43,25 @@ class MockTracker(TrackerPort):
         self.projects: list[TrackerProject] = []
         self.milestones: dict[str, list[TrackerMilestone]] = {}
         self.issues: dict[str, list[TrackerIssue]] = {}
+
+    @property
+    def provider_name(self) -> str:
+        return "mock"
+
+    async def check_connection(self) -> TrackerConnectionStatus:
+        return TrackerConnectionStatus(connected=True, provider="mock")
+
+    async def search_issues(self, query: str, project_id: str | None = None) -> list[TrackerIssue]:
+        return []
+
+    async def get_recent_issues(self, project_id: str, limit: int = 10) -> list[TrackerIssue]:
+        return []
+
+    async def get_issue(self, issue_id: str) -> TrackerIssue | None:
+        return None
+
+    async def update_issue_status(self, issue_id: str, status: str) -> TrackerIssue:
+        return TrackerIssue(id=issue_id, identifier="", title="", status=status)
 
     async def create_saga(self, saga: Saga) -> str:
         return "saga-created"

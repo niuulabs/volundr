@@ -10,8 +10,8 @@ from base64 import b64encode
 
 import httpx
 
-from volundr.domain.models import TrackerConnectionStatus, TrackerIssue
-from volundr.domain.ports import IssueTrackerProvider
+from niuu.domain.models import TrackerConnectionStatus, TrackerIssue
+from niuu.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ _PRIORITY_MAP: dict[str, int] = {
 }
 
 
-class JiraAdapter(IssueTrackerProvider):
+class JiraAdapter(TrackerPort):
     """Jira Cloud issue tracker adapter using REST API v3.
 
     Constructor kwargs match the dynamic adapter pattern:

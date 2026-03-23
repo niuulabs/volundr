@@ -10,11 +10,11 @@ import httpx
 import pytest
 
 from niuu.adapters.linear import GraphQLError
+from niuu.adapters.linear_tracker import parse_progress
 from tyr.adapters.linear import (
     _LINEAR_TO_RAID,
     _RAID_TO_LINEAR,
     LinearTrackerAdapter,
-    _parse_progress,
 )
 from tyr.domain.models import (
     Phase,
@@ -619,25 +619,25 @@ class TestGetRaid:
 
 
 # ---------------------------------------------------------------------------
-# _parse_progress
+# parse_progress
 # ---------------------------------------------------------------------------
 
 
 class TestParseProgress:
     def test_none(self):
-        assert _parse_progress(None) == 0.0
+        assert parse_progress(None) == 0.0
 
     def test_float(self):
-        assert _parse_progress(0.75) == 0.0075
+        assert parse_progress(0.75) == 0.0075
 
     def test_int(self):
-        assert _parse_progress(1) == 0.01
+        assert parse_progress(1) == 0.01
 
     def test_percentage_string(self):
-        assert _parse_progress("50%") == 0.5
+        assert parse_progress("50%") == 0.5
 
     def test_unknown_type(self):
-        assert _parse_progress([1, 2]) == 0.0
+        assert parse_progress([1, 2]) == 0.0
 
 
 # ---------------------------------------------------------------------------

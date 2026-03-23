@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from niuu.domain.models import TrackerConnectionStatus, TrackerIssue
 from volundr.adapters.inbound.rest_tracker import create_tracker_router
-from volundr.domain.models import ProjectMapping, TrackerConnectionStatus, TrackerIssue
+from volundr.domain.models import ProjectMapping
 from volundr.domain.ports import IssueTrackerProvider, ProjectMappingRepository
 from volundr.domain.services.tracker import (
     TrackerIssueNotFoundError,
@@ -75,7 +77,7 @@ class InMemoryIssueTracker(IssueTrackerProvider):
         issue = self._issues.get(issue_id)
         if issue is None:
             raise TrackerIssueNotFoundError(f"Issue not found: {issue_id}")
-        updated = issue.model_copy(update={"status": status})
+        updated = replace(issue, status=status)
         self._issues[issue_id] = updated
         return updated
 
@@ -489,7 +491,7 @@ class TestLinearAdapterCache:
         assert adapter.provider_name == "linear"
 
     def test_node_to_issue(self):
-        from volundr.adapters.outbound.linear import LinearAdapter
+        from niuu.adapters.linear_tracker import node_to_tracker_issue
 
         node = {
             "id": "abc123",
@@ -501,7 +503,7 @@ class TestLinearAdapterCache:
             "priority": 1,
             "url": "https://linear.app/issue/NIU-99",
         }
-        issue = LinearAdapter._node_to_issue(node)
+        issue = node_to_tracker_issue(node)
         assert issue.id == "abc123"
         assert issue.identifier == "NIU-99"
         assert issue.title == "Test issue"
@@ -511,7 +513,7 @@ class TestLinearAdapterCache:
         assert issue.priority == 1
 
     def test_node_to_issue_missing_fields(self):
-        from volundr.adapters.outbound.linear import LinearAdapter
+        from niuu.adapters.linear_tracker import node_to_tracker_issue
 
         node = {
             "id": "abc123",
@@ -523,7 +525,7 @@ class TestLinearAdapterCache:
             "priority": 0,
             "url": "",
         }
-        issue = LinearAdapter._node_to_issue(node)
+        issue = node_to_tracker_issue(node)
         assert issue.status == "Unknown"
         assert issue.assignee is None
         assert issue.labels == []

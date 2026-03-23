@@ -19,6 +19,8 @@ from niuu.domain.models import (  # noqa: F401
     RepoInfo,
     SecretType,
     StoredCredential,
+    TrackerConnectionStatus,
+    TrackerIssue,
 )
 
 
@@ -749,38 +751,6 @@ class SavedPrompt(BaseModel):
     model_config = {"frozen": False}
 
 
-class TrackerIssue(BaseModel):
-    """Issue from an external issue tracker (Linear, Jira, GitHub Issues, etc.)."""
-
-    id: str = Field(
-        description="Internal issue ID from the tracker backend",
-    )
-    identifier: str = Field(
-        description="Human-readable issue identifier (e.g. NIU-57)",
-    )
-    title: str = Field(description="Issue title")
-    status: str = Field(
-        description="Current issue status (e.g. In Progress, Done)",
-    )
-    assignee: str | None = Field(
-        default=None,
-        description="Display name of the assigned user",
-    )
-    labels: list[str] = Field(
-        default_factory=list,
-        description="Labels attached to the issue",
-    )
-    priority: int = Field(
-        default=0,
-        description="Priority level (0=none, 1=urgent, 4=low)",
-    )
-    url: str = Field(
-        description="Web URL to view the issue in the tracker",
-    )
-
-    model_config = {"frozen": False}
-
-
 class ProjectMapping(BaseModel):
     """Maps a git repo URL to an issue tracker project."""
 
@@ -797,27 +767,6 @@ class ProjectMapping(BaseModel):
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp when the mapping was created",
-    )
-
-    model_config = {"frozen": False}
-
-
-class TrackerConnectionStatus(BaseModel):
-    """Connection status for an issue tracker."""
-
-    connected: bool = Field(
-        description="Whether the tracker connection is active",
-    )
-    provider: str = Field(
-        description="Tracker provider name (e.g. linear, jira)",
-    )
-    workspace: str | None = Field(
-        default=None,
-        description="Workspace or organization name in the tracker",
-    )
-    user: str | None = Field(
-        default=None,
-        description="Authenticated user display name",
     )
 
     model_config = {"frozen": False}

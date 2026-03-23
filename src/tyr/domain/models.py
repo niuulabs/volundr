@@ -7,6 +7,11 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
+from niuu.domain.models import (  # noqa: F401
+    TrackerIssue,
+    TrackerMilestone,
+    TrackerProject,
+)
 from tyr.domain.exceptions import InvalidStateTransitionError
 
 # ---------------------------------------------------------------------------
@@ -149,60 +154,6 @@ class PRStatus:
     state: str
     mergeable: bool
     ci_passed: bool | None
-
-
-# ---------------------------------------------------------------------------
-# Tracker browsing models (read-only, pre-import)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class TrackerProject:
-    """A project from an external tracker (read-only browsing model)."""
-
-    id: str
-    name: str
-    description: str
-    status: str
-    url: str
-    milestone_count: int
-    issue_count: int
-    slug: str = ""
-    progress: float = 0.0
-    start_date: str | None = None
-    target_date: str | None = None
-
-
-@dataclass(frozen=True)
-class TrackerMilestone:
-    """A milestone from an external tracker (read-only browsing model)."""
-
-    id: str
-    project_id: str
-    name: str
-    description: str
-    sort_order: int
-    progress: float
-    target_date: str | None = None
-
-
-@dataclass(frozen=True)
-class TrackerIssue:
-    """An issue from an external tracker (read-only browsing model)."""
-
-    id: str
-    identifier: str
-    title: str
-    description: str
-    status: str
-    status_type: str = ""
-    assignee: str | None = None
-    labels: list[str] = None  # type: ignore[assignment]
-    priority: int = 0
-    priority_label: str = ""
-    estimate: float | None = None
-    url: str = ""
-    milestone_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
