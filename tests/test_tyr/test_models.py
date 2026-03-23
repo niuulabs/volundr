@@ -239,12 +239,16 @@ class TestDispatcherState:
     def test_create(self) -> None:
         state = DispatcherState(
             id=uuid4(),
+            owner_id="user-1",
             running=True,
             threshold=0.7,
+            max_concurrent_raids=3,
             updated_at=NOW,
         )
         assert state.running is True
         assert state.threshold == 0.7
+        assert state.owner_id == "user-1"
+        assert state.max_concurrent_raids == 3
 
 
 class TestSessionInfo:

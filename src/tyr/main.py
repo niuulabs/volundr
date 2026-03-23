@@ -12,16 +12,19 @@ from fastapi import Depends, FastAPI, Request, Response
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
 from niuu.domain.models import Principal
 from niuu.utils import import_class, resolve_secret_kwargs
+from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
+from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
+from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
@@ -58,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
     app.include_router(create_dispatch_router())
+    app.include_router(create_dispatcher_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -98,6 +102,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
             app.dependency_overrides[dispatch_resolve_saga_repo] = _resolve_saga_repo
+
+            # Wire dispatcher repository
+            dispatcher_repo = PostgresDispatcherRepository(pool)
+
+            async def _resolve_dispatcher_repo() -> DispatcherRepository:
+                return dispatcher_repo
+
+            app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
             # Wire Volundr adapter
             volundr_adapter = VolundrHTTPAdapter(settings.volundr.url)
