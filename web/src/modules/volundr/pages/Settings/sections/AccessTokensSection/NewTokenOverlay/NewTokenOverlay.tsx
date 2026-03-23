@@ -25,9 +25,7 @@ export function NewTokenOverlay({ token, onDone }: NewTokenOverlayProps) {
         </div>
 
         <div className={styles.body}>
-          <p className={styles.warning}>
-            Copy this token now. It will not be shown again.
-          </p>
+          <p className={styles.warning}>Copy this token now. It will not be shown again.</p>
 
           <div className={styles.tokenBox}>
             <code className={styles.tokenValue}>{token}</code>

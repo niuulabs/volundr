@@ -78,15 +78,9 @@ export function AccessTokensSection({ service }: AccessTokensSectionProps) {
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>Access Tokens</h2>
-          <p className={styles.subtitle}>
-            Personal access tokens for API authentication.
-          </p>
+          <p className={styles.subtitle}>Personal access tokens for API authentication.</p>
         </div>
-        <button
-          className={styles.newButton}
-          onClick={() => setShowForm(true)}
-          type="button"
-        >
+        <button className={styles.newButton} onClick={() => setShowForm(true)} type="button">
           <Plus className={styles.newButtonIcon} />
           New Token
         </button>
@@ -134,8 +128,7 @@ export function AccessTokensSection({ service }: AccessTokensSectionProps) {
         <div className={styles.emptyState}>
           <KeyRound className={styles.emptyIcon} />
           <p className={styles.emptyText}>
-            No access tokens. Create one to allow external services like Tyr to
-            authenticate as you.
+            No access tokens. Create one to allow external services like Tyr to authenticate as you.
           </p>
         </div>
       ) : (

@@ -1178,9 +1178,7 @@ export class MockVolundrService implements IVolundrService {
     return [];
   }
 
-  async createToken(
-    name: string
-  ): Promise<import('@/modules/volundr/models').CreatePATResult> {
+  async createToken(name: string): Promise<import('@/modules/volundr/models').CreatePATResult> {
     return {
       id: 'mock-pat-id',
       name,

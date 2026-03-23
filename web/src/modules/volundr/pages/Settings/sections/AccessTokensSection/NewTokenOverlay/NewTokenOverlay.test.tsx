@@ -23,9 +23,7 @@ describe('NewTokenOverlay', () => {
 
   it('displays warning message', () => {
     render(<NewTokenOverlay token={mockToken} onDone={onDone} />);
-    expect(
-      screen.getByText('Copy this token now. It will not be shown again.')
-    ).toBeDefined();
+    expect(screen.getByText('Copy this token now. It will not be shown again.')).toBeDefined();
   });
 
   it('displays title', () => {

@@ -1565,9 +1565,10 @@ export class ApiVolundrService implements IVolundrService {
   // ── Personal Access Tokens ──────────────────────────────────────
 
   async listTokens(): Promise<import('@/modules/volundr/models').PersonalAccessToken[]> {
-    const response = await usersApi.get<
-      Array<{ id: string; name: string; created_at: string; last_used_at: string | null }>
-    >('/tokens');
+    const response =
+      await usersApi.get<
+        Array<{ id: string; name: string; created_at: string; last_used_at: string | null }>
+      >('/tokens');
     return response.map(t => ({
       id: t.id,
       name: t.name,
@@ -1576,9 +1577,7 @@ export class ApiVolundrService implements IVolundrService {
     }));
   }
 
-  async createToken(
-    name: string
-  ): Promise<import('@/modules/volundr/models').CreatePATResult> {
+  async createToken(name: string): Promise<import('@/modules/volundr/models').CreatePATResult> {
     const response = await usersApi.post<{
       id: string;
       name: string;
