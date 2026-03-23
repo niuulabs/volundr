@@ -116,6 +116,72 @@ data:
     ALTER TABLE sagas DROP COLUMN IF EXISTS name;
     ALTER TABLE sagas DROP COLUMN IF EXISTS status;
 
+  000004_owner_id_sagas.up.sql: |
+    -- Add owner_id to sagas, rename user_id→owner_id on integration_connections
+
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'default';
+    CREATE INDEX IF NOT EXISTS idx_sagas_owner_id ON sagas(owner_id);
+
+    -- Align with Volundr convention (sessions.owner_id, workspaces FK, etc.)
+    ALTER TABLE integration_connections RENAME COLUMN user_id TO owner_id;
+
+  000004_owner_id_sagas.down.sql: |
+    -- Revert owner_id on sagas, restore user_id on integration_connections
+
+    ALTER TABLE integration_connections RENAME COLUMN owner_id TO user_id;
+
+    DROP INDEX IF EXISTS idx_sagas_owner_id;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS owner_id;
+
+  000005_dispatcher_owner.up.sql: |
+    -- Per-user dispatcher state: owner_id + max_concurrent_raids
+
+    ALTER TABLE dispatcher_state ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE dispatcher_state ADD COLUMN IF NOT EXISTS max_concurrent_raids INT NOT NULL DEFAULT 3;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_dispatcher_state_owner ON dispatcher_state(owner_id);
+
+  000005_dispatcher_owner.down.sql: |
+    -- Revert per-user dispatcher state
+
+    DROP INDEX IF EXISTS idx_dispatcher_state_owner;
+    ALTER TABLE dispatcher_state DROP COLUMN IF EXISTS max_concurrent_raids;
+    ALTER TABLE dispatcher_state DROP COLUMN IF EXISTS owner_id;
+
+  000006_raid_pr_fields.up.sql: |
+    -- PR tracking fields on raids
+
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS pr_url TEXT;
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS pr_id  TEXT;
+    CREATE INDEX IF NOT EXISTS idx_raids_session_id ON raids(session_id)
+        WHERE session_id IS NOT NULL;
+
+  000006_raid_pr_fields.down.sql: |
+    -- Revert PR tracking fields on raids
+
+    DROP INDEX IF EXISTS idx_raids_session_id;
+    ALTER TABLE raids DROP COLUMN IF EXISTS pr_id;
+    ALTER TABLE raids DROP COLUMN IF EXISTS pr_url;
+
+  000007_notification_subscriptions.up.sql: |
+    -- Notification subscriptions table
+
+    CREATE TABLE IF NOT EXISTS notification_subscriptions (
+        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_id   TEXT        NOT NULL,
+        channel    TEXT        NOT NULL,
+        config     JSONB       NOT NULL DEFAULT '{}',
+        enabled    BOOLEAN     NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notification_subs_owner
+        ON notification_subscriptions(owner_id);
+
+  000007_notification_subscriptions.down.sql: |
+    -- Revert notification subscriptions
+
+    DROP TABLE IF EXISTS notification_subscriptions;
+
   000008_personal_access_tokens.up.sql: |
     -- Personal access tokens for Tyr API callers (e.g. Telegram bot, ODIN/Móði)
     -- owner_id is the IDP sub claim from Envoy headers, treated as an opaque string
