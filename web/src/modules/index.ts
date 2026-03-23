@@ -15,6 +15,7 @@ import {
   Palette,
   ToggleLeft,
   LayoutDashboard,
+  ShieldCheck,
 } from 'lucide-react';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import { registerModule } from './shared/registry';
@@ -73,6 +74,15 @@ registerModule({
 });
 
 // ── User modules ───────────────────────────────────────────────────
+
+registerModule({
+  key: 'tokens',
+  load: () =>
+    import('@/modules/volundr/pages/Settings/sections/AccessTokensSection').then(m => ({
+      default: m.AccessTokensSection,
+    })),
+  icon: ShieldCheck,
+});
 
 registerModule({
   key: 'credentials',

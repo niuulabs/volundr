@@ -38,6 +38,8 @@ import type {
   FeatureModule,
   FeatureScope,
   UserFeaturePreference,
+  PersonalAccessToken,
+  CreatePATResult,
 } from '@/modules/volundr/models';
 
 /**
@@ -518,4 +520,21 @@ export interface IVolundrService {
   updateUserFeaturePreferences(
     preferences: UserFeaturePreference[]
   ): Promise<UserFeaturePreference[]>;
+
+  // Personal Access Tokens
+
+  /**
+   * List the current user's personal access tokens
+   */
+  listTokens(): Promise<PersonalAccessToken[]>;
+
+  /**
+   * Create a new personal access token
+   */
+  createToken(name: string): Promise<CreatePATResult>;
+
+  /**
+   * Revoke a personal access token by ID
+   */
+  revokeToken(id: string): Promise<void>;
 }
