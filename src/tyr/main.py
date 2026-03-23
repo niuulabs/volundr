@@ -10,11 +10,11 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request, Response
 
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
-from niuu.domain.models import IntegrationType, Principal
-from niuu.ports.credentials import CredentialStorePort
-from niuu.ports.integrations import IntegrationRepository
+from niuu.domain.models import Principal
 from niuu.utils import import_class, resolve_secret_kwargs
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
+from tyr.adapters.tracker_factory import TrackerAdapterFactory
+from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
@@ -37,50 +37,6 @@ def _configure_logging(settings: Settings) -> None:
         if settings.logging.format == "text"
         else "%(message)s",
     )
-
-
-async def _resolve_tracker_adapters(
-    principal: Principal,
-    integration_repo: IntegrationRepository,
-    credential_store: CredentialStorePort,
-) -> list[TrackerPort]:
-    """Resolve TrackerPort adapters from the user's integration credentials.
-
-    Uses dynamic adapter pattern: config specifies fully-qualified class path,
-    credentials + config are passed as **kwargs to the constructor.
-    """
-    user_id = principal.user_id
-
-    connections = await integration_repo.list_connections(
-        user_id,
-        integration_type=IntegrationType.ISSUE_TRACKER,
-    )
-
-    adapters: list[TrackerPort] = []
-    for conn in connections:
-        if not conn.enabled:
-            continue
-        try:
-            cred = await credential_store.get_value(
-                "user",
-                conn.user_id,
-                conn.credential_name,
-            )
-            if cred is None:
-                continue
-
-            cls = import_class(conn.adapter)
-            kwargs = {**cred, **conn.config}
-            adapter = cls(**kwargs)
-            adapters.append(adapter)
-        except Exception:
-            logger.warning(
-                "Failed to create tracker adapter for connection %s",
-                conn.id,
-                exc_info=True,
-            )
-
-    return adapters
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -119,15 +75,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             credential_store = cs_cls(**cs_kwargs)
             logger.info("Credential store: %s", cs_cfg.adapter.rsplit(".", 1)[-1])
 
-            # Override the tracker resolver dependency with real wiring
+            # Wire adapter factories (used by autonomous dispatcher)
+            app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
+            app.state.tracker_factory = TrackerAdapterFactory(integration_repo, credential_store)
+
+            # Override the tracker resolver dependency with factory delegation
             from tyr.adapters.inbound.auth import extract_principal
 
             async def _resolve(
                 principal: Principal = Depends(extract_principal),
             ) -> list[TrackerPort]:
-                return await _resolve_tracker_adapters(
-                    principal, integration_repo, credential_store
-                )
+                return await app.state.tracker_factory.for_owner(principal.user_id)
 
             app.dependency_overrides[resolve_trackers] = _resolve
 
