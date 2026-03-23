@@ -107,6 +107,56 @@ describe('VolundrConnectionSection', () => {
     });
   });
 
+  it('shows error on disconnect failure', async () => {
+    const onDisconnect = vi.fn().mockRejectedValue(new Error('Disconnect failed'));
+    render(
+      <VolundrConnectionSection
+        connection={mockConnection}
+        onConnect={vi.fn()}
+        onDisconnect={onDisconnect}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Disconnect'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Disconnect failed')).toBeInTheDocument();
+    });
+  });
+
+  it('shows fallback error on non-Error connect failure', async () => {
+    const onConnect = vi.fn().mockRejectedValue('string error');
+    render(
+      <VolundrConnectionSection connection={null} onConnect={onConnect} onDisconnect={vi.fn()} />
+    );
+
+    fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+      target: { value: 'token' },
+    });
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to connect')).toBeInTheDocument();
+    });
+  });
+
+  it('shows fallback error on non-Error disconnect failure', async () => {
+    const onDisconnect = vi.fn().mockRejectedValue('string error');
+    render(
+      <VolundrConnectionSection
+        connection={mockConnection}
+        onConnect={vi.fn()}
+        onDisconnect={onDisconnect}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Disconnect'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to disconnect')).toBeInTheDocument();
+    });
+  });
+
   it('PAT input is password type', () => {
     render(
       <VolundrConnectionSection connection={null} onConnect={vi.fn()} onDisconnect={vi.fn()} />

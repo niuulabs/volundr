@@ -125,4 +125,54 @@ describe('GitHubConnectionSection', () => {
       expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({ config: {} }));
     });
   });
+
+  it('shows error on disconnect failure', async () => {
+    const onDisconnect = vi.fn().mockRejectedValue(new Error('Disconnect failed'));
+    render(
+      <GitHubConnectionSection
+        connection={mockConnection}
+        onConnect={vi.fn()}
+        onDisconnect={onDisconnect}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Disconnect'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Disconnect failed')).toBeInTheDocument();
+    });
+  });
+
+  it('shows fallback error on non-Error connect failure', async () => {
+    const onConnect = vi.fn().mockRejectedValue('string error');
+    render(
+      <GitHubConnectionSection connection={null} onConnect={onConnect} onDisconnect={vi.fn()} />
+    );
+
+    fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+      target: { value: 'ghp_x' },
+    });
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to connect')).toBeInTheDocument();
+    });
+  });
+
+  it('shows fallback error on non-Error disconnect failure', async () => {
+    const onDisconnect = vi.fn().mockRejectedValue('string error');
+    render(
+      <GitHubConnectionSection
+        connection={mockConnection}
+        onConnect={vi.fn()}
+        onDisconnect={onDisconnect}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Disconnect'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to disconnect')).toBeInTheDocument();
+    });
+  });
 });

@@ -110,4 +110,53 @@ describe('TelegramConnectionSection', () => {
       expect(screen.getByText('Bot unavailable')).toBeInTheDocument();
     });
   });
+
+  it('shows fallback error on non-Error setup failure', async () => {
+    const service = mockService({
+      getTelegramSetup: vi.fn().mockRejectedValue('string error'),
+    });
+    render(
+      <TelegramConnectionSection connection={null} service={service} onDisconnect={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByText('Generate Link'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to generate link')).toBeInTheDocument();
+    });
+  });
+
+  it('shows error on disconnect failure', async () => {
+    const onDisconnect = vi.fn().mockRejectedValue(new Error('Unlink failed'));
+    render(
+      <TelegramConnectionSection
+        connection={mockConnection}
+        service={mockService()}
+        onDisconnect={onDisconnect}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Unlink'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Unlink failed')).toBeInTheDocument();
+    });
+  });
+
+  it('shows fallback error on non-Error disconnect failure', async () => {
+    const onDisconnect = vi.fn().mockRejectedValue('string error');
+    render(
+      <TelegramConnectionSection
+        connection={mockConnection}
+        service={mockService()}
+        onDisconnect={onDisconnect}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Unlink'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to disconnect')).toBeInTheDocument();
+    });
+  });
 });
