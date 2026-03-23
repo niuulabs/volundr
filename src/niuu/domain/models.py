@@ -27,6 +27,7 @@ class IntegrationType(StrEnum):
     ISSUE_TRACKER = "issue_tracker"
     MESSAGING = "messaging"
     AI_PROVIDER = "ai_provider"
+    CODE_FORGE = "code_forge"
 
 
 @dataclass(frozen=True)
