@@ -4,6 +4,7 @@ import { AuthProvider } from '@/auth';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { useIdentity } from '@/hooks/useIdentity';
 import { volundrService } from '@/modules/volundr/adapters';
+import { tyrIntegrationService } from '@/modules/tyr/adapters';
 import { AppShell } from '@/modules/shared/components/AppShell';
 // Initialize module registry (registers all built-in feature modules)
 import '@/modules';
@@ -42,6 +43,9 @@ const TyrSessionsView = lazy(() =>
 const ImportView = lazy(() =>
   import('@/modules/tyr/pages/ImportView').then(m => ({ default: m.ImportView }))
 );
+const TyrSettingsView = lazy(() =>
+  import('@/modules/tyr/pages/Settings').then(m => ({ default: m.TyrSettings }))
+);
 
 function PageLoader() {
   return (
@@ -69,6 +73,7 @@ function AppContent() {
             <Route path="import" element={<ImportView />} />
             <Route path="dispatcher" element={<DispatcherView />} />
             <Route path="sessions" element={<TyrSessionsView />} />
+            <Route path="settings" element={<TyrSettingsView service={tyrIntegrationService} />} />
           </Route>
           <Route path="/settings" element={<SettingsPage service={volundrService} />} />
           <Route path="/admin" element={<AdminPage service={volundrService} />} />

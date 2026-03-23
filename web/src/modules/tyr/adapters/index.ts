@@ -4,11 +4,17 @@ import {
   MockTyrSessionService,
   MockTrackerBrowserService,
 } from './mock';
-import { ApiTyrService, ApiDispatcherService, ApiTrackerBrowserService } from './api';
+import {
+  ApiTyrService,
+  ApiDispatcherService,
+  ApiTrackerBrowserService,
+  ApiTyrIntegrationService,
+} from './api';
 import type { ITyrService } from '../ports';
 import type { IDispatcherService } from '../ports';
 import type { ITyrSessionService } from '../ports';
 import type { ITrackerBrowserService } from '../ports';
+import type { ITyrIntegrationService } from '../ports';
 
 const useMocks = import.meta.env.VITE_USE_MOCK_TYR === 'true';
 
@@ -20,3 +26,4 @@ export const tyrSessionService: ITyrSessionService = new MockTyrSessionService()
 export const trackerService: ITrackerBrowserService = useMocks
   ? new MockTrackerBrowserService()
   : new ApiTrackerBrowserService();
+export const tyrIntegrationService: ITyrIntegrationService = new ApiTyrIntegrationService();
