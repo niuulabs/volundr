@@ -146,6 +146,12 @@ query GetProjectFull($id: String!, $issueFirst: Int!) {
           estimate
           url
           projectMilestone { id }
+          relations {
+            nodes {
+              type
+              relatedIssue { identifier state { type } }
+            }
+          }
         }
       }
   }
@@ -165,6 +171,12 @@ _ISSUE_FIELDS = """
       estimate
       url
       projectMilestone { id }
+      relations {
+        nodes {
+          type
+          relatedIssue { identifier state { type } }
+        }
+      }
 """
 
 _LIST_ISSUES_QUERY = (
@@ -619,6 +631,14 @@ class LinearTrackerAdapter(TrackerPort):
     @staticmethod
     def _node_to_tracker_issue(node: dict) -> TrackerIssue:
         state = node.get("state") or {}
+
+        # Extract identifiers of issues this one blocks
+        blocks: list[str] = []
+        for rel in (node.get("relations") or {}).get("nodes", []):
+            if rel.get("type") == "blocks":
+                related = rel.get("relatedIssue") or {}
+                blocks.append(related.get("identifier", ""))
+
         return TrackerIssue(
             id=node["id"],
             identifier=node.get("identifier", ""),
@@ -633,6 +653,7 @@ class LinearTrackerAdapter(TrackerPort):
             estimate=node.get("estimate"),
             url=node.get("url", ""),
             milestone_id=(node.get("projectMilestone") or {}).get("id"),
+            blocks=blocks,
         )
 
     @staticmethod

@@ -199,6 +199,7 @@ class TrackerIssue:
     estimate: float | None = None
     url: str = ""
     milestone_id: str | None = None
+    blocks: list[str] = None  # type: ignore[assignment]  # identifiers this issue blocks
 
 
 # ---------------------------------------------------------------------------

@@ -112,11 +112,34 @@ async def resolve_volundr() -> VolundrPort:
 _READY_STATUSES = {"todo", "backlog", "triage"}
 
 
-def _is_ready(issue: TrackerIssue, active_issue_ids: set[str]) -> bool:
+def _find_blocked_identifiers(issues: list[TrackerIssue]) -> set[str]:
+    """Find identifiers of issues that are blocked by incomplete dependencies.
+
+    Linear stores: if A blocks B, A.blocks contains B's identifier.
+    An issue is blocked if ANY of its blockers is not completed.
+    """
+    # For each issue that blocks others: if this blocker is NOT completed,
+    # all issues it blocks are considered blocked.
+    blocked: set[str] = set()
+    for issue in issues:
+        if issue.status_type == "completed":
+            continue
+        for target_id in (issue.blocks or []):
+            blocked.add(target_id)
+    return blocked
+
+
+def _is_ready(
+    issue: TrackerIssue,
+    active_issue_ids: set[str],
+    blocked_identifiers: set[str],
+) -> bool:
     """Check if an issue is ready for dispatch."""
     if issue.status.lower() not in _READY_STATUSES:
         return False
     if issue.identifier in active_issue_ids:
+        return False
+    if issue.identifier in blocked_identifiers:
         return False
     return True
 
@@ -212,11 +235,12 @@ def create_dispatch_router() -> APIRouter:
                         milestones = await adapter.list_milestones(saga.tracker_id)
                         issues = await adapter.list_issues(saga.tracker_id)
 
-                    # Build milestone lookup
+                    # Build milestone lookup and dependency filter
                     milestone_names = {m.id: m.name for m in milestones}
+                    blocked_identifiers = _find_blocked_identifiers(issues)
 
                     for issue in issues:
-                        if not _is_ready(issue, active_issue_ids):
+                        if not _is_ready(issue, active_issue_ids, blocked_identifiers):
                             continue
                         queue.append(
                             QueueItem(
