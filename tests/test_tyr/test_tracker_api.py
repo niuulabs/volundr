@@ -65,6 +65,7 @@ class MockTracker(TrackerPort):
             slug="test",
             name="Test",
             repos=[],
+            feature_branch="feat/test",
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
@@ -134,6 +135,9 @@ class MockTracker(TrackerPort):
         milestones = await self.list_milestones(project_id)
         issues = await self.list_issues(project_id)
         return project, milestones, issues
+
+    async def get_blocked_identifiers(self, project_id: str) -> set[str]:
+        return getattr(self, "_blocked", set())
 
 
 # ---------------------------------------------------------------------------

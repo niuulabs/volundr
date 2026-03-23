@@ -1,190 +1,239 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DispatcherView } from './DispatcherView';
-import * as hooks from '../../hooks';
 
-vi.mock('../../hooks', () => ({
-  useDispatcher: vi.fn(),
+vi.mock('../../hooks/useDispatchQueue', () => ({
+  useDispatchQueue: vi.fn(),
 }));
 
 vi.mock('@/modules/shared', () => ({
-  LoadingIndicator: ({ messages, label }: { messages?: string[]; label?: string }) => (
-    <div data-testid="loading-indicator">{messages?.[0] ?? label}</div>
+  LoadingIndicator: ({ messages }: { messages?: string[] }) => (
+    <div data-testid="loading-indicator">{messages?.[0]}</div>
   ),
 }));
 
-const mockPause = vi.fn();
-const mockResume = vi.fn();
-const mockSetThreshold = vi.fn();
+import { useDispatchQueue } from '../../hooks/useDispatchQueue';
+
+const mockDefaults = {
+  default_system_prompt: 'test prompt',
+  default_model: 'claude-sonnet-4-6',
+  models: [
+    { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6' },
+    { id: 'claude-opus-4-6', name: 'Opus 4.6' },
+  ],
+};
 
 describe('DispatcherView', () => {
   beforeEach(() => {
-    vi.mocked(hooks.useDispatcher).mockReturnValue({
-      state: {
-        id: 'disp-1',
-        running: true,
-        threshold: 0.85,
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      log: ['[12:00] Dispatched raid-1', '[12:01] Raid-1 completed'],
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [
+        {
+          saga_id: 's1',
+          saga_name: 'Test Saga',
+          saga_slug: 'test',
+          repos: ['https://github.com/org/repo'],
+          feature_branch: 'feat/test',
+          phase_name: 'Phase 1',
+          issue_id: 'i1',
+          identifier: 'NIU-100',
+          title: 'Test issue',
+          description: '',
+          status: 'Todo',
+          priority: 1,
+          priority_label: 'Urgent',
+          estimate: 3,
+          url: '',
+        },
+      ],
+      defaults: mockDefaults,
       loading: false,
       error: null,
-      pause: mockPause,
-      resume: mockResume,
-      setThreshold: mockSetThreshold,
+      dispatching: false,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useDispatcher>);
+      dispatch: vi.fn(),
+    });
   });
 
-  it('renders dispatcher running status', () => {
+  it('renders queue items', () => {
     render(<DispatcherView />);
-    expect(screen.getByText('Running')).toBeInTheDocument();
+    expect(screen.getByText('NIU-100')).toBeInTheDocument();
+    expect(screen.getByText('Test issue')).toBeInTheDocument();
   });
 
-  it('renders pause button when running', () => {
-    render(<DispatcherView />);
-    expect(screen.getByText('Pause')).toBeInTheDocument();
-  });
-
-  it('renders threshold value', () => {
-    render(<DispatcherView />);
-    expect(screen.getByText('Confidence Threshold: 85%')).toBeInTheDocument();
-  });
-
-  it('renders log entries', () => {
-    render(<DispatcherView />);
-    expect(screen.getByText('[12:00] Dispatched raid-1')).toBeInTheDocument();
-    expect(screen.getByText('[12:01] Raid-1 completed')).toBeInTheDocument();
-  });
-
-  it('renders log heading', () => {
-    render(<DispatcherView />);
-    expect(screen.getByText('Dispatcher Log')).toBeInTheDocument();
-  });
-
-  it('renders loading indicator when loading', () => {
-    vi.mocked(hooks.useDispatcher).mockReturnValue({
-      state: null,
-      log: [],
+  it('renders loading indicator', () => {
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [],
+      defaults: mockDefaults,
       loading: true,
       error: null,
-      pause: vi.fn(),
-      resume: vi.fn(),
-      setThreshold: vi.fn(),
+      dispatching: false,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useDispatcher>);
-
+      dispatch: vi.fn(),
+    });
     render(<DispatcherView />);
-    expect(screen.getByText('Loading dispatcher...')).toBeInTheDocument();
+    expect(screen.getByText('Loading dispatch queue...')).toBeInTheDocument();
   });
 
-  it('renders error message when error occurs', () => {
-    vi.mocked(hooks.useDispatcher).mockReturnValue({
-      state: null,
-      log: [],
+  it('renders error message', () => {
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [],
+      defaults: mockDefaults,
       loading: false,
-      error: 'Connection failed',
-      pause: vi.fn(),
-      resume: vi.fn(),
-      setThreshold: vi.fn(),
+      error: 'Something broke',
+      dispatching: false,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useDispatcher>);
-
+      dispatch: vi.fn(),
+    });
     render(<DispatcherView />);
-    expect(screen.getByText('Connection failed')).toBeInTheDocument();
+    expect(screen.getByText('Something broke')).toBeInTheDocument();
   });
 
-  it('renders empty state when state is null', () => {
-    vi.mocked(hooks.useDispatcher).mockReturnValue({
-      state: null,
-      log: [],
+  it('renders empty state', () => {
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [],
+      defaults: mockDefaults,
       loading: false,
       error: null,
-      pause: vi.fn(),
-      resume: vi.fn(),
-      setThreshold: vi.fn(),
+      dispatching: false,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useDispatcher>);
-
+      dispatch: vi.fn(),
+    });
     render(<DispatcherView />);
-    expect(screen.getByText('Dispatcher not available')).toBeInTheDocument();
+    expect(screen.getByText('No issues ready for dispatch')).toBeInTheDocument();
   });
 
-  it('renders resume button and paused status when not running', () => {
-    vi.mocked(hooks.useDispatcher).mockReturnValue({
-      state: {
-        id: 'disp-1',
-        running: false,
-        threshold: 0.5,
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      log: [],
+  it('renders queue count', () => {
+    render(<DispatcherView />);
+    expect(screen.getByText('1 ready')).toBeInTheDocument();
+  });
+
+  it('renders select all and clear buttons', () => {
+    render(<DispatcherView />);
+    expect(screen.getByText('Select All')).toBeInTheDocument();
+    expect(screen.getByText('Clear')).toBeInTheDocument();
+  });
+
+  it('renders priority and estimate', () => {
+    render(<DispatcherView />);
+    expect(screen.getByText('Urgent')).toBeInTheDocument();
+    expect(screen.getByText('3pt')).toBeInTheDocument();
+  });
+
+  it('renders phase name', () => {
+    render(<DispatcherView />);
+    expect(screen.getByText('Phase 1')).toBeInTheDocument();
+  });
+
+  it('renders system prompt textarea when queue has items', () => {
+    render(<DispatcherView />);
+    expect(screen.getByText('System Prompt (optional)')).toBeInTheDocument();
+  });
+
+  it('renders model dropdown from config', () => {
+    render(<DispatcherView />);
+    expect(screen.getByText('Sonnet 4.6')).toBeInTheDocument();
+    expect(screen.getByText('Opus 4.6')).toBeInTheDocument();
+  });
+
+  it('renders saga group header', () => {
+    render(<DispatcherView />);
+    expect(screen.getByText('Test Saga')).toBeInTheDocument();
+  });
+
+  it('selects all and clears selection', () => {
+    render(<DispatcherView />);
+    fireEvent.click(screen.getByText('Select All'));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Clear'));
+    expect(screen.getByText('0 selected')).toBeInTheDocument();
+  });
+
+  it('toggles individual item selection', () => {
+    render(<DispatcherView />);
+    const checkbox = screen.getByRole('checkbox');
+    fireEvent.click(checkbox);
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    fireEvent.click(checkbox);
+    expect(screen.getByText('0 selected')).toBeInTheDocument();
+  });
+
+  it('shows dispatch button disabled when nothing selected', () => {
+    render(<DispatcherView />);
+    const btn = screen.getByText('Dispatch 0');
+    expect(btn).toBeDisabled();
+  });
+
+  it('dispatches and shows results', async () => {
+    const mockDispatch = vi
+      .fn()
+      .mockResolvedValue([{ issue_id: 'i1', session_name: 'niu-100', status: 'spawned' }]);
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [
+        {
+          saga_id: 's1',
+          saga_name: 'Test Saga',
+          saga_slug: 'test',
+          repos: ['https://github.com/org/repo'],
+          feature_branch: 'feat/test',
+          phase_name: 'Phase 1',
+          issue_id: 'i1',
+          identifier: 'NIU-100',
+          title: 'Test issue',
+          description: '',
+          status: 'Todo',
+          priority: 1,
+          priority_label: 'Urgent',
+          estimate: 3,
+          url: '',
+        },
+      ],
+      defaults: mockDefaults,
       loading: false,
       error: null,
-      pause: mockPause,
-      resume: mockResume,
-      setThreshold: mockSetThreshold,
+      dispatching: false,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useDispatcher>);
-
+      dispatch: mockDispatch,
+    });
     render(<DispatcherView />);
-    expect(screen.getByText('Paused')).toBeInTheDocument();
-    expect(screen.getByText('Resume')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Select All'));
+    fireEvent.click(screen.getByText('Dispatch 1'));
+    const { waitFor } = await import('@testing-library/react');
+    await waitFor(() => {
+      expect(screen.getByText(/niu-100/)).toBeInTheDocument();
+    });
+    // Dismiss results
+    fireEvent.click(screen.getByText('Dismiss'));
   });
 
-  it('calls pause when clicking pause button while running', () => {
-    render(<DispatcherView />);
-    fireEvent.click(screen.getByText('Pause'));
-    expect(mockPause).toHaveBeenCalled();
-  });
-
-  it('calls resume when clicking resume button while paused', () => {
-    vi.mocked(hooks.useDispatcher).mockReturnValue({
-      state: {
-        id: 'disp-1',
-        running: false,
-        threshold: 0.5,
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      log: [],
+  it('shows dispatching state', () => {
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [
+        {
+          saga_id: 's1',
+          saga_name: 'Test Saga',
+          saga_slug: 'test',
+          repos: ['https://github.com/org/repo'],
+          feature_branch: 'feat/test',
+          phase_name: 'Phase 1',
+          issue_id: 'i1',
+          identifier: 'NIU-100',
+          title: 'Test issue',
+          description: '',
+          status: 'Todo',
+          priority: 1,
+          priority_label: 'Urgent',
+          estimate: 3,
+          url: '',
+        },
+      ],
+      defaults: mockDefaults,
       loading: false,
       error: null,
-      pause: mockPause,
-      resume: mockResume,
-      setThreshold: mockSetThreshold,
+      dispatching: true,
       refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useDispatcher>);
-
+      dispatch: vi.fn(),
+    });
     render(<DispatcherView />);
-    fireEvent.click(screen.getByText('Resume'));
-    expect(mockResume).toHaveBeenCalled();
-  });
-
-  it('calls setThreshold when changing range input', () => {
-    render(<DispatcherView />);
-    const range = screen.getByLabelText(/Confidence Threshold/);
-    fireEvent.change(range, { target: { value: '50' } });
-    expect(mockSetThreshold).toHaveBeenCalledWith(0.5);
-  });
-
-  it('renders empty log message when log is empty', () => {
-    vi.mocked(hooks.useDispatcher).mockReturnValue({
-      state: {
-        id: 'disp-1',
-        running: true,
-        threshold: 0.85,
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      log: [],
-      loading: false,
-      error: null,
-      pause: vi.fn(),
-      resume: vi.fn(),
-      setThreshold: vi.fn(),
-      refresh: vi.fn(),
-    } as ReturnType<typeof hooks.useDispatcher>);
-
-    render(<DispatcherView />);
-    expect(screen.getByText('No log entries')).toBeInTheDocument();
+    expect(screen.getByText('Dispatching...')).toBeInTheDocument();
   });
 });

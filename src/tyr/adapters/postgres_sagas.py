@@ -54,13 +54,15 @@ class PostgresSagaRepository(SagaRepository):
 
     @staticmethod
     def _row_to_saga(row: asyncpg.Record) -> Saga:
+        slug = row["slug"]
         return Saga(
             id=row["id"],
             tracker_id=row["tracker_id"],
             tracker_type=row["tracker_type"],
-            slug=row["slug"],
+            slug=slug,
             name=row["name"],
             repos=list(row["repos"]),
+            feature_branch=row.get("feature_branch") or f"feat/{slug}",
             status=SagaStatus(row.get("status", "ACTIVE") or "ACTIVE"),
             confidence=row["confidence"] or 0.0,
             created_at=row["created_at"] or datetime.now(UTC),

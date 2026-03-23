@@ -32,7 +32,7 @@ from tyr.domain.models import (
 )
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
-from tyr.ports.volundr import VolundrPort
+from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 from .test_tracker_api import MockTracker
 
@@ -122,16 +122,19 @@ class MockVolundr(VolundrPort):
         self.chronicle = "Everything looks good"
         self.fail_pr_status = False
 
-    async def spawn_session(self, raid: Raid, branch: str) -> str:
-        return "session-1"
+    async def spawn_session(self, request: SpawnRequest) -> VolundrSession:
+        return VolundrSession(
+            id="session-1",
+            name=request.name,
+            status="running",
+            tracker_issue_id=request.tracker_issue_id,
+        )
 
-    async def get_session(self, session_id: str):
-        from tyr.domain.models import SessionInfo
+    async def get_session(self, session_id: str) -> VolundrSession | None:
+        return VolundrSession(id=session_id, name="test", status="completed", tracker_issue_id=None)
 
-        return SessionInfo(session_id=session_id, status="completed")
-
-    async def stop_session(self, session_id: str) -> None:
-        pass
+    async def list_sessions(self) -> list[VolundrSession]:
+        return []
 
     async def get_chronicle_summary(self, session_id: str) -> str:
         return self.chronicle
@@ -209,6 +212,7 @@ def _make_saga() -> Saga:
         slug="alpha",
         name="Alpha",
         repos=["org/repo"],
+        feature_branch="feat/alpha",
         status=SagaStatus.ACTIVE,
         confidence=0.0,
         created_at=datetime.now(UTC),

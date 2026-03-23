@@ -14,16 +14,24 @@ from niuu.domain.models import IntegrationType
 from niuu.ports.credentials import CredentialStorePort
 from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class, resolve_secret_kwargs
+from tyr.adapters.github_git import GitHubGitAdapter
 from tyr.adapters.postgres_raids import PostgresRaidRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
-from tyr.api.raids import create_raids_router, resolve_raid_repo
+from tyr.adapters.volundr_http import VolundrHTTPAdapter
+from tyr.api.dispatch import create_dispatch_router, resolve_volundr
+from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
+from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
+from tyr.api.raids import resolve_tracker as resolve_raids_tracker
+from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
+from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
+from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
     app.include_router(create_raids_router())
+    app.include_router(create_dispatch_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -132,6 +141,42 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return saga_repo
 
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
+            app.dependency_overrides[dispatch_resolve_saga_repo] = _resolve_saga_repo
+
+            # Wire Volundr adapter
+            volundr_adapter = VolundrHTTPAdapter(settings.volundr.url)
+
+            async def _resolve_volundr() -> VolundrPort:
+                return volundr_adapter
+
+            app.dependency_overrides[resolve_volundr] = _resolve_volundr
+            app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr
+
+            # Wire Git adapter
+            git_adapter = GitHubGitAdapter(settings.git.token)
+
+            async def _resolve_git() -> GitPort:
+                return git_adapter
+
+            app.dependency_overrides[resolve_git] = _resolve_git
+
+            # Wire tracker for raids (uses first available tracker)
+            async def _resolve_raids_tracker_dep(
+                request: Request,
+            ) -> TrackerPort:
+                trackers = await _resolve_tracker_adapters(
+                    request, integration_repo, credential_store
+                )
+                if not trackers:
+                    from fastapi import HTTPException, status
+
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="No tracker configured",
+                    )
+                return trackers[0]
+
+            app.dependency_overrides[resolve_raids_tracker] = _resolve_raids_tracker_dep
 
             # Wire raid repository
             raid_repo = PostgresRaidRepository(pool)

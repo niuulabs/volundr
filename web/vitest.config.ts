@@ -21,6 +21,9 @@ export default defineConfig({
         '**/*.d.ts',
         '**/*.config.*',
         '**/index.ts',
+        '**/register.ts',
+        'src/modules/icons.ts',
+        'src/modules/registry.ts',
         'src/adapters/api/yggdrasil.adapter.ts',
       ],
       thresholds: {

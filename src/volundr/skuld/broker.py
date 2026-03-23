@@ -574,6 +574,23 @@ class Broker:
 
         await self._channels.broadcast(data)
 
+        # Record user messages that arrive via the transport (e.g. the
+        # initial prompt flushed as a pending message) into conversation
+        # history so late-joining browsers see them.
+        if event_type == "user":
+            user_content = ""
+            msg = data.get("message", {})
+            if isinstance(msg, dict):
+                user_content = msg.get("content", "")
+            if isinstance(user_content, str) and user_content:
+                self._append_turn(
+                    ConversationTurn(
+                        id=str(uuid.uuid4()),
+                        role="user",
+                        content=user_content,
+                    )
+                )
+
         # When CLI sends system/init, broadcast available commands to browsers
         if event_type == "system" and data.get("subtype") == "init":
             slash_commands = data.get("slash_commands", [])
@@ -1290,6 +1307,20 @@ class Broker:
                 {"type": "system", "content": f"Connected to session {self.session_id}"}
             )
             logger.debug("handle_websocket: welcome message sent")
+
+            # Replay conversation history so late-joining browsers see
+            # earlier messages (including the initial prompt)
+            if self._conversation_turns:
+                logger.info(
+                    "Replaying %d conversation turns to new browser",
+                    len(self._conversation_turns),
+                )
+                await websocket.send_json(
+                    {
+                        "type": "conversation_history",
+                        "turns": [asdict(t) for t in self._conversation_turns],
+                    }
+                )
 
             # Handle messages from browser
             while True:

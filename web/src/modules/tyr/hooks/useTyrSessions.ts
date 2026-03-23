@@ -1,61 +1,98 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { SessionInfo } from '../models';
-import { tyrSessionService } from '../adapters';
+import { createApiClient } from '@/modules/shared/api/client';
+
+const volundrApi = createApiClient('/api/v1/volundr');
+
+export interface VolundrSession {
+  id: string;
+  name: string;
+  model: string;
+  source: {
+    repo: string;
+    branch: string;
+  };
+  status: string;
+  chat_endpoint: string | null;
+  code_endpoint: string | null;
+  created_at: string;
+  updated_at: string;
+  last_active: string;
+  message_count: number;
+  tokens_used: number;
+  tracker_issue_id: string | null;
+  issue_tracker_url: string | null;
+  error: string | null;
+}
+
+export interface TimelineEvent {
+  t: number;
+  type: string;
+  label: string;
+  tokens?: number | null;
+  action?: string | null;
+  ins?: number | null;
+  del?: number | null;
+  hash?: string | null;
+  exit?: number | null;
+}
+
+export interface TimelineFile {
+  path: string;
+  status: string;
+  ins: number;
+  del: number;
+}
+
+export interface TimelineCommit {
+  hash: string;
+  msg: string;
+  time: string;
+}
+
+export interface TimelineResponse {
+  events: TimelineEvent[];
+  files: TimelineFile[];
+  commits: TimelineCommit[];
+  token_burn: number[];
+}
 
 interface UseTyrSessionsResult {
-  sessions: SessionInfo[];
+  sessions: VolundrSession[];
   loading: boolean;
   error: string | null;
-  approve: (sessionId: string) => Promise<void>;
   refresh: () => void;
+  getTimeline: (sessionId: string) => Promise<TimelineResponse | null>;
 }
 
 export function useTyrSessions(): UseTyrSessionsResult {
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sessions, setSessions] = useState<VolundrSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSessions = useCallback(() => {
+  const fetchSessions = useCallback(async () => {
     setLoading(true);
     setError(null);
-    tyrSessionService
-      .getSessions()
-      .then(setSessions)
-      .catch(e => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+    try {
+      const data = await volundrApi.get<VolundrSession[]>('/sessions');
+      setSessions(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const fetch = async () => {
-      try {
-        const data = await tyrSessionService.getSessions();
-        if (!cancelled) {
-          setSessions(data);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-    setLoading(true);
-    setError(null);
-    fetch();
-    return () => {
-      cancelled = true;
-    };
+    fetchSessions();
+  }, [fetchSessions]);
+
+  const getTimeline = useCallback(async (sessionId: string): Promise<TimelineResponse | null> => {
+    try {
+      return await volundrApi.get<TimelineResponse>(`/chronicles/${sessionId}/timeline`);
+    } catch {
+      return null;
+    }
   }, []);
 
-  const approve = useCallback(async (sessionId: string) => {
-    await tyrSessionService.approve(sessionId);
-    const updated = await tyrSessionService.getSessions();
-    setSessions(updated);
-  }, []);
-
-  return { sessions, loading, error, approve, refresh: fetchSessions };
+  return { sessions, loading, error, refresh: fetchSessions, getTimeline };
 }
