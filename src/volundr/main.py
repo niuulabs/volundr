@@ -620,6 +620,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             presets_router = create_presets_router(preset_service)
             app.include_router(presets_router)
 
+            # Personal access tokens
+            from volundr.adapters.outbound.postgres_pats import PostgresPATRepository
+            from volundr.domain.services.pat import PATService
+
+            pat_repository = PostgresPATRepository(pool)
+            pat_service = PATService(
+                repo=pat_repository,
+                signing_key=settings.pat.signing_key,
+                ttl_days=settings.pat.ttl_days,
+            )
+            app.state.pat_service = pat_service
+
             git_router = create_git_router(git_workflow_service)
             app.include_router(git_router)
 

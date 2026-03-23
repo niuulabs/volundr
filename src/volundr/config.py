@@ -909,6 +909,19 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
     ]
 
 
+class PATConfig(BaseModel):
+    """Personal access token configuration."""
+
+    signing_key: str = Field(
+        default="",
+        description="Symmetric signing key for PAT JWTs (same key Envoy uses for validation).",
+    )
+    ttl_days: int = Field(
+        default=365,
+        description="Default PAT lifetime in days.",
+    )
+
+
 class AuthDiscoveryConfig(BaseModel):
     """Public auth discovery configuration for CLI and external clients.
 
@@ -990,6 +1003,7 @@ class Settings(BaseSettings):
     resource_provider: ResourceProviderConfig = Field(default_factory=ResourceProviderConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
+    pat: PATConfig = Field(default_factory=PATConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)
