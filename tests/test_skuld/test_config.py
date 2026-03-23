@@ -12,7 +12,7 @@ class TestSkuldSessionConfig:
         config = SkuldSessionConfig()
         assert config.id == "unknown"
         assert config.name == "unknown"
-        assert config.model == "claude-sonnet-4-20250514"
+        assert config.model == "claude-sonnet-4-6"
         assert config.workspace_dir is None
 
     def test_explicit_values(self):
@@ -54,7 +54,7 @@ class TestSkuldSettings:
         assert s.volundr_api_url == ""
         assert s.session.id == "unknown"
         assert s.session.name == "unknown"
-        assert s.session.model == "claude-sonnet-4-20250514"
+        assert s.session.model == "claude-sonnet-4-6"
         assert s.persistence_mount_path == "/volundr/sessions"
 
     def test_workspace_path_computed(self, monkeypatch):

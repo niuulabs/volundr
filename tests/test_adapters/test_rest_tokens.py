@@ -14,6 +14,7 @@ from tests.conftest import (
 )
 from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.outbound.pricing import HardcodedPricingProvider
+from volundr.config import AIModelConfig
 from volundr.domain.models import GitSource, Session, SessionStatus
 from volundr.domain.services import (
     SessionService,
@@ -258,7 +259,9 @@ class TestReportUsageWithPricing:
 
         session_repository = InMemorySessionRepository()
         token_tracker = InMemoryTokenTracker()
-        pricing_provider = HardcodedPricingProvider()
+        pricing_provider = HardcodedPricingProvider([
+            AIModelConfig(id="claude-sonnet-4-20250514", name="Sonnet", cost_per_million_tokens=3.0),
+        ])
         token_service = TokenService(token_tracker, session_repository, pricing_provider)
         session_service = SessionService(session_repository, MockPodManager())
 

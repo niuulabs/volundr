@@ -66,7 +66,7 @@ class TestValuesDefaults:
     def test_skuld_claude_defaults_session_model(self, values_yaml):
         """Test skuld-claude defaults include session model."""
         defaults = values_yaml["sessionDefinitions"]["skuldClaude"]["defaults"]
-        assert defaults["session"]["model"] == "claude-sonnet-4-20250514"
+        assert defaults["session"]["model"] == "claude-sonnet-4-6"
 
     def test_skuld_codex_defaults_session_model(self, values_yaml):
         """Test skuld-codex defaults include a Codex model."""
