@@ -57,8 +57,8 @@ class NativeTrackerAdapter(TrackerPort):
             """
             INSERT INTO sagas
                 (id, tracker_id, tracker_type, slug, name,
-                 repos, status, confidence, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 repos, feature_branch, status, confidence, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (id) DO NOTHING
             """,
             saga.id,
@@ -67,6 +67,7 @@ class NativeTrackerAdapter(TrackerPort):
             saga.slug,
             saga.name,
             saga.repos,
+            saga.feature_branch,
             saga.status.value,
             saga.confidence,
             saga.created_at,
@@ -232,13 +233,15 @@ class NativeTrackerAdapter(TrackerPort):
 
     @staticmethod
     def _row_to_saga(row: asyncpg.Record) -> Saga:
+        slug = row["slug"]
         return Saga(
             id=row["id"],
             tracker_id=row["tracker_id"],
             tracker_type=row.get("tracker_type", "native") or "native",
-            slug=row["slug"],
+            slug=slug,
             name=row["name"],
             repos=list(row["repos"]),
+            feature_branch=row.get("feature_branch") or f"feat/{slug}",
             status=SagaStatus(row.get("status", "ACTIVE") or "ACTIVE"),
             confidence=row["confidence"] or 0.0,
             created_at=row["created_at"] or datetime.now(UTC),
