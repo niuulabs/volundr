@@ -260,7 +260,11 @@ class TestReportUsageWithPricing:
         session_repository = InMemorySessionRepository()
         token_tracker = InMemoryTokenTracker()
         pricing_provider = HardcodedPricingProvider([
-            AIModelConfig(id="claude-sonnet-4-20250514", name="Sonnet", cost_per_million_tokens=3.0),
+            AIModelConfig(
+                id="claude-sonnet-4-20250514",
+                name="Sonnet",
+                cost_per_million_tokens=3.0,
+            ),
         ])
         token_service = TokenService(token_tracker, session_repository, pricing_provider)
         session_service = SessionService(session_repository, MockPodManager())
