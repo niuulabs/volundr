@@ -106,6 +106,13 @@ class AuthConfig(BaseModel):
     )
 
 
+class TelegramConfig(BaseModel):
+    """Telegram bot configuration for deeplink setup."""
+
+    bot_username: str = Field(default="TyrBot")
+    hmac_key: str = Field(default="")
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
@@ -147,6 +154,7 @@ class Settings(BaseSettings):
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
     @classmethod
     def settings_customise_sources(

@@ -12,6 +12,10 @@ from fastapi import Depends, FastAPI, Request, Response
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
 from niuu.domain.models import Principal
 from niuu.utils import import_class, resolve_secret_kwargs
+from tyr.adapters.inbound.rest_integrations import (
+    create_integrations_router,
+    create_telegram_setup_router,
+)
 from tyr.adapters.inbound.rest_pats import create_pats_router
 from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
@@ -64,6 +68,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
     app.include_router(create_pats_router())
+    app.include_router(create_integrations_router())
+    app.include_router(
+        create_telegram_setup_router(
+            telegram_bot_username=settings.telegram.bot_username,
+            telegram_hmac_key=settings.telegram.hmac_key,
+        )
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -80,6 +91,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             cs_kwargs = resolve_secret_kwargs(cs_cfg.kwargs, cs_cfg.secret_kwargs_env)
             credential_store = cs_cls(**cs_kwargs)
             logger.info("Credential store: %s", cs_cfg.adapter.rsplit(".", 1)[-1])
+
+            # Expose shared infrastructure on app.state for REST routers
+            app.state.integration_repo = integration_repo
+            app.state.credential_store = credential_store
 
             # Wire adapter factories (used by autonomous dispatcher)
             app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
