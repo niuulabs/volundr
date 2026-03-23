@@ -56,9 +56,7 @@ class TestVolundrPort:
         methods = {
             "spawn_session",
             "get_session",
-            "stop_session",
-            "get_chronicle_summary",
-            "get_pr_status",
+            "list_sessions",
         }
         abstract_methods = {
             name

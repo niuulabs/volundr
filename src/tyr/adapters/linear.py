@@ -52,6 +52,25 @@ _LINEAR_TO_RAID: dict[str, RaidStatus] = {
 # GraphQL mutations (saga/phase/raid specific)
 # ---------------------------------------------------------------------------
 
+_LIST_ISSUE_RELATIONS_QUERY = """
+query ListIssueRelations($projectId: ID!, $first: Int!) {
+  issues(
+    filter: { project: { id: { eq: $projectId } } }
+    first: $first
+  ) {
+    nodes {
+      identifier
+      state { type }
+      relations {
+        nodes {
+          type
+          relatedIssue { identifier }
+        }
+      }
+    }
+  }
+}
+"""
 _CREATE_PROJECT_QUERY = """
 mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
   projectCreate(input: { name: $name, description: $description, teamIds: $teamIds }) {
@@ -292,6 +311,25 @@ class LinearTrackerAdapter(LinearTrackerBase, TrackerPort):
         raids = [self._issue_to_raid(n) for n in nodes]
         return [r for r in raids if r.status in (RaidStatus.PENDING, RaidStatus.QUEUED)]
 
+    async def get_blocked_identifiers(self, project_id: str) -> set[str]:
+        """Fetch issue relations and return identifiers blocked by incomplete issues."""
+        data = await self._gql.query(
+            _LIST_ISSUE_RELATIONS_QUERY, {"projectId": project_id, "first": 250}
+        )
+        nodes = data.get("issues", {}).get("nodes", [])
+
+        blocked: set[str] = set()
+        for node in nodes:
+            state_type = (node.get("state") or {}).get("type", "")
+            if state_type == "completed":
+                continue
+            for rel in (node.get("relations") or {}).get("nodes", []):
+                if rel.get("type") == "blocks":
+                    target = (rel.get("relatedIssue") or {}).get("identifier", "")
+                    if target:
+                        blocked.add(target)
+        return blocked
+
     # -- Conversion helpers (saga-specific) --
 
     @staticmethod
@@ -304,6 +342,7 @@ class LinearTrackerAdapter(LinearTrackerBase, TrackerPort):
             slug=node.get("name", "").lower().replace(" ", "-"),
             name=node.get("name", ""),
             repos=[],
+            feature_branch="feat/test",
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,

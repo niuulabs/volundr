@@ -41,6 +41,19 @@ replicaCount: 1
 # -- Number of old ReplicaSets to retain
 revisionHistoryLimit: 10
 
+# Available AI models — used by the wizard, profiles, and pricing
+# Override via global.models from the niuu umbrella chart
+aiModels:
+  - id: "claude-opus-4-6"
+    name: "Opus 4.6"
+    costPerMillionTokens: 15.00
+  - id: "claude-sonnet-4-6"
+    name: "Sonnet 4.6"
+    costPerMillionTokens: 3.00
+  - id: "claude-haiku-4-5-20251001"
+    name: "Haiku 4.5"
+    costPerMillionTokens: 1.00
+
 # Image configuration
 image:
   # -- Container registry
@@ -220,7 +233,7 @@ database:
 #       code_path: "/"
 #       session_defaults:              # values passed to the skuld Helm chart
 #         session:
-#           model: "claude-sonnet-4-20250514"
+#           model: "claude-sonnet-4-6"
 #         image:
 #           repository: "ghcr.io/niuulabs/skuld"
 #           tag: "latest"
@@ -273,7 +286,7 @@ profiles: []
   #   description: "Standard Claude Code session"
   #   workloadType: session
   #   sessionDefinition: skuld-claude   # which session definition to use
-  #   model: "claude-sonnet-4-20250514"
+  #   model: "claude-sonnet-4-6"
   #   resourceConfig:
   #     cpu: "500m"
   #     memory: "1Gi"
@@ -297,7 +310,7 @@ profiles: []
   #   description: "GPU-accelerated data science"
   #   workloadType: session
   #   sessionDefinition: skuld-claude
-  #   model: "claude-sonnet-4-20250514"
+  #   model: "claude-sonnet-4-6"
   #   resourceConfig:
   #     cpu: "2"
   #     memory: "8Gi"
@@ -783,7 +796,7 @@ sessionDefinitions:
     defaults:
       session:
         # -- Default Claude model
-        model: "claude-sonnet-4-20250514"
+        model: "claude-sonnet-4-6"
 
       broker:
         # -- AI CLI backend: "claude" (Claude Code)

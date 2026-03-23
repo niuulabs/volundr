@@ -11,6 +11,17 @@ global:
   image:
     registry: ghcr.io/niuulabs
   domain: niuu.world
+  # Available AI models — propagated to both Tyr and Volundr
+  aiModels:
+    - id: "claude-opus-4-6"
+      name: "Opus 4.6"
+      costPerMillionTokens: 15.00
+    - id: "claude-sonnet-4-6"
+      name: "Sonnet 4.6"
+      costPerMillionTokens: 3.00
+    - id: "claude-haiku-4-5-20251001"
+      name: "Haiku 4.5"
+      costPerMillionTokens: 1.00
 
 volundr:
   enabled: true

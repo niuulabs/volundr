@@ -173,13 +173,15 @@ def create_tracker_router() -> APIRouter:
             )
 
         now = datetime.now(UTC)
+        slug = project.slug or _slugify(project.name)
         saga = Saga(
             id=uuid4(),
             tracker_id=project.id,
             tracker_type="linear",
-            slug=project.slug or _slugify(project.name),
+            slug=slug,
             name=project.name,
             repos=body.repos,
+            feature_branch=f"feat/{slug}",
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,

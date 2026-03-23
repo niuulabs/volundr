@@ -30,6 +30,19 @@ data:
     volundr:
       url: {{ .Values.volundr.url | quote }}
 
+    dispatch:
+      default_system_prompt: {{ .Values.dispatch.defaultSystemPrompt | quote }}
+      default_model: {{ .Values.dispatch.defaultModel | quote }}
+    ai_models:
+      {{- $models := .Values.aiModels }}
+      {{- if and .Values.global .Values.global.aiModels }}
+      {{- $models = .Values.global.aiModels }}
+      {{- end }}
+      {{- range $models }}
+      - id: {{ .id | quote }}
+        name: {{ .name | quote }}
+      {{- end }}
+
     credential_store:
       adapter: {{ .Values.credentialStore.adapter | quote }}
       kwargs: {{ .Values.credentialStore.kwargs | toJson }}

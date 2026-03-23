@@ -91,7 +91,7 @@ class SessionCreate(BaseModel):
     model: str = Field(
         default="",
         max_length=100,
-        description="LLM model identifier (e.g. claude-sonnet-4-20250514)",
+        description="LLM model identifier (e.g. claude-sonnet-4-6)",
     )
     source: SessionSource = Field(
         default_factory=GitSource,
@@ -156,7 +156,7 @@ class SessionCreate(BaseModel):
         "json_schema_extra": {
             "example": {
                 "name": "fix-auth-bug",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "source": {
                     "type": "git",
                     "repo": "github.com/acme/backend",
@@ -207,7 +207,7 @@ class SessionUpdate(BaseModel):
         "json_schema_extra": {
             "example": {
                 "name": "fix-auth-bug-v2",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "branch": "fix/auth-bypass",
                 "tracker_issue_id": "PROJ-1234",
             },
@@ -297,7 +297,7 @@ class SessionResponse(BaseModel):
             "example": {
                 "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "name": "fix-auth-bug",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "source": {
                     "type": "git",
                     "repo": "github.com/acme/backend",
@@ -551,7 +551,7 @@ class ChronicleResponse(BaseModel):
                 "project": "backend",
                 "repo": "github.com/acme/backend",
                 "branch": "fix/auth-bug",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "config_snapshot": {},
                 "summary": "Fixed JWT validation bypass",
                 "key_changes": [

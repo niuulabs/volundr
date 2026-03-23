@@ -83,14 +83,10 @@ class Saga:
     slug: str
     name: str
     repos: list[str]
+    feature_branch: str
     status: SagaStatus
     confidence: float
     created_at: datetime
-
-    @property
-    def feature_branch(self) -> str:
-        """Auto-generated feature branch: feat/<slug>."""
-        return f"feat/{self.slug}"
 
 
 @dataclass(frozen=True)

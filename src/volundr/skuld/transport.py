@@ -330,7 +330,6 @@ class SdkWebSocketTransport(CLITransport):
             "claude",
             "--sdk-url",
             self.sdk_url,
-            "--print",
             "--output-format",
             "stream-json",
             "--input-format",
@@ -343,16 +342,26 @@ class SdkWebSocketTransport(CLITransport):
             cmd.extend(["--permission-mode", "bypassPermissions"])
         if self._system_prompt:
             cmd.extend(["--append-system-prompt", self._system_prompt])
-        cmd.extend(["-p", self._initial_prompt or "placeholder"])
+        if self._initial_prompt and not resume_id:
+            self._pending_messages.append({
+                "type": "user",
+                "message": {"role": "user", "content": self._initial_prompt},
+                "parent_tool_use_id": None,
+                "session_id": "",
+            })
         if resume_id:
             cmd.extend(["--resume", resume_id])
 
         logger.info(
-            "Spawning Claude CLI with --sdk-url %s (resume: %s, skip_perms: %s, teams: %s)",
-            self.sdk_url,
+            "Spawning Claude CLI: %s",
+            " ".join(cmd[:10]) + ("..." if len(cmd) > 10 else ""),
+        )
+        logger.info(
+            "CLI args: system_prompt=%d chars, initial_prompt=%d chars, model=%s, resume=%s",
+            len(self._system_prompt),
+            len(self._initial_prompt),
+            self._model,
             resume_id,
-            self._skip_permissions,
-            self._agent_teams,
         )
 
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
@@ -428,6 +437,9 @@ class SdkWebSocketTransport(CLITransport):
             for msg in self._pending_messages:
                 logger.debug("Flushing pending message type=%s", msg.get("type"))
                 await self._send_to_cli(msg)
+                # Emit to broker so the message is broadcast to all channels
+                # (browser WebSockets, Telegram, etc.) and recorded in history
+                await self._emit(msg)
             self._pending_messages.clear()
 
         self._keepalive_task = asyncio.create_task(self._keepalive_loop())

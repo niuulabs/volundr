@@ -69,6 +69,24 @@ class CredentialStoreConfig(BaseModel):
     secret_kwargs_env: dict[str, str] = Field(default_factory=dict)
 
 
+class AIModelConfig(BaseModel):
+    """Available AI model — configured via Helm values.
+
+    Mirrors niuu.domain.models.AIModelConfig but as a pydantic model
+    for settings deserialization.
+    """
+
+    id: str
+    name: str
+
+
+class DispatchConfig(BaseModel):
+    """Dispatcher configuration."""
+
+    default_system_prompt: str = Field(default="")
+    default_model: str = Field(default="claude-sonnet-4-6")
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
@@ -98,7 +116,13 @@ class Settings(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     volundr: VolundrConfig = Field(default_factory=VolundrConfig)
+    ai_models: list[AIModelConfig] = Field(default_factory=lambda: [
+        AIModelConfig(id="claude-opus-4-6", name="Opus 4.6"),
+        AIModelConfig(id="claude-sonnet-4-6", name="Sonnet 4.6"),
+        AIModelConfig(id="claude-haiku-4-5-20251001", name="Haiku 4.5"),
+    ])
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
+    dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
 
     @classmethod
