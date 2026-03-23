@@ -1,0 +1,201 @@
+# Tyr — saga coordinator
+# https://github.com/niuulabs/volundr
+
+replicaCount: 1
+revisionHistoryLimit: 10
+
+image:
+  registry: ghcr.io/niuulabs
+  repository: tyr
+  tag: ""  # defaults to appVersion
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8081
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+config:
+  logLevel: "info"
+  logFormat: "json"
+  host: "0.0.0.0"
+  port: 8081
+  workers: 2
+  extra: {}
+
+database:
+  name: tyr
+  existingSecret: ""
+  createSecret: false
+  username: ""
+  password: ""
+  userKey: "username"
+  passwordKey: "password"
+  minPoolSize: 2
+  maxPoolSize: 10
+  external:
+    enabled: false
+    host: ""
+    port: 5432
+
+# Envoy sidecar proxy (JWT validation, header extraction)
+envoy:
+  # -- Enable Envoy sidecar proxy
+  enabled: false
+  image:
+    # -- Envoy image repository
+    repository: envoyproxy/envoy
+    # -- Envoy image tag
+    tag: "v1.32-latest"
+    # -- Envoy image pull policy
+    pullPolicy: IfNotPresent
+  # -- Envoy listener port (becomes the service target when enabled)
+  port: 8443
+  # -- Envoy admin interface port (localhost only)
+  adminPort: 9901
+  # -- Upstream connect timeout
+  connectTimeout: "0.25s"
+  # -- Upstream request timeout
+  upstreamTimeout: "60s"
+  # -- Resource limits for the Envoy sidecar
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  # -- Header names Envoy sets on upstream requests
+  headerNames:
+    userId: x-auth-user-id
+    email: x-auth-email
+    tenant: x-auth-tenant
+    roles: x-auth-roles
+  # JWT authentication (via Keycloak)
+  jwt:
+    # -- Enable JWT authentication filter
+    enabled: false
+    # -- JWT issuer URL (Keycloak realm)
+    issuer: ""
+    # -- Allowed JWT audiences
+    audiences: []
+    # -- JWKS URI for key retrieval
+    jwksUri: ""
+    # -- JWKS fetch timeout
+    jwksTimeout: "5s"
+    # -- JWKS cache duration in seconds
+    jwksCacheDurationSeconds: 300
+    # -- JWT claim containing tenant ID
+    tenantClaim: "tenant_id"
+    # -- JWT claim containing roles
+    rolesClaim: "resource_access.tyr.roles"
+    # -- Keycloak upstream host (for JWKS fetching)
+    keycloakHost: ""
+    # -- Keycloak upstream port
+    keycloakPort: 8080
+    # -- Enable TLS for Keycloak upstream
+    keycloakTls: false
+    # -- Additional JWT claim-to-header mappings
+    extraClaimHeaders: []
+    # -- Path prefixes that bypass JWT validation
+    bypassPrefixes:
+      - /health
+  # -- Extra HTTP filters (inserted before the router filter)
+  extraHttpFilters: []
+  # -- Extra upstream clusters
+  extraClusters: []
+
+credentialStore:
+  # -- Fully-qualified class path for the credential store adapter
+  adapter: "niuu.adapters.memory_credential_store.MemoryCredentialStore"
+  # -- Extra kwargs forwarded to the adapter constructor
+  kwargs: {}
+  # -- Secret kwargs: each entry injects a K8s secret value as an env var
+  # Example:
+  #   - kwarg: client_id
+  #     secretName: infisical-auth
+  #     secretKey: client-id
+  secretKwargs: []
+
+volundr:
+  url: "http://volundr:8000"
+
+migrations:
+  enabled: true
+  image:
+    repository: migrate/migrate
+    tag: "v4.18.3"
+    pullPolicy: IfNotPresent
+  resources: {}
+
+livenessProbe:
+  enabled: true
+  path: "/health"
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  path: "/health"
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  enabled: false
+  path: "/health"
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: false
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podLabels: {}
+deploymentAnnotations: {}
+extraEnv: []
+extraVolumeMounts: []
+extraVolumes: []
+
+global:
+  imagePullSecrets: []
+  image:
+    registry: ""

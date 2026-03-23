@@ -6,6 +6,170 @@ metadata:
   labels:
     {{- include "tyr.labels" . | nindent 4 }}
 data:
+  000001_initial_schema.up.sql: |
+    -- Initial schema for tyr saga coordinator
+
+    CREATE TABLE IF NOT EXISTS sagas (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tracker_id    TEXT NOT NULL,
+        tracker_type  TEXT NOT NULL,
+        slug          TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        repos         TEXT[] NOT NULL DEFAULT '{}',
+        confidence    FLOAT DEFAULT 0,
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS phases (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        saga_id       UUID NOT NULL REFERENCES sagas(id),
+        tracker_id    TEXT NOT NULL,
+        number        INT NOT NULL,
+        name          TEXT NOT NULL,
+        status        TEXT NOT NULL DEFAULT 'GATED',
+        confidence    FLOAT DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_phases_saga_id ON phases(saga_id);
+
+    CREATE TABLE IF NOT EXISTS raids (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        phase_id      UUID NOT NULL REFERENCES phases(id),
+        tracker_id    TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        declared_files TEXT[],
+        estimate_hours FLOAT,
+        status        TEXT NOT NULL DEFAULT 'PENDING',
+        confidence    FLOAT DEFAULT 0,
+        session_id    TEXT,
+        branch        TEXT,
+        chronicle_summary TEXT,
+        retry_count   INT DEFAULT 0,
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_raids_phase_id ON raids(phase_id);
+    CREATE INDEX IF NOT EXISTS idx_raids_status ON raids(status);
+
+    CREATE TABLE IF NOT EXISTS confidence_events (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        raid_id       UUID NOT NULL REFERENCES raids(id),
+        event_type    TEXT NOT NULL,
+        delta         FLOAT NOT NULL,
+        score_after   FLOAT NOT NULL,
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_confidence_events_raid_id ON confidence_events(raid_id);
+
+    CREATE TABLE IF NOT EXISTS dispatcher_state (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        running       BOOL DEFAULT TRUE,
+        threshold     FLOAT DEFAULT 0.75,
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+  000001_initial_schema.down.sql: |
+    -- Rollback initial schema for tyr saga coordinator
+
+    DROP TABLE IF EXISTS confidence_events;
+    DROP TABLE IF EXISTS dispatcher_state;
+    DROP TABLE IF EXISTS raids;
+    DROP TABLE IF EXISTS phases;
+    DROP TABLE IF EXISTS sagas;
+
+  000002_integration_connections.up.sql: |
+    -- Integration connections (shared table used by niuu adapters)
+
+    CREATE TABLE IF NOT EXISTS integration_connections (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255) NOT NULL,
+        integration_type VARCHAR(50) NOT NULL,
+        adapter VARCHAR(500) NOT NULL,
+        credential_name VARCHAR(253) NOT NULL,
+        config JSONB NOT NULL DEFAULT '{}',
+        enabled BOOLEAN NOT NULL DEFAULT true,
+        slug VARCHAR(100) NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_integration_connections_user
+        ON integration_connections(user_id, integration_type);
+
+  000002_integration_connections.down.sql: |
+    DROP TABLE IF EXISTS integration_connections;
+
+  000003_saga_repos_array.up.sql: |
+    -- Fix sagas table: rename repo→repos as array, add name and status columns
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS repos TEXT[] NOT NULL DEFAULT '{}';
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE';
+    UPDATE sagas SET repos = ARRAY[repo] WHERE repo IS NOT NULL AND repo != '';
+    ALTER TABLE sagas DROP COLUMN IF EXISTS repo;
+
+  000003_saga_repos_array.down.sql: |
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS repo TEXT NOT NULL DEFAULT '';
+    UPDATE sagas SET repo = repos[1] WHERE array_length(repos, 1) > 0;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS repos;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS name;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS status;
+
+  000004_owner_id_sagas.up.sql: |
+    -- Add owner_id to sagas and rename integration_connections.user_id → owner_id
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'default';
+    CREATE INDEX IF NOT EXISTS idx_sagas_owner_id ON sagas(owner_id);
+    ALTER TABLE integration_connections RENAME COLUMN user_id TO owner_id;
+
+  000004_owner_id_sagas.down.sql: |
+    -- Revert owner_id on sagas and restore integration_connections.owner_id → user_id
+    DROP INDEX IF EXISTS idx_sagas_owner_id;
+    ALTER TABLE sagas DROP COLUMN IF EXISTS owner_id;
+    ALTER TABLE integration_connections RENAME COLUMN owner_id TO user_id;
+
+  000005_dispatcher_owner.up.sql: |
+    -- Per-user dispatcher state
+    ALTER TABLE dispatcher_state ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE dispatcher_state ADD COLUMN IF NOT EXISTS max_concurrent_raids INT NOT NULL DEFAULT 3;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_dispatcher_state_owner ON dispatcher_state(owner_id);
+
+  000005_dispatcher_owner.down.sql: |
+    -- Revert per-user dispatcher state
+    DROP INDEX IF EXISTS idx_dispatcher_state_owner;
+    ALTER TABLE dispatcher_state DROP COLUMN IF EXISTS max_concurrent_raids;
+    ALTER TABLE dispatcher_state DROP COLUMN IF EXISTS owner_id;
+
+  000006_raid_pr_fields.up.sql: |
+    -- Raid PR tracking fields
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS pr_url TEXT;
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS pr_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_raids_session_id ON raids(session_id)
+        WHERE session_id IS NOT NULL;
+
+  000006_raid_pr_fields.down.sql: |
+    -- Revert raid PR tracking fields
+    DROP INDEX IF EXISTS idx_raids_session_id;
+    ALTER TABLE raids DROP COLUMN IF EXISTS pr_id;
+    ALTER TABLE raids DROP COLUMN IF EXISTS pr_url;
+
+  000007_notification_subscriptions.up.sql: |
+    -- Notification subscriptions
+    CREATE TABLE IF NOT EXISTS notification_subscriptions (
+        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_id   TEXT        NOT NULL,
+        channel    TEXT        NOT NULL,
+        config     JSONB       NOT NULL DEFAULT '{}',
+        enabled    BOOLEAN     NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_notification_subs_owner
+        ON notification_subscriptions(owner_id);
+
+  000007_notification_subscriptions.down.sql: |
+    -- Revert notification subscriptions
+    DROP TABLE IF EXISTS notification_subscriptions;
+
   000008_personal_access_tokens.up.sql: |
     -- Add personal_access_tokens table for Tyr PAT authentication
 
