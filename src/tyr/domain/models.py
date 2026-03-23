@@ -226,3 +226,19 @@ class PhaseSpec:
 @dataclass(frozen=True)
 class SagaStructure:
     phases: list[PhaseSpec]
+
+
+# ---------------------------------------------------------------------------
+# Personal access tokens
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PersonalAccessToken:
+    """A personal access token for API authentication."""
+
+    id: UUID
+    owner_id: str
+    name: str
+    created_at: datetime
+    last_used_at: datetime | None = None

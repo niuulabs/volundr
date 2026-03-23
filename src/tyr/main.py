@@ -119,6 +119,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr
 
+            # Wire personal access token service
+            from tyr.adapters.postgres_pats import PostgresPATRepository
+            from tyr.domain.services.pat import PATService
+
+            pat_repo = PostgresPATRepository(pool)
+            pat_service = PATService(
+                repo=pat_repo,
+                signing_key=settings.auth.pat_signing_key,
+                ttl_days=settings.auth.pat_ttl_days,
+            )
+            app.state.pat_service = pat_service
+
             logger.info("Tyr started — database pool ready")
             yield
             logger.info("Tyr shutting down")

@@ -93,6 +93,19 @@ class CerbosConfig(BaseModel):
     url: str = Field(default="http://localhost:3592")
 
 
+class AuthConfig(BaseModel):
+    """Authentication configuration for PAT signing."""
+
+    pat_signing_key: str = Field(
+        default="",
+        description="Symmetric signing key for PAT JWTs (same key Envoy uses for validation).",
+    )
+    pat_ttl_days: int = Field(
+        default=365,
+        description="Default PAT lifetime in days.",
+    )
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
@@ -132,6 +145,7 @@ class Settings(BaseSettings):
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
 
     @classmethod
