@@ -468,7 +468,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             token_tracker = PostgresTokenTracker(pool)
             pod_manager = _create_pod_manager(settings)
             gateway_adapter = _create_gateway_adapter(settings)
-            pricing_provider = HardcodedPricingProvider()
+            pricing_provider = HardcodedPricingProvider(settings.models or None)
             git_registry = create_git_registry(settings.git)
             broadcaster = InMemoryEventBroadcaster()
 

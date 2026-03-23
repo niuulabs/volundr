@@ -19,7 +19,11 @@ session:
   # -- Human-readable session name
   name: ""
   # -- AI model to use for the session
-  model: "claude-sonnet-4-20250514"
+  model: "claude-sonnet-4-6"
+  # -- System prompt injected into the LLM context
+  systemPrompt: ""
+  # -- Initial user message sent when the CLI starts
+  initialPrompt: ""
 
 # Container image for the Skuld broker
 # Note: repository and tag are updated by CI/CD pipeline

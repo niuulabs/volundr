@@ -54,6 +54,7 @@ export interface WizardState {
   resourceConfig: Record<string, string | undefined>;
   envVars: Record<string, string>;
   systemPrompt: string;
+  initialPrompt: string;
   setupScripts: string[];
   selectedCredentials: string[];
   selectedIntegrations: string[];
@@ -107,6 +108,7 @@ function buildInitialState(template: VolundrTemplate, repos: VolundrRepo[]): Wiz
     resourceConfig: { ...template.resourceConfig },
     envVars: { ...template.envVars },
     systemPrompt: template.systemPrompt ?? '',
+    initialPrompt: '',
     setupScripts: [...template.setupScripts],
     terminalRestricted: false,
     selectedCredentials: [...template.envSecretRefs],
@@ -193,6 +195,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
       integrationIds: state.selectedIntegrations.length ? state.selectedIntegrations : undefined,
       resourceConfig: Object.keys(resourceConfig).length > 0 ? resourceConfig : undefined,
       systemPrompt: state.systemPrompt || undefined,
+      initialPrompt: state.initialPrompt || undefined,
     });
   }, [state, onLaunch]);
 

@@ -982,7 +982,7 @@ class TestSdkWebSocketTransport:
             assert "--append-system-prompt" not in call_args
 
     @pytest.mark.asyncio
-    async def test_spawn_with_initial_prompt_replaces_placeholder(self, tmp_path):
+    async def test_spawn_with_initial_prompt_queues_pending_message(self, tmp_path):
         t = SdkWebSocketTransport(
             workspace_dir=str(tmp_path),
             sdk_port=8081,
@@ -1000,13 +1000,16 @@ class TestSdkWebSocketTransport:
 
             await t.start()
 
+            # Initial prompt is queued as a pending message, not passed via -p
             call_args = mock_exec.call_args[0]
-            idx = call_args.index("-p")
-            assert call_args[idx + 1] == "Break down ticket TK-123."
-            assert "placeholder" not in call_args
+            assert "-p" not in call_args
+            assert len(t._pending_messages) == 1
+            msg = t._pending_messages[0]
+            assert msg["type"] == "user"
+            assert msg["message"]["content"] == "Break down ticket TK-123."
 
     @pytest.mark.asyncio
-    async def test_spawn_without_initial_prompt_uses_placeholder(self, transport):
+    async def test_spawn_without_initial_prompt_no_pending(self, transport):
         with patch(
             "volundr.skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
@@ -1019,8 +1022,8 @@ class TestSdkWebSocketTransport:
             await transport.start()
 
             call_args = mock_exec.call_args[0]
-            idx = call_args.index("-p")
-            assert call_args[idx + 1] == "placeholder"
+            assert "-p" not in call_args
+            assert len(transport._pending_messages) == 0
 
 
 # ---------------------------------------------------------------------------

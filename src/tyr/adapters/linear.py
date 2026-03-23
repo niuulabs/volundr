@@ -167,6 +167,26 @@ _ISSUE_FIELDS = """
       projectMilestone { id }
 """
 
+_LIST_ISSUE_RELATIONS_QUERY = """
+query ListIssueRelations($projectId: ID!, $first: Int!) {
+  issues(
+    filter: { project: { id: { eq: $projectId } } }
+    first: $first
+  ) {
+    nodes {
+      identifier
+      state { type }
+      relations {
+        nodes {
+          type
+          relatedIssue { identifier }
+        }
+      }
+    }
+  }
+}
+"""
+
 _LIST_ISSUES_QUERY = (
     """
 query ListIssues($projectId: ID!, $first: Int!) {
@@ -546,6 +566,25 @@ class LinearTrackerAdapter(TrackerPort):
 
         return project, milestones, issues
 
+    async def get_blocked_identifiers(self, project_id: str) -> set[str]:
+        """Fetch issue relations and return identifiers blocked by incomplete issues."""
+        data = await self._gql.query(
+            _LIST_ISSUE_RELATIONS_QUERY, {"projectId": project_id, "first": 250}
+        )
+        nodes = data.get("issues", {}).get("nodes", [])
+
+        blocked: set[str] = set()
+        for node in nodes:
+            state_type = (node.get("state") or {}).get("type", "")
+            if state_type == "completed":
+                continue
+            for rel in (node.get("relations") or {}).get("nodes", []):
+                if rel.get("type") == "blocks":
+                    target = (rel.get("relatedIssue") or {}).get("identifier", "")
+                    if target:
+                        blocked.add(target)
+        return blocked
+
     # -- Internal helpers --
 
     async def _resolve_state_id(self, issue_id: str, state_name: str) -> str:
@@ -645,6 +684,7 @@ class LinearTrackerAdapter(TrackerPort):
             slug=node.get("name", "").lower().replace(" ", "-"),
             name=node.get("name", ""),
             repos=[],
+            feature_branch="feat/test",
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,

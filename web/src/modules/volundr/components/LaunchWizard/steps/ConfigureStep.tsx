@@ -1064,6 +1064,21 @@ export function ConfigureStep({
               />
             </div>
 
+            {/* Initial Prompt */}
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>
+                <FileText className={styles.formLabelIcon} />
+                Initial Prompt
+              </label>
+              <textarea
+                className={styles.formTextarea}
+                value={state.initialPrompt}
+                onChange={e => onChange({ initialPrompt: e.target.value })}
+                placeholder="What should the session work on? e.g. 'Fix the login bug in auth.py'"
+                rows={4}
+              />
+            </div>
+
             {/* MCP Servers */}
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>
