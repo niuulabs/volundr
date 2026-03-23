@@ -58,6 +58,13 @@ spec:
                   key: {{ .Values.database.passwordKey | default "password" }}
             - name: VOLUNDR_URL
               value: {{ .Values.volundr.url | quote }}
+            {{- if .Values.auth.patSigningKey }}
+            - name: AUTH__PAT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tyr.fullname" . }}-auth
+                  key: pat-signing-key
+            {{- end }}
             {{- range .Values.credentialStore.secretKwargs }}
             - name: CREDENTIAL_STORE_SK_{{ .kwarg | upper }}
               valueFrom:
