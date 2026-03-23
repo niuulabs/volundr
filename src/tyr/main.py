@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
 from niuu.domain.models import Principal
 from niuu.utils import import_class, resolve_secret_kwargs
+from tyr.adapters.inbound.rest_pats import create_pats_router
 from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
@@ -62,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_sagas_router())
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
+    app.include_router(create_pats_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
