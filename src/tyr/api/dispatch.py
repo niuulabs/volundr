@@ -205,8 +205,11 @@ def create_dispatch_router() -> APIRouter:
 
         # Get all active Volundr sessions to know what's already running
         sessions = await volundr.list_sessions()
+        active_statuses = {"running", "starting", "creating"}
         active_issue_ids = {
-            s.tracker_issue_id for s in sessions if s.tracker_issue_id and s.status in ("running", "starting", "creating")
+            s.tracker_issue_id
+            for s in sessions
+            if s.tracker_issue_id and s.status in active_statuses
         }
 
         queue: list[QueueItem] = []
@@ -237,7 +240,9 @@ def create_dispatch_router() -> APIRouter:
                                 saga_slug=saga.slug,
                                 repos=saga.repos,
                                 feature_branch=saga.feature_branch,
-                                phase_name=milestone_names.get(issue.milestone_id or "", "Unassigned"),
+                                phase_name=milestone_names.get(
+                                    issue.milestone_id or "", "Unassigned"
+                                ),
                                 issue_id=issue.id,
                                 identifier=issue.identifier,
                                 title=issue.title,

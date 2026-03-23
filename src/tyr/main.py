@@ -16,9 +16,8 @@ from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class, resolve_secret_kwargs
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
-from tyr.api.dispatch import create_dispatch_router
+from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
-from tyr.api.dispatch import resolve_volundr
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
