@@ -7,10 +7,10 @@ import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
-from niuu.domain.models import IntegrationType
+from niuu.domain.models import IntegrationType, Principal
 from niuu.ports.credentials import CredentialStorePort
 from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class, resolve_secret_kwargs
@@ -40,7 +40,7 @@ def _configure_logging(settings: Settings) -> None:
 
 
 async def _resolve_tracker_adapters(
-    request: Request,
+    principal: Principal,
     integration_repo: IntegrationRepository,
     credential_store: CredentialStorePort,
 ) -> list[TrackerPort]:
@@ -49,7 +49,7 @@ async def _resolve_tracker_adapters(
     Uses dynamic adapter pattern: config specifies fully-qualified class path,
     credentials + config are passed as **kwargs to the constructor.
     """
-    user_id = request.headers.get("x-auth-user-id", "default")
+    user_id = principal.user_id
 
     connections = await integration_repo.list_connections(
         user_id,
@@ -120,8 +120,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             logger.info("Credential store: %s", cs_cfg.adapter.rsplit(".", 1)[-1])
 
             # Override the tracker resolver dependency with real wiring
-            async def _resolve(request: Request) -> list[TrackerPort]:
-                return await _resolve_tracker_adapters(request, integration_repo, credential_store)
+            from tyr.adapters.inbound.auth import extract_principal
+
+            async def _resolve(
+                principal: Principal = Depends(extract_principal),
+            ) -> list[TrackerPort]:
+                return await _resolve_tracker_adapters(
+                    principal, integration_repo, credential_store
+                )
 
             app.dependency_overrides[resolve_trackers] = _resolve
 

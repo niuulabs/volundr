@@ -87,6 +87,12 @@ class DispatchConfig(BaseModel):
     default_model: str = Field(default="claude-sonnet-4-6")
 
 
+class CerbosConfig(BaseModel):
+    """Cerbos authorization service configuration."""
+
+    url: str = Field(default="http://localhost:3592")
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
@@ -116,14 +122,17 @@ class Settings(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     volundr: VolundrConfig = Field(default_factory=VolundrConfig)
-    ai_models: list[AIModelConfig] = Field(default_factory=lambda: [
-        AIModelConfig(id="claude-opus-4-6", name="Opus 4.6"),
-        AIModelConfig(id="claude-sonnet-4-6", name="Sonnet 4.6"),
-        AIModelConfig(id="claude-haiku-4-5-20251001", name="Haiku 4.5"),
-    ])
+    ai_models: list[AIModelConfig] = Field(
+        default_factory=lambda: [
+            AIModelConfig(id="claude-opus-4-6", name="Opus 4.6"),
+            AIModelConfig(id="claude-sonnet-4-6", name="Sonnet 4.6"),
+            AIModelConfig(id="claude-haiku-4-5-20251001", name="Haiku 4.5"),
+        ]
+    )
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
+    cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
 
     @classmethod
     def settings_customise_sources(

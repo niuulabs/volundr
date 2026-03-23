@@ -15,6 +15,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
+from niuu.domain.models import Principal
+from tyr.adapters.inbound.auth import extract_principal
 from tyr.domain.models import Saga, SagaStatus, TrackerIssue, TrackerMilestone, TrackerProject
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
@@ -84,6 +86,7 @@ def create_tracker_router() -> APIRouter:
 
     @router.get("/projects", response_model=list[TrackerProject])
     async def list_projects(
+        principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> list[TrackerProject]:
         """List all projects across all connected trackers."""
@@ -99,6 +102,7 @@ def create_tracker_router() -> APIRouter:
     @router.get("/projects/{project_id}", response_model=TrackerProject)
     async def get_project(
         project_id: str,
+        principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> TrackerProject:
         """Get a single project by ID, searching across connected trackers."""
@@ -118,6 +122,7 @@ def create_tracker_router() -> APIRouter:
     )
     async def list_milestones(
         project_id: str,
+        principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> list[TrackerMilestone]:
         """List milestones for a project."""
@@ -135,6 +140,7 @@ def create_tracker_router() -> APIRouter:
     async def list_issues(
         project_id: str,
         milestone_id: str | None = Query(default=None),
+        principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> list[TrackerIssue]:
         """List issues for a project, optionally filtered by milestone."""
@@ -149,6 +155,7 @@ def create_tracker_router() -> APIRouter:
     async def import_project(
         request: Request,
         body: ImportRequest,
+        principal: Principal = Depends(extract_principal),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> SagaResponse:
         """Import a tracker project as a Saga reference.

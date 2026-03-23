@@ -228,10 +228,10 @@ class MockSagaRepo(SagaRepository):
     async def save_saga(self, saga: Saga) -> None:
         self.sagas.append(saga)
 
-    async def list_sagas(self) -> list[Saga]:
+    async def list_sagas(self, *, owner_id: str | None = None) -> list[Saga]:
         return list(self.sagas)
 
-    async def get_saga(self, saga_id) -> Saga | None:
+    async def get_saga(self, saga_id, *, owner_id: str | None = None) -> Saga | None:
         return next((s for s in self.sagas if s.id == saga_id), None)
 
     async def delete_saga(self, saga_id) -> bool:
