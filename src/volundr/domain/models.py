@@ -137,6 +137,7 @@ class IntegrationType(StrEnum):
     SOURCE_CONTROL = "source_control"
     ISSUE_TRACKER = "issue_tracker"
     MESSAGING = "messaging"
+    CODE_FORGE = "code_forge"
     AI_PROVIDER = "ai_provider"
 
 

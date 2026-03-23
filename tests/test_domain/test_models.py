@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from volundr.domain.models import (
     GitProviderType,
     GitSource,
+    IntegrationType,
     Model,
     ModelProvider,
     ModelTier,
@@ -37,6 +38,28 @@ class TestSessionStatus:
         assert SessionStatus.RUNNING.value == "running"
         # Can be compared directly to string
         assert SessionStatus.RUNNING == "running"
+
+
+class TestIntegrationType:
+    """Tests for IntegrationType enum."""
+
+    def test_all_values_exist(self):
+        """Verify all expected integration type values exist."""
+        assert IntegrationType.SOURCE_CONTROL.value == "source_control"
+        assert IntegrationType.ISSUE_TRACKER.value == "issue_tracker"
+        assert IntegrationType.MESSAGING.value == "messaging"
+        assert IntegrationType.CODE_FORGE.value == "code_forge"
+        assert IntegrationType.AI_PROVIDER.value == "ai_provider"
+
+    def test_is_string_enum(self):
+        """IntegrationType values should be usable as strings."""
+        assert IntegrationType.CODE_FORGE == "code_forge"
+        assert IntegrationType.MESSAGING == "messaging"
+
+    def test_round_trip(self):
+        """Values round-trip through StrEnum construction."""
+        for member in IntegrationType:
+            assert IntegrationType(member.value) is member
 
 
 class TestSession:
