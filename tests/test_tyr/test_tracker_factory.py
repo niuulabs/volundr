@@ -1,0 +1,230 @@
+"""Tests for TrackerAdapterFactory."""
+
+from __future__ import annotations
+
+import logging
+from datetime import UTC, datetime
+
+import pytest
+
+from niuu.domain.models import IntegrationConnection, IntegrationType
+from niuu.ports.credentials import CredentialStorePort
+from niuu.ports.integrations import IntegrationRepository
+from tyr.adapters.tracker_factory import TrackerAdapterFactory
+from tyr.ports.tracker import TrackerPort
+
+# ---------------------------------------------------------------------------
+# Stubs
+# ---------------------------------------------------------------------------
+
+_NOW = datetime.now(tz=UTC)
+
+
+def _make_connection(
+    *,
+    id: str = "conn-1",
+    enabled: bool = True,
+    credential_name: str = "linear-cred",
+    adapter: str = "tests.test_tyr.test_tracker_factory.FakeTracker",
+    config: dict | None = None,
+) -> IntegrationConnection:
+    return IntegrationConnection(
+        id=id,
+        user_id="owner-1",
+        integration_type=IntegrationType.ISSUE_TRACKER,
+        adapter=adapter,
+        credential_name=credential_name,
+        config=config or {"team_id": "TEAM-1"},
+        enabled=enabled,
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+
+
+class StubIntegrationRepo(IntegrationRepository):
+    """In-memory integration repository for testing."""
+
+    def __init__(self, connections: list[IntegrationConnection] | None = None) -> None:
+        self._connections = connections or []
+
+    async def list_connections(
+        self,
+        user_id: str,
+        integration_type: IntegrationType | None = None,
+    ) -> list[IntegrationConnection]:
+        return [
+            c
+            for c in self._connections
+            if c.user_id == user_id
+            and (integration_type is None or c.integration_type == integration_type)
+        ]
+
+    async def get_connection(self, connection_id: str) -> IntegrationConnection | None:
+        return next((c for c in self._connections if c.id == connection_id), None)
+
+    async def save_connection(self, connection: IntegrationConnection) -> IntegrationConnection:
+        return connection
+
+    async def delete_connection(self, connection_id: str) -> None:
+        pass
+
+
+class StubCredentialStore(CredentialStorePort):
+    """In-memory credential store for testing."""
+
+    def __init__(self, values: dict[str, dict[str, str]] | None = None) -> None:
+        self._values = values or {}
+
+    async def get_value(self, owner_type: str, owner_id: str, name: str) -> dict[str, str] | None:
+        return self._values.get(f"{owner_type}:{owner_id}:{name}")
+
+    async def store(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        raise NotImplementedError
+
+    async def get(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        raise NotImplementedError
+
+    async def delete(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        raise NotImplementedError
+
+    async def list(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        raise NotImplementedError
+
+    async def health_check(self) -> bool:
+        return True
+
+
+class FakeTracker(TrackerPort):
+    """Minimal TrackerPort stub for dynamic import testing."""
+
+    def __init__(self, **kwargs) -> None:  # noqa: ANN003
+        self.kwargs = kwargs
+
+    async def create_saga(self, saga):  # noqa: ANN001
+        return "s-1"
+
+    async def create_phase(self, phase):  # noqa: ANN001
+        return "p-1"
+
+    async def create_raid(self, raid):  # noqa: ANN001
+        return "r-1"
+
+    async def update_raid_state(self, raid_id, state):  # noqa: ANN001
+        pass
+
+    async def close_raid(self, raid_id):  # noqa: ANN001
+        pass
+
+    async def get_saga(self, saga_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def get_phase(self, tracker_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def get_raid(self, tracker_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def list_pending_raids(self, phase_id):  # noqa: ANN001
+        return []
+
+    async def list_projects(self):
+        return []
+
+    async def get_project(self, project_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def list_milestones(self, project_id):  # noqa: ANN001
+        return []
+
+    async def list_issues(self, project_id, milestone_id=None):  # noqa: ANN001
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_no_connections_returns_empty_list() -> None:
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[]),
+        credential_store=StubCredentialStore(),
+    )
+    result = await factory.for_owner("owner-1")
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_one_enabled_one_disabled_returns_only_enabled() -> None:
+    enabled = _make_connection(id="conn-1", enabled=True, credential_name="cred-a")
+    disabled = _make_connection(id="conn-2", enabled=False, credential_name="cred-b")
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[enabled, disabled]),
+        credential_store=StubCredentialStore(
+            values={
+                "user:owner-1:cred-a": {"api_key": "tok-a"},
+                "user:owner-1:cred-b": {"api_key": "tok-b"},
+            }
+        ),
+    )
+    result = await factory.for_owner("owner-1")
+    assert len(result) == 1
+    assert isinstance(result[0], FakeTracker)
+    assert result[0].kwargs["api_key"] == "tok-a"
+    assert result[0].kwargs["team_id"] == "TEAM-1"
+
+
+@pytest.mark.asyncio
+async def test_credential_missing_skips_adapter() -> None:
+    conn = _make_connection(enabled=True)
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=StubCredentialStore(values={}),
+    )
+    result = await factory.for_owner("owner-1")
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_adapter_instantiation_failure_logged_and_skipped(caplog) -> None:  # noqa: ANN001
+    conn = _make_connection(
+        id="conn-bad",
+        enabled=True,
+        adapter="tests.test_tyr.test_tracker_factory.NonExistentClass",
+    )
+    good_conn = _make_connection(id="conn-good", enabled=True, credential_name="cred-good")
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn, good_conn]),
+        credential_store=StubCredentialStore(
+            values={
+                "user:owner-1:linear-cred": {"api_key": "tok-bad"},
+                "user:owner-1:cred-good": {"api_key": "tok-good"},
+            }
+        ),
+    )
+    with caplog.at_level(logging.WARNING):
+        result = await factory.for_owner("owner-1")
+
+    assert len(result) == 1
+    assert isinstance(result[0], FakeTracker)
+    assert "Failed to create tracker adapter for connection conn-bad" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_config_merged_with_credentials() -> None:
+    conn = _make_connection(
+        enabled=True,
+        config={"team_id": "TEAM-X", "extra_setting": "val"},
+    )
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=StubCredentialStore(
+            values={"user:owner-1:linear-cred": {"api_key": "tok-merge"}}
+        ),
+    )
+    result = await factory.for_owner("owner-1")
+    assert len(result) == 1
+    assert result[0].kwargs["api_key"] == "tok-merge"
+    assert result[0].kwargs["team_id"] == "TEAM-X"
+    assert result[0].kwargs["extra_setting"] == "val"
