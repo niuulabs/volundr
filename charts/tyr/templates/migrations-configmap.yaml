@@ -115,4 +115,22 @@ data:
     ALTER TABLE sagas DROP COLUMN IF EXISTS repos;
     ALTER TABLE sagas DROP COLUMN IF EXISTS name;
     ALTER TABLE sagas DROP COLUMN IF EXISTS status;
+
+  000008_personal_access_tokens.up.sql: |
+    -- Personal access tokens for Tyr API callers (e.g. Telegram bot, ODIN/Móði)
+    -- owner_id is the IDP sub claim from Envoy headers, treated as an opaque string
+
+    CREATE TABLE IF NOT EXISTS personal_access_tokens (
+        id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_id     TEXT        NOT NULL,
+        name         TEXT        NOT NULL,
+        token_hash   TEXT        NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_used_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pats_owner_id ON personal_access_tokens(owner_id);
+
+  000008_personal_access_tokens.down.sql: |
+    DROP TABLE IF EXISTS personal_access_tokens;
 {{- end }}
