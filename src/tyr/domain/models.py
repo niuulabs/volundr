@@ -128,8 +128,10 @@ class ConfidenceEvent:
 @dataclass(frozen=True)
 class DispatcherState:
     id: UUID
+    owner_id: str
     running: bool
     threshold: float
+    max_concurrent_raids: int
     updated_at: datetime
 
 

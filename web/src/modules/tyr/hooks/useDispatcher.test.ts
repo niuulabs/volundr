@@ -17,6 +17,7 @@ const mockState: DispatcherState = {
   id: 'dispatcher-001',
   running: true,
   threshold: 0.6,
+  max_concurrent_raids: 3,
   updated_at: '2026-03-21T08:00:00Z',
 };
 

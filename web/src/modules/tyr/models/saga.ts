@@ -60,6 +60,7 @@ export interface DispatcherState {
   id: string;
   running: boolean;
   threshold: number;
+  max_concurrent_raids: number;
   updated_at: string;
 }
 
