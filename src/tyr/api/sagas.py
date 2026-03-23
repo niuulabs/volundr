@@ -12,6 +12,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from niuu.domain.models import Principal
+from tyr.adapters.inbound.auth import extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.domain.models import TrackerIssue, TrackerProject
 from tyr.ports.saga_repository import SagaRepository
@@ -120,11 +122,12 @@ def create_sagas_router() -> APIRouter:
 
     @router.get("", response_model=list[SagaListItem])
     async def list_sagas(
+        principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> list[SagaListItem]:
         """List all sagas, hydrating display data from the tracker."""
-        sagas = await repo.list_sagas()
+        sagas = await repo.list_sagas(owner_id=principal.user_id)
 
         # Fetch all projects once and index by ID
         all_projects: dict[str, TrackerProject] = {}
@@ -160,11 +163,12 @@ def create_sagas_router() -> APIRouter:
     @router.get("/{saga_id}", response_model=SagaDetailResponse)
     async def get_saga(
         saga_id: str,
+        principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
     ) -> SagaDetailResponse:
         """Get saga detail, hydrating milestones and issues from the tracker."""
-        saga = await repo.get_saga(UUID(saga_id))
+        saga = await repo.get_saga(UUID(saga_id), owner_id=principal.user_id)
         if saga is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -261,6 +265,7 @@ def create_sagas_router() -> APIRouter:
     @router.delete("/{saga_id}", status_code=204)
     async def delete_saga(
         saga_id: str,
+        principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
     ) -> None:
         """Delete a saga reference."""

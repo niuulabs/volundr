@@ -1,0 +1,20 @@
+---
+apiVersion: "api.cerbos.dev/v1"
+resourcePolicy:
+  resource: raid
+  version: default
+  importDerivedRoles:
+    - volundr_roles
+
+  rules:
+    # Owners can approve, reject, and retry their raids
+    - actions: ["approve", "reject", "retry"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - owner
+
+    # Tenant members can read and list raids
+    - actions: ["read", "list"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - tenant_member

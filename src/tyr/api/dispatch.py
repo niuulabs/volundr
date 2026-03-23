@@ -13,6 +13,8 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from niuu.domain.models import Principal
+from tyr.adapters.inbound.auth import extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.domain.models import TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
@@ -112,8 +114,6 @@ async def resolve_volundr() -> VolundrPort:
 _READY_STATUSES = {"todo", "backlog", "triage"}
 
 
-
-
 def _is_ready(
     issue: TrackerIssue,
     active_issue_ids: set[str],
@@ -174,21 +174,22 @@ def create_dispatch_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/tyr/dispatch", tags=["Dispatcher"])
 
     @router.get("/config", response_model=DispatchConfig)
-    async def get_config(request: Request) -> DispatchConfig:
+    async def get_config(
+        request: Request,
+        principal: Principal = Depends(extract_principal),
+    ) -> DispatchConfig:
         """Get dispatch defaults from server configuration."""
         settings = request.app.state.settings
         return DispatchConfig(
             default_system_prompt=settings.dispatch.default_system_prompt,
             default_model=settings.dispatch.default_model,
-            models=[
-                ModelOption(id=m.id, name=m.name)
-                for m in settings.ai_models
-            ],
+            models=[ModelOption(id=m.id, name=m.name) for m in settings.ai_models],
         )
 
     @router.get("/queue", response_model=list[QueueItem])
     async def get_queue(
         request: Request,
+        principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
@@ -199,7 +200,7 @@ def create_dispatch_router() -> APIRouter:
         if auth.startswith("Bearer ") and hasattr(volundr, "set_auth_token"):
             volundr.set_auth_token(auth[7:])
 
-        sagas = await repo.list_sagas()
+        sagas = await repo.list_sagas(owner_id=principal.user_id)
         if not sagas:
             return []
 
@@ -256,9 +257,7 @@ def create_dispatch_router() -> APIRouter:
                         )
                     break
                 except Exception:
-                    logger.warning(
-                        "Failed to fetch issues for saga %s", saga.id, exc_info=True
-                    )
+                    logger.warning("Failed to fetch issues for saga %s", saga.id, exc_info=True)
 
         # Sort: highest priority first (1=urgent, 4=low)
         queue.sort(key=lambda q: (q.priority, q.identifier))
@@ -268,6 +267,7 @@ def create_dispatch_router() -> APIRouter:
     async def approve_dispatch(
         request: Request,
         body: DispatchRequest,
+        principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
@@ -285,7 +285,7 @@ def create_dispatch_router() -> APIRouter:
         results: list[DispatchResult] = []
 
         # Build a lookup of saga data
-        sagas = await repo.list_sagas()
+        sagas = await repo.list_sagas(owner_id=principal.user_id)
         saga_map = {str(s.id): s for s in sagas}
 
         # Fetch issue details for prompts
@@ -334,13 +334,9 @@ def create_dispatch_router() -> APIRouter:
                         status="spawned",
                     )
                 )
-                logger.info(
-                    "Dispatched %s → session %s", issue.identifier, session.id
-                )
+                logger.info("Dispatched %s → session %s", issue.identifier, session.id)
             except Exception:
-                logger.error(
-                    "Failed to spawn session for %s", issue.identifier, exc_info=True
-                )
+                logger.error("Failed to spawn session for %s", issue.identifier, exc_info=True)
                 results.append(
                     DispatchResult(
                         issue_id=item.issue_id,
