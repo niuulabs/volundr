@@ -37,6 +37,30 @@ class TestAuthHeaders:
         adapter.set_auth_token("new")
         assert adapter._headers()["Authorization"] == "Bearer new"
 
+    def test_api_key_provides_header(self):
+        adapter = VolundrHTTPAdapter(base_url=BASE_URL, api_key="pat-abc")
+        assert adapter._headers()["Authorization"] == "Bearer pat-abc"
+
+    def test_runtime_token_overrides_api_key(self):
+        adapter = VolundrHTTPAdapter(base_url=BASE_URL, api_key="pat-abc")
+        adapter.set_auth_token("runtime-tok")
+        assert adapter._headers()["Authorization"] == "Bearer runtime-tok"
+
+    def test_clear_auth_token_restores_api_key(self):
+        adapter = VolundrHTTPAdapter(base_url=BASE_URL, api_key="pat-abc")
+        adapter.set_auth_token("runtime-tok")
+        adapter.clear_auth_token()
+        assert adapter._headers()["Authorization"] == "Bearer pat-abc"
+
+    def test_clear_auth_token_no_api_key(self, adapter: VolundrHTTPAdapter):
+        adapter.set_auth_token("runtime-tok")
+        adapter.clear_auth_token()
+        assert adapter._headers() == {}
+
+    def test_set_auth_token_no_api_key(self, adapter: VolundrHTTPAdapter):
+        adapter.set_auth_token("runtime-tok")
+        assert adapter._headers()["Authorization"] == "Bearer runtime-tok"
+
 
 # -------------------------------------------------------------------
 # spawn_session
@@ -308,3 +332,16 @@ class TestConstructor:
     def test_custom_timeout(self):
         adapter = VolundrHTTPAdapter(base_url="http://example.com", timeout=10.0)
         assert adapter._timeout == 10.0
+
+    def test_default_api_key_is_none(self):
+        adapter = VolundrHTTPAdapter(base_url="http://example.com")
+        assert adapter._api_key is None
+
+    def test_custom_api_key(self):
+        adapter = VolundrHTTPAdapter(base_url="http://example.com", api_key="pat-xyz")
+        assert adapter._api_key == "pat-xyz"
+
+    def test_api_key_with_timeout(self):
+        adapter = VolundrHTTPAdapter(base_url="http://example.com", api_key="pat-xyz", timeout=15.0)
+        assert adapter._api_key == "pat-xyz"
+        assert adapter._timeout == 15.0

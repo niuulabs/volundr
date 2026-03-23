@@ -14,20 +14,30 @@ logger = logging.getLogger(__name__)
 class VolundrHTTPAdapter(VolundrPort):
     """Calls Volundr's REST API to manage sessions."""
 
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
         self._timeout = timeout
-        self._auth_token: str | None = None
+        self._runtime_token: str | None = None
 
     def set_auth_token(self, token: str) -> None:
-        """Set the bearer token for authenticating with Volundr."""
-        self._auth_token = token
+        """Set a per-request token override. Takes precedence over stored api_key."""
+        self._runtime_token = token
+
+    def clear_auth_token(self) -> None:
+        """Clear the per-request override, falling back to stored api_key."""
+        self._runtime_token = None
 
     def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        if self._auth_token:
-            headers["Authorization"] = f"Bearer {self._auth_token}"
-        return headers
+        token = self._runtime_token or self._api_key
+        if token:
+            return {"Authorization": f"Bearer {token}"}
+        return {}
 
     async def spawn_session(self, request: SpawnRequest) -> VolundrSession:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
