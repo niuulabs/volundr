@@ -136,6 +136,9 @@ class MockTracker(TrackerPort):
         issues = await self.list_issues(project_id)
         return project, milestones, issues
 
+    async def get_blocked_identifiers(self, project_id: str) -> set[str]:
+        return getattr(self, "_blocked", set())
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
