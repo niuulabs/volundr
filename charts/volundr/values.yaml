@@ -728,6 +728,13 @@ authDiscovery:
   # -- OIDC scopes
   scopes: "openid profile email"
 
+# Auth secrets (PAT signing key, etc.)
+auth:
+  # -- Create a K8s Secret for auth-related keys (disable if using an existing secret)
+  createSecret: true
+  # -- Symmetric signing key for PAT JWTs (overridden in production via values/sealed-secrets)
+  patSigningKey: ""
+
 # OAuth integration configuration
 oauth:
   # -- Base URL for OAuth redirect callbacks (e.g. https://volundr.example.com)

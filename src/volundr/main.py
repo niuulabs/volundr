@@ -632,6 +632,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.state.pat_service = pat_service
 
+            from volundr.adapters.inbound.rest_pats import create_pats_router
+
+            pats_router = create_pats_router()
+            app.include_router(pats_router)
+
             git_router = create_git_router(git_workflow_service)
             app.include_router(git_router)
 
