@@ -1,0 +1,27 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tyr.fullname" . }}-migrations
+  labels:
+    {{- include "tyr.labels" . | nindent 4 }}
+data:
+  000008_personal_access_tokens.up.sql: |
+    -- Add personal_access_tokens table for Tyr PAT authentication
+
+    CREATE TABLE IF NOT EXISTS personal_access_tokens (
+        id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_id     TEXT        NOT NULL,
+        name         TEXT        NOT NULL,
+        token_hash   TEXT        NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_used_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pats_owner_id ON personal_access_tokens(owner_id);
+
+  000008_personal_access_tokens.down.sql: |
+    -- Rollback personal_access_tokens table
+
+    DROP TABLE IF EXISTS personal_access_tokens;
+{{- end }}
