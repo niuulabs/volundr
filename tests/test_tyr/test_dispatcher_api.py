@@ -249,30 +249,137 @@ class TestPatchDispatcherState:
 # -------------------------------------------------------------------
 
 
+class _FakeRow(dict):
+    """Dict subclass that mimics asyncpg.Record subscript access."""
+
+    def __getitem__(self, key: str) -> object:
+        return super().__getitem__(key)
+
+
+def _make_row(
+    owner_id: str = "owner-1",
+    running: bool = True,
+    threshold: float = 0.8,
+    max_concurrent_raids: int = 5,
+    updated_at: datetime | None = None,
+) -> _FakeRow:
+    return _FakeRow(
+        id=uuid4(),
+        owner_id=owner_id,
+        running=running,
+        threshold=threshold,
+        max_concurrent_raids=max_concurrent_raids,
+        updated_at=updated_at or datetime.now(UTC),
+    )
+
+
 class TestPostgresDispatcherRepository:
     def test_row_to_state(self):
         from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 
-        now = datetime.now(UTC)
-        uid = uuid4()
-
-        class FakeRow(dict):
-            def __getitem__(self, key):
-                return super().__getitem__(key)
-
-        row = FakeRow(
-            id=uid,
-            owner_id="owner-1",
-            running=True,
-            threshold=0.8,
-            max_concurrent_raids=5,
-            updated_at=now,
-        )
-
+        row = _make_row()
         state = PostgresDispatcherRepository._row_to_state(row)
-        assert state.id == uid
+        assert state.id == row["id"]
         assert state.owner_id == "owner-1"
         assert state.running is True
         assert state.threshold == 0.8
         assert state.max_concurrent_raids == 5
-        assert state.updated_at == now
+
+    def test_row_to_state_null_updated_at(self):
+        from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
+
+        row = _make_row(updated_at=None)
+        row["updated_at"] = None
+        state = PostgresDispatcherRepository._row_to_state(row)
+        assert state.updated_at is not None
+
+    @pytest.mark.asyncio
+    async def test_get_or_create(self):
+        from unittest.mock import AsyncMock
+
+        from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
+
+        row = _make_row(owner_id="user-x", running=True, threshold=0.75, max_concurrent_raids=3)
+        pool = AsyncMock()
+        pool.fetchrow = AsyncMock(return_value=row)
+
+        repo = PostgresDispatcherRepository(pool)
+        state = await repo.get_or_create("user-x")
+
+        pool.fetchrow.assert_called_once()
+        assert state.owner_id == "user-x"
+        assert state.running is True
+        assert state.threshold == 0.75
+        assert state.max_concurrent_raids == 3
+
+    @pytest.mark.asyncio
+    async def test_update_with_fields(self):
+        from unittest.mock import AsyncMock
+
+        from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
+
+        row = _make_row(owner_id="user-x", running=False, threshold=0.9, max_concurrent_raids=5)
+        pool = AsyncMock()
+        pool.fetchrow = AsyncMock(return_value=row)
+
+        repo = PostgresDispatcherRepository(pool)
+        state = await repo.update("user-x", running=False, threshold=0.9)
+
+        pool.fetchrow.assert_called_once()
+        sql_arg = pool.fetchrow.call_args[0][0]
+        assert "UPDATE dispatcher_state SET" in sql_arg
+        assert state.running is False
+        assert state.threshold == 0.9
+
+    @pytest.mark.asyncio
+    async def test_update_empty_fields_delegates_to_get_or_create(self):
+        from unittest.mock import AsyncMock
+
+        from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
+
+        row = _make_row(owner_id="user-x")
+        pool = AsyncMock()
+        pool.fetchrow = AsyncMock(return_value=row)
+
+        repo = PostgresDispatcherRepository(pool)
+        state = await repo.update("user-x")
+
+        # Should call get_or_create path (INSERT ... ON CONFLICT)
+        sql_arg = pool.fetchrow.call_args[0][0]
+        assert "INSERT INTO dispatcher_state" in sql_arg
+        assert state.owner_id == "user-x"
+
+    @pytest.mark.asyncio
+    async def test_update_row_none_falls_back_to_get_or_create(self):
+        from unittest.mock import AsyncMock
+
+        from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
+
+        row = _make_row(owner_id="user-x")
+        pool = AsyncMock()
+        # First call (UPDATE) returns None, second call (INSERT) returns row
+        pool.fetchrow = AsyncMock(side_effect=[None, row])
+
+        repo = PostgresDispatcherRepository(pool)
+        state = await repo.update("user-x", running=False)
+
+        assert pool.fetchrow.call_count == 2
+        assert state.owner_id == "user-x"
+
+    @pytest.mark.asyncio
+    async def test_update_ignores_disallowed_fields(self):
+        from unittest.mock import AsyncMock
+
+        from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
+
+        row = _make_row(owner_id="user-x")
+        pool = AsyncMock()
+        pool.fetchrow = AsyncMock(return_value=row)
+
+        repo = PostgresDispatcherRepository(pool)
+        # Pass only disallowed fields — should delegate to get_or_create
+        state = await repo.update("user-x", bogus_field="nope")
+
+        sql_arg = pool.fetchrow.call_args[0][0]
+        assert "INSERT INTO dispatcher_state" in sql_arg
+        assert state.owner_id == "user-x"
