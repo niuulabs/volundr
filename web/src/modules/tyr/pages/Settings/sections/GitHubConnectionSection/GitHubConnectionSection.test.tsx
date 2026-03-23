@@ -17,11 +17,7 @@ const mockConnection: TyrIntegrationConnection = {
 describe('GitHubConnectionSection', () => {
   it('renders disconnected state with form', () => {
     render(
-      <GitHubConnectionSection
-        connection={null}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-      />,
+      <GitHubConnectionSection connection={null} onConnect={vi.fn()} onDisconnect={vi.fn()} />
     );
 
     expect(screen.getByText('GitHub')).toBeInTheDocument();
@@ -36,7 +32,7 @@ describe('GitHubConnectionSection', () => {
         connection={mockConnection}
         onConnect={vi.fn()}
         onDisconnect={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -47,11 +43,7 @@ describe('GitHubConnectionSection', () => {
   it('calls onConnect with correct params', async () => {
     const onConnect = vi.fn().mockResolvedValue(undefined);
     render(
-      <GitHubConnectionSection
-        connection={null}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-      />,
+      <GitHubConnectionSection connection={null} onConnect={onConnect} onDisconnect={vi.fn()} />
     );
 
     fireEvent.change(screen.getByLabelText('Personal Access Token'), {
@@ -75,11 +67,7 @@ describe('GitHubConnectionSection', () => {
 
   it('shows error when PAT is empty', async () => {
     render(
-      <GitHubConnectionSection
-        connection={null}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-      />,
+      <GitHubConnectionSection connection={null} onConnect={vi.fn()} onDisconnect={vi.fn()} />
     );
 
     fireEvent.click(screen.getByText('Connect'));
@@ -96,7 +84,7 @@ describe('GitHubConnectionSection', () => {
         connection={mockConnection}
         onConnect={vi.fn()}
         onDisconnect={onDisconnect}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText('Disconnect'));
@@ -109,11 +97,7 @@ describe('GitHubConnectionSection', () => {
   it('shows error on failure', async () => {
     const onConnect = vi.fn().mockRejectedValue(new Error('Auth failed'));
     render(
-      <GitHubConnectionSection
-        connection={null}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-      />,
+      <GitHubConnectionSection connection={null} onConnect={onConnect} onDisconnect={vi.fn()} />
     );
 
     fireEvent.change(screen.getByLabelText('Personal Access Token'), {
@@ -129,11 +113,7 @@ describe('GitHubConnectionSection', () => {
   it('sends empty config when org is blank', async () => {
     const onConnect = vi.fn().mockResolvedValue(undefined);
     render(
-      <GitHubConnectionSection
-        connection={null}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-      />,
+      <GitHubConnectionSection connection={null} onConnect={onConnect} onDisconnect={vi.fn()} />
     );
 
     fireEvent.change(screen.getByLabelText('Personal Access Token'), {
@@ -142,9 +122,7 @@ describe('GitHubConnectionSection', () => {
     fireEvent.click(screen.getByText('Connect'));
 
     await waitFor(() => {
-      expect(onConnect).toHaveBeenCalledWith(
-        expect.objectContaining({ config: {} }),
-      );
+      expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({ config: {} }));
     });
   });
 });

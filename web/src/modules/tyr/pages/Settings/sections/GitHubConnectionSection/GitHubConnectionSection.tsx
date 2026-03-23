@@ -64,12 +64,16 @@ export function GitHubConnectionSection({
         <h3 className={styles.title}>GitHub</h3>
         <div className={styles.connected}>
           <div className={styles.statusRow}>
-            <span className={styles.statusBadge} data-status="connected">Connected</span>
+            <span className={styles.statusBadge} data-status="connected">
+              Connected
+            </span>
             {connection.config.org && (
               <span className={styles.detail}>org: {connection.config.org}</span>
             )}
           </div>
-          <p className={styles.meta}>Connected {new Date(connection.created_at).toLocaleDateString()}</p>
+          <p className={styles.meta}>
+            Connected {new Date(connection.created_at).toLocaleDateString()}
+          </p>
           <button className={styles.disconnectBtn} onClick={handleDisconnect} type="button">
             Disconnect
           </button>

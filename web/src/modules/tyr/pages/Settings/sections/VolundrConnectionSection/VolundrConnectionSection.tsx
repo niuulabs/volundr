@@ -63,12 +63,14 @@ export function VolundrConnectionSection({
         <h3 className={styles.title}>Volundr</h3>
         <div className={styles.connected}>
           <div className={styles.statusRow}>
-            <span className={styles.statusBadge} data-status="connected">Connected</span>
-            <span className={styles.detail}>
-              {connection.config.url || 'Volundr instance'}
+            <span className={styles.statusBadge} data-status="connected">
+              Connected
             </span>
+            <span className={styles.detail}>{connection.config.url || 'Volundr instance'}</span>
           </div>
-          <p className={styles.meta}>Connected {new Date(connection.created_at).toLocaleDateString()}</p>
+          <p className={styles.meta}>
+            Connected {new Date(connection.created_at).toLocaleDateString()}
+          </p>
           <button className={styles.disconnectBtn} onClick={handleDisconnect} type="button">
             Disconnect
           </button>

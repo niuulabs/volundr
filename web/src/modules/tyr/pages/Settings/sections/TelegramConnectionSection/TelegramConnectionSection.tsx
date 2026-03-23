@@ -46,9 +46,13 @@ export function TelegramConnectionSection({
         <h3 className={styles.title}>Telegram</h3>
         <div className={styles.connected}>
           <div className={styles.statusRow}>
-            <span className={styles.statusBadge} data-status="connected">Connected</span>
+            <span className={styles.statusBadge} data-status="connected">
+              Connected
+            </span>
           </div>
-          <p className={styles.meta}>Linked {new Date(connection.created_at).toLocaleDateString()}</p>
+          <p className={styles.meta}>
+            Linked {new Date(connection.created_at).toLocaleDateString()}
+          </p>
           <button className={styles.disconnectBtn} onClick={handleDisconnect} type="button">
             Unlink
           </button>
@@ -66,12 +70,7 @@ export function TelegramConnectionSection({
       </p>
       {deeplink ? (
         <div className={styles.linkContainer}>
-          <a
-            href={deeplink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.deeplink}
-          >
+          <a href={deeplink} target="_blank" rel="noopener noreferrer" className={styles.deeplink}>
             Open in Telegram
           </a>
           <p className={styles.hint}>

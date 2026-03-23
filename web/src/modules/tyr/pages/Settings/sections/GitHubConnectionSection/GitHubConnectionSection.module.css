@@ -85,7 +85,7 @@
   font-weight: 500;
 }
 
-.statusBadge[data-status="connected"] {
+.statusBadge[data-status='connected'] {
   background-color: color-mix(in srgb, var(--color-accent-emerald) 20%, transparent);
   color: var(--color-accent-emerald);
 }

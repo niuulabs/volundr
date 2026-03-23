@@ -31,11 +31,7 @@ function mockService(overrides: Partial<ITyrIntegrationService> = {}): ITyrInteg
 describe('TelegramConnectionSection', () => {
   it('renders disconnected state with generate link button', () => {
     render(
-      <TelegramConnectionSection
-        connection={null}
-        service={mockService()}
-        onDisconnect={vi.fn()}
-      />,
+      <TelegramConnectionSection connection={null} service={mockService()} onDisconnect={vi.fn()} />
     );
 
     expect(screen.getByText('Telegram')).toBeInTheDocument();
@@ -48,7 +44,7 @@ describe('TelegramConnectionSection', () => {
         connection={mockConnection}
         service={mockService()}
         onDisconnect={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -58,11 +54,7 @@ describe('TelegramConnectionSection', () => {
   it('generates deeplink on button click', async () => {
     const service = mockService();
     render(
-      <TelegramConnectionSection
-        connection={null}
-        service={service}
-        onDisconnect={vi.fn()}
-      />,
+      <TelegramConnectionSection connection={null} service={service} onDisconnect={vi.fn()} />
     );
 
     fireEvent.click(screen.getByText('Generate Link'));
@@ -75,11 +67,7 @@ describe('TelegramConnectionSection', () => {
 
   it('deeplink opens in new tab', async () => {
     render(
-      <TelegramConnectionSection
-        connection={null}
-        service={mockService()}
-        onDisconnect={vi.fn()}
-      />,
+      <TelegramConnectionSection connection={null} service={mockService()} onDisconnect={vi.fn()} />
     );
 
     fireEvent.click(screen.getByText('Generate Link'));
@@ -98,7 +86,7 @@ describe('TelegramConnectionSection', () => {
         connection={mockConnection}
         service={mockService()}
         onDisconnect={onDisconnect}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText('Unlink'));
@@ -113,11 +101,7 @@ describe('TelegramConnectionSection', () => {
       getTelegramSetup: vi.fn().mockRejectedValue(new Error('Bot unavailable')),
     });
     render(
-      <TelegramConnectionSection
-        connection={null}
-        service={service}
-        onDisconnect={vi.fn()}
-      />,
+      <TelegramConnectionSection connection={null} service={service} onDisconnect={vi.fn()} />
     );
 
     fireEvent.click(screen.getByText('Generate Link'));

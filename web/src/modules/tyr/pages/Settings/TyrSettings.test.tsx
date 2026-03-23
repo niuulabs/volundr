@@ -25,9 +25,7 @@ const githubConn: TyrIntegrationConnection = {
   updated_at: '2026-01-15T10:00:00Z',
 };
 
-function mockService(
-  connections: TyrIntegrationConnection[] = [],
-): ITyrIntegrationService {
+function mockService(connections: TyrIntegrationConnection[] = []): ITyrIntegrationService {
   return {
     listIntegrations: vi.fn().mockResolvedValue(connections),
     createIntegration: vi.fn().mockResolvedValue(connections[0] ?? volundrConn),

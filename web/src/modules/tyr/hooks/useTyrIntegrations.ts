@@ -57,7 +57,7 @@ export function useTyrIntegrations(service: ITyrIntegrationService): UseTyrInteg
         throw err;
       }
     },
-    [service, refresh],
+    [service, refresh]
   );
 
   const deleteConnection = useCallback(
@@ -72,7 +72,7 @@ export function useTyrIntegrations(service: ITyrIntegrationService): UseTyrInteg
         throw err;
       }
     },
-    [service, refresh],
+    [service, refresh]
   );
 
   const toggleConnection = useCallback(
@@ -87,8 +87,16 @@ export function useTyrIntegrations(service: ITyrIntegrationService): UseTyrInteg
         throw err;
       }
     },
-    [service, refresh],
+    [service, refresh]
   );
 
-  return { connections, loading, error, createConnection, deleteConnection, toggleConnection, refresh };
+  return {
+    connections,
+    loading,
+    error,
+    createConnection,
+    deleteConnection,
+    toggleConnection,
+    refresh,
+  };
 }

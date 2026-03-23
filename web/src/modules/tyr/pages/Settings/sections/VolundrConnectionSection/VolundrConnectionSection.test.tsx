@@ -17,11 +17,7 @@ const mockConnection: TyrIntegrationConnection = {
 describe('VolundrConnectionSection', () => {
   it('renders disconnected state with form', () => {
     render(
-      <VolundrConnectionSection
-        connection={null}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-      />,
+      <VolundrConnectionSection connection={null} onConnect={vi.fn()} onDisconnect={vi.fn()} />
     );
 
     expect(screen.getByText('Volundr')).toBeInTheDocument();
@@ -36,7 +32,7 @@ describe('VolundrConnectionSection', () => {
         connection={mockConnection}
         onConnect={vi.fn()}
         onDisconnect={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -47,11 +43,7 @@ describe('VolundrConnectionSection', () => {
   it('calls onConnect with correct params', async () => {
     const onConnect = vi.fn().mockResolvedValue(undefined);
     render(
-      <VolundrConnectionSection
-        connection={null}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-      />,
+      <VolundrConnectionSection connection={null} onConnect={onConnect} onDisconnect={vi.fn()} />
     );
 
     fireEvent.change(screen.getByLabelText('Personal Access Token'), {
@@ -72,11 +64,7 @@ describe('VolundrConnectionSection', () => {
 
   it('shows error when PAT is empty', async () => {
     render(
-      <VolundrConnectionSection
-        connection={null}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-      />,
+      <VolundrConnectionSection connection={null} onConnect={vi.fn()} onDisconnect={vi.fn()} />
     );
 
     fireEvent.click(screen.getByText('Connect'));
@@ -93,7 +81,7 @@ describe('VolundrConnectionSection', () => {
         connection={mockConnection}
         onConnect={vi.fn()}
         onDisconnect={onDisconnect}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText('Disconnect'));
@@ -106,11 +94,7 @@ describe('VolundrConnectionSection', () => {
   it('shows error on connect failure', async () => {
     const onConnect = vi.fn().mockRejectedValue(new Error('Network error'));
     render(
-      <VolundrConnectionSection
-        connection={null}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-      />,
+      <VolundrConnectionSection connection={null} onConnect={onConnect} onDisconnect={vi.fn()} />
     );
 
     fireEvent.change(screen.getByLabelText('Personal Access Token'), {
@@ -125,11 +109,7 @@ describe('VolundrConnectionSection', () => {
 
   it('PAT input is password type', () => {
     render(
-      <VolundrConnectionSection
-        connection={null}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-      />,
+      <VolundrConnectionSection connection={null} onConnect={vi.fn()} onDisconnect={vi.fn()} />
     );
 
     const patInput = screen.getByLabelText('Personal Access Token');
