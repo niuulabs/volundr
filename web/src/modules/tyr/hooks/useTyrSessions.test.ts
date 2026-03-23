@@ -56,4 +56,34 @@ describe('useTyrSessions', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(typeof result.current.getTimeline).toBe('function');
   });
+
+  it('should return null from getTimeline on error', async () => {
+    const { result } = renderHook(() => useTyrSessions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('fail'));
+    const timeline = await result.current.getTimeline('sess-1');
+    expect(timeline).toBeNull();
+  });
+
+  it('should return timeline data on success', async () => {
+    const { result } = renderHook(() => useTyrSessions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ events: [], files: [], commits: [], token_burn: [] }),
+    } as Response);
+    const timeline = await result.current.getTimeline('sess-1');
+    expect(timeline).not.toBeNull();
+    expect(timeline!.events).toEqual([]);
+  });
+
+  it('should handle non-Error rejection', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue('string error');
+    const { result } = renderHook(() => useTyrSessions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('string error');
+  });
 });
