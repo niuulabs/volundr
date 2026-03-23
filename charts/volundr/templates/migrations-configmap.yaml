@@ -556,4 +556,20 @@ data:
   000020_feature_toggles.down.sql: |
     DROP TABLE IF EXISTS user_feature_preferences;
     DROP TABLE IF EXISTS feature_toggles;
+
+  000021_personal_access_tokens.up.sql: |
+    -- Personal access tokens: stores PAT metadata and bcrypt hash of the raw JWT.
+    CREATE TABLE IF NOT EXISTS personal_access_tokens (
+        id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_id     TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name         TEXT        NOT NULL,
+        token_hash   TEXT        NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_used_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pats_owner_id ON personal_access_tokens(owner_id);
+
+  000021_personal_access_tokens.down.sql: |
+    DROP TABLE IF EXISTS personal_access_tokens;
 {{- end }}
