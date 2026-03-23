@@ -1174,6 +1174,25 @@ export class MockVolundrService implements IVolundrService {
     return preferences;
   }
 
+  async listTokens(): Promise<import('@/modules/volundr/models').PersonalAccessToken[]> {
+    return [];
+  }
+
+  async createToken(
+    name: string
+  ): Promise<import('@/modules/volundr/models').CreatePATResult> {
+    return {
+      id: 'mock-pat-id',
+      name,
+      token: 'pat_mock_token_value',
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  async revokeToken(_id: string): Promise<void> {
+    // no-op in mock
+  }
+
   private notifySubscribers(): void {
     for (const callback of this.subscribers) {
       callback(this.sessions.map(s => ({ ...s })));

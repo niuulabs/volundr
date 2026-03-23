@@ -88,6 +88,7 @@ import type {
  */
 const api = createApiClient('/api/v1/volundr');
 const niuuApi = createApiClient('/api/v1/niuu');
+const usersApi = createApiClient('/api/v1/users');
 
 /**
  * SSE stream endpoint
@@ -1559,6 +1560,41 @@ export class ApiVolundrService implements IVolundrService {
       visible: p.visible,
       sortOrder: p.sort_order,
     }));
+  }
+
+  // ── Personal Access Tokens ──────────────────────────────────────
+
+  async listTokens(): Promise<import('@/modules/volundr/models').PersonalAccessToken[]> {
+    const response = await usersApi.get<
+      Array<{ id: string; name: string; created_at: string; last_used_at: string | null }>
+    >('/tokens');
+    return response.map(t => ({
+      id: t.id,
+      name: t.name,
+      createdAt: t.created_at,
+      lastUsedAt: t.last_used_at,
+    }));
+  }
+
+  async createToken(
+    name: string
+  ): Promise<import('@/modules/volundr/models').CreatePATResult> {
+    const response = await usersApi.post<{
+      id: string;
+      name: string;
+      token: string;
+      created_at: string;
+    }>('/tokens', { name });
+    return {
+      id: response.id,
+      name: response.name,
+      token: response.token,
+      createdAt: response.created_at,
+    };
+  }
+
+  async revokeToken(id: string): Promise<void> {
+    await usersApi.delete(`/tokens/${id}`);
   }
 
   private mapWorkspace(w: ApiWorkspaceResponse): VolundrWorkspace {
