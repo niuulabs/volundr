@@ -36,7 +36,7 @@ class IntegrationConnection:
     """A configured integration connection (e.g., issue tracker)."""
 
     id: str
-    user_id: str
+    owner_id: str
     integration_type: IntegrationType
     adapter: str  # fully-qualified class path
     credential_name: str  # reference to stored credential
