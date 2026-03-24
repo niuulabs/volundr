@@ -7,7 +7,7 @@ GET /api/v1/tyr/telegram/setup.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
@@ -26,7 +26,7 @@ from tyr.adapters.inbound.rest_integrations import (
 
 
 def _make_connection(
-    user_id: str = "user-1",
+    owner_id: str = "user-1",
     integration_type: IntegrationType = IntegrationType.CODE_FORGE,
     adapter: str = "tyr.adapters.volundr_http.VolundrHTTPAdapter",
     credential_name: str = "volundr-pat",
@@ -36,7 +36,7 @@ def _make_connection(
     now = datetime.now(UTC)
     return IntegrationConnection(
         id=str(uuid4()),
-        owner_id=user_id,
+        owner_id=owner_id,
         integration_type=integration_type,
         adapter=adapter,
         credential_name=credential_name,
@@ -50,6 +50,18 @@ def _make_connection(
 # -------------------------------------------------------------------
 # Fixtures
 # -------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _mock_test_connection():
+    """Skip real connection testing in unit tests."""
+    from niuu.domain.services.connection_tester import ConnectionTestResult
+
+    with patch(
+        "tyr.adapters.inbound.rest_integrations.test_connection",
+        return_value=ConnectionTestResult(success=True, message="mock ok"),
+    ):
+        yield
 
 
 @pytest.fixture

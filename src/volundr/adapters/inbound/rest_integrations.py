@@ -281,7 +281,7 @@ def create_integrations_router(
         now = datetime.now(UTC)
         updated = IntegrationConnection(
             id=existing.id,
-            user_id=existing.owner_id,
+            owner_id=existing.owner_id,
             integration_type=existing.integration_type,
             adapter=existing.adapter,
             credential_name=(

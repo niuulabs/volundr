@@ -456,7 +456,7 @@ class Broker:
         self._conversation_turns.append(turn)
         self._save_conversation_history()
 
-    def _flush_pending_assistant_turn(self) -> None:
+    def _flush_pending_assistant_turn(self, metadata: dict | None = None) -> None:
         """Save any accumulated assistant content as a conversation turn."""
         content = self._pending_assistant_content
         if not content:
@@ -476,6 +476,7 @@ class Broker:
                 role="assistant",
                 content=content,
                 parts=parts,
+                metadata=metadata or {},
             )
         )
         self._pending_assistant_content = ""
@@ -744,9 +745,22 @@ class Broker:
                         if isinstance(block, dict) and block.get("type") == "text":
                             self._pending_assistant_content = block.get("text", "")
                             break
-            self._flush_pending_assistant_turn()
+            # Build metadata from result event
+            model_usage_for_turn = data.get("modelUsage", {})
+            result_cost = None
+            result_model = None
+            for model_id, usage in model_usage_for_turn.items():
+                result_model = model_id
+                if usage.get("costUSD") is not None:
+                    result_cost = (result_cost or 0) + usage["costUSD"]
 
-            # Use first non-empty line as label, falling back to turn number
+            # Capture content before flush clears it
+            content = self._pending_assistant_content or data.get("result", "")
+            self._flush_pending_assistant_turn(metadata={
+                "usage": model_usage_for_turn,
+                "cost": result_cost,
+                "model": result_model,
+            })
             first_line = ""
             if content:
                 for line in content.strip().splitlines():

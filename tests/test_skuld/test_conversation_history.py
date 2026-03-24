@@ -62,7 +62,7 @@ class TestConversationHistoryPersistence:
         return Broker(settings=settings)
 
     def test_history_path(self, test_broker, tmp_path):
-        expected = tmp_path / CONVERSATION_HISTORY_DIR / CONVERSATION_HISTORY_FILE
+        expected = tmp_path / CONVERSATION_HISTORY_DIR / f"conversation_{test_broker.session_id}.json"
         assert test_broker._conversation_history_path() == expected
 
     def test_save_and_load_history(self, test_broker):
@@ -205,7 +205,9 @@ class TestConversationHistoryEndpoint:
         response = client.get("/api/conversation/history")
         assert response.status_code == 200
         data = response.json()
-        assert data == {"turns": []}
+        assert data["turns"] == []
+        assert "is_active" in data
+        assert "last_activity" in data
 
     def test_history_with_turns(self):
         broker._conversation_turns = [

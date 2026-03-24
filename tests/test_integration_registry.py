@@ -529,7 +529,7 @@ class TestMCPInjectionService:
 @pytest.fixture
 def mock_principal():
     return Principal(
-        owner_id="user-1",
+        user_id="user-1",
         email="test@test.com",
         tenant_id="default",
         roles=["volundr:admin"],

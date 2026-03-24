@@ -101,7 +101,7 @@ class TestCreateToken:
             headers=_auth_headers("user-42"),
         )
 
-        mock_service.create.assert_called_once_with("user-42", "test")
+        mock_service.create.assert_called_once_with("user-42", "test", subject_token="")
 
     def test_rejects_empty_name(self, client: TestClient):
         resp = client.post(

@@ -21,7 +21,7 @@ class StubIntegrationRepo(IntegrationRepository):
         return [
             c
             for c in self._connections
-            if c.user_id == user_id
+            if c.owner_id == user_id
             and (integration_type is None or c.integration_type == integration_type)
         ]
 

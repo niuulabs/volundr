@@ -342,7 +342,7 @@ class TestJiraAdapterUnit:
 @pytest.fixture
 def mock_principal():
     return Principal(
-        owner_id="user-1",
+        user_id="user-1",
         email="test@test.com",
         tenant_id="default",
         roles=["volundr:admin"],
@@ -646,7 +646,7 @@ class TestIntegrationConnectionModel:
             updated_at=now,
         )
         assert conn.id == "c1"
-        assert conn.user_id == "u1"
+        assert conn.owner_id == "u1"
         assert conn.enabled is True
 
     def test_config_dict(self):
