@@ -50,7 +50,7 @@ describe('TelegramConnectionSection', () => {
     );
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('Unlink')).toBeInTheDocument();
+    expect(screen.getByText('Disconnect')).toBeInTheDocument();
   });
 
   it('generates deeplink on button click', async () => {
@@ -81,7 +81,7 @@ describe('TelegramConnectionSection', () => {
     });
   });
 
-  it('calls onDisconnect on unlink', async () => {
+  it('calls onDisconnect on disconnect', async () => {
     const onDisconnect = vi.fn().mockResolvedValue(undefined);
     render(
       <TelegramConnectionSection
@@ -91,7 +91,7 @@ describe('TelegramConnectionSection', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Unlink'));
+    fireEvent.click(screen.getByText('Disconnect'));
 
     await waitFor(() => {
       expect(onDisconnect).toHaveBeenCalledWith('conn-3');
@@ -129,7 +129,7 @@ describe('TelegramConnectionSection', () => {
   });
 
   it('shows error on disconnect failure', async () => {
-    const onDisconnect = vi.fn().mockRejectedValue(new Error('Unlink failed'));
+    const onDisconnect = vi.fn().mockRejectedValue(new Error('Disconnect failed'));
     render(
       <TelegramConnectionSection
         connection={mockConnection}
@@ -138,10 +138,10 @@ describe('TelegramConnectionSection', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Unlink'));
+    fireEvent.click(screen.getByText('Disconnect'));
 
     await waitFor(() => {
-      expect(screen.getByText('Unlink failed')).toBeInTheDocument();
+      expect(screen.getByText('Disconnect failed')).toBeInTheDocument();
     });
   });
 
@@ -155,7 +155,7 @@ describe('TelegramConnectionSection', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Unlink'));
+    fireEvent.click(screen.getByText('Disconnect'));
 
     await waitFor(() => {
       expect(screen.getByText('Failed to disconnect')).toBeInTheDocument();

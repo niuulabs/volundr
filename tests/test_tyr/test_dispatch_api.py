@@ -50,7 +50,10 @@ class MockVolundr(VolundrPort):
         self.fail_spawn: bool = False
 
     async def spawn_session(
-        self, request: SpawnRequest, *, auth_token: str | None = None,
+        self,
+        request: SpawnRequest,
+        *,
+        auth_token: str | None = None,
     ) -> VolundrSession:
         self.last_auth_token = auth_token
         if self.fail_spawn:
@@ -66,7 +69,10 @@ class MockVolundr(VolundrPort):
         return session
 
     async def get_session(
-        self, session_id: str, *, auth_token: str | None = None,
+        self,
+        session_id: str,
+        *,
+        auth_token: str | None = None,
     ) -> VolundrSession | None:
         return next(
             (s for s in self.sessions if s.id == session_id),
@@ -74,7 +80,9 @@ class MockVolundr(VolundrPort):
         )
 
     async def list_sessions(
-        self, *, auth_token: str | None = None,
+        self,
+        *,
+        auth_token: str | None = None,
     ) -> list[VolundrSession]:
         self.last_auth_token = auth_token
         return list(self.sessions)

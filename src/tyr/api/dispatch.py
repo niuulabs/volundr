@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
-from tyr.adapters.inbound.auth import extract_principal
+from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.domain.models import TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
@@ -196,8 +196,7 @@ def create_dispatch_router() -> APIRouter:
     ) -> list[QueueItem]:
         """Get the list of issues ready for dispatch across all sagas."""
         # Extract user's auth token for per-request forwarding to Volundr
-        auth = request.headers.get("authorization", "")
-        auth_token = auth[7:] if auth.startswith("Bearer ") else None
+        auth_token = extract_bearer_token(request)
 
         sagas = await repo.list_sagas(owner_id=principal.user_id)
         if not sagas:
@@ -256,7 +255,7 @@ def create_dispatch_router() -> APIRouter:
                         )
                     break
                 except Exception:
-                    logger.warning("Failed to fetch issues for saga %s", saga.id, exc_info=True)
+                    logger.error("Failed to fetch issues for saga %s", saga.id, exc_info=True)
 
         # Sort: highest priority first (1=urgent, 4=low)
         queue.sort(key=lambda q: (q.priority, q.identifier))
@@ -272,8 +271,7 @@ def create_dispatch_router() -> APIRouter:
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> list[DispatchResult]:
         """Approve and dispatch selected issues — spawns Volundr sessions."""
-        auth = request.headers.get("authorization", "")
-        auth_token = auth[7:] if auth.startswith("Bearer ") else None
+        auth_token = extract_bearer_token(request)
 
         # Merge with server defaults
         settings = request.app.state.settings
@@ -286,16 +284,24 @@ def create_dispatch_router() -> APIRouter:
         sagas = await repo.list_sagas(owner_id=principal.user_id)
         saga_map = {str(s.id): s for s in sagas}
 
-        # Fetch issue details for prompts
+        # Fetch issue details for prompts (bounded to prevent memory exhaustion)
+        max_cached_issues = 10_000
         issue_cache: dict[str, TrackerIssue] = {}
         for saga in sagas:
             for adapter in adapters:
                 try:
                     issues = await adapter.list_issues(saga.tracker_id)
                     for issue in issues:
+                        if len(issue_cache) >= max_cached_issues:
+                            logger.warning(
+                                "Issue cache limit reached (%d), skipping remaining issues",
+                                max_cached_issues,
+                            )
+                            break
                         issue_cache[issue.id] = issue
                     break
                 except Exception:
+                    logger.warning("Failed to fetch issues for saga %s", saga.id, exc_info=True)
                     continue
 
         for item in body.items:

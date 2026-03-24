@@ -1,18 +1,15 @@
 import { useState } from 'react';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
-import { INTEGRATION_TYPES, ADAPTER_PATHS } from '@/modules/tyr/constants';
+import type { CreateIntegrationParams } from '@/modules/tyr/ports';
+import { INTEGRATION_TYPES, ADAPTER_PATHS, CREDENTIAL_NAMES } from '@/modules/tyr/constants';
 import { useConnectionForm } from '../useConnectionForm';
-import styles from './VolundrConnectionSection.module.css';
+import styles from '../ConnectionSection.module.css';
+
+const DEFAULT_VOLUNDR_URL = import.meta.env.VITE_VOLUNDR_DEFAULT_URL || 'http://volundr';
 
 interface VolundrConnectionSectionProps {
   connection: IntegrationConnection | null;
-  onConnect: (params: {
-    integration_type: string;
-    adapter: string;
-    credential_name: string;
-    credential_value: string;
-    config: Record<string, string>;
-  }) => Promise<void>;
+  onConnect: (params: CreateIntegrationParams) => Promise<void>;
   onDisconnect: (id: string) => Promise<void>;
 }
 
@@ -21,7 +18,7 @@ export function VolundrConnectionSection({
   onConnect,
   onDisconnect,
 }: VolundrConnectionSectionProps) {
-  const [url, setUrl] = useState('http://volundr');
+  const [url, setUrl] = useState(DEFAULT_VOLUNDR_URL);
   const [pat, setPat] = useState('');
   const { error, submitting, disconnecting, setError, handleDisconnect, wrapSubmit } =
     useConnectionForm(connection?.id ?? null, onDisconnect);
@@ -33,10 +30,10 @@ export function VolundrConnectionSection({
     }
     const result = await wrapSubmit(() =>
       onConnect({
-        integration_type: INTEGRATION_TYPES.CODE_FORGE,
+        integrationType: INTEGRATION_TYPES.CODE_FORGE,
         adapter: ADAPTER_PATHS.VOLUNDR_HTTP,
-        credential_name: 'volundr-pat',
-        credential_value: pat,
+        credentialName: CREDENTIAL_NAMES.VOLUNDR_PAT,
+        credentialValue: pat,
         config: { url: url.trim() },
       })
     );

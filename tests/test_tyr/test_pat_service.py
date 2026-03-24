@@ -9,9 +9,9 @@ from uuid import uuid4
 import jwt
 import pytest
 
-from tyr.domain.models import PersonalAccessToken
-from tyr.domain.services.pat import PATService
-from tyr.ports.pat_repository import PATRepository
+from niuu.domain.models import PersonalAccessToken
+from niuu.domain.services.pat import PATService
+from niuu.ports.pat_repository import PATRepository
 
 
 class FakePATRepository(PATRepository):
@@ -20,6 +20,7 @@ class FakePATRepository(PATRepository):
     def __init__(self) -> None:
         self.store: dict[str, PersonalAccessToken] = {}
         self.hashes: dict[str, str] = {}
+        self.last_used_touches: list[str] = []
 
     async def create(self, owner_id: str, name: str, token_hash: str) -> PersonalAccessToken:
         pat = PersonalAccessToken(
@@ -41,16 +42,20 @@ class FakePATRepository(PATRepository):
             return pat
         return None
 
-    async def delete(self, pat_id, owner_id: str) -> bool:
+    async def delete(self, pat_id, owner_id: str) -> str | None:
         key = str(pat_id)
         pat = self.store.get(key)
         if pat and pat.owner_id == owner_id:
+            token_hash = self.hashes.pop(key, None)
             del self.store[key]
-            return True
-        return False
+            return token_hash
+        return None
 
     async def exists_by_hash(self, token_hash: str) -> bool:
         return token_hash in self.hashes.values()
+
+    async def touch_last_used(self, token_hash: str) -> None:
+        self.last_used_touches.append(token_hash)
 
 
 SIGNING_KEY = "test-secret-key-for-pats-minimum-32-bytes!"
@@ -212,3 +217,42 @@ class TestDefaultTtl:
         ttl_seconds = payload["exp"] - payload["iat"]
 
         assert ttl_seconds == 365 * 86400
+
+
+class TestValidatorIntegration:
+    @pytest.mark.asyncio
+    async def test_revoke_calls_validator_invalidate_by_hash(
+        self,
+        fake_repo: FakePATRepository,
+    ):
+        """When a validator is provided, revoke() calls invalidate_by_hash."""
+        from unittest.mock import MagicMock
+
+        from niuu.domain.services.pat_validator import PATValidator
+
+        mock_validator = MagicMock(spec=PATValidator)
+        service = PATService(
+            repo=fake_repo,
+            signing_key=SIGNING_KEY,
+            validator=mock_validator,
+        )
+
+        pat, _ = await service.create("user-1", "tok")
+        token_hash = fake_repo.hashes[str(pat.id)]
+
+        await service.revoke(pat.id, "user-1")
+
+        mock_validator.invalidate_by_hash.assert_called_once_with(token_hash)
+
+    @pytest.mark.asyncio
+    async def test_revoke_without_validator_does_not_fail(
+        self,
+        fake_repo: FakePATRepository,
+    ):
+        """When no validator is provided, revoke() still works."""
+        service = PATService(repo=fake_repo, signing_key=SIGNING_KEY, validator=None)
+        pat, _ = await service.create("user-1", "tok")
+
+        result = await service.revoke(pat.id, "user-1")
+
+        assert result is True

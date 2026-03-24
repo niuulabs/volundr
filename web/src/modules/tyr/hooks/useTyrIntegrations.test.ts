@@ -92,10 +92,10 @@ describe('useTyrIntegrations', () => {
     });
 
     const params = {
-      integration_type: 'code_forge',
+      integrationType: 'code_forge',
       adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-      credential_name: 'volundr-pat',
-      credential_value: 'secret',
+      credentialName: 'volundr-pat',
+      credentialValue: 'secret',
       config: { url: 'http://volundr' },
     };
 
@@ -119,10 +119,10 @@ describe('useTyrIntegrations', () => {
     await act(async () => {
       await expect(
         result.current.createConnection({
-          integration_type: 'code_forge',
+          integrationType: 'code_forge',
           adapter: 'a',
-          credential_name: 'n',
-          credential_value: 'v',
+          credentialName: 'n',
+          credentialValue: 'v',
           config: {},
         })
       ).rejects.toThrow('Create failed');
@@ -142,10 +142,10 @@ describe('useTyrIntegrations', () => {
     await act(async () => {
       await expect(
         result.current.createConnection({
-          integration_type: 'code_forge',
+          integrationType: 'code_forge',
           adapter: 'a',
-          credential_name: 'n',
-          credential_value: 'v',
+          credentialName: 'n',
+          credentialValue: 'v',
           config: {},
         })
       ).rejects.toBe('oops');

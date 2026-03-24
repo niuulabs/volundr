@@ -84,7 +84,7 @@ class TestAutonomousDispatchWithPAT:
         factory = VolundrAdapterFactory(
             integration_repo=StubIntegrationRepo(connections=[conn]),
             credential_store=StubCredentialStore(
-                values={f"user:{OWNER_ID}:volundr-pat": {"api_key": STORED_PAT}}
+                values={f"user:{OWNER_ID}:volundr-pat": {"token": STORED_PAT}}
             ),
         )
 

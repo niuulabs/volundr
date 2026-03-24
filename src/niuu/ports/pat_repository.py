@@ -24,9 +24,13 @@ class PATRepository(ABC):
         """Retrieve a PAT by ID scoped to an owner."""
 
     @abstractmethod
-    async def delete(self, pat_id: UUID, owner_id: str) -> bool:
-        """Delete a PAT. Returns True if deleted."""
+    async def delete(self, pat_id: UUID, owner_id: str) -> str | None:
+        """Delete a PAT. Returns the token_hash if deleted, None otherwise."""
 
     @abstractmethod
     async def exists_by_hash(self, token_hash: str) -> bool:
         """Check if a PAT with the given hash exists (i.e. not revoked)."""
+
+    @abstractmethod
+    async def touch_last_used(self, token_hash: str) -> None:
+        """Update last_used_at for the PAT identified by token_hash."""

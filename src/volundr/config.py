@@ -936,6 +936,14 @@ class PATConfig(BaseModel):
         default=365,
         description="Default PAT lifetime in days.",
     )
+    revocation_cache_ttl: float = Field(
+        default=300.0,
+        description="Seconds to cache valid-token lookups before re-checking the DB.",
+    )
+    revoked_cache_ttl: float = Field(
+        default=60.0,
+        description="Seconds to cache revoked-token lookups (shorter for faster propagation).",
+    )
 
 
 class AuthDiscoveryConfig(BaseModel):

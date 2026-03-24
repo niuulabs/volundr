@@ -6,4 +6,5 @@ export type {
   ITyrIntegrationService,
   IntegrationConnection,
   TelegramSetupResult,
+  CreateIntegrationParams,
 } from './integrations.port';

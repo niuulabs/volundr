@@ -31,7 +31,10 @@ class VolundrHTTPAdapter(VolundrPort):
         return {}
 
     async def spawn_session(
-        self, request: SpawnRequest, *, auth_token: str | None = None,
+        self,
+        request: SpawnRequest,
+        *,
+        auth_token: str | None = None,
     ) -> VolundrSession:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(
@@ -61,7 +64,10 @@ class VolundrHTTPAdapter(VolundrPort):
             )
 
     async def get_session(
-        self, session_id: str, *, auth_token: str | None = None,
+        self,
+        session_id: str,
+        *,
+        auth_token: str | None = None,
     ) -> VolundrSession | None:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(
@@ -80,7 +86,9 @@ class VolundrHTTPAdapter(VolundrPort):
             )
 
     async def list_sessions(
-        self, *, auth_token: str | None = None,
+        self,
+        *,
+        auth_token: str | None = None,
     ) -> list[VolundrSession]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(

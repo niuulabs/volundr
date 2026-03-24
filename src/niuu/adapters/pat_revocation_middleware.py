@@ -21,7 +21,9 @@ class PATRevocationMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint,
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         validator = getattr(request.app.state, "pat_validator", None)
         if validator is None:

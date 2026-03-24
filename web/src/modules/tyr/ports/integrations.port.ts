@@ -7,15 +7,17 @@ export interface TelegramSetupResult {
   token: string;
 }
 
+export interface CreateIntegrationParams {
+  integrationType: string;
+  adapter: string;
+  credentialName: string;
+  credentialValue: string;
+  config: Record<string, string>;
+}
+
 export interface ITyrIntegrationService {
   listIntegrations(): Promise<IntegrationConnection[]>;
-  createIntegration(params: {
-    integration_type: string;
-    adapter: string;
-    credential_name: string;
-    credential_value: string;
-    config: Record<string, string>;
-  }): Promise<IntegrationConnection>;
+  createIntegration(params: CreateIntegrationParams): Promise<IntegrationConnection>;
   deleteIntegration(id: string): Promise<void>;
   toggleIntegration(id: string, enabled: boolean): Promise<IntegrationConnection>;
   getTelegramSetup(): Promise<TelegramSetupResult>;

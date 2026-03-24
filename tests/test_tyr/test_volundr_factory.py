@@ -59,7 +59,7 @@ async def test_disabled_connection_returns_none() -> None:
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[conn]),
         credential_store=StubCredentialStore(
-            values={"user:owner-1:volundr-pat": {"api_key": "tok-123"}}
+            values={"user:owner-1:volundr-pat": {"token": "tok-123"}}
         ),
     )
     result = await factory.for_owner("owner-1")
@@ -72,7 +72,7 @@ async def test_enabled_connection_valid_cred_returns_adapter() -> None:
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[conn]),
         credential_store=StubCredentialStore(
-            values={"user:owner-1:volundr-pat": {"api_key": "tok-123"}}
+            values={"user:owner-1:volundr-pat": {"token": "tok-123"}}
         ),
     )
     result = await factory.for_owner("owner-1")
@@ -98,7 +98,7 @@ async def test_uses_default_url_when_not_in_config() -> None:
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[conn]),
         credential_store=StubCredentialStore(
-            values={"user:owner-1:volundr-pat": {"api_key": "tok-456"}}
+            values={"user:owner-1:volundr-pat": {"token": "tok-456"}}
         ),
     )
     result = await factory.for_owner("owner-1")
@@ -113,7 +113,7 @@ async def test_picks_first_enabled_connection() -> None:
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[disabled, enabled]),
         credential_store=StubCredentialStore(
-            values={"user:owner-1:volundr-pat": {"api_key": "tok-789"}}
+            values={"user:owner-1:volundr-pat": {"token": "tok-789"}}
         ),
     )
     result = await factory.for_owner("owner-1")

@@ -239,7 +239,8 @@ class MockSagaRepo(SagaRepository):
     async def delete_saga(self, saga_id, *, owner_id=None) -> bool:
         before = len(self.sagas)
         self.sagas = [
-            s for s in self.sagas
+            s
+            for s in self.sagas
             if not (s.id == saga_id and (owner_id is None or s.owner_id == owner_id))
         ]
         return len(self.sagas) < before

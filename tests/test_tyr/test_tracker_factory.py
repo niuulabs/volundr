@@ -149,7 +149,7 @@ async def test_adapter_instantiation_failure_logged_and_skipped(caplog) -> None:
             }
         ),
     )
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.ERROR):
         result = await factory.for_owner("owner-1")
 
     assert len(result) == 1

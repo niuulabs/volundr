@@ -49,9 +49,15 @@ class TrackerAdapterFactory:
                 cls = import_class(conn.adapter)
                 kwargs = {**cred, **conn.config}
                 adapters.append(cls(**kwargs))
+            except (ImportError, TypeError, ValueError, AttributeError) as exc:
+                logger.error(
+                    "Failed to create tracker adapter for connection %s: %s",
+                    conn.id,
+                    exc,
+                )
             except Exception:
-                logger.warning(
-                    "Failed to create tracker adapter for connection %s",
+                logger.error(
+                    "Unexpected error creating tracker adapter for connection %s",
                     conn.id,
                     exc_info=True,
                 )

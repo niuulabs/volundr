@@ -1,18 +1,13 @@
 import { useState } from 'react';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
-import { INTEGRATION_TYPES, ADAPTER_PATHS } from '@/modules/tyr/constants';
+import type { CreateIntegrationParams } from '@/modules/tyr/ports';
+import { INTEGRATION_TYPES, ADAPTER_PATHS, CREDENTIAL_NAMES } from '@/modules/tyr/constants';
 import { useConnectionForm } from '../useConnectionForm';
-import styles from './GitHubConnectionSection.module.css';
+import styles from '../ConnectionSection.module.css';
 
 interface GitHubConnectionSectionProps {
   connection: IntegrationConnection | null;
-  onConnect: (params: {
-    integration_type: string;
-    adapter: string;
-    credential_name: string;
-    credential_value: string;
-    config: Record<string, string>;
-  }) => Promise<void>;
+  onConnect: (params: CreateIntegrationParams) => Promise<void>;
   onDisconnect: (id: string) => Promise<void>;
 }
 
@@ -33,10 +28,10 @@ export function GitHubConnectionSection({
     }
     const result = await wrapSubmit(() =>
       onConnect({
-        integration_type: INTEGRATION_TYPES.SOURCE_CONTROL,
+        integrationType: INTEGRATION_TYPES.SOURCE_CONTROL,
         adapter: ADAPTER_PATHS.GITHUB,
-        credential_name: 'github-pat',
-        credential_value: pat,
+        credentialName: CREDENTIAL_NAMES.GITHUB_PAT,
+        credentialValue: pat,
         config: org.trim() ? { org: org.trim() } : {},
       })
     );

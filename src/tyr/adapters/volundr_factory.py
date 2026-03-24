@@ -37,5 +37,5 @@ class VolundrAdapterFactory:
 
         return VolundrHTTPAdapter(
             base_url=conn.config.get("url", DEFAULT_VOLUNDR_URL),
-            api_key=cred.get("api_key"),
+            api_key=cred.get("token"),
         )

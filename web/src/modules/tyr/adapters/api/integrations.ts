@@ -1,6 +1,10 @@
 import { createApiClient } from '@/modules/shared/api/client';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
-import type { ITyrIntegrationService, TelegramSetupResult } from '../../ports/integrations.port';
+import type {
+  ITyrIntegrationService,
+  TelegramSetupResult,
+  CreateIntegrationParams,
+} from '../../ports/integrations.port';
 
 const integrationsApi = createApiClient('/api/v1/tyr/integrations');
 const telegramApi = createApiClient('/api/v1/tyr/telegram');
@@ -37,14 +41,14 @@ export class ApiTyrIntegrationService implements ITyrIntegrationService {
     return raw.map(mapConnection);
   }
 
-  async createIntegration(params: {
-    integration_type: string;
-    adapter: string;
-    credential_name: string;
-    credential_value: string;
-    config: Record<string, string>;
-  }): Promise<IntegrationConnection> {
-    const raw = await integrationsApi.post<RawIntegrationConnection>('', params);
+  async createIntegration(params: CreateIntegrationParams): Promise<IntegrationConnection> {
+    const raw = await integrationsApi.post<RawIntegrationConnection>('', {
+      integration_type: params.integrationType,
+      adapter: params.adapter,
+      credential_name: params.credentialName,
+      credential_value: params.credentialValue,
+      config: params.config,
+    });
     return mapConnection(raw);
   }
 

@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { Copy, Check, AlertTriangle } from 'lucide-react';
 import styles from './NewTokenOverlay.module.css';
 
+const COPY_FEEDBACK_DURATION_MS = 2000;
+
 interface NewTokenOverlayProps {
   token: string;
   onDone: () => void;
@@ -13,7 +15,7 @@ export function NewTokenOverlay({ token, onDone }: NewTokenOverlayProps) {
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(token);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
   }, [token]);
 
   return (

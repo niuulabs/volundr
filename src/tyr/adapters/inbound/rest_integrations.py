@@ -73,6 +73,7 @@ class TelegramSetupResponse(BaseModel):
 
 # --- Router factory ---
 
+
 def create_integrations_router() -> APIRouter:
     """Create FastAPI router for Tyr integration management endpoints."""
     router = APIRouter(
@@ -91,8 +92,8 @@ def create_integrations_router() -> APIRouter:
         response_model=list[IntegrationResponse],
     )
     async def list_integrations(
+        request: Request,
         principal: Principal = Depends(extract_principal),
-        request: Request = None,
     ) -> list[IntegrationResponse]:
         """List the current user's integration connections."""
         repo = _get_repo(request)
@@ -105,9 +106,9 @@ def create_integrations_router() -> APIRouter:
         status_code=status.HTTP_201_CREATED,
     )
     async def create_integration(
+        request: Request,
         data: IntegrationCreateRequest,
         principal: Principal = Depends(extract_principal),
-        request: Request = None,
     ) -> IntegrationResponse:
         """Create a new integration connection and store its credential."""
         credential_store = _get_credential_store(request)
@@ -148,9 +149,9 @@ def create_integrations_router() -> APIRouter:
         status_code=status.HTTP_204_NO_CONTENT,
     )
     async def delete_integration(
+        request: Request,
         connection_id: str = Path(description="Integration connection UUID"),
         principal: Principal = Depends(extract_principal),
-        request: Request = None,
     ) -> None:
         """Delete an integration connection and its stored credential."""
         repo = _get_repo(request)
@@ -174,10 +175,10 @@ def create_integrations_router() -> APIRouter:
         response_model=IntegrationResponse,
     )
     async def toggle_integration(
+        request: Request,
         data: IntegrationToggleRequest,
         connection_id: str = Path(description="Integration connection UUID"),
         principal: Principal = Depends(extract_principal),
-        request: Request = None,
     ) -> IntegrationResponse:
         """Toggle the enabled flag on an integration connection."""
         repo = _get_repo(request)
@@ -209,6 +210,7 @@ def create_integrations_router() -> APIRouter:
 def create_telegram_setup_router(
     telegram_bot_username: str = "TyrBot",
     telegram_hmac_key: str = "",
+    telegram_hmac_sig_length: int = 32,
 ) -> APIRouter:
     """Create router for the Telegram deeplink setup endpoint."""
     router = APIRouter(
@@ -232,7 +234,7 @@ def create_telegram_setup_router(
         ts = str(int(time.time()))
         payload = f"{principal.user_id}:{ts}"
         key = telegram_hmac_key.encode()
-        sig = hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()[:16]
+        sig = hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()[:telegram_hmac_sig_length]
         token = f"{payload}:{sig}"
         deeplink = f"https://t.me/{telegram_bot_username}?start={token}"
         return TelegramSetupResponse(deeplink=deeplink, token=token)

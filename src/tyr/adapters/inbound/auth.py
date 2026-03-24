@@ -12,6 +12,14 @@ from fastapi import HTTPException, Request, status
 from niuu.domain.models import Principal
 
 
+def extract_bearer_token(request: Request) -> str | None:
+    """Extract Bearer token from the Authorization header, or None."""
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    return auth[7:]
+
+
 async def extract_principal(request: Request) -> Principal:
     """Read identity from Envoy-injected trusted headers.
 

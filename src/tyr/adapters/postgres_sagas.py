@@ -71,11 +71,13 @@ class PostgresSagaRepository(SagaRepository):
         if owner_id is not None:
             result = await self._pool.execute(
                 "DELETE FROM sagas WHERE id = $1 AND owner_id = $2",
-                saga_id, owner_id,
+                saga_id,
+                owner_id,
             )
         else:
             result = await self._pool.execute(
-                "DELETE FROM sagas WHERE id = $1", saga_id,
+                "DELETE FROM sagas WHERE id = $1",
+                saga_id,
             )
         return result == "DELETE 1"
 

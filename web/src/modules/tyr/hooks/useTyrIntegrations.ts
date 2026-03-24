@@ -1,18 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
-import type { ITyrIntegrationService } from '../ports';
+import type { ITyrIntegrationService, CreateIntegrationParams } from '../ports';
 
 export interface UseTyrIntegrationsResult {
   connections: IntegrationConnection[];
   loading: boolean;
   error: string | null;
-  createConnection: (params: {
-    integration_type: string;
-    adapter: string;
-    credential_name: string;
-    credential_value: string;
-    config: Record<string, string>;
-  }) => Promise<void>;
+  createConnection: (params: CreateIntegrationParams) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
   toggleConnection: (id: string, enabled: boolean) => Promise<void>;
   refresh: () => Promise<void>;
@@ -41,13 +35,7 @@ export function useTyrIntegrations(service: ITyrIntegrationService): UseTyrInteg
   }, [refresh]);
 
   const createConnection = useCallback(
-    async (params: {
-      integration_type: string;
-      adapter: string;
-      credential_name: string;
-      credential_value: string;
-      config: Record<string, string>;
-    }) => {
+    async (params: CreateIntegrationParams) => {
       setError(null);
       try {
         await service.createIntegration(params);

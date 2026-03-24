@@ -13,8 +13,9 @@ resourcePolicy:
       derivedRoles:
         - owner
 
-    # Tenant members can read and list sagas
+    # Owners and tenant members can read and list sagas
     - actions: ["read", "list"]
       effect: EFFECT_ALLOW
       derivedRoles:
+        - owner
         - tenant_member

@@ -1,5 +1,9 @@
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
-import type { ITyrIntegrationService, TelegramSetupResult } from '../../ports';
+import type {
+  ITyrIntegrationService,
+  TelegramSetupResult,
+  CreateIntegrationParams,
+} from '../../ports';
 
 export class MockTyrIntegrationService implements ITyrIntegrationService {
   private connections: IntegrationConnection[] = [];
@@ -8,23 +12,17 @@ export class MockTyrIntegrationService implements ITyrIntegrationService {
     return [...this.connections];
   }
 
-  async createIntegration(params: {
-    integration_type: string;
-    adapter: string;
-    credential_name: string;
-    credential_value: string;
-    config: Record<string, string>;
-  }): Promise<IntegrationConnection> {
+  async createIntegration(params: CreateIntegrationParams): Promise<IntegrationConnection> {
     const connection: IntegrationConnection = {
       id: crypto.randomUUID(),
-      integrationType: params.integration_type,
+      integrationType: params.integrationType,
       adapter: params.adapter,
-      credentialName: params.credential_name,
+      credentialName: params.credentialName,
       config: params.config,
       enabled: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      slug: params.integration_type.replace(/_/g, '-'),
+      slug: params.integrationType.replace(/_/g, '-'),
     };
     this.connections.push(connection);
     return connection;

@@ -57,10 +57,10 @@ describe('GitHubConnectionSection', () => {
 
     await waitFor(() => {
       expect(onConnect).toHaveBeenCalledWith({
-        integration_type: 'source_control',
+        integrationType: 'source_control',
         adapter: 'tyr.adapters.git.github.GitHubAdapter',
-        credential_name: 'github-pat',
-        credential_value: 'ghp_abc123',
+        credentialName: 'github-pat',
+        credentialValue: 'ghp_abc123',
         config: { org: 'niuulabs' },
       });
     });

@@ -1,5 +1,8 @@
 -- Personal access tokens for Tyr API callers (e.g. Telegram bot, ODIN/Móði)
--- owner_id is the IDP sub claim from Envoy headers, treated as an opaque string
+-- owner_id is the IDP sub claim from Envoy headers, treated as an opaque string.
+-- NOTE: Unlike Volundr's PAT table, there is no FK on owner_id because Tyr does
+-- not own a users table. owner_id is validated at the application layer via the
+-- IDP subject claim propagated through Envoy.
 
 CREATE TABLE IF NOT EXISTS personal_access_tokens (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

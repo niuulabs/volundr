@@ -625,20 +625,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from volundr.domain.services.pat import PATService
 
             pat_repository = PostgresPATRepository(pool)
-            pat_service = PATService(
-                repo=pat_repository,
-                signing_key=settings.pat.signing_key,
-                ttl_days=settings.pat.ttl_days,
-            )
-            app.state.pat_service = pat_service
 
             from niuu.domain.services.pat_validator import PATValidator
 
             pat_validator = PATValidator(
                 repo=pat_repository,
                 signing_key=settings.pat.signing_key,
+                cache_ttl=settings.pat.revocation_cache_ttl,
+                revoked_cache_ttl=settings.pat.revoked_cache_ttl,
             )
             app.state.pat_validator = pat_validator
+
+            pat_service = PATService(
+                repo=pat_repository,
+                signing_key=settings.pat.signing_key,
+                ttl_days=settings.pat.ttl_days,
+                validator=pat_validator,
+            )
+            app.state.pat_service = pat_service
 
             from volundr.adapters.inbound.auth import extract_principal as _extract_principal
             from volundr.adapters.inbound.rest_pats import create_pats_router

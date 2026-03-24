@@ -13,8 +13,8 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from niuu.adapters.inbound.rest_pats import create_pats_router
 from niuu.domain.models import PersonalAccessToken
-from tyr.adapters.inbound.rest_pats import create_pats_router
 
 # -------------------------------------------------------------------
 # Fixtures
@@ -228,9 +228,7 @@ class TestRevokeToken:
 
 
 class TestAuthRequired:
-    def test_no_auth_headers_returns_401(
-        self, client: TestClient, mock_service: AsyncMock
-    ):
+    def test_no_auth_headers_returns_401(self, client: TestClient, mock_service: AsyncMock):
         """Without Envoy headers and no allow_anonymous_dev, returns 401."""
         resp = client.get("/api/v1/users/tokens")
         assert resp.status_code == 401

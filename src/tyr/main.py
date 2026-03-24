@@ -77,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         create_telegram_setup_router(
             telegram_bot_username=settings.telegram.bot_username,
             telegram_hmac_key=settings.telegram.hmac_key,
+            telegram_hmac_sig_length=settings.telegram.hmac_signature_length,
         )
     )
 
@@ -145,19 +146,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from tyr.domain.services.pat import PATService
 
             pat_repo = PostgresPATRepository(pool)
-            pat_service = PATService(
-                repo=pat_repo,
-                signing_key=settings.auth.pat_signing_key,
-                ttl_days=settings.auth.pat_ttl_days,
-            )
-            app.state.pat_service = pat_service
 
             # Wire PAT revocation validator
             pat_validator = PATValidator(
                 repo=pat_repo,
                 signing_key=settings.auth.pat_signing_key,
+                cache_ttl=settings.auth.revocation_cache_ttl,
+                revoked_cache_ttl=settings.auth.revoked_cache_ttl,
             )
             app.state.pat_validator = pat_validator
+
+            pat_service = PATService(
+                repo=pat_repo,
+                signing_key=settings.auth.pat_signing_key,
+                ttl_days=settings.auth.pat_ttl_days,
+                validator=pat_validator,
+            )
+            app.state.pat_service = pat_service
 
             logger.info("Tyr started — database pool ready")
             yield

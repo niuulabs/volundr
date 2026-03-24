@@ -58,14 +58,20 @@ class PostgresPATRepository(PATRepository):
             return None
         return self._row_to_pat(row)
 
-    async def delete(self, pat_id: UUID, owner_id: str) -> bool:
-        """Delete a PAT. Returns True if deleted."""
-        result = await self._pool.execute(
-            "DELETE FROM personal_access_tokens WHERE id = $1 AND owner_id = $2",
+    async def delete(self, pat_id: UUID, owner_id: str) -> str | None:
+        """Delete a PAT. Returns the token_hash if deleted, None otherwise."""
+        row = await self._pool.fetchrow(
+            """
+            DELETE FROM personal_access_tokens
+            WHERE id = $1 AND owner_id = $2
+            RETURNING token_hash
+            """,
             pat_id,
             owner_id,
         )
-        return result == "DELETE 1"
+        if row is None:
+            return None
+        return row["token_hash"]
 
     async def exists_by_hash(self, token_hash: str) -> bool:
         """Check if a PAT with the given hash exists (i.e. not revoked)."""
@@ -74,6 +80,13 @@ class PostgresPATRepository(PATRepository):
             token_hash,
         )
         return row is not None
+
+    async def touch_last_used(self, token_hash: str) -> None:
+        """Update last_used_at for the PAT identified by token_hash."""
+        await self._pool.execute(
+            "UPDATE personal_access_tokens SET last_used_at = NOW() WHERE token_hash = $1",
+            token_hash,
+        )
 
     @staticmethod
     def _row_to_pat(row: asyncpg.Record) -> PersonalAccessToken:

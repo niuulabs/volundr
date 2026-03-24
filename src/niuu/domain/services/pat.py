@@ -5,12 +5,16 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import jwt
 
 from niuu.domain.models import PersonalAccessToken
 from niuu.ports.pat_repository import PATRepository
+
+if TYPE_CHECKING:
+    from niuu.domain.services.pat_validator import PATValidator
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +31,14 @@ class PATService:
         repo: PATRepository,
         signing_key: str,
         ttl_days: int = 365,
+        validator: PATValidator | None = None,
     ) -> None:
         if not signing_key:
-            raise ValueError(
-                "PAT signing key must not be empty. "
-                "Set AUTH__PAT_SIGNING_KEY or auth.pat_signing_key in config."
-            )
+            raise ValueError("PAT signing key must not be empty — check your service config.")
         self._repo = repo
         self._signing_key = signing_key
         self._ttl_days = ttl_days
+        self._validator = validator
 
     async def create(self, owner_id: str, name: str) -> tuple[PersonalAccessToken, str]:
         """Create a new PAT. Returns (metadata, raw_jwt). raw_jwt shown once only."""
@@ -62,7 +65,11 @@ class PATService:
 
     async def revoke(self, pat_id: UUID, owner_id: str) -> bool:
         """Revoke (delete) a PAT. Returns True if found and deleted."""
-        deleted = await self._repo.delete(pat_id, owner_id)
-        if deleted:
+        token_hash = await self._repo.delete(pat_id, owner_id)
+        if token_hash is not None:
             logger.info("PAT revoked: id=%s owner=%s", pat_id, owner_id)
-        return deleted
+            if self._validator is not None:
+                self._validator.invalidate_by_hash(token_hash)
+            return True
+        logger.warning("PAT revoke failed (not found): id=%s owner=%s", pat_id, owner_id)
+        return False

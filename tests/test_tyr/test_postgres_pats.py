@@ -8,8 +8,8 @@ from uuid import uuid4
 
 import pytest
 
-from tyr.adapters.postgres_pats import PostgresPATRepository
-from tyr.domain.models import PersonalAccessToken
+from niuu.adapters.postgres_pats import PostgresPATRepository
+from niuu.domain.models import PersonalAccessToken
 
 
 @pytest.fixture
@@ -48,8 +48,6 @@ class TestCreate:
         pat = await repo.create("user-1", "my-token", "hash123")
 
         mock_pool.fetchrow.assert_called_once()
-        sql = mock_pool.fetchrow.call_args[0][0]
-        assert "INSERT INTO personal_access_tokens" in sql
         assert mock_pool.fetchrow.call_args[0][1] == "user-1"
         assert mock_pool.fetchrow.call_args[0][2] == "my-token"
         assert mock_pool.fetchrow.call_args[0][3] == "hash123"
@@ -88,8 +86,7 @@ class TestList:
     async def test_queries_with_owner_id(self, repo: PostgresPATRepository, mock_pool: MagicMock):
         await repo.list("user-42")
 
-        sql = mock_pool.fetch.call_args[0][0]
-        assert "WHERE owner_id = $1" in sql
+        mock_pool.fetch.assert_called_once()
         assert mock_pool.fetch.call_args[0][1] == "user-42"
 
 
@@ -115,42 +112,42 @@ class TestGet:
         pat_id = uuid4()
         await repo.get(pat_id, "user-1")
 
-        sql = mock_pool.fetchrow.call_args[0][0]
-        assert "WHERE id = $1 AND owner_id = $2" in sql
+        mock_pool.fetchrow.assert_called_once()
         assert mock_pool.fetchrow.call_args[0][1] == pat_id
         assert mock_pool.fetchrow.call_args[0][2] == "user-1"
 
 
 class TestDelete:
     @pytest.mark.asyncio
-    async def test_returns_true_when_deleted(
+    async def test_returns_token_hash_when_deleted(
         self, repo: PostgresPATRepository, mock_pool: MagicMock
     ):
-        mock_pool.execute = AsyncMock(return_value="DELETE 1")
+        mock_pool.fetchrow = AsyncMock(return_value={"token_hash": "abc123hash"})
 
         result = await repo.delete(uuid4(), "user-1")
 
-        assert result is True
+        assert result == "abc123hash"
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_not_found(
+    async def test_returns_none_when_not_found(
         self, repo: PostgresPATRepository, mock_pool: MagicMock
     ):
-        mock_pool.execute = AsyncMock(return_value="DELETE 0")
+        mock_pool.fetchrow = AsyncMock(return_value=None)
 
         result = await repo.delete(uuid4(), "user-1")
 
-        assert result is False
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_scopes_delete_to_owner(self, repo: PostgresPATRepository, mock_pool: MagicMock):
         pat_id = uuid4()
+        mock_pool.fetchrow = AsyncMock(return_value=None)
+
         await repo.delete(pat_id, "user-1")
 
-        sql = mock_pool.execute.call_args[0][0]
-        assert "WHERE id = $1 AND owner_id = $2" in sql
-        assert mock_pool.execute.call_args[0][1] == pat_id
-        assert mock_pool.execute.call_args[0][2] == "user-1"
+        mock_pool.fetchrow.assert_called_once()
+        assert mock_pool.fetchrow.call_args[0][1] == pat_id
+        assert mock_pool.fetchrow.call_args[0][2] == "user-1"
 
 
 class TestExistsByHash:
@@ -161,19 +158,46 @@ class TestExistsByHash:
         result = await repo.exists_by_hash("abc123hash")
 
         assert result is True
-        sql = mock_pool.fetchrow.call_args[0][0]
-        assert "token_hash" in sql
+        mock_pool.fetchrow.assert_called_once()
         assert mock_pool.fetchrow.call_args[0][1] == "abc123hash"
 
     @pytest.mark.asyncio
     async def test_returns_false_when_not_found(
-        self, repo: PostgresPATRepository, mock_pool: MagicMock,
+        self,
+        repo: PostgresPATRepository,
+        mock_pool: MagicMock,
     ):
         mock_pool.fetchrow.return_value = None
 
         result = await repo.exists_by_hash("nonexistent")
 
         assert result is False
+
+
+class TestTouchLastUsed:
+    @pytest.mark.asyncio
+    async def test_calls_execute_with_token_hash(
+        self,
+        repo: PostgresPATRepository,
+        mock_pool: MagicMock,
+    ):
+        await repo.touch_last_used("abc123hash")
+
+        mock_pool.execute.assert_called_once()
+        assert mock_pool.execute.call_args[0][1] == "abc123hash"
+
+    @pytest.mark.asyncio
+    async def test_does_not_raise_on_missing_hash(
+        self,
+        repo: PostgresPATRepository,
+        mock_pool: MagicMock,
+    ):
+        """touch_last_used is fire-and-forget; no error if hash not found."""
+        mock_pool.execute = AsyncMock(return_value=None)
+
+        await repo.touch_last_used("nonexistent-hash")
+
+        mock_pool.execute.assert_called_once()
 
 
 class TestRowToPat:

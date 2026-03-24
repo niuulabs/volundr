@@ -104,6 +104,14 @@ class AuthConfig(BaseModel):
         default=365,
         description="Default PAT lifetime in days.",
     )
+    revocation_cache_ttl: float = Field(
+        default=300.0,
+        description="Seconds to cache valid-token lookups before re-checking the DB.",
+    )
+    revoked_cache_ttl: float = Field(
+        default=60.0,
+        description="Seconds to cache revoked-token lookups (shorter for faster propagation).",
+    )
     allow_anonymous_dev: bool = Field(
         default=False,
         description=(
@@ -118,6 +126,10 @@ class TelegramConfig(BaseModel):
 
     bot_username: str = Field(default="TyrBot")
     hmac_key: str = Field(default="")
+    hmac_signature_length: int = Field(
+        default=32,
+        description="Number of hex characters to use from the HMAC-SHA256 signature.",
+    )
 
 
 class TrackerConfig(BaseModel):

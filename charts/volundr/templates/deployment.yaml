@@ -81,7 +81,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "volundr.fullname" . }}-auth
-                  key: AUTH__PAT_SIGNING_KEY
+                  key: pat-signing-key
             {{- end }}
             # Pod manager token (if configured)
             {{- if .Values.podManager.existingSecret }}

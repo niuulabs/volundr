@@ -31,6 +31,7 @@ class CreatePATRequest(BaseModel):
     name: str = Field(
         min_length=1,
         max_length=100,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9 _-]*$",
         description="Human-readable label for the token",
     )
 
@@ -82,9 +83,9 @@ def create_pats_router(
         status_code=status.HTTP_201_CREATED,
     )
     async def create_token(
+        request: Request,
         body: CreatePATRequest,
         principal: Principal = Depends(extract_principal),
-        request: Request = None,
     ) -> CreatePATResponse:
         """Create a new personal access token. The raw token is shown once."""
         service: PATService = request.app.state.pat_service
@@ -101,8 +102,8 @@ def create_pats_router(
         response_model=list[PATResponse],
     )
     async def list_tokens(
+        request: Request,
         principal: Principal = Depends(extract_principal),
-        request: Request = None,
     ) -> list[PATResponse]:
         """List all personal access tokens for the authenticated user."""
         service: PATService = request.app.state.pat_service
@@ -122,9 +123,9 @@ def create_pats_router(
         status_code=status.HTTP_204_NO_CONTENT,
     )
     async def revoke_token(
+        request: Request,
         pat_id: str,
         principal: Principal = Depends(extract_principal),
-        request: Request = None,
     ) -> None:
         """Revoke a personal access token by ID."""
         service: PATService = request.app.state.pat_service

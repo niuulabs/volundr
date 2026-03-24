@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 import type { ITyrIntegrationService } from '@/modules/tyr/ports';
 import { useConnectionForm } from '../useConnectionForm';
-import styles from './TelegramConnectionSection.module.css';
+import styles from '../ConnectionSection.module.css';
 
 interface TelegramConnectionSectionProps {
   connection: IntegrationConnection | null;
@@ -46,7 +46,7 @@ export function TelegramConnectionSection({
             </span>
           </div>
           <p className={styles.meta}>
-            Linked {new Date(connection.createdAt).toLocaleDateString()}
+            Connected {new Date(connection.createdAt).toLocaleDateString()}
           </p>
           <button
             className={styles.disconnectBtn}
@@ -54,7 +54,7 @@ export function TelegramConnectionSection({
             disabled={disconnecting}
             type="button"
           >
-            {disconnecting ? 'Disconnecting...' : 'Unlink'}
+            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
           </button>
         </div>
         {error && <p className={styles.error}>{error}</p>}

@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Default cache TTL in seconds — the maximum delay between revocation and
 # enforcement.  Configurable via ``revocation_cache_ttl_seconds``.
 _DEFAULT_CACHE_TTL = 300.0  # 5 minutes
+_DEFAULT_REVOKED_CACHE_TTL = 60.0  # 1 minute
 
 
 class PATValidator:
@@ -47,10 +48,12 @@ class PATValidator:
         repo: PATRepository,
         signing_key: str,
         cache_ttl: float = _DEFAULT_CACHE_TTL,
+        revoked_cache_ttl: float = _DEFAULT_REVOKED_CACHE_TTL,
     ) -> None:
         self._repo = repo
         self._signing_key = signing_key
         self._cache_ttl = cache_ttl
+        self._revoked_cache_ttl = revoked_cache_ttl
         # hash → (is_valid, expires_at_monotonic)
         self._cache: dict[str, tuple[bool, float]] = {}
 
@@ -82,8 +85,15 @@ class PATValidator:
 
         # Cache miss or expired — query the database.
         exists = await self._repo.exists_by_hash(token_hash)
-        ttl = self._cache_ttl if exists else 60.0
+        ttl = self._cache_ttl if exists else self._revoked_cache_ttl
         self._cache[token_hash] = (exists, time.monotonic() + ttl)
+
+        # Update last_used_at on first validation (cache miss = not recently tracked)
+        if exists:
+            try:
+                await self._repo.touch_last_used(token_hash)
+            except Exception:
+                logger.debug("Failed to update last_used_at for PAT", exc_info=True)
 
         if not exists:
             jti, sub = payload.get("jti"), payload.get("sub")
@@ -95,6 +105,11 @@ class PATValidator:
         """Immediately remove a token from the cache (called on revoke)."""
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         self._cache.pop(token_hash, None)
+
+    def invalidate_by_hash(self, token_hash_or_id: str | object) -> None:
+        """Remove a token from the cache by its SHA-256 hash."""
+        key = str(token_hash_or_id)
+        self._cache.pop(key, None)
 
     def clear_cache(self) -> None:
         """Clear the entire cache (useful for testing)."""

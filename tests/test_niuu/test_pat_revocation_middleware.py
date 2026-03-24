@@ -34,8 +34,14 @@ def _create_app(*, exists_by_hash: bool = True) -> FastAPI:
 
     mock_repo = AsyncMock()
     mock_repo.exists_by_hash = AsyncMock(return_value=exists_by_hash)
+    mock_repo.touch_last_used = AsyncMock()
 
-    validator = PATValidator(repo=mock_repo, signing_key=SIGNING_KEY, cache_ttl=0)
+    validator = PATValidator(
+        repo=mock_repo,
+        signing_key=SIGNING_KEY,
+        cache_ttl=0,
+        revoked_cache_ttl=0,
+    )
     app.state.pat_validator = validator
 
     app.add_middleware(PATRevocationMiddleware)
