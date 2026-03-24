@@ -17,6 +17,9 @@ class GitPort(ABC):
     async def merge_branch(self, repo: str, source: str, target: str) -> None: ...
 
     @abstractmethod
+    async def delete_branch(self, repo: str, branch: str) -> None: ...
+
+    @abstractmethod
     async def create_pr(self, repo: str, source: str, target: str, title: str) -> str: ...
 
     @abstractmethod

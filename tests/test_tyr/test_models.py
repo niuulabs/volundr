@@ -71,9 +71,10 @@ class TestConfidenceEventType:
         assert ConfidenceEventType.SCOPE_BREACH == "scope_breach"
         assert ConfidenceEventType.RETRY == "retry"
         assert ConfidenceEventType.HUMAN_REJECT == "human_reject"
+        assert ConfidenceEventType.HUMAN_APPROVED == "human_approved"
 
     def test_member_count(self) -> None:
-        assert len(ConfidenceEventType) == 5
+        assert len(ConfidenceEventType) == 6
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from tyr.domain.models import PRStatus
+
 
 @dataclass(frozen=True)
 class SpawnRequest:
@@ -56,3 +58,9 @@ class VolundrPort(ABC):
         *,
         auth_token: str | None = None,
     ) -> list[VolundrSession]: ...
+
+    @abstractmethod
+    async def get_pr_status(self, session_id: str) -> PRStatus: ...
+
+    @abstractmethod
+    async def get_chronicle_summary(self, session_id: str) -> str: ...

@@ -233,4 +233,11 @@ data:
 
   000010_saga_base_branch.down.sql: |
     ALTER TABLE sagas DROP COLUMN IF EXISTS base_branch;
+
+  000011_raids_reason_column.up.sql: |
+    -- Add reason column to raids for reject context
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS reason TEXT;
+
+  000011_raids_reason_column.down.sql: |
+    ALTER TABLE raids DROP COLUMN IF EXISTS reason;
 {{- end }}
