@@ -209,6 +209,11 @@ class GitSource(BaseModel):
         max_length=255,
         description="Git branch to checkout",
     )
+    base_branch: str = Field(
+        default="",
+        max_length=255,
+        description="Branch to create feature branch from if it doesn't exist",
+    )
 
     model_config = {"frozen": False}
 

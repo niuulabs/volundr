@@ -47,6 +47,7 @@ class VolundrHTTPAdapter(VolundrPort):
                         "type": "git",
                         "repo": request.repo,
                         "branch": request.branch,
+                        "base_branch": request.base_branch,
                     },
                     "system_prompt": request.system_prompt,
                     "initial_prompt": request.initial_prompt,

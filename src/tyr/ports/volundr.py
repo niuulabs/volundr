@@ -18,6 +18,7 @@ class SpawnRequest:
     tracker_issue_url: str
     system_prompt: str
     initial_prompt: str
+    base_branch: str = "main"
 
 
 @dataclass(frozen=True)

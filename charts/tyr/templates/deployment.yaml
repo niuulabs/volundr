@@ -59,7 +59,7 @@ spec:
             - name: VOLUNDR_URL
               value: {{ .Values.volundr.url | quote }}
             {{- if or .Values.auth.patSigningKey (and .Values.global .Values.global.auth .Values.global.auth.patSigningKey) }}
-            - name: AUTH__PAT_SIGNING_KEY
+            - name: PAT__SIGNING_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "tyr.fullname" . }}-auth

@@ -150,16 +150,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Wire PAT revocation validator
             pat_validator = PATValidator(
                 repo=pat_repo,
-                signing_key=settings.auth.pat_signing_key,
-                cache_ttl=settings.auth.revocation_cache_ttl,
-                revoked_cache_ttl=settings.auth.revoked_cache_ttl,
+                signing_key=settings.pat.signing_key,
+                cache_ttl=settings.pat.revocation_cache_ttl,
+                revoked_cache_ttl=settings.pat.revoked_cache_ttl,
             )
             app.state.pat_validator = pat_validator
 
             pat_service = PATService(
                 repo=pat_repo,
-                signing_key=settings.auth.pat_signing_key,
-                ttl_days=settings.auth.pat_ttl_days,
+                signing_key=settings.pat.signing_key,
+                ttl_days=settings.pat.ttl_days,
                 validator=pat_validator,
             )
             app.state.pat_service = pat_service

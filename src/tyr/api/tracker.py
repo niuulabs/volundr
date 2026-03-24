@@ -41,6 +41,7 @@ class ImportRequest(BaseModel):
 
     project_id: str = Field(description="External tracker project ID")
     repos: list[str] = Field(description="Repositories (org/repo)")
+    base_branch: str = Field(default="main", description="Branch to create feature branch from")
 
 
 class SagaResponse(BaseModel):
@@ -188,6 +189,7 @@ def create_tracker_router() -> APIRouter:
             name=project.name,
             repos=body.repos,
             feature_branch=f"feat/{slug}",
+            base_branch=body.base_branch,
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,

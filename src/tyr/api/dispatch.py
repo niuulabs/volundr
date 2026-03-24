@@ -323,6 +323,7 @@ def create_dispatch_router() -> APIRouter:
                         name=session_name,
                         repo=item.repo,
                         branch=saga.feature_branch,
+                        base_branch=saga.base_branch,
                         model=effective_model,
                         tracker_issue_id=issue.identifier,
                         tracker_issue_url=issue.url,

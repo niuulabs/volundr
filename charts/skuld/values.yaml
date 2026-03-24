@@ -44,10 +44,10 @@ resources:
     # -- Broker memory request
     cpu: "100m"
   limits:
-    # -- Broker memory limit
-    memory: "1Gi"
+    # -- Broker memory limit (includes Claude CLI child process)
+    memory: "4Gi"
     # -- Broker CPU limit
-    cpu: "500m"
+    cpu: "1"
 
 # Nginx entry point (routes all traffic internally)
 # All external traffic enters via nginx on port 8080 and is routed
@@ -217,6 +217,8 @@ git:
   repoUrl: ""
   # -- Branch to checkout (empty = default branch)
   branch: ""
+  # -- Base branch to create feature branch from if it doesn't exist on the remote
+  baseBranch: ""
   # Credentials for private repos (HTTPS token auth)
   credentials:
     # -- Name of a Kubernetes secret containing a git token

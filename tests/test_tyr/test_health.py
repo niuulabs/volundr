@@ -5,14 +5,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from tyr.config import AuthConfig, Settings
+from tyr.config import PATConfig, Settings
 from tyr.main import create_app
 
 
 @pytest.fixture
 def client() -> TestClient:
     """Create a test client with mocked database pool."""
-    settings = Settings(auth=AuthConfig(pat_signing_key="test-key-for-health-tests"))
+    settings = Settings(pat=PATConfig(signing_key="test-key-for-health-tests"))
     app = create_app(settings)
 
     mock_pool = AsyncMock()

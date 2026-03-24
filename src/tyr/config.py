@@ -93,14 +93,14 @@ class CerbosConfig(BaseModel):
     url: str = Field(default="http://localhost:3592")
 
 
-class AuthConfig(BaseModel):
-    """Authentication configuration for PAT signing."""
+class PATConfig(BaseModel):
+    """Personal access token configuration (matches Volundr's PATConfig)."""
 
-    pat_signing_key: str = Field(
+    signing_key: str = Field(
         default="",
         description="Symmetric signing key for PAT JWTs (same key Envoy uses for validation).",
     )
-    pat_ttl_days: int = Field(
+    ttl_days: int = Field(
         default=365,
         description="Default PAT lifetime in days.",
     )
@@ -110,8 +110,13 @@ class AuthConfig(BaseModel):
     )
     revoked_cache_ttl: float = Field(
         default=60.0,
-        description="Seconds to cache revoked-token lookups (shorter for faster propagation).",
+        description="Seconds to cache revoked-token lookups (shorter for fast propagation).",
     )
+
+
+class AuthConfig(BaseModel):
+    """Authentication configuration."""
+
     allow_anonymous_dev: bool = Field(
         default=False,
         description=(
@@ -171,6 +176,7 @@ class Settings(BaseSettings):
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
+    pat: PATConfig = Field(default_factory=PATConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)

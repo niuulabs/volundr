@@ -22,8 +22,8 @@ class PostgresSagaRepository(SagaRepository):
             """
             INSERT INTO sagas
                 (id, tracker_id, tracker_type, slug, name,
-                 repos, feature_branch, status, confidence, created_at, owner_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                 repos, feature_branch, base_branch, status, confidence, created_at, owner_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             ON CONFLICT (id) DO NOTHING
             """,
             saga.id,
@@ -33,6 +33,7 @@ class PostgresSagaRepository(SagaRepository):
             saga.name,
             saga.repos,
             saga.feature_branch,
+            saga.base_branch,
             saga.status.value,
             saga.confidence,
             saga.created_at,
@@ -92,6 +93,7 @@ class PostgresSagaRepository(SagaRepository):
             name=row["name"],
             repos=list(row["repos"]),
             feature_branch=row.get("feature_branch") or f"feat/{slug}",
+            base_branch=row.get("base_branch") or "main",
             status=SagaStatus(row.get("status", "ACTIVE") or "ACTIVE"),
             confidence=row["confidence"] or 0.0,
             created_at=row["created_at"] or datetime.now(UTC),

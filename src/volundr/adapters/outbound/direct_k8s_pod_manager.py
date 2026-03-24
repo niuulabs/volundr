@@ -331,6 +331,25 @@ class DirectK8sPodManager(PodManager):
             for k, v in extra_env.items():
                 env.append({"name": k, "value": str(v)})
 
+        # Inject git credentials into the skuld container so that
+        # git push / gh CLI work with the same token used for cloning.
+        git_secret = git_config.get("secretName", "github-token")
+        git_secret_key = git_config.get("secretKey", "token")
+        if git_config.get("cloneUrl"):
+            for var_name in ("GITHUB_TOKEN", "GH_TOKEN"):
+                env.append(
+                    {
+                        "name": var_name,
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "name": git_secret,
+                                "key": git_secret_key,
+                                "optional": True,
+                            },
+                        },
+                    }
+                )
+
         # Inject secrets from contributor-provided envSecrets.
         for es in spec.values.get("envSecrets", []):
             env.append(
@@ -426,10 +445,13 @@ class DirectK8sPodManager(PodManager):
 
         repo_url = git_config.get("repoUrl", clone_url)
         branch = git_config.get("branch", "main")
+        base_branch = git_config.get("baseBranch", "")
         workspace = f"/volundr/sessions/{session.id}/workspace"
 
         # cloneUrl from GitContributor is already authenticated.
         # Use it directly for fetch, then set the clean repoUrl as origin.
+        # After clone, configure a credential helper so git push works
+        # in the skuld container using $GITHUB_TOKEN injected at runtime.
         clone_script = f"""\
 set -e
 export GIT_TERMINAL_PROMPT=0
@@ -437,6 +459,7 @@ WORKSPACE="{workspace}"
 CLONE_URL="{clone_url}"
 REPO_URL="{repo_url}"
 BRANCH="{branch}"
+BASE_BRANCH="{base_branch}"
 if [ -d "$WORKSPACE/.git" ]; then
   echo "Workspace already contains a git repository, skipping clone"
 else
@@ -444,10 +467,29 @@ else
   git init "$WORKSPACE"
   git -C "$WORKSPACE" remote add origin "$CLONE_URL"
   git -C "$WORKSPACE" fetch origin
-  git -C "$WORKSPACE" checkout -B "$BRANCH" "origin/$BRANCH"
+  if git -C "$WORKSPACE" rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+    git -C "$WORKSPACE" checkout -B "$BRANCH" "origin/$BRANCH"
+    echo "Checked out existing branch $BRANCH"
+  else
+    # Use explicit base branch, or fall back to remote HEAD
+    if [ -n "$BASE_BRANCH" ] && git -C "$WORKSPACE" rev-parse --verify "origin/$BASE_BRANCH" >/dev/null 2>&1; then
+      FALLBACK="$BASE_BRANCH"
+    else
+      FALLBACK=$(git -C "$WORKSPACE" remote show origin | sed -n 's/.*HEAD branch: //p')
+      FALLBACK=${{FALLBACK:-main}}
+    fi
+    echo "Branch $BRANCH not found on remote, creating from $FALLBACK"
+    git -C "$WORKSPACE" checkout -B "$FALLBACK" "origin/$FALLBACK"
+    git -C "$WORKSPACE" checkout -b "$BRANCH"
+  fi
   git -C "$WORKSPACE" remote set-url origin "$REPO_URL"
   echo "Repository cloned successfully"
 fi
+# Configure credential helper so git push uses GITHUB_TOKEN env var.
+# This persists in .gitconfig and is picked up by the skuld container.
+git -C "$WORKSPACE" config credential.helper \
+  '!f() {{ echo "username=x-access-token"; echo "password=$GITHUB_TOKEN"; }}; f'
+echo "Git credential helper configured"
 """
         containers.append(
             {
