@@ -1,17 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VolundrConnectionSection } from './VolundrConnectionSection';
-import type { TyrIntegrationConnection } from '@/modules/tyr/ports';
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 
-const mockConnection: TyrIntegrationConnection = {
+const mockConnection: IntegrationConnection = {
   id: 'conn-1',
-  integration_type: 'code_forge',
+  slug: '',
+  integrationType: 'code_forge',
   adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-  credential_name: 'volundr-pat',
+  credentialName: 'volundr-pat',
   config: { url: 'http://volundr' },
   enabled: true,
-  created_at: '2026-01-15T10:00:00Z',
-  updated_at: '2026-01-15T10:00:00Z',
+  createdAt: '2026-01-15T10:00:00Z',
+  updatedAt: '2026-01-15T10:00:00Z',
 };
 
 describe('VolundrConnectionSection', () => {
@@ -53,10 +54,10 @@ describe('VolundrConnectionSection', () => {
 
     await waitFor(() => {
       expect(onConnect).toHaveBeenCalledWith({
-        integration_type: 'code_forge',
+        integrationType: 'code_forge',
         adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-        credential_name: 'volundr-pat',
-        credential_value: 'my-secret-pat',
+        credentialName: 'volundr-pat',
+        credentialValue: 'my-secret-pat',
         config: { url: 'http://volundr' },
       });
     });

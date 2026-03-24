@@ -1,36 +1,45 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { TyrSettings } from './TyrSettings';
-import type { ITyrIntegrationService, TyrIntegrationConnection } from '@/modules/tyr/ports';
+import type { ITyrIntegrationService } from '@/modules/tyr/ports';
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 
-const volundrConn: TyrIntegrationConnection = {
+const volundrConn: IntegrationConnection = {
   id: 'v-1',
-  integration_type: 'code_forge',
+  integrationType: 'code_forge',
   adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-  credential_name: 'volundr-pat',
+  credentialName: 'volundr-pat',
   config: { url: 'http://volundr' },
   enabled: true,
-  created_at: '2026-01-15T10:00:00Z',
-  updated_at: '2026-01-15T10:00:00Z',
+  createdAt: '2026-01-15T10:00:00Z',
+  updatedAt: '2026-01-15T10:00:00Z',
+  slug: '',
 };
 
-const githubConn: TyrIntegrationConnection = {
+const githubConn: IntegrationConnection = {
   id: 'g-1',
-  integration_type: 'source_control',
+  integrationType: 'source_control',
   adapter: 'tyr.adapters.git.github.GitHubAdapter',
-  credential_name: 'github-pat',
+  credentialName: 'github-pat',
   config: { org: 'niuulabs' },
   enabled: true,
-  created_at: '2026-01-15T10:00:00Z',
-  updated_at: '2026-01-15T10:00:00Z',
+  createdAt: '2026-01-15T10:00:00Z',
+  updatedAt: '2026-01-15T10:00:00Z',
+  slug: '',
 };
 
-function mockService(connections: TyrIntegrationConnection[] = []): ITyrIntegrationService {
+function mockService(
+  connections: IntegrationConnection[] = [],
+): ITyrIntegrationService {
   return {
     listIntegrations: vi.fn().mockResolvedValue(connections),
-    createIntegration: vi.fn().mockResolvedValue(connections[0] ?? volundrConn),
+    createIntegration: vi
+      .fn()
+      .mockResolvedValue(connections[0] ?? volundrConn),
     deleteIntegration: vi.fn().mockResolvedValue(undefined),
-    toggleIntegration: vi.fn().mockResolvedValue(connections[0] ?? volundrConn),
+    toggleIntegration: vi
+      .fn()
+      .mockResolvedValue(connections[0] ?? volundrConn),
     getTelegramSetup: vi.fn().mockResolvedValue({
       deeplink: 'https://t.me/TyrBot?start=tok',
       token: 'tok',
@@ -55,7 +64,9 @@ describe('TyrSettings', () => {
   });
 
   it('shows connected state for existing connections', async () => {
-    render(<TyrSettings service={mockService([volundrConn, githubConn])} />);
+    render(
+      <TyrSettings service={mockService([volundrConn, githubConn])} />,
+    );
 
     await waitFor(() => {
       const badges = screen.getAllByText('Connected');
@@ -68,14 +79,18 @@ describe('TyrSettings', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(screen.getByText('Manage your integration connections')).toBeInTheDocument();
+      expect(
+        screen.getByText('Manage your integration connections'),
+      ).toBeInTheDocument();
     });
   });
 
   it('shows error from service', async () => {
     const service = {
       ...mockService(),
-      listIntegrations: vi.fn().mockRejectedValue(new Error('Network error')),
+      listIntegrations: vi
+        .fn()
+        .mockRejectedValue(new Error('Network error')),
     };
     render(<TyrSettings service={service} />);
 

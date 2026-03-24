@@ -1,17 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GitHubConnectionSection } from './GitHubConnectionSection';
-import type { TyrIntegrationConnection } from '@/modules/tyr/ports';
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 
-const mockConnection: TyrIntegrationConnection = {
+const mockConnection: IntegrationConnection = {
   id: 'conn-2',
-  integration_type: 'source_control',
+  slug: '',
+  integrationType: 'source_control',
   adapter: 'tyr.adapters.git.github.GitHubAdapter',
-  credential_name: 'github-pat',
+  credentialName: 'github-pat',
   config: { org: 'niuulabs' },
   enabled: true,
-  created_at: '2026-01-15T10:00:00Z',
-  updated_at: '2026-01-15T10:00:00Z',
+  createdAt: '2026-01-15T10:00:00Z',
+  updatedAt: '2026-01-15T10:00:00Z',
 };
 
 describe('GitHubConnectionSection', () => {
@@ -56,10 +57,10 @@ describe('GitHubConnectionSection', () => {
 
     await waitFor(() => {
       expect(onConnect).toHaveBeenCalledWith({
-        integration_type: 'source_control',
+        integrationType: 'source_control',
         adapter: 'tyr.adapters.git.github.GitHubAdapter',
-        credential_name: 'github-pat',
-        credential_value: 'ghp_abc123',
+        credentialName: 'github-pat',
+        credentialValue: 'ghp_abc123',
         config: { org: 'niuulabs' },
       });
     });

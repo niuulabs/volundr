@@ -1,17 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TelegramConnectionSection } from './TelegramConnectionSection';
-import type { TyrIntegrationConnection, ITyrIntegrationService } from '@/modules/tyr/ports';
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
+import type { ITyrIntegrationService } from '@/modules/tyr/ports';
 
-const mockConnection: TyrIntegrationConnection = {
+const mockConnection: IntegrationConnection = {
   id: 'conn-3',
-  integration_type: 'messaging',
+  slug: '',
+  integrationType: 'messaging',
   adapter: 'tyr.adapters.telegram.TelegramAdapter',
-  credential_name: 'telegram-chat',
+  credentialName: 'telegram-chat',
   config: {},
   enabled: true,
-  created_at: '2026-01-15T10:00:00Z',
-  updated_at: '2026-01-15T10:00:00Z',
+  createdAt: '2026-01-15T10:00:00Z',
+  updatedAt: '2026-01-15T10:00:00Z',
 };
 
 function mockService(overrides: Partial<ITyrIntegrationService> = {}): ITyrIntegrationService {
