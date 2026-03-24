@@ -189,10 +189,11 @@ def create_tracker_router() -> APIRouter:
             name=project.name,
             repos=body.repos,
             feature_branch=f"feat/{slug}",
-            base_branch=body.base_branch,
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
+            base_branch=body.base_branch,
+            owner_id=principal.user_id,
         )
 
         saga_repo: SagaRepository = request.app.state.saga_repo

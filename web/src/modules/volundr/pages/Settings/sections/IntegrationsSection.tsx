@@ -169,12 +169,15 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
       : catalog.filter(e => e.integration_type === integrationTypeFilter);
 
   return (
-    <>
+    <div className={styles.integrationsSection}>
       <div className={styles.integrationsHeader}>
-        <p className={styles.integrationsDescription}>
-          Connect external services. Integrations with MCP servers are automatically injected into
-          new sessions.
-        </p>
+        <div>
+          <h2 className={styles.integrationsTitle}>Integrations</h2>
+          <p className={styles.integrationsDescription}>
+            Connect external services. Integrations with MCP servers are automatically injected into
+            new sessions.
+          </p>
+        </div>
       </div>
 
       <div className={styles.filterRow}>
@@ -231,6 +234,6 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
             : `Connection failed: ${testResult.error ?? 'unknown error'}`}
         </div>
       )}
-    </>
+    </div>
   );
 }
