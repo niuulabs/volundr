@@ -23,6 +23,14 @@ from tyr.domain.models import (
 
 from .test_tracker_api import MockSagaRepo, MockTracker
 
+
+def _dev_settings() -> MagicMock:
+    """Create mock settings with anonymous dev enabled for test apps."""
+    s = MagicMock()
+    s.auth = AuthConfig(allow_anonymous_dev=True)
+    return s
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -112,6 +120,7 @@ def saga_repo() -> MockSagaRepo:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=datetime.now(UTC),
+            owner_id="default",
         )
     )
     return repo
@@ -123,9 +132,7 @@ def client(mock_tracker: MockTracker, saga_repo: MockSagaRepo) -> TestClient:
     app.include_router(create_sagas_router())
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-    mock_settings = MagicMock()
-    mock_settings.auth = AuthConfig(allow_anonymous_dev=True)
-    app.state.settings = mock_settings
+    app.state.settings = _dev_settings()
     return TestClient(app)
 
 
@@ -154,6 +161,7 @@ class TestListSagas:
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
+        app.state.settings = _dev_settings()
         client = TestClient(app)
         resp = client.get("/api/v1/tyr/sagas")
         assert resp.status_code == 200
@@ -206,6 +214,7 @@ class TestGetSagaErrors:
         failing = FailingTracker()
         app.dependency_overrides[resolve_trackers] = lambda: [failing]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -224,6 +233,7 @@ class TestGetSagaErrors:
         failing = FailingTracker()
         app.dependency_overrides[resolve_trackers] = lambda: [failing]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.state.settings = _dev_settings()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/sagas")
