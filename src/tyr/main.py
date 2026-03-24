@@ -27,9 +27,11 @@ from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
+from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.saga_repository import SagaRepository
@@ -69,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_sagas_router())
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
+    app.include_router(create_events_router(settings.events.keepalive_interval))
     from tyr.adapters.inbound.auth import extract_principal as _extract_principal
 
     app.include_router(create_pats_router(_extract_principal))
@@ -166,6 +169,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 validator=pat_validator,
             )
             app.state.pat_service = pat_service
+
+            # Wire event bus
+            event_bus = EventBus(max_clients=settings.events.max_sse_clients)
+            app.state.event_bus = event_bus
+
+            async def _resolve_event_bus() -> EventBus:
+                return event_bus
+
+            app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
             logger.info("Tyr started — database pool ready")
             yield

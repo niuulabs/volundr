@@ -148,6 +148,13 @@ class TrackerConfig(BaseModel):
     rate_limit_max_retries: int = Field(default=3)
 
 
+class EventsConfig(BaseModel):
+    """SSE event stream configuration."""
+
+    max_sse_clients: int = Field(default=10)
+    keepalive_interval: float = Field(default=15.0)
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -183,6 +190,7 @@ class Settings(BaseSettings):
     pat: PATConfig = Field(default_factory=PATConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
+    events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
     @classmethod
