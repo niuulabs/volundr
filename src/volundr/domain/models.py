@@ -1392,6 +1392,10 @@ class SessionSpec:
         return SessionSpec(values=merged_values, pod_spec=merged_pod_spec)
 
 
+# PersonalAccessToken — re-exported from shared niuu module
+from niuu.domain.models import PersonalAccessToken  # noqa: F401, E402
+
+
 def _deep_merge(base: dict, override: dict) -> None:
     """Deep-merge override into base in place."""
     for key, value in override.items():

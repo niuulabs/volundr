@@ -129,6 +129,8 @@ export type {
   FeatureModule,
   FeatureScope,
   UserFeaturePreference,
+  PersonalAccessToken,
+  CreatePATResult,
 } from './volundr.model';
 
 export { TASK_TYPES } from './volundr.model';

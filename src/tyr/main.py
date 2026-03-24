@@ -7,21 +7,31 @@ import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 
+from niuu.adapters.pat_revocation_middleware import PATRevocationMiddleware
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
-from niuu.domain.models import IntegrationType
-from niuu.ports.credentials import CredentialStorePort
-from niuu.ports.integrations import IntegrationRepository
+from niuu.domain.models import Principal
+from niuu.domain.services.pat_validator import PATValidator
 from niuu.utils import import_class, resolve_secret_kwargs
+from tyr.adapters.inbound.rest_integrations import (
+    create_integrations_router,
+    create_telegram_setup_router,
+)
+from tyr.adapters.inbound.rest_pats import create_pats_router
+from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
+from tyr.adapters.tracker_factory import TrackerAdapterFactory
+from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
+from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.infrastructure.database import database_pool
+from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
@@ -37,50 +47,6 @@ def _configure_logging(settings: Settings) -> None:
         if settings.logging.format == "text"
         else "%(message)s",
     )
-
-
-async def _resolve_tracker_adapters(
-    request: Request,
-    integration_repo: IntegrationRepository,
-    credential_store: CredentialStorePort,
-) -> list[TrackerPort]:
-    """Resolve TrackerPort adapters from the user's integration credentials.
-
-    Uses dynamic adapter pattern: config specifies fully-qualified class path,
-    credentials + config are passed as **kwargs to the constructor.
-    """
-    user_id = request.headers.get("x-auth-user-id", "default")
-
-    connections = await integration_repo.list_connections(
-        user_id,
-        integration_type=IntegrationType.ISSUE_TRACKER,
-    )
-
-    adapters: list[TrackerPort] = []
-    for conn in connections:
-        if not conn.enabled:
-            continue
-        try:
-            cred = await credential_store.get_value(
-                "user",
-                conn.user_id,
-                conn.credential_name,
-            )
-            if cred is None:
-                continue
-
-            cls = import_class(conn.adapter)
-            kwargs = {**cred, **conn.config}
-            adapter = cls(**kwargs)
-            adapters.append(adapter)
-        except Exception:
-            logger.warning(
-                "Failed to create tracker adapter for connection %s",
-                conn.id,
-                exc_info=True,
-            )
-
-    return adapters
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -102,6 +68,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
     app.include_router(create_dispatch_router())
+    app.include_router(create_dispatcher_router())
+    from tyr.adapters.inbound.auth import extract_principal as _extract_principal
+
+    app.include_router(create_pats_router(_extract_principal))
+    app.include_router(create_integrations_router())
+    app.include_router(
+        create_telegram_setup_router(
+            telegram_bot_username=settings.telegram.bot_username,
+            telegram_hmac_key=settings.telegram.hmac_key,
+            telegram_hmac_sig_length=settings.telegram.hmac_signature_length,
+        )
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -119,9 +97,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             credential_store = cs_cls(**cs_kwargs)
             logger.info("Credential store: %s", cs_cfg.adapter.rsplit(".", 1)[-1])
 
-            # Override the tracker resolver dependency with real wiring
-            async def _resolve(request: Request) -> list[TrackerPort]:
-                return await _resolve_tracker_adapters(request, integration_repo, credential_store)
+            # Expose shared infrastructure on app.state for REST routers
+            app.state.integration_repo = integration_repo
+            app.state.credential_store = credential_store
+
+            # Wire adapter factories (used by autonomous dispatcher)
+            app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
+            app.state.tracker_factory = TrackerAdapterFactory(integration_repo, credential_store)
+
+            # Override the tracker resolver dependency with factory delegation
+            from tyr.adapters.inbound.auth import extract_principal
+
+            async def _resolve(
+                principal: Principal = Depends(extract_principal),
+            ) -> list[TrackerPort]:
+                return await app.state.tracker_factory.for_owner(principal.user_id)
 
             app.dependency_overrides[resolve_trackers] = _resolve
 
@@ -135,6 +125,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
             app.dependency_overrides[dispatch_resolve_saga_repo] = _resolve_saga_repo
 
+            # Wire dispatcher repository
+            dispatcher_repo = PostgresDispatcherRepository(pool)
+
+            async def _resolve_dispatcher_repo() -> DispatcherRepository:
+                return dispatcher_repo
+
+            app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
+
             # Wire Volundr adapter
             volundr_adapter = VolundrHTTPAdapter(settings.volundr.url)
 
@@ -143,11 +141,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr
 
+            # Wire personal access token service
+            from tyr.adapters.postgres_pats import PostgresPATRepository
+            from tyr.domain.services.pat import PATService
+
+            pat_repo = PostgresPATRepository(pool)
+
+            # Wire PAT revocation validator
+            pat_validator = PATValidator(
+                repo=pat_repo,
+                signing_key=settings.auth.pat_signing_key,
+                cache_ttl=settings.auth.revocation_cache_ttl,
+                revoked_cache_ttl=settings.auth.revoked_cache_ttl,
+            )
+            app.state.pat_validator = pat_validator
+
+            pat_service = PATService(
+                repo=pat_repo,
+                signing_key=settings.auth.pat_signing_key,
+                ttl_days=settings.auth.pat_ttl_days,
+                validator=pat_validator,
+            )
+            app.state.pat_service = pat_service
+
             logger.info("Tyr started — database pool ready")
             yield
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan
+    app.add_middleware(PATRevocationMiddleware)
 
     @app.middleware("http")
     async def correlation_id_middleware(request: Request, call_next):  # noqa: ANN001

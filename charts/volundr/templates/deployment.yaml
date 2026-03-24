@@ -75,6 +75,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "volundr.databaseSecretName" . }}
                   key: {{ .Values.database.passwordKey | default "password" }}
+            # Auth secrets (PAT signing key)
+            {{- if or .Values.auth.patSigningKey (and .Values.global .Values.global.auth .Values.global.auth.patSigningKey) }}
+            - name: AUTH__PAT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "volundr.fullname" . }}-auth
+                  key: pat-signing-key
+            {{- end }}
             # Pod manager token (if configured)
             {{- if .Values.podManager.existingSecret }}
             - name: POD_MANAGER_TOKEN

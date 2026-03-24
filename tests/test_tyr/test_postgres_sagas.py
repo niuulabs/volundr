@@ -82,6 +82,39 @@ class TestListSagas:
         assert len(result) == 1
         assert result[0].tracker_id == "proj-1"
 
+    @pytest.mark.asyncio
+    async def test_list_with_owner_id(
+        self, repo: PostgresSagaRepository, saga: Saga, mock_pool: MagicMock
+    ):
+        mock_pool.fetch.return_value = [
+            {
+                "id": saga.id,
+                "tracker_id": saga.tracker_id,
+                "tracker_type": saga.tracker_type,
+                "slug": saga.slug,
+                "name": saga.name,
+                "repos": saga.repos,
+                "feature_branch": saga.feature_branch,
+                "status": "ACTIVE",
+                "confidence": 0.0,
+                "created_at": saga.created_at,
+            }
+        ]
+        result = await repo.list_sagas(owner_id="user-1")
+        assert len(result) == 1
+        call_args = mock_pool.fetch.call_args
+        assert "owner_id" in call_args[0][0]
+        assert call_args[0][1] == "user-1"
+
+    @pytest.mark.asyncio
+    async def test_list_without_owner_id_no_filter(
+        self, repo: PostgresSagaRepository, mock_pool: MagicMock
+    ):
+        mock_pool.fetch.return_value = []
+        await repo.list_sagas()
+        call_args = mock_pool.fetch.call_args
+        assert "owner_id" not in call_args[0][0]
+
 
 class TestGetSaga:
     @pytest.mark.asyncio
@@ -106,6 +139,36 @@ class TestGetSaga:
         result = await repo.get_saga(saga.id)
         assert result is not None
         assert result.name == "Alpha"
+
+    @pytest.mark.asyncio
+    async def test_get_with_owner_id(
+        self, repo: PostgresSagaRepository, saga: Saga, mock_pool: MagicMock
+    ):
+        mock_pool.fetchrow.return_value = {
+            "id": saga.id,
+            "tracker_id": saga.tracker_id,
+            "tracker_type": saga.tracker_type,
+            "slug": saga.slug,
+            "name": saga.name,
+            "repos": saga.repos,
+            "feature_branch": saga.feature_branch,
+            "status": "ACTIVE",
+            "confidence": 0.0,
+            "created_at": saga.created_at,
+        }
+        result = await repo.get_saga(saga.id, owner_id="user-1")
+        assert result is not None
+        call_args = mock_pool.fetchrow.call_args
+        assert "owner_id" in call_args[0][0]
+        assert call_args[0][2] == "user-1"
+
+    @pytest.mark.asyncio
+    async def test_get_with_owner_id_not_found(
+        self, repo: PostgresSagaRepository, mock_pool: MagicMock
+    ):
+        mock_pool.fetchrow.return_value = None
+        result = await repo.get_saga(uuid4(), owner_id="user-1")
+        assert result is None
 
 
 class TestDeleteSaga:

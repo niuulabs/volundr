@@ -867,6 +867,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
         ),
         # User-scoped modules
         FeatureModuleConfig(
+            key="tokens",
+            label="Access Tokens",
+            icon="ShieldCheck",
+            scope="user",
+            default_enabled=True,
+            order=5,
+        ),
+        FeatureModuleConfig(
             key="credentials",
             label="Credentials",
             icon="KeyRound",
@@ -891,6 +899,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             order=30,
         ),
         FeatureModuleConfig(
+            key="tyr-connections",
+            label="Tyr Connections",
+            icon="Compass",
+            scope="user",
+            default_enabled=True,
+            order=35,
+        ),
+        FeatureModuleConfig(
             key="appearance",
             label="Appearance",
             icon="Palette",
@@ -907,6 +923,27 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             order=50,
         ),
     ]
+
+
+class PATConfig(BaseModel):
+    """Personal access token configuration."""
+
+    signing_key: str = Field(
+        default="",
+        description="Symmetric signing key for PAT JWTs (same key Envoy uses for validation).",
+    )
+    ttl_days: int = Field(
+        default=365,
+        description="Default PAT lifetime in days.",
+    )
+    revocation_cache_ttl: float = Field(
+        default=300.0,
+        description="Seconds to cache valid-token lookups before re-checking the DB.",
+    )
+    revoked_cache_ttl: float = Field(
+        default=60.0,
+        description="Seconds to cache revoked-token lookups (shorter for faster propagation).",
+    )
 
 
 class AuthDiscoveryConfig(BaseModel):
@@ -990,6 +1027,7 @@ class Settings(BaseSettings):
     resource_provider: ResourceProviderConfig = Field(default_factory=ResourceProviderConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
+    pat: PATConfig = Field(default_factory=PATConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)

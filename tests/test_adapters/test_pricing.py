@@ -13,9 +13,7 @@ class TestHardcodedPricingProvider:
     @pytest.fixture
     def configs(self) -> list[AIModelConfig]:
         return [
-            AIModelConfig(
-                id="claude-opus-4-6", name="Opus 4.6", cost_per_million_tokens=15.0
-            ),
+            AIModelConfig(id="claude-opus-4-6", name="Opus 4.6", cost_per_million_tokens=15.0),
             AIModelConfig(
                 id="claude-sonnet-4-6",
                 name="Sonnet 4.6",
@@ -37,19 +35,13 @@ class TestHardcodedPricingProvider:
         assert provider.get_price("claude-sonnet-4-6") == 3.0
         assert provider.get_price("claude-haiku-4-5-20251001") == 1.0
 
-    def test_get_price_local_model_returns_none(
-        self, provider: HardcodedPricingProvider
-    ):
+    def test_get_price_local_model_returns_none(self, provider: HardcodedPricingProvider):
         assert provider.get_price("llama3.2:latest") is None
 
-    def test_get_price_unknown_model_returns_none(
-        self, provider: HardcodedPricingProvider
-    ):
+    def test_get_price_unknown_model_returns_none(self, provider: HardcodedPricingProvider):
         assert provider.get_price("nonexistent-model") is None
 
-    def test_list_models_returns_cloud_and_local(
-        self, provider: HardcodedPricingProvider
-    ):
+    def test_list_models_returns_cloud_and_local(self, provider: HardcodedPricingProvider):
         models = provider.list_models()
         cloud = [m for m in models if m.provider == ModelProvider.CLOUD]
         local = [m for m in models if m.provider == ModelProvider.LOCAL]
@@ -67,9 +59,7 @@ class TestHardcodedPricingProvider:
         cloud = [m for m in models if m.provider == ModelProvider.CLOUD]
         assert len(cloud) == 0
 
-    def test_cloud_models_have_pricing(
-        self, provider: HardcodedPricingProvider
-    ):
+    def test_cloud_models_have_pricing(self, provider: HardcodedPricingProvider):
         models = provider.list_models()
         cloud = [m for m in models if m.provider == ModelProvider.CLOUD]
         for model in cloud:

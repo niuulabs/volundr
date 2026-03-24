@@ -1173,6 +1173,10 @@ class ResourceProvider(ABC):
         """
 
 
+# PATRepository — re-exported from shared niuu module
+from niuu.ports.pat_repository import PATRepository  # noqa: F401, E402
+
+
 @dataclass(frozen=True)
 class SessionContext:
     """Read-only context for contributors."""

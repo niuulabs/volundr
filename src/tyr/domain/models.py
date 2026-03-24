@@ -82,6 +82,7 @@ class Saga:
     status: SagaStatus
     confidence: float
     created_at: datetime
+    owner_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -128,8 +129,10 @@ class ConfidenceEvent:
 @dataclass(frozen=True)
 class DispatcherState:
     id: UUID
+    owner_id: str
     running: bool
     threshold: float
+    max_concurrent_raids: int
     updated_at: datetime
 
 
@@ -193,7 +196,7 @@ class TrackerIssue:
     status: str
     status_type: str = ""
     assignee: str | None = None
-    labels: list[str] = None  # type: ignore[assignment]
+    labels: list[str] | None = None
     priority: int = 0
     priority_label: str = ""
     estimate: float | None = None
@@ -224,3 +227,10 @@ class PhaseSpec:
 @dataclass(frozen=True)
 class SagaStructure:
     phases: list[PhaseSpec]
+
+
+# ---------------------------------------------------------------------------
+# Personal access tokens — re-exported from shared niuu module
+# ---------------------------------------------------------------------------
+
+from niuu.domain.models import PersonalAccessToken  # noqa: F401, E402

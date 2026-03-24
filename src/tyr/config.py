@@ -87,6 +87,51 @@ class DispatchConfig(BaseModel):
     default_model: str = Field(default="claude-sonnet-4-6")
 
 
+class CerbosConfig(BaseModel):
+    """Cerbos authorization service configuration."""
+
+    url: str = Field(default="http://localhost:3592")
+
+
+class AuthConfig(BaseModel):
+    """Authentication configuration for PAT signing."""
+
+    pat_signing_key: str = Field(
+        default="",
+        description="Symmetric signing key for PAT JWTs (same key Envoy uses for validation).",
+    )
+    pat_ttl_days: int = Field(
+        default=365,
+        description="Default PAT lifetime in days.",
+    )
+    revocation_cache_ttl: float = Field(
+        default=300.0,
+        description="Seconds to cache valid-token lookups before re-checking the DB.",
+    )
+    revoked_cache_ttl: float = Field(
+        default=60.0,
+        description="Seconds to cache revoked-token lookups (shorter for faster propagation).",
+    )
+    allow_anonymous_dev: bool = Field(
+        default=False,
+        description=(
+            "When True, requests without auth headers fall back to a default developer "
+            "identity. Must be False in production."
+        ),
+    )
+
+
+class TelegramConfig(BaseModel):
+    """Telegram bot configuration for deeplink setup."""
+
+    bot_username: str = Field(default="TyrBot")
+    hmac_key: str = Field(default="")
+    hmac_signature_length: int = Field(
+        default=32,
+        description="Number of hex characters to use from the HMAC-SHA256 signature.",
+    )
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
@@ -116,14 +161,19 @@ class Settings(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     volundr: VolundrConfig = Field(default_factory=VolundrConfig)
-    ai_models: list[AIModelConfig] = Field(default_factory=lambda: [
-        AIModelConfig(id="claude-opus-4-6", name="Opus 4.6"),
-        AIModelConfig(id="claude-sonnet-4-6", name="Sonnet 4.6"),
-        AIModelConfig(id="claude-haiku-4-5-20251001", name="Haiku 4.5"),
-    ])
+    ai_models: list[AIModelConfig] = Field(
+        default_factory=lambda: [
+            AIModelConfig(id="claude-opus-4-6", name="Opus 4.6"),
+            AIModelConfig(id="claude-sonnet-4-6", name="Sonnet 4.6"),
+            AIModelConfig(id="claude-haiku-4-5-20251001", name="Haiku 4.5"),
+        ]
+    )
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
     @classmethod
     def settings_customise_sources(

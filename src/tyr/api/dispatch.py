@@ -13,6 +13,8 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from niuu.domain.models import Principal
+from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.domain.models import TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
@@ -112,8 +114,6 @@ async def resolve_volundr() -> VolundrPort:
 _READY_STATUSES = {"todo", "backlog", "triage"}
 
 
-
-
 def _is_ready(
     issue: TrackerIssue,
     active_issue_ids: set[str],
@@ -174,37 +174,36 @@ def create_dispatch_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/tyr/dispatch", tags=["Dispatcher"])
 
     @router.get("/config", response_model=DispatchConfig)
-    async def get_config(request: Request) -> DispatchConfig:
+    async def get_config(
+        request: Request,
+        principal: Principal = Depends(extract_principal),
+    ) -> DispatchConfig:
         """Get dispatch defaults from server configuration."""
         settings = request.app.state.settings
         return DispatchConfig(
             default_system_prompt=settings.dispatch.default_system_prompt,
             default_model=settings.dispatch.default_model,
-            models=[
-                ModelOption(id=m.id, name=m.name)
-                for m in settings.ai_models
-            ],
+            models=[ModelOption(id=m.id, name=m.name) for m in settings.ai_models],
         )
 
     @router.get("/queue", response_model=list[QueueItem])
     async def get_queue(
         request: Request,
+        principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> list[QueueItem]:
         """Get the list of issues ready for dispatch across all sagas."""
-        # Forward the user's auth token to Volundr
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer ") and hasattr(volundr, "set_auth_token"):
-            volundr.set_auth_token(auth[7:])
+        # Extract user's auth token for per-request forwarding to Volundr
+        auth_token = extract_bearer_token(request)
 
-        sagas = await repo.list_sagas()
+        sagas = await repo.list_sagas(owner_id=principal.user_id)
         if not sagas:
             return []
 
         # Get all active Volundr sessions to know what's already running
-        sessions = await volundr.list_sessions()
+        sessions = await volundr.list_sessions(auth_token=auth_token)
         active_statuses = {"running", "starting", "creating"}
         active_issue_ids = {
             s.tracker_issue_id
@@ -256,9 +255,7 @@ def create_dispatch_router() -> APIRouter:
                         )
                     break
                 except Exception:
-                    logger.warning(
-                        "Failed to fetch issues for saga %s", saga.id, exc_info=True
-                    )
+                    logger.error("Failed to fetch issues for saga %s", saga.id, exc_info=True)
 
         # Sort: highest priority first (1=urgent, 4=low)
         queue.sort(key=lambda q: (q.priority, q.identifier))
@@ -268,14 +265,13 @@ def create_dispatch_router() -> APIRouter:
     async def approve_dispatch(
         request: Request,
         body: DispatchRequest,
+        principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> list[DispatchResult]:
         """Approve and dispatch selected issues — spawns Volundr sessions."""
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer ") and hasattr(volundr, "set_auth_token"):
-            volundr.set_auth_token(auth[7:])
+        auth_token = extract_bearer_token(request)
 
         # Merge with server defaults
         settings = request.app.state.settings
@@ -285,19 +281,27 @@ def create_dispatch_router() -> APIRouter:
         results: list[DispatchResult] = []
 
         # Build a lookup of saga data
-        sagas = await repo.list_sagas()
+        sagas = await repo.list_sagas(owner_id=principal.user_id)
         saga_map = {str(s.id): s for s in sagas}
 
-        # Fetch issue details for prompts
+        # Fetch issue details for prompts (bounded to prevent memory exhaustion)
+        max_cached_issues = 10_000
         issue_cache: dict[str, TrackerIssue] = {}
         for saga in sagas:
             for adapter in adapters:
                 try:
                     issues = await adapter.list_issues(saga.tracker_id)
                     for issue in issues:
+                        if len(issue_cache) >= max_cached_issues:
+                            logger.warning(
+                                "Issue cache limit reached (%d), skipping remaining issues",
+                                max_cached_issues,
+                            )
+                            break
                         issue_cache[issue.id] = issue
                     break
                 except Exception:
+                    logger.warning("Failed to fetch issues for saga %s", saga.id, exc_info=True)
                     continue
 
         for item in body.items:
@@ -315,7 +319,7 @@ def create_dispatch_router() -> APIRouter:
 
             try:
                 session = await volundr.spawn_session(
-                    SpawnRequest(
+                    request=SpawnRequest(
                         name=session_name,
                         repo=item.repo,
                         branch=saga.feature_branch,
@@ -324,7 +328,8 @@ def create_dispatch_router() -> APIRouter:
                         tracker_issue_url=issue.url,
                         system_prompt=effective_prompt,
                         initial_prompt=_build_prompt(issue, item.repo, saga.feature_branch),
-                    )
+                    ),
+                    auth_token=auth_token,
                 )
                 results.append(
                     DispatchResult(
@@ -334,13 +339,9 @@ def create_dispatch_router() -> APIRouter:
                         status="spawned",
                     )
                 )
-                logger.info(
-                    "Dispatched %s → session %s", issue.identifier, session.id
-                )
+                logger.info("Dispatched %s → session %s", issue.identifier, session.id)
             except Exception:
-                logger.error(
-                    "Failed to spawn session for %s", issue.identifier, exc_info=True
-                )
+                logger.error("Failed to spawn session for %s", issue.identifier, exc_info=True)
                 results.append(
                     DispatchResult(
                         issue_id=item.issue_id,

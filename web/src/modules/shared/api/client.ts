@@ -25,6 +25,7 @@ export interface ApiClient {
   get<T>(endpoint: string): Promise<T>;
   post<T>(endpoint: string, body?: unknown): Promise<T>;
   put<T>(endpoint: string, body: unknown): Promise<T>;
+  patch<T>(endpoint: string, body: unknown): Promise<T>;
   delete<T>(endpoint: string, body?: unknown): Promise<T>;
 }
 
@@ -110,6 +111,13 @@ export function createApiClient(basePath: string): ApiClient {
     put<T>(endpoint: string, body: unknown): Promise<T> {
       return request<T>(endpoint, {
         method: 'PUT',
+        body: JSON.stringify(body),
+      });
+    },
+
+    patch<T>(endpoint: string, body: unknown): Promise<T> {
+      return request<T>(endpoint, {
+        method: 'PATCH',
         body: JSON.stringify(body),
       });
     },

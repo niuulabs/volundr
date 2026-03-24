@@ -14,26 +14,32 @@ logger = logging.getLogger(__name__)
 class VolundrHTTPAdapter(VolundrPort):
     """Calls Volundr's REST API to manage sessions."""
 
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
         self._timeout = timeout
-        self._auth_token: str | None = None
 
-    def set_auth_token(self, token: str) -> None:
-        """Set the bearer token for authenticating with Volundr."""
-        self._auth_token = token
+    def _headers(self, auth_token: str | None = None) -> dict[str, str]:
+        token = auth_token or self._api_key
+        if token:
+            return {"Authorization": f"Bearer {token}"}
+        return {}
 
-    def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        if self._auth_token:
-            headers["Authorization"] = f"Bearer {self._auth_token}"
-        return headers
-
-    async def spawn_session(self, request: SpawnRequest) -> VolundrSession:
+    async def spawn_session(
+        self,
+        request: SpawnRequest,
+        *,
+        auth_token: str | None = None,
+    ) -> VolundrSession:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(
                 f"{self._base_url}/api/v1/volundr/sessions",
-                headers=self._headers(),
+                headers=self._headers(auth_token),
                 json={
                     "name": request.name,
                     "model": request.model,
@@ -57,11 +63,16 @@ class VolundrHTTPAdapter(VolundrPort):
                 tracker_issue_id=data.get("tracker_issue_id"),
             )
 
-    async def get_session(self, session_id: str) -> VolundrSession | None:
+    async def get_session(
+        self,
+        session_id: str,
+        *,
+        auth_token: str | None = None,
+    ) -> VolundrSession | None:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(
                 f"{self._base_url}/api/v1/volundr/sessions/{session_id}",
-                headers=self._headers(),
+                headers=self._headers(auth_token),
             )
             if resp.status_code == 404:
                 return None
@@ -74,11 +85,15 @@ class VolundrHTTPAdapter(VolundrPort):
                 tracker_issue_id=data.get("tracker_issue_id"),
             )
 
-    async def list_sessions(self) -> list[VolundrSession]:
+    async def list_sessions(
+        self,
+        *,
+        auth_token: str | None = None,
+    ) -> list[VolundrSession]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(
                 f"{self._base_url}/api/v1/volundr/sessions",
-                headers=self._headers(),
+                headers=self._headers(auth_token),
             )
             resp.raise_for_status()
             return [

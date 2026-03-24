@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from uuid import UUID
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
 
@@ -27,6 +28,7 @@ class IntegrationType(StrEnum):
     ISSUE_TRACKER = "issue_tracker"
     MESSAGING = "messaging"
     AI_PROVIDER = "ai_provider"
+    CODE_FORGE = "code_forge"
 
 
 @dataclass(frozen=True)
@@ -100,6 +102,17 @@ class RepoInfo:
     url: str  # Web URL for the repo
     default_branch: str = "main"
     branches: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PersonalAccessToken:
+    """A personal access token for API authentication."""
+
+    id: UUID
+    owner_id: str
+    name: str
+    created_at: datetime
+    last_used_at: datetime | None = None
 
 
 class CacheEntry:

@@ -69,6 +69,7 @@ function AppContent() {
             <Route path="import" element={<ImportView />} />
             <Route path="dispatcher" element={<DispatcherView />} />
             <Route path="sessions" element={<TyrSessionsView />} />
+            <Route path="settings" element={<Navigate to="/settings" replace />} />
           </Route>
           <Route path="/settings" element={<SettingsPage service={volundrService} />} />
           <Route path="/admin" element={<AdminPage service={volundrService} />} />
