@@ -2,8 +2,6 @@ import type { ITyrIntegrationService } from '@/modules/tyr/ports';
 import { useTyrIntegrations } from '@/modules/tyr/hooks/useTyrIntegrations';
 import { INTEGRATION_TYPES } from '@/modules/tyr/constants';
 import { VolundrConnectionSection } from './sections/VolundrConnectionSection';
-import { GitHubConnectionSection } from './sections/GitHubConnectionSection';
-import { TelegramConnectionSection } from './sections/TelegramConnectionSection';
 import styles from './TyrSettings.module.css';
 
 interface TyrSettingsProps {
@@ -16,39 +14,25 @@ export function TyrSettings({ service }: TyrSettingsProps) {
 
   const volundrConnection =
     connections.find(c => c.integrationType === INTEGRATION_TYPES.CODE_FORGE) ?? null;
-  const githubConnection =
-    connections.find(c => c.integrationType === INTEGRATION_TYPES.SOURCE_CONTROL) ?? null;
-  const telegramConnection =
-    connections.find(c => c.integrationType === INTEGRATION_TYPES.MESSAGING) ?? null;
 
   if (loading) {
     return (
       <div className={styles.page}>
-        <h2 className={styles.heading}>Settings</h2>
-        <p className={styles.loadingText}>Loading integrations...</p>
+        <h2 className={styles.heading}>Tyr Connections</h2>
+        <p className={styles.loadingText}>Loading...</p>
       </div>
     );
   }
 
   return (
     <div className={styles.page}>
-      <h2 className={styles.heading}>Settings</h2>
-      <p className={styles.subheading}>Manage your integration connections</p>
+      <h2 className={styles.heading}>Tyr Connections</h2>
+      <p className={styles.subheading}>Connect Tyr to your Volundr instance for session dispatch</p>
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.sections}>
         <VolundrConnectionSection
           connection={volundrConnection}
           onConnect={createConnection}
-          onDisconnect={deleteConnection}
-        />
-        <GitHubConnectionSection
-          connection={githubConnection}
-          onConnect={createConnection}
-          onDisconnect={deleteConnection}
-        />
-        <TelegramConnectionSection
-          connection={telegramConnection}
-          service={service}
           onDisconnect={deleteConnection}
         />
       </div>

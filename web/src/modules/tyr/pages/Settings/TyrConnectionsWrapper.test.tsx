@@ -18,6 +18,6 @@ describe('TyrConnectionsWrapper', () => {
     const mockService = {} as IVolundrService;
     render(<TyrConnectionsWrapper service={mockService} />);
 
-    expect(await screen.findByText('Settings')).toBeDefined();
+    expect(await screen.findByText('Tyr Connections')).toBeDefined();
   });
 });

@@ -16,18 +16,6 @@ const volundrConn: IntegrationConnection = {
   slug: '',
 };
 
-const githubConn: IntegrationConnection = {
-  id: 'g-1',
-  integrationType: 'source_control',
-  adapter: 'tyr.adapters.git.github.GitHubAdapter',
-  credentialName: 'github-pat',
-  config: { org: 'niuulabs' },
-  enabled: true,
-  createdAt: '2026-01-15T10:00:00Z',
-  updatedAt: '2026-01-15T10:00:00Z',
-  slug: '',
-};
-
 function mockService(connections: IntegrationConnection[] = []): ITyrIntegrationService {
   return {
     listIntegrations: vi.fn().mockResolvedValue(connections),
@@ -44,25 +32,22 @@ function mockService(connections: IntegrationConnection[] = []): ITyrIntegration
 describe('TyrSettings', () => {
   it('shows loading state initially', () => {
     render(<TyrSettings service={mockService()} />);
-    expect(screen.getByText('Loading integrations...')).toBeInTheDocument();
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
-  it('renders all three sections when no connections', async () => {
+  it('renders volundr connection section', async () => {
     render(<TyrSettings service={mockService()} />);
 
     await waitFor(() => {
       expect(screen.getByText('Volundr')).toBeInTheDocument();
-      expect(screen.getByText('GitHub')).toBeInTheDocument();
-      expect(screen.getByText('Telegram')).toBeInTheDocument();
     });
   });
 
-  it('shows connected state for existing connections', async () => {
-    render(<TyrSettings service={mockService([volundrConn, githubConn])} />);
+  it('shows connected state for existing connection', async () => {
+    render(<TyrSettings service={mockService([volundrConn])} />);
 
     await waitFor(() => {
-      const badges = screen.getAllByText('Connected');
-      expect(badges).toHaveLength(2);
+      expect(screen.getByText('Connected')).toBeInTheDocument();
     });
   });
 
@@ -70,8 +55,7 @@ describe('TyrSettings', () => {
     render(<TyrSettings service={mockService()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(screen.getByText('Manage your integration connections')).toBeInTheDocument();
+      expect(screen.getByText('Tyr Connections')).toBeInTheDocument();
     });
   });
 

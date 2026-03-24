@@ -15,7 +15,6 @@ describe('TyrLayout', () => {
     expect(screen.getByText('New Saga')).toBeInTheDocument();
     expect(screen.getByText('Dispatcher')).toBeInTheDocument();
     expect(screen.getByText('Sessions')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
   it('renders tab links as navigation links', () => {
