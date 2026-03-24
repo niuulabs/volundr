@@ -9,8 +9,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request, Response
 
+from niuu.adapters.pat_revocation_middleware import PATRevocationMiddleware
 from niuu.adapters.postgres_integrations import PostgresIntegrationRepository
 from niuu.domain.models import Principal
+from niuu.domain.services.pat_validator import PATValidator
 from niuu.utils import import_class, resolve_secret_kwargs
 from tyr.adapters.inbound.rest_integrations import (
     create_integrations_router,
@@ -148,11 +150,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.state.pat_service = pat_service
 
+            # Wire PAT revocation validator
+            pat_validator = PATValidator(
+                repo=pat_repo,
+                signing_key=settings.auth.pat_signing_key,
+            )
+            app.state.pat_validator = pat_validator
+
             logger.info("Tyr started — database pool ready")
             yield
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan
+    app.add_middleware(PATRevocationMiddleware)
 
     @app.middleware("http")
     async def correlation_id_middleware(request: Request, call_next):  # noqa: ANN001

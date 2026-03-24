@@ -67,6 +67,14 @@ class PostgresPATRepository(PATRepository):
         )
         return result == "DELETE 1"
 
+    async def exists_by_hash(self, token_hash: str) -> bool:
+        """Check if a PAT with the given hash exists (i.e. not revoked)."""
+        row = await self._pool.fetchrow(
+            "SELECT 1 FROM personal_access_tokens WHERE token_hash = $1",
+            token_hash,
+        )
+        return row is not None
+
     @staticmethod
     def _row_to_pat(row: asyncpg.Record) -> PersonalAccessToken:
         """Convert a database row to a PersonalAccessToken domain model."""

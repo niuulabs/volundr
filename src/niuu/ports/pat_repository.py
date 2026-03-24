@@ -26,3 +26,7 @@ class PATRepository(ABC):
     @abstractmethod
     async def delete(self, pat_id: UUID, owner_id: str) -> bool:
         """Delete a PAT. Returns True if deleted."""
+
+    @abstractmethod
+    async def exists_by_hash(self, token_hash: str) -> bool:
+        """Check if a PAT with the given hash exists (i.e. not revoked)."""

@@ -153,6 +153,29 @@ class TestDelete:
         assert mock_pool.execute.call_args[0][2] == "user-1"
 
 
+class TestExistsByHash:
+    @pytest.mark.asyncio
+    async def test_returns_true_when_found(self, repo: PostgresPATRepository, mock_pool: MagicMock):
+        mock_pool.fetchrow.return_value = {"1": 1}
+
+        result = await repo.exists_by_hash("abc123hash")
+
+        assert result is True
+        sql = mock_pool.fetchrow.call_args[0][0]
+        assert "token_hash" in sql
+        assert mock_pool.fetchrow.call_args[0][1] == "abc123hash"
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_not_found(
+        self, repo: PostgresPATRepository, mock_pool: MagicMock,
+    ):
+        mock_pool.fetchrow.return_value = None
+
+        result = await repo.exists_by_hash("nonexistent")
+
+        assert result is False
+
+
 class TestRowToPat:
     def test_converts_row_to_domain_model(self):
         row = _make_row()

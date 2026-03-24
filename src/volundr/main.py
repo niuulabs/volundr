@@ -632,6 +632,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.state.pat_service = pat_service
 
+            from niuu.domain.services.pat_validator import PATValidator
+
+            pat_validator = PATValidator(
+                repo=pat_repository,
+                signing_key=settings.pat.signing_key,
+            )
+            app.state.pat_validator = pat_validator
+
             from volundr.adapters.inbound.rest_pats import create_pats_router
 
             pats_router = create_pats_router()
@@ -845,6 +853,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # PAT revocation enforcement
+    from niuu.adapters.pat_revocation_middleware import PATRevocationMiddleware
+
+    app.add_middleware(PATRevocationMiddleware)
 
     @app.get("/health", tags=["Health"])
     async def health_check() -> dict[str, str]:
