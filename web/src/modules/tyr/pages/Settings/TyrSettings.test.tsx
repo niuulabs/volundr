@@ -28,18 +28,12 @@ const githubConn: IntegrationConnection = {
   slug: '',
 };
 
-function mockService(
-  connections: IntegrationConnection[] = [],
-): ITyrIntegrationService {
+function mockService(connections: IntegrationConnection[] = []): ITyrIntegrationService {
   return {
     listIntegrations: vi.fn().mockResolvedValue(connections),
-    createIntegration: vi
-      .fn()
-      .mockResolvedValue(connections[0] ?? volundrConn),
+    createIntegration: vi.fn().mockResolvedValue(connections[0] ?? volundrConn),
     deleteIntegration: vi.fn().mockResolvedValue(undefined),
-    toggleIntegration: vi
-      .fn()
-      .mockResolvedValue(connections[0] ?? volundrConn),
+    toggleIntegration: vi.fn().mockResolvedValue(connections[0] ?? volundrConn),
     getTelegramSetup: vi.fn().mockResolvedValue({
       deeplink: 'https://t.me/TyrBot?start=tok',
       token: 'tok',
@@ -64,9 +58,7 @@ describe('TyrSettings', () => {
   });
 
   it('shows connected state for existing connections', async () => {
-    render(
-      <TyrSettings service={mockService([volundrConn, githubConn])} />,
-    );
+    render(<TyrSettings service={mockService([volundrConn, githubConn])} />);
 
     await waitFor(() => {
       const badges = screen.getAllByText('Connected');
@@ -79,18 +71,14 @@ describe('TyrSettings', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(
-        screen.getByText('Manage your integration connections'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('Manage your integration connections')).toBeInTheDocument();
     });
   });
 
   it('shows error from service', async () => {
     const service = {
       ...mockService(),
-      listIntegrations: vi
-        .fn()
-        .mockRejectedValue(new Error('Network error')),
+      listIntegrations: vi.fn().mockRejectedValue(new Error('Network error')),
     };
     render(<TyrSettings service={service} />);
 
