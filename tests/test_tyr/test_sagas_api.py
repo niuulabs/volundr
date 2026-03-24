@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import resolve_trackers
+from tyr.config import AuthConfig
 from tyr.domain.models import (
     Saga,
     SagaStatus,
@@ -121,6 +123,9 @@ def client(mock_tracker: MockTracker, saga_repo: MockSagaRepo) -> TestClient:
     app.include_router(create_sagas_router())
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+    mock_settings = MagicMock()
+    mock_settings.auth = AuthConfig(allow_anonymous_dev=True)
+    app.state.settings = mock_settings
     return TestClient(app)
 
 

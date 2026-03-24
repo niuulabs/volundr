@@ -1,13 +1,33 @@
-.section { composes: section from '../ConnectionSection.module.css'; }
-.title { composes: title from '../ConnectionSection.module.css'; }
-.description { composes: description from '../ConnectionSection.module.css'; }
-.connectBtn { composes: connectBtn from '../ConnectionSection.module.css'; }
-.connected { composes: connected from '../ConnectionSection.module.css'; }
-.statusRow { composes: statusRow from '../ConnectionSection.module.css'; }
-.statusBadge { composes: statusBadge from '../ConnectionSection.module.css'; }
-.meta { composes: meta from '../ConnectionSection.module.css'; }
-.disconnectBtn { composes: disconnectBtn from '../ConnectionSection.module.css'; }
-.error { composes: error from '../ConnectionSection.module.css'; }
+.section {
+  composes: section from '../ConnectionSection.module.css';
+}
+.title {
+  composes: title from '../ConnectionSection.module.css';
+}
+.description {
+  composes: description from '../ConnectionSection.module.css';
+}
+.connectBtn {
+  composes: connectBtn from '../ConnectionSection.module.css';
+}
+.connected {
+  composes: connected from '../ConnectionSection.module.css';
+}
+.statusRow {
+  composes: statusRow from '../ConnectionSection.module.css';
+}
+.statusBadge {
+  composes: statusBadge from '../ConnectionSection.module.css';
+}
+.meta {
+  composes: meta from '../ConnectionSection.module.css';
+}
+.disconnectBtn {
+  composes: disconnectBtn from '../ConnectionSection.module.css';
+}
+.error {
+  composes: error from '../ConnectionSection.module.css';
+}
 
 .linkContainer {
   display: flex;
