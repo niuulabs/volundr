@@ -235,3 +235,4 @@ docs/site/openapi.json
 # Helm dependency build artifacts
 charts/*/charts/
 charts/*/Chart.lock
+*.tgz
