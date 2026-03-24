@@ -1,10 +1,1 @@
-export const INTEGRATION_TYPES = {
-  CODE_FORGE: 'code_forge',
-  SOURCE_CONTROL: 'source_control',
-  MESSAGING: 'messaging',
-} as const;
-
-export const ADAPTER_PATHS = {
-  VOLUNDR_HTTP: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-  GITHUB: 'tyr.adapters.git.github.GitHubAdapter',
-} as const;
+export { INTEGRATION_TYPES, ADAPTER_PATHS } from '@/modules/shared/constants/integration.constants';

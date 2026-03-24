@@ -6,11 +6,11 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from niuu.domain.models import PersonalAccessToken, Principal
 from volundr.adapters.inbound.rest_pats import create_pats_router
-from volundr.domain.models import PersonalAccessToken, Principal
 
 
 def _mock_identity(principal: Principal | None = None):
@@ -45,10 +45,21 @@ def _make_app(
     pat_service: AsyncMock | None = None,
 ) -> tuple[FastAPI, AsyncMock]:
     service = pat_service or AsyncMock()
+    ident = identity or _mock_identity()
+
+    async def _extract_principal(request: Request) -> Principal:
+        auth = request.headers.get("authorization", "")
+        if not auth:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=401, detail="Missing auth")
+        token = auth.removeprefix("Bearer ")
+        return await ident.validate_token(token)
+
     app = FastAPI()
-    app.state.identity = identity or _mock_identity()
+    app.state.identity = ident
     app.state.pat_service = service
-    router = create_pats_router()
+    router = create_pats_router(_extract_principal)
     app.include_router(router)
     return app, service
 

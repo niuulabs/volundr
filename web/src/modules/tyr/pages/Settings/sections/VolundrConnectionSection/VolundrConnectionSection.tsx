@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import type { TyrIntegrationConnection } from '@/modules/tyr/ports';
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 import { INTEGRATION_TYPES, ADAPTER_PATHS } from '@/modules/tyr/constants';
 import { useConnectionForm } from '../useConnectionForm';
 import styles from './VolundrConnectionSection.module.css';
 
 interface VolundrConnectionSectionProps {
-  connection: TyrIntegrationConnection | null;
+  connection: IntegrationConnection | null;
   onConnect: (params: {
     integration_type: string;
     adapter: string;
@@ -57,7 +57,7 @@ export function VolundrConnectionSection({
             <span className={styles.detail}>{connection.config.url || 'Volundr instance'}</span>
           </div>
           <p className={styles.meta}>
-            Connected {new Date(connection.created_at).toLocaleDateString()}
+            Connected {new Date(connection.createdAt).toLocaleDateString()}
           </p>
           <button
             className={styles.disconnectBtn}

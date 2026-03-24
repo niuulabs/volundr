@@ -69,7 +69,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_sagas_router())
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
-    app.include_router(create_pats_router())
+    from tyr.adapters.inbound.auth import extract_principal as _extract_principal
+
+    app.include_router(create_pats_router(_extract_principal))
     app.include_router(create_integrations_router())
     app.include_router(
         create_telegram_setup_router(

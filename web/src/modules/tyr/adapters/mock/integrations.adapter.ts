@@ -1,13 +1,10 @@
-import type {
-  ITyrIntegrationService,
-  TyrIntegrationConnection,
-  TelegramSetupResult,
-} from '../../ports';
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
+import type { ITyrIntegrationService, TelegramSetupResult } from '../../ports';
 
 export class MockTyrIntegrationService implements ITyrIntegrationService {
-  private connections: TyrIntegrationConnection[] = [];
+  private connections: IntegrationConnection[] = [];
 
-  async listIntegrations(): Promise<TyrIntegrationConnection[]> {
+  async listIntegrations(): Promise<IntegrationConnection[]> {
     return [...this.connections];
   }
 
@@ -17,16 +14,17 @@ export class MockTyrIntegrationService implements ITyrIntegrationService {
     credential_name: string;
     credential_value: string;
     config: Record<string, string>;
-  }): Promise<TyrIntegrationConnection> {
-    const connection: TyrIntegrationConnection = {
+  }): Promise<IntegrationConnection> {
+    const connection: IntegrationConnection = {
       id: crypto.randomUUID(),
-      integration_type: params.integration_type,
+      integrationType: params.integration_type,
       adapter: params.adapter,
-      credential_name: params.credential_name,
+      credentialName: params.credential_name,
       config: params.config,
       enabled: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      slug: params.integration_type.replace(/_/g, '-'),
     };
     this.connections.push(connection);
     return connection;
@@ -36,13 +34,13 @@ export class MockTyrIntegrationService implements ITyrIntegrationService {
     this.connections = this.connections.filter(c => c.id !== id);
   }
 
-  async toggleIntegration(id: string, enabled: boolean): Promise<TyrIntegrationConnection> {
+  async toggleIntegration(id: string, enabled: boolean): Promise<IntegrationConnection> {
     const connection = this.connections.find(c => c.id === id);
     if (!connection) {
       throw new Error(`Integration ${id} not found`);
     }
     connection.enabled = enabled;
-    connection.updated_at = new Date().toISOString();
+    connection.updatedAt = new Date().toISOString();
     return { ...connection };
   }
 

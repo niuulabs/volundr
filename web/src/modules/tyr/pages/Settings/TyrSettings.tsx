@@ -15,11 +15,11 @@ export function TyrSettings({ service }: TyrSettingsProps) {
     useTyrIntegrations(service);
 
   const volundrConnection =
-    connections.find(c => c.integration_type === INTEGRATION_TYPES.CODE_FORGE) ?? null;
+    connections.find(c => c.integrationType === INTEGRATION_TYPES.CODE_FORGE) ?? null;
   const githubConnection =
-    connections.find(c => c.integration_type === INTEGRATION_TYPES.SOURCE_CONTROL) ?? null;
+    connections.find(c => c.integrationType === INTEGRATION_TYPES.SOURCE_CONTROL) ?? null;
   const telegramConnection =
-    connections.find(c => c.integration_type === INTEGRATION_TYPES.MESSAGING) ?? null;
+    connections.find(c => c.integrationType === INTEGRATION_TYPES.MESSAGING) ?? null;
 
   if (loading) {
     return (

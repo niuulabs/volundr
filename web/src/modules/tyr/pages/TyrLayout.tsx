@@ -9,7 +9,7 @@ const navItems = [
   { to: '/tyr/import', label: 'Import', icon: Download },
   { to: '/tyr/dispatcher', label: 'Dispatcher', icon: Radio },
   { to: '/tyr/sessions', label: 'Sessions', icon: Monitor },
-  { to: '/tyr/settings', label: 'Settings', icon: Settings },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function TyrLayout() {

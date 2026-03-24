@@ -1,13 +1,6 @@
-export interface TyrIntegrationConnection {
-  id: string;
-  integration_type: string;
-  adapter: string;
-  credential_name: string;
-  config: Record<string, string>;
-  enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
+
+export type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 
 export interface TelegramSetupResult {
   deeplink: string;
@@ -15,15 +8,15 @@ export interface TelegramSetupResult {
 }
 
 export interface ITyrIntegrationService {
-  listIntegrations(): Promise<TyrIntegrationConnection[]>;
+  listIntegrations(): Promise<IntegrationConnection[]>;
   createIntegration(params: {
     integration_type: string;
     adapter: string;
     credential_name: string;
     credential_value: string;
     config: Record<string, string>;
-  }): Promise<TyrIntegrationConnection>;
+  }): Promise<IntegrationConnection>;
   deleteIntegration(id: string): Promise<void>;
-  toggleIntegration(id: string, enabled: boolean): Promise<TyrIntegrationConnection>;
+  toggleIntegration(id: string, enabled: boolean): Promise<IntegrationConnection>;
   getTelegramSetup(): Promise<TelegramSetupResult>;
 }

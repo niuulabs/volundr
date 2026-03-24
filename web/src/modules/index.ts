@@ -16,6 +16,7 @@ import {
   ToggleLeft,
   LayoutDashboard,
   ShieldCheck,
+  Compass,
 } from 'lucide-react';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import { registerModule } from './shared/registry';
@@ -128,6 +129,15 @@ registerModule({
       default: m.LayoutSection,
     })),
   icon: LayoutDashboard,
+});
+
+registerModule({
+  key: 'tyr-connections',
+  load: () =>
+    import('@/modules/tyr/pages/Settings/TyrConnectionsWrapper').then(m => ({
+      default: m.TyrConnectionsWrapper,
+    })),
+  icon: Compass,
 });
 
 // Re-export registry utilities

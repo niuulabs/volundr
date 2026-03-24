@@ -12,6 +12,10 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field
 
+from niuu.adapters.inbound.rest_integration_models import (
+    IntegrationResponse,
+    IntegrationToggleRequest,
+)
 from niuu.domain.models import (
     IntegrationConnection,
     IntegrationType,
@@ -58,39 +62,6 @@ class IntegrationCreateRequest(BaseModel):
         default_factory=dict,
         description="Adapter-specific configuration",
     )
-
-
-class IntegrationToggleRequest(BaseModel):
-    """Request model for toggling the enabled flag."""
-
-    enabled: bool = Field(..., description="New enabled status")
-
-
-class IntegrationResponse(BaseModel):
-    """Response model for an integration connection."""
-
-    id: str
-    integration_type: str
-    adapter: str
-    credential_name: str
-    config: dict[str, str]
-    enabled: bool
-    created_at: str
-    updated_at: str
-
-    @classmethod
-    def from_connection(cls, conn: IntegrationConnection) -> IntegrationResponse:
-        """Create response from domain model."""
-        return cls(
-            id=conn.id,
-            integration_type=conn.integration_type,
-            adapter=conn.adapter,
-            credential_name=conn.credential_name,
-            config=conn.config,
-            enabled=conn.enabled,
-            created_at=conn.created_at.isoformat(),
-            updated_at=conn.updated_at.isoformat(),
-        )
 
 
 class TelegramSetupResponse(BaseModel):

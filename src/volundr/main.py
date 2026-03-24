@@ -640,9 +640,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.state.pat_validator = pat_validator
 
+            from volundr.adapters.inbound.auth import extract_principal as _extract_principal
             from volundr.adapters.inbound.rest_pats import create_pats_router
 
-            pats_router = create_pats_router()
+            pats_router = create_pats_router(_extract_principal)
             app.include_router(pats_router)
 
             git_router = create_git_router(git_workflow_service)

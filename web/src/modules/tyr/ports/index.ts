@@ -4,6 +4,6 @@ export type { ITyrSessionService } from './session.port';
 export type { ITrackerBrowserService } from './tracker.port';
 export type {
   ITyrIntegrationService,
-  TyrIntegrationConnection,
+  IntegrationConnection,
   TelegramSetupResult,
 } from './integrations.port';

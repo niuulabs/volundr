@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { ITyrIntegrationService, TyrIntegrationConnection } from '../ports';
+import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
+import type { ITyrIntegrationService } from '../ports';
 
 export interface UseTyrIntegrationsResult {
-  connections: TyrIntegrationConnection[];
+  connections: IntegrationConnection[];
   loading: boolean;
   error: string | null;
   createConnection: (params: {
@@ -18,7 +19,7 @@ export interface UseTyrIntegrationsResult {
 }
 
 export function useTyrIntegrations(service: ITyrIntegrationService): UseTyrIntegrationsResult {
-  const [connections, setConnections] = useState<TyrIntegrationConnection[]>([]);
+  const [connections, setConnections] = useState<IntegrationConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

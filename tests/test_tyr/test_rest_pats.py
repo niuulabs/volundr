@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from niuu.domain.models import PersonalAccessToken
 from tyr.adapters.inbound.rest_pats import create_pats_router
-from tyr.domain.models import PersonalAccessToken
 
 # -------------------------------------------------------------------
 # Fixtures
@@ -42,11 +42,23 @@ def mock_service() -> AsyncMock:
     return service
 
 
+async def _stub_extract_principal(request: Request):
+    """Stub auth — reads user_id from x-auth-user-id header, returns 401 if missing."""
+    from niuu.domain.models import Principal
+
+    user_id = request.headers.get("x-auth-user-id", "")
+    if not user_id:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=401, detail="Missing auth")
+    return Principal(user_id=user_id, email="", tenant_id="", roles=[])
+
+
 @pytest.fixture
 def client(mock_service: AsyncMock) -> TestClient:
     app = FastAPI()
     app.state.pat_service = mock_service
-    app.include_router(create_pats_router())
+    app.include_router(create_pats_router(_stub_extract_principal))
     return TestClient(app)
 
 

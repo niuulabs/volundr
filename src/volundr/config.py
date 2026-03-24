@@ -867,6 +867,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
         ),
         # User-scoped modules
         FeatureModuleConfig(
+            key="tokens",
+            label="Access Tokens",
+            icon="ShieldCheck",
+            scope="user",
+            default_enabled=True,
+            order=5,
+        ),
+        FeatureModuleConfig(
             key="credentials",
             label="Credentials",
             icon="KeyRound",
@@ -889,6 +897,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             scope="user",
             default_enabled=True,
             order=30,
+        ),
+        FeatureModuleConfig(
+            key="tyr-connections",
+            label="Tyr Connections",
+            icon="Compass",
+            scope="user",
+            default_enabled=True,
+            order=35,
         ),
         FeatureModuleConfig(
             key="appearance",
