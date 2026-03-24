@@ -75,13 +75,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "volundr.databaseSecretName" . }}
                   key: {{ .Values.database.passwordKey | default "password" }}
-            # Auth secrets (PAT signing key)
-            {{- if or .Values.auth.patSigningKey (and .Values.global .Values.global.auth .Values.global.auth.patSigningKey) }}
-            - name: AUTH__PAT_SIGNING_KEY
+            # PAT token issuer secret (client_secret for IDP token exchange)
+            {{- if .Values.pat.issuerSecretName }}
+            - name: PAT__TOKEN_ISSUER_KWARGS__CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "volundr.fullname" . }}-auth
-                  key: pat-signing-key
+                  name: {{ .Values.pat.issuerSecretName }}
+                  key: {{ .Values.pat.issuerSecretKey | default "client-secret" }}
             {{- end }}
             # Pod manager token (if configured)
             {{- if .Values.podManager.existingSecret }}

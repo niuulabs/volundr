@@ -89,7 +89,12 @@ def create_pats_router(
     ) -> CreatePATResponse:
         """Create a new personal access token. The raw token is shown once."""
         service: PATService = request.app.state.pat_service
-        pat, raw_token = await service.create(principal.user_id, body.name)
+        # Extract the user's current access token for IDP token exchange
+        auth_header = request.headers.get("authorization", "")
+        subject_token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+        pat, raw_token = await service.create(
+            principal.user_id, body.name, subject_token=subject_token
+        )
         return CreatePATResponse(
             id=str(pat.id),
             name=pat.name,

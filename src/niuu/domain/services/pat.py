@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
-
-import jwt
+from uuid import UUID
 
 from niuu.domain.models import PersonalAccessToken
 from niuu.ports.pat_repository import PATRepository
+from niuu.ports.token_issuer import TokenIssuer
 
 if TYPE_CHECKING:
     from niuu.domain.services.pat_validator import PATValidator
@@ -22,42 +20,50 @@ logger = logging.getLogger(__name__)
 class PATService:
     """Service for creating, listing, and revoking personal access tokens.
 
-    PATs are long-lived JWTs signed with the OIDC signing key so Envoy
-    can validate them with zero infrastructure changes.
+    Delegates token signing to the configured ``TokenIssuer`` (IDP adapter)
+    so the resulting JWT is signed by the IDP and recognised by Envoy.
     """
 
     def __init__(
         self,
         repo: PATRepository,
-        signing_key: str,
+        token_issuer: TokenIssuer,
         ttl_days: int = 365,
         validator: PATValidator | None = None,
     ) -> None:
-        if not signing_key:
-            raise ValueError("PAT signing key must not be empty — check your service config.")
         self._repo = repo
-        self._signing_key = signing_key
+        self._issuer = token_issuer
         self._ttl_days = ttl_days
         self._validator = validator
 
-    async def create(self, owner_id: str, name: str) -> tuple[PersonalAccessToken, str]:
-        """Create a new PAT. Returns (metadata, raw_jwt). raw_jwt shown once only."""
-        now = datetime.now(UTC)
-        jti = str(uuid4())
-        payload = {
-            "sub": owner_id,
-            "type": "pat",
-            "jti": jti,
-            "name": name,
-            "iat": now,
-            "exp": now + timedelta(days=self._ttl_days),
-        }
-        raw_jwt = jwt.encode(payload, self._signing_key, algorithm="HS256")
-        token_hash = hashlib.sha256(raw_jwt.encode()).hexdigest()
+    async def create(
+        self,
+        owner_id: str,
+        name: str,
+        *,
+        subject_token: str = "",
+    ) -> tuple[PersonalAccessToken, str]:
+        """Create a new PAT via the IDP. Returns (metadata, raw_jwt).
 
+        Args:
+            owner_id: User ID (IDP sub claim).
+            name: Human-readable label.
+            subject_token: The user's current access token, used by the
+                IDP token exchange to prove identity.
+
+        Returns:
+            Tuple of (PAT metadata, raw JWT shown once only).
+        """
+        issued = await self._issuer.issue_token(
+            subject_token=subject_token,
+            name=name,
+            ttl_days=self._ttl_days,
+        )
+
+        token_hash = hashlib.sha256(issued.raw_token.encode()).hexdigest()
         pat = await self._repo.create(owner_id, name, token_hash)
         logger.info("PAT created: id=%s owner=%s name=%s", pat.id, owner_id, name)
-        return pat, raw_jwt
+        return pat, issued.raw_token
 
     async def list(self, owner_id: str) -> list[PersonalAccessToken]:
         """List all PATs for an owner."""

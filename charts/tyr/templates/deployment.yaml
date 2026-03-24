@@ -58,12 +58,12 @@ spec:
                   key: {{ .Values.database.passwordKey | default "password" }}
             - name: VOLUNDR_URL
               value: {{ .Values.volundr.url | quote }}
-            {{- if or .Values.auth.patSigningKey (and .Values.global .Values.global.auth .Values.global.auth.patSigningKey) }}
-            - name: PAT__SIGNING_KEY
+            {{- if .Values.pat.issuerSecretName }}
+            - name: PAT__TOKEN_ISSUER_KWARGS__CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "tyr.fullname" . }}-auth
-                  key: pat-signing-key
+                  name: {{ .Values.pat.issuerSecretName }}
+                  key: {{ .Values.pat.issuerSecretKey | default "client-secret" }}
             {{- end }}
             {{- range .Values.credentialStore.secretKwargs }}
             - name: CREDENTIAL_STORE_SK_{{ .kwarg | upper }}

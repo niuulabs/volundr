@@ -951,9 +951,13 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
 class PATConfig(BaseModel):
     """Personal access token configuration."""
 
-    signing_key: str = Field(
-        default="",
-        description="Symmetric signing key for PAT JWTs (same key Envoy uses for validation).",
+    token_issuer_adapter: str = Field(
+        default="niuu.adapters.keycloak_token_issuer.KeycloakTokenIssuer",
+        description="Fully-qualified class path for the token issuer adapter.",
+    )
+    token_issuer_kwargs: dict = Field(
+        default_factory=dict,
+        description="Kwargs passed to the token issuer adapter constructor.",
     )
     ttl_days: int = Field(
         default=365,
