@@ -712,6 +712,24 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             },
             env_from_credentials={"OPENAI_API_KEY": "api_key"},
         ),
+        IntegrationDefinitionConfig(
+            slug="telegram",
+            name="Telegram",
+            description="Telegram messaging — notifications and session alerts",
+            integration_type="messaging",
+            icon="telegram",
+            credential_schema={
+                "required": ["chat_id"],
+                "properties": {
+                    "chat_id": {
+                        "label": "Chat ID",
+                        "type": "string",
+                        "description": "Telegram chat ID for notifications",
+                    },
+                },
+            },
+            auth_type="api_key",
+        ),
     ]
 
 
