@@ -62,7 +62,8 @@ class TestConversationHistoryPersistence:
         return Broker(settings=settings)
 
     def test_history_path(self, test_broker, tmp_path):
-        expected = tmp_path / CONVERSATION_HISTORY_DIR / f"conversation_{test_broker.session_id}.json"
+        sid = test_broker.session_id
+        expected = tmp_path / CONVERSATION_HISTORY_DIR / f"conversation_{sid}.json"
         assert test_broker._conversation_history_path() == expected
 
     def test_save_and_load_history(self, test_broker):

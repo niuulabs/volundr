@@ -411,7 +411,8 @@ class Broker:
 
     def _conversation_history_path(self) -> Path:
         """Return the path to the conversation history file, scoped to session ID."""
-        return Path(self.workspace_dir) / CONVERSATION_HISTORY_DIR / f"conversation_{self.session_id}.json"
+        filename = f"conversation_{self.session_id}.json"
+        return Path(self.workspace_dir) / CONVERSATION_HISTORY_DIR / filename
 
     def _load_conversation_history(self) -> None:
         """Load conversation history from disk if it exists."""

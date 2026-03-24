@@ -472,7 +472,8 @@ else
     echo "Checked out existing branch $BRANCH"
   else
     # Use explicit base branch, or fall back to remote HEAD
-    if [ -n "$BASE_BRANCH" ] && git -C "$WORKSPACE" rev-parse --verify "origin/$BASE_BRANCH" >/dev/null 2>&1; then
+    if [ -n "$BASE_BRANCH" ] && \
+      git -C "$WORKSPACE" rev-parse --verify "origin/$BASE_BRANCH" >/dev/null 2>&1; then
       FALLBACK="$BASE_BRANCH"
     else
       FALLBACK=$(git -C "$WORKSPACE" remote show origin | sed -n 's/.*HEAD branch: //p')

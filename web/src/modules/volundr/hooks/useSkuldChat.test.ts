@@ -189,7 +189,7 @@ describe('useSkuldChat', () => {
     expect(sendJson).not.toHaveBeenCalled();
   });
 
-  it('ignores send when already running', () => {
+  it('allows send even when already running', () => {
     const { handlers, sendJson } = setupMock();
     const { result } = renderHook(() => useSkuldChat('wss://test/session'));
 
@@ -198,8 +198,8 @@ describe('useSkuldChat', () => {
     expect(sendJson).toHaveBeenCalledTimes(1);
 
     act(() => result.current.sendMessage('second'));
-    expect(sendJson).toHaveBeenCalledTimes(1);
-    expect(result.current.messages).toHaveLength(1);
+    expect(sendJson).toHaveBeenCalledTimes(2);
+    expect(result.current.messages).toHaveLength(2);
   });
 
   it('ignores empty/whitespace messages', () => {

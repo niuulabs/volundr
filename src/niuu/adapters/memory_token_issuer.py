@@ -45,7 +45,10 @@ class MemoryTokenIssuer(TokenIssuer):
             claims = jwt.decode(subject_token, options={"verify_signature": False})
             sub = claims.get("sub", "")
         except Exception:
-            sub = hashlib.sha256(subject_token.encode()).hexdigest()[:16] if subject_token else "dev"
+            sub = (
+                hashlib.sha256(subject_token.encode()).hexdigest()[:16]
+                if subject_token else "dev"
+            )
 
         now = int(time.time())
         jti = str(uuid4())
