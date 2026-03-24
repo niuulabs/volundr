@@ -49,6 +49,9 @@ class FakePATRepository(PATRepository):
             return True
         return False
 
+    async def exists_by_hash(self, token_hash: str) -> bool:
+        return token_hash in self.hashes.values()
+
 
 SIGNING_KEY = "test-secret-key-for-pats-minimum-32-bytes!"
 
