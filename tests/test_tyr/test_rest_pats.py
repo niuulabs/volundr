@@ -216,14 +216,10 @@ class TestRevokeToken:
 
 
 class TestAuthRequired:
-    def test_no_auth_headers_uses_default_principal(
+    def test_no_auth_headers_returns_401(
         self, client: TestClient, mock_service: AsyncMock
     ):
-        """Without Envoy headers the fallback principal (user_id='default') is used."""
-        mock_service.list.return_value = []
-
+        """Without Envoy headers and no allow_anonymous_dev, returns 401."""
         resp = client.get("/api/v1/users/tokens")
-
-        # Should succeed with fallback principal
-        assert resp.status_code == 200
-        mock_service.list.assert_called_once_with("default")
+        assert resp.status_code == 401
+        mock_service.list.assert_not_called()

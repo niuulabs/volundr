@@ -1,5 +1,6 @@
 import type { ITyrIntegrationService } from '@/modules/tyr/ports';
 import { useTyrIntegrations } from '@/modules/tyr/hooks/useTyrIntegrations';
+import { INTEGRATION_TYPES } from '@/modules/tyr/constants';
 import { VolundrConnectionSection } from './sections/VolundrConnectionSection';
 import { GitHubConnectionSection } from './sections/GitHubConnectionSection';
 import { TelegramConnectionSection } from './sections/TelegramConnectionSection';
@@ -13,9 +14,9 @@ export function TyrSettings({ service }: TyrSettingsProps) {
   const { connections, loading, error, createConnection, deleteConnection } =
     useTyrIntegrations(service);
 
-  const volundrConnection = connections.find(c => c.integration_type === 'code_forge') ?? null;
-  const githubConnection = connections.find(c => c.integration_type === 'source_control') ?? null;
-  const telegramConnection = connections.find(c => c.integration_type === 'messaging') ?? null;
+  const volundrConnection = connections.find(c => c.integration_type === INTEGRATION_TYPES.CODE_FORGE) ?? null;
+  const githubConnection = connections.find(c => c.integration_type === INTEGRATION_TYPES.SOURCE_CONTROL) ?? null;
+  const telegramConnection = connections.find(c => c.integration_type === INTEGRATION_TYPES.MESSAGING) ?? null;
 
   if (loading) {
     return (

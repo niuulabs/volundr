@@ -48,6 +48,9 @@ data:
     cerbos:
       url: {{ .Values.cerbos.url | default "http://localhost:3592" | quote }}
 
+    auth:
+      pat_ttl_days: {{ .Values.auth.patTtlDays | default 365 }}
+
     credential_store:
       adapter: {{ .Values.credentialStore.adapter | quote }}
       kwargs: {{ .Values.credentialStore.kwargs | toJson }}

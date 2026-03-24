@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS personal_access_tokens (
     name         TEXT        NOT NULL,
     token_hash   TEXT        NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at   TIMESTAMPTZ,
     last_used_at TIMESTAMPTZ
 );
 

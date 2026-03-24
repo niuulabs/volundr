@@ -309,11 +309,8 @@ class TestTelegramSetup:
 
 
 class TestAuthRequired:
-    def test_no_auth_uses_default_principal(self, client: TestClient, mock_repo: AsyncMock):
-        """Without Envoy headers the fallback principal (user_id='default') is used."""
-        mock_repo.list_connections.return_value = []
-
+    def test_no_auth_returns_401(self, client: TestClient, mock_repo: AsyncMock):
+        """Without Envoy headers and no allow_anonymous_dev, returns 401."""
         resp = client.get("/api/v1/tyr/integrations")
-
-        assert resp.status_code == 200
-        mock_repo.list_connections.assert_called_once_with("default")
+        assert resp.status_code == 401
+        mock_repo.list_connections.assert_not_called()

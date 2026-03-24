@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { TyrIntegrationConnection } from '@/modules/tyr/ports';
+import { INTEGRATION_TYPES, ADAPTER_PATHS } from '@/modules/tyr/constants';
+import { useConnectionForm } from '../useConnectionForm';
 import styles from './VolundrConnectionSection.module.css';
 
 interface VolundrConnectionSectionProps {
@@ -21,39 +23,25 @@ export function VolundrConnectionSection({
 }: VolundrConnectionSectionProps) {
   const [url, setUrl] = useState('http://volundr');
   const [pat, setPat] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { error, submitting, disconnecting, setError, handleDisconnect, wrapSubmit } =
+    useConnectionForm(connection?.id ?? null, onDisconnect);
 
   const handleConnect = async () => {
     if (!pat.trim()) {
       setError('PAT is required');
       return;
     }
-    setError(null);
-    setSubmitting(true);
-    try {
-      await onConnect({
-        integration_type: 'code_forge',
-        adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
+    const result = await wrapSubmit(() =>
+      onConnect({
+        integration_type: INTEGRATION_TYPES.CODE_FORGE,
+        adapter: ADAPTER_PATHS.VOLUNDR_HTTP,
         credential_name: 'volundr-pat',
         credential_value: pat,
         config: { url: url.trim() },
-      });
+      }),
+    );
+    if (result !== undefined) {
       setPat('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    if (!connection) return;
-    setError(null);
-    try {
-      await onDisconnect(connection.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect');
     }
   };
 
@@ -71,8 +59,13 @@ export function VolundrConnectionSection({
           <p className={styles.meta}>
             Connected {new Date(connection.created_at).toLocaleDateString()}
           </p>
-          <button className={styles.disconnectBtn} onClick={handleDisconnect} type="button">
-            Disconnect
+          <button
+            className={styles.disconnectBtn}
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            type="button"
+          >
+            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
           </button>
         </div>
         {error && <p className={styles.error}>{error}</p>}

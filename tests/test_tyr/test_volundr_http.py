@@ -19,7 +19,7 @@ def adapter() -> VolundrHTTPAdapter:
 
 
 # -------------------------------------------------------------------
-# set_auth_token / _headers
+# _headers
 # -------------------------------------------------------------------
 
 
@@ -27,39 +27,24 @@ class TestAuthHeaders:
     def test_no_token_by_default(self, adapter: VolundrHTTPAdapter):
         assert adapter._headers() == {}
 
-    def test_set_token(self, adapter: VolundrHTTPAdapter):
-        adapter.set_auth_token("tok-123")
-        headers = adapter._headers()
+    def test_auth_token_provides_header(self, adapter: VolundrHTTPAdapter):
+        headers = adapter._headers(auth_token="tok-123")
         assert headers["Authorization"] == "Bearer tok-123"
-
-    def test_overwrite_token(self, adapter: VolundrHTTPAdapter):
-        adapter.set_auth_token("old")
-        adapter.set_auth_token("new")
-        assert adapter._headers()["Authorization"] == "Bearer new"
 
     def test_api_key_provides_header(self):
         adapter = VolundrHTTPAdapter(base_url=BASE_URL, api_key="pat-abc")
         assert adapter._headers()["Authorization"] == "Bearer pat-abc"
 
-    def test_runtime_token_overrides_api_key(self):
+    def test_auth_token_overrides_api_key(self):
         adapter = VolundrHTTPAdapter(base_url=BASE_URL, api_key="pat-abc")
-        adapter.set_auth_token("runtime-tok")
-        assert adapter._headers()["Authorization"] == "Bearer runtime-tok"
+        assert adapter._headers(auth_token="runtime-tok")["Authorization"] == "Bearer runtime-tok"
 
-    def test_clear_auth_token_restores_api_key(self):
+    def test_none_auth_token_falls_back_to_api_key(self):
         adapter = VolundrHTTPAdapter(base_url=BASE_URL, api_key="pat-abc")
-        adapter.set_auth_token("runtime-tok")
-        adapter.clear_auth_token()
-        assert adapter._headers()["Authorization"] == "Bearer pat-abc"
+        assert adapter._headers(auth_token=None)["Authorization"] == "Bearer pat-abc"
 
-    def test_clear_auth_token_no_api_key(self, adapter: VolundrHTTPAdapter):
-        adapter.set_auth_token("runtime-tok")
-        adapter.clear_auth_token()
-        assert adapter._headers() == {}
-
-    def test_set_auth_token_no_api_key(self, adapter: VolundrHTTPAdapter):
-        adapter.set_auth_token("runtime-tok")
-        assert adapter._headers()["Authorization"] == "Bearer runtime-tok"
+    def test_no_auth_token_no_api_key(self, adapter: VolundrHTTPAdapter):
+        assert adapter._headers(auth_token=None) == {}
 
 
 # -------------------------------------------------------------------
@@ -142,7 +127,7 @@ class TestSpawnSession:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_sends_auth_header(self, adapter: VolundrHTTPAdapter):
+    async def test_sends_auth_token_header(self, adapter: VolundrHTTPAdapter):
         route = respx.post(SESSIONS_URL).mock(
             return_value=httpx.Response(
                 200,
@@ -153,7 +138,6 @@ class TestSpawnSession:
                 },
             )
         )
-        adapter.set_auth_token("my-token")
 
         req = SpawnRequest(
             name="n",
@@ -165,7 +149,7 @@ class TestSpawnSession:
             system_prompt="",
             initial_prompt="",
         )
-        await adapter.spawn_session(req)
+        await adapter.spawn_session(req, auth_token="my-token")
 
         sent = route.calls[0].request
         assert sent.headers["Authorization"] == "Bearer my-token"
@@ -305,11 +289,10 @@ class TestListSessions:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_sends_auth_header(self, adapter: VolundrHTTPAdapter):
+    async def test_sends_auth_token_header(self, adapter: VolundrHTTPAdapter):
         route = respx.get(SESSIONS_URL).mock(return_value=httpx.Response(200, json=[]))
-        adapter.set_auth_token("list-tok")
 
-        await adapter.list_sessions()
+        await adapter.list_sessions(auth_token="list-tok")
 
         sent = route.calls[0].request
         assert sent.headers["Authorization"] == "Bearer list-tok"

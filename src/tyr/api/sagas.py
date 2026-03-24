@@ -268,8 +268,15 @@ def create_sagas_router() -> APIRouter:
         principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
     ) -> None:
-        """Delete a saga reference."""
-        deleted = await repo.delete_saga(UUID(saga_id))
+        """Delete a saga reference (scoped to the current user)."""
+        try:
+            parsed_id = UUID(saga_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Saga not found: {saga_id}",
+            )
+        deleted = await repo.delete_saga(parsed_id, owner_id=principal.user_id)
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

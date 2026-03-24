@@ -183,10 +183,20 @@ class TestRevoke:
     async def test_logs_on_successful_revoke(self, service: PATService):
         pat, _ = await service.create("user-1", "tok")
 
-        with patch("tyr.domain.services.pat.logger") as mock_logger:
+        with patch("niuu.domain.services.pat.logger") as mock_logger:
             await service.revoke(pat.id, "user-1")
             mock_logger.info.assert_called_once()
             assert "revoked" in mock_logger.info.call_args[0][0].lower()
+
+
+class TestSigningKeyValidation:
+    def test_rejects_empty_signing_key(self, fake_repo: FakePATRepository):
+        with pytest.raises(ValueError, match="signing key must not be empty"):
+            PATService(repo=fake_repo, signing_key="")
+
+    def test_rejects_none_signing_key(self, fake_repo: FakePATRepository):
+        with pytest.raises(ValueError, match="signing key must not be empty"):
+            PATService(repo=fake_repo, signing_key="")
 
 
 class TestDefaultTtl:

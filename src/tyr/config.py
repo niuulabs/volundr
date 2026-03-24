@@ -104,6 +104,13 @@ class AuthConfig(BaseModel):
         default=365,
         description="Default PAT lifetime in days.",
     )
+    allow_anonymous_dev: bool = Field(
+        default=False,
+        description=(
+            "When True, requests without auth headers fall back to a default developer "
+            "identity. Must be False in production."
+        ),
+    )
 
 
 class TelegramConfig(BaseModel):

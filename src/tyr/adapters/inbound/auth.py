@@ -1,12 +1,13 @@
 """FastAPI authentication dependency for Tyr.
 
 Reads identity from Envoy-injected trusted headers. In dev/test (no Envoy),
-falls back to allow-all with a default identity.
+falls back to allow-all with a default identity only when
+``auth.allow_anonymous_dev`` is explicitly enabled.
 """
 
 from __future__ import annotations
 
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 
 from niuu.domain.models import Principal
 
@@ -14,10 +15,19 @@ from niuu.domain.models import Principal
 async def extract_principal(request: Request) -> Principal:
     """Read identity from Envoy-injected trusted headers.
 
-    In dev/test (no Envoy), falls back to allow-all with a default identity.
+    When ``auth.allow_anonymous_dev`` is True in settings, missing headers fall
+    back to a default developer identity. Otherwise returns 401.
     """
     user_id = request.headers.get("x-auth-user-id", "")
     if not user_id:
+        allow_anon = getattr(request.app.state, "settings", None)
+        if allow_anon is not None:
+            allow_anon = allow_anon.auth.allow_anonymous_dev
+        if not allow_anon:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing authentication headers",
+            )
         return Principal(
             user_id="default",
             email="",

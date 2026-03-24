@@ -1,125 +1,14 @@
-.section {
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background-color: var(--color-bg-secondary);
-}
-
-.title {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 var(--space-2) 0;
-}
-
-.description {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  margin: 0 0 var(--space-4) 0;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.label {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.input {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
-}
-
-.input::placeholder {
-  color: var(--color-text-muted);
-}
-
-.connectBtn {
-  align-self: flex-start;
-  padding: var(--space-2) var(--space-4);
-  border: none;
-  border-radius: var(--radius-md);
-  background-color: var(--color-brand);
-  color: var(--color-bg-primary);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity var(--transition-fast);
-}
-
-.connectBtn:hover {
-  opacity: 0.9;
-}
-
-.connectBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.connected {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.statusRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.statusBadge {
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
-
-.statusBadge[data-status='connected'] {
-  background-color: color-mix(in srgb, var(--color-accent-emerald) 20%, transparent);
-  color: var(--color-accent-emerald);
-}
-
-.detail {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-}
-
-.meta {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  margin: 0;
-}
-
-.disconnectBtn {
-  align-self: flex-start;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-accent-red);
-  border-radius: var(--radius-md);
-  background-color: transparent;
-  color: var(--color-accent-red);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-}
-
-.disconnectBtn:hover {
-  background-color: color-mix(in srgb, var(--color-accent-red) 10%, transparent);
-}
-
-.error {
-  font-size: var(--text-sm);
-  color: var(--color-accent-red);
-  margin: var(--space-2) 0 0 0;
-}
+.section { composes: section from '../ConnectionSection.module.css'; }
+.title { composes: title from '../ConnectionSection.module.css'; }
+.description { composes: description from '../ConnectionSection.module.css'; }
+.form { composes: form from '../ConnectionSection.module.css'; }
+.label { composes: label from '../ConnectionSection.module.css'; }
+.input { composes: input from '../ConnectionSection.module.css'; }
+.connectBtn { composes: connectBtn from '../ConnectionSection.module.css'; }
+.connected { composes: connected from '../ConnectionSection.module.css'; }
+.statusRow { composes: statusRow from '../ConnectionSection.module.css'; }
+.statusBadge { composes: statusBadge from '../ConnectionSection.module.css'; }
+.detail { composes: detail from '../ConnectionSection.module.css'; }
+.meta { composes: meta from '../ConnectionSection.module.css'; }
+.disconnectBtn { composes: disconnectBtn from '../ConnectionSection.module.css'; }
+.error { composes: error from '../ConnectionSection.module.css'; }

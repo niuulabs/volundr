@@ -102,13 +102,7 @@ class TelegramSetupResponse(BaseModel):
 
 # --- Router factory ---
 
-TELEGRAM_SETUP_TTL = 300  # 5 minutes
-
-
-def create_integrations_router(
-    telegram_bot_username: str = "TyrBot",
-    telegram_hmac_key: str = "",
-) -> APIRouter:
+def create_integrations_router() -> APIRouter:
     """Create FastAPI router for Tyr integration management endpoints."""
     router = APIRouter(
         prefix="/api/v1/tyr/integrations",
@@ -187,14 +181,21 @@ def create_integrations_router(
         principal: Principal = Depends(extract_principal),
         request: Request = None,
     ) -> None:
-        """Delete an integration connection."""
+        """Delete an integration connection and its stored credential."""
         repo = _get_repo(request)
+        credential_store = _get_credential_store(request)
         existing = await repo.get_connection(connection_id)
         if existing is None or existing.user_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
             )
+        # Clean up the stored credential before removing the connection
+        await credential_store.delete(
+            owner_type="user",
+            owner_id=principal.user_id,
+            name=existing.credential_name,
+        )
         await repo.delete_connection(connection_id)
 
     @router.patch(
@@ -252,9 +253,14 @@ def create_telegram_setup_router(
         principal: Principal = Depends(extract_principal),
     ) -> TelegramSetupResponse:
         """Generate a signed Telegram deeplink for bot setup."""
+        if not telegram_hmac_key:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Telegram HMAC key not configured",
+            )
         ts = str(int(time.time()))
         payload = f"{principal.user_id}:{ts}"
-        key = telegram_hmac_key.encode() if telegram_hmac_key else b"tyr-telegram-dev"
+        key = telegram_hmac_key.encode()
         sig = hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()[:16]
         token = f"{payload}:{sig}"
         deeplink = f"https://t.me/{telegram_bot_username}?start={token}"

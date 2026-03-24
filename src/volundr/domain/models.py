@@ -1392,15 +1392,8 @@ class SessionSpec:
         return SessionSpec(values=merged_values, pod_spec=merged_pod_spec)
 
 
-@dataclass(frozen=True)
-class PersonalAccessToken:
-    """A personal access token for API authentication."""
-
-    id: UUID
-    owner_id: str
-    name: str
-    created_at: datetime
-    last_used_at: datetime | None = None
+# PersonalAccessToken — re-exported from shared niuu module
+from niuu.domain.models import PersonalAccessToken  # noqa: F401, E402
 
 
 def _deep_merge(base: dict, override: dict) -> None:

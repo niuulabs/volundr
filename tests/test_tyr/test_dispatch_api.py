@@ -46,13 +46,13 @@ class MockVolundr(VolundrPort):
     def __init__(self) -> None:
         self.sessions: list[VolundrSession] = []
         self.spawned: list[SpawnRequest] = []
-        self.auth_token: str | None = None
+        self.last_auth_token: str | None = None
         self.fail_spawn: bool = False
 
-    def set_auth_token(self, token: str) -> None:
-        self.auth_token = token
-
-    async def spawn_session(self, request: SpawnRequest) -> VolundrSession:
+    async def spawn_session(
+        self, request: SpawnRequest, *, auth_token: str | None = None,
+    ) -> VolundrSession:
+        self.last_auth_token = auth_token
         if self.fail_spawn:
             raise RuntimeError("spawn failed")
         self.spawned.append(request)
@@ -65,13 +65,18 @@ class MockVolundr(VolundrPort):
         self.sessions.append(session)
         return session
 
-    async def get_session(self, session_id: str) -> VolundrSession | None:
+    async def get_session(
+        self, session_id: str, *, auth_token: str | None = None,
+    ) -> VolundrSession | None:
         return next(
             (s for s in self.sessions if s.id == session_id),
             None,
         )
 
-    async def list_sessions(self) -> list[VolundrSession]:
+    async def list_sessions(
+        self, *, auth_token: str | None = None,
+    ) -> list[VolundrSession]:
+        self.last_auth_token = auth_token
         return list(self.sessions)
 
 

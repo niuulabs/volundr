@@ -15,11 +15,11 @@ import pytest
 import respx
 
 from niuu.domain.models import IntegrationConnection, IntegrationType
-from niuu.ports.credentials import CredentialStorePort
-from niuu.ports.integrations import IntegrationRepository
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.ports.volundr import SpawnRequest
+
+from tests.test_tyr.conftest import StubCredentialStore, StubIntegrationRepo
 
 # ---------------------------------------------------------------------------
 # Stubs
@@ -62,59 +62,6 @@ def _spawn_request() -> SpawnRequest:
         system_prompt="You are a senior software engineer.",
         initial_prompt="Implement the feature.",
     )
-
-
-class StubIntegrationRepo(IntegrationRepository):
-    """In-memory integration repository for testing."""
-
-    def __init__(self, connections: list[IntegrationConnection] | None = None) -> None:
-        self._connections = connections or []
-
-    async def list_connections(
-        self,
-        user_id: str,
-        integration_type: IntegrationType | None = None,
-    ) -> list[IntegrationConnection]:
-        return [
-            c
-            for c in self._connections
-            if c.user_id == user_id
-            and (integration_type is None or c.integration_type == integration_type)
-        ]
-
-    async def get_connection(self, connection_id: str) -> IntegrationConnection | None:
-        return next((c for c in self._connections if c.id == connection_id), None)
-
-    async def save_connection(self, connection: IntegrationConnection) -> IntegrationConnection:
-        return connection
-
-    async def delete_connection(self, connection_id: str) -> None:
-        pass
-
-
-class StubCredentialStore(CredentialStorePort):
-    """In-memory credential store for testing."""
-
-    def __init__(self, values: dict[str, dict[str, str]] | None = None) -> None:
-        self._values = values or {}
-
-    async def get_value(self, owner_type: str, owner_id: str, name: str) -> dict[str, str] | None:
-        return self._values.get(f"{owner_type}:{owner_id}:{name}")
-
-    async def store(self, *args, **kwargs):  # noqa: ANN002, ANN003
-        raise NotImplementedError
-
-    async def get(self, *args, **kwargs):  # noqa: ANN002, ANN003
-        raise NotImplementedError
-
-    async def delete(self, *args, **kwargs):  # noqa: ANN002, ANN003
-        raise NotImplementedError
-
-    async def list(self, *args, **kwargs):  # noqa: ANN002, ANN003
-        raise NotImplementedError
-
-    async def health_check(self) -> bool:
-        return True
 
 
 # ---------------------------------------------------------------------------
@@ -163,9 +110,8 @@ class TestAutonomousDispatchWithPAT:
         sent = route.calls[0].request
         assert sent.headers["Authorization"] == f"Bearer {STORED_PAT}"
 
-        # Verify adapter state: api_key is set, no runtime token was needed
+        # Verify adapter state: api_key is set
         assert adapter._api_key == STORED_PAT
-        assert adapter._runtime_token is None
 
         # Verify the session was created correctly
         assert session.id == "ses-auto-1"
@@ -184,20 +130,17 @@ class TestAutonomousDispatchWithPAT:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_manual_dispatch_runtime_token_overrides_stored_pat(self) -> None:
-        """Runtime token from set_auth_token takes precedence over stored PAT;
-        clearing it restores the stored PAT."""
+    async def test_per_request_auth_token_overrides_stored_pat(self) -> None:
+        """Per-request auth_token takes precedence over stored api_key."""
         adapter = VolundrHTTPAdapter(base_url=VOLUNDR_BASE, api_key=STORED_PAT)
 
         # Stored PAT is the default
         assert adapter._headers()["Authorization"] == f"Bearer {STORED_PAT}"
 
-        # Runtime token overrides stored PAT
-        adapter.set_auth_token("request-token")
-        assert adapter._headers()["Authorization"] == "Bearer request-token"
+        # Per-request auth_token overrides stored PAT
+        assert adapter._headers(auth_token="request-token")["Authorization"] == "Bearer request-token"
 
-        # Clearing restores stored PAT
-        adapter.clear_auth_token()
+        # Without auth_token, falls back to stored PAT
         assert adapter._headers()["Authorization"] == f"Bearer {STORED_PAT}"
 
     @pytest.mark.asyncio

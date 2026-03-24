@@ -82,6 +82,7 @@ class Saga:
     status: SagaStatus
     confidence: float
     created_at: datetime
+    owner_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -195,7 +196,7 @@ class TrackerIssue:
     status: str
     status_type: str = ""
     assignee: str | None = None
-    labels: list[str] = None  # type: ignore[assignment]
+    labels: list[str] | None = None
     priority: int = 0
     priority_label: str = ""
     estimate: float | None = None
@@ -229,16 +230,7 @@ class SagaStructure:
 
 
 # ---------------------------------------------------------------------------
-# Personal access tokens
+# Personal access tokens — re-exported from shared niuu module
 # ---------------------------------------------------------------------------
 
-
-@dataclass(frozen=True)
-class PersonalAccessToken:
-    """A personal access token for API authentication."""
-
-    id: UUID
-    owner_id: str
-    name: str
-    created_at: datetime
-    last_used_at: datetime | None = None
+from niuu.domain.models import PersonalAccessToken  # noqa: F401, E402

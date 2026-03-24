@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
+from tyr.config import AuthConfig
 
 
-@pytest.fixture
-def app() -> FastAPI:
+def _create_app(*, allow_anonymous_dev: bool = False) -> FastAPI:
     """Create a minimal app with an endpoint using extract_principal."""
     app = FastAPI()
+    settings = MagicMock()
+    settings.auth = AuthConfig(allow_anonymous_dev=allow_anonymous_dev)
+    app.state.settings = settings
 
     @app.get("/whoami")
     async def whoami(principal: Principal = Depends(extract_principal)) -> dict:
@@ -28,8 +33,25 @@ def app() -> FastAPI:
 
 
 @pytest.fixture
+def app() -> FastAPI:
+    """Default app with anonymous dev DISABLED (production-like)."""
+    return _create_app(allow_anonymous_dev=False)
+
+
+@pytest.fixture
 def client(app: FastAPI) -> TestClient:
     return TestClient(app)
+
+
+@pytest.fixture
+def dev_app() -> FastAPI:
+    """App with anonymous dev ENABLED (dev/test mode)."""
+    return _create_app(allow_anonymous_dev=True)
+
+
+@pytest.fixture
+def dev_client(dev_app: FastAPI) -> TestClient:
+    return TestClient(dev_app)
 
 
 class TestExtractPrincipalWithHeaders:
@@ -77,11 +99,26 @@ class TestExtractPrincipalWithHeaders:
         assert data["roles"] == ["volundr:developer"]
 
 
-class TestExtractPrincipalFallback:
-    """Tests for extract_principal when no Envoy headers are present (dev/test)."""
+class TestExtractPrincipalProduction:
+    """Tests for extract_principal when allow_anonymous_dev=False (production)."""
 
-    def test_returns_default_principal(self, client: TestClient):
+    def test_returns_401_without_auth_headers(self, client: TestClient):
         resp = client.get("/whoami")
+        assert resp.status_code == 401
+
+    def test_returns_401_with_empty_user_id(self, client: TestClient):
+        resp = client.get(
+            "/whoami",
+            headers={"x-auth-user-id": ""},
+        )
+        assert resp.status_code == 401
+
+
+class TestExtractPrincipalDevFallback:
+    """Tests for extract_principal when allow_anonymous_dev=True (dev/test)."""
+
+    def test_returns_default_principal(self, dev_client: TestClient):
+        resp = dev_client.get("/whoami")
         assert resp.status_code == 200
         data = resp.json()
         assert data["user_id"] == "default"
@@ -89,8 +126,8 @@ class TestExtractPrincipalFallback:
         assert data["tenant_id"] == ""
         assert data["roles"] == ["volundr:developer"]
 
-    def test_empty_user_id_header_triggers_fallback(self, client: TestClient):
-        resp = client.get(
+    def test_empty_user_id_header_triggers_fallback(self, dev_client: TestClient):
+        resp = dev_client.get(
             "/whoami",
             headers={"x-auth-user-id": ""},
         )

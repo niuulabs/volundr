@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { TyrIntegrationConnection } from '@/modules/tyr/ports';
+import { INTEGRATION_TYPES, ADAPTER_PATHS } from '@/modules/tyr/constants';
+import { useConnectionForm } from '../useConnectionForm';
 import styles from './GitHubConnectionSection.module.css';
 
 interface GitHubConnectionSectionProps {
@@ -21,40 +23,26 @@ export function GitHubConnectionSection({
 }: GitHubConnectionSectionProps) {
   const [pat, setPat] = useState('');
   const [org, setOrg] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { error, submitting, disconnecting, setError, handleDisconnect, wrapSubmit } =
+    useConnectionForm(connection?.id ?? null, onDisconnect);
 
   const handleConnect = async () => {
     if (!pat.trim()) {
       setError('GitHub PAT is required');
       return;
     }
-    setError(null);
-    setSubmitting(true);
-    try {
-      await onConnect({
-        integration_type: 'source_control',
-        adapter: 'tyr.adapters.git.github.GitHubAdapter',
+    const result = await wrapSubmit(() =>
+      onConnect({
+        integration_type: INTEGRATION_TYPES.SOURCE_CONTROL,
+        adapter: ADAPTER_PATHS.GITHUB,
         credential_name: 'github-pat',
         credential_value: pat,
         config: org.trim() ? { org: org.trim() } : {},
-      });
+      }),
+    );
+    if (result !== undefined) {
       setPat('');
       setOrg('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    if (!connection) return;
-    setError(null);
-    try {
-      await onDisconnect(connection.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect');
     }
   };
 
@@ -74,8 +62,13 @@ export function GitHubConnectionSection({
           <p className={styles.meta}>
             Connected {new Date(connection.created_at).toLocaleDateString()}
           </p>
-          <button className={styles.disconnectBtn} onClick={handleDisconnect} type="button">
-            Disconnect
+          <button
+            className={styles.disconnectBtn}
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            type="button"
+          >
+            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
           </button>
         </div>
         {error && <p className={styles.error}>{error}</p>}

@@ -195,17 +195,16 @@ def create_dispatch_router() -> APIRouter:
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> list[QueueItem]:
         """Get the list of issues ready for dispatch across all sagas."""
-        # Forward the user's auth token to Volundr
+        # Extract user's auth token for per-request forwarding to Volundr
         auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer ") and hasattr(volundr, "set_auth_token"):
-            volundr.set_auth_token(auth[7:])
+        auth_token = auth[7:] if auth.startswith("Bearer ") else None
 
         sagas = await repo.list_sagas(owner_id=principal.user_id)
         if not sagas:
             return []
 
         # Get all active Volundr sessions to know what's already running
-        sessions = await volundr.list_sessions()
+        sessions = await volundr.list_sessions(auth_token=auth_token)
         active_statuses = {"running", "starting", "creating"}
         active_issue_ids = {
             s.tracker_issue_id
@@ -274,8 +273,7 @@ def create_dispatch_router() -> APIRouter:
     ) -> list[DispatchResult]:
         """Approve and dispatch selected issues — spawns Volundr sessions."""
         auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer ") and hasattr(volundr, "set_auth_token"):
-            volundr.set_auth_token(auth[7:])
+        auth_token = auth[7:] if auth.startswith("Bearer ") else None
 
         # Merge with server defaults
         settings = request.app.state.settings
@@ -315,7 +313,7 @@ def create_dispatch_router() -> APIRouter:
 
             try:
                 session = await volundr.spawn_session(
-                    SpawnRequest(
+                    request=SpawnRequest(
                         name=session_name,
                         repo=item.repo,
                         branch=saga.feature_branch,
@@ -324,7 +322,8 @@ def create_dispatch_router() -> APIRouter:
                         tracker_issue_url=issue.url,
                         system_prompt=effective_prompt,
                         initial_prompt=_build_prompt(issue, item.repo, saga.feature_branch),
-                    )
+                    ),
+                    auth_token=auth_token,
                 )
                 results.append(
                     DispatchResult(

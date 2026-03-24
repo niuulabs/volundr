@@ -34,10 +34,16 @@ class VolundrPort(ABC):
     """Abstract interface for Volundr session management."""
 
     @abstractmethod
-    async def spawn_session(self, request: SpawnRequest) -> VolundrSession: ...
+    async def spawn_session(
+        self, request: SpawnRequest, *, auth_token: str | None = None,
+    ) -> VolundrSession: ...
 
     @abstractmethod
-    async def get_session(self, session_id: str) -> VolundrSession | None: ...
+    async def get_session(
+        self, session_id: str, *, auth_token: str | None = None,
+    ) -> VolundrSession | None: ...
 
     @abstractmethod
-    async def list_sessions(self) -> list[VolundrSession]: ...
+    async def list_sessions(
+        self, *, auth_token: str | None = None,
+    ) -> list[VolundrSession]: ...

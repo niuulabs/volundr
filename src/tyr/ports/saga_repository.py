@@ -32,6 +32,6 @@ class SagaRepository(ABC):
         ...
 
     @abstractmethod
-    async def delete_saga(self, saga_id: UUID) -> bool:
-        """Delete a saga. Returns True if deleted."""
+    async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
+        """Delete a saga, optionally scoped to an owner. Returns True if deleted."""
         ...

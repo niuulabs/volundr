@@ -3,6 +3,7 @@ import {
   MockDispatcherService,
   MockTyrSessionService,
   MockTrackerBrowserService,
+  MockTyrIntegrationService,
 } from './mock';
 import {
   ApiTyrService,
@@ -26,4 +27,6 @@ export const tyrSessionService: ITyrSessionService = new MockTyrSessionService()
 export const trackerService: ITrackerBrowserService = useMocks
   ? new MockTrackerBrowserService()
   : new ApiTrackerBrowserService();
-export const tyrIntegrationService: ITyrIntegrationService = new ApiTyrIntegrationService();
+export const tyrIntegrationService: ITyrIntegrationService = useMocks
+  ? new MockTyrIntegrationService()
+  : new ApiTyrIntegrationService();

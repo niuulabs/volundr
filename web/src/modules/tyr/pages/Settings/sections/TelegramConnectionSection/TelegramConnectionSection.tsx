@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { TyrIntegrationConnection, ITyrIntegrationService } from '@/modules/tyr/ports';
+import { useConnectionForm } from '../useConnectionForm';
 import styles from './TelegramConnectionSection.module.css';
 
 interface TelegramConnectionSectionProps {
@@ -14,8 +15,9 @@ export function TelegramConnectionSection({
   onDisconnect,
 }: TelegramConnectionSectionProps) {
   const [deeplink, setDeeplink] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { error, disconnecting, setError, handleDisconnect } =
+    useConnectionForm(connection?.id ?? null, onDisconnect);
 
   const handleGenerateLink = useCallback(async () => {
     setError(null);
@@ -28,17 +30,7 @@ export function TelegramConnectionSection({
     } finally {
       setLoading(false);
     }
-  }, [service]);
-
-  const handleDisconnect = async () => {
-    if (!connection) return;
-    setError(null);
-    try {
-      await onDisconnect(connection.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect');
-    }
-  };
+  }, [service, setError]);
 
   if (connection) {
     return (
@@ -53,8 +45,13 @@ export function TelegramConnectionSection({
           <p className={styles.meta}>
             Linked {new Date(connection.created_at).toLocaleDateString()}
           </p>
-          <button className={styles.disconnectBtn} onClick={handleDisconnect} type="button">
-            Unlink
+          <button
+            className={styles.disconnectBtn}
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            type="button"
+          >
+            {disconnecting ? 'Disconnecting...' : 'Unlink'}
           </button>
         </div>
         {error && <p className={styles.error}>{error}</p>}
