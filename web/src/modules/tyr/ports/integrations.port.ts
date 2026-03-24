@@ -15,10 +15,16 @@ export interface CreateIntegrationParams {
   config: Record<string, string>;
 }
 
+export interface ConnectionTestResult {
+  success: boolean;
+  message: string;
+}
+
 export interface ITyrIntegrationService {
   listIntegrations(): Promise<IntegrationConnection[]>;
   createIntegration(params: CreateIntegrationParams): Promise<IntegrationConnection>;
   deleteIntegration(id: string): Promise<void>;
   toggleIntegration(id: string, enabled: boolean): Promise<IntegrationConnection>;
+  testConnection(id: string): Promise<ConnectionTestResult>;
   getTelegramSetup(): Promise<TelegramSetupResult>;
 }

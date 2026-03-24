@@ -4,6 +4,7 @@ import type {
   ITyrIntegrationService,
   TelegramSetupResult,
   CreateIntegrationParams,
+  ConnectionTestResult,
 } from '../../ports/integrations.port';
 
 const integrationsApi = createApiClient('/api/v1/tyr/integrations');
@@ -59,6 +60,10 @@ export class ApiTyrIntegrationService implements ITyrIntegrationService {
   async toggleIntegration(id: string, enabled: boolean): Promise<IntegrationConnection> {
     const raw = await integrationsApi.patch<RawIntegrationConnection>(`/${id}`, { enabled });
     return mapConnection(raw);
+  }
+
+  async testConnection(id: string): Promise<ConnectionTestResult> {
+    return integrationsApi.post<ConnectionTestResult>(`/${id}/test`, {});
   }
 
   async getTelegramSetup(): Promise<TelegramSetupResult> {

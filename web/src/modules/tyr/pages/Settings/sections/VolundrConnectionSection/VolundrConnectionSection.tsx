@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
-import type { CreateIntegrationParams } from '@/modules/tyr/ports';
+import type { CreateIntegrationParams, ITyrIntegrationService } from '@/modules/tyr/ports';
 import { INTEGRATION_TYPES, ADAPTER_PATHS, CREDENTIAL_NAMES } from '@/modules/tyr/constants';
 import { useConnectionForm } from '../useConnectionForm';
 import styles from '../ConnectionSection.module.css';
@@ -11,17 +11,35 @@ interface VolundrConnectionSectionProps {
   connection: IntegrationConnection | null;
   onConnect: (params: CreateIntegrationParams) => Promise<void>;
   onDisconnect: (id: string) => Promise<void>;
+  service: ITyrIntegrationService;
 }
 
 export function VolundrConnectionSection({
   connection,
   onConnect,
   onDisconnect,
+  service,
 }: VolundrConnectionSectionProps) {
   const [url, setUrl] = useState(DEFAULT_VOLUNDR_URL);
   const [pat, setPat] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const { error, submitting, disconnecting, setError, handleDisconnect, wrapSubmit } =
     useConnectionForm(connection?.id ?? null, onDisconnect);
+
+  const handleTest = async () => {
+    if (!connection) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await service.testConnection(connection.id);
+      setTestResult(result);
+    } catch (e) {
+      setTestResult({ success: false, message: e instanceof Error ? e.message : 'Test failed' });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const handleConnect = async () => {
     if (!pat.trim()) {
@@ -56,14 +74,29 @@ export function VolundrConnectionSection({
           <p className={styles.meta}>
             Connected {new Date(connection.createdAt).toLocaleDateString()}
           </p>
-          <button
-            className={styles.disconnectBtn}
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            type="button"
-          >
-            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
-          </button>
+          {testResult && (
+            <p className={testResult.success ? styles.testSuccess : styles.error}>
+              {testResult.message}
+            </p>
+          )}
+          <div className={styles.actions}>
+            <button
+              className={styles.testBtn}
+              onClick={handleTest}
+              disabled={testing}
+              type="button"
+            >
+              {testing ? 'Testing...' : 'Test Connection'}
+            </button>
+            <button
+              className={styles.disconnectBtn}
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              type="button"
+            >
+              {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+            </button>
+          </div>
         </div>
         {error && <p className={styles.error}>{error}</p>}
       </div>

@@ -42,6 +42,10 @@ export class MockTyrIntegrationService implements ITyrIntegrationService {
     return { ...connection };
   }
 
+  async testConnection(_id: string): Promise<{ success: boolean; message: string }> {
+    return { success: true, message: 'Mock connection OK' };
+  }
+
   async getTelegramSetup(): Promise<TelegramSetupResult> {
     return {
       deeplink: 'https://t.me/mock_tyr_bot?start=mock_token_123',

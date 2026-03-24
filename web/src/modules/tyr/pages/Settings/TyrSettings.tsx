@@ -34,6 +34,7 @@ export function TyrSettings({ service }: TyrSettingsProps) {
           connection={volundrConnection}
           onConnect={createConnection}
           onDisconnect={deleteConnection}
+          service={service}
         />
       </div>
     </div>

@@ -134,6 +134,40 @@
   margin: var(--space-2) 0 0 0;
 }
 
+.testSuccess {
+  font-size: var(--text-sm);
+  color: var(--color-accent-emerald);
+  margin: var(--space-2) 0 0 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  align-self: flex-start;
+}
+
+.testBtn {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.testBtn:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.testBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .linkContainer {
   display: flex;
   flex-direction: column;
