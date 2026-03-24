@@ -54,10 +54,10 @@ describe('VolundrConnectionSection', () => {
 
     await waitFor(() => {
       expect(onConnect).toHaveBeenCalledWith({
-        integrationType: 'code_forge',
+        integration_type: 'code_forge',
         adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-        credentialName: 'volundr-pat',
-        credentialValue: 'my-secret-pat',
+        credential_name: 'volundr-pat',
+        credential_value: 'my-secret-pat',
         config: { url: 'http://volundr' },
       });
     });
