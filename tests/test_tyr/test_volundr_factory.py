@@ -7,10 +7,9 @@ from datetime import UTC, datetime
 import pytest
 
 from niuu.domain.models import IntegrationConnection, IntegrationType
+from tests.test_tyr.conftest import StubCredentialStore, StubIntegrationRepo
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
-
-from tests.test_tyr.conftest import StubCredentialStore, StubIntegrationRepo
 
 # ---------------------------------------------------------------------------
 # Stubs

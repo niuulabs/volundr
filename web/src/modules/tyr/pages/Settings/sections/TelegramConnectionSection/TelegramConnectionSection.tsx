@@ -16,8 +16,10 @@ export function TelegramConnectionSection({
 }: TelegramConnectionSectionProps) {
   const [deeplink, setDeeplink] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { error, disconnecting, setError, handleDisconnect } =
-    useConnectionForm(connection?.id ?? null, onDisconnect);
+  const { error, disconnecting, setError, handleDisconnect } = useConnectionForm(
+    connection?.id ?? null,
+    onDisconnect
+  );
 
   const handleGenerateLink = useCallback(async () => {
     setError(null);

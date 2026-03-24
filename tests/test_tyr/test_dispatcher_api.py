@@ -134,11 +134,9 @@ class TestGetDispatcherState:
         assert "user-1" in mock_repo.states
         assert "user-2" in mock_repo.states
 
-    def test_default_principal_when_no_auth_headers(self, client: TestClient):
+    def test_returns_401_when_no_auth_headers(self, client: TestClient):
         resp = client.get("/api/v1/tyr/dispatcher")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["running"] is True
+        assert resp.status_code == 401
 
 
 # -------------------------------------------------------------------

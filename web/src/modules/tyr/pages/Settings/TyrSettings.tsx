@@ -14,9 +14,12 @@ export function TyrSettings({ service }: TyrSettingsProps) {
   const { connections, loading, error, createConnection, deleteConnection } =
     useTyrIntegrations(service);
 
-  const volundrConnection = connections.find(c => c.integration_type === INTEGRATION_TYPES.CODE_FORGE) ?? null;
-  const githubConnection = connections.find(c => c.integration_type === INTEGRATION_TYPES.SOURCE_CONTROL) ?? null;
-  const telegramConnection = connections.find(c => c.integration_type === INTEGRATION_TYPES.MESSAGING) ?? null;
+  const volundrConnection =
+    connections.find(c => c.integration_type === INTEGRATION_TYPES.CODE_FORGE) ?? null;
+  const githubConnection =
+    connections.find(c => c.integration_type === INTEGRATION_TYPES.SOURCE_CONTROL) ?? null;
+  const telegramConnection =
+    connections.find(c => c.integration_type === INTEGRATION_TYPES.MESSAGING) ?? null;
 
   if (loading) {
     return (

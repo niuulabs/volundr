@@ -26,7 +26,6 @@ from volundr.domain.models import (
     MCPServerConfig,
     Model,
     ModelProvider,
-    PersonalAccessToken,
     PodSpecAdditions,
     Preset,
     Principal,

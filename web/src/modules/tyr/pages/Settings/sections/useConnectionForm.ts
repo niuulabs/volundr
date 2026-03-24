@@ -11,7 +11,7 @@ interface UseConnectionFormResult {
 
 export function useConnectionForm(
   connectionId: string | null,
-  onDisconnect: (id: string) => Promise<void>,
+  onDisconnect: (id: string) => Promise<void>
 ): UseConnectionFormResult {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -30,7 +30,7 @@ export function useConnectionForm(
     }
   };
 
-  const wrapSubmit = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+  const wrapSubmit = async <T>(fn: () => Promise<T>): Promise<T | undefined> => {
     setError(null);
     setSubmitting(true);
     try {

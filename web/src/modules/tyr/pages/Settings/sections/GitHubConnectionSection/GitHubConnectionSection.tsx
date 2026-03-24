@@ -38,7 +38,7 @@ export function GitHubConnectionSection({
         credential_name: 'github-pat',
         credential_value: pat,
         config: org.trim() ? { org: org.trim() } : {},
-      }),
+      })
     );
     if (result !== undefined) {
       setPat('');

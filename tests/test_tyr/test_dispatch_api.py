@@ -22,7 +22,7 @@ from tyr.api.dispatch import (
     resolve_volundr,
 )
 from tyr.api.tracker import resolve_trackers
-from tyr.config import AIModelConfig, Settings
+from tyr.config import AIModelConfig, AuthConfig, Settings
 from tyr.config import DispatchConfig as DispatchCfg
 from tyr.domain.models import (
     Saga,
@@ -86,7 +86,8 @@ class MockVolundr(VolundrPort):
 
 
 def _make_settings(**overrides) -> Settings:
-    """Build a Settings with dispatch defaults."""
+    """Build a Settings with dispatch defaults and anonymous dev enabled."""
+    overrides.setdefault("auth", AuthConfig(allow_anonymous_dev=True))
     return Settings(
         dispatch=DispatchCfg(
             default_system_prompt="Be helpful.",
@@ -451,7 +452,7 @@ class TestGetQueue:
             headers={"Authorization": "Bearer test-tok"},
         )
         assert resp.status_code == 200
-        assert volundr.auth_token == "test-tok"
+        assert volundr.last_auth_token == "test-tok"
 
     def test_queue_item_has_saga_fields(self, client: TestClient, saga_repo: MockSagaRepo):
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -655,7 +656,7 @@ class TestApproveDispatch:
             },
             headers={"Authorization": "Bearer my-token"},
         )
-        assert volundr.auth_token == "my-token"
+        assert volundr.last_auth_token == "my-token"
 
     def test_multiple_items(
         self,

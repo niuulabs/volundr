@@ -38,7 +38,7 @@ export function VolundrConnectionSection({
         credential_name: 'volundr-pat',
         credential_value: pat,
         config: { url: url.trim() },
-      }),
+      })
     );
     if (result !== undefined) {
       setPat('');

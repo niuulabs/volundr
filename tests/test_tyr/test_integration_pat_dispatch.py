@@ -15,11 +15,10 @@ import pytest
 import respx
 
 from niuu.domain.models import IntegrationConnection, IntegrationType
+from tests.test_tyr.conftest import StubCredentialStore, StubIntegrationRepo
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.ports.volundr import SpawnRequest
-
-from tests.test_tyr.conftest import StubCredentialStore, StubIntegrationRepo
 
 # ---------------------------------------------------------------------------
 # Stubs
@@ -138,7 +137,8 @@ class TestAutonomousDispatchWithPAT:
         assert adapter._headers()["Authorization"] == f"Bearer {STORED_PAT}"
 
         # Per-request auth_token overrides stored PAT
-        assert adapter._headers(auth_token="request-token")["Authorization"] == "Bearer request-token"
+        headers = adapter._headers(auth_token="request-token")
+        assert headers["Authorization"] == "Bearer request-token"
 
         # Without auth_token, falls back to stored PAT
         assert adapter._headers()["Authorization"] == f"Bearer {STORED_PAT}"
