@@ -38,7 +38,6 @@ def _create_app(*, exists_by_hash: bool = True) -> FastAPI:
 
     validator = PATValidator(
         repo=mock_repo,
-        signing_key=SIGNING_KEY,
         cache_ttl=0,
         revoked_cache_ttl=0,
     )

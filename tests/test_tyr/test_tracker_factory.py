@@ -29,7 +29,7 @@ def _make_connection(
 ) -> IntegrationConnection:
     return IntegrationConnection(
         id=id,
-        user_id="owner-1",
+        owner_id="owner-1",
         integration_type=IntegrationType.ISSUE_TRACKER,
         adapter=adapter,
         credential_name=credential_name,

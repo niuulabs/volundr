@@ -101,7 +101,7 @@ class TestSaveConnection:
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id="conn-new",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type=IntegrationType.SOURCE_CONTROL,
             adapter="volundr.adapters.github.GitHubProvider",
             credential_name="gh-token",
@@ -125,7 +125,7 @@ class TestSaveConnection:
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id="conn-upsert",
-            user_id="user-2",
+            owner_id="user-2",
             integration_type=IntegrationType.MESSAGING,
             adapter="volundr.adapters.slack.SlackProvider",
             credential_name="slack-token",

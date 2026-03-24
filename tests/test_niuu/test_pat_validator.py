@@ -50,7 +50,6 @@ def mock_repo() -> AsyncMock:
 def validator(mock_repo: AsyncMock) -> PATValidator:
     return PATValidator(
         repo=mock_repo,
-        signing_key=SIGNING_KEY,
         cache_ttl=300,
         revoked_cache_ttl=60,
     )
@@ -113,7 +112,6 @@ class TestCaching:
     async def test_cache_expires(self, mock_repo: AsyncMock):
         validator = PATValidator(
             repo=mock_repo,
-            signing_key=SIGNING_KEY,
             cache_ttl=0.01,
             revoked_cache_ttl=0.01,
         )

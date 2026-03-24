@@ -1,17 +1,22 @@
-"""Tests for PATService with mocked repository."""
+"""Tests for PATService with mocked repository and MemoryTokenIssuer."""
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import jwt
 import pytest
 
+from niuu.adapters.memory_token_issuer import MemoryTokenIssuer
 from niuu.domain.models import PersonalAccessToken
 from niuu.domain.services.pat import PATService
+from niuu.domain.services.pat_validator import PATValidator
 from niuu.ports.pat_repository import PATRepository
+
+SIGNING_KEY = "test-secret-key-for-pats-minimum-32-bytes!"
 
 
 class FakePATRepository(PATRepository):
@@ -58,23 +63,25 @@ class FakePATRepository(PATRepository):
         self.last_used_touches.append(token_hash)
 
 
-SIGNING_KEY = "test-secret-key-for-pats-minimum-32-bytes!"
-
-
 @pytest.fixture
 def fake_repo() -> FakePATRepository:
     return FakePATRepository()
 
 
 @pytest.fixture
-def service(fake_repo: FakePATRepository) -> PATService:
-    return PATService(repo=fake_repo, signing_key=SIGNING_KEY, ttl_days=30)
+def issuer() -> MemoryTokenIssuer:
+    return MemoryTokenIssuer(signing_key=SIGNING_KEY)
+
+
+@pytest.fixture
+def service(fake_repo: FakePATRepository, issuer: MemoryTokenIssuer) -> PATService:
+    return PATService(repo=fake_repo, token_issuer=issuer, ttl_days=30)
 
 
 class TestCreate:
     @pytest.mark.asyncio
     async def test_returns_pat_and_raw_jwt(self, service: PATService):
-        pat, raw_jwt = await service.create("user-1", "my-token")
+        pat, raw_jwt = await service.create("user-1", "my-token", subject_token="fake")
 
         assert isinstance(pat, PersonalAccessToken)
         assert pat.owner_id == "user-1"
@@ -84,11 +91,10 @@ class TestCreate:
 
     @pytest.mark.asyncio
     async def test_jwt_payload_contains_required_fields(self, service: PATService):
-        pat, raw_jwt = await service.create("user-1", "ci-token")
+        _, raw_jwt = await service.create("user-1", "ci-token", subject_token="fake")
 
         payload = jwt.decode(raw_jwt, SIGNING_KEY, algorithms=["HS256"])
 
-        assert payload["sub"] == "user-1"
         assert payload["type"] == "pat"
         assert payload["name"] == "ci-token"
         assert "jti" in payload
@@ -97,7 +103,7 @@ class TestCreate:
 
     @pytest.mark.asyncio
     async def test_jwt_expiry_uses_ttl_days(self, service: PATService):
-        _, raw_jwt = await service.create("user-1", "tok")
+        _, raw_jwt = await service.create("user-1", "tok", subject_token="fake")
 
         payload = jwt.decode(raw_jwt, SIGNING_KEY, algorithms=["HS256"])
         ttl_seconds = payload["exp"] - payload["iat"]
@@ -106,17 +112,15 @@ class TestCreate:
 
     @pytest.mark.asyncio
     async def test_stores_sha256_hash(self, service: PATService, fake_repo: FakePATRepository):
-        import hashlib
-
-        pat, raw_jwt = await service.create("user-1", "tok")
+        pat, raw_jwt = await service.create("user-1", "tok", subject_token="fake")
         expected_hash = hashlib.sha256(raw_jwt.encode()).hexdigest()
 
         assert fake_repo.hashes[str(pat.id)] == expected_hash
 
     @pytest.mark.asyncio
     async def test_each_token_has_unique_jti(self, service: PATService):
-        _, jwt1 = await service.create("user-1", "tok-1")
-        _, jwt2 = await service.create("user-1", "tok-2")
+        _, jwt1 = await service.create("user-1", "tok-1", subject_token="fake")
+        _, jwt2 = await service.create("user-1", "tok-2", subject_token="fake")
 
         payload1 = jwt.decode(jwt1, SIGNING_KEY, algorithms=["HS256"])
         payload2 = jwt.decode(jwt2, SIGNING_KEY, algorithms=["HS256"])
@@ -125,7 +129,7 @@ class TestCreate:
 
     @pytest.mark.asyncio
     async def test_persists_to_repo(self, service: PATService, fake_repo: FakePATRepository):
-        await service.create("user-1", "tok")
+        await service.create("user-1", "tok", subject_token="fake")
 
         assert len(fake_repo.store) == 1
 
@@ -138,9 +142,9 @@ class TestList:
 
     @pytest.mark.asyncio
     async def test_returns_pats_for_owner(self, service: PATService):
-        await service.create("user-1", "tok-a")
-        await service.create("user-1", "tok-b")
-        await service.create("user-2", "tok-c")
+        await service.create("user-1", "tok-a", subject_token="fake")
+        await service.create("user-1", "tok-b", subject_token="fake")
+        await service.create("user-2", "tok-c", subject_token="fake")
 
         result = await service.list("user-1")
 
@@ -150,7 +154,7 @@ class TestList:
 
     @pytest.mark.asyncio
     async def test_isolates_by_owner(self, service: PATService):
-        await service.create("user-1", "tok")
+        await service.create("user-1", "tok", subject_token="fake")
 
         result = await service.list("user-2")
 
@@ -160,7 +164,7 @@ class TestList:
 class TestRevoke:
     @pytest.mark.asyncio
     async def test_returns_true_when_deleted(self, service: PATService):
-        pat, _ = await service.create("user-1", "tok")
+        pat, _ = await service.create("user-1", "tok", subject_token="fake")
 
         result = await service.revoke(pat.id, "user-1")
 
@@ -174,14 +178,14 @@ class TestRevoke:
 
     @pytest.mark.asyncio
     async def test_removes_from_repo(self, service: PATService, fake_repo: FakePATRepository):
-        pat, _ = await service.create("user-1", "tok")
+        pat, _ = await service.create("user-1", "tok", subject_token="fake")
         await service.revoke(pat.id, "user-1")
 
         assert len(fake_repo.store) == 0
 
     @pytest.mark.asyncio
     async def test_cannot_revoke_other_owners_token(self, service: PATService):
-        pat, _ = await service.create("user-1", "tok")
+        pat, _ = await service.create("user-1", "tok", subject_token="fake")
 
         result = await service.revoke(pat.id, "user-2")
 
@@ -189,7 +193,7 @@ class TestRevoke:
 
     @pytest.mark.asyncio
     async def test_logs_on_successful_revoke(self, service: PATService):
-        pat, _ = await service.create("user-1", "tok")
+        pat, _ = await service.create("user-1", "tok", subject_token="fake")
 
         with patch("niuu.domain.services.pat.logger") as mock_logger:
             await service.revoke(pat.id, "user-1")
@@ -197,21 +201,11 @@ class TestRevoke:
             assert "revoked" in mock_logger.info.call_args[0][0].lower()
 
 
-class TestSigningKeyValidation:
-    def test_rejects_empty_signing_key(self, fake_repo: FakePATRepository):
-        with pytest.raises(ValueError, match="signing key must not be empty"):
-            PATService(repo=fake_repo, signing_key="")
-
-    def test_rejects_none_signing_key(self, fake_repo: FakePATRepository):
-        with pytest.raises(ValueError, match="signing key must not be empty"):
-            PATService(repo=fake_repo, signing_key="")
-
-
 class TestDefaultTtl:
     @pytest.mark.asyncio
-    async def test_default_ttl_is_365_days(self, fake_repo: FakePATRepository):
-        service = PATService(repo=fake_repo, signing_key=SIGNING_KEY)
-        _, raw_jwt_str = await service.create("user-1", "tok")
+    async def test_default_ttl_is_365_days(self, fake_repo: FakePATRepository, issuer: MemoryTokenIssuer):
+        service = PATService(repo=fake_repo, token_issuer=issuer)
+        _, raw_jwt_str = await service.create("user-1", "tok", subject_token="fake")
 
         payload = jwt.decode(raw_jwt_str, SIGNING_KEY, algorithms=["HS256"])
         ttl_seconds = payload["exp"] - payload["iat"]
@@ -224,20 +218,16 @@ class TestValidatorIntegration:
     async def test_revoke_calls_validator_invalidate_by_hash(
         self,
         fake_repo: FakePATRepository,
+        issuer: MemoryTokenIssuer,
     ):
-        """When a validator is provided, revoke() calls invalidate_by_hash."""
-        from unittest.mock import MagicMock
-
-        from niuu.domain.services.pat_validator import PATValidator
-
         mock_validator = MagicMock(spec=PATValidator)
         service = PATService(
             repo=fake_repo,
-            signing_key=SIGNING_KEY,
+            token_issuer=issuer,
             validator=mock_validator,
         )
 
-        pat, _ = await service.create("user-1", "tok")
+        pat, _ = await service.create("user-1", "tok", subject_token="fake")
         token_hash = fake_repo.hashes[str(pat.id)]
 
         await service.revoke(pat.id, "user-1")
@@ -248,10 +238,10 @@ class TestValidatorIntegration:
     async def test_revoke_without_validator_does_not_fail(
         self,
         fake_repo: FakePATRepository,
+        issuer: MemoryTokenIssuer,
     ):
-        """When no validator is provided, revoke() still works."""
-        service = PATService(repo=fake_repo, signing_key=SIGNING_KEY, validator=None)
-        pat, _ = await service.create("user-1", "tok")
+        service = PATService(repo=fake_repo, token_issuer=issuer, validator=None)
+        pat, _ = await service.create("user-1", "tok", subject_token="fake")
 
         result = await service.revoke(pat.id, "user-1")
 

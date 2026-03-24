@@ -39,7 +39,7 @@ def _make_connection(
 ) -> IntegrationConnection:
     return IntegrationConnection(
         id="conn-1",
-        user_id=OWNER_ID,
+        owner_id=OWNER_ID,
         integration_type=IntegrationType.CODE_FORGE,
         adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
         credential_name="volundr-pat",

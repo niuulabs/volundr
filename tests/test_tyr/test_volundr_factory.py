@@ -27,7 +27,7 @@ def _make_connection(
 ) -> IntegrationConnection:
     return IntegrationConnection(
         id="conn-1",
-        user_id="owner-1",
+        owner_id="owner-1",
         integration_type=integration_type,
         adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
         credential_name=credential_name,

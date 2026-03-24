@@ -156,8 +156,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.pat_validator = pat_validator
 
             # Resolve the token issuer (IDP adapter) via dynamic import
-            from niuu.utils import import_class
-
             token_issuer_cls = import_class(settings.pat.token_issuer_adapter)
             token_issuer = token_issuer_cls(**settings.pat.token_issuer_kwargs)
 

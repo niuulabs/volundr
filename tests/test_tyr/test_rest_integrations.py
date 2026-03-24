@@ -36,7 +36,7 @@ def _make_connection(
     now = datetime.now(UTC)
     return IntegrationConnection(
         id=str(uuid4()),
-        user_id=user_id,
+        owner_id=user_id,
         integration_type=integration_type,
         adapter=adapter,
         credential_name=credential_name,
@@ -224,7 +224,7 @@ class TestDeleteIntegration:
         assert resp.status_code == 404
 
     def test_returns_404_for_other_user(self, client: TestClient, mock_repo: AsyncMock):
-        conn = _make_connection(user_id="other-user")
+        conn = _make_connection(owner_id="other-user")
         mock_repo.get_connection.return_value = conn
 
         resp = client.delete(
@@ -267,7 +267,7 @@ class TestToggleIntegration:
         assert resp.status_code == 404
 
     def test_returns_404_for_other_user(self, client: TestClient, mock_repo: AsyncMock):
-        conn = _make_connection(user_id="other-user")
+        conn = _make_connection(owner_id="other-user")
         mock_repo.get_connection.return_value = conn
 
         resp = client.patch(

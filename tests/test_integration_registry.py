@@ -107,7 +107,7 @@ def sample_connection() -> IntegrationConnection:
     now = datetime.now(UTC)
     return IntegrationConnection(
         id="conn-1",
-        user_id="user-1",
+        owner_id="user-1",
         integration_type="issue_tracker",
         adapter="volundr.adapters.outbound.linear.LinearAdapter",
         credential_name="linear-key",
@@ -174,7 +174,7 @@ class TestIntegrationRegistry:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-t",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="messaging",
             adapter="volundr.adapters.outbound.telegram.TelegramIntegration",
             credential_name="tg-key",
@@ -190,7 +190,7 @@ class TestIntegrationRegistry:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-x",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="unknown",
             adapter="some.Adapter",
             credential_name="key",
@@ -223,7 +223,7 @@ class TestIntegrationRegistry:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-t",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="messaging",
             adapter="volundr.adapters.outbound.telegram.TelegramIntegration",
             credential_name="tg-key",
@@ -243,7 +243,7 @@ class TestIntegrationRegistry:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-gh",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="source_control",
             adapter="volundr.adapters.outbound.github.GitHubProvider",
             credential_name="gh-key",
@@ -338,7 +338,7 @@ class TestMCPInjectionService:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.linear.LinearAdapter",
             credential_name="linear-key",
@@ -368,7 +368,7 @@ class TestMCPInjectionService:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.linear.LinearAdapter",
             credential_name="linear-key",
@@ -390,7 +390,7 @@ class TestMCPInjectionService:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.linear.LinearAdapter",
             credential_name="linear-key",
@@ -415,7 +415,7 @@ class TestMCPInjectionService:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.linear.LinearAdapter",
             credential_name="missing-key",
@@ -443,7 +443,7 @@ class TestMCPInjectionService:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-t",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="messaging",
             adapter="volundr.adapters.outbound.telegram.TelegramIntegration",
             credential_name="tg-key",
@@ -471,7 +471,7 @@ class TestMCPInjectionService:
 
         linear_conn = IntegrationConnection(
             id="conn-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.linear.LinearAdapter",
             credential_name="linear-key",
@@ -483,7 +483,7 @@ class TestMCPInjectionService:
         )
         github_conn = IntegrationConnection(
             id="conn-2",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="source_control",
             adapter="volundr.adapters.outbound.github.GitHubProvider",
             credential_name="gh-key",
@@ -529,7 +529,7 @@ class TestMCPInjectionService:
 @pytest.fixture
 def mock_principal():
     return Principal(
-        user_id="user-1",
+        owner_id="user-1",
         email="test@test.com",
         tenant_id="default",
         roles=["volundr:admin"],
@@ -698,7 +698,7 @@ class TestIntegrationConnectionSlug:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="c1",
-            user_id="u1",
+            owner_id="u1",
             integration_type="issue_tracker",
             adapter="some.Adapter",
             credential_name="cred",
@@ -713,7 +713,7 @@ class TestIntegrationConnectionSlug:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="c1",
-            user_id="u1",
+            owner_id="u1",
             integration_type="issue_tracker",
             adapter="some.Adapter",
             credential_name="cred",

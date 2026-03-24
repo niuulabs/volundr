@@ -46,7 +46,7 @@ def sample_connection() -> IntegrationConnection:
     now = datetime.now(UTC)
     return IntegrationConnection(
         id="conn-1",
-        user_id="user-1",
+        owner_id="user-1",
         integration_type="issue_tracker",
         adapter="volundr.adapters.outbound.linear.LinearAdapter",
         credential_name="linear-key",
@@ -62,7 +62,7 @@ def sample_connection_disabled() -> IntegrationConnection:
     now = datetime.now(UTC)
     return IntegrationConnection(
         id="conn-2",
-        user_id="user-1",
+        owner_id="user-1",
         integration_type="issue_tracker",
         adapter="volundr.adapters.outbound.jira.JiraAdapter",
         credential_name="jira-key",
@@ -176,7 +176,7 @@ class TestTrackerFactory:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.linear.LinearAdapter",
             credential_name="missing-key",
@@ -240,7 +240,7 @@ class TestTrackerServiceWithFactory:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="conn-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.linear.LinearAdapter",
             credential_name="key",
@@ -342,7 +342,7 @@ class TestJiraAdapterUnit:
 @pytest.fixture
 def mock_principal():
     return Principal(
-        user_id="user-1",
+        owner_id="user-1",
         email="test@test.com",
         tenant_id="default",
         roles=["volundr:admin"],
@@ -524,7 +524,7 @@ class TestIntegrationTestEndpointBranches:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="sc-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="source_control",
             adapter="volundr.adapters.outbound.github.GitHubProvider",
             credential_name="gh-token",
@@ -568,7 +568,7 @@ class TestIntegrationTestEndpointBranches:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="ai-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="ai_provider",
             adapter="volundr.adapters.outbound.anthropic.AnthropicProvider",
             credential_name="anthropic-key",
@@ -609,7 +609,7 @@ class TestIntegrationTestEndpointBranches:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="msg-1",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="messaging",
             adapter="some.MessagingAdapter",
             credential_name="slack-key",
@@ -636,7 +636,7 @@ class TestIntegrationConnectionModel:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="c1",
-            user_id="u1",
+            owner_id="u1",
             integration_type="issue_tracker",
             adapter="some.Adapter",
             credential_name="cred",
@@ -653,7 +653,7 @@ class TestIntegrationConnectionModel:
         now = datetime.now(UTC)
         conn = IntegrationConnection(
             id="c1",
-            user_id="u1",
+            owner_id="u1",
             integration_type="issue_tracker",
             adapter="some.Adapter",
             credential_name="cred",

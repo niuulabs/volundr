@@ -97,7 +97,7 @@ class PATConfig(BaseModel):
     """Personal access token configuration (matches Volundr's PATConfig)."""
 
     token_issuer_adapter: str = Field(
-        default="niuu.adapters.keycloak_token_issuer.KeycloakTokenIssuer",
+        default="niuu.adapters.memory_token_issuer.MemoryTokenIssuer",
         description="Fully-qualified class path for the token issuer adapter.",
     )
     token_issuer_kwargs: dict = Field(
