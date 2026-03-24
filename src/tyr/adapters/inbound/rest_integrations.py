@@ -126,7 +126,7 @@ def create_integrations_router() -> APIRouter:
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id=str(uuid4()),
-            user_id=principal.user_id,
+            owner_id=principal.user_id,
             integration_type=IntegrationType(data.integration_type),
             adapter=data.adapter,
             credential_name=data.credential_name,
@@ -157,7 +157,7 @@ def create_integrations_router() -> APIRouter:
         repo = _get_repo(request)
         credential_store = _get_credential_store(request)
         existing = await repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
@@ -183,7 +183,7 @@ def create_integrations_router() -> APIRouter:
         """Toggle the enabled flag on an integration connection."""
         repo = _get_repo(request)
         existing = await repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
@@ -192,7 +192,7 @@ def create_integrations_router() -> APIRouter:
         now = datetime.now(UTC)
         updated = IntegrationConnection(
             id=existing.id,
-            user_id=existing.user_id,
+            user_id=existing.owner_id,
             integration_type=existing.integration_type,
             adapter=existing.adapter,
             credential_name=existing.credential_name,

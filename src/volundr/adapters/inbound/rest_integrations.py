@@ -242,7 +242,7 @@ def create_integrations_router(
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id=str(uuid4()),
-            user_id=principal.user_id,
+            owner_id=principal.user_id,
             integration_type=IntegrationType(data.integration_type),
             adapter=data.adapter,
             credential_name=data.credential_name,
@@ -272,7 +272,7 @@ def create_integrations_router(
     ) -> IntegrationResponse:
         """Update an integration connection."""
         existing = await integration_repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
@@ -281,7 +281,7 @@ def create_integrations_router(
         now = datetime.now(UTC)
         updated = IntegrationConnection(
             id=existing.id,
-            user_id=existing.user_id,
+            user_id=existing.owner_id,
             integration_type=existing.integration_type,
             adapter=existing.adapter,
             credential_name=(
@@ -308,7 +308,7 @@ def create_integrations_router(
     ) -> None:
         """Delete an integration connection."""
         existing = await integration_repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
@@ -325,7 +325,7 @@ def create_integrations_router(
     ) -> IntegrationTestResult:
         """Test an integration connection by instantiating the adapter."""
         existing = await integration_repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
