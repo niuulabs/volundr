@@ -58,7 +58,7 @@ spec:
                   key: {{ .Values.database.passwordKey | default "password" }}
             - name: VOLUNDR_URL
               value: {{ .Values.volundr.url | quote }}
-            {{- if .Values.pat.issuerSecretName }}
+            {{- if and .Values.pat .Values.pat.issuerSecretName }}
             - name: PAT__TOKEN_ISSUER_KWARGS__CLIENT_SECRET
               valueFrom:
                 secretKeyRef:

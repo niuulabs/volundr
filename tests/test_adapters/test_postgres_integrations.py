@@ -15,7 +15,7 @@ from volundr.domain.models import IntegrationConnection, IntegrationType
 def _mock_row(**overrides):
     defaults = {
         "id": "conn-001",
-        "user_id": "user-1",
+        "owner_id": "user-1",
         "integration_type": "issue_tracker",
         "adapter": "volundr.adapters.linear.LinearProvider",
         "credential_name": "linear-token",
@@ -190,7 +190,7 @@ class TestRowToConnection:
     def test_slug_defaults_to_empty(self):
         defaults = {
             "id": "conn-001",
-            "user_id": "user-1",
+            "owner_id": "user-1",
             "integration_type": "issue_tracker",
             "adapter": "some.Adapter",
             "credential_name": "cred",

@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from volundr.skuld.broker import (
     CONVERSATION_HISTORY_DIR,
-    CONVERSATION_HISTORY_FILE,
     Broker,
     ConversationTurn,
     app,
