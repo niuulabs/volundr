@@ -715,16 +715,21 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
         IntegrationDefinitionConfig(
             slug="telegram",
             name="Telegram",
-            description="Telegram messaging — notifications and session alerts",
+            description="Telegram bot — notifications, session alerts, and dispatch commands",
             integration_type="messaging",
             icon="telegram",
             credential_schema={
-                "required": ["chat_id"],
+                "required": ["bot_token", "chat_id"],
                 "properties": {
+                    "bot_token": {
+                        "label": "Bot Token",
+                        "type": "password",
+                        "description": "Telegram bot API token (from @BotFather)",
+                    },
                     "chat_id": {
                         "label": "Chat ID",
                         "type": "string",
-                        "description": "Telegram chat ID for notifications",
+                        "description": "Chat or channel ID to send notifications to",
                     },
                 },
             },

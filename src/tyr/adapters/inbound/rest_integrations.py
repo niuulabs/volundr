@@ -22,6 +22,10 @@ from niuu.domain.models import (
     Principal,
     SecretType,
 )
+from niuu.domain.services.connection_tester import (
+    ConnectionTestResult,
+    test_connection,
+)
 from niuu.ports.credentials import CredentialStorePort
 from niuu.ports.integrations import IntegrationRepository
 from tyr.adapters.inbound.auth import extract_principal
@@ -135,12 +139,25 @@ def create_integrations_router() -> APIRouter:
             created_at=now,
             updated_at=now,
         )
+        # Test connection before saving
+        test_result = await test_connection(
+            data.integration_type,
+            data.config,
+            {"token": data.credential_value},
+        )
+        if not test_result.success:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Connection test failed: {test_result.message}",
+            )
+
         saved = await repo.save_connection(connection)
         logger.info(
-            "Created Tyr integration: type=%s adapter=%s user=%s",
+            "Created Tyr integration: type=%s adapter=%s user=%s test=%s",
             data.integration_type,
             data.adapter,
             principal.user_id,
+            test_result.message,
         )
         return IntegrationResponse.from_connection(saved)
 
@@ -192,7 +209,7 @@ def create_integrations_router() -> APIRouter:
         now = datetime.now(UTC)
         updated = IntegrationConnection(
             id=existing.id,
-            user_id=existing.owner_id,
+            owner_id=existing.owner_id,
             integration_type=existing.integration_type,
             adapter=existing.adapter,
             credential_name=existing.credential_name,
@@ -203,6 +220,36 @@ def create_integrations_router() -> APIRouter:
         )
         saved = await repo.save_connection(updated)
         return IntegrationResponse.from_connection(saved)
+
+    @router.post(
+        "/{connection_id}/test",
+        response_model=ConnectionTestResult,
+    )
+    async def test_integration(
+        request: Request,
+        connection_id: str = Path(description="Integration connection UUID"),
+        principal: Principal = Depends(extract_principal),
+    ) -> ConnectionTestResult:
+        """Test an existing integration connection."""
+        repo = _get_repo(request)
+        credential_store = _get_credential_store(request)
+        existing = await repo.get_connection(connection_id)
+        if existing is None or existing.owner_id != principal.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Integration not found: {connection_id}",
+            )
+        # Resolve credential from store
+        cred = await credential_store.get_value(
+            owner_type="user",
+            owner_id=principal.user_id,
+            name=existing.credential_name,
+        )
+        return await test_connection(
+            str(existing.integration_type),
+            existing.config,
+            cred or {},
+        )
 
     return router
 
