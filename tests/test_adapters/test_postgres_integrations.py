@@ -48,7 +48,7 @@ class TestListConnections:
         assert len(result) == 2
         pool.fetch.assert_called_once()
         call_sql = pool.fetch.call_args[0][0]
-        assert "user_id = $1" in call_sql
+        assert "owner_id = $1" in call_sql
         assert pool.fetch.call_args[0][1] == "user-1"
 
     async def test_list_with_type_filter(self):
