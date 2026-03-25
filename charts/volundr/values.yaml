@@ -581,7 +581,7 @@ authorization:
 #
 # ── Infisical ──────────────────────────────────────────────────
 #   credentialStore:
-#     adapter: "volundr.adapters.outbound.infisical_credential_store.InfisicalCredentialStore"
+#     adapter: "niuu.adapters.infisical_credential_store.InfisicalCredentialStore"
 #     kwargs:
 #       site_url: "https://app.infisical.com"
 #       client_id: ""
@@ -590,7 +590,7 @@ authorization:
 #
 credentialStore:
   # -- Fully-qualified class path for the CredentialStorePort adapter
-  adapter: "volundr.adapters.outbound.memory_credential_store.MemoryCredentialStore"
+  adapter: "niuu.adapters.memory_credential_store.MemoryCredentialStore"
   # -- All kwargs forwarded to the adapter constructor
   kwargs: {}
   # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
