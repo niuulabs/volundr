@@ -29,6 +29,7 @@ from tyr.domain.models import (
 from tyr.events import EventBus, TyrEvent
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
+from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
 
@@ -104,11 +105,13 @@ class ReviewEngine:
         git: GitPort,
         review_config: ReviewConfig,
         event_bus: EventBus | None = None,
+        volundr: VolundrPort | None = None,
     ) -> None:
         self._raid_repo = raid_repo
         self._git = git
         self._cfg = review_config
         self._event_bus = event_bus
+        self._volundr = volundr
 
     async def evaluate(self, raid_id: UUID) -> ReviewDecision:
         """Run the full review pipeline for a raid in REVIEW state."""
@@ -193,7 +196,10 @@ class ReviewEngine:
 
         if pr_status.mergeable:
             event = _make_event(
-                raid_id, ConfidenceEventType.CI_PASS, self._cfg.confidence_delta_mergeable, score
+                raid_id,
+                ConfidenceEventType.PR_MERGEABLE,
+                self._cfg.confidence_delta_mergeable,
+                score,
             )
         else:
             event = _make_event(
@@ -344,6 +350,9 @@ class ReviewEngine:
         )
         await self._raid_repo.add_confidence_event(event)
 
+        # Send failure context to the running session before resetting
+        await self._send_retry_feedback(raid, reason)
+
         validate_transition(raid.status, RaidStatus.PENDING)
         updated = await self._raid_repo.update_raid_status(
             raid.id, RaidStatus.PENDING, increment_retry=True
@@ -353,6 +362,24 @@ class ReviewEngine:
 
         await self._emit_state_changed(updated, action="retried")
         return ReviewDecision(raid=updated, action="retried", reason=reason)
+
+    # -- Session feedback --
+
+    async def _send_retry_feedback(self, raid: Raid, reason: str) -> None:
+        """Send failure context to the session before retrying."""
+        if self._volundr is None or not raid.session_id:
+            return
+        try:
+            await self._volundr.send_message(
+                raid.session_id,
+                f"Review failed: {reason}. Please fix and push again.",
+            )
+        except Exception:
+            logger.warning(
+                "Failed to send retry feedback to session %s for raid %s",
+                raid.session_id,
+                raid.id,
+            )
 
     # -- Phase gate --
 
@@ -391,6 +418,7 @@ class ReviewEngine:
                             "saga_id": str(saga.id),
                             "phase_number": next_phase.number,
                             "phase_name": next_phase.name,
+                            "owner_id": saga.owner_id,
                         },
                     )
                 )

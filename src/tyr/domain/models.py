@@ -45,6 +45,7 @@ class ConfidenceEventType(StrEnum):
     HUMAN_APPROVED = "human_approved"
     AUTO_APPROVED = "auto_approved"
     PR_CONFLICT = "pr_conflict"
+    PR_MERGEABLE = "pr_mergeable"
 
 
 # ---------------------------------------------------------------------------

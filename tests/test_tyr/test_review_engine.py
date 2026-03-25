@@ -26,6 +26,7 @@ from tyr.domain.services.review_engine import (
 from tyr.events import EventBus
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
+from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 NOW = datetime.now(UTC)
 
@@ -189,6 +190,40 @@ class StubRaidRepo(RaidRepository):
         return None
 
 
+class StubVolundr(VolundrPort):
+    """In-memory Volundr stub for review engine tests."""
+
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, str]] = []
+        self.fail_send: bool = False
+
+    async def spawn_session(
+        self, request: SpawnRequest, *, auth_token: str | None = None
+    ) -> VolundrSession:
+        raise NotImplementedError
+
+    async def get_session(
+        self, session_id: str, *, auth_token: str | None = None
+    ) -> VolundrSession | None:
+        return VolundrSession(id=session_id, name="s", status="running", tracker_issue_id=None)
+
+    async def list_sessions(self, *, auth_token: str | None = None) -> list[VolundrSession]:
+        return []
+
+    async def get_pr_status(self, session_id: str) -> PRStatus:
+        raise NotImplementedError
+
+    async def get_chronicle_summary(self, session_id: str) -> str:
+        return ""
+
+    async def send_message(
+        self, session_id: str, message: str, *, auth_token: str | None = None
+    ) -> None:
+        if self.fail_send:
+            raise RuntimeError("Send failed")
+        self.messages.append((session_id, message))
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -275,12 +310,13 @@ def _make_engine(
     git: StubGit | None = None,
     config: ReviewConfig | None = None,
     event_bus: EventBus | None = None,
+    volundr: StubVolundr | None = None,
 ) -> tuple[ReviewEngine, StubRaidRepo, StubGit, EventBus]:
     r = raid_repo or StubRaidRepo()
     g = git or StubGit()
     e = event_bus or EventBus()
     c = config or _default_config()
-    engine = ReviewEngine(raid_repo=r, git=g, review_config=c, event_bus=e)
+    engine = ReviewEngine(raid_repo=r, git=g, review_config=c, event_bus=e, volundr=volundr)
     return engine, r, g, e
 
 
@@ -751,6 +787,7 @@ class TestPhaseGate:
         phase_events = [e for e in events if e.event == "phase.unlocked"]
         assert len(phase_events) == 1
         assert phase_events[0].data["phase_id"] == str(next_phase_id)
+        assert phase_events[0].data["owner_id"] == "user-1"
 
     @pytest.mark.asyncio
     async def test_no_phase_gate_when_raids_remain(self) -> None:
@@ -883,8 +920,6 @@ class TestWatcherIntegration:
             async def update(self, owner_id: str, **fields: object) -> DispatcherState:
                 return await self.get_or_create(owner_id)
 
-        from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
-
         class StubVolundr(VolundrPort):
             async def spawn_session(
                 self, request: SpawnRequest, *, auth_token: str | None = None
@@ -967,8 +1002,6 @@ class TestWatcherIntegration:
             async def update(self, owner_id: str, **fields: object) -> DispatcherState:
                 return await self.get_or_create(owner_id)
 
-        from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
-
         class StubVolundr(VolundrPort):
             async def spawn_session(
                 self, request: SpawnRequest, *, auth_token: str | None = None
@@ -1037,6 +1070,143 @@ class TestNewConfidenceEventTypes:
     def test_pr_conflict_exists(self) -> None:
         assert ConfidenceEventType.PR_CONFLICT == "pr_conflict"
 
+    def test_pr_mergeable_exists(self) -> None:
+        assert ConfidenceEventType.PR_MERGEABLE == "pr_mergeable"
+
     def test_all_values_serializable(self) -> None:
         for evt in ConfidenceEventType:
             assert isinstance(evt.value, str)
+
+
+# ---------------------------------------------------------------------------
+# Tests: Mergeable signal uses PR_MERGEABLE (not CI_PASS)
+# ---------------------------------------------------------------------------
+
+
+class TestMergeableSignal:
+    @pytest.mark.asyncio
+    async def test_mergeable_records_pr_mergeable_event(self) -> None:
+        """Mergeable PR should record PR_MERGEABLE, not CI_PASS."""
+        engine, repo, git, _ = _make_engine()
+        raid = _make_raid(confidence=0.5)
+        repo.raids[raid.id] = raid
+        repo.saga = _make_saga()
+        repo.phase = _make_phase()
+
+        _setup_passing_pr(git, raid.pr_id)
+        git.changed_files[raid.pr_id] = ["src/main.py"]
+
+        await engine.evaluate(raid.id)
+
+        events = repo.events[raid.id]
+        event_types = [e.event_type for e in events]
+        assert ConfidenceEventType.PR_MERGEABLE in event_types
+        # CI_PASS should only appear once (from CI signal, not mergeable)
+        ci_pass_count = sum(1 for t in event_types if t == ConfidenceEventType.CI_PASS)
+        assert ci_pass_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: Session feedback on retry
+# ---------------------------------------------------------------------------
+
+
+class TestSessionFeedback:
+    @pytest.mark.asyncio
+    async def test_retry_sends_message_to_session(self) -> None:
+        """Auto-retry should send failure context to the session."""
+        volundr = StubVolundr()
+        engine, repo, git, _ = _make_engine(volundr=volundr)
+        raid = _make_raid(retry_count=0)
+        repo.raids[raid.id] = raid
+
+        _setup_failing_pr(git, raid.pr_id)
+
+        result = await engine.evaluate(raid.id)
+
+        assert result.action == "retried"
+        assert len(volundr.messages) == 1
+        session_id, message = volundr.messages[0]
+        assert session_id == "session-1"
+        assert "CI failed" in message
+
+    @pytest.mark.asyncio
+    async def test_retry_sends_conflict_message(self) -> None:
+        """Auto-retry for PR conflicts should send conflict context."""
+        volundr = StubVolundr()
+        engine, repo, git, _ = _make_engine(volundr=volundr)
+        raid = _make_raid(retry_count=0)
+        repo.raids[raid.id] = raid
+
+        _setup_conflicted_pr(git, raid.pr_id)
+
+        result = await engine.evaluate(raid.id)
+
+        assert result.action == "retried"
+        assert len(volundr.messages) == 1
+        assert "PR conflicts" in volundr.messages[0][1]
+
+    @pytest.mark.asyncio
+    async def test_retry_without_volundr_does_not_fail(self) -> None:
+        """Auto-retry without VolundrPort should still work."""
+        engine, repo, git, _ = _make_engine()  # no volundr
+        raid = _make_raid(retry_count=0)
+        repo.raids[raid.id] = raid
+
+        _setup_failing_pr(git, raid.pr_id)
+
+        result = await engine.evaluate(raid.id)
+
+        assert result.action == "retried"
+
+    @pytest.mark.asyncio
+    async def test_retry_send_failure_does_not_block(self) -> None:
+        """If sending the message fails, retry should still proceed."""
+        volundr = StubVolundr()
+        volundr.fail_send = True
+        engine, repo, git, _ = _make_engine(volundr=volundr)
+        raid = _make_raid(retry_count=0)
+        repo.raids[raid.id] = raid
+
+        _setup_failing_pr(git, raid.pr_id)
+
+        result = await engine.evaluate(raid.id)
+
+        assert result.action == "retried"
+        assert repo.raids[raid.id].status == RaidStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_retry_no_session_id_skips_message(self) -> None:
+        """If the raid has no session_id, skip sending the message."""
+        volundr = StubVolundr()
+        engine, repo, git, _ = _make_engine(volundr=volundr)
+        raid = _make_raid(retry_count=0)
+        # Clear session_id
+        raid = Raid(
+            id=raid.id,
+            phase_id=raid.phase_id,
+            tracker_id=raid.tracker_id,
+            name=raid.name,
+            description=raid.description,
+            acceptance_criteria=raid.acceptance_criteria,
+            declared_files=raid.declared_files,
+            estimate_hours=raid.estimate_hours,
+            status=raid.status,
+            confidence=raid.confidence,
+            session_id=None,
+            branch=raid.branch,
+            chronicle_summary=raid.chronicle_summary,
+            pr_url=raid.pr_url,
+            pr_id=raid.pr_id,
+            retry_count=raid.retry_count,
+            created_at=raid.created_at,
+            updated_at=raid.updated_at,
+        )
+        repo.raids[raid.id] = raid
+
+        _setup_failing_pr(git, raid.pr_id)
+
+        result = await engine.evaluate(raid.id)
+
+        assert result.action == "retried"
+        assert len(volundr.messages) == 0

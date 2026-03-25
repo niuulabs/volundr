@@ -271,6 +271,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 git=git_adapter,
                 review_config=settings.review,
                 event_bus=event_bus,
+                volundr=volundr_adapter,
             )
             app.state.review_engine = review_engine
 
