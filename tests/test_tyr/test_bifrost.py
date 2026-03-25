@@ -11,19 +11,19 @@ import respx
 from tyr.adapters.bifrost import (
     ANTHROPIC_API_VERSION,
     DECOMPOSITION_PROMPT,
-    MAX_ESTIMATE_HOURS,
-    MIN_ESTIMATE_HOURS,
     BifrostAdapter,
     DecompositionError,
-    ValidationError,
-    _parse_and_validate,
-    _validate_raid,
 )
 from tyr.domain.models import RaidSpec, SagaStructure
+from tyr.domain.validation import ValidationError, parse_and_validate, validate_raid
 
 # ---------------------------------------------------------------------------
 # Valid fixture data
 # ---------------------------------------------------------------------------
+
+# Default bounds (matching LLMConfig defaults)
+DEFAULT_MIN = 2.0
+DEFAULT_MAX = 8.0
 
 VALID_RAID = {
     "name": "Add user model",
@@ -55,14 +55,14 @@ def _api_response(payload: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# _parse_and_validate
+# parse_and_validate
 # ---------------------------------------------------------------------------
 
 
 class TestParseAndValidate:
     def test_valid_response(self) -> None:
         raw = json.dumps(VALID_RESPONSE)
-        result = _parse_and_validate(raw)
+        result = parse_and_validate(raw)
         assert isinstance(result, SagaStructure)
         assert result.name == "User Management Saga"
         assert len(result.phases) == 1
@@ -75,51 +75,51 @@ class TestParseAndValidate:
 
     def test_strips_markdown_fences(self) -> None:
         raw = "```json\n" + json.dumps(VALID_RESPONSE) + "\n```"
-        result = _parse_and_validate(raw)
+        result = parse_and_validate(raw)
         assert result.name == "User Management Saga"
 
     def test_strips_plain_fences(self) -> None:
         raw = "```\n" + json.dumps(VALID_RESPONSE) + "\n```"
-        result = _parse_and_validate(raw)
+        result = parse_and_validate(raw)
         assert result.name == "User Management Saga"
 
     def test_invalid_json(self) -> None:
         with pytest.raises(json.JSONDecodeError):
-            _parse_and_validate("not json at all")
+            parse_and_validate("not json at all")
 
     def test_not_a_dict(self) -> None:
         with pytest.raises(ValidationError, match="JSON object"):
-            _parse_and_validate(json.dumps([1, 2, 3]))
+            parse_and_validate(json.dumps([1, 2, 3]))
 
     def test_missing_name(self) -> None:
         data = {**VALID_RESPONSE, "name": ""}
         with pytest.raises(ValidationError, match="'name'"):
-            _parse_and_validate(json.dumps(data))
+            parse_and_validate(json.dumps(data))
 
     def test_missing_phases(self) -> None:
         data = {**VALID_RESPONSE, "phases": []}
         with pytest.raises(ValidationError, match="non-empty list"):
-            _parse_and_validate(json.dumps(data))
+            parse_and_validate(json.dumps(data))
 
     def test_phases_not_list(self) -> None:
         data = {**VALID_RESPONSE, "phases": "nope"}
         with pytest.raises(ValidationError, match="non-empty list"):
-            _parse_and_validate(json.dumps(data))
+            parse_and_validate(json.dumps(data))
 
     def test_phase_not_dict(self) -> None:
         data = {"name": "S", "phases": ["not a dict"]}
         with pytest.raises(ValidationError, match="Phase 0 must be an object"):
-            _parse_and_validate(json.dumps(data))
+            parse_and_validate(json.dumps(data))
 
     def test_phase_missing_name(self) -> None:
         data = {"name": "S", "phases": [{"raids": [VALID_RAID]}]}
         with pytest.raises(ValidationError, match="Phase 0.*'name'"):
-            _parse_and_validate(json.dumps(data))
+            parse_and_validate(json.dumps(data))
 
     def test_phase_empty_raids(self) -> None:
         data = {"name": "S", "phases": [{"name": "P1", "raids": []}]}
         with pytest.raises(ValidationError, match="non-empty list"):
-            _parse_and_validate(json.dumps(data))
+            parse_and_validate(json.dumps(data))
 
     def test_multiple_phases_and_raids(self) -> None:
         raid2 = {**VALID_RAID, "name": "Second raid"}
@@ -130,123 +130,140 @@ class TestParseAndValidate:
                 {"name": "P2", "raids": [raid2]},
             ],
         }
-        result = _parse_and_validate(json.dumps(data))
+        result = parse_and_validate(json.dumps(data))
         assert len(result.phases) == 2
         assert result.phases[1].raids[0].name == "Second raid"
 
     def test_integer_estimate_accepted(self) -> None:
         raid = {**VALID_RAID, "estimate_hours": 4}
         data = {"name": "S", "phases": [{"name": "P", "raids": [raid]}]}
-        result = _parse_and_validate(json.dumps(data))
+        result = parse_and_validate(json.dumps(data))
         assert result.phases[0].raids[0].estimate_hours == 4.0
 
     def test_integer_confidence_accepted(self) -> None:
         raid = {**VALID_RAID, "confidence": 1}
         data = {"name": "S", "phases": [{"name": "P", "raids": [raid]}]}
-        result = _parse_and_validate(json.dumps(data))
+        result = parse_and_validate(json.dumps(data))
         assert result.phases[0].raids[0].confidence == 1.0
+
+    def test_custom_estimate_bounds(self) -> None:
+        raid = {**VALID_RAID, "estimate_hours": 1.0}
+        data = {"name": "S", "phases": [{"name": "P", "raids": [raid]}]}
+        # Default bounds reject 1.0
+        with pytest.raises(ValidationError, match="below minimum"):
+            parse_and_validate(json.dumps(data))
+        # Custom bounds accept 1.0
+        result = parse_and_validate(
+            json.dumps(data), min_estimate_hours=0.5, max_estimate_hours=10.0
+        )
+        assert result.phases[0].raids[0].estimate_hours == 1.0
 
 
 # ---------------------------------------------------------------------------
-# _validate_raid
+# validate_raid
 # ---------------------------------------------------------------------------
 
 
 class TestValidateRaid:
     def test_valid_raid(self) -> None:
-        result = _validate_raid(VALID_RAID, "P1", 0)
+        result = validate_raid(VALID_RAID, "P1", 0)
         assert isinstance(result, RaidSpec)
         assert result.name == "Add user model"
 
     def test_raid_not_dict(self) -> None:
         with pytest.raises(ValidationError, match="must be an object"):
-            _validate_raid("not a dict", "P1", 0)
+            validate_raid("not a dict", "P1", 0)
 
     def test_missing_name(self) -> None:
         data = {**VALID_RAID, "name": ""}
         with pytest.raises(ValidationError, match="'name'"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_missing_description(self) -> None:
         data = {**VALID_RAID, "description": ""}
         with pytest.raises(ValidationError, match="'description'"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_empty_acceptance_criteria(self) -> None:
         data = {**VALID_RAID, "acceptance_criteria": []}
         with pytest.raises(ValidationError, match="acceptance_criteria"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_blank_criterion(self) -> None:
         data = {**VALID_RAID, "acceptance_criteria": ["valid", "  "]}
         with pytest.raises(ValidationError, match="acceptance_criteria"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_empty_declared_files(self) -> None:
         data = {**VALID_RAID, "declared_files": []}
         with pytest.raises(ValidationError, match="declared_files"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_blank_declared_file(self) -> None:
         data = {**VALID_RAID, "declared_files": ["valid.py", ""]}
         with pytest.raises(ValidationError, match="declared_files"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_estimate_not_number(self) -> None:
         data = {**VALID_RAID, "estimate_hours": "three"}
         with pytest.raises(ValidationError, match="estimate_hours"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_estimate_too_low(self) -> None:
         data = {**VALID_RAID, "estimate_hours": 1.0}
         with pytest.raises(ValidationError, match="below minimum"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_estimate_too_high(self) -> None:
         data = {**VALID_RAID, "estimate_hours": 10.0}
         with pytest.raises(ValidationError, match="exceeds maximum"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_estimate_at_min_boundary(self) -> None:
-        data = {**VALID_RAID, "estimate_hours": MIN_ESTIMATE_HOURS}
-        result = _validate_raid(data, "P1", 0)
-        assert result.estimate_hours == MIN_ESTIMATE_HOURS
+        data = {**VALID_RAID, "estimate_hours": DEFAULT_MIN}
+        result = validate_raid(data, "P1", 0)
+        assert result.estimate_hours == DEFAULT_MIN
 
     def test_estimate_at_max_boundary(self) -> None:
-        data = {**VALID_RAID, "estimate_hours": MAX_ESTIMATE_HOURS}
-        result = _validate_raid(data, "P1", 0)
-        assert result.estimate_hours == MAX_ESTIMATE_HOURS
+        data = {**VALID_RAID, "estimate_hours": DEFAULT_MAX}
+        result = validate_raid(data, "P1", 0)
+        assert result.estimate_hours == DEFAULT_MAX
+
+    def test_custom_estimate_bounds(self) -> None:
+        data = {**VALID_RAID, "estimate_hours": 1.0}
+        result = validate_raid(data, "P1", 0, min_estimate_hours=0.5, max_estimate_hours=10.0)
+        assert result.estimate_hours == 1.0
 
     def test_confidence_not_number(self) -> None:
         data = {**VALID_RAID, "confidence": "high"}
         with pytest.raises(ValidationError, match="confidence"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_confidence_out_of_range_low(self) -> None:
         data = {**VALID_RAID, "confidence": -0.1}
         with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_confidence_out_of_range_high(self) -> None:
         data = {**VALID_RAID, "confidence": 1.1}
         with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_confidence_at_boundaries(self) -> None:
         for val in [0.0, 1.0]:
             data = {**VALID_RAID, "confidence": val}
-            result = _validate_raid(data, "P1", 0)
+            result = validate_raid(data, "P1", 0)
             assert result.confidence == val
 
     def test_criteria_not_list(self) -> None:
         data = {**VALID_RAID, "acceptance_criteria": "just a string"}
         with pytest.raises(ValidationError, match="acceptance_criteria"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
     def test_files_not_list(self) -> None:
         data = {**VALID_RAID, "declared_files": "single.py"}
         with pytest.raises(ValidationError, match="declared_files"):
-            _validate_raid(data, "P1", 0)
+            validate_raid(data, "P1", 0)
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +324,43 @@ class TestBifrostAdapter:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_decompose_http_error_propagates(self, adapter: BifrostAdapter) -> None:
-        respx.post(API_URL).mock(return_value=httpx.Response(500))
+    async def test_non_retryable_http_error_propagates(self, adapter: BifrostAdapter) -> None:
+        respx.post(API_URL).mock(return_value=httpx.Response(401))
         with pytest.raises(httpx.HTTPStatusError):
             await adapter.decompose_spec("spec", "repo", model="claude-sonnet-4-6")
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_retryable_http_500_retries(self, adapter: BifrostAdapter) -> None:
+        route = respx.post(API_URL)
+        route.side_effect = [
+            httpx.Response(500),
+            httpx.Response(200, json=_api_response(VALID_RESPONSE)),
+        ]
+        result = await adapter.decompose_spec("spec", "repo", model="m")
+        assert result.name == "User Management Saga"
+        assert route.call_count == 2
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_retryable_http_429_retries(self) -> None:
+        adapter = BifrostAdapter(base_url="http://bifrost.test", max_retries=2)
+        route = respx.post(API_URL)
+        route.side_effect = [
+            httpx.Response(429),
+            httpx.Response(200, json=_api_response(VALID_RESPONSE)),
+        ]
+        result = await adapter.decompose_spec("spec", "repo", model="m")
+        assert result.name == "User Management Saga"
+        assert route.call_count == 2
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_retryable_http_503_exhausts_retries(self) -> None:
+        adapter = BifrostAdapter(base_url="http://bifrost.test", max_retries=2)
+        respx.post(API_URL).mock(return_value=httpx.Response(503))
+        with pytest.raises(DecompositionError, match="2 attempts"):
+            await adapter.decompose_spec("spec", "repo", model="m")
 
     @pytest.mark.asyncio
     @respx.mock
@@ -392,6 +442,16 @@ class TestBifrostAdapter:
     def test_default_base_url(self) -> None:
         adapter = BifrostAdapter()
         assert adapter._base_url == "https://api.anthropic.com"
+
+    def test_default_estimate_bounds(self) -> None:
+        adapter = BifrostAdapter()
+        assert adapter._min_estimate_hours == DEFAULT_MIN
+        assert adapter._max_estimate_hours == DEFAULT_MAX
+
+    def test_custom_estimate_bounds(self) -> None:
+        adapter = BifrostAdapter(min_estimate_hours=1.0, max_estimate_hours=12.0)
+        assert adapter._min_estimate_hours == 1.0
+        assert adapter._max_estimate_hours == 12.0
 
     @pytest.mark.asyncio
     @respx.mock

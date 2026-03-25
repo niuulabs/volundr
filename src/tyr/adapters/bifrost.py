@@ -11,7 +11,8 @@ import logging
 
 import httpx
 
-from tyr.domain.models import PhaseSpec, RaidSpec, SagaStructure
+from tyr.domain.models import SagaStructure
+from tyr.domain.validation import ValidationError, parse_and_validate
 from tyr.ports.llm import LLMPort
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,8 @@ Specification:
 {spec}
 """
 
-MIN_ESTIMATE_HOURS = 2.0
-MAX_ESTIMATE_HOURS = 8.0
+# HTTP status codes that trigger a retry (transient server/rate-limit errors).
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503})
 
 
 class DecompositionError(Exception):
@@ -90,11 +91,15 @@ class BifrostAdapter(LLMPort):
         timeout: float = 120.0,
         max_tokens: int = 8192,
         max_retries: int = 2,
+        min_estimate_hours: float = 2.0,
+        max_estimate_hours: float = 8.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._max_tokens = max_tokens
         self._max_retries = max_retries
+        self._min_estimate_hours = min_estimate_hours
+        self._max_estimate_hours = max_estimate_hours
         self._client = httpx.AsyncClient(timeout=timeout)
 
     def _headers(self) -> dict[str, str]:
@@ -113,13 +118,27 @@ class BifrostAdapter(LLMPort):
         for attempt in range(1, self._max_retries + 1):
             try:
                 raw = await self._call_api(prompt, model=model)
-                return _parse_and_validate(raw)
+                return parse_and_validate(
+                    raw,
+                    min_estimate_hours=self._min_estimate_hours,
+                    max_estimate_hours=self._max_estimate_hours,
+                )
             except (json.JSONDecodeError, ValidationError) as exc:
                 logger.warning(
                     "Decomposition attempt %d/%d failed: %s",
                     attempt,
                     self._max_retries,
                     exc,
+                )
+                last_error = exc
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code not in _RETRYABLE_STATUS_CODES:
+                    raise
+                logger.warning(
+                    "Decomposition attempt %d/%d: HTTP %d",
+                    attempt,
+                    self._max_retries,
+                    exc.response.status_code,
                 )
                 last_error = exc
 
@@ -147,112 +166,3 @@ class BifrostAdapter(LLMPort):
     async def close(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
-
-
-class ValidationError(Exception):
-    """Raised when LLM output fails structural validation."""
-
-
-def _parse_and_validate(raw: str) -> SagaStructure:
-    """Parse raw JSON string and validate against SagaStructure schema."""
-    # Strip markdown fences if LLM included them despite instructions
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        first_newline = cleaned.index("\n")
-        cleaned = cleaned[first_newline + 1 :]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[: cleaned.rfind("```")]
-    cleaned = cleaned.strip()
-
-    data = json.loads(cleaned)
-
-    if not isinstance(data, dict):
-        raise ValidationError("Response must be a JSON object")
-
-    name = data.get("name")
-    if not name or not isinstance(name, str):
-        raise ValidationError("Missing or invalid 'name' field")
-
-    phases_raw = data.get("phases")
-    if not isinstance(phases_raw, list) or not phases_raw:
-        raise ValidationError("'phases' must be a non-empty list")
-
-    phases: list[PhaseSpec] = []
-    for pi, phase_data in enumerate(phases_raw):
-        if not isinstance(phase_data, dict):
-            raise ValidationError(f"Phase {pi} must be an object")
-
-        phase_name = phase_data.get("name")
-        if not phase_name or not isinstance(phase_name, str):
-            raise ValidationError(f"Phase {pi}: missing or invalid 'name'")
-
-        raids_raw = phase_data.get("raids")
-        if not isinstance(raids_raw, list) or not raids_raw:
-            raise ValidationError(f"Phase '{phase_name}': 'raids' must be a non-empty list")
-
-        raids: list[RaidSpec] = []
-        for ri, raid_data in enumerate(raids_raw):
-            raids.append(_validate_raid(raid_data, phase_name, ri))
-
-        phases.append(PhaseSpec(name=phase_name, raids=raids))
-
-    return SagaStructure(name=name, phases=phases)
-
-
-def _validate_raid(data: object, phase_name: str, index: int) -> RaidSpec:
-    """Validate a single raid dict and return a RaidSpec."""
-    prefix = f"Phase '{phase_name}', raid {index}"
-
-    if not isinstance(data, dict):
-        raise ValidationError(f"{prefix}: must be an object")
-
-    raid_name = data.get("name")
-    if not raid_name or not isinstance(raid_name, str):
-        raise ValidationError(f"{prefix}: missing or invalid 'name'")
-
-    description = data.get("description")
-    if not description or not isinstance(description, str):
-        raise ValidationError(f"{prefix}: missing or invalid 'description'")
-
-    criteria = data.get("acceptance_criteria")
-    if not isinstance(criteria, list) or not criteria:
-        raise ValidationError(f"{prefix}: 'acceptance_criteria' must be a non-empty list")
-    for ci, c in enumerate(criteria):
-        if not isinstance(c, str) or not c.strip():
-            raise ValidationError(f"{prefix}: acceptance_criteria[{ci}] must be a non-empty string")
-
-    files = data.get("declared_files")
-    if not isinstance(files, list) or not files:
-        raise ValidationError(f"{prefix}: 'declared_files' must be a non-empty list")
-    for fi, f in enumerate(files):
-        if not isinstance(f, str) or not f.strip():
-            raise ValidationError(f"{prefix}: declared_files[{fi}] must be a non-empty string")
-
-    estimate = data.get("estimate_hours")
-    if not isinstance(estimate, (int, float)):
-        raise ValidationError(f"{prefix}: 'estimate_hours' must be a number")
-    estimate = float(estimate)
-    if estimate < MIN_ESTIMATE_HOURS:
-        raise ValidationError(
-            f"{prefix}: estimate_hours {estimate} below minimum {MIN_ESTIMATE_HOURS}"
-        )
-    if estimate > MAX_ESTIMATE_HOURS:
-        raise ValidationError(
-            f"{prefix}: estimate_hours {estimate} exceeds maximum {MAX_ESTIMATE_HOURS}"
-        )
-
-    confidence = data.get("confidence")
-    if not isinstance(confidence, (int, float)):
-        raise ValidationError(f"{prefix}: 'confidence' must be a number")
-    confidence = float(confidence)
-    if confidence < 0.0 or confidence > 1.0:
-        raise ValidationError(f"{prefix}: confidence must be between 0.0 and 1.0")
-
-    return RaidSpec(
-        name=raid_name,
-        description=description,
-        acceptance_criteria=criteria,
-        declared_files=files,
-        estimate_hours=estimate,
-        confidence=confidence,
-    )

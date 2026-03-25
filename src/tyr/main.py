@@ -227,6 +227,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             llm_cfg = settings.llm
             llm_cls = import_class(llm_cfg.adapter)
             llm_kwargs = resolve_secret_kwargs(llm_cfg.kwargs, llm_cfg.secret_kwargs_env)
+            llm_kwargs.setdefault("min_estimate_hours", llm_cfg.min_estimate_hours)
+            llm_kwargs.setdefault("max_estimate_hours", llm_cfg.max_estimate_hours)
             llm_adapter = llm_cls(**llm_kwargs)
             logger.info("LLM adapter: %s", llm_cfg.adapter.rsplit(".", 1)[-1])
 

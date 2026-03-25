@@ -165,6 +165,8 @@ class LLMConfig(BaseModel):
     kwargs: dict[str, Any] = Field(default_factory=dict)
     secret_kwargs_env: dict[str, str] = Field(default_factory=dict)
     default_model: str = Field(default="claude-sonnet-4-6")
+    min_estimate_hours: float = Field(default=2.0)
+    max_estimate_hours: float = Field(default=8.0)
 
 
 class TrackerConfig(BaseModel):
