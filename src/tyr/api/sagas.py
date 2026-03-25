@@ -7,15 +7,30 @@ milestones, issues) is fetched live from the tracker at read time.
 from __future__ import annotations
 
 import logging
-from uuid import UUID
+from dataclasses import replace
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import TrackerIssue, TrackerProject
+from tyr.config import ReviewConfig
+from tyr.domain.models import (
+    Phase,
+    PhaseStatus,
+    Raid,
+    RaidStatus,
+    Saga,
+    SagaStatus,
+    TrackerIssue,
+    TrackerProject,
+)
+from tyr.ports.git import GitPort
+from tyr.ports.llm import LLMPort
+from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
@@ -82,8 +97,90 @@ class SagaDetailResponse(BaseModel):
     phases: list[PhaseResponse]
 
 
+class DecomposeRequest(BaseModel):
+    spec: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    model: str = Field(default="")
+
+
+class RaidSpecResponse(BaseModel):
+    name: str
+    description: str
+    acceptance_criteria: list[str]
+    declared_files: list[str]
+    estimate_hours: float
+    confidence: float
+
+
+class PhaseSpecResponse(BaseModel):
+    name: str
+    raids: list[RaidSpecResponse]
+
+
+class SagaStructureResponse(BaseModel):
+    name: str
+    phases: list[PhaseSpecResponse]
+
+
 # ---------------------------------------------------------------------------
-# Dependency — overridden by main.py
+# Commit request / response models
+# ---------------------------------------------------------------------------
+
+
+class RaidSpecRequest(BaseModel):
+    name: str
+    description: str = ""
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    declared_files: list[str] = Field(default_factory=list)
+    estimate_hours: float = 0.0
+
+
+class PhaseSpecRequest(BaseModel):
+    name: str
+    raids: list[RaidSpecRequest]
+
+
+class CommitRequest(BaseModel):
+    name: str
+    slug: str
+    repos: list[str]
+    base_branch: str = "main"
+    phases: list[PhaseSpecRequest]
+
+
+class CommittedRaidResponse(BaseModel):
+    id: str
+    tracker_id: str
+    name: str
+    status: str
+
+
+class CommittedPhaseResponse(BaseModel):
+    id: str
+    tracker_id: str
+    number: int
+    name: str
+    status: str
+    raids: list[CommittedRaidResponse]
+
+
+class CommittedSagaResponse(BaseModel):
+    id: str
+    tracker_id: str
+    tracker_type: str
+    slug: str
+    name: str
+    repos: list[str]
+    feature_branch: str
+    base_branch: str
+    status: str
+    confidence: float
+    phases: list[CommittedPhaseResponse]
+    warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Dependencies — overridden by main.py
 # ---------------------------------------------------------------------------
 
 
@@ -91,6 +188,27 @@ async def resolve_saga_repo() -> SagaRepository:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Saga repository not configured",
+    )
+
+
+async def resolve_llm() -> LLMPort:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="LLM adapter not configured",
+    )
+
+
+async def resolve_raid_repo() -> RaidRepository:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Raid repository not configured",
+    )
+
+
+async def resolve_git() -> GitPort:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Git adapter not configured",
     )
 
 
@@ -262,6 +380,44 @@ def create_sagas_router() -> APIRouter:
             phases=phase_responses,
         )
 
+    @router.post("/decompose", response_model=SagaStructureResponse)
+    async def decompose_spec(
+        body: DecomposeRequest,
+        request: Request,
+        principal: Principal = Depends(extract_principal),
+        llm: LLMPort = Depends(resolve_llm),
+    ) -> SagaStructureResponse:
+        """Decompose a spec into a saga structure (stateless preview)."""
+        model = body.model or request.app.state.settings.llm.default_model
+        try:
+            structure = await llm.decompose_spec(body.spec, body.repo, model=model)
+        except Exception as exc:
+            logger.error("Decomposition failed: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"LLM decomposition failed: {exc}",
+            )
+        return SagaStructureResponse(
+            name=structure.name,
+            phases=[
+                PhaseSpecResponse(
+                    name=phase.name,
+                    raids=[
+                        RaidSpecResponse(
+                            name=raid.name,
+                            description=raid.description,
+                            acceptance_criteria=raid.acceptance_criteria,
+                            declared_files=raid.declared_files,
+                            estimate_hours=raid.estimate_hours,
+                            confidence=raid.confidence,
+                        )
+                        for raid in phase.raids
+                    ],
+                )
+                for phase in structure.phases
+            ],
+        )
+
     @router.delete("/{saga_id}", status_code=204)
     async def delete_saga(
         saga_id: str,
@@ -282,5 +438,199 @@ def create_sagas_router() -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Saga not found: {saga_id}",
             )
+
+    @router.post("/commit", response_model=CommittedSagaResponse, status_code=201)
+    async def commit_saga(
+        body: CommitRequest,
+        request: Request,
+        principal: Principal = Depends(extract_principal),
+        saga_repo: SagaRepository = Depends(resolve_saga_repo),
+        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        adapters: list[TrackerPort] = Depends(resolve_trackers),
+        git: GitPort = Depends(resolve_git),
+    ) -> CommittedSagaResponse:
+        """Commit a previewed saga structure.
+
+        Persists the saga, phases, and raids to PostgreSQL inside a single
+        transaction, then creates tracker entities and the feature branch.
+
+        Tracker and git calls are best-effort — if they fail after the DB
+        transaction commits, the operator must retry.  The DB writes are
+        atomic: a failure in any save rolls back the entire transaction.
+
+        Returns 409 if the slug already exists.
+        """
+        # Idempotency: reject duplicate slugs
+        existing = await saga_repo.get_saga_by_slug(body.slug)
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Saga with slug '{body.slug}' already exists",
+            )
+
+        if not body.phases:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="At least one phase is required",
+            )
+
+        tracker = adapters[0] if adapters else None
+        if tracker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No tracker configured",
+            )
+
+        review_cfg: ReviewConfig = getattr(
+            getattr(request.app.state, "settings", None),
+            "review",
+            ReviewConfig(),
+        )
+        initial_confidence = review_cfg.initial_confidence
+
+        now = datetime.now(UTC)
+        saga_id = uuid4()
+        feature_branch = f"feat/{body.slug}"
+
+        # Build saga domain object (tracker_id filled after tracker call)
+        saga = Saga(
+            id=saga_id,
+            tracker_id="",
+            tracker_type="",
+            slug=body.slug,
+            name=body.name,
+            repos=body.repos,
+            feature_branch=feature_branch,
+            base_branch=body.base_branch,
+            status=SagaStatus.ACTIVE,
+            confidence=initial_confidence,
+            created_at=now,
+            owner_id=principal.user_id,
+        )
+
+        # 1. Create saga in tracker (best-effort — logged on failure)
+        tracker_type = type(tracker).__name__
+        try:
+            tracker_saga_id = await tracker.create_saga(saga)
+        except Exception:
+            logger.warning("Tracker create_saga failed for slug=%s", body.slug, exc_info=True)
+            tracker_saga_id = ""
+        saga = replace(saga, tracker_id=tracker_saga_id, tracker_type=tracker_type)
+
+        # 2. Build all phases and raids, creating tracker entities along the way
+        phases: list[Phase] = []
+        raids: list[Raid] = []
+        phase_responses: list[CommittedPhaseResponse] = []
+
+        for phase_num, phase_spec in enumerate(body.phases, start=1):
+            is_first_phase = phase_num == 1
+            phase_status = PhaseStatus.ACTIVE if is_first_phase else PhaseStatus.GATED
+
+            phase = Phase(
+                id=uuid4(),
+                saga_id=saga_id,
+                tracker_id="",
+                number=phase_num,
+                name=phase_spec.name,
+                status=phase_status,
+                confidence=initial_confidence,
+            )
+
+            try:
+                tracker_phase_id = await tracker.create_phase(phase)
+            except Exception:
+                logger.warning(
+                    "Tracker create_phase failed for phase=%s", phase_spec.name, exc_info=True
+                )
+                tracker_phase_id = ""
+            phase = replace(phase, tracker_id=tracker_phase_id)
+            phases.append(phase)
+
+            raid_responses: list[CommittedRaidResponse] = []
+
+            for raid_spec in phase_spec.raids:
+                raid = Raid(
+                    id=uuid4(),
+                    phase_id=phase.id,
+                    tracker_id="",
+                    name=raid_spec.name,
+                    description=raid_spec.description,
+                    acceptance_criteria=raid_spec.acceptance_criteria,
+                    declared_files=raid_spec.declared_files,
+                    estimate_hours=raid_spec.estimate_hours,
+                    status=RaidStatus.PENDING,
+                    confidence=initial_confidence,
+                    session_id=None,
+                    branch=None,
+                    chronicle_summary=None,
+                    pr_url=None,
+                    pr_id=None,
+                    retry_count=0,
+                    created_at=now,
+                    updated_at=now,
+                )
+
+                try:
+                    tracker_raid_id = await tracker.create_raid(raid)
+                except Exception:
+                    logger.warning(
+                        "Tracker create_raid failed for raid=%s", raid_spec.name, exc_info=True
+                    )
+                    tracker_raid_id = ""
+                raid = replace(raid, tracker_id=tracker_raid_id)
+                raids.append(raid)
+
+                raid_responses.append(
+                    CommittedRaidResponse(
+                        id=str(raid.id),
+                        tracker_id=raid.tracker_id,
+                        name=raid.name,
+                        status=raid.status.value,
+                    )
+                )
+
+            phase_responses.append(
+                CommittedPhaseResponse(
+                    id=str(phase.id),
+                    tracker_id=phase.tracker_id,
+                    number=phase.number,
+                    name=phase.name,
+                    status=phase.status.value,
+                    raids=raid_responses,
+                )
+            )
+
+        # 3. Persist all DB rows in a single transaction
+        async with saga_repo.begin() as conn:
+            await saga_repo.save_saga(saga, conn=conn)
+            for phase in phases:
+                await raid_repo.save_phase(phase, conn=conn)
+            for raid in raids:
+                await raid_repo.save_raid(raid, conn=conn)
+
+        # 4. Create feature branch for each repo (best-effort — logged on failure)
+        warnings: list[str] = []
+        for repo in body.repos:
+            try:
+                await git.create_branch(repo, feature_branch, base=body.base_branch)
+            except Exception:
+                msg = f"Failed to create branch '{feature_branch}' in {repo}"
+                logger.warning(msg, exc_info=True)
+                warnings.append(msg)
+
+        return CommittedSagaResponse(
+            id=str(saga.id),
+            tracker_id=saga.tracker_id,
+            tracker_type=saga.tracker_type,
+            slug=saga.slug,
+            name=saga.name,
+            repos=saga.repos,
+            feature_branch=saga.feature_branch,
+            base_branch=saga.base_branch,
+            status=saga.status.value,
+            confidence=saga.confidence,
+            phases=phase_responses,
+            warnings=warnings,
+        )
 
     return router

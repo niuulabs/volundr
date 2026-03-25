@@ -86,6 +86,10 @@ class ReviewConfig(BaseModel):
     confidence_delta_approved: float = Field(default=0.15)
     confidence_delta_rejected: float = Field(default=-0.20)
     confidence_delta_retry: float = Field(default=-0.05)
+    initial_confidence: float = Field(
+        default=0.5,
+        description="Starting confidence score for newly committed sagas, phases, and raids.",
+    )
 
 
 class GitConfig(BaseModel):
@@ -171,11 +175,36 @@ class TelegramConfig(BaseModel):
     )
 
 
+class LLMConfig(BaseModel):
+    """LLM adapter configuration (dynamic adapter pattern)."""
+
+    adapter: str = Field(
+        default="tyr.adapters.bifrost.BifrostAdapter",
+        description="Fully-qualified class path for the LLM adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(default_factory=dict)
+    default_model: str = Field(default="claude-sonnet-4-6")
+    min_estimate_hours: float = Field(default=2.0)
+    max_estimate_hours: float = Field(default=8.0)
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
     cache_ttl_seconds: float = Field(default=30.0)
     rate_limit_max_retries: int = Field(default=3)
+
+
+class WatcherConfig(BaseModel):
+    """Raid completion watcher configuration."""
+
+    enabled: bool = Field(default=True)
+    poll_interval: float = Field(default=30.0, description="Seconds between polls.")
+    batch_size: int = Field(default=10, description="Max concurrent session checks.")
+    chronicle_on_complete: bool = Field(
+        default=True, description="Fetch chronicle summary on completion."
+    )
 
 
 class EventsConfig(BaseModel):
@@ -222,6 +251,8 @@ class Settings(BaseSettings):
     pat: PATConfig = Field(default_factory=PATConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
+    watcher: WatcherConfig = Field(default_factory=WatcherConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 

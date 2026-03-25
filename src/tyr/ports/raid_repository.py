@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 from uuid import UUID
 
 from tyr.domain.models import ConfidenceEvent, Phase, Raid, RaidStatus, Saga
@@ -10,6 +11,16 @@ from tyr.domain.models import ConfidenceEvent, Phase, Raid, RaidStatus, Saga
 
 class RaidRepository(ABC):
     """Abstract persistence for raids and their confidence history."""
+
+    @abstractmethod
+    async def save_phase(self, phase: Phase, *, conn: Any | None = None) -> None:
+        """Persist a new phase. Uses *conn* when inside a transaction."""
+        ...
+
+    @abstractmethod
+    async def save_raid(self, raid: Raid, *, conn: Any | None = None) -> None:
+        """Persist a new raid. Uses *conn* when inside a transaction."""
+        ...
 
     @abstractmethod
     async def get_raid(self, raid_id: UUID) -> Raid | None:
@@ -51,6 +62,26 @@ class RaidRepository(ABC):
     @abstractmethod
     async def get_phase_for_raid(self, raid_id: UUID) -> Phase | None:
         """Resolve the parent phase for a given raid."""
+        ...
+
+    @abstractmethod
+    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
+        """Fetch all raids in a given state."""
+        ...
+
+    @abstractmethod
+    async def update_raid_completion(
+        self,
+        raid_id: UUID,
+        *,
+        status: RaidStatus,
+        chronicle_summary: str | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        reason: str | None = None,
+        increment_retry: bool = False,
+    ) -> Raid | None:
+        """Update raid on completion detection — sets status plus optional fields."""
         ...
 
     @abstractmethod

@@ -118,6 +118,7 @@ class VolundrHTTPAdapter(VolundrPort):
             data = resp.json()
             return PRStatus(
                 pr_id=data["pr_id"],
+                url=data.get("url", ""),
                 state=data["state"],
                 mergeable=data["mergeable"],
                 ci_passed=data.get("ci_passed"),

@@ -37,9 +37,12 @@ from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
-from tyr.api.sagas import create_sagas_router, resolve_saga_repo
+from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
+from tyr.api.sagas import resolve_git as sagas_resolve_git
+from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.domain.services.watcher import RaidWatcher
 from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
@@ -171,6 +174,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return git_adapter
 
             app.dependency_overrides[resolve_git] = _resolve_git
+            app.dependency_overrides[sagas_resolve_git] = _resolve_git
 
             # Wire tracker for raids (uses first available tracker)
             async def _resolve_raids_tracker_dep(
@@ -196,6 +200,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return raid_repo
 
             app.dependency_overrides[resolve_raid_repo] = _resolve_raid_repo
+            app.dependency_overrides[sagas_resolve_raid_repo] = _resolve_raid_repo
 
             # Wire personal access token service
             from tyr.adapters.postgres_pats import PostgresPATRepository
@@ -243,10 +248,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.state.telegram_reply_client = telegram_reply_client
 
+            # Wire LLM adapter (dynamic adapter pattern)
+            from tyr.ports.llm import LLMPort as _LLMPort
+
+            llm_cfg = settings.llm
+            llm_cls = import_class(llm_cfg.adapter)
+            llm_kwargs = resolve_secret_kwargs(llm_cfg.kwargs, llm_cfg.secret_kwargs_env)
+            llm_kwargs.setdefault("min_estimate_hours", llm_cfg.min_estimate_hours)
+            llm_kwargs.setdefault("max_estimate_hours", llm_cfg.max_estimate_hours)
+            llm_adapter = llm_cls(**llm_kwargs)
+            logger.info("LLM adapter: %s", llm_cfg.adapter.rsplit(".", 1)[-1])
+
+            async def _resolve_llm() -> _LLMPort:
+                return llm_adapter
+
+            app.dependency_overrides[resolve_llm] = _resolve_llm
+
+            # Wire raid completion watcher
+            watcher = RaidWatcher(
+                volundr=volundr_adapter,
+                raid_repo=raid_repo,
+                dispatcher_repo=dispatcher_repo,
+                event_bus=event_bus,
+                config=settings.watcher,
+            )
+            app.state.watcher = watcher
+            await watcher.start()
+
             logger.info("Tyr started — database pool ready")
             yield
 
+            # Lifecycle cleanup
             await telegram_reply_client.close()
+            if hasattr(llm_adapter, "close"):
+                await llm_adapter.close()
+            await watcher.stop()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan

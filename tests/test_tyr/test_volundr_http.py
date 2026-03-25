@@ -311,7 +311,8 @@ class TestGetPRStatus:
             return_value=httpx.Response(
                 200,
                 json={
-                    "pr_id": "https://github.com/org/repo/pull/42",
+                    "pr_id": "42",
+                    "url": "https://github.com/org/repo/pull/42",
                     "state": "open",
                     "mergeable": True,
                     "ci_passed": True,
@@ -320,7 +321,8 @@ class TestGetPRStatus:
         )
 
         pr_status = await adapter.get_pr_status("ses-1")
-        assert pr_status.pr_id == "https://github.com/org/repo/pull/42"
+        assert pr_status.pr_id == "42"
+        assert pr_status.url == "https://github.com/org/repo/pull/42"
         assert pr_status.state == "open"
         assert pr_status.mergeable is True
         assert pr_status.ci_passed is True
@@ -373,9 +375,7 @@ class TestGetChronicleSummary:
     @pytest.mark.asyncio
     @respx.mock
     async def test_empty_summary(self, adapter: VolundrHTTPAdapter):
-        respx.get(f"{SESSIONS_URL}/ses-1/chronicle").mock(
-            return_value=httpx.Response(200, json={})
-        )
+        respx.get(f"{SESSIONS_URL}/ses-1/chronicle").mock(return_value=httpx.Response(200, json={}))
 
         summary = await adapter.get_chronicle_summary("ses-1")
         assert summary == ""

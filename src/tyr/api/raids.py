@@ -159,7 +159,7 @@ def create_raids_router() -> APIRouter:
         if raid.session_id:
             try:
                 pr_status = await volundr.get_pr_status(raid.session_id)
-                pr_url = pr_status.pr_id
+                pr_url = pr_status.url
                 ci_passed = pr_status.ci_passed
             except Exception:
                 logger.warning(

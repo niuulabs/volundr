@@ -250,14 +250,16 @@ mutation CreateIssue(
   $description: String,
   $projectId: ID!,
   $projectMilestoneId: ID,
-  $teamId: ID!
+  $teamId: ID!,
+  $estimate: Int
 ) {
   issueCreate(input: {
     title: $title,
     description: $description,
     projectId: $projectId,
     projectMilestoneId: $projectMilestoneId,
-    teamId: $teamId
+    teamId: $teamId,
+    estimate: $estimate
   }) {
     issue { id identifier }
     success
@@ -409,6 +411,11 @@ class LinearTrackerAdapter(TrackerPort):
         if raid.declared_files:
             files = "\n".join(f"- `{f}`" for f in raid.declared_files)
             description += f"\n\n## Declared Files\n{files}"
+        if raid.confidence:
+            description += f"\n\n**Confidence:** {raid.confidence:.0%}"
+
+        # Linear estimate is an integer (story points); round hours to nearest int
+        estimate = round(raid.estimate_hours) if raid.estimate_hours else None
 
         data = await self._gql.query(
             _CREATE_ISSUE_QUERY,
@@ -418,6 +425,7 @@ class LinearTrackerAdapter(TrackerPort):
                 "projectId": raid.tracker_id,
                 "projectMilestoneId": str(raid.phase_id) if raid.phase_id else None,
                 "teamId": await self._get_team_id(),
+                "estimate": estimate,
             },
         )
         issue = data.get("issueCreate", {}).get("issue")
@@ -721,6 +729,8 @@ class LinearTrackerAdapter(TrackerPort):
             session_id=None,
             branch=None,
             chronicle_summary=None,
+            pr_url=None,
+            pr_id=None,
             retry_count=0,
             created_at=now,
             updated_at=now,

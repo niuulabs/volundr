@@ -211,6 +211,8 @@ class TestRaid:
             session_id=None,
             branch=None,
             chronicle_summary=None,
+            pr_url=None,
+            pr_id=None,
             retry_count=0,
             created_at=NOW,
             updated_at=NOW,
@@ -260,7 +262,14 @@ class TestSessionInfo:
 
 class TestPRStatus:
     def test_create(self) -> None:
-        pr = PRStatus(pr_id="PR-1", state="open", mergeable=True, ci_passed=None)
+        pr = PRStatus(
+            pr_id="PR-1",
+            url="https://github.com/org/repo/pull/1",
+            state="open",
+            mergeable=True,
+            ci_passed=None,
+        )
+        assert pr.url == "https://github.com/org/repo/pull/1"
         assert pr.mergeable is True
         assert pr.ci_passed is None
 
@@ -273,8 +282,10 @@ class TestSpecStructures:
             acceptance_criteria=["Tests pass"],
             declared_files=["models.py"],
             estimate_hours=1.5,
+            confidence=0.9,
         )
         assert spec.estimate_hours == 1.5
+        assert spec.confidence == 0.9
 
     def test_phase_spec(self) -> None:
         raid = RaidSpec(
@@ -283,10 +294,12 @@ class TestSpecStructures:
             acceptance_criteria=[],
             declared_files=[],
             estimate_hours=1.0,
+            confidence=0.5,
         )
         phase = PhaseSpec(name="Phase 1", raids=[raid])
         assert len(phase.raids) == 1
 
     def test_saga_structure(self) -> None:
-        structure = SagaStructure(phases=[])
+        structure = SagaStructure(name="Test Saga", phases=[])
         assert structure.phases == []
+        assert structure.name == "Test Saga"

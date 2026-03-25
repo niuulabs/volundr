@@ -275,6 +275,8 @@ class NativeTrackerAdapter(TrackerPort):
             session_id=row.get("session_id"),
             branch=row.get("branch"),
             chronicle_summary=row.get("chronicle_summary"),
+            pr_url=row.get("pr_url"),
+            pr_id=row.get("pr_id"),
             retry_count=row.get("retry_count", 0) or 0,
             created_at=row["created_at"] or datetime.now(UTC),
             updated_at=row["updated_at"] or datetime.now(UTC),

@@ -70,6 +70,9 @@ class StubSagaRepo(SagaRepository):
     async def get_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> Saga | None:
         return next((s for s in self._sagas if s.id == saga_id), None)
 
+    async def get_saga_by_slug(self, slug: str) -> Saga | None:
+        return next((s for s in self._sagas if s.slug == slug), None)
+
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         return False
 
@@ -85,6 +88,12 @@ class StubRaidRepo(RaidRepository):
     def add_raid(self, raid: Raid) -> None:
         self.raids[raid.id] = raid
         self._tracker_id_map[raid.tracker_id] = raid
+
+    async def save_phase(self, phase, *, conn=None) -> None:  # noqa: ANN001
+        pass
+
+    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
+        self.raids[raid.id] = raid
 
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         return self.raids.get(raid_id)
@@ -116,6 +125,8 @@ class StubRaidRepo(RaidRepository):
             session_id=raid.session_id,
             branch=raid.branch,
             chronicle_summary=raid.chronicle_summary,
+            pr_url=raid.pr_url,
+            pr_id=raid.pr_id,
             retry_count=raid.retry_count + (1 if increment_retry else 0),
             created_at=raid.created_at,
             updated_at=datetime.now(UTC),
@@ -130,17 +141,23 @@ class StubRaidRepo(RaidRepository):
     async def add_confidence_event(self, event: ConfidenceEvent) -> None:
         self.events.setdefault(event.raid_id, []).append(event)
 
+    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
+        return self._tracker_id_map.get(tracker_id)
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return None
 
     async def get_phase_for_raid(self, raid_id: UUID) -> None:
         return self._phase_for_raid.get(raid_id)
 
+    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
+        return [r for r in self.raids.values() if r.status == status]
+
+    async def update_raid_completion(self, raid_id, **kwargs) -> Raid | None:  # noqa: ANN001
+        return await self.update_raid_status(raid_id, kwargs.get("status", RaidStatus.MERGED))
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return self._all_merged
-
-    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        return self._tracker_id_map.get(tracker_id)
 
 
 class StubDispatcherRepo(DispatcherRepository):
@@ -237,6 +254,8 @@ def _make_raid(
         session_id="session-1",
         branch="raid/test",
         chronicle_summary="summary",
+        pr_url=None,
+        pr_id=None,
         retry_count=0,
         created_at=now,
         updated_at=now,
