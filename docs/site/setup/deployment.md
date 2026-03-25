@@ -277,7 +277,14 @@ database:
 
 #### Envoy Sidecar
 
-Same configuration pattern as Volundr but with Tyr-specific roles claim:
+Same configuration pattern as Volundr but with Tyr-specific roles claim.
+
+> **Why `audiences: [volundr-api]` for both Volundr and Tyr?** Both services
+> share the same Keycloak realm and accept the same user JWTs. The `volundr-api`
+> audience is configured once in the IDP and used by all backend services. Tyr
+> differentiates authorization via the `rolesClaim` (which reads from
+> `resource_access.tyr.roles` instead of `resource_access.volundr.roles`), not
+> via a separate audience.
 
 ```yaml
 envoy:
@@ -286,7 +293,7 @@ envoy:
     enabled: true
     issuer: "https://keycloak.example.com/realms/volundr"
     audiences:
-      - volundr-api
+      - volundr-api              # shared audience — see note above
     jwksUri: "https://keycloak.example.com/realms/volundr/protocol/openid-connect/certs"
     keycloakHost: "keycloak.default.svc.cluster.local"
     keycloakPort: 8080
@@ -389,12 +396,24 @@ UPDATE schema_migrations SET version = <previous_version>, dirty = false;
 
 Then re-run the deployment so the init container retries.
 
-### Migration Counts
+### Checking Migration State
 
-| Chart | Migrations | Latest |
-|---|---|---|
-| Volundr | 22 | `000022_pat_unique_owner_name` |
-| Tyr | 12 | `000012_*` |
+To see how many migrations exist and which is latest, check the migration files
+directly:
+
+```bash
+# Volundr migrations
+ls migrations/*.up.sql | wc -l
+
+# Tyr migrations
+ls tyr_migrations/*.up.sql | wc -l
+```
+
+Or query the database:
+
+```sql
+SELECT version, dirty FROM schema_migrations;
+```
 
 ---
 
