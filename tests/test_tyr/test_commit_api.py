@@ -390,3 +390,84 @@ class TestCommitSagaOwnership:
     ) -> None:
         client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
         assert saga_repo.sagas[0].owner_id == "default"
+
+
+class TestCommitSagaTrackerFailure:
+    """Tracker calls are best-effort — failures are logged, not raised."""
+
+    def test_tracker_create_saga_failure_still_commits(
+        self,
+        saga_repo: MockSagaRepo,
+        raid_repo: MockRaidRepo,
+        mock_git: MockGit,
+    ) -> None:
+        class FailingSagaTracker(MockTracker):
+            async def create_saga(self, saga):  # noqa: ANN001
+                raise ConnectionError("Tracker down")
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [FailingSagaTracker()]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+        app.dependency_overrides[resolve_git] = lambda: mock_git
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
+        assert resp.status_code == 201
+        data = resp.json()
+        # tracker_id is empty because the call failed
+        assert data["tracker_id"] == ""
+        # But the saga was still persisted
+        assert len(saga_repo.sagas) == 1
+
+    def test_tracker_create_phase_failure_still_commits(
+        self,
+        saga_repo: MockSagaRepo,
+        raid_repo: MockRaidRepo,
+        mock_git: MockGit,
+    ) -> None:
+        class FailingPhaseTracker(MockTracker):
+            async def create_phase(self, phase):  # noqa: ANN001
+                raise ConnectionError("Tracker down")
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [FailingPhaseTracker()]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+        app.dependency_overrides[resolve_git] = lambda: mock_git
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
+        assert resp.status_code == 201
+        # Phases have empty tracker_id but are still persisted
+        assert len(raid_repo.phases) == 2
+        assert raid_repo.phases[0].tracker_id == ""
+
+    def test_tracker_create_raid_failure_still_commits(
+        self,
+        saga_repo: MockSagaRepo,
+        raid_repo: MockRaidRepo,
+        mock_git: MockGit,
+    ) -> None:
+        class FailingRaidTracker(MockTracker):
+            async def create_raid(self, raid):  # noqa: ANN001
+                raise ConnectionError("Tracker down")
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [FailingRaidTracker()]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+        app.dependency_overrides[resolve_git] = lambda: mock_git
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
+        assert resp.status_code == 201
+        # Raids have empty tracker_id but are still persisted
+        assert len(raid_repo.raids) == 3
+        assert raid_repo.raids[0].tracker_id == ""

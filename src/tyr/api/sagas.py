@@ -7,6 +7,7 @@ milestones, issues) is fetched live from the tracker at read time.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -419,7 +420,7 @@ def create_sagas_router() -> APIRouter:
         saga_id = uuid4()
         feature_branch = f"feat/{body.slug}"
 
-        # Build saga domain object (tracker_id filled after create)
+        # Build saga domain object (tracker_id filled after tracker call)
         saga = Saga(
             id=saga_id,
             tracker_id="",
@@ -435,22 +436,14 @@ def create_sagas_router() -> APIRouter:
             owner_id=principal.user_id,
         )
 
-        # 1. Create saga in tracker (best-effort — not transactional)
-        tracker_saga_id = await tracker.create_saga(saga)
-        saga = Saga(
-            id=saga.id,
-            tracker_id=tracker_saga_id,
-            tracker_type=type(tracker).__name__,
-            slug=saga.slug,
-            name=saga.name,
-            repos=saga.repos,
-            feature_branch=saga.feature_branch,
-            base_branch=saga.base_branch,
-            status=saga.status,
-            confidence=saga.confidence,
-            created_at=saga.created_at,
-            owner_id=saga.owner_id,
-        )
+        # 1. Create saga in tracker (best-effort — logged on failure)
+        tracker_type = type(tracker).__name__
+        try:
+            tracker_saga_id = await tracker.create_saga(saga)
+        except Exception:
+            logger.warning("Tracker create_saga failed for slug=%s", body.slug, exc_info=True)
+            tracker_saga_id = ""
+        saga = replace(saga, tracker_id=tracker_saga_id, tracker_type=tracker_type)
 
         # 2. Build all phases and raids, creating tracker entities along the way
         phases: list[Phase] = []
@@ -461,9 +454,8 @@ def create_sagas_router() -> APIRouter:
             is_first_phase = phase_num == 1
             phase_status = PhaseStatus.ACTIVE if is_first_phase else PhaseStatus.GATED
 
-            phase_id = uuid4()
             phase = Phase(
-                id=phase_id,
+                id=uuid4(),
                 saga_id=saga_id,
                 tracker_id="",
                 number=phase_num,
@@ -472,26 +464,22 @@ def create_sagas_router() -> APIRouter:
                 confidence=initial_confidence,
             )
 
-            # Create in tracker (best-effort)
-            tracker_phase_id = await tracker.create_phase(phase)
-            phase = Phase(
-                id=phase.id,
-                saga_id=phase.saga_id,
-                tracker_id=tracker_phase_id,
-                number=phase.number,
-                name=phase.name,
-                status=phase.status,
-                confidence=phase.confidence,
-            )
+            try:
+                tracker_phase_id = await tracker.create_phase(phase)
+            except Exception:
+                logger.warning(
+                    "Tracker create_phase failed for phase=%s", phase_spec.name, exc_info=True
+                )
+                tracker_phase_id = ""
+            phase = replace(phase, tracker_id=tracker_phase_id)
             phases.append(phase)
 
             raid_responses: list[CommittedRaidResponse] = []
 
             for raid_spec in phase_spec.raids:
-                raid_id = uuid4()
                 raid = Raid(
-                    id=raid_id,
-                    phase_id=phase_id,
+                    id=uuid4(),
+                    phase_id=phase.id,
                     tracker_id="",
                     name=raid_spec.name,
                     description=raid_spec.description,
@@ -508,26 +496,14 @@ def create_sagas_router() -> APIRouter:
                     updated_at=now,
                 )
 
-                # Create in tracker (best-effort)
-                tracker_raid_id = await tracker.create_raid(raid)
-                raid = Raid(
-                    id=raid.id,
-                    phase_id=raid.phase_id,
-                    tracker_id=tracker_raid_id,
-                    name=raid.name,
-                    description=raid.description,
-                    acceptance_criteria=raid.acceptance_criteria,
-                    declared_files=raid.declared_files,
-                    estimate_hours=raid.estimate_hours,
-                    status=raid.status,
-                    confidence=raid.confidence,
-                    session_id=raid.session_id,
-                    branch=raid.branch,
-                    chronicle_summary=raid.chronicle_summary,
-                    retry_count=raid.retry_count,
-                    created_at=raid.created_at,
-                    updated_at=raid.updated_at,
-                )
+                try:
+                    tracker_raid_id = await tracker.create_raid(raid)
+                except Exception:
+                    logger.warning(
+                        "Tracker create_raid failed for raid=%s", raid_spec.name, exc_info=True
+                    )
+                    tracker_raid_id = ""
+                raid = replace(raid, tracker_id=tracker_raid_id)
                 raids.append(raid)
 
                 raid_responses.append(
