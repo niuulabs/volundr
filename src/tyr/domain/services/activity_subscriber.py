@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
-from tyr.events import EventBus, TyrEvent
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import ActivityEvent, VolundrPort
@@ -39,7 +39,7 @@ class SessionActivitySubscriber:
         volundr: VolundrPort,
         raid_repo: RaidRepository,
         dispatcher_repo: DispatcherRepository,
-        event_bus: EventBus,
+        event_bus: EventBusPort,
         config: WatcherConfig,
     ) -> None:
         self._volundr = volundr

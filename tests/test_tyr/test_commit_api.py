@@ -96,8 +96,17 @@ class MockRaidRepo(RaidRepository):
     ) -> Raid | None:
         return None
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        return None
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return False
+
+    async def save_session_message(self, message: object) -> None:
+        pass
+
+    async def get_session_messages(self, raid_id: UUID) -> list:
+        return []
 
 
 class MockGit(GitPort):

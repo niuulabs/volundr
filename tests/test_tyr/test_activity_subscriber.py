@@ -22,7 +22,7 @@ from tyr.domain.services.activity_subscriber import (
     CompletionEvaluation,
     SessionActivitySubscriber,
 )
-from tyr.events import EventBus
+from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrSession
@@ -174,6 +174,12 @@ class StubRaidRepo(RaidRepository):
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return False
 
+    async def save_session_message(self, message: object) -> None:
+        pass
+
+    async def get_session_messages(self, raid_id: UUID) -> list:
+        return []
+
 
 class StubDispatcherRepo(DispatcherRepository):
     """In-memory dispatcher repo for activity subscriber tests."""
@@ -277,16 +283,16 @@ def _make_subscriber(
     volundr: StubVolundr | None = None,
     raid_repo: StubRaidRepo | None = None,
     dispatcher_repo: StubDispatcherRepo | None = None,
-    event_bus: EventBus | None = None,
+    event_bus: InMemoryEventBus | None = None,
     config: WatcherConfig | None = None,
-) -> tuple[SessionActivitySubscriber, StubVolundr, StubRaidRepo, EventBus]:
+) -> tuple[SessionActivitySubscriber, StubVolundr, StubRaidRepo, InMemoryEventBus]:
     v = volundr or StubVolundr()
     # Register a default running session so debounced evaluation can verify it
     if "session-1" not in v.sessions:
         v.sessions["session-1"] = _make_volundr_session()
     r = raid_repo or StubRaidRepo()
     d = dispatcher_repo or StubDispatcherRepo()
-    e = event_bus or EventBus()
+    e = event_bus or InMemoryEventBus()
     c = config or _default_config()
     sub = SessionActivitySubscriber(
         volundr=v, raid_repo=r, dispatcher_repo=d, event_bus=e, config=c

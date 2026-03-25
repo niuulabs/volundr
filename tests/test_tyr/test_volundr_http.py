@@ -421,3 +421,47 @@ class TestConstructor:
         adapter = VolundrHTTPAdapter(base_url="http://example.com", api_key="pat-xyz", timeout=15.0)
         assert adapter._api_key == "pat-xyz"
         assert adapter._timeout == 15.0
+
+
+# -------------------------------------------------------------------
+# send_message
+# -------------------------------------------------------------------
+
+
+class TestSendMessage:
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_success(self, adapter: VolundrHTTPAdapter):
+        route = respx.post(f"{SESSIONS_URL}/ses-1/messages").mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+
+        await adapter.send_message("ses-1", "Fix the test")
+
+        sent = route.calls[0].request
+        import json
+
+        body = json.loads(sent.content)
+        assert body["content"] == "Fix the test"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_sends_auth_token(self, adapter: VolundrHTTPAdapter):
+        route = respx.post(f"{SESSIONS_URL}/ses-1/messages").mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+
+        await adapter.send_message("ses-1", "hello", auth_token="pat-abc")
+
+        sent = route.calls[0].request
+        assert sent.headers["Authorization"] == "Bearer pat-abc"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_raises_on_error(self, adapter: VolundrHTTPAdapter):
+        respx.post(f"{SESSIONS_URL}/ses-1/messages").mock(
+            return_value=httpx.Response(500, text="error")
+        )
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await adapter.send_message("ses-1", "hello")

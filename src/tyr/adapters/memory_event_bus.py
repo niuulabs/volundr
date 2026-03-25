@@ -1,16 +1,15 @@
-"""Tyr event bus — in-process pub/sub for SSE broadcasting.
+"""In-memory event bus adapter — fan-out pub/sub using asyncio queues.
 
-Application services call ``event_bus.emit(event)`` to broadcast state changes.
-The SSE handler subscribes a per-client queue and streams events to the browser.
+This is the default EventBusPort implementation. Each subscriber gets a
+dedicated ``asyncio.Queue``; ``emit`` fans out to all queues.  State-type
+events are cached and replayed to new subscribers as an initial snapshot.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-import uuid
-from dataclasses import dataclass, field
-from typing import Any
+
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 
 # Event types that represent current persistent state.
 # These are cached and replayed to new subscribers as an initial snapshot,
@@ -18,20 +17,7 @@ from typing import Any
 _SNAPSHOT_TYPES: frozenset[str] = frozenset({"dispatcher.state"})
 
 
-@dataclass
-class TyrEvent:
-    """A single Tyr SSE event."""
-
-    event: str
-    data: dict[str, Any]
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-
-    def to_sse(self) -> str:
-        """Serialise as SSE wire format (id / event / data / blank line)."""
-        return f"id: {self.id}\nevent: {self.event}\ndata: {json.dumps(self.data)}\n\n"
-
-
-class EventBus:
+class InMemoryEventBus(EventBusPort):
     """In-process broadcast bus for Tyr SSE events.
 
     One queue per connected SSE client.  ``emit`` fans out to all queues.

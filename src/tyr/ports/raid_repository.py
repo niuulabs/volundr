@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from uuid import UUID
 
-from tyr.domain.models import ConfidenceEvent, Phase, Raid, RaidStatus, Saga
+from tyr.domain.models import ConfidenceEvent, Phase, Raid, RaidStatus, Saga, SessionMessage
 
 
 class RaidRepository(ABC):
@@ -90,6 +90,24 @@ class RaidRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        """Resolve the owner_id for a raid via its parent saga.
+
+        Returns the owner_id string, or None if the raid or saga is not found.
+        """
+        ...
+
+    @abstractmethod
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         """Check whether every raid in the phase has status MERGED."""
+        ...
+
+    @abstractmethod
+    async def save_session_message(self, message: SessionMessage) -> None:
+        """Persist a message sent to a running session (audit trail)."""
+        ...
+
+    @abstractmethod
+    async def get_session_messages(self, raid_id: UUID) -> list[SessionMessage]:
+        """Return all messages sent to a raid's session, ordered by created_at."""
         ...
