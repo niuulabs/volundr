@@ -465,7 +465,7 @@ class TestNotificationServiceLifecycle:
         event_bus = EventBus()
         factory = StubChannelFactory()
         raid_repo = StubRaidRepo()
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
 
         assert service.running is False
         await service.start()
@@ -481,7 +481,7 @@ class TestNotificationServiceLifecycle:
         event_bus = EventBus()
         factory = StubChannelFactory()
         raid_repo = StubRaidRepo()
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.stop()  # Should not raise
 
 
@@ -498,7 +498,7 @@ class TestNotificationServiceEventMapping:
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -535,7 +535,7 @@ class TestNotificationServiceEventMapping:
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -570,7 +570,7 @@ class TestNotificationServiceEventMapping:
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -599,7 +599,7 @@ class TestNotificationServiceEventMapping:
         raid_repo = StubRaidRepo()
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -621,7 +621,7 @@ class TestNotificationServiceEventMapping:
         factory = StubChannelFactory(channels={"user-1": [channel]})
         raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(TyrEvent(event="some.unknown.event", data={"foo": "bar"}))
@@ -640,7 +640,7 @@ class TestNotificationServiceEventMapping:
         raid_repo = StubRaidRepo()
         # saga is None → owner cannot be resolved
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -666,7 +666,7 @@ class TestNotificationServiceEventMapping:
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -693,7 +693,7 @@ class TestNotificationServiceEventMapping:
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -720,7 +720,7 @@ class TestNotificationServiceEventMapping:
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -742,7 +742,7 @@ class TestNotificationServiceEventMapping:
         factory = StubChannelFactory(channels={"user-1": [channel]})
         raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -772,7 +772,7 @@ class TestNotificationServiceEventMapping:
         factory = StubChannelFactory(channels={"user-1": [channel]})
         raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(TyrEvent(event="saga.pr_created", data={"saga_name": "X"}))
@@ -789,7 +789,7 @@ class TestNotificationServiceEventMapping:
         factory = StubChannelFactory(channels={"user-1": [channel]})
         raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -819,7 +819,7 @@ class TestNotificationServiceEventMapping:
         factory = StubChannelFactory(channels={"user-1": [channel]})
         raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -898,7 +898,7 @@ class TestNotificationServiceEventMapping:
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo)
+        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
         await service.start()
 
         # Emit without tracker_id in data

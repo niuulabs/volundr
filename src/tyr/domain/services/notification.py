@@ -43,9 +43,6 @@ _STATUS_NOTIFICATION_MAP: dict[str, dict[str, Any]] = {
     },
 }
 
-_CONFIDENCE_THRESHOLD = 0.3
-
-
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -65,7 +62,7 @@ class NotificationService:
         channel_factory: NotificationChannelFactory,
         raid_repo: RaidRepository,
         *,
-        confidence_threshold: float = _CONFIDENCE_THRESHOLD,
+        confidence_threshold: float,
     ) -> None:
         self._event_bus = event_bus
         self._channel_factory = channel_factory
@@ -254,6 +251,9 @@ class NotificationService:
         """Map a phase.unlocked event."""
         owner_id = data.get("owner_id", "")
         if not owner_id:
+            logger.warning(
+                "phase.unlocked event missing owner_id, skipping notification"
+            )
             return None
 
         phase_number = data.get("phase_number", "?")
