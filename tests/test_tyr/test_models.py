@@ -273,8 +273,10 @@ class TestSpecStructures:
             acceptance_criteria=["Tests pass"],
             declared_files=["models.py"],
             estimate_hours=1.5,
+            confidence=0.9,
         )
         assert spec.estimate_hours == 1.5
+        assert spec.confidence == 0.9
 
     def test_phase_spec(self) -> None:
         raid = RaidSpec(
@@ -283,10 +285,12 @@ class TestSpecStructures:
             acceptance_criteria=[],
             declared_files=[],
             estimate_hours=1.0,
+            confidence=0.5,
         )
         phase = PhaseSpec(name="Phase 1", raids=[raid])
         assert len(phase.raids) == 1
 
     def test_saga_structure(self) -> None:
-        structure = SagaStructure(phases=[])
+        structure = SagaStructure(name="Test Saga", phases=[])
         assert structure.phases == []
+        assert structure.name == "Test Saga"

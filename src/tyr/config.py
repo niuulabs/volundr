@@ -155,6 +155,14 @@ class TelegramConfig(BaseModel):
     )
 
 
+class BifrostConfig(BaseModel):
+    """Bifröst LLM gateway configuration."""
+
+    url: str = Field(default="http://localhost:8080")
+    timeout: float = Field(default=120.0)
+    default_model: str = Field(default="claude-sonnet-4-6")
+
+
 class TrackerConfig(BaseModel):
     """Tracker adapter configuration."""
 
@@ -206,6 +214,7 @@ class Settings(BaseSettings):
     pat: PATConfig = Field(default_factory=PATConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
+    bifrost: BifrostConfig = Field(default_factory=BifrostConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 

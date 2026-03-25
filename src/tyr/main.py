@@ -33,7 +33,7 @@ from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
-from tyr.api.sagas import create_sagas_router, resolve_saga_repo
+from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.events import EventBus
@@ -165,9 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             async def _resolve_raids_tracker_dep(
                 principal: Principal = Depends(extract_principal),
             ) -> TrackerPort:
-                trackers = await app.state.tracker_factory.for_owner(
-                    principal.user_id
-                )
+                trackers = await app.state.tracker_factory.for_owner(principal.user_id)
                 if not trackers:
                     from fastapi import HTTPException, status
 
@@ -177,9 +175,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     )
                 return trackers[0]
 
-            app.dependency_overrides[resolve_raids_tracker] = (
-                _resolve_raids_tracker_dep
-            )
+            app.dependency_overrides[resolve_raids_tracker] = _resolve_raids_tracker_dep
 
             # Wire raid repository
             raid_repo = PostgresRaidRepository(pool)
@@ -224,6 +220,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return event_bus
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
+
+            # Wire LLM adapter (Bifröst)
+            from tyr.adapters.bifrost import BifrostAdapter
+            from tyr.ports.llm import LLMPort as _LLMPort
+
+            bifrost = BifrostAdapter(
+                base_url=settings.bifrost.url,
+                timeout=settings.bifrost.timeout,
+            )
+
+            async def _resolve_llm() -> _LLMPort:
+                return bifrost
+
+            app.dependency_overrides[resolve_llm] = _resolve_llm
 
             logger.info("Tyr started — database pool ready")
             yield
