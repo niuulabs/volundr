@@ -11,6 +11,7 @@ The engine then decides: auto-approve, auto-retry, or escalate to human review.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,7 +27,7 @@ from tyr.domain.models import (
     RaidStatus,
     validate_transition,
 )
-from tyr.events import EventBus, TyrEvent
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import VolundrPort
@@ -104,7 +105,7 @@ class ReviewEngine:
         raid_repo: RaidRepository,
         git: GitPort,
         review_config: ReviewConfig,
-        event_bus: EventBus | None = None,
+        event_bus: EventBusPort | None = None,
         volundr: VolundrPort | None = None,
     ) -> None:
         self._raid_repo = raid_repo
@@ -112,6 +113,53 @@ class ReviewEngine:
         self._cfg = review_config
         self._event_bus = event_bus
         self._volundr = volundr
+        self._task: asyncio.Task[None] | None = None
+
+    async def start(self) -> None:
+        """Subscribe to the event bus and react to raids entering REVIEW."""
+        if self._event_bus is None:
+            return
+        self._task = asyncio.create_task(self._listen())
+
+    async def stop(self) -> None:
+        """Cancel the event listener task."""
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+    async def _listen(self) -> None:
+        """Listen for raid.state_changed events where status == REVIEW."""
+        if self._event_bus is None:
+            return
+        q = self._event_bus.subscribe()
+        try:
+            while True:
+                event = await q.get()
+                if event.event != "raid.state_changed":
+                    continue
+                if event.data.get("status") != RaidStatus.REVIEW.value:
+                    continue
+                raid_id_str = event.data.get("raid_id")
+                if not raid_id_str:
+                    continue
+                try:
+                    raid_id = UUID(raid_id_str)
+                    await self.evaluate(raid_id)
+                except Exception:
+                    logger.warning(
+                        "Review engine failed for raid %s",
+                        raid_id_str,
+                        exc_info=True,
+                    )
+        except asyncio.CancelledError:
+            return
+        finally:
+            if self._event_bus is not None:
+                self._event_bus.unsubscribe(q)
 
     async def evaluate(self, raid_id: UUID) -> ReviewDecision:
         """Run the full review pipeline for a raid in REVIEW state."""

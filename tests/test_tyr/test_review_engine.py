@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 
+from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.config import ReviewConfig
 from tyr.domain.models import (
     ConfidenceEvent,
@@ -23,10 +25,9 @@ from tyr.domain.services.review_engine import (
     ReviewEngine,
     detect_scope_breach,
 )
-from tyr.events import EventBus
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
-from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
+from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrSession
 
 NOW = datetime.now(UTC)
 
@@ -189,6 +190,17 @@ class StubRaidRepo(RaidRepository):
                 return updated
         return None
 
+    async def save_session_message(self, message: object) -> None:
+        pass
+
+    async def get_session_messages(self, raid_id: UUID) -> list:
+        return []
+
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        if self.saga:
+            return self.saga.owner_id
+        return None
+
 
 class StubVolundr(VolundrPort):
     """In-memory Volundr stub for review engine tests."""
@@ -222,6 +234,10 @@ class StubVolundr(VolundrPort):
         if self.fail_send:
             raise RuntimeError("Send failed")
         self.messages.append((session_id, message))
+
+    async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
+        return
+        yield  # type: ignore[misc]  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
@@ -309,12 +325,12 @@ def _make_engine(
     raid_repo: StubRaidRepo | None = None,
     git: StubGit | None = None,
     config: ReviewConfig | None = None,
-    event_bus: EventBus | None = None,
+    event_bus: InMemoryEventBus | None = None,
     volundr: StubVolundr | None = None,
-) -> tuple[ReviewEngine, StubRaidRepo, StubGit, EventBus]:
+) -> tuple[ReviewEngine, StubRaidRepo, StubGit, InMemoryEventBus]:
     r = raid_repo or StubRaidRepo()
     g = git or StubGit()
-    e = event_bus or EventBus()
+    e = event_bus or InMemoryEventBus()
     c = config or _default_config()
     engine = ReviewEngine(raid_repo=r, git=g, review_config=c, event_bus=e, volundr=volundr)
     return engine, r, g, e
@@ -893,169 +909,114 @@ class TestReviewConfig:
 
 
 # ---------------------------------------------------------------------------
-# Tests: Watcher integration
+# Tests: Event-driven review integration
 # ---------------------------------------------------------------------------
 
 
-class TestWatcherIntegration:
+class TestEventDrivenReview:
     @pytest.mark.asyncio
-    async def test_watcher_triggers_review_on_completion(self) -> None:
-        """Watcher should call the review callback when a raid enters REVIEW."""
-        from tyr.config import WatcherConfig
-        from tyr.domain.models import DispatcherState
-        from tyr.domain.services.watcher import RaidWatcher
-        from tyr.ports.dispatcher_repository import DispatcherRepository
+    async def test_review_engine_reacts_to_state_changed_event(self) -> None:
+        """ReviewEngine should evaluate a raid when it sees a REVIEW state_changed event."""
+        import asyncio
 
-        class StubDispatcherRepo(DispatcherRepository):
-            async def get_or_create(self, owner_id: str) -> DispatcherState:
-                return DispatcherState(
-                    id=uuid4(),
-                    owner_id=owner_id,
-                    running=True,
-                    threshold=0.5,
-                    max_concurrent_raids=3,
-                    updated_at=NOW,
-                )
+        from tyr.ports.event_bus import TyrEvent
 
-            async def update(self, owner_id: str, **fields: object) -> DispatcherState:
-                return await self.get_or_create(owner_id)
+        engine, repo, git, bus = _make_engine()
+        raid = _make_raid(confidence=0.5)
+        repo.raids[raid.id] = raid
+        repo.saga = _make_saga()
+        repo.phase = _make_phase()
 
-        class StubVolundr(VolundrPort):
-            async def spawn_session(
-                self, request: SpawnRequest, *, auth_token: str | None = None
-            ) -> VolundrSession:
-                raise NotImplementedError
+        _setup_passing_pr(git, raid.pr_id)
+        git.changed_files[raid.pr_id] = ["src/main.py"]
 
-            async def get_session(
-                self, session_id: str, *, auth_token: str | None = None
-            ) -> VolundrSession | None:
-                return VolundrSession(
-                    id=session_id, name="s", status="completed", tracker_issue_id=None
-                )
+        await engine.start()
+        await asyncio.sleep(0)  # yield so listener task subscribes
 
-            async def list_sessions(self, *, auth_token: str | None = None) -> list[VolundrSession]:
-                return []
-
-            async def get_pr_status(self, session_id: str) -> PRStatus:
-                return PRStatus(
-                    pr_id="PR-42",
-                    url="https://github.com/org/repo/pull/42",
-                    state="open",
-                    mergeable=True,
-                    ci_passed=True,
-                )
-
-            async def get_chronicle_summary(self, session_id: str) -> str:
-                return "Done"
-
-            async def send_message(
-                self, session_id: str, message: str, *, auth_token: str | None = None
-            ) -> None:
-                pass
-
-        review_called: list[UUID] = []
-
-        async def on_review(raid_id: UUID) -> None:
-            review_called.append(raid_id)
-
-        raid_repo = StubRaidRepo()
-        raid_repo.saga = _make_saga()
-        raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
-
-        bus = EventBus()
-        config = WatcherConfig(enabled=True, poll_interval=1.0, batch_size=10)
-
-        watcher = RaidWatcher(
-            volundr=StubVolundr(),
-            raid_repo=raid_repo,
-            dispatcher_repo=StubDispatcherRepo(),
-            event_bus=bus,
-            config=config,
-            on_review=on_review,
+        # Emit a raid.state_changed event with status=REVIEW
+        await bus.emit(
+            TyrEvent(
+                event="raid.state_changed",
+                data={
+                    "raid_id": str(raid.id),
+                    "status": RaidStatus.REVIEW.value,
+                    "confidence": raid.confidence,
+                    "action": "completed",
+                    "tracker_id": raid.tracker_id,
+                },
+            )
         )
 
-        await watcher._poll_cycle()
+        # Give the listener task time to process
+        await asyncio.sleep(0.1)
+        await engine.stop()
 
-        assert len(review_called) == 1
-        assert review_called[0] == raid.id
+        # The engine should have auto-approved the raid
+        assert repo.raids[raid.id].status == RaidStatus.MERGED
 
     @pytest.mark.asyncio
-    async def test_watcher_handles_review_error_gracefully(self) -> None:
-        """Watcher should log but not crash if the review callback raises."""
-        from tyr.config import WatcherConfig
-        from tyr.domain.models import DispatcherState
-        from tyr.domain.services.watcher import RaidWatcher
-        from tyr.ports.dispatcher_repository import DispatcherRepository
+    async def test_review_engine_ignores_non_review_events(self) -> None:
+        """ReviewEngine should ignore state_changed events for non-REVIEW states."""
+        import asyncio
 
-        class StubDispatcherRepo(DispatcherRepository):
-            async def get_or_create(self, owner_id: str) -> DispatcherState:
-                return DispatcherState(
-                    id=uuid4(),
-                    owner_id=owner_id,
-                    running=True,
-                    threshold=0.5,
-                    max_concurrent_raids=3,
-                    updated_at=NOW,
-                )
+        from tyr.ports.event_bus import TyrEvent
 
-            async def update(self, owner_id: str, **fields: object) -> DispatcherState:
-                return await self.get_or_create(owner_id)
+        engine, repo, git, bus = _make_engine()
+        raid = _make_raid(confidence=0.5, status=RaidStatus.RUNNING)
+        repo.raids[raid.id] = raid
 
-        class StubVolundr(VolundrPort):
-            async def spawn_session(
-                self, request: SpawnRequest, *, auth_token: str | None = None
-            ) -> VolundrSession:
-                raise NotImplementedError
+        await engine.start()
+        await asyncio.sleep(0)
 
-            async def get_session(
-                self, session_id: str, *, auth_token: str | None = None
-            ) -> VolundrSession | None:
-                return VolundrSession(
-                    id=session_id, name="s", status="completed", tracker_issue_id=None
-                )
-
-            async def list_sessions(self, *, auth_token: str | None = None) -> list[VolundrSession]:
-                return []
-
-            async def get_pr_status(self, session_id: str) -> PRStatus:
-                return PRStatus(
-                    pr_id="PR-42", url="url", state="open", mergeable=True, ci_passed=True
-                )
-
-            async def get_chronicle_summary(self, session_id: str) -> str:
-                return "Done"
-
-            async def send_message(
-                self, session_id: str, message: str, *, auth_token: str | None = None
-            ) -> None:
-                pass
-
-        async def failing_review(raid_id: UUID) -> None:
-            raise RuntimeError("Review engine exploded")
-
-        raid_repo = StubRaidRepo()
-        raid_repo.saga = _make_saga()
-        raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
-
-        bus = EventBus()
-        config = WatcherConfig(enabled=True, poll_interval=1.0, batch_size=10)
-
-        watcher = RaidWatcher(
-            volundr=StubVolundr(),
-            raid_repo=raid_repo,
-            dispatcher_repo=StubDispatcherRepo(),
-            event_bus=bus,
-            config=config,
-            on_review=failing_review,
+        await bus.emit(
+            TyrEvent(
+                event="raid.state_changed",
+                data={
+                    "raid_id": str(raid.id),
+                    "status": RaidStatus.RUNNING.value,
+                    "confidence": raid.confidence,
+                    "action": "started",
+                    "tracker_id": raid.tracker_id,
+                },
+            )
         )
 
-        # Should not raise
-        stats = await watcher._poll_cycle()
-        assert stats.transitioned == 1
-        # Raid still transitioned to REVIEW despite review failure
-        assert raid_repo.raids[raid.id].status == RaidStatus.REVIEW
+        await asyncio.sleep(0.1)
+        await engine.stop()
+
+        # Raid should still be RUNNING (not evaluated)
+        assert repo.raids[raid.id].status == RaidStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_review_engine_handles_evaluation_error(self) -> None:
+        """ReviewEngine should log and continue if evaluation fails."""
+        import asyncio
+
+        from tyr.ports.event_bus import TyrEvent
+
+        engine, repo, git, bus = _make_engine()
+        # No raid in repo — will cause ValueError("Raid not found")
+
+        await engine.start()
+        await asyncio.sleep(0)
+
+        await bus.emit(
+            TyrEvent(
+                event="raid.state_changed",
+                data={
+                    "raid_id": str(uuid4()),
+                    "status": RaidStatus.REVIEW.value,
+                    "confidence": 0.5,
+                    "action": "completed",
+                    "tracker_id": "NIU-999",
+                },
+            )
+        )
+
+        await asyncio.sleep(0.1)
+        await engine.stop()
+
+        # Engine should have survived the error (no crash)
 
 
 # ---------------------------------------------------------------------------

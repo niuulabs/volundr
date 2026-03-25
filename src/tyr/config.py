@@ -226,6 +226,62 @@ class WatcherConfig(BaseModel):
     chronicle_on_complete: bool = Field(
         default=True, description="Fetch chronicle summary on completion."
     )
+    idle_threshold: float = Field(
+        default=30.0,
+        description="Seconds of idle before considering work complete.",
+    )
+    completion_check_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait after idle before evaluating completion (debounce).",
+    )
+    require_pr: bool = Field(
+        default=False,
+        description="If true, PR must exist for completion.",
+    )
+    require_ci: bool = Field(
+        default=False,
+        description="If true, CI must pass for completion.",
+    )
+    confidence_base: float = Field(
+        default=0.5,
+        description="Base confidence score when completion criteria are met.",
+    )
+    confidence_pr_bonus: float = Field(
+        default=0.2,
+        description="Confidence bonus when a PR exists.",
+    )
+    confidence_ci_bonus: float = Field(
+        default=0.2,
+        description="Confidence bonus when CI has passed.",
+    )
+    confidence_idle_bonus: float = Field(
+        default=0.1,
+        description="Confidence bonus for extended idle beyond threshold.",
+    )
+    reconnect_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait before reconnecting after SSE subscription failure.",
+    )
+
+
+class EventBusConfig(BaseModel):
+    """Event bus adapter configuration (dynamic adapter pattern)."""
+
+    adapter: str = Field(
+        default="tyr.adapters.memory_event_bus.InMemoryEventBus",
+        description="Fully-qualified class path for the EventBus adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationConfig(BaseModel):
+    """Notification service configuration."""
+
+    enabled: bool = Field(default=True)
+    confidence_threshold: float = Field(
+        default=0.3,
+        description="Notify when raid confidence drops below this value.",
+    )
 
 
 class EventsConfig(BaseModel):
@@ -274,8 +330,10 @@ class Settings(BaseSettings):
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     watcher: WatcherConfig = Field(default_factory=WatcherConfig)
+    event_bus: EventBusConfig = Field(default_factory=EventBusConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    notification: NotificationConfig = Field(default_factory=NotificationConfig)
 
     @classmethod
     def settings_customise_sources(

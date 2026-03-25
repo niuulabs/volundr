@@ -261,9 +261,7 @@ class TestGetPRChangedFiles:
     @respx.mock
     async def test_empty_file_list(self, adapter: GitHubGitAdapter):
         pr_url = "https://api.github.com/repos/org/repo/pulls/42"
-        respx.get(f"{pr_url}/files").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        respx.get(f"{pr_url}/files").mock(return_value=httpx.Response(200, json=[]))
 
         files = await adapter.get_pr_changed_files(pr_url)
 
@@ -273,9 +271,7 @@ class TestGetPRChangedFiles:
     @respx.mock
     async def test_raises_on_error(self, adapter: GitHubGitAdapter):
         pr_url = "https://api.github.com/repos/org/repo/pulls/999"
-        respx.get(f"{pr_url}/files").mock(
-            return_value=httpx.Response(404, text="not found")
-        )
+        respx.get(f"{pr_url}/files").mock(return_value=httpx.Response(404, text="not found"))
 
         with pytest.raises(httpx.HTTPStatusError):
             await adapter.get_pr_changed_files(pr_url)

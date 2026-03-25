@@ -110,6 +110,10 @@ class MockVolundr(VolundrPort):
     ) -> None:
         pass
 
+    async def subscribe_activity(self):
+        return
+        yield  # type: ignore[misc]  # pragma: no cover
+
 
 # -------------------------------------------------------------------
 # Fixtures

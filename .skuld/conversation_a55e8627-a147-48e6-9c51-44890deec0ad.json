@@ -1,0 +1,1672 @@
+{
+  "turns": [
+    {
+      "id": "dc1cec20-8e21-4d2d-aa4c-4d880af738f6",
+      "role": "user",
+      "content": "# Task: NIU-239 \u2014 Tyr: automated code review \u2014 quality scoring and feedback loop for completed raids\n\n## Summary\n\nWhen a raid reaches REVIEW (detected by NIU-203), automatically evaluate the work quality and either approve (merge) or escalate to human review. This is the autonomous review engine \u2014 the confidence scoring brain.\n\n## Architecture Constraint\n\n**Tyr talks to Volundr and GitHub, never the reverse.** All evaluation is Tyr-initiated:\n\n* Tyr fetches PR details via `GitPort.get_pr_status()`\n* Tyr fetches CI results from GitHub checks API\n* Tyr reads the chronicle summary from Volundr\n* Tyr makes the approve/reject decision based on confidence\n\n## Review Pipeline\n\nWhen a raid enters REVIEW state (triggered by NIU-203 watcher):\n\n```\nREVIEW\n  \u251c\u2500 Fetch PR status (mergeable? conflicts?)\n  \u251c\u2500 Fetch CI status (passed? failed? pending?)\n  \u251c\u2500 Fetch chronicle summary (what did the session do?)\n  \u251c\u2500 Score confidence based on signals\n  \u2502\n  \u251c\u2500 confidence >= threshold AND CI passed AND mergeable\n  \u2502   \u2192 Auto-approve: merge PR, transition REVIEW \u2192 MERGED\n  \u2502   \u2192 Emit confidence event (HUMAN_APPROVED equivalent: AUTO_APPROVED)\n  \u2502   \u2192 Check if all raids in phase are merged \u2192 unlock next phase\n  \u2502\n  \u251c\u2500 CI failed OR not mergeable\n  \u2502   \u2192 Auto-retry if retry_count < max_retries\n  \u2502   \u2192 Emit confidence event (CI_FAIL)\n  \u2502   \u2192 Transition REVIEW \u2192 PENDING (re-queue with failure context)\n  \u2502\n  \u2514\u2500 confidence < threshold OR human review required\n      \u2192 Escalate: emit notification event\n      \u2192 Raid stays in REVIEW for human decision\n      \u2192 NIU-240 (notifications) alerts the user\n```\n\n## Confidence Signals\n\n| Signal | Delta | Source |\n| -- | -- | -- |\n| CI passed | +0.30 | GitHub checks API via GitPort |\n| CI failed | \\-0.30 | GitHub checks API |\n| PR mergeable (no conflicts) | +0.10 | GitHub PR API |\n| PR has conflicts | \\-0.20 | GitHub PR API |\n| Chronicle indicates scope breach | \\-0.25 | LLM evaluation of chronicle vs declared_files |\n| Auto-retry (nth attempt) | \\-0.05 \\* n | Internal counter |\n\n## Scope Breach Detection\n\nCompare the files actually changed (from PR diff) against `raid.declared_files`:\n\n* Files changed that weren't declared = potential scope breach\n* Simple set difference, no LLM needed for v1\n* If >30% of changed files are undeclared, flag as scope breach\n\n## Auto-Retry Logic\n\nWhen CI fails or PR has conflicts:\n\n1. Fetch the CI failure logs / conflict details\n2. Append failure context to the original raid prompt\n3. Transition raid back to PENDING (re-enters dispatch queue)\n4. Increment `retry_count`\n5. If `retry_count >= max_retries` (config, default 3) \u2192 FAILED, escalate to human\n\n## New ConfidenceEventTypes\n\n```python\nclass ConfidenceEventType(StrEnum):\n    CI_PASS = \"ci_pass\"\n    CI_FAIL = \"ci_fail\"\n    SCOPE_BREACH = \"scope_breach\"\n    RETRY = \"retry\"\n    HUMAN_REJECT = \"human_reject\"\n    HUMAN_APPROVED = \"human_approved\"\n    AUTO_APPROVED = \"auto_approved\"    # NEW\n    PR_CONFLICT = \"pr_conflict\"        # NEW\n```\n\n## Config\n\n```yaml\nreview:\n  confidence_delta_approved: 0.15\n  confidence_delta_rejected: -0.20\n  confidence_delta_retry: -0.05\n  auto_approve_threshold: 0.80     # NEW \u2014 above this, auto-merge\n  max_retries: 3                   # NEW \u2014 max auto-retries before escalation\n  scope_breach_threshold: 0.30     # NEW \u2014 % undeclared files to flag breach\n```\n\n## Phase Gate Logic\n\nAfter a raid is merged (auto or human), check:\n\n```python\nif await raid_repo.all_raids_merged(raid.phase_id):\n    # All raids in this phase are done\n    # Unlock next phase: set next phase status to ACTIVE\n    # Transition PENDING raids in next phase to QUEUED\n    # Emit phase.unlocked event\n```\n\nThis is the cascade that drives the saga forward autonomously.\n\n## Dependencies\n\n* **NIU-203** (completion detection) \u2014 triggers the review pipeline\n* **NIU-199** (review endpoints) \u2014 \u2705 Done, provides manual fallback\n* **NIU-192** (GitHubAdapter) \u2014 \u2705 Done, provides PR/CI data\n\n## Acceptance Criteria\n\n- [ ] Auto-approve when confidence >= threshold, CI passed, PR mergeable\n- [ ] Auto-retry on CI failure with failure context appended\n- [ ] Scope breach detection via declared_files vs actual diff\n- [ ] Confidence events emitted for every signal\n- [ ] Phase gate: next phase unlocked when all raids merged\n- [ ] Escalation to human when confidence too low or retries exhausted\n- [ ] `raid.state_changed` and `confidence.updated` events emitted via EventBus\n- [ ] Config-driven thresholds, no magic numbers\n- [ ] Max retries respected, FAILED on exhaustion\n\nRepository: https://github.com/niuulabs/volundr\nBase branch: feat/tyr\nCreate a branch for your work: `niu-239`\n\n## Completion Requirements\n\n1. **Update Linear ticket**: Use the Linear MCP server to set the ticket `NIU-239` status to **In Progress** immediately.\n2. **Implement the task**: Write code, tests, and ensure coverage >= 85%.\n3. **Commit your changes**: Use conventional commits.\n4. **Create a PR against `feat/tyr`** (NOT `main`): include a summary of all changes in the PR description.\n5. **Wait for CI**: Ensure all CI checks pass (tests, lint, coverage). If CI fails, fix the issues and push again.\n6. **Update Linear ticket**: Use the Linear MCP server to add a comment on `NIU-239` with a summary of what was done and a link to the PR.\n\n**Do NOT stop until the PR is created and CI is green.**",
+      "parts": [],
+      "created_at": "2026-03-25T17:24:26.324884+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "30c428fa-df66-41e6-8efa-47a53d56daa9",
+      "role": "assistant",
+      "content": "Now let me read a few more files I need for the implementation.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me read a few more files I need for the implementation."
+        }
+      ],
+      "created_at": "2026-03-25T17:26:47.704357+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "5aedb175-d3f9-4155-bbd0-8b445c0d6e49",
+      "role": "assistant",
+      "content": "Now I have a complete picture. Let me create the branch and start implementing.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I have a complete picture. Let me create the branch and start implementing."
+        }
+      ],
+      "created_at": "2026-03-25T17:27:16.926190+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c850cc02-c184-4ec0-b498-37f7acb8bde7",
+      "role": "assistant",
+      "content": "Let me start with the foundational changes: config, enums, and port updates.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Let me start with the foundational changes: config, enums, and port updates."
+        }
+      ],
+      "created_at": "2026-03-25T17:27:56.023785+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "4c92e245-7382-48d5-86e9-472d5688cccd",
+      "role": "assistant",
+      "content": "Now add `get_pr_diff` to the GitPort:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add `get_pr_diff` to the GitPort:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:16.057335+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "1a454e88-fa80-4813-b491-261f9effdb10",
+      "role": "assistant",
+      "content": "Now add the implementation to the GitHub adapter:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add the implementation to the GitHub adapter:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:21.067060+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "e39810b2-5d70-4ed5-a627-16bb2157bda6",
+      "role": "assistant",
+      "content": "Now let me also check the phase-related models \u2014 I need to understand how to unlock the next phase:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me also check the phase-related models \u2014 I need to understand how to unlock the next phase:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:26.423205+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "44f5bc56-2aa5-449e-9662-282f047366cd",
+      "role": "assistant",
+      "content": "I need to add phase-related methods to the raid repository for the phase gate logic. Let me check what's already available:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add phase-related methods to the raid repository for the phase gate logic. Let me check what's already available:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:35.558488+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "064171ba-880e-427b-9d53-04f8ef2f41ba",
+      "role": "assistant",
+      "content": "The raid repository has `all_raids_merged` and `get_phase_for_raid`. For phase gate unlocking, I need to be able to get phases for a saga and update their status. Let me check the postgres raids adapter to see if there's a method to update phase status:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The raid repository has `all_raids_merged` and `get_phase_for_raid`. For phase gate unlocking, I need to be able to get phases for a saga and update their status. Let me check the postgres raids adapter to see if there's a method to update phase status:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:40.273528+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "9d32c41b-4927-4dd2-a6ff-e32256b7ca6e",
+      "role": "assistant",
+      "content": "There's no `update_phase_status` or `list_phases_for_saga` method yet. I'll need to add these to the RaidRepository port and implement them. Let me add the needed methods:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "There's no `update_phase_status` or `list_phases_for_saga` method yet. I'll need to add these to the RaidRepository port and implement them. Let me add the needed methods:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:46.725622+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "bcd62db8-cf1a-43cd-a581-dc8f6e10a5cb",
+      "role": "assistant",
+      "content": "Now fix the import \u2014 need to add PhaseStatus:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now fix the import \u2014 need to add PhaseStatus:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:51.288629+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c1593fc6-2e56-4a41-9bf1-410256f5130e",
+      "role": "assistant",
+      "content": "Remove the string annotation now that we have the import:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Remove the string annotation now that we have the import:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:55.787090+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "cd0e229d-8980-4913-b0c8-da652768a0cc",
+      "role": "assistant",
+      "content": "Now add these methods to the postgres adapter:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add these methods to the postgres adapter:"
+        }
+      ],
+      "created_at": "2026-03-25T17:28:59.910024+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "5d22aaa9-eed1-4253-8798-c51f1d1542b1",
+      "role": "assistant",
+      "content": "Now let me create the automated review engine service:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me create the automated review engine service:"
+        }
+      ],
+      "created_at": "2026-03-25T17:30:05.984158+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "b4a1e603-3a7c-4c1b-baff-b324b8cd468a",
+      "role": "assistant",
+      "content": "Now let me integrate the review engine with the watcher \u2014 the watcher should trigger automated review after transitioning a raid to REVIEW. Let me also check the main.py to understand wiring:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me integrate the review engine with the watcher \u2014 the watcher should trigger automated review after transitioning a raid to REVIEW. Let me also check the main.py to understand wiring:"
+        }
+      ],
+      "created_at": "2026-03-25T17:30:17.742185+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "5a31324b-905c-4348-a506-0f82864d58ae",
+      "role": "assistant",
+      "content": "Now I need to integrate the ReviewEngine with the watcher. The watcher detects when a raid enters REVIEW, and we want to automatically trigger the review engine. The best approach is to have the watcher call the review engine after transitioning a raid to REVIEW. Let me update the watcher to accept an optional review engine callback:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I need to integrate the ReviewEngine with the watcher. The watcher detects when a raid enters REVIEW, and we want to automatically trigger the review engine. The best approach is to have the watcher call the review engine after transitioning a raid to REVIEW. Let me update the watcher to accept an optional review engine callback:"
+        }
+      ],
+      "created_at": "2026-03-25T17:30:31.140136+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c8691ceb-3945-4598-8fc6-ef5938759917",
+      "role": "assistant",
+      "content": "Now update `_handle_completion` to trigger the review callback after transitioning to REVIEW:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update `_handle_completion` to trigger the review callback after transitioning to REVIEW:"
+        }
+      ],
+      "created_at": "2026-03-25T17:30:47.479770+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "2f36281d-03c2-4fc1-bf37-7fbad742efe7",
+      "role": "assistant",
+      "content": "Now wire the review engine in main.py:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now wire the review engine in main.py:"
+        }
+      ],
+      "created_at": "2026-03-25T17:30:52.643312+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "3964990b-2899-42cd-a379-d637483e85be",
+      "role": "assistant",
+      "content": "Now let me write comprehensive tests for the review engine:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me write comprehensive tests for the review engine:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:00.847601+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "6d75076c-a618-4b0e-aa04-672138e22db2",
+      "role": "assistant",
+      "content": "Now I need to update the existing mock implementations that implement `RaidRepository` to include the new methods. Let me check which test files have mock repos that need updating:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I need to update the existing mock implementations that implement `RaidRepository` to include the new methods. Let me check which test files have mock repos that need updating:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:05.155817+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "dce328a4-f8aa-4fa5-b274-57c44cc2960d",
+      "role": "assistant",
+      "content": "I need to add the two new abstract methods to the existing mock repos. Let me check and update each:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add the two new abstract methods to the existing mock repos. Let me check and update each:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:10.031046+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "ac2278a9-98fa-4c99-93cb-b28714ffa0f4",
+      "role": "assistant",
+      "content": "I need to add these two methods to the 4 existing mock repos. Let me read and update them:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add these two methods to the 4 existing mock repos. Let me read and update them:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:15.565229+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "952aa10d-bb0a-4b33-bd45-0660eb06eae3",
+      "role": "assistant",
+      "content": "Now I need to add the two new methods to each mock repo. Let me update them:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I need to add the two new methods to each mock repo. Let me update them:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:23.642483+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "271ac6df-a2f8-40a7-b2a6-3e6a1b432ed5",
+      "role": "assistant",
+      "content": "Now add the `get_pr_changed_files` to the MockGit in test_commit_api.py:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add the `get_pr_changed_files` to the MockGit in test_commit_api.py:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:28.159045+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "262d3bfa-165b-42f5-b9e1-40cfb9160095",
+      "role": "assistant",
+      "content": "Now update the telegram webhook test stubs:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update the telegram webhook test stubs:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:38.992682+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "7deec60c-83d9-40e3-8cec-73fcae762e26",
+      "role": "assistant",
+      "content": "Now update the watcher test stub:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update the watcher test stub:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:46.810124+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c6028901-5f8e-4e0e-ac06-50af0534efbf",
+      "role": "assistant",
+      "content": "Now update the raids_api test mock:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update the raids_api test mock:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:51.253173+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "6adf379a-8b5a-4675-9792-fa9e7f7d7bea",
+      "role": "assistant",
+      "content": "Now add `get_pr_changed_files` to MockGit in test_raids_api.py:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add `get_pr_changed_files` to MockGit in test_raids_api.py:"
+        }
+      ],
+      "created_at": "2026-03-25T17:33:57.756511+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "374e779e-b456-4d79-8fd8-ac34bdd2862d",
+      "role": "assistant",
+      "content": "Now let me also check if there are any other mock GitPort implementations that need the new method:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me also check if there are any other mock GitPort implementations that need the new method:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:02.519683+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c28b2718-6290-4c8a-be0d-ca9faeb72d57",
+      "role": "assistant",
+      "content": "Let me check test_ports.py:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Let me check test_ports.py:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:06.571971+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c6d38aca-3c67-4574-958c-8653b572db59",
+      "role": "assistant",
+      "content": "I need to update this test to include the new `get_pr_changed_files` method:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to update this test to include the new `get_pr_changed_files` method:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:11.751175+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "396ca6c4-41ed-4acb-b3aa-7bc1a530e1a7",
+      "role": "assistant",
+      "content": "Also need to check test_github_git.py for the new method:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Also need to check test_github_git.py for the new method:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:27.401545+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "e338b6be-9fe0-4495-8518-21938678a7eb",
+      "role": "assistant",
+      "content": "I see the file ends at line 234. Let me check if there's more:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I see the file ends at line 234. Let me check if there's more:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:33.000569+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "88eedea8-b8b1-44b2-81dc-49cf3ba2ceb3",
+      "role": "assistant",
+      "content": "I need to add a test for `get_pr_changed_files` to test_github_git.py:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add a test for `get_pr_changed_files` to test_github_git.py:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:41.996734+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "0fa39f5a-4cc0-42f1-8a96-32287073466c",
+      "role": "assistant",
+      "content": "Now let me also check if there are RaidRepository port tests that need updating:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me also check if there are RaidRepository port tests that need updating:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:45.390669+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "054d84a5-322e-4cd6-9c6f-2ff74225664f",
+      "role": "assistant",
+      "content": "Good, no port test for RaidRepository. Now let me run the tests to see if everything passes:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Good, no port test for RaidRepository. Now let me run the tests to see if everything passes:"
+        }
+      ],
+      "created_at": "2026-03-25T17:34:53.306174+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "55cad340-ab8c-470c-8ca5-71b521c01778",
+      "role": "assistant",
+      "content": "I see \u2014 need to install with dev dependencies:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I see \u2014 need to install with dev dependencies:"
+        }
+      ],
+      "created_at": "2026-03-25T17:35:44.941133+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c96afa2e-19a9-451c-954c-99d1f144460e",
+      "role": "assistant",
+      "content": "All 37 tests passed. The coverage failure is because pytest is configured to cover `src/volundr` not `src/tyr`. Let me run all tyr tests specifically:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All 37 tests passed. The coverage failure is because pytest is configured to cover `src/volundr` not `src/tyr`. Let me run all tyr tests specifically:"
+        }
+      ],
+      "created_at": "2026-03-25T17:36:55.308927+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "3f486634-b39b-4258-bb06-acb95bcaa0cd",
+      "role": "assistant",
+      "content": "Just one test failure \u2014 the model test checks member count. Let me fix it:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Just one test failure \u2014 the model test checks member count. Let me fix it:"
+        }
+      ],
+      "created_at": "2026-03-25T17:37:04.509529+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c0fb2fc7-413a-42a1-8b6f-09f39f63b922",
+      "role": "assistant",
+      "content": "Now run ruff and re-run tests:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now run ruff and re-run tests:"
+        }
+      ],
+      "created_at": "2026-03-25T17:37:28.328912+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "384a7155-18ed-4272-be3a-df5280011db3",
+      "role": "assistant",
+      "content": "Let me fix the linting issues:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Let me fix the linting issues:"
+        }
+      ],
+      "created_at": "2026-03-25T17:37:35.750999+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "f8a67338-ec2c-4ba9-bc15-8552b6a46770",
+      "role": "assistant",
+      "content": "Now fix the remaining lint issues in the test file (unused imports and long lines in the inline stubs):",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now fix the remaining lint issues in the test file (unused imports and long lines in the inline stubs):"
+        }
+      ],
+      "created_at": "2026-03-25T17:37:44.666083+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "4496141e-c668-4da5-82c7-336bf600d761",
+      "role": "assistant",
+      "content": "Now fix the long lines in the inline stub classes. Let me read the relevant sections:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now fix the long lines in the inline stub classes. Let me read the relevant sections:"
+        }
+      ],
+      "created_at": "2026-03-25T17:37:56.173430+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "24ee8eb6-77c1-483f-af97-574d46b70faa",
+      "role": "assistant",
+      "content": "Now let me fix the inline stub classes in the watcher integration tests. Let me refactor those to use a shared approach:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me fix the inline stub classes in the watcher integration tests. Let me refactor those to use a shared approach:"
+        }
+      ],
+      "created_at": "2026-03-25T17:38:04.117491+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "46e2fa2d-3e8e-41f2-8382-9db116b552ec",
+      "role": "assistant",
+      "content": "Good, the formatter already fixed the long lines in the inline stubs. Let me run ruff check again:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Good, the formatter already fixed the long lines in the inline stubs. Let me run ruff check again:"
+        }
+      ],
+      "created_at": "2026-03-25T17:38:09.420659+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "2c5399d3-d718-44b0-b93f-a161a8e49f9b",
+      "role": "assistant",
+      "content": "Now run all tests:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now run all tests:"
+        }
+      ],
+      "created_at": "2026-03-25T17:38:45.237211+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "9f299c67-e16c-4c3a-aaae-8882d1bc9ec1",
+      "role": "assistant",
+      "content": "All 630 tests pass (was 629+1 before), lint clean, 91.86% coverage. Let me verify there are no failures:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All 630 tests pass (was 629+1 before), lint clean, 91.86% coverage. Let me verify there are no failures:"
+        }
+      ],
+      "created_at": "2026-03-25T17:39:08.304224+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "47c9b439-7f59-4d82-990c-97b0466331a6",
+      "role": "assistant",
+      "content": "All 630 tests pass, coverage at 91.86%. Now let me commit and create a PR.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All 630 tests pass, coverage at 91.86%. Now let me commit and create a PR."
+        }
+      ],
+      "created_at": "2026-03-25T17:39:16.334169+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c93ee926-e268-4944-b410-de672735d347",
+      "role": "assistant",
+      "content": "PR created: https://github.com/niuulabs/volundr/pull/155\n\nNow let me wait for CI and check its status:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "PR created: https://github.com/niuulabs/volundr/pull/155\n\nNow let me wait for CI and check its status:"
+        }
+      ],
+      "created_at": "2026-03-25T17:45:09.850238+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "5ba279d7-dc8c-446c-83ff-a2f43ddd15de",
+      "role": "assistant",
+      "content": "All CI checks pass! Now let me update the Linear ticket.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All CI checks pass! Now let me update the Linear ticket."
+        }
+      ],
+      "created_at": "2026-03-25T17:45:22.082119+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "053c1758-561f-44ac-ac40-eee5460757fe",
+      "role": "assistant",
+      "content": "Linear MCP tools are not available in this environment. The PR description includes `Closes NIU-239` which will link it in Linear.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Linear MCP tools are not available in this environment. The PR description includes `Closes NIU-239` which will link it in Linear."
+        }
+      ],
+      "created_at": "2026-03-25T17:45:50.873124+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "2a422a39-e0a2-4363-834d-b647854487bb",
+      "role": "assistant",
+      "content": "All done. Here's a summary:\n\n**PR**: https://github.com/niuulabs/volundr/pull/155\n**Branch**: `niu-239` \u2192 `feat/tyr`\n**CI**: All 42 checks green\n\n### What was implemented\n\n**ReviewEngine** (`src/tyr/domain/services/review_engine.py`) \u2014 the autonomous review brain:\n\n1. **Confidence scoring** from 4 signals: CI pass/fail (+0.30/-0.30), PR mergeability (+0.10/-0.20), scope breach (-0.25), retry penalty (-0.05\u00d7n)\n2. **Auto-approve** when confidence >= 0.80, CI passed, and PR mergeable \u2014 merges branch into feature branch, transitions REVIEW \u2192 MERGED\n3. **Auto-retry** on CI failure or PR conflicts \u2014 transitions back to PENDING (up to 3 retries)\n4. **Escalation** to human review when confidence too low or retries exhausted\n5. **Phase gate** \u2014 when all raids in a phase are merged, unlocks the next GATED phase to ACTIVE\n6. **Scope breach detection** \u2014 compares `declared_files` vs actual PR diff; >30% undeclared triggers penalty\n\n**Integration**: Watcher calls `ReviewEngine.evaluate()` via an `on_review` callback after any raid enters REVIEW. Failures in the engine are caught and logged \u2014 never block the watcher.\n\n**Tests**: 37 new tests covering all decision paths. All 630 tyr tests pass at 91.86% coverage.\n\n**Note**: Linear MCP tools were unavailable. The PR description includes `Closes NIU-239` for automatic linking. Manual update to \"In Review\" status is needed.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All done. Here's a summary:\n\n**PR**: https://github.com/niuulabs/volundr/pull/155\n**Branch**: `niu-239` \u2192 `feat/tyr`\n**CI**: All 42 checks green\n\n### What was implemented\n\n**ReviewEngine** (`src/tyr/domain/services/review_engine.py`) \u2014 the autonomous review brain:\n\n1. **Confidence scoring** from 4 signals: CI pass/fail (+0.30/-0.30), PR mergeability (+0.10/-0.20), scope breach (-0.25), retry penalty (-0.05\u00d7n)\n2. **Auto-approve** when confidence >= 0.80, CI passed, and PR mergeable \u2014 merges branch into feature branch, transitions REVIEW \u2192 MERGED\n3. **Auto-retry** on CI failure or PR conflicts \u2014 transitions back to PENDING (up to 3 retries)\n4. **Escalation** to human review when confidence too low or retries exhausted\n5. **Phase gate** \u2014 when all raids in a phase are merged, unlocks the next GATED phase to ACTIVE\n6. **Scope breach detection** \u2014 compares `declared_files` vs actual PR diff; >30% undeclared triggers penalty\n\n**Integration**: Watcher calls `ReviewEngine.evaluate()` via an `on_review` callback after any raid enters REVIEW. Failures in the engine are caught and logged \u2014 never block the watcher.\n\n**Tests**: 37 new tests covering all decision paths. All 630 tyr tests pass at 91.86% coverage.\n\n**Note**: Linear MCP tools were unavailable. The PR description includes `Closes NIU-239` for automatic linking. Manual update to \"In Review\" status is needed."
+        }
+      ],
+      "created_at": "2026-03-25T17:46:02.943669+00:00",
+      "metadata": {
+        "usage": {
+          "claude-opus-4-6": {
+            "inputTokens": 1708,
+            "outputTokens": 39405,
+            "cacheReadInputTokens": 11274373,
+            "cacheCreationInputTokens": 164655,
+            "webSearchRequests": 0,
+            "costUSD": 7.659945250000001,
+            "contextWindow": 200000,
+            "maxOutputTokens": 64000
+          },
+          "claude-haiku-4-5-20251001": {
+            "inputTokens": 64,
+            "outputTokens": 8864,
+            "cacheReadInputTokens": 1197414,
+            "cacheCreationInputTokens": 84295,
+            "webSearchRequests": 0,
+            "costUSD": 0.26949415,
+            "contextWindow": 200000,
+            "maxOutputTokens": 32000
+          }
+        },
+        "cost": 7.929439400000001,
+        "model": "claude-haiku-4-5-20251001"
+      }
+    },
+    {
+      "id": "6612b4e6-b30c-441f-bae4-83790f80c02a",
+      "role": "user",
+      "content": "Three fixes needed:\n\n1. **CRITICAL: _apply_mergeable_signal uses ConfidenceEventType.CI_PASS for mergeable=True.** This conflates two different signals and pollutes confidence history. Add a new event type PR_MERGEABLE (or PR_CONFLICT for the negative case) to ConfidenceEventType. Use CI_PASS only for actual CI pass signals.\n\n2. **CRITICAL: phase.unlocked event missing owner_id.** In _check_phase_gate, the emitted phase.unlocked event does not include owner_id in the data dict. The notification service (PR #156) needs owner_id to route notifications to the right user. Add owner_id by resolving the saga owner from the phase's saga_id.\n\n3. **IMPORTANT: Wire feedback to sessions before retry.** When the review engine decides to retry a raid (CI failed, PR conflicts), it should use SessionMessageService (from PR #154 / NIU-241) to send the failure context to the running session BEFORE resetting to PENDING. This closes the feedback loop. Import and use VolundrPort.send_message to send a message like 'CI failed: <failure details>. Please fix and push again.' to the session. If the session is no longer running, skip the message and just retry.\n\nFix all three, run tests, commit, push.",
+      "parts": [],
+      "created_at": "2026-03-25T18:03:02.608117+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "bbd07c3d-fc89-4abb-ba0e-de8a9c27771c",
+      "role": "assistant",
+      "content": "Now I need to check the Saga model for `owner_id` field and read the test file.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I need to check the Saga model for `owner_id` field and read the test file."
+        }
+      ],
+      "created_at": "2026-03-25T18:05:09.773976+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "5667c608-1ddc-4c09-8abc-52cfb09c18ff",
+      "role": "assistant",
+      "content": "Now I have all the context. Let me implement all three fixes.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I have all the context. Let me implement all three fixes."
+        }
+      ],
+      "created_at": "2026-03-25T18:05:32.206550+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "43c3ae46-1704-4296-8a90-5360e7100872",
+      "role": "assistant",
+      "content": "\n\n**Fix 1**: Add `PR_MERGEABLE` to `ConfidenceEventType` and use it in `_apply_mergeable_signal`.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "\n\n**Fix 1**: Add `PR_MERGEABLE` to `ConfidenceEventType` and use it in `_apply_mergeable_signal`."
+        }
+      ],
+      "created_at": "2026-03-25T18:05:43.288461+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "ec22ca25-8155-4c74-9e06-99ec6a6183f4",
+      "role": "assistant",
+      "content": "**Fix 2**: Add `owner_id` to `phase.unlocked` event data.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "**Fix 2**: Add `owner_id` to `phase.unlocked` event data."
+        }
+      ],
+      "created_at": "2026-03-25T18:05:54.377881+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "dbc2f999-47f9-4f28-915d-94b25153c601",
+      "role": "assistant",
+      "content": "**Fix 3**: Add `VolundrPort` to `ReviewEngine` constructor and send failure message in `_auto_retry`.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "**Fix 3**: Add `VolundrPort` to `ReviewEngine` constructor and send failure message in `_auto_retry`."
+        }
+      ],
+      "created_at": "2026-03-25T18:05:59.121230+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "fc234404-e987-4d0b-9458-48ce7aab74b2",
+      "role": "assistant",
+      "content": "Now add the `_send_retry_feedback` method. I'll add it right before the phase gate section.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add the `_send_retry_feedback` method. I'll add it right before the phase gate section."
+        }
+      ],
+      "created_at": "2026-03-25T18:06:11.998167+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "22338bfa-f677-4be2-811c-a98eb6c22b2b",
+      "role": "assistant",
+      "content": "Now update `main.py` to pass `volundr` to `ReviewEngine`.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update `main.py` to pass `volundr` to `ReviewEngine`."
+        }
+      ],
+      "created_at": "2026-03-25T18:06:17.152442+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "99fe0ec6-61ac-45ce-bc76-a7e00f6ae190",
+      "role": "assistant",
+      "content": "Now update the tests. First, update `test_models.py` member count (8 \u2192 9) and add `PR_MERGEABLE`.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update the tests. First, update `test_models.py` member count (8 \u2192 9) and add `PR_MERGEABLE`."
+        }
+      ],
+      "created_at": "2026-03-25T18:06:21.533322+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "0a777455-57c3-4479-a9f2-3c732047a65a",
+      "role": "assistant",
+      "content": "Now update `test_review_engine.py`. I need to:\n1. Add `PR_MERGEABLE` test to `TestNewConfidenceEventTypes`\n2. Update `_make_engine` to accept `volundr` parameter\n3. Add `owner_id` assertion in phase gate test\n4. Add tests for session feedback on retry",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update `test_review_engine.py`. I need to:\n1. Add `PR_MERGEABLE` test to `TestNewConfidenceEventTypes`\n2. Update `_make_engine` to accept `volundr` parameter\n3. Add `owner_id` assertion in phase gate test\n4. Add tests for session feedback on retry"
+        }
+      ],
+      "created_at": "2026-03-25T18:06:32.116280+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "17f2a5b3-474d-47dc-b58d-9011dff7806d",
+      "role": "assistant",
+      "content": "Now add a `StubVolundr` class after the `StubRaidRepo` class and update `_make_engine`.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add a `StubVolundr` class after the `StubRaidRepo` class and update `_make_engine`."
+        }
+      ],
+      "created_at": "2026-03-25T18:06:42.306853+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "028ff3a3-9a1f-4c98-b6ac-ba83de5e819f",
+      "role": "assistant",
+      "content": "Update `_make_engine` to accept and pass `volundr`.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Update `_make_engine` to accept and pass `volundr`."
+        }
+      ],
+      "created_at": "2026-03-25T18:06:50.206051+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "368f6cf6-7eee-4ac3-aec5-a94bc47b94e9",
+      "role": "assistant",
+      "content": "Now add `owner_id` assertion to the phase gate test.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add `owner_id` assertion to the phase gate test."
+        }
+      ],
+      "created_at": "2026-03-25T18:06:55.043822+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "fb095918-3fc3-4880-adb1-e8bb62842cec",
+      "role": "assistant",
+      "content": "Now add tests for session feedback and `PR_MERGEABLE` at the end of the file.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add tests for session feedback and `PR_MERGEABLE` at the end of the file."
+        }
+      ],
+      "created_at": "2026-03-25T18:07:21.548955+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "9cb15711-43b8-482e-9cf1-48af62f514ca",
+      "role": "assistant",
+      "content": "Now run ruff and tests.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now run ruff and tests."
+        }
+      ],
+      "created_at": "2026-03-25T18:07:26.684452+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "73036a82-a7e9-4f71-a93c-af1404dd6c40",
+      "role": "assistant",
+      "content": "Now fix the duplicate imports in the watcher integration tests \u2014 they re-import `SpawnRequest` locally. I need to remove those unused local imports.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now fix the duplicate imports in the watcher integration tests \u2014 they re-import `SpawnRequest` locally. I need to remove those unused local imports."
+        }
+      ],
+      "created_at": "2026-03-25T18:07:49.264158+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "814ea6d1-47af-4b43-a49e-ceafafd8c4a0",
+      "role": "assistant",
+      "content": "The local imports at lines 923 and 1007 have unused `SpawnRequest`. Since these are now imported at the top level, the local imports are redundant. Let me check what's used from them locally.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The local imports at lines 923 and 1007 have unused `SpawnRequest`. Since these are now imported at the top level, the local imports are redundant. Let me check what's used from them locally."
+        }
+      ],
+      "created_at": "2026-03-25T18:07:55.819147+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "02361863-d942-4e45-bbdc-b6fcc0a66c54",
+      "role": "assistant",
+      "content": "These local imports are inside the test methods. Since `VolundrPort`, `VolundrSession`, and `SpawnRequest` are now imported at the top level, I can remove these local imports entirely.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "These local imports are inside the test methods. Since `VolundrPort`, `VolundrSession`, and `SpawnRequest` are now imported at the top level, I can remove these local imports entirely."
+        }
+      ],
+      "created_at": "2026-03-25T18:08:00.269956+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "b06c89ed-5264-4b3e-99e8-a2efcc819221",
+      "role": "assistant",
+      "content": "Now run the tests.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now run the tests."
+        }
+      ],
+      "created_at": "2026-03-25T18:08:24.368147+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "6e991e28-ce47-46d2-b49f-c598e87aad5b",
+      "role": "assistant",
+      "content": "All 87 tests passed. The coverage failure is just because it's measuring the entire codebase \u2014 not related to my changes. Let me run just the tyr tests to confirm coverage there.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All 87 tests passed. The coverage failure is just because it's measuring the entire codebase \u2014 not related to my changes. Let me run just the tyr tests to confirm coverage there."
+        }
+      ],
+      "created_at": "2026-03-25T18:08:49.850584+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "699a637f-a65d-425d-b310-3500d324e8b3",
+      "role": "assistant",
+      "content": "All 637 tests pass. Now commit and push.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All 637 tests pass. Now commit and push."
+        }
+      ],
+      "created_at": "2026-03-25T18:08:55.942641+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "dc2d914d-e987-427e-a879-2415153cd454",
+      "role": "assistant",
+      "content": "I see there's already a branch `niu-239` with a previous commit. Let me commit and push.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I see there's already a branch `niu-239` with a previous commit. Let me commit and push."
+        }
+      ],
+      "created_at": "2026-03-25T18:09:01.166082+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "ee489d51-dda9-481f-a90c-431c47998825",
+      "role": "assistant",
+      "content": "Now check if there's an existing PR for this branch.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now check if there's an existing PR for this branch."
+        }
+      ],
+      "created_at": "2026-03-25T18:09:16.881633+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "61b2b9db-eba3-4814-b1d8-57991e9b964c",
+      "role": "assistant",
+      "content": "PR #155 already exists. Let me wait for CI to pick up the new push.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "PR #155 already exists. Let me wait for CI to pick up the new push."
+        }
+      ],
+      "created_at": "2026-03-25T18:12:07.961663+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "dbc2693c-1a32-4b88-8054-83133ee2f744",
+      "role": "assistant",
+      "content": "All CI checks pass. Now update the Linear ticket.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All CI checks pass. Now update the Linear ticket."
+        }
+      ],
+      "created_at": "2026-03-25T18:12:14.450786+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "45a3d916-d25f-4dd1-8aea-53f70f3fdfe3",
+      "role": "assistant",
+      "content": "\n\nLinear MCP tools aren't available in this environment. Let me note that in the PR and proceed. All three exit criteria are met except the Linear update, which I'll document.\n\nLet me verify the PR is green one more time:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "\n\nLinear MCP tools aren't available in this environment. Let me note that in the PR and proceed. All three exit criteria are met except the Linear update, which I'll document.\n\nLet me verify the PR is green one more time:"
+        }
+      ],
+      "created_at": "2026-03-25T18:12:29.486637+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "76bf67cf-ef77-44a6-81c6-73e2180a982d",
+      "role": "assistant",
+      "content": "All 42 CI checks pass, 0 failing. \n\n**Summary of changes pushed to PR #155:**\n\n1. **Fix: `PR_MERGEABLE` event type** \u2014 Added `PR_MERGEABLE = \"pr_mergeable\"` to `ConfidenceEventType`. `_apply_mergeable_signal` now uses `PR_MERGEABLE` for mergeable PRs instead of incorrectly reusing `CI_PASS`.\n\n2. **Fix: `owner_id` in `phase.unlocked` event** \u2014 The `_check_phase_gate` method now includes `owner_id: saga.owner_id` in the `phase.unlocked` event data, enabling notification routing.\n\n3. **Fix: Retry feedback to sessions** \u2014 `ReviewEngine` now accepts an optional `VolundrPort`. Before retrying a raid, `_send_retry_feedback` sends failure context (e.g., \"Review failed: CI failed...\") to the session via `send_message`. Gracefully skips if no session, no volundr, or send fails.\n\n**Tests added:** 8 new tests covering `PR_MERGEABLE` signal separation, `owner_id` assertion in phase gate, and 5 session feedback scenarios (success, conflict message, no volundr, send failure, no session_id).\n\n**Linear ticket (NIU-239):** Could not update via MCP \u2014 Linear tools are not available in this environment. The ticket should be manually set to \"In Review\" with a link to https://github.com/niuulabs/volundr/pull/155.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All 42 CI checks pass, 0 failing. \n\n**Summary of changes pushed to PR #155:**\n\n1. **Fix: `PR_MERGEABLE` event type** \u2014 Added `PR_MERGEABLE = \"pr_mergeable\"` to `ConfidenceEventType`. `_apply_mergeable_signal` now uses `PR_MERGEABLE` for mergeable PRs instead of incorrectly reusing `CI_PASS`.\n\n2. **Fix: `owner_id` in `phase.unlocked` event** \u2014 The `_check_phase_gate` method now includes `owner_id: saga.owner_id` in the `phase.unlocked` event data, enabling notification routing.\n\n3. **Fix: Retry feedback to sessions** \u2014 `ReviewEngine` now accepts an optional `VolundrPort`. Before retrying a raid, `_send_retry_feedback` sends failure context (e.g., \"Review failed: CI failed...\") to the session via `send_message`. Gracefully skips if no session, no volundr, or send fails.\n\n**Tests added:** 8 new tests covering `PR_MERGEABLE` signal separation, `owner_id` assertion in phase gate, and 5 session feedback scenarios (success, conflict message, no volundr, send failure, no session_id).\n\n**Linear ticket (NIU-239):** Could not update via MCP \u2014 Linear tools are not available in this environment. The ticket should be manually set to \"In Review\" with a link to https://github.com/niuulabs/volundr/pull/155."
+        }
+      ],
+      "created_at": "2026-03-25T18:12:40.842276+00:00",
+      "metadata": {
+        "usage": {
+          "claude-opus-4-6": {
+            "inputTokens": 14054,
+            "outputTokens": 57908,
+            "cacheReadInputTokens": 15080866,
+            "cacheCreationInputTokens": 255722,
+            "webSearchRequests": 0,
+            "costUSD": 10.656665499999994,
+            "contextWindow": 200000,
+            "maxOutputTokens": 64000
+          },
+          "claude-haiku-4-5-20251001": {
+            "inputTokens": 64,
+            "outputTokens": 8864,
+            "cacheReadInputTokens": 1197414,
+            "cacheCreationInputTokens": 84295,
+            "webSearchRequests": 0,
+            "costUSD": 0.26949415,
+            "contextWindow": 200000,
+            "maxOutputTokens": 32000
+          }
+        },
+        "cost": 10.926159649999994,
+        "model": "claude-haiku-4-5-20251001"
+      }
+    },
+    {
+      "id": "2241732e-cec7-4f18-ba86-c5a40e87dd0e",
+      "role": "user",
+      "content": "Time to merge your PR #155 \u2014 last one, biggest merge. Steps:\n\n1. git fetch origin && git merge origin/feat/tyr\n2. MAJOR changes since your branch was created:\n   - tyr/events.py is GONE. EventBus is now:\n     * Port: tyr.ports.event_bus.EventBusPort and TyrEvent\n     * Adapter: tyr.adapters.memory_event_bus.InMemoryEventBus\n     * Update ALL your imports from tyr.events to tyr.ports.event_bus\n   - The old RaidWatcher (domain/services/watcher.py) is GONE. Replaced by SessionActivitySubscriber.\n     Your ReviewEngine's watcher integration (on_review callback) needs to be rewired.\n     The new subscriber emits raid.state_changed events to the EventBus. Your ReviewEngine\n     should subscribe to the EventBus and react to raid.state_changed events where status=REVIEW,\n     instead of using a callback on the old watcher.\n   - RaidRepository port has new methods: save_session_message, get_session_messages,\n     get_owner_for_raid, find_raid_by_tracker_id, save_phase, save_raid\n   - config.py has: EventBusConfig, WatcherConfig (updated), NotificationConfig, LLMConfig\n   - main.py is significantly different \u2014 new wiring for notifications, activity subscriber, LLM, etc.\n3. Resolve ALL conflicts \u2014 keep both sides. This will be a big merge.\n4. Run ALL tests\n5. Push\n6. gh pr merge 155 --squash --delete-branch\n\nDo NOT rebase. Merge the parent branch in. Take your time with conflicts.",
+      "parts": [],
+      "created_at": "2026-03-25T21:07:27.381951+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "62a8666c-93f6-4728-b82b-984f0481c818",
+      "role": "assistant",
+      "content": "Big merge with many conflicts. Let me systematically resolve each one. Let me first understand the new structures.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Big merge with many conflicts. Let me systematically resolve each one. Let me first understand the new structures."
+        }
+      ],
+      "created_at": "2026-03-25T21:07:53.408240+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "41077d9a-1059-4e9d-bbc5-fc776106daf4",
+      "role": "assistant",
+      "content": "Good. Now I understand the new architecture. The key change is:\n- `tyr.events.EventBus` \u2192 `tyr.ports.event_bus.EventBusPort` + `tyr.adapters.memory_event_bus.InMemoryEventBus`\n- `RaidWatcher` \u2192 `SessionActivitySubscriber` (no `on_review` callback)\n- `TyrEvent` now has an `owner_id` field and moved to `tyr.ports.event_bus`\n\nLet me resolve all conflicts one by one.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Good. Now I understand the new architecture. The key change is:\n- `tyr.events.EventBus` \u2192 `tyr.ports.event_bus.EventBusPort` + `tyr.adapters.memory_event_bus.InMemoryEventBus`\n- `RaidWatcher` \u2192 `SessionActivitySubscriber` (no `on_review` callback)\n- `TyrEvent` now has an `owner_id` field and moved to `tyr.ports.event_bus`\n\nLet me resolve all conflicts one by one."
+        }
+      ],
+      "created_at": "2026-03-25T21:08:15.381617+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "71ff387e-6049-4c58-84f2-7cff55847b34",
+      "role": "assistant",
+      "content": "Now resolve `src/tyr/main.py`:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now resolve `src/tyr/main.py`:"
+        }
+      ],
+      "created_at": "2026-03-25T21:08:23.516831+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "4af86370-62df-4e7d-b0e7-90a371b41394",
+      "role": "assistant",
+      "content": "Now the big conflict in main.py wiring section:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now the big conflict in main.py wiring section:"
+        }
+      ],
+      "created_at": "2026-03-25T21:08:30.939260+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "ffef1fb0-02e8-4509-8168-15697499913d",
+      "role": "assistant",
+      "content": "I need to keep both: ReviewEngine wiring + notification service + SessionActivitySubscriber (without on_review callback since that was the old watcher). The ReviewEngine should now subscribe to events from the EventBus instead.\n\nLet me check the SessionActivitySubscriber constructor signature to confirm it doesn't accept `on_review`:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to keep both: ReviewEngine wiring + notification service + SessionActivitySubscriber (without on_review callback since that was the old watcher). The ReviewEngine should now subscribe to events from the EventBus instead.\n\nLet me check the SessionActivitySubscriber constructor signature to confirm it doesn't accept `on_review`:"
+        }
+      ],
+      "created_at": "2026-03-25T21:08:38.261431+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "d6bd966b-06a4-4d05-bd2a-5131cd21490c",
+      "role": "assistant",
+      "content": "Correct \u2014 no `on_review` callback. I need to wire the ReviewEngine to listen to `raid.state_changed` events from the EventBus. Let me add a method to ReviewEngine that subscribes and processes events, and wire it in main.py.\n\nFirst, resolve the main.py conflict:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Correct \u2014 no `on_review` callback. I need to wire the ReviewEngine to listen to `raid.state_changed` events from the EventBus. Let me add a method to ReviewEngine that subscribes and processes events, and wire it in main.py.\n\nFirst, resolve the main.py conflict:"
+        }
+      ],
+      "created_at": "2026-03-25T21:08:48.561835+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "e34c5fbb-9373-466d-852f-74e13e3de40e",
+      "role": "assistant",
+      "content": "Now add `review_engine.stop()` to the cleanup section:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now add `review_engine.stop()` to the cleanup section:"
+        }
+      ],
+      "created_at": "2026-03-25T21:08:51.942096+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "4c8b4ce1-6099-444e-ae19-7469fe8c6dfa",
+      "role": "assistant",
+      "content": "Now update the ReviewEngine to use the new event bus port and add `start`/`stop` methods for event subscription. First update imports:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update the ReviewEngine to use the new event bus port and add `start`/`stop` methods for event subscription. First update imports:"
+        }
+      ],
+      "created_at": "2026-03-25T21:09:01.550523+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "7ae7c43c-2321-4d12-b5b2-0715befc8aa8",
+      "role": "assistant",
+      "content": "Now update the constructor to use `EventBusPort` and add `start`/`stop` methods:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now update the constructor to use `EventBusPort` and add `start`/`stop` methods:"
+        }
+      ],
+      "created_at": "2026-03-25T21:09:19.446218+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "b8c1bd42-e09e-4b22-b0b5-b9ab9f811e32",
+      "role": "assistant",
+      "content": "Now resolve the remaining conflicts. Let me handle `src/tyr/ports/raid_repository.py`:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now resolve the remaining conflicts. Let me handle `src/tyr/ports/raid_repository.py`:"
+        }
+      ],
+      "created_at": "2026-03-25T21:09:24.935834+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "14f01644-514a-49de-99c9-0d06257c930b",
+      "role": "assistant",
+      "content": "Now resolve `src/tyr/adapters/postgres_raids.py`:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now resolve `src/tyr/adapters/postgres_raids.py`:"
+        }
+      ],
+      "created_at": "2026-03-25T21:09:39.612757+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "6cc92168-d45c-478f-8ef1-b206ca218582",
+      "role": "assistant",
+      "content": "Good, imports already have `PhaseStatus`. Now resolve the conflict keeping both sides:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Good, imports already have `PhaseStatus`. Now resolve the conflict keeping both sides:"
+        }
+      ],
+      "created_at": "2026-03-25T21:09:56.989454+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "0289efb0-dfaf-4a77-bcdc-fa627ae4ef3b",
+      "role": "assistant",
+      "content": "Now resolve test file conflicts. Let me handle them:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now resolve test file conflicts. Let me handle them:"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:01.080803+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "99e34173-ee16-4595-b57b-a1fca750927d",
+      "role": "assistant",
+      "content": "We have 10 members now (CI_PASS, CI_FAIL, SCOPE_BREACH, RETRY, HUMAN_REJECT, HUMAN_APPROVED, AUTO_APPROVED, PR_CONFLICT, PR_MERGEABLE, MESSAGE_SENT):",
+      "parts": [
+        {
+          "type": "text",
+          "text": "We have 10 members now (CI_PASS, CI_FAIL, SCOPE_BREACH, RETRY, HUMAN_REJECT, HUMAN_APPROVED, AUTO_APPROVED, PR_CONFLICT, PR_MERGEABLE, MESSAGE_SENT):"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:10.688004+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "f5c49bcd-ea1d-4e03-84d0-69aed7b59fe1",
+      "role": "assistant",
+      "content": "Now resolve the remaining test file conflicts:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now resolve the remaining test file conflicts:"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:15.079101+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "7e96696e-0322-4ac3-8ad9-e1c34f06d1d1",
+      "role": "assistant",
+      "content": "Let me read and resolve each one:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Let me read and resolve each one:"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:20.090173+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "9fe4d2e4-a41e-4e3f-87cf-a912b9cb0055",
+      "role": "assistant",
+      "content": "All three are the same pattern \u2014 keep both sides:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All three are the same pattern \u2014 keep both sides:"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:28.435964+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "e0cf2a1f-42f7-471e-bb60-79511e2d0ff0",
+      "role": "assistant",
+      "content": "Now handle the deleted files. The old `watcher.py` and `test_watcher.py` should be removed since they've been replaced:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now handle the deleted files. The old `watcher.py` and `test_watcher.py` should be removed since they've been replaced:"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:39.178192+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "7b0ff82b-d465-4803-83c0-c00106d1d789",
+      "role": "assistant",
+      "content": "Now I need to update the review engine test file \u2014 it imports from `tyr.events` and references the old `RaidWatcher`. Let me update it:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I need to update the review engine test file \u2014 it imports from `tyr.events` and references the old `RaidWatcher`. Let me update it:"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:43.729357+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "1d0160eb-e632-43a7-bdfa-870cd7ed3484",
+      "role": "assistant",
+      "content": "Now replace all `EventBus` references with `InMemoryEventBus` in the test file:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now replace all `EventBus` references with `InMemoryEventBus` in the test file:"
+        }
+      ],
+      "created_at": "2026-03-25T21:10:53.260541+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "50ee79ed-9ff4-4eb3-883c-b77c9b5727b2",
+      "role": "assistant",
+      "content": "Now the StubRaidRepo also needs the new methods `save_session_message`, `get_session_messages`, `get_owner_for_raid`:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now the StubRaidRepo also needs the new methods `save_session_message`, `get_session_messages`, `get_owner_for_raid`:"
+        }
+      ],
+      "created_at": "2026-03-25T21:11:01.424807+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "bab22a04-1a9c-43a9-95d3-0ae4f6355ee5",
+      "role": "assistant",
+      "content": "I need to add these methods to `StubRaidRepo` to satisfy the abstract interface:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add these methods to `StubRaidRepo` to satisfy the abstract interface:"
+        }
+      ],
+      "created_at": "2026-03-25T21:11:04.602565+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "5e3e512f-55bc-4c35-ba2e-ad7984822241",
+      "role": "assistant",
+      "content": "Now I need to update the watcher integration tests. The old watcher is gone \u2014 these tests reference `RaidWatcher` which no longer exists. I need to replace them with tests that verify the ReviewEngine's event-driven subscription instead.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now I need to update the watcher integration tests. The old watcher is gone \u2014 these tests reference `RaidWatcher` which no longer exists. I need to replace them with tests that verify the ReviewEngine's event-driven subscription instead."
+        }
+      ],
+      "created_at": "2026-03-25T21:11:14.398940+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "edb97126-e2e7-413b-a958-b37d2d2cc019",
+      "role": "assistant",
+      "content": "I need to replace the old watcher integration tests with event-bus-driven tests. Let me replace the whole `TestWatcherIntegration` class:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to replace the old watcher integration tests with event-bus-driven tests. Let me replace the whole `TestWatcherIntegration` class:"
+        }
+      ],
+      "created_at": "2026-03-25T21:11:26.913941+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "2a6768b9-884e-439f-a3c0-bb82ee5d192b",
+      "role": "assistant",
+      "content": "Now check if there are any remaining conflict markers or issues:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now check if there are any remaining conflict markers or issues:"
+        }
+      ],
+      "created_at": "2026-03-25T21:12:02.526942+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c19c1c3b-3ded-449d-bf0b-3747d0ca73cb",
+      "role": "assistant",
+      "content": "Those are just section separators (`=====`), not conflict markers. No real conflicts remain.\n\nNow check if `tyr.events` is still referenced anywhere:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Those are just section separators (`=====`), not conflict markers. No real conflicts remain.\n\nNow check if `tyr.events` is still referenced anywhere:"
+        }
+      ],
+      "created_at": "2026-03-25T21:12:06.613414+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "9687e186-f701-415d-ab21-c49ed04bd56d",
+      "role": "assistant",
+      "content": "Just a docstring reference \u2014 that's fine. Let me also check tests:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Just a docstring reference \u2014 that's fine. Let me also check tests:"
+        }
+      ],
+      "created_at": "2026-03-25T21:12:13.366233+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "e4a110ef-966c-40f7-9a25-81cb769c1db9",
+      "role": "assistant",
+      "content": "Good. Now check if the `tyr.events` module still exists:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Good. Now check if the `tyr.events` module still exists:"
+        }
+      ],
+      "created_at": "2026-03-25T21:12:16.802462+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "c17c89b0-c42b-4e8b-8d4c-251ae5637ccd",
+      "role": "assistant",
+      "content": "Good, it's already gone. Now let me also check test_ports.py \u2014 it might need updates since we removed `tyr.events`:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Good, it's already gone. Now let me also check test_ports.py \u2014 it might need updates since we removed `tyr.events`:"
+        }
+      ],
+      "created_at": "2026-03-25T21:12:21.082250+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "4caaa587-3b0b-47d3-b805-26ddba3ec88f",
+      "role": "assistant",
+      "content": "Now run ruff:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now run ruff:"
+        }
+      ],
+      "created_at": "2026-03-25T21:12:24.669217+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "00cc45cb-4381-4816-b7be-de0d18848468",
+      "role": "assistant",
+      "content": "The replace_all of `EventBus` \u2192 `InMemoryEventBus` also affected `InMemoryEventBus` making it `InMemoryInMemoryEventBus`. Let me fix that:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The replace_all of `EventBus` \u2192 `InMemoryEventBus` also affected `InMemoryEventBus` making it `InMemoryInMemoryEventBus`. Let me fix that:"
+        }
+      ],
+      "created_at": "2026-03-25T21:12:29.510466+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "41e92faa-8d80-4ec1-b154-b7cf44a3a18f",
+      "role": "user",
+      "content": "Fix the double-replace issue, then keep going. Run tests, push, and merge: gh pr merge 155 --squash --delete-branch",
+      "parts": [],
+      "created_at": "2026-03-25T21:12:47.971336+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "ae2d21ae-8b2d-4baf-97b2-4f5cd0688a27",
+      "role": "assistant",
+      "content": "Now run the tests:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now run the tests:"
+        }
+      ],
+      "created_at": "2026-03-25T21:13:08.429781+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "27ba59e2-b296-45bc-ae90-12be45252716",
+      "role": "assistant",
+      "content": "Let me look at the specific test failures. The `test_review_engine.py` failures and the other test failures likely share the same root cause \u2014 the StubRaidRepo needs `get_owner_for_raid` and the other new methods. Let me check:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Let me look at the specific test failures. The `test_review_engine.py` failures and the other test failures likely share the same root cause \u2014 the StubRaidRepo needs `get_owner_for_raid` and the other new methods. Let me check:"
+        }
+      ],
+      "created_at": "2026-03-25T21:13:46.422205+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "2a057f6b-e877-4375-b63c-c36c6ef4f9ce",
+      "role": "assistant",
+      "content": "Let me see the actual error:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Let me see the actual error:"
+        }
+      ],
+      "created_at": "2026-03-25T21:13:57.840774+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "a469b084-87a5-4960-a99d-4c78615a83fe",
+      "role": "assistant",
+      "content": "The async event listener needs more time to process. The `_listen` method receives the event and processes it, but the engine itself also emits events during evaluation, which might cause a feedback loop issue, or the sleep isn't long enough. Let me check \u2014 when the ReviewEngine evaluates and auto-approves, it emits `raid.state_changed` with `auto_approved` action. The listener then sees this as another `raid.state_changed` event but with status `MERGED`, not `REVIEW`, so it should be ignored. The real issue is likely just timing. Let me increase the sleep and check.\n\nActually, the problem might be that the ReviewEngine's `_listen` method subscribes AFTER `start()`, but the event is emitted and the listener task may not have started yet. Let me check the `InMemoryEventBus.subscribe` to understand queueing:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The async event listener needs more time to process. The `_listen` method receives the event and processes it, but the engine itself also emits events during evaluation, which might cause a feedback loop issue, or the sleep isn't long enough. Let me check \u2014 when the ReviewEngine evaluates and auto-approves, it emits `raid.state_changed` with `auto_approved` action. The listener then sees this as another `raid.state_changed` event but with status `MERGED`, not `REVIEW`, so it should be ignored. The real issue is likely just timing. Let me increase the sleep and check.\n\nActually, the problem might be that the ReviewEngine's `_listen` method subscribes AFTER `start()`, but the event is emitted and the listener task may not have started yet. Let me check the `InMemoryEventBus.subscribe` to understand queueing:"
+        }
+      ],
+      "created_at": "2026-03-25T21:14:12.730728+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "190fd17d-7fb0-44e8-883e-0b6ef11e6afa",
+      "role": "assistant",
+      "content": "The issue is a race condition: `engine.start()` creates the task, but the task may not have called `subscribe()` yet when we emit the event. I need to yield control to let the task start. Let me fix the test:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The issue is a race condition: `engine.start()` creates the task, but the task may not have called `subscribe()` yet when we emit the event. I need to yield control to let the task start. Let me fix the test:"
+        }
+      ],
+      "created_at": "2026-03-25T21:14:17.238059+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "727b1480-e775-4207-87df-41f3c524d384",
+      "role": "assistant",
+      "content": "I need to add `await asyncio.sleep(0)` after `start()` to yield control so the listener task can subscribe before the event is emitted:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add `await asyncio.sleep(0)` after `start()` to yield control so the listener task can subscribe before the event is emitted:"
+        }
+      ],
+      "created_at": "2026-03-25T21:14:35.165572+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "a7f4abfd-3396-427b-b50d-4f7ec488daab",
+      "role": "assistant",
+      "content": "Now let me look at the other failures. The notification and activity subscriber tests probably need the new methods on their stubs too:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now let me look at the other failures. The notification and activity subscriber tests probably need the new methods on their stubs too:"
+        }
+      ],
+      "created_at": "2026-03-25T21:14:48.597231+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "4eb05a78-df93-4e92-92e0-681f850cf462",
+      "role": "assistant",
+      "content": "The notification service and activity subscriber tests have their own stubs that need `list_phases_for_saga` and `update_phase_status`. Let me fix those:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The notification service and activity subscriber tests have their own stubs that need `list_phases_for_saga` and `update_phase_status`. Let me fix those:"
+        }
+      ],
+      "created_at": "2026-03-25T21:15:03.084040+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "10805e53-571e-42ce-a633-53993994426b",
+      "role": "assistant",
+      "content": "Now run the tests again:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Now run the tests again:"
+        }
+      ],
+      "created_at": "2026-03-25T21:15:57.634241+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "95070002-dead-4830-b371-78be9b6dbb65",
+      "role": "assistant",
+      "content": "Down to 4 failures \u2014 all in `TestSessionFeedback`. Let me check what's wrong:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Down to 4 failures \u2014 all in `TestSessionFeedback`. Let me check what's wrong:"
+        }
+      ],
+      "created_at": "2026-03-25T21:16:16.295692+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "108d460f-f7a1-474f-83b6-80d6f34a4eda",
+      "role": "assistant",
+      "content": "The `VolundrPort` now has a `subscribe_activity` abstract method. Let me check:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The `VolundrPort` now has a `subscribe_activity` abstract method. Let me check:"
+        }
+      ],
+      "created_at": "2026-03-25T21:16:21.069472+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "d49e0dc9-e99f-426b-b657-d95fc805f0b9",
+      "role": "assistant",
+      "content": "I need to add `subscribe_activity` to the `StubVolundr` in the review engine test file:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add `subscribe_activity` to the `StubVolundr` in the review engine test file:"
+        }
+      ],
+      "created_at": "2026-03-25T21:16:26.817607+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "127c87a8-c5f9-464f-b59f-ca2df181676c",
+      "role": "assistant",
+      "content": "I need to add `subscribe_activity` and also import `AsyncGenerator` and `ActivityEvent`:",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I need to add `subscribe_activity` and also import `AsyncGenerator` and `ActivityEvent`:"
+        }
+      ],
+      "created_at": "2026-03-25T21:16:39.079693+00:00",
+      "metadata": {}
+    },
+    {
+      "id": "bad23803-4162-49f6-b30b-b69bc262c2e4",
+      "role": "assistant",
+      "content": "All 724 tests pass. Now lint everything, commit, push, and merge.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "All 724 tests pass. Now lint everything, commit, push, and merge."
+        }
+      ],
+      "created_at": "2026-03-25T21:17:20.118939+00:00",
+      "metadata": {}
+    }
+  ]
+}

@@ -7,8 +7,9 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.api.events import _sse_generator, create_events_router, resolve_event_bus
-from tyr.events import EventBus, TyrEvent
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 
 # ---------------------------------------------------------------------------
 # TyrEvent
@@ -50,36 +51,36 @@ class TestTyrEvent:
 
 class TestEventBus:
     def test_initial_state(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         assert bus.client_count == 0
         assert not bus.at_capacity
         assert bus.get_snapshot() == []
 
     def test_subscribe_increments_count(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         bus.subscribe()
         assert bus.client_count == 1
 
     def test_unsubscribe_decrements_count(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         q = bus.subscribe()
         bus.unsubscribe(q)
         assert bus.client_count == 0
 
     def test_unsubscribe_nonexistent_is_noop(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         orphan: asyncio.Queue = asyncio.Queue()
         bus.unsubscribe(orphan)  # must not raise
 
     def test_at_capacity_when_full(self):
-        bus = EventBus(max_clients=2)
+        bus = InMemoryEventBus(max_clients=2)
         bus.subscribe()
         assert not bus.at_capacity
         bus.subscribe()
         assert bus.at_capacity
 
     async def test_emit_puts_event_in_all_queues(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         q1 = bus.subscribe()
         q2 = bus.subscribe()
         event = TyrEvent(
@@ -93,7 +94,7 @@ class TestEventBus:
         assert received is event
 
     async def test_emit_skips_unsubscribed_queues(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         q = bus.subscribe()
         bus.unsubscribe(q)
         event = TyrEvent(event="session.spawned", data={})
@@ -101,7 +102,7 @@ class TestEventBus:
         assert q.qsize() == 0
 
     async def test_emit_saves_snapshot_for_state_events(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         event = TyrEvent(
             event="dispatcher.state",
             data={"running": False, "threshold": 0.8, "queue_depth": 0},
@@ -112,7 +113,7 @@ class TestEventBus:
         assert snapshot[0] is event
 
     async def test_emit_does_not_snapshot_transient_events(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         for ev_type in (
             "session.spawned",
             "session.stopped",
@@ -127,7 +128,7 @@ class TestEventBus:
         assert bus.get_snapshot() == []
 
     async def test_snapshot_updated_on_repeated_emit(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         e1 = TyrEvent(
             event="dispatcher.state",
             data={"running": False, "threshold": 0.8, "queue_depth": 0},
@@ -143,7 +144,7 @@ class TestEventBus:
         assert snapshot[0].data["running"] is True
 
     async def test_get_snapshot_returns_copy(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         await bus.emit(
             TyrEvent(
                 event="dispatcher.state",
@@ -164,7 +165,7 @@ class TestSseGenerator:
     """Tests for _sse_generator directly — no HTTP transport required."""
 
     async def test_yields_snapshot_on_start(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         snap = TyrEvent(
             id="snap-1",
             event="dispatcher.state",
@@ -183,7 +184,7 @@ class TestSseGenerator:
         assert "id: snap-1" in combined
 
     async def test_yields_queued_events(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         q = bus.subscribe()
         event = TyrEvent(
             id="live-1",
@@ -209,7 +210,7 @@ class TestSseGenerator:
         assert "id: live-1" in combined
 
     async def test_yields_keepalive_when_idle(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         q = bus.subscribe()
 
         chunks: list[str] = []
@@ -221,7 +222,7 @@ class TestSseGenerator:
         assert ": keepalive" in "".join(chunks)
 
     async def test_unsubscribes_on_close(self):
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         snap = TyrEvent(
             id="s1",
             event="dispatcher.state",
@@ -241,7 +242,7 @@ class TestSseGenerator:
 
     async def test_multiple_event_types_delivered(self):
         """All event types flow through the queue correctly."""
-        bus = EventBus(max_clients=5)
+        bus = InMemoryEventBus(max_clients=5)
         q = bus.subscribe()
 
         event_types = [
@@ -276,7 +277,7 @@ class TestSseGenerator:
 # ---------------------------------------------------------------------------
 
 
-def _make_app(event_bus: EventBus, keepalive_interval: float = 30.0) -> FastAPI:
+def _make_app(event_bus: EventBusPort, keepalive_interval: float = 30.0) -> FastAPI:
     app = FastAPI()
     app.include_router(create_events_router(keepalive_interval=keepalive_interval))
     app.dependency_overrides[resolve_event_bus] = lambda: event_bus
@@ -285,7 +286,7 @@ def _make_app(event_bus: EventBus, keepalive_interval: float = 30.0) -> FastAPI:
 
 class TestSseEndpointHttp:
     def test_returns_503_when_at_capacity(self):
-        bus = EventBus(max_clients=1)
+        bus = InMemoryEventBus(max_clients=1)
         bus.subscribe()  # fill up
         client = TestClient(_make_app(bus))
         resp = client.get("/api/v1/tyr/events")
@@ -296,6 +297,38 @@ class TestSseEndpointHttp:
 # ---------------------------------------------------------------------------
 # Config integration
 # ---------------------------------------------------------------------------
+
+
+class TestTyrEventOwnerID:
+    def test_owner_id_default_empty(self):
+        event = TyrEvent(event="test.event", data={})
+        assert event.owner_id == ""
+
+    def test_owner_id_set(self):
+        event = TyrEvent(event="test.event", data={}, owner_id="user-1")
+        assert event.owner_id == "user-1"
+
+    def test_owner_id_not_in_sse(self):
+        """owner_id is metadata for routing, not included in SSE wire format."""
+        event = TyrEvent(id="x", event="test.event", data={}, owner_id="user-1")
+        sse = event.to_sse()
+        assert "owner_id" not in sse
+
+
+class TestEventBusPortIsABC:
+    def test_cannot_instantiate_port(self):
+        import pytest
+
+        from tyr.ports.event_bus import EventBusPort
+
+        with pytest.raises(TypeError):
+            EventBusPort()  # type: ignore[abstract]
+
+    def test_in_memory_implements_port(self):
+        from tyr.ports.event_bus import EventBusPort
+
+        bus = InMemoryEventBus()
+        assert isinstance(bus, EventBusPort)
 
 
 class TestEventsConfig:
@@ -312,3 +345,18 @@ class TestEventsConfig:
         s = Settings()
         assert s.events.max_sse_clients == 10
         assert s.events.keepalive_interval == 15.0
+
+
+class TestEventBusConfig:
+    def test_default_values(self):
+        from tyr.config import EventBusConfig
+
+        cfg = EventBusConfig()
+        assert cfg.adapter == "tyr.adapters.memory_event_bus.InMemoryEventBus"
+        assert cfg.kwargs == {}
+
+    def test_settings_includes_event_bus(self):
+        from tyr.config import Settings
+
+        s = Settings()
+        assert s.event_bus.adapter == "tyr.adapters.memory_event_bus.InMemoryEventBus"

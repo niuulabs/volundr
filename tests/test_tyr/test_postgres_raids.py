@@ -240,6 +240,21 @@ class TestRelationshipQueries:
         assert await repo.get_saga_for_raid(uuid4()) is None
 
     @pytest.mark.asyncio
+    async def test_get_owner_found(self, repo: PostgresRaidRepository, pool: MagicMock):
+        pool.fetchrow = AsyncMock(return_value={"owner_id": "user-42"})
+        assert await repo.get_owner_for_raid(uuid4()) == "user-42"
+
+    @pytest.mark.asyncio
+    async def test_get_owner_not_found(self, repo: PostgresRaidRepository, pool: MagicMock):
+        pool.fetchrow = AsyncMock(return_value=None)
+        assert await repo.get_owner_for_raid(uuid4()) is None
+
+    @pytest.mark.asyncio
+    async def test_get_owner_empty_string(self, repo: PostgresRaidRepository, pool: MagicMock):
+        pool.fetchrow = AsyncMock(return_value={"owner_id": ""})
+        assert await repo.get_owner_for_raid(uuid4()) is None
+
+    @pytest.mark.asyncio
     async def test_get_phase_found(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(
             return_value={
@@ -266,3 +281,69 @@ class TestRelationshipQueries:
     async def test_all_raids_merged_false(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(return_value={"remaining": 2})
         assert await repo.all_raids_merged(uuid4()) is False
+
+
+# ---------------------------------------------------------------------------
+# save_session_message / get_session_messages
+# ---------------------------------------------------------------------------
+
+
+class TestSessionMessages:
+    @pytest.mark.asyncio
+    async def test_save_session_message(self, repo: PostgresRaidRepository, pool: MagicMock):
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        from tyr.domain.models import SessionMessage
+
+        msg = SessionMessage(
+            id=uuid4(),
+            raid_id=uuid4(),
+            session_id="ses-1",
+            content="Fix the tests",
+            sender="user",
+            created_at=datetime.now(UTC),
+        )
+        pool.execute = AsyncMock()
+        await repo.save_session_message(msg)
+
+        pool.execute.assert_called_once()
+        call_args = pool.execute.call_args
+        assert "INSERT INTO session_messages" in call_args[0][0]
+        assert call_args[0][1] == msg.id
+        assert call_args[0][4] == "Fix the tests"
+
+    @pytest.mark.asyncio
+    async def test_get_session_messages(self, repo: PostgresRaidRepository, pool: MagicMock):
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        raid_id = uuid4()
+        msg_id = uuid4()
+        now = datetime.now(UTC)
+
+        pool.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": msg_id,
+                    "raid_id": raid_id,
+                    "session_id": "ses-1",
+                    "content": "hello",
+                    "sender": "user",
+                    "created_at": now,
+                }
+            ]
+        )
+
+        messages = await repo.get_session_messages(raid_id)
+        assert len(messages) == 1
+        assert messages[0].id == msg_id
+        assert messages[0].content == "hello"
+        assert messages[0].sender == "user"
+        assert messages[0].session_id == "ses-1"
+
+    @pytest.mark.asyncio
+    async def test_get_session_messages_empty(self, repo: PostgresRaidRepository, pool: MagicMock):
+        pool.fetch = AsyncMock(return_value=[])
+        messages = await repo.get_session_messages(uuid4())
+        assert messages == []

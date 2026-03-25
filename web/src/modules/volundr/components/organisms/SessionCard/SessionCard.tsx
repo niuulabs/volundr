@@ -50,7 +50,10 @@ export function SessionCard({
         role={onClick ? 'button' : undefined}
         tabIndex={onClick ? 0 : undefined}
       >
-        <span className={cn(styles.statusDot, styles[`dot_${session.status}`])} />
+        <span
+          className={cn(styles.statusDot, styles[`dot_${session.status}`])}
+          data-activity={session.activityState ?? undefined}
+        />
         <span className={styles.compactName}>{session.name}</span>
         <span className={styles.compactIcons}>
           {repoUrl && (

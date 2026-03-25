@@ -115,6 +115,14 @@ class SessionStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class SessionActivityState(StrEnum):
+    """Activity state of a running session (orthogonal to lifecycle status)."""
+
+    ACTIVE = "active"
+    IDLE = "idle"
+    TOOL_EXECUTING = "tool_executing"
+
+
 class EventType(StrEnum):
     """Type of real-time event."""
 
@@ -129,6 +137,7 @@ class EventType(StrEnum):
     CHRONICLE_EVENT = "chronicle_event"
     PR_CREATED = "pr_created"
     PR_MERGED = "pr_merged"
+    SESSION_ACTIVITY = "session_activity"
 
 
 class ModelProvider(StrEnum):
@@ -352,6 +361,14 @@ class Session(BaseModel):
     workspace_id: UUID | None = Field(
         default=None,
         description="Workspace PVC identifier for storage isolation",
+    )
+    activity_state: SessionActivityState | None = Field(
+        default=None,
+        description="Current activity state (active/idle/tool_executing)",
+    )
+    activity_metadata: dict = Field(
+        default_factory=dict,
+        description="Metadata from the latest activity report",
     )
 
     model_config = {"frozen": False}

@@ -21,6 +21,7 @@ from tyr.adapters.inbound.rest_integrations import (
 )
 from tyr.adapters.inbound.rest_pats import create_pats_router
 from tyr.adapters.inbound.rest_telegram_webhook import create_telegram_webhook_router
+from tyr.adapters.notification_channel_factory import NotificationChannelFactory
 from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_notification_subscriptions import (
     PostgresNotificationSubscriptionRepository,
@@ -42,11 +43,12 @@ from tyr.api.sagas import resolve_git as sagas_resolve_git
 from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
+from tyr.domain.services.notification import NotificationService
 from tyr.domain.services.review_engine import ReviewEngine
-from tyr.domain.services.watcher import RaidWatcher
-from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
+from tyr.ports.event_bus import EventBusPort
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
@@ -229,11 +231,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.state.pat_service = pat_service
 
-            # Wire event bus
-            event_bus = EventBus(max_clients=settings.events.max_sse_clients)
+            # Wire event bus (dynamic adapter pattern)
+            eb_cfg = settings.event_bus
+            eb_cls = import_class(eb_cfg.adapter)
+            eb_kwargs = {"max_clients": settings.events.max_sse_clients, **eb_cfg.kwargs}
+            event_bus: EventBusPort = eb_cls(**eb_kwargs)
             app.state.event_bus = event_bus
+            logger.info("Event bus: %s", eb_cfg.adapter.rsplit(".", 1)[-1])
 
-            async def _resolve_event_bus() -> EventBus:
+            async def _resolve_event_bus() -> EventBusPort:
                 return event_bus
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
@@ -265,7 +271,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_llm] = _resolve_llm
 
-            # Wire automated review engine
+            # Wire notification service
+            channel_factory = NotificationChannelFactory(integration_repo, credential_store)
+            app.state.channel_factory = channel_factory
+
+            notification_service = NotificationService(
+                event_bus=event_bus,
+                channel_factory=channel_factory,
+                raid_repo=raid_repo,
+                confidence_threshold=settings.notification.confidence_threshold,
+            )
+            app.state.notification_service = notification_service
+            if settings.notification.enabled:
+                await notification_service.start()
+
+            # Wire automated review engine (subscribes to raid.state_changed events)
             review_engine = ReviewEngine(
                 raid_repo=raid_repo,
                 git=git_adapter,
@@ -274,27 +294,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 volundr=volundr_adapter,
             )
             app.state.review_engine = review_engine
+            await review_engine.start()
 
-            # Wire raid completion watcher with review engine callback
-            watcher = RaidWatcher(
+            # Wire event-driven raid completion subscriber
+            subscriber = SessionActivitySubscriber(
                 volundr=volundr_adapter,
                 raid_repo=raid_repo,
                 dispatcher_repo=dispatcher_repo,
                 event_bus=event_bus,
                 config=settings.watcher,
-                on_review=review_engine.evaluate,
             )
-            app.state.watcher = watcher
-            await watcher.start()
+            app.state.subscriber = subscriber
+            await subscriber.start()
 
             logger.info("Tyr started — database pool ready")
             yield
 
             # Lifecycle cleanup
+            await review_engine.stop()
+            await notification_service.stop()
             await telegram_reply_client.close()
             if hasattr(llm_adapter, "close"):
                 await llm_adapter.close()
-            await watcher.stop()
+            await subscriber.stop()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan

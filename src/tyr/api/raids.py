@@ -13,11 +13,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from tyr.config import ReviewConfig
+from tyr.domain.exceptions import RaidNotFoundError
 from tyr.domain.models import RaidStatus
 from tyr.domain.services.raid_review import (
     InvalidRaidStateError,
-    RaidNotFoundError,
     RaidReviewService,
+)
+from tyr.domain.services.session_message import (
+    NoActiveSessionError,
+    RaidNotRunningError,
+    SessionMessageService,
 )
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
@@ -63,6 +68,27 @@ class RaidResponse(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str | None = None
+
+
+class SendMessageRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=32768)
+
+
+class SendMessageResponse(BaseModel):
+    message_id: str
+    raid_id: str
+    session_id: str
+    content: str
+    sender: str
+    created_at: str
+
+
+class SessionMessageResponse(BaseModel):
+    id: str
+    session_id: str
+    content: str
+    sender: str
+    created_at: str
 
 
 # ---------------------------------------------------------------------------
@@ -338,5 +364,69 @@ def create_raids_router() -> APIRouter:
             logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
 
         return _raid_response(result.raid)
+
+    @router.post("/{raid_id}/message", response_model=SendMessageResponse)
+    async def send_message(
+        raid_id: UUID,
+        body: SendMessageRequest,
+        request: Request,
+        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        volundr: VolundrPort = Depends(resolve_volundr),
+    ) -> SendMessageResponse:
+        """Send a message to the running session for a raid."""
+        event_bus = getattr(request.app.state, "event_bus", None)
+        svc = SessionMessageService(raid_repo, volundr, event_bus=event_bus)
+
+        try:
+            result = await svc.send_message(raid_id, body.content, sender="user")
+        except RaidNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Raid not found: {raid_id}",
+            )
+        except RaidNotRunningError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Raid is in {exc.status} state, not running",
+            )
+        except NoActiveSessionError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Raid has no active session",
+            )
+
+        return SendMessageResponse(
+            message_id=str(result.message.id),
+            raid_id=str(result.raid_id),
+            session_id=result.session_id,
+            content=result.message.content,
+            sender=result.message.sender,
+            created_at=result.message.created_at.isoformat(),
+        )
+
+    @router.get("/{raid_id}/messages", response_model=list[SessionMessageResponse])
+    async def list_messages(
+        raid_id: UUID,
+        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+    ) -> list[SessionMessageResponse]:
+        """List all messages sent to a raid's session (audit trail)."""
+        raid = await raid_repo.get_raid(raid_id)
+        if raid is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Raid not found: {raid_id}",
+            )
+
+        messages = await raid_repo.get_session_messages(raid_id)
+        return [
+            SessionMessageResponse(
+                id=str(m.id),
+                session_id=m.session_id,
+                content=m.content,
+                sender=m.sender,
+                created_at=m.created_at.isoformat(),
+            )
+            for m in messages
+        ]
 
     return router

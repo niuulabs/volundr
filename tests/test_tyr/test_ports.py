@@ -53,6 +53,7 @@ class TestVolundrPort:
             "get_pr_status",
             "get_chronicle_summary",
             "send_message",
+            "subscribe_activity",
         }
         abstract_methods = {
             name

@@ -27,6 +27,7 @@ from tyr.domain.models import (
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
 )
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
@@ -117,6 +118,11 @@ class MockRaidRepository(RaidRepository):
                 return raid
         return None
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        if self.saga is None:
+            return None
+        return self.saga.owner_id or None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return self.saga
 
@@ -172,6 +178,12 @@ class MockRaidRepository(RaidRepository):
 
     async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
         return None
+
+    async def save_session_message(self, message: SessionMessage) -> None:
+        pass
+
+    async def get_session_messages(self, raid_id: UUID) -> list[SessionMessage]:
+        return []
 
 
 class MockVolundr(VolundrPort):
@@ -232,6 +244,10 @@ class MockVolundr(VolundrPort):
         auth_token: str | None = None,
     ) -> None:
         pass
+
+    async def subscribe_activity(self):
+        return
+        yield  # type: ignore[misc]  # pragma: no cover
 
 
 class MockGit(GitPort):

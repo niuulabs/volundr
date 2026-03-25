@@ -17,6 +17,7 @@ from tyr.domain.models import (
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
 )
 from tyr.ports.raid_repository import RaidRepository
 
@@ -151,6 +152,20 @@ class PostgresRaidRepository(RaidRepository):
             event.created_at,
         )
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        row = await self._pool.fetchrow(
+            """
+            SELECT s.owner_id FROM sagas s
+            JOIN phases p ON p.saga_id = s.id
+            JOIN raids r ON r.phase_id = p.id
+            WHERE r.id = $1
+            """,
+            raid_id,
+        )
+        if row is None:
+            return None
+        return row["owner_id"] or None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         row = await self._pool.fetchrow(
             """
@@ -253,6 +268,27 @@ class PostgresRaidRepository(RaidRepository):
             return None
         return self._row_to_phase(row)
 
+    async def save_session_message(self, message: SessionMessage) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO session_messages (id, raid_id, session_id, content, sender, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            message.id,
+            message.raid_id,
+            message.session_id,
+            message.content,
+            message.sender,
+            message.created_at,
+        )
+
+    async def get_session_messages(self, raid_id: UUID) -> list[SessionMessage]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM session_messages WHERE raid_id = $1 ORDER BY created_at",
+            raid_id,
+        )
+        return [self._row_to_session_message(r) for r in rows]
+
     # -- Row mappers --
 
     @staticmethod
@@ -315,4 +351,15 @@ class PostgresRaidRepository(RaidRepository):
             name=row["name"],
             status=PhaseStatus(row.get("status", "PENDING") or "PENDING"),
             confidence=row.get("confidence", 0.0) or 0.0,
+        )
+
+    @staticmethod
+    def _row_to_session_message(row: asyncpg.Record) -> SessionMessage:
+        return SessionMessage(
+            id=row["id"],
+            raid_id=row["raid_id"],
+            session_id=row["session_id"],
+            content=row["content"],
+            sender=row["sender"],
+            created_at=row["created_at"],
         )
