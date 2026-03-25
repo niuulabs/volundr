@@ -12,8 +12,8 @@ from dataclasses import dataclass
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
-from tyr.events import EventBus, TyrEvent
 from tyr.ports.dispatcher_repository import DispatcherRepository
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import VolundrPort, VolundrSession
 
@@ -40,7 +40,7 @@ class RaidWatcher:
         volundr: VolundrPort,
         raid_repo: RaidRepository,
         dispatcher_repo: DispatcherRepository,
-        event_bus: EventBus,
+        event_bus: EventBusPort,
         config: WatcherConfig,
     ) -> None:
         self._volundr = volundr
@@ -246,9 +246,11 @@ class RaidWatcher:
 
     async def _emit_state_changed(self, raid: Raid) -> None:
         """Emit a raid.state_changed event via the event bus."""
+        owner_id = await self._raid_repo.get_owner_for_raid(raid.id) or ""
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
+                owner_id=owner_id,
                 data={
                     "raid_id": str(raid.id),
                     "status": raid.status.value,

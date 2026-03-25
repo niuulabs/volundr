@@ -207,6 +207,26 @@ class WatcherConfig(BaseModel):
     )
 
 
+class EventBusConfig(BaseModel):
+    """Event bus adapter configuration (dynamic adapter pattern)."""
+
+    adapter: str = Field(
+        default="tyr.adapters.memory_event_bus.InMemoryEventBus",
+        description="Fully-qualified class path for the EventBus adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationConfig(BaseModel):
+    """Notification service configuration."""
+
+    enabled: bool = Field(default=True)
+    confidence_threshold: float = Field(
+        default=0.3,
+        description="Notify when raid confidence drops below this value.",
+    )
+
+
 class EventsConfig(BaseModel):
     """SSE event stream configuration."""
 
@@ -253,8 +273,10 @@ class Settings(BaseSettings):
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     watcher: WatcherConfig = Field(default_factory=WatcherConfig)
+    event_bus: EventBusConfig = Field(default_factory=EventBusConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    notification: NotificationConfig = Field(default_factory=NotificationConfig)
 
     @classmethod
     def settings_customise_sources(
