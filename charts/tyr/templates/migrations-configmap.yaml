@@ -249,4 +249,10 @@ data:
   000012_raid_description.down.sql: |
     ALTER TABLE raids DROP COLUMN IF EXISTS acceptance_criteria;
     ALTER TABLE raids DROP COLUMN IF EXISTS description;
+
+  000013_raids_status_index.up.sql: |
+    CREATE INDEX IF NOT EXISTS idx_raids_status ON raids (status);
+
+  000013_raids_status_index.down.sql: |
+    DROP INDEX IF EXISTS idx_raids_status;
 {{- end }}

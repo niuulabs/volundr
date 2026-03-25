@@ -49,6 +49,26 @@ class RaidRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
+        """Fetch all raids in a given state."""
+        ...
+
+    @abstractmethod
+    async def update_raid_completion(
+        self,
+        raid_id: UUID,
+        *,
+        status: RaidStatus,
+        chronicle_summary: str | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        reason: str | None = None,
+        increment_retry: bool = False,
+    ) -> Raid | None:
+        """Update raid on completion detection — sets status plus optional fields."""
+        ...
+
+    @abstractmethod
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         """Check whether every raid in the phase has status MERGED."""
         ...

@@ -120,6 +120,8 @@ class Raid:
     session_id: str | None
     branch: str | None
     chronicle_summary: str | None
+    pr_url: str | None
+    pr_id: str | None
     retry_count: int
     created_at: datetime
     updated_at: datetime
