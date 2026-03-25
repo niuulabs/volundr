@@ -21,7 +21,7 @@ from tyr.domain.models import (
     RaidStatus,
     validate_transition,
 )
-from tyr.events import EventBus, TyrEvent
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.raid_repository import RaidRepository
 
 logger = logging.getLogger(__name__)
@@ -94,19 +94,31 @@ class RaidReviewService:
         self,
         raid_repo: RaidRepository,
         review_config: ReviewConfig,
-        event_bus: EventBus | None = None,
+        event_bus: EventBusPort | None = None,
     ) -> None:
         self._raid_repo = raid_repo
         self._cfg = review_config
         self._event_bus = event_bus
 
+    async def _resolve_owner(self, raid_id: UUID) -> str:
+        """Resolve the owner_id for a raid via its parent saga."""
+        try:
+            saga = await self._raid_repo.get_saga_for_raid(raid_id)
+            if saga is not None:
+                return saga.owner_id
+        except Exception:
+            logger.debug("Could not resolve owner for raid %s", raid_id)
+        return ""
+
     async def _emit_state_changed(self, raid: Raid, *, action: str) -> None:
         """Emit a raid.state_changed event if an EventBus is wired."""
         if self._event_bus is None:
             return
+        owner_id = await self._resolve_owner(raid.id)
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
+                owner_id=owner_id,
                 data={
                     "raid_id": str(raid.id),
                     "status": raid.status.value,

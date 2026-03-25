@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.config import WatcherConfig
 from tyr.domain.models import (
     DispatcherState,
@@ -18,7 +19,6 @@ from tyr.domain.models import (
     SagaStatus,
 )
 from tyr.domain.services.watcher import RaidWatcher, WatcherStats
-from tyr.events import EventBus
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
@@ -244,13 +244,13 @@ def _make_watcher(
     volundr: StubVolundr | None = None,
     raid_repo: StubRaidRepo | None = None,
     dispatcher_repo: StubDispatcherRepo | None = None,
-    event_bus: EventBus | None = None,
+    event_bus: InMemoryEventBus | None = None,
     config: WatcherConfig | None = None,
-) -> tuple[RaidWatcher, StubVolundr, StubRaidRepo, EventBus]:
+) -> tuple[RaidWatcher, StubVolundr, StubRaidRepo, InMemoryEventBus]:
     v = volundr or StubVolundr()
     r = raid_repo or StubRaidRepo()
     d = dispatcher_repo or StubDispatcherRepo()
-    e = event_bus or EventBus()
+    e = event_bus or InMemoryEventBus()
     c = config or _default_config()
     watcher = RaidWatcher(volundr=v, raid_repo=r, dispatcher_repo=d, event_bus=e, config=c)
     return watcher, v, r, e

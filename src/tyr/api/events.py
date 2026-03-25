@@ -14,12 +14,12 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
-from tyr.events import EventBus, TyrEvent
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 
 logger = logging.getLogger(__name__)
 
 
-async def resolve_event_bus() -> EventBus:  # pragma: no cover
+async def resolve_event_bus() -> EventBusPort:  # pragma: no cover
     """Dependency stub — always overridden by the app lifespan in main.py."""
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -28,7 +28,7 @@ async def resolve_event_bus() -> EventBus:  # pragma: no cover
 
 
 async def _sse_generator(
-    event_bus: EventBus,
+    event_bus: EventBusPort,
     q: asyncio.Queue[TyrEvent],
     keepalive_interval: float,
 ) -> AsyncGenerator[str, None]:
@@ -69,7 +69,7 @@ def create_events_router(keepalive_interval: float = 15.0) -> APIRouter:
     @router.get("/events", summary="SSE event stream")
     async def sse_stream(
         request: Request,  # noqa: ARG001
-        event_bus: EventBus = Depends(resolve_event_bus),
+        event_bus: EventBusPort = Depends(resolve_event_bus),
     ) -> StreamingResponse:
         """Stream all real-time Tyr state changes as Server-Sent Events.
 
