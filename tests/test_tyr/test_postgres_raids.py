@@ -107,18 +107,14 @@ class TestUpdateRaidStatus:
         assert updated.status == RaidStatus.MERGED
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_missing(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_returns_none_when_missing(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(return_value=None)
 
         result = await repo.update_raid_status(uuid4(), RaidStatus.FAILED)
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_increment_retry(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_increment_retry(self, repo: PostgresRaidRepository, pool: MagicMock):
         now = datetime.now(UTC)
         raid_id = uuid4()
         pool.fetchrow = AsyncMock(
@@ -142,9 +138,7 @@ class TestUpdateRaidStatus:
             }
         )
 
-        updated = await repo.update_raid_status(
-            raid_id, RaidStatus.PENDING, increment_retry=True
-        )
+        updated = await repo.update_raid_status(raid_id, RaidStatus.PENDING, increment_retry=True)
         assert updated is not None
         assert updated.retry_count == 2
         # Verify SQL uses retry_count + 1
@@ -190,9 +184,7 @@ class TestAddConfidenceEvent:
 
 class TestGetConfidenceEvents:
     @pytest.mark.asyncio
-    async def test_returns_events(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_returns_events(self, repo: PostgresRaidRepository, pool: MagicMock):
         now = datetime.now(UTC)
         pool.fetch = AsyncMock(
             return_value=[
@@ -219,9 +211,7 @@ class TestGetConfidenceEvents:
 
 class TestRelationshipQueries:
     @pytest.mark.asyncio
-    async def test_get_saga_found(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_get_saga_found(self, repo: PostgresRaidRepository, pool: MagicMock):
         now = datetime.now(UTC)
         pool.fetchrow = AsyncMock(
             return_value={
@@ -245,16 +235,12 @@ class TestRelationshipQueries:
         assert saga.feature_branch == "feat/alpha"
 
     @pytest.mark.asyncio
-    async def test_get_saga_not_found(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_get_saga_not_found(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(return_value=None)
         assert await repo.get_saga_for_raid(uuid4()) is None
 
     @pytest.mark.asyncio
-    async def test_get_phase_found(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_get_phase_found(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(
             return_value={
                 "id": uuid4(),
@@ -272,15 +258,11 @@ class TestRelationshipQueries:
         assert phase.name == "Phase 1"
 
     @pytest.mark.asyncio
-    async def test_all_raids_merged_true(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_all_raids_merged_true(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(return_value={"remaining": 0})
         assert await repo.all_raids_merged(uuid4()) is True
 
     @pytest.mark.asyncio
-    async def test_all_raids_merged_false(
-        self, repo: PostgresRaidRepository, pool: MagicMock
-    ):
+    async def test_all_raids_merged_false(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(return_value={"remaining": 2})
         assert await repo.all_raids_merged(uuid4()) is False

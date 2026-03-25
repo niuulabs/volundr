@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 from uuid import UUID
 
 from tyr.domain.models import ConfidenceEvent, Phase, Raid, RaidStatus, Saga
@@ -10,6 +11,16 @@ from tyr.domain.models import ConfidenceEvent, Phase, Raid, RaidStatus, Saga
 
 class RaidRepository(ABC):
     """Abstract persistence for raids and their confidence history."""
+
+    @abstractmethod
+    async def save_phase(self, phase: Phase, *, conn: Any | None = None) -> None:
+        """Persist a new phase. Uses *conn* when inside a transaction."""
+        ...
+
+    @abstractmethod
+    async def save_raid(self, raid: Raid, *, conn: Any | None = None) -> None:
+        """Persist a new raid. Uses *conn* when inside a transaction."""
+        ...
 
     @abstractmethod
     async def get_raid(self, raid_id: UUID) -> Raid | None:

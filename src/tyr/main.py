@@ -34,6 +34,8 @@ from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
+from tyr.api.sagas import resolve_git as sagas_resolve_git
+from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.watcher import RaidWatcher
@@ -161,6 +163,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return git_adapter
 
             app.dependency_overrides[resolve_git] = _resolve_git
+            app.dependency_overrides[sagas_resolve_git] = _resolve_git
 
             # Wire tracker for raids (uses first available tracker)
             async def _resolve_raids_tracker_dep(
@@ -186,6 +189,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return raid_repo
 
             app.dependency_overrides[resolve_raid_repo] = _resolve_raid_repo
+            app.dependency_overrides[sagas_resolve_raid_repo] = _resolve_raid_repo
 
             # Wire personal access token service
             from tyr.adapters.postgres_pats import PostgresPATRepository
