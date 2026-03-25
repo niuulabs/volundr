@@ -43,6 +43,7 @@ class ConfidenceEventType(StrEnum):
     RETRY = "retry"
     HUMAN_REJECT = "human_reject"
     HUMAN_APPROVED = "human_approved"
+    MESSAGE_SENT = "message_sent"
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +135,18 @@ class ConfidenceEvent:
     event_type: ConfidenceEventType
     delta: float
     score_after: float
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class SessionMessage:
+    """A message sent to a running Volundr session (audit record)."""
+
+    id: UUID
+    raid_id: UUID
+    session_id: str
+    content: str
+    sender: str
     created_at: datetime
 
 
