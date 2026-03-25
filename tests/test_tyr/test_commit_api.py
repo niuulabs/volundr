@@ -68,6 +68,9 @@ class MockRaidRepo(RaidRepository):
     async def add_confidence_event(self, event) -> None:  # noqa: ANN001
         pass
 
+    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
+        return next((r for r in self.raids if r.tracker_id == tracker_id), None)
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return None
 

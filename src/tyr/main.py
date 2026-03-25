@@ -20,7 +20,11 @@ from tyr.adapters.inbound.rest_integrations import (
     create_telegram_setup_router,
 )
 from tyr.adapters.inbound.rest_pats import create_pats_router
+from tyr.adapters.inbound.rest_telegram_webhook import create_telegram_webhook_router
 from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
+from tyr.adapters.postgres_notification_subscriptions import (
+    PostgresNotificationSubscriptionRepository,
+)
 from tyr.adapters.postgres_raids import PostgresRaidRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
@@ -94,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             telegram_hmac_sig_length=settings.telegram.hmac_signature_length,
         )
     )
+    app.include_router(create_telegram_webhook_router())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -139,8 +144,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
             app.dependency_overrides[dispatch_resolve_saga_repo] = _resolve_saga_repo
 
+            # Wire notification subscription repository (Telegram webhook auth)
+            notification_sub_repo = PostgresNotificationSubscriptionRepository(pool)
+            app.state.notification_sub_repo = notification_sub_repo
+
             # Wire dispatcher repository
             dispatcher_repo = PostgresDispatcherRepository(pool)
+            app.state.dispatcher_repo = dispatcher_repo
 
             async def _resolve_dispatcher_repo() -> DispatcherRepository:
                 return dispatcher_repo
@@ -149,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Wire Volundr adapter
             volundr_adapter = VolundrHTTPAdapter(settings.volundr.url)
+            app.state.volundr = volundr_adapter
 
             async def _resolve_volundr() -> VolundrPort:
                 return volundr_adapter
@@ -226,6 +237,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
+            # Wire Telegram reply client (shared httpx.AsyncClient)
+            from tyr.adapters.inbound.rest_telegram_webhook import (
+                TelegramReplyClient,
+            )
+
+            telegram_reply_client = TelegramReplyClient(
+                bot_token=settings.telegram.bot_token,
+                timeout=settings.telegram.reply_timeout,
+            )
+            app.state.telegram_reply_client = telegram_reply_client
+
             # Wire LLM adapter (dynamic adapter pattern)
             from tyr.ports.llm import LLMPort as _LLMPort
 
@@ -257,6 +279,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
 
             # Lifecycle cleanup
+            await telegram_reply_client.close()
             if hasattr(llm_adapter, "close"):
                 await llm_adapter.close()
             await watcher.stop()

@@ -101,6 +101,15 @@ class MockVolundr(VolundrPort):
     async def get_chronicle_summary(self, session_id: str) -> str:
         return "summary"
 
+    async def send_message(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        auth_token: str | None = None,
+    ) -> None:
+        pass
+
 
 # -------------------------------------------------------------------
 # Fixtures

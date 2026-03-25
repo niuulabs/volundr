@@ -149,9 +149,25 @@ class AuthConfig(BaseModel):
 
 
 class TelegramConfig(BaseModel):
-    """Telegram bot configuration for deeplink setup."""
+    """Telegram bot configuration for deeplink setup and webhook commands."""
 
     bot_username: str = Field(default="TyrBot")
+    bot_token: str = Field(
+        default="",
+        description="Telegram Bot API token — required for webhook replies.",
+    )
+    webhook_secret: str = Field(
+        default="",
+        description=(
+            "Secret token set when registering the webhook with Telegram. "
+            "Telegram sends it as X-Telegram-Bot-Api-Secret-Token header. "
+            "When non-empty, requests without a matching header are rejected with 403."
+        ),
+    )
+    reply_timeout: float = Field(
+        default=10.0,
+        description="Timeout in seconds for Telegram Bot API reply calls.",
+    )
     hmac_key: str = Field(default="")
     hmac_signature_length: int = Field(
         default=32,

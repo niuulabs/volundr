@@ -132,3 +132,18 @@ class VolundrHTTPAdapter(VolundrPort):
             )
             resp.raise_for_status()
             return resp.json().get("summary", "")
+
+    async def send_message(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        auth_token: str | None = None,
+    ) -> None:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.post(
+                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/messages",
+                headers=self._headers(auth_token),
+                json={"content": message},
+            )
+            resp.raise_for_status()

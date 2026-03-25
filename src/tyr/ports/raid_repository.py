@@ -50,6 +50,11 @@ class RaidRepository(ABC):
         ...
 
     @abstractmethod
+    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
+        """Find a raid by its external tracker ID (e.g. NIU-221)."""
+        ...
+
+    @abstractmethod
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         """Resolve the parent saga for a given raid (raid -> phase -> saga)."""
         ...

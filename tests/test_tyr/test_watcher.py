@@ -66,6 +66,11 @@ class StubVolundr(VolundrPort):
             raise RuntimeError("Chronicle fetch failed")
         return self.chronicles.get(session_id, "")
 
+    async def send_message(
+        self, session_id: str, message: str, *, auth_token: str | None = None
+    ) -> None:
+        pass
+
 
 class StubRaidRepo(RaidRepository):
     """In-memory raid repository for watcher tests."""
@@ -133,6 +138,12 @@ class StubRaidRepo(RaidRepository):
 
     async def add_confidence_event(self, event: object) -> None:
         pass
+
+    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
+        for raid in self.raids.values():
+            if raid.tracker_id == tracker_id:
+                return raid
+        return None
 
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return self.saga
