@@ -253,9 +253,19 @@ def _default_config(**overrides: object) -> WatcherConfig:
         "confidence_pr_bonus": 0.2,
         "confidence_ci_bonus": 0.2,
         "confidence_idle_bonus": 0.1,
+        "reconnect_delay": 0.1,
     }
     defaults.update(overrides)
     return WatcherConfig(**defaults)
+
+
+def _make_volundr_session(session_id: str = "session-1", status: str = "running") -> VolundrSession:
+    return VolundrSession(
+        id=session_id,
+        name="Test Session",
+        status=status,
+        tracker_issue_id=None,
+    )
 
 
 def _make_subscriber(
@@ -266,6 +276,9 @@ def _make_subscriber(
     config: WatcherConfig | None = None,
 ) -> tuple[SessionActivitySubscriber, StubVolundr, StubRaidRepo, EventBus]:
     v = volundr or StubVolundr()
+    # Register a default running session so debounced evaluation can verify it
+    if "session-1" not in v.sessions:
+        v.sessions["session-1"] = _make_volundr_session()
     r = raid_repo or StubRaidRepo()
     d = dispatcher_repo or StubDispatcherRepo()
     e = event_bus or EventBus()
@@ -717,6 +730,174 @@ class TestDispatcherPauseFiltering:
 
 
 # ---------------------------------------------------------------------------
+# Tests — Failure detection
+# ---------------------------------------------------------------------------
+
+
+class TestFailureDetection:
+    @pytest.mark.asyncio
+    async def test_session_stopped_transitions_raid_to_failed(self) -> None:
+        """A session_updated event with status=stopped should transition raid to FAILED."""
+        sub, volundr, raid_repo, event_bus = _make_subscriber()
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="",
+            metadata={},
+            owner_id="user-1",
+            session_status="stopped",
+        )
+
+        q = event_bus.subscribe()
+        await sub._on_activity_event(event)
+
+        updated = raid_repo.raids[raid.id]
+        assert updated.status == RaidStatus.FAILED
+        assert updated.retry_count == 1
+
+        bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
+        assert bus_event.event == "raid.state_changed"
+        assert bus_event.data["status"] == "FAILED"
+
+    @pytest.mark.asyncio
+    async def test_session_failed_transitions_raid_to_failed(self) -> None:
+        """A session_updated event with status=failed should transition raid to FAILED."""
+        sub, volundr, raid_repo, _ = _make_subscriber()
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="",
+            metadata={},
+            owner_id="user-1",
+            session_status="failed",
+        )
+
+        await sub._on_activity_event(event)
+
+        updated = raid_repo.raids[raid.id]
+        assert updated.status == RaidStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_session_failed_cancels_pending_evaluation(self) -> None:
+        """A failure event should cancel any pending idle evaluation."""
+        config = _default_config(completion_check_delay=1.0)
+        sub, volundr, raid_repo, _ = _make_subscriber(config=config)
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+        raid_repo.saga = _make_saga()
+
+        # Schedule an idle evaluation
+        idle_event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="idle",
+            metadata={"turn_count": 5, "duration_seconds": 60},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(idle_event)
+        assert raid.session_id in sub._pending_evaluations
+
+        # Session crashes
+        fail_event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="",
+            metadata={},
+            owner_id="user-1",
+            session_status="failed",
+        )
+        await sub._on_activity_event(fail_event)
+
+        assert raid.session_id not in sub._pending_evaluations
+        assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_session_not_found_during_evaluation_transitions_to_failed(self) -> None:
+        """If get_session returns None during debounced evaluation, raid should fail."""
+        sub, volundr, raid_repo, _ = _make_subscriber()
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+        raid_repo.saga = _make_saga()
+
+        # Remove the session so get_session returns None
+        volundr.sessions.pop(raid.session_id or "", None)
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="idle",
+            metadata={"turn_count": 5, "duration_seconds": 60},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(event)
+        await asyncio.sleep(0.1)
+
+        assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
+        assert raid_repo.raids[raid.id].retry_count == 1
+
+    @pytest.mark.asyncio
+    async def test_session_stopped_during_evaluation_transitions_to_failed(self) -> None:
+        """If get_session returns a stopped session during evaluation, raid should fail."""
+        sub, volundr, raid_repo, _ = _make_subscriber()
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+        raid_repo.saga = _make_saga()
+
+        # Session is stopped
+        volundr.sessions[raid.session_id or ""] = _make_volundr_session(
+            session_id=raid.session_id or "", status="stopped"
+        )
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="idle",
+            metadata={"turn_count": 5, "duration_seconds": 60},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(event)
+        await asyncio.sleep(0.1)
+
+        assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_failure_no_raid_is_ignored(self) -> None:
+        """A failure event for a session with no RUNNING raid should be ignored."""
+        sub, volundr, raid_repo, _ = _make_subscriber()
+
+        event = ActivityEvent(
+            session_id="unknown-session",
+            state="",
+            metadata={},
+            owner_id="user-1",
+            session_status="stopped",
+        )
+        await sub._on_activity_event(event)
+        # No crash, no transitions
+
+    @pytest.mark.asyncio
+    async def test_chronicle_fetched_on_failure(self) -> None:
+        """Chronicle summary should be fetched when a raid fails."""
+        sub, volundr, raid_repo, _ = _make_subscriber()
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+        volundr.chronicles[raid.session_id or ""] = "Session crashed"
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="",
+            metadata={},
+            owner_id="user-1",
+            session_status="failed",
+        )
+        await sub._on_activity_event(event)
+
+        updated = raid_repo.raids[raid.id]
+        assert updated.status == RaidStatus.FAILED
+        assert updated.chronicle_summary == "Session crashed"
+
+
+# ---------------------------------------------------------------------------
 # Tests — WatcherConfig new fields
 # ---------------------------------------------------------------------------
 
@@ -732,6 +913,7 @@ class TestWatcherConfigNewFields:
         assert cfg.confidence_pr_bonus == 0.2
         assert cfg.confidence_ci_bonus == 0.2
         assert cfg.confidence_idle_bonus == 0.1
+        assert cfg.reconnect_delay == 5.0
 
     def test_custom(self) -> None:
         cfg = WatcherConfig(
@@ -743,6 +925,7 @@ class TestWatcherConfigNewFields:
             confidence_pr_bonus=0.15,
             confidence_ci_bonus=0.15,
             confidence_idle_bonus=0.05,
+            reconnect_delay=3.0,
         )
         assert cfg.idle_threshold == 60.0
         assert cfg.completion_check_delay == 10.0
@@ -752,3 +935,4 @@ class TestWatcherConfigNewFields:
         assert cfg.confidence_pr_bonus == 0.15
         assert cfg.confidence_ci_bonus == 0.15
         assert cfg.confidence_idle_bonus == 0.05
+        assert cfg.reconnect_delay == 3.0

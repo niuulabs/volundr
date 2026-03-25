@@ -237,6 +237,10 @@ class WatcherConfig(BaseModel):
         default=0.1,
         description="Confidence bonus for extended idle beyond threshold.",
     )
+    reconnect_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait before reconnecting after SSE subscription failure.",
+    )
 
 
 class EventsConfig(BaseModel):

@@ -151,7 +151,7 @@ class VolundrHTTPAdapter(VolundrPort):
             resp.raise_for_status()
 
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
-        """Subscribe to the Volundr SSE stream and yield session_activity events."""
+        """Subscribe to the Volundr SSE stream and yield activity + session lifecycle events."""
         url = f"{self._base_url}/api/v1/volundr/sessions/stream"
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream("GET", url, headers=self._headers()) as resp:
@@ -160,18 +160,33 @@ class VolundrHTTPAdapter(VolundrPort):
                 async for line in resp.aiter_lines():
                     if line.startswith("event:"):
                         event_type = line[len("event:") :].strip()
-                    elif line.startswith("data:") and event_type == "session_activity":
+                    elif line.startswith("data:"):
                         raw = line[len("data:") :].strip()
-                        try:
-                            data = json.loads(raw)
-                        except json.JSONDecodeError:
-                            continue
-                        yield ActivityEvent(
-                            session_id=data.get("session_id", ""),
-                            state=data.get("state", ""),
-                            metadata=data.get("metadata", {}),
-                            owner_id=data.get("owner_id", ""),
-                        )
+                        if event_type == "session_activity":
+                            try:
+                                data = json.loads(raw)
+                            except json.JSONDecodeError:
+                                continue
+                            yield ActivityEvent(
+                                session_id=data.get("session_id", ""),
+                                state=data.get("state", ""),
+                                metadata=data.get("metadata", {}),
+                                owner_id=data.get("owner_id", ""),
+                            )
+                        elif event_type == "session_updated":
+                            try:
+                                data = json.loads(raw)
+                            except json.JSONDecodeError:
+                                continue
+                            status = data.get("status", "")
+                            if status in ("stopped", "failed"):
+                                yield ActivityEvent(
+                                    session_id=data.get("id", ""),
+                                    state="",
+                                    metadata={},
+                                    owner_id=data.get("owner_id", ""),
+                                    session_status=status,
+                                )
                         event_type = ""
                     elif line == "":
                         event_type = ""

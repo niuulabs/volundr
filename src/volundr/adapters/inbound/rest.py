@@ -243,6 +243,13 @@ class DeleteSessionBody(BaseModel):
     )
 
 
+class ActivityReport(BaseModel):
+    """Request model for reporting session activity state."""
+
+    state: str = Field(description="Activity state (active/idle/tool_executing)")
+    metadata: dict = Field(default_factory=dict, description="Activity metadata")
+
+
 class SessionResponse(BaseModel):
     """Response model for a session."""
 
@@ -1253,6 +1260,7 @@ def create_router(
     )
     async def report_activity(
         request: Request,
+        data: ActivityReport,
         session_id: UUID = Path(description="Unique session identifier"),
     ) -> None:
         """Report a session activity state change from Skuld.
@@ -1272,20 +1280,16 @@ def create_router(
                     detail=f"Not authorized to report activity for session {session_id}",
                 )
 
-        body = await request.json()
-        raw_state = body.get("state", "")
-        metadata = body.get("metadata", {})
-
         try:
-            activity_state = SessionActivityState(raw_state)
+            activity_state = SessionActivityState(data.state)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Invalid activity state: {raw_state}",
+                detail=f"Invalid activity state: {data.state}",
             )
 
         try:
-            await service.update_activity(session_id, activity_state, metadata)
+            await service.update_activity(session_id, activity_state, data.metadata)
         except SessionNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

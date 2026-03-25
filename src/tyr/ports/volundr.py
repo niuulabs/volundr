@@ -36,12 +36,17 @@ class VolundrSession:
 
 @dataclass(frozen=True)
 class ActivityEvent:
-    """An activity state change received from Volundr SSE."""
+    """An activity or session lifecycle event received from Volundr SSE.
+
+    For activity events: state is "active"/"idle"/"tool_executing", session_status is empty.
+    For session lifecycle events: session_status is "stopped"/"failed"/etc., state is empty.
+    """
 
     session_id: str
     state: str
     metadata: dict
     owner_id: str
+    session_status: str = ""
 
 
 class VolundrPort(ABC):

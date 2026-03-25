@@ -97,10 +97,17 @@ class SessionActivitySubscriber:
             except Exception:
                 logger.exception("SSE subscription failed, reconnecting")
             if self._running:
-                await asyncio.sleep(self._config.poll_interval)
+                await asyncio.sleep(self._config.reconnect_delay)
+
+    _FAILED_STATUSES: frozenset[str] = frozenset({"stopped", "failed"})
 
     async def _on_activity_event(self, event: ActivityEvent) -> None:
-        """Handle a single activity event from the SSE stream."""
+        """Handle a single activity or session lifecycle event from the SSE stream."""
+        # Session lifecycle event (stopped/failed) — handle failure
+        if event.session_status in self._FAILED_STATUSES:
+            await self._on_session_failed(event)
+            return
+
         if event.state != "idle":
             # Cancel any pending evaluation for this session — it's still working
             pending = self._pending_evaluations.pop(event.session_id, None)
@@ -129,6 +136,15 @@ class SessionActivitySubscriber:
 
         raid = await self._find_raid_by_session(event.session_id)
         if raid is None:
+            return
+
+        # Verify session still exists and is running before evaluating
+        session = await self._volundr.get_session(event.session_id)
+        if session is None:
+            await self._handle_failure(raid, reason="Session not found")
+            return
+        if session.status in ("stopped", "failed"):
+            await self._handle_failure(raid, reason=f"Session {session.status}")
             return
 
         # Check dispatcher pause state
@@ -243,6 +259,45 @@ class SessionActivitySubscriber:
                 raid.id,
                 raid.session_id,
                 pr_id or "none",
+            )
+
+    async def _on_session_failed(self, event: ActivityEvent) -> None:
+        """Handle a session stopped/failed lifecycle event."""
+        # Cancel any pending completion evaluation for this session
+        pending = self._pending_evaluations.pop(event.session_id, None)
+        if pending is not None:
+            pending.cancel()
+
+        raid = await self._find_raid_by_session(event.session_id)
+        if raid is None:
+            return
+
+        await self._handle_failure(raid, reason=f"Session {event.session_status}")
+
+    async def _handle_failure(self, raid: Raid, *, reason: str) -> None:
+        """Transition a raid to FAILED when its session crashes or stops."""
+        chronicle_summary = None
+        if self._config.chronicle_on_complete and raid.session_id:
+            try:
+                chronicle_summary = await self._volundr.get_chronicle_summary(raid.session_id)
+            except Exception:
+                logger.warning("Failed to fetch chronicle for session %s", raid.session_id)
+
+        updated = await self._raid_repo.update_raid_completion(
+            raid.id,
+            status=RaidStatus.FAILED,
+            chronicle_summary=chronicle_summary,
+            reason=reason,
+            increment_retry=True,
+        )
+
+        if updated:
+            await self._emit_state_changed(updated)
+            logger.info(
+                "Raid %s transitioned to FAILED (session=%s, reason=%s)",
+                raid.id,
+                raid.session_id,
+                reason,
             )
 
     async def _emit_state_changed(self, raid: Raid) -> None:
