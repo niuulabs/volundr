@@ -26,10 +26,21 @@ service:
   annotations: {}
 
 ingress:
+  # -- Enable ingress
   enabled: false
+  # -- Ingress class name (nginx, traefik, haproxy, etc.)
   className: ""
+  # -- Ingress annotations (controller-specific)
   annotations: {}
-  hosts: []
+  # -- Ingress hosts
+  # Note: Tyr API is served at /api/v1/tyr/* — these defaults ensure the
+  # chart works out of the box without users needing to know the route prefix.
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /api/v1/tyr
+          pathType: Prefix
+  # -- TLS configuration
   tls: []
 
 config:
