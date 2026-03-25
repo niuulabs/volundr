@@ -90,7 +90,13 @@ class MockVolundr(VolundrPort):
     async def get_pr_status(self, session_id: str):  # noqa: ANN201
         from tyr.domain.models import PRStatus
 
-        return PRStatus(pr_id="pr-1", state="open", mergeable=True, ci_passed=True)
+        return PRStatus(
+            pr_id="pr-1",
+            url="https://github.com/org/repo/pull/1",
+            state="open",
+            mergeable=True,
+            ci_passed=True,
+        )
 
     async def get_chronicle_summary(self, session_id: str) -> str:
         return "summary"

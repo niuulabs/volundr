@@ -120,6 +120,8 @@ class Raid:
     session_id: str | None
     branch: str | None
     chronicle_summary: str | None
+    pr_url: str | None
+    pr_id: str | None
     retry_count: int
     created_at: datetime
     updated_at: datetime
@@ -154,6 +156,7 @@ class SessionInfo:
 @dataclass(frozen=True)
 class PRStatus:
     pr_id: str
+    url: str
     state: str
     mergeable: bool
     ci_passed: bool | None

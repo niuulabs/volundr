@@ -36,6 +36,7 @@ from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_saga_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.domain.services.watcher import RaidWatcher
 from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
@@ -165,9 +166,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             async def _resolve_raids_tracker_dep(
                 principal: Principal = Depends(extract_principal),
             ) -> TrackerPort:
-                trackers = await app.state.tracker_factory.for_owner(
-                    principal.user_id
-                )
+                trackers = await app.state.tracker_factory.for_owner(principal.user_id)
                 if not trackers:
                     from fastapi import HTTPException, status
 
@@ -177,9 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     )
                 return trackers[0]
 
-            app.dependency_overrides[resolve_raids_tracker] = (
-                _resolve_raids_tracker_dep
-            )
+            app.dependency_overrides[resolve_raids_tracker] = _resolve_raids_tracker_dep
 
             # Wire raid repository
             raid_repo = PostgresRaidRepository(pool)
@@ -225,8 +222,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
+            # Wire raid completion watcher
+            watcher = RaidWatcher(
+                volundr=volundr_adapter,
+                raid_repo=raid_repo,
+                dispatcher_repo=dispatcher_repo,
+                event_bus=event_bus,
+                config=settings.watcher,
+            )
+            app.state.watcher = watcher
+            await watcher.start()
+
             logger.info("Tyr started — database pool ready")
             yield
+
+            await watcher.stop()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan
