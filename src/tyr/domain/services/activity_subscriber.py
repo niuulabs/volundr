@@ -167,11 +167,11 @@ class SessionActivitySubscriber:
 
     async def _is_owner_active(self, raid: Raid) -> bool:
         """Check if the raid owner's dispatcher is running."""
-        saga = await self._raid_repo.get_saga_for_raid(raid.id)
-        if saga is None:
+        owner_id = await self._raid_repo.get_owner_for_raid(raid.id)
+        if owner_id is None:
             return True
 
-        state = await self._dispatcher_repo.get_or_create(saga.owner_id)
+        state = await self._dispatcher_repo.get_or_create(owner_id)
         return state.running
 
     async def _evaluate_completion(self, raid: Raid, metadata: dict) -> CompletionEvaluation:

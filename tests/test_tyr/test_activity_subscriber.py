@@ -154,6 +154,11 @@ class StubRaidRepo(RaidRepository):
                 return raid
         return None
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        if self.saga is None:
+            return None
+        return self.saga.owner_id or None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return self.saga
 

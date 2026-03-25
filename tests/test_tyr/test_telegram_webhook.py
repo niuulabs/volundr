@@ -144,6 +144,9 @@ class StubRaidRepo(RaidRepository):
     async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
         return self._tracker_id_map.get(tracker_id)
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        return None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return None
 
