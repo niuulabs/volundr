@@ -145,9 +145,13 @@ class AuthConfig(BaseModel):
 
 
 class TelegramConfig(BaseModel):
-    """Telegram bot configuration for deeplink setup."""
+    """Telegram bot configuration for deeplink setup and webhook commands."""
 
     bot_username: str = Field(default="TyrBot")
+    bot_token: str = Field(
+        default="",
+        description="Telegram Bot API token — required for webhook replies.",
+    )
     hmac_key: str = Field(default="")
     hmac_signature_length: int = Field(
         default=32,
