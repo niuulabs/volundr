@@ -150,6 +150,7 @@ class CommittedSagaResponse(BaseModel):
     status: str
     confidence: float
     phases: list[CommittedPhaseResponse]
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -534,9 +535,15 @@ def create_sagas_router() -> APIRouter:
             for raid in raids:
                 await raid_repo.save_raid(raid, conn=conn)
 
-        # 4. Create feature branch for each repo (best-effort — not transactional)
+        # 4. Create feature branch for each repo (best-effort — logged on failure)
+        warnings: list[str] = []
         for repo in body.repos:
-            await git.create_branch(repo, feature_branch, base=body.base_branch)
+            try:
+                await git.create_branch(repo, feature_branch, base=body.base_branch)
+            except Exception:
+                msg = f"Failed to create branch '{feature_branch}' in {repo}"
+                logger.warning(msg, exc_info=True)
+                warnings.append(msg)
 
         return CommittedSagaResponse(
             id=str(saga.id),
@@ -550,6 +557,7 @@ def create_sagas_router() -> APIRouter:
             status=saga.status.value,
             confidence=saga.confidence,
             phases=phase_responses,
+            warnings=warnings,
         )
 
     return router

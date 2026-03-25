@@ -471,3 +471,71 @@ class TestCommitSagaTrackerFailure:
         # Raids have empty tracker_id but are still persisted
         assert len(raid_repo.raids) == 3
         assert raid_repo.raids[0].tracker_id == ""
+
+
+class TestCommitSagaGitFailure:
+    """Git branch creation is best-effort — failures are logged and surfaced as warnings."""
+
+    def test_git_failure_still_returns_201(
+        self,
+        saga_repo: MockSagaRepo,
+        raid_repo: MockRaidRepo,
+    ) -> None:
+        class FailingGit(MockGit):
+            async def create_branch(self, repo: str, branch: str, base: str) -> None:
+                raise ConnectionError("GitHub API down")
+
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [MockTracker()]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+        app.dependency_overrides[resolve_git] = lambda: FailingGit()
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
+        assert resp.status_code == 201
+        data = resp.json()
+        # Saga is persisted despite git failure
+        assert len(saga_repo.sagas) == 1
+        assert len(raid_repo.phases) == 2
+        assert len(raid_repo.raids) == 3
+        # Response includes warning about the failure
+        assert len(data["warnings"]) == 1
+        assert "feat/my-saga" in data["warnings"][0]
+        assert "org/repo" in data["warnings"][0]
+
+    def test_partial_git_failure_reports_failed_repos(
+        self,
+        saga_repo: MockSagaRepo,
+        raid_repo: MockRaidRepo,
+    ) -> None:
+        class PartialFailGit(MockGit):
+            async def create_branch(self, repo: str, branch: str, base: str) -> None:
+                if repo == "org/repo-b":
+                    raise ConnectionError("GitHub API down")
+                self.branches_created.append((repo, branch, base))
+
+        git = PartialFailGit()
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [MockTracker()]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+        app.dependency_overrides[resolve_git] = lambda: git
+        app.state.settings = _dev_settings()
+        client = TestClient(app)
+
+        body = {**VALID_COMMIT_BODY, "repos": ["org/repo-a", "org/repo-b"]}
+        resp = client.post("/api/v1/tyr/sagas/commit", json=body)
+        assert resp.status_code == 201
+        data = resp.json()
+        # repo-a succeeded, repo-b failed
+        assert len(git.branches_created) == 1
+        assert len(data["warnings"]) == 1
+        assert "org/repo-b" in data["warnings"][0]
+
+    def test_no_warnings_on_success(self, client: TestClient) -> None:
+        resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
+        assert resp.json()["warnings"] == []
