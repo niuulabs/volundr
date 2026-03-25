@@ -55,6 +55,11 @@ class RaidRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        """Resolve the owner_id for a raid (raid → phase → saga → owner_id)."""
+        ...
+
+    @abstractmethod
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         """Resolve the parent saga for a given raid (raid -> phase -> saga)."""
         ...
@@ -82,14 +87,6 @@ class RaidRepository(ABC):
         increment_retry: bool = False,
     ) -> Raid | None:
         """Update raid on completion detection — sets status plus optional fields."""
-        ...
-
-    @abstractmethod
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
-        """Resolve the owner_id for a raid via its parent saga.
-
-        Returns the owner_id string, or None if the raid or saga is not found.
-        """
         ...
 
     @abstractmethod

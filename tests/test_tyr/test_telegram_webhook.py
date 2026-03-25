@@ -144,6 +144,9 @@ class StubRaidRepo(RaidRepository):
     async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
         return self._tracker_id_map.get(tracker_id)
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        return None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return None
 
@@ -155,10 +158,6 @@ class StubRaidRepo(RaidRepository):
 
     async def update_raid_completion(self, raid_id, **kwargs) -> Raid | None:  # noqa: ANN001
         return await self.update_raid_status(raid_id, kwargs.get("status", RaidStatus.MERGED))
-
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
-        saga = await self.get_saga_for_raid(raid_id)
-        return saga.owner_id if saga else None
 
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return self._all_merged
@@ -219,6 +218,10 @@ class StubVolundr(VolundrPort):
 
     async def send_message(self, session_id, message, *, auth_token=None):
         self.sent_messages.append((session_id, message))
+
+    async def subscribe_activity(self):
+        return
+        yield  # type: ignore[misc]  # pragma: no cover
 
 
 class StubReplyClient(TelegramReplyClient):

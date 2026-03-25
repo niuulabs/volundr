@@ -398,6 +398,8 @@ class Broker:
         self._artifacts = SessionArtifacts()
         self._session_start_reported = False
         self._event_sequence = 0
+        self._activity_state: str = "idle"
+        self._last_activity_report: float = 0.0
         self._conversation_turns: list[ConversationTurn] = []
         self._pending_assistant_content: str = ""
         self._pending_assistant_parts: list[dict] = []
@@ -466,9 +468,7 @@ class Broker:
         # Flush remaining reasoning
         if self._pending_reasoning_text:
             summary = self._pending_reasoning_text[-500:]
-            self._pending_assistant_parts.append(
-                {"type": "reasoning", "text": summary}
-            )
+            self._pending_assistant_parts.append({"type": "reasoning", "text": summary})
 
         parts = self._pending_assistant_parts if self._pending_assistant_parts else []
         self._append_turn(
@@ -649,6 +649,12 @@ class Broker:
                     }
                 )
 
+        # Report activity state transitions to Volundr
+        if event_type == "assistant":
+            asyncio.create_task(self._report_activity_state("active"))
+        elif event_type == "result":
+            asyncio.create_task(self._report_activity_state("idle"))
+
         # Track conversation from assistant messages.
         # The SDK WebSocket protocol sends complete messages as type=assistant
         # with content blocks already resolved (not as streaming deltas).
@@ -678,9 +684,7 @@ class Broker:
                         self._pending_assistant_parts.append(
                             {"type": "reasoning", "text": combined[-500:]}
                         )
-                    self._pending_assistant_parts.append(
-                        {"type": "text", "text": text_content}
-                    )
+                    self._pending_assistant_parts.append({"type": "text", "text": text_content})
 
         # HTTP streaming format: accumulate deltas
         if event_type == "content_block_delta":
@@ -698,6 +702,8 @@ class Broker:
         # Accumulate artifacts from assistant tool_use events
         if event_type == "assistant":
             tool_events = self._artifacts.record_tool_use(data)
+            if tool_events:
+                asyncio.create_task(self._report_activity_state("tool_executing"))
             # Enrich tool events with tool_result data (exit codes, git info)
             self._artifacts.enrich_from_tool_result(data, tool_events)
             for tool_ev in tool_events:
@@ -757,11 +763,13 @@ class Broker:
 
             # Capture content before flush clears it
             content = self._pending_assistant_content or data.get("result", "")
-            self._flush_pending_assistant_turn(metadata={
-                "usage": model_usage_for_turn,
-                "cost": result_cost,
-                "model": result_model,
-            })
+            self._flush_pending_assistant_turn(
+                metadata={
+                    "usage": model_usage_for_turn,
+                    "cost": result_cost,
+                    "model": result_model,
+                }
+            )
             first_line = ""
             if content:
                 for line in content.strip().splitlines():
@@ -921,11 +929,13 @@ class Broker:
                 )
 
                 # Echo back to all browsers so the message is confirmed
-                await self._channels.broadcast({
-                    "type": "user_confirmed",
-                    "id": msg_id,
-                    "content": content_str,
-                })
+                await self._channels.broadcast(
+                    {
+                        "type": "user_confirmed",
+                        "id": msg_id,
+                        "content": content_str,
+                    }
+                )
 
                 await self._transport.send_message(message)
 
@@ -1150,6 +1160,36 @@ class Broker:
             },
             model=self.model,
         )
+
+    async def _report_activity_state(self, state: str) -> None:
+        """Report activity state change to Volundr.
+
+        States: active, idle, tool_executing.
+        Debounces rapid transitions — only reports when state actually changes.
+        """
+        if state == self._activity_state:
+            return
+
+        self._activity_state = state
+        now = time.monotonic()
+        self._last_activity_report = now
+
+        if not self.volundr_api_url:
+            return
+
+        metadata = {
+            "turn_count": self._artifacts.turn_count,
+            "duration_seconds": self._artifacts.duration_seconds,
+        }
+
+        try:
+            client = await self._get_http_client()
+            await client.post(
+                f"/api/v1/volundr/sessions/{self.session_id}/activity",
+                json={"state": state, "metadata": metadata},
+            )
+        except Exception:
+            logger.debug("Failed to report activity state %s", state, exc_info=True)
 
     async def _generate_summary(self) -> dict:
         """Ask the CLI to generate a session summary.

@@ -205,6 +205,42 @@ class WatcherConfig(BaseModel):
     chronicle_on_complete: bool = Field(
         default=True, description="Fetch chronicle summary on completion."
     )
+    idle_threshold: float = Field(
+        default=30.0,
+        description="Seconds of idle before considering work complete.",
+    )
+    completion_check_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait after idle before evaluating completion (debounce).",
+    )
+    require_pr: bool = Field(
+        default=False,
+        description="If true, PR must exist for completion.",
+    )
+    require_ci: bool = Field(
+        default=False,
+        description="If true, CI must pass for completion.",
+    )
+    confidence_base: float = Field(
+        default=0.5,
+        description="Base confidence score when completion criteria are met.",
+    )
+    confidence_pr_bonus: float = Field(
+        default=0.2,
+        description="Confidence bonus when a PR exists.",
+    )
+    confidence_ci_bonus: float = Field(
+        default=0.2,
+        description="Confidence bonus when CI has passed.",
+    )
+    confidence_idle_bonus: float = Field(
+        default=0.1,
+        description="Confidence bonus for extended idle beyond threshold.",
+    )
+    reconnect_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait before reconnecting after SSE subscription failure.",
+    )
 
 
 class EventBusConfig(BaseModel):

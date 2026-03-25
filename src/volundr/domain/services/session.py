@@ -10,10 +10,13 @@ from uuid import UUID
 
 from volundr.domain.models import (
     CleanupTarget,
+    EventType,
     GitSource,
     IntegrationConnection,
     Principal,
+    RealtimeEvent,
     Session,
+    SessionActivityState,
     SessionSource,
     SessionSpec,
     SessionStatus,
@@ -297,6 +300,39 @@ class SessionService:
     async def get_session(self, session_id: UUID) -> Session | None:
         """Get a session by ID."""
         return await self._repository.get(session_id)
+
+    async def update_activity(
+        self,
+        session_id: UUID,
+        state: SessionActivityState,
+        metadata: dict,
+    ) -> Session:
+        """Update a session's activity state and broadcast an SSE event.
+
+        Raises SessionNotFoundError if the session doesn't exist.
+        """
+        session = await self._repository.get(session_id)
+        if session is None:
+            raise SessionNotFoundError(session_id)
+
+        session.activity_state = state
+        session.activity_metadata = metadata
+        updated = await self._repository.update(session)
+
+        if self._broadcaster is not None:
+            await self._broadcaster.publish(
+                RealtimeEvent(
+                    type=EventType.SESSION_ACTIVITY,
+                    data={
+                        "session_id": str(session_id),
+                        "state": state.value,
+                        "metadata": metadata,
+                        "owner_id": session.owner_id or "",
+                    },
+                    timestamp=updated.updated_at,
+                )
+            )
+        return updated
 
     async def list_sessions(
         self,

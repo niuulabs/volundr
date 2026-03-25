@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
 from tyr.domain.models import PRStatus
@@ -31,6 +32,21 @@ class VolundrSession:
     name: str
     status: str
     tracker_issue_id: str | None
+
+
+@dataclass(frozen=True)
+class ActivityEvent:
+    """An activity or session lifecycle event received from Volundr SSE.
+
+    For activity events: state is "active"/"idle"/"tool_executing", session_status is empty.
+    For session lifecycle events: session_status is "stopped"/"failed"/etc., state is empty.
+    """
+
+    session_id: str
+    state: str
+    metadata: dict
+    owner_id: str
+    session_status: str = ""
 
 
 class VolundrPort(ABC):
@@ -75,3 +91,9 @@ class VolundrPort(ABC):
     ) -> None:
         """Send a human message to a running Volundr session."""
         ...
+
+    @abstractmethod
+    async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
+        """Subscribe to the Volundr SSE stream for session_activity events."""
+        ...
+        yield  # type: ignore[misc]  # pragma: no cover

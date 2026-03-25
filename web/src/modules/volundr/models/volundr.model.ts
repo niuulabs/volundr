@@ -122,6 +122,7 @@ export interface VolundrSession {
   taskType?: string;
   archivedAt?: Date;
   trackerIssue?: TrackerIssue;
+  activityState?: 'active' | 'idle' | 'tool_executing' | null;
   ownerId?: string;
   tenantId?: string;
 }

@@ -71,6 +71,9 @@ class MockRaidRepo(RaidRepository):
     async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
         return next((r for r in self.raids if r.tracker_id == tracker_id), None)
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        return None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return None
 
@@ -91,9 +94,6 @@ class MockRaidRepo(RaidRepository):
         reason: str | None = None,
         increment_retry: bool = False,
     ) -> Raid | None:
-        return None
-
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
         return None
 
     async def all_raids_merged(self, phase_id: UUID) -> bool:

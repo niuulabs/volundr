@@ -118,6 +118,11 @@ class MockRaidRepository(RaidRepository):
                 return raid
         return None
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        if self.saga is None:
+            return None
+        return self.saga.owner_id or None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return self.saga
 
@@ -164,10 +169,6 @@ class MockRaidRepository(RaidRepository):
         )
         self.raids[raid_id] = updated
         return updated
-
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
-        saga = await self.get_saga_for_raid(raid_id)
-        return saga.owner_id if saga else None
 
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return self._all_merged
@@ -237,6 +238,10 @@ class MockVolundr(VolundrPort):
         auth_token: str | None = None,
     ) -> None:
         pass
+
+    async def subscribe_activity(self):
+        return
+        yield  # type: ignore[misc]  # pragma: no cover
 
 
 class MockGit(GitPort):

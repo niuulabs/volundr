@@ -240,6 +240,21 @@ class TestRelationshipQueries:
         assert await repo.get_saga_for_raid(uuid4()) is None
 
     @pytest.mark.asyncio
+    async def test_get_owner_found(self, repo: PostgresRaidRepository, pool: MagicMock):
+        pool.fetchrow = AsyncMock(return_value={"owner_id": "user-42"})
+        assert await repo.get_owner_for_raid(uuid4()) == "user-42"
+
+    @pytest.mark.asyncio
+    async def test_get_owner_not_found(self, repo: PostgresRaidRepository, pool: MagicMock):
+        pool.fetchrow = AsyncMock(return_value=None)
+        assert await repo.get_owner_for_raid(uuid4()) is None
+
+    @pytest.mark.asyncio
+    async def test_get_owner_empty_string(self, repo: PostgresRaidRepository, pool: MagicMock):
+        pool.fetchrow = AsyncMock(return_value={"owner_id": ""})
+        assert await repo.get_owner_for_raid(uuid4()) is None
+
+    @pytest.mark.asyncio
     async def test_get_phase_found(self, repo: PostgresRaidRepository, pool: MagicMock):
         pool.fetchrow = AsyncMock(
             return_value={

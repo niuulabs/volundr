@@ -23,6 +23,7 @@ from volundr.domain.models import (
     ModelTier,
     Principal,
     Session,
+    SessionActivityState,
     SessionSource,
     SessionStatus,
     TimelineEvent,
@@ -242,6 +243,13 @@ class DeleteSessionBody(BaseModel):
     )
 
 
+class ActivityReport(BaseModel):
+    """Request model for reporting session activity state."""
+
+    state: str = Field(description="Activity state (active/idle/tool_executing)")
+    metadata: dict = Field(default_factory=dict, description="Activity metadata")
+
+
 class SessionResponse(BaseModel):
     """Response model for a session."""
 
@@ -290,6 +298,14 @@ class SessionResponse(BaseModel):
     tenant_id: str | None = Field(
         default=None,
         description="Tenant ID for multi-tenant isolation",
+    )
+    activity_state: str | None = Field(
+        default=None,
+        description="Current activity state (active/idle/tool_executing)",
+    )
+    activity_metadata: dict = Field(
+        default_factory=dict,
+        description="Metadata from the latest activity report",
     )
 
     model_config = {
@@ -345,6 +361,8 @@ class SessionResponse(BaseModel):
             archived_at=(session.archived_at.isoformat() if session.archived_at else None),
             owner_id=session.owner_id,
             tenant_id=session.tenant_id,
+            activity_state=(session.activity_state.value if session.activity_state else None),
+            activity_metadata=session.activity_metadata,
         )
 
 
@@ -1232,6 +1250,50 @@ def create_router(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(e),
+            )
+
+    @router.post(
+        "/sessions/{session_id}/activity",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        tags=["Sessions"],
+    )
+    async def report_activity(
+        request: Request,
+        data: ActivityReport,
+        session_id: UUID = Path(description="Unique session identifier"),
+    ) -> None:
+        """Report a session activity state change from Skuld.
+
+        Updates the session's activity_state and broadcasts a
+        session_activity SSE event for downstream consumers (e.g. Tyr).
+        """
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_activity")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report activity for session {session_id}",
+                )
+
+        try:
+            activity_state = SessionActivityState(data.state)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid activity state: {data.state}",
+            )
+
+        try:
+            await service.update_activity(session_id, activity_state, data.metadata)
+        except SessionNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
             )
 
     @router.patch(

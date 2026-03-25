@@ -247,6 +247,22 @@
   background-color: var(--color-text-faint);
 }
 
+/* Activity state indicators */
+.statusDot[data-activity='active'],
+.statusDot[data-activity='tool_executing'] {
+  animation: activityPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes activityPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
 .compactIcons {
   display: flex;
   align-items: center;
