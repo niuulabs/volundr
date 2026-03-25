@@ -58,6 +58,12 @@ class MockRaidRepository(RaidRepository):
         self.phase: Phase | None = None
         self._all_merged: bool = False
 
+    async def save_phase(self, phase: Phase) -> None:
+        pass
+
+    async def save_raid(self, raid: Raid) -> None:
+        self.raids[raid.id] = raid
+
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         return self.raids.get(raid_id)
 

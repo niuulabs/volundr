@@ -7,7 +7,8 @@ milestones, issues) is fetched live from the tracker at read time.
 from __future__ import annotations
 
 import logging
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -15,7 +16,18 @@ from pydantic import BaseModel, Field
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import TrackerIssue, TrackerProject
+from tyr.domain.models import (
+    Phase,
+    PhaseStatus,
+    Raid,
+    RaidStatus,
+    Saga,
+    SagaStatus,
+    TrackerIssue,
+    TrackerProject,
+)
+from tyr.ports.git import GitPort
+from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
@@ -83,6 +95,62 @@ class SagaDetailResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Commit request / response models
+# ---------------------------------------------------------------------------
+
+
+class RaidSpecRequest(BaseModel):
+    name: str
+    description: str = ""
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    declared_files: list[str] = Field(default_factory=list)
+    estimate_hours: float = 0.0
+
+
+class PhaseSpecRequest(BaseModel):
+    name: str
+    raids: list[RaidSpecRequest]
+
+
+class CommitRequest(BaseModel):
+    name: str
+    slug: str
+    repos: list[str]
+    base_branch: str = "main"
+    phases: list[PhaseSpecRequest]
+
+
+class CommittedRaidResponse(BaseModel):
+    id: str
+    tracker_id: str
+    name: str
+    status: str
+
+
+class CommittedPhaseResponse(BaseModel):
+    id: str
+    tracker_id: str
+    number: int
+    name: str
+    status: str
+    raids: list[CommittedRaidResponse]
+
+
+class CommittedSagaResponse(BaseModel):
+    id: str
+    tracker_id: str
+    tracker_type: str
+    slug: str
+    name: str
+    repos: list[str]
+    feature_branch: str
+    base_branch: str
+    status: str
+    confidence: float
+    phases: list[CommittedPhaseResponse]
+
+
+# ---------------------------------------------------------------------------
 # Dependency — overridden by main.py
 # ---------------------------------------------------------------------------
 
@@ -91,6 +159,20 @@ async def resolve_saga_repo() -> SagaRepository:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Saga repository not configured",
+    )
+
+
+async def resolve_raid_repo() -> RaidRepository:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Raid repository not configured",
+    )
+
+
+async def resolve_git() -> GitPort:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Git adapter not configured",
     )
 
 
@@ -282,5 +364,203 @@ def create_sagas_router() -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Saga not found: {saga_id}",
             )
+
+    @router.post("/commit", response_model=CommittedSagaResponse, status_code=201)
+    async def commit_saga(
+        body: CommitRequest,
+        principal: Principal = Depends(extract_principal),
+        saga_repo: SagaRepository = Depends(resolve_saga_repo),
+        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        adapters: list[TrackerPort] = Depends(resolve_trackers),
+        git: GitPort = Depends(resolve_git),
+    ) -> CommittedSagaResponse:
+        """Commit a previewed saga structure.
+
+        Persists the saga, phases, and raids to PostgreSQL, creates tracker
+        entities, and creates the feature branch. Returns 409 if the slug
+        already exists.
+        """
+        # Idempotency: reject duplicate slugs
+        existing = await saga_repo.get_saga_by_slug(body.slug)
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Saga with slug '{body.slug}' already exists",
+            )
+
+        if not body.phases:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="At least one phase is required",
+            )
+
+        tracker = adapters[0] if adapters else None
+        if tracker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No tracker configured",
+            )
+
+        now = datetime.now(UTC)
+        saga_id = uuid4()
+        feature_branch = f"feat/{body.slug}"
+        initial_confidence = 0.5
+
+        # Build saga domain object (tracker_id filled after create)
+        saga = Saga(
+            id=saga_id,
+            tracker_id="",
+            tracker_type="",
+            slug=body.slug,
+            name=body.name,
+            repos=body.repos,
+            feature_branch=feature_branch,
+            base_branch=body.base_branch,
+            status=SagaStatus.ACTIVE,
+            confidence=initial_confidence,
+            created_at=now,
+            owner_id=principal.user_id,
+        )
+
+        # 1. Create saga in tracker
+        tracker_saga_id = await tracker.create_saga(saga)
+        saga = Saga(
+            id=saga.id,
+            tracker_id=tracker_saga_id,
+            tracker_type=type(tracker).__name__,
+            slug=saga.slug,
+            name=saga.name,
+            repos=saga.repos,
+            feature_branch=saga.feature_branch,
+            base_branch=saga.base_branch,
+            status=saga.status,
+            confidence=saga.confidence,
+            created_at=saga.created_at,
+            owner_id=saga.owner_id,
+        )
+
+        # Persist saga
+        await saga_repo.save_saga(saga)
+
+        # 2. Create phases and raids
+        phase_responses: list[CommittedPhaseResponse] = []
+
+        for phase_num, phase_spec in enumerate(body.phases, start=1):
+            is_first_phase = phase_num == 1
+            phase_status = PhaseStatus.ACTIVE if is_first_phase else PhaseStatus.GATED
+
+            phase_id = uuid4()
+            phase = Phase(
+                id=phase_id,
+                saga_id=saga_id,
+                tracker_id="",
+                number=phase_num,
+                name=phase_spec.name,
+                status=phase_status,
+                confidence=initial_confidence,
+            )
+
+            # Create in tracker
+            tracker_phase_id = await tracker.create_phase(phase)
+            phase = Phase(
+                id=phase.id,
+                saga_id=phase.saga_id,
+                tracker_id=tracker_phase_id,
+                number=phase.number,
+                name=phase.name,
+                status=phase.status,
+                confidence=phase.confidence,
+            )
+
+            # Persist phase
+            await raid_repo.save_phase(phase)
+
+            # 3. Create raids for this phase
+            raid_responses: list[CommittedRaidResponse] = []
+
+            for raid_spec in phase_spec.raids:
+                raid_status = RaidStatus.PENDING if is_first_phase else RaidStatus.PENDING
+                raid_id = uuid4()
+
+                raid = Raid(
+                    id=raid_id,
+                    phase_id=phase_id,
+                    tracker_id="",
+                    name=raid_spec.name,
+                    description=raid_spec.description,
+                    acceptance_criteria=raid_spec.acceptance_criteria,
+                    declared_files=raid_spec.declared_files,
+                    estimate_hours=raid_spec.estimate_hours,
+                    status=raid_status,
+                    confidence=initial_confidence,
+                    session_id=None,
+                    branch=None,
+                    chronicle_summary=None,
+                    retry_count=0,
+                    created_at=now,
+                    updated_at=now,
+                )
+
+                # Create in tracker
+                tracker_raid_id = await tracker.create_raid(raid)
+                raid = Raid(
+                    id=raid.id,
+                    phase_id=raid.phase_id,
+                    tracker_id=tracker_raid_id,
+                    name=raid.name,
+                    description=raid.description,
+                    acceptance_criteria=raid.acceptance_criteria,
+                    declared_files=raid.declared_files,
+                    estimate_hours=raid.estimate_hours,
+                    status=raid.status,
+                    confidence=raid.confidence,
+                    session_id=raid.session_id,
+                    branch=raid.branch,
+                    chronicle_summary=raid.chronicle_summary,
+                    retry_count=raid.retry_count,
+                    created_at=raid.created_at,
+                    updated_at=raid.updated_at,
+                )
+
+                # Persist raid
+                await raid_repo.save_raid(raid)
+
+                raid_responses.append(
+                    CommittedRaidResponse(
+                        id=str(raid.id),
+                        tracker_id=raid.tracker_id,
+                        name=raid.name,
+                        status=raid.status.value,
+                    )
+                )
+
+            phase_responses.append(
+                CommittedPhaseResponse(
+                    id=str(phase.id),
+                    tracker_id=phase.tracker_id,
+                    number=phase.number,
+                    name=phase.name,
+                    status=phase.status.value,
+                    raids=raid_responses,
+                )
+            )
+
+        # 4. Create feature branch for each repo
+        for repo in body.repos:
+            await git.create_branch(repo, feature_branch, base=body.base_branch)
+
+        return CommittedSagaResponse(
+            id=str(saga.id),
+            tracker_id=saga.tracker_id,
+            tracker_type=saga.tracker_type,
+            slug=saga.slug,
+            name=saga.name,
+            repos=saga.repos,
+            feature_branch=saga.feature_branch,
+            base_branch=saga.base_branch,
+            status=saga.status.value,
+            confidence=saga.confidence,
+            phases=phase_responses,
+        )
 
     return router

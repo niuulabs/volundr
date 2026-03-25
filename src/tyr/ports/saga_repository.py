@@ -32,6 +32,11 @@ class SagaRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_saga_by_slug(self, slug: str) -> Saga | None:
+        """Get a saga by its slug. Returns None if no saga with that slug exists."""
+        ...
+
+    @abstractmethod
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         """Delete a saga, optionally scoped to an owner. Returns True if deleted."""
         ...

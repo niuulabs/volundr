@@ -68,6 +68,15 @@ class PostgresSagaRepository(SagaRepository):
             return None
         return self._row_to_saga(row)
 
+    async def get_saga_by_slug(self, slug: str) -> Saga | None:
+        row = await self._pool.fetchrow(
+            "SELECT * FROM sagas WHERE slug = $1",
+            slug,
+        )
+        if row is None:
+            return None
+        return self._row_to_saga(row)
+
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         if owner_id is not None:
             result = await self._pool.execute(

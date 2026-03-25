@@ -12,6 +12,16 @@ class RaidRepository(ABC):
     """Abstract persistence for raids and their confidence history."""
 
     @abstractmethod
+    async def save_phase(self, phase: Phase) -> None:
+        """Persist a new phase."""
+        ...
+
+    @abstractmethod
+    async def save_raid(self, raid: Raid) -> None:
+        """Persist a new raid."""
+        ...
+
+    @abstractmethod
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         """Get a raid by its internal UUID."""
         ...
