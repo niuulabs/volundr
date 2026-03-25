@@ -299,6 +299,7 @@ def create_sagas_router() -> APIRouter:
     async def decompose_spec(
         body: DecomposeRequest,
         request: Request,
+        principal: Principal = Depends(extract_principal),
         llm: LLMPort = Depends(resolve_llm),
     ) -> SagaStructureResponse:
         """Decompose a spec into a saga structure (stateless preview)."""

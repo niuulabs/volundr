@@ -11,7 +11,7 @@ import respx
 from tyr.adapters.bifrost import (
     DECOMPOSITION_PROMPT,
     MAX_ESTIMATE_HOURS,
-    MAX_RETRIES,
+    MIN_ESTIMATE_HOURS,
     BifrostAdapter,
     DecompositionError,
     ValidationError,
@@ -194,12 +194,22 @@ class TestValidateRaid:
         with pytest.raises(ValidationError, match="estimate_hours"):
             _validate_raid(data, "P1", 0)
 
+    def test_estimate_too_low(self) -> None:
+        data = {**VALID_RAID, "estimate_hours": 1.0}
+        with pytest.raises(ValidationError, match="below minimum"):
+            _validate_raid(data, "P1", 0)
+
     def test_estimate_too_high(self) -> None:
         data = {**VALID_RAID, "estimate_hours": 10.0}
         with pytest.raises(ValidationError, match="exceeds maximum"):
             _validate_raid(data, "P1", 0)
 
-    def test_estimate_at_boundary(self) -> None:
+    def test_estimate_at_min_boundary(self) -> None:
+        data = {**VALID_RAID, "estimate_hours": MIN_ESTIMATE_HOURS}
+        result = _validate_raid(data, "P1", 0)
+        assert result.estimate_hours == MIN_ESTIMATE_HOURS
+
+    def test_estimate_at_max_boundary(self) -> None:
         data = {**VALID_RAID, "estimate_hours": MAX_ESTIMATE_HOURS}
         result = _validate_raid(data, "P1", 0)
         assert result.estimate_hours == MAX_ESTIMATE_HOURS
@@ -346,6 +356,27 @@ class TestBifrostAdapter:
         adapter = BifrostAdapter(base_url="http://bifrost.test/")
         assert adapter._base_url == "http://bifrost.test"
 
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_custom_max_tokens(self) -> None:
+        adapter = BifrostAdapter(base_url="http://bifrost.test", max_tokens=4096)
+        route = respx.post("http://bifrost.test/api/v1/messages").mock(
+            return_value=httpx.Response(200, json=_bifrost_response(VALID_RESPONSE))
+        )
+        await adapter.decompose_spec("spec", "repo", model="m")
+        body = json.loads(route.calls.last.request.content)
+        assert body["max_tokens"] == 4096
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_custom_max_retries(self) -> None:
+        adapter = BifrostAdapter(base_url="http://bifrost.test", max_retries=1)
+        respx.post("http://bifrost.test/api/v1/messages").mock(
+            return_value=httpx.Response(200, json={"content": [{"type": "text", "text": "bad"}]})
+        )
+        with pytest.raises(DecompositionError, match="1 attempts"):
+            await adapter.decompose_spec("spec", "repo", model="m")
+
 
 # ---------------------------------------------------------------------------
 # Decomposition prompt
@@ -367,5 +398,10 @@ class TestDecompositionPrompt:
         lower_prompt = DECOMPOSITION_PROMPT.lower()
         assert "no markdown fences" in lower_prompt or "no markdown" in lower_prompt
 
-    def test_max_retries_value(self) -> None:
-        assert MAX_RETRIES == 2
+    def test_default_max_retries(self) -> None:
+        adapter = BifrostAdapter(base_url="http://test")
+        assert adapter._max_retries == 2
+
+    def test_default_max_tokens(self) -> None:
+        adapter = BifrostAdapter(base_url="http://test")
+        assert adapter._max_tokens == 8192

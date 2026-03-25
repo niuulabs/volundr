@@ -228,6 +228,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             bifrost = BifrostAdapter(
                 base_url=settings.bifrost.url,
                 timeout=settings.bifrost.timeout,
+                max_tokens=settings.bifrost.max_tokens,
+                max_retries=settings.bifrost.max_retries,
             )
 
             async def _resolve_llm() -> _LLMPort:

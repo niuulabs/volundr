@@ -63,7 +63,6 @@ Specification:
 
 MIN_ESTIMATE_HOURS = 2.0
 MAX_ESTIMATE_HOURS = 8.0
-MAX_RETRIES = 2
 
 
 class DecompositionError(Exception):
@@ -73,15 +72,24 @@ class DecompositionError(Exception):
 class BifrostAdapter(LLMPort):
     """Routes spec decomposition to a configured model via Bifröst HTTP API."""
 
-    def __init__(self, base_url: str, *, timeout: float = 120.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        timeout: float = 120.0,
+        max_tokens: int = 8192,
+        max_retries: int = 2,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._max_tokens = max_tokens
+        self._max_retries = max_retries
 
     async def decompose_spec(self, spec: str, repo: str, *, model: str) -> SagaStructure:
         prompt = DECOMPOSITION_PROMPT.format(spec=spec, repo=repo)
         last_error: Exception | None = None
 
-        for attempt in range(1, MAX_RETRIES + 1):
+        for attempt in range(1, self._max_retries + 1):
             try:
                 raw = await self._call_bifrost(prompt, model=model)
                 return _parse_and_validate(raw)
@@ -89,13 +97,13 @@ class BifrostAdapter(LLMPort):
                 logger.warning(
                     "Decomposition attempt %d/%d failed: %s",
                     attempt,
-                    MAX_RETRIES,
+                    self._max_retries,
                     exc,
                 )
                 last_error = exc
 
         raise DecompositionError(
-            f"Failed to decompose spec after {MAX_RETRIES} attempts: {last_error}"
+            f"Failed to decompose spec after {self._max_retries} attempts: {last_error}"
         )
 
     async def _call_bifrost(self, prompt: str, *, model: str) -> str:
@@ -105,7 +113,7 @@ class BifrostAdapter(LLMPort):
                 f"{self._base_url}/api/v1/messages",
                 json={
                     "model": model,
-                    "max_tokens": 8192,
+                    "max_tokens": self._max_tokens,
                     "messages": [{"role": "user", "content": prompt}],
                 },
             )
@@ -200,6 +208,10 @@ def _validate_raid(data: object, phase_name: str, index: int) -> RaidSpec:
     if not isinstance(estimate, (int, float)):
         raise ValidationError(f"{prefix}: 'estimate_hours' must be a number")
     estimate = float(estimate)
+    if estimate < MIN_ESTIMATE_HOURS:
+        raise ValidationError(
+            f"{prefix}: estimate_hours {estimate} below minimum {MIN_ESTIMATE_HOURS}"
+        )
     if estimate > MAX_ESTIMATE_HOURS:
         raise ValidationError(
             f"{prefix}: estimate_hours {estimate} exceeds maximum {MAX_ESTIMATE_HOURS}"

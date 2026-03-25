@@ -161,6 +161,8 @@ class BifrostConfig(BaseModel):
     url: str = Field(default="http://localhost:8080")
     timeout: float = Field(default=120.0)
     default_model: str = Field(default="claude-sonnet-4-6")
+    max_tokens: int = Field(default=8192)
+    max_retries: int = Field(default=2)
 
 
 class TrackerConfig(BaseModel):
