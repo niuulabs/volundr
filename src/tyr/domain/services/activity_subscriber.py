@@ -12,8 +12,8 @@ from dataclasses import dataclass
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
-from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.dispatcher_repository import DispatcherRepository
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import ActivityEvent, VolundrPort
 

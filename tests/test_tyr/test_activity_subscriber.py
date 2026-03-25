@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.config import WatcherConfig
 from tyr.domain.models import (
     DispatcherState,
@@ -22,7 +23,6 @@ from tyr.domain.services.activity_subscriber import (
     CompletionEvaluation,
     SessionActivitySubscriber,
 )
-from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrSession
