@@ -111,6 +111,13 @@ def _get_review_config(request: Request) -> ReviewConfig:
     return settings.review
 
 
+def _build_review_service(request: Request, raid_repo: RaidRepository) -> RaidReviewService:
+    """Construct a RaidReviewService with config and event bus from app state."""
+    review_cfg = _get_review_config(request)
+    event_bus = getattr(request.app.state, "event_bus", None)
+    return RaidReviewService(raid_repo, review_cfg, event_bus=event_bus)
+
+
 def _raid_response(raid, reason: str | None = None) -> RaidResponse:
     return RaidResponse(
         id=str(raid.id),
@@ -198,8 +205,7 @@ def create_raids_router() -> APIRouter:
         wrap the shared RaidReviewService which handles confidence events,
         state transition, and phase gate checks.
         """
-        review_cfg = _get_review_config(request)
-        svc = RaidReviewService(raid_repo, review_cfg)
+        svc = _build_review_service(request, raid_repo)
 
         # Fetch raid for REST-specific pre-steps (CI check, git merge)
         raid = await raid_repo.get_raid(raid_id)
@@ -276,9 +282,8 @@ def create_raids_router() -> APIRouter:
         tracker: TrackerPort = Depends(resolve_tracker),
     ) -> RaidResponse:
         """Reject a raid: set FAILED, record reason, apply confidence penalty."""
-        review_cfg = _get_review_config(request)
         reason = body.reason if body else None
-        svc = RaidReviewService(raid_repo, review_cfg)
+        svc = _build_review_service(request, raid_repo)
 
         # Core review: confidence event, state → FAILED
         try:
@@ -310,8 +315,7 @@ def create_raids_router() -> APIRouter:
         tracker: TrackerPort = Depends(resolve_tracker),
     ) -> RaidResponse:
         """Retry a raid: re-queue with incremented retry_count."""
-        review_cfg = _get_review_config(request)
-        svc = RaidReviewService(raid_repo, review_cfg)
+        svc = _build_review_service(request, raid_repo)
 
         # Core review: confidence event, state → PENDING or QUEUED
         try:

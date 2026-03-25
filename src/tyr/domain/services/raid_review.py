@@ -21,6 +21,7 @@ from tyr.domain.models import (
     RaidStatus,
     validate_transition,
 )
+from tyr.events import EventBus, TyrEvent
 from tyr.ports.raid_repository import RaidRepository
 
 logger = logging.getLogger(__name__)
@@ -51,9 +52,7 @@ class InvalidRaidStateError(Exception):
         self.raid_id = raid_id
         self.current = current
         self.action = action
-        super().__init__(
-            f"Cannot {action} raid {raid_id} in {current} state"
-        )
+        super().__init__(f"Cannot {action} raid {raid_id} in {current} state")
 
 
 # ---------------------------------------------------------------------------
@@ -95,9 +94,28 @@ class RaidReviewService:
         self,
         raid_repo: RaidRepository,
         review_config: ReviewConfig,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._raid_repo = raid_repo
         self._cfg = review_config
+        self._event_bus = event_bus
+
+    async def _emit_state_changed(self, raid: Raid, *, action: str) -> None:
+        """Emit a raid.state_changed event if an EventBus is wired."""
+        if self._event_bus is None:
+            return
+        await self._event_bus.emit(
+            TyrEvent(
+                event="raid.state_changed",
+                data={
+                    "raid_id": str(raid.id),
+                    "status": raid.status.value,
+                    "confidence": raid.confidence,
+                    "action": action,
+                    "tracker_id": raid.tracker_id,
+                },
+            )
+        )
 
     async def approve(self, raid_id: UUID) -> ReviewResult:
         """Approve a raid: HUMAN_APPROVED event → MERGED → phase gate check."""
@@ -128,10 +146,10 @@ class RaidReviewService:
         phase_gate_unlocked = False
         phase = await self._raid_repo.get_phase_for_raid(raid_id)
         if phase and await self._raid_repo.all_raids_merged(phase.id):
-            logger.info(
-                "Phase gate unlocked — all raids merged in phase %s", phase.id
-            )
+            logger.info("Phase gate unlocked — all raids merged in phase %s", phase.id)
             phase_gate_unlocked = True
+
+        await self._emit_state_changed(updated, action="approved")
 
         return ReviewResult(raid=updated, phase_gate_unlocked=phase_gate_unlocked)
 
@@ -165,6 +183,8 @@ class RaidReviewService:
         if updated is None:
             raise RaidNotFoundError(raid_id)
 
+        await self._emit_state_changed(updated, action="rejected")
+
         return ReviewResult(raid=updated, reason=reason)
 
     async def retry(self, raid_id: UUID) -> ReviewResult:
@@ -177,9 +197,7 @@ class RaidReviewService:
             raise RaidNotFoundError(raid_id)
 
         # Determine target status based on current state
-        target = (
-            RaidStatus.QUEUED if raid.status == RaidStatus.FAILED else RaidStatus.PENDING
-        )
+        target = RaidStatus.QUEUED if raid.status == RaidStatus.FAILED else RaidStatus.PENDING
 
         try:
             validate_transition(raid.status, target)
@@ -194,10 +212,10 @@ class RaidReviewService:
         )
         await self._raid_repo.add_confidence_event(event)
 
-        updated = await self._raid_repo.update_raid_status(
-            raid_id, target, increment_retry=True
-        )
+        updated = await self._raid_repo.update_raid_status(raid_id, target, increment_retry=True)
         if updated is None:
             raise RaidNotFoundError(raid_id)
+
+        await self._emit_state_changed(updated, action="retried")
 
         return ReviewResult(raid=updated)

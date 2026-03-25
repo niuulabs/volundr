@@ -375,14 +375,15 @@ def create_telegram_webhook_router() -> APIRouter:
         telegram_cfg = _get_telegram_config(request)
 
         # Validate webhook secret (X-Telegram-Bot-Api-Secret-Token)
-        if telegram_cfg.webhook_secret:
-            token = request.headers.get("x-telegram-bot-api-secret-token", "")
-            if token != telegram_cfg.webhook_secret:
-                return Response(status_code=status.HTTP_403_FORBIDDEN)
-        else:
+        if not telegram_cfg.webhook_secret:
             logger.warning(
                 "Telegram webhook secret not configured — webhook endpoint is unprotected"
             )
+        elif (
+            request.headers.get("x-telegram-bot-api-secret-token", "")
+            != telegram_cfg.webhook_secret
+        ):
+            return Response(status_code=status.HTTP_403_FORBIDDEN)
 
         body = await request.json()
         reply_client = _get_reply_client(request)
@@ -420,7 +421,8 @@ def create_telegram_webhook_router() -> APIRouter:
         volundr = _get_volundr(request)
         dispatcher_repo = _get_dispatcher_repo(request)
         review_config = _get_review_config(request)
-        review_service = RaidReviewService(raid_repo, review_config)
+        event_bus = getattr(request.app.state, "event_bus", None)
+        review_service = RaidReviewService(raid_repo, review_config, event_bus=event_bus)
 
         try:
             reply = await _dispatch_command(

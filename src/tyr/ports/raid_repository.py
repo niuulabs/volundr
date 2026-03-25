@@ -38,12 +38,10 @@ class RaidRepository(ABC):
         """Persist a new confidence event and update the raid's confidence score."""
         ...
 
+    @abstractmethod
     async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        """Find a raid by its external tracker ID (e.g. NIU-221).
-
-        Default returns None; adapters with tracker-id indexing should override.
-        """
-        return None
+        """Find a raid by its external tracker ID (e.g. NIU-221)."""
+        ...
 
     @abstractmethod
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:

@@ -71,6 +71,12 @@ class PostgresRaidRepository(RaidRepository):
             return None
         return self._row_to_raid(row)
 
+    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
+        row = await self._pool.fetchrow("SELECT * FROM raids WHERE tracker_id = $1", tracker_id)
+        if row is None:
+            return None
+        return self._row_to_raid(row)
+
     async def get_confidence_events(self, raid_id: UUID) -> list[ConfidenceEvent]:
         rows = await self._pool.fetch(
             "SELECT * FROM confidence_events WHERE raid_id = $1 ORDER BY created_at",

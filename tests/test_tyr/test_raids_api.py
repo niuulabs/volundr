@@ -103,6 +103,12 @@ class MockRaidRepository(RaidRepository):
     async def add_confidence_event(self, event: ConfidenceEvent) -> None:
         self.events.setdefault(event.raid_id, []).append(event)
 
+    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
+        for raid in self.raids.values():
+            if raid.tracker_id == tracker_id:
+                return raid
+        return None
+
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return self.saga
 
