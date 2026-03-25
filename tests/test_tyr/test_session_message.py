@@ -9,6 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.api.raids import (
     create_raids_router,
     resolve_git,
@@ -28,7 +29,6 @@ from tyr.domain.services.session_message import (
     RaidNotRunningError,
     SessionMessageService,
 )
-from tyr.events import EventBus
 
 from .test_raids_api import (
     MockGit,
@@ -106,15 +106,15 @@ def volundr() -> MessageTrackingVolundr:
 
 
 @pytest.fixture
-def event_bus() -> EventBus:
-    return EventBus()
+def event_bus() -> InMemoryEventBus:
+    return InMemoryEventBus()
 
 
 @pytest.fixture
 def service(
     raid_repo: MessageAwareMockRaidRepo,
     volundr: MessageTrackingVolundr,
-    event_bus: EventBus,
+    event_bus: InMemoryEventBus,
 ) -> SessionMessageService:
     return SessionMessageService(raid_repo, volundr, event_bus=event_bus)
 
@@ -123,7 +123,7 @@ def service(
 def client(
     raid_repo: MessageAwareMockRaidRepo,
     volundr: MessageTrackingVolundr,
-    event_bus: EventBus,
+    event_bus: InMemoryEventBus,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(create_raids_router())
@@ -281,7 +281,7 @@ class TestSessionMessageService:
         self,
         service: SessionMessageService,
         raid_repo: MessageAwareMockRaidRepo,
-        event_bus: EventBus,
+        event_bus: InMemoryEventBus,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
         raid_repo.raids[raid.id] = raid

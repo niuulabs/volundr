@@ -19,7 +19,7 @@ from tyr.domain.models import (
     RaidStatus,
     SessionMessage,
 )
-from tyr.events import EventBus, TyrEvent
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import VolundrPort
 
@@ -57,7 +57,7 @@ class SessionMessageService:
         self,
         raid_repo: RaidRepository,
         volundr: VolundrPort,
-        event_bus: EventBus | None = None,
+        event_bus: EventBusPort | None = None,
     ) -> None:
         self._raid_repo = raid_repo
         self._volundr = volundr
