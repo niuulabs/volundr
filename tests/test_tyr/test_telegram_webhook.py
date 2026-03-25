@@ -159,6 +159,12 @@ class StubRaidRepo(RaidRepository):
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return self._all_merged
 
+    async def list_phases_for_saga(self, saga_id: UUID) -> list:
+        return []
+
+    async def update_phase_status(self, phase_id: UUID, status) -> None:  # noqa: ANN001
+        return None
+
 
 class StubDispatcherRepo(DispatcherRepository):
     def __init__(self, running: bool = True) -> None:

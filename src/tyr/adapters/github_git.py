@@ -98,6 +98,14 @@ class GitHubGitAdapter(GitPort):
             ci_passed=None,
         )
 
+    async def get_pr_changed_files(self, pr_id: str) -> list[str]:
+        resp = await self._client.get(
+            f"{pr_id}/files",
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return [f["filename"] for f in resp.json()]
+
     async def close(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()

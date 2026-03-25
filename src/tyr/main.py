@@ -42,6 +42,7 @@ from tyr.api.sagas import resolve_git as sagas_resolve_git
 from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.domain.services.review_engine import ReviewEngine
 from tyr.domain.services.watcher import RaidWatcher
 from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
@@ -264,13 +265,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_llm] = _resolve_llm
 
-            # Wire raid completion watcher
+            # Wire automated review engine
+            review_engine = ReviewEngine(
+                raid_repo=raid_repo,
+                git=git_adapter,
+                review_config=settings.review,
+                event_bus=event_bus,
+            )
+            app.state.review_engine = review_engine
+
+            # Wire raid completion watcher with review engine callback
             watcher = RaidWatcher(
                 volundr=volundr_adapter,
                 raid_repo=raid_repo,
                 dispatcher_repo=dispatcher_repo,
                 event_bus=event_bus,
                 config=settings.watcher,
+                on_review=review_engine.evaluate,
             )
             app.state.watcher = watcher
             await watcher.start()

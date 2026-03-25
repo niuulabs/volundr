@@ -90,6 +90,27 @@ class ReviewConfig(BaseModel):
         default=0.5,
         description="Starting confidence score for newly committed sagas, phases, and raids.",
     )
+    auto_approve_threshold: float = Field(
+        default=0.80,
+        description="Confidence threshold above which raids are auto-merged.",
+    )
+    max_retries: int = Field(
+        default=3,
+        description="Maximum auto-retries before escalation to human review.",
+    )
+    scope_breach_threshold: float = Field(
+        default=0.30,
+        description="Fraction of undeclared changed files that flags a scope breach.",
+    )
+    confidence_delta_ci_pass: float = Field(default=0.30)
+    confidence_delta_ci_fail: float = Field(default=-0.30)
+    confidence_delta_mergeable: float = Field(default=0.10)
+    confidence_delta_conflict: float = Field(default=-0.20)
+    confidence_delta_scope_breach: float = Field(default=-0.25)
+    confidence_delta_retry_multiplier: float = Field(
+        default=-0.05,
+        description="Per-retry confidence penalty (multiplied by retry_count).",
+    )
 
 
 class GitConfig(BaseModel):

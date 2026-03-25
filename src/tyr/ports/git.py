@@ -24,3 +24,8 @@ class GitPort(ABC):
 
     @abstractmethod
     async def get_pr_status(self, pr_id: str) -> PRStatus: ...
+
+    @abstractmethod
+    async def get_pr_changed_files(self, pr_id: str) -> list[str]:
+        """Return the list of file paths changed in the PR."""
+        ...

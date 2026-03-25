@@ -2,13 +2,19 @@
 
 Tyr is the active party: it polls Volundr's session API, detects when a session
 has completed or failed, and transitions the corresponding raid accordingly.
+
+When a raid transitions to REVIEW, the watcher optionally triggers the
+automated ReviewEngine for quality scoring and feedback loop (NIU-239).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
+from typing import Any
+from uuid import UUID
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
@@ -16,6 +22,9 @@ from tyr.events import EventBus, TyrEvent
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import VolundrPort, VolundrSession
+
+# Callback type for the automated review engine
+ReviewCallback = Callable[[UUID], Coroutine[Any, Any, None]]
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +51,14 @@ class RaidWatcher:
         dispatcher_repo: DispatcherRepository,
         event_bus: EventBus,
         config: WatcherConfig,
+        on_review: ReviewCallback | None = None,
     ) -> None:
         self._volundr = volundr
         self._raid_repo = raid_repo
         self._dispatcher_repo = dispatcher_repo
         self._event_bus = event_bus
         self._config = config
+        self._on_review = on_review
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
@@ -218,6 +229,16 @@ class RaidWatcher:
                 raid.session_id,
                 pr_id or "none",
             )
+            # Trigger automated review engine if wired
+            if self._on_review is not None:
+                try:
+                    await self._on_review(updated.id)
+                except Exception:
+                    logger.warning(
+                        "Automated review failed for raid %s, escalating to human",
+                        updated.id,
+                        exc_info=True,
+                    )
 
     async def _handle_failure(self, raid: Raid, session: VolundrSession) -> None:
         """Transition a raid to FAILED on session failure."""

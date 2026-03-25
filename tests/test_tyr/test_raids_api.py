@@ -167,6 +167,12 @@ class MockRaidRepository(RaidRepository):
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return self._all_merged
 
+    async def list_phases_for_saga(self, saga_id: UUID) -> list[Phase]:
+        return []
+
+    async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
+        return None
+
 
 class MockVolundr(VolundrPort):
     """In-memory mock for Volundr port."""
@@ -258,6 +264,9 @@ class MockGit(GitPort):
             mergeable=True,
             ci_passed=True,
         )
+
+    async def get_pr_changed_files(self, pr_id: str) -> list[str]:
+        return []
 
 
 # ---------------------------------------------------------------------------
