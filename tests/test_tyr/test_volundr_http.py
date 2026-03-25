@@ -299,6 +299,99 @@ class TestListSessions:
 
 
 # -------------------------------------------------------------------
+# get_pr_status
+# -------------------------------------------------------------------
+
+
+class TestGetPRStatus:
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_success(self, adapter: VolundrHTTPAdapter):
+        respx.get(f"{SESSIONS_URL}/ses-1/pr").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "pr_id": "https://github.com/org/repo/pull/42",
+                    "state": "open",
+                    "mergeable": True,
+                    "ci_passed": True,
+                },
+            )
+        )
+
+        pr_status = await adapter.get_pr_status("ses-1")
+        assert pr_status.pr_id == "https://github.com/org/repo/pull/42"
+        assert pr_status.state == "open"
+        assert pr_status.mergeable is True
+        assert pr_status.ci_passed is True
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_ci_passed_none(self, adapter: VolundrHTTPAdapter):
+        respx.get(f"{SESSIONS_URL}/ses-1/pr").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "pr_id": "pr-1",
+                    "state": "open",
+                    "mergeable": False,
+                },
+            )
+        )
+
+        pr_status = await adapter.get_pr_status("ses-1")
+        assert pr_status.ci_passed is None
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_raises_on_error(self, adapter: VolundrHTTPAdapter):
+        respx.get(f"{SESSIONS_URL}/ses-1/pr").mock(return_value=httpx.Response(500, text="error"))
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await adapter.get_pr_status("ses-1")
+
+
+# -------------------------------------------------------------------
+# get_chronicle_summary
+# -------------------------------------------------------------------
+
+
+class TestGetChronicleSummary:
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_success(self, adapter: VolundrHTTPAdapter):
+        respx.get(f"{SESSIONS_URL}/ses-1/chronicle").mock(
+            return_value=httpx.Response(
+                200,
+                json={"summary": "All tests pass"},
+            )
+        )
+
+        summary = await adapter.get_chronicle_summary("ses-1")
+        assert summary == "All tests pass"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_empty_summary(self, adapter: VolundrHTTPAdapter):
+        respx.get(f"{SESSIONS_URL}/ses-1/chronicle").mock(
+            return_value=httpx.Response(200, json={})
+        )
+
+        summary = await adapter.get_chronicle_summary("ses-1")
+        assert summary == ""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_raises_on_error(self, adapter: VolundrHTTPAdapter):
+        respx.get(f"{SESSIONS_URL}/ses-1/chronicle").mock(
+            return_value=httpx.Response(503, text="unavailable")
+        )
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await adapter.get_chronicle_summary("ses-1")
+
+
+# -------------------------------------------------------------------
 # Constructor
 # -------------------------------------------------------------------
 

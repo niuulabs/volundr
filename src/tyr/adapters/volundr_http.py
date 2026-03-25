@@ -6,6 +6,7 @@ import logging
 
 import httpx
 
+from tyr.domain.models import PRStatus
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 logger = logging.getLogger(__name__)
@@ -106,3 +107,27 @@ class VolundrHTTPAdapter(VolundrPort):
                 )
                 for s in resp.json()
             ]
+
+    async def get_pr_status(self, session_id: str) -> PRStatus:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.get(
+                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/pr",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return PRStatus(
+                pr_id=data["pr_id"],
+                state=data["state"],
+                mergeable=data["mergeable"],
+                ci_passed=data.get("ci_passed"),
+            )
+
+    async def get_chronicle_summary(self, session_id: str) -> str:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.get(
+                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/chronicle",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            return resp.json().get("summary", "")

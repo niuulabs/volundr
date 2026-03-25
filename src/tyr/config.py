@@ -80,6 +80,20 @@ class AIModelConfig(BaseModel):
     name: str
 
 
+class ReviewConfig(BaseModel):
+    """Confidence deltas for raid review actions."""
+
+    confidence_delta_approved: float = Field(default=0.15)
+    confidence_delta_rejected: float = Field(default=-0.20)
+    confidence_delta_retry: float = Field(default=-0.05)
+
+
+class GitConfig(BaseModel):
+    """Git provider configuration."""
+
+    token: str = Field(default="")
+
+
 class DispatchConfig(BaseModel):
     """Dispatcher configuration."""
 
@@ -148,6 +162,13 @@ class TrackerConfig(BaseModel):
     rate_limit_max_retries: int = Field(default=3)
 
 
+class EventsConfig(BaseModel):
+    """SSE event stream configuration."""
+
+    max_sse_clients: int = Field(default=10)
+    keepalive_interval: float = Field(default=15.0)
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -177,12 +198,15 @@ class Settings(BaseSettings):
             AIModelConfig(id="claude-haiku-4-5-20251001", name="Haiku 4.5"),
         ]
     )
+    git: GitConfig = Field(default_factory=GitConfig)
+    review: ReviewConfig = Field(default_factory=ReviewConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
     pat: PATConfig = Field(default_factory=PATConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
+    events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
     @classmethod

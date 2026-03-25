@@ -87,6 +87,14 @@ class MockVolundr(VolundrPort):
         self.last_auth_token = auth_token
         return list(self.sessions)
 
+    async def get_pr_status(self, session_id: str):  # noqa: ANN201
+        from tyr.domain.models import PRStatus
+
+        return PRStatus(pr_id="pr-1", state="open", mergeable=True, ci_passed=True)
+
+    async def get_chronicle_summary(self, session_id: str) -> str:
+        return "summary"
+
 
 # -------------------------------------------------------------------
 # Fixtures
