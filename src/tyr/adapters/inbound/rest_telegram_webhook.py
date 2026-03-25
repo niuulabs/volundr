@@ -66,9 +66,7 @@ class TelegramReplyClient:
         try:
             await self._client.post(url, json={"chat_id": chat_id, "text": text})
         except Exception:
-            logger.warning(
-                "Failed to send Telegram reply to %s", chat_id, exc_info=True
-            )
+            logger.warning("Failed to send Telegram reply to %s", chat_id, exc_info=True)
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -209,10 +207,7 @@ async def _handle_retry(
     try:
         result = await review_service.retry(raid.id)
     except InvalidRaidStateError as exc:
-        return (
-            f"Raid {tracker_id} is in {exc.current} state "
-            "— can only retry from REVIEW or FAILED"
-        )
+        return f"Raid {tracker_id} is in {exc.current} state — can only retry from REVIEW or FAILED"
 
     return f"Raid {tracker_id} queued for retry — status → {result.raid.status.value}"
 
@@ -325,11 +320,7 @@ async def _find_raid_by_tracker_id(
     except ValueError:
         pass
 
-    # Search by tracker_id if the repo supports it
-    if hasattr(raid_repo, "find_raid_by_tracker_id"):
-        return await raid_repo.find_raid_by_tracker_id(tracker_id)
-
-    return None
+    return await raid_repo.find_raid_by_tracker_id(tracker_id)
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +379,10 @@ def create_telegram_webhook_router() -> APIRouter:
             token = request.headers.get("x-telegram-bot-api-secret-token", "")
             if token != telegram_cfg.webhook_secret:
                 return Response(status_code=status.HTTP_403_FORBIDDEN)
+        else:
+            logger.warning(
+                "Telegram webhook secret not configured — webhook endpoint is unprotected"
+            )
 
         body = await request.json()
         reply_client = _get_reply_client(request)
