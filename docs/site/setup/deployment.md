@@ -406,7 +406,7 @@ directly:
 ls migrations/*.up.sql | wc -l
 
 # Tyr migrations
-ls tyr_migrations/*.up.sql | wc -l
+ls migrations/tyr/*.up.sql | wc -l
 ```
 
 Or query the database:
