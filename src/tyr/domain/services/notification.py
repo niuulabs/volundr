@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import Any
 
-from tyr.adapters.notification_channel_factory import NotificationChannelFactory
+from tyr.ports.channel_resolver import ChannelResolverPort
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.notification_channel import (
     Notification,
@@ -59,7 +59,7 @@ class NotificationService:
     def __init__(
         self,
         event_bus: EventBusPort,
-        channel_factory: NotificationChannelFactory,
+        channel_factory: ChannelResolverPort,
         raid_repo: RaidRepository,
         *,
         confidence_threshold: float,
@@ -266,15 +266,13 @@ class NotificationService:
         )
 
     async def _resolve_owner(self, raid_id: str) -> str:
-        """Resolve the owner_id for a raid via its parent saga."""
+        """Resolve the owner_id for a raid via the repository."""
         if not raid_id:
             return ""
         try:
             from uuid import UUID
 
-            saga = await self._raid_repo.get_saga_for_raid(UUID(raid_id))
-            if saga is not None:
-                return saga.owner_id
+            return await self._raid_repo.get_owner_for_raid(UUID(raid_id)) or ""
         except (ValueError, Exception):
             logger.debug("Could not resolve owner for raid %s", raid_id)
         return ""

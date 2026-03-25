@@ -157,6 +157,10 @@ class StubRaidRepo(RaidRepository):
     async def save_raid(self, raid: object, *, conn: object = None) -> None:
         pass
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        saga = await self.get_saga_for_raid(raid_id)
+        return saga.owner_id if saga else None
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return False
 

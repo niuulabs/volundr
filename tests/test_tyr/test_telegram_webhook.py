@@ -156,6 +156,10 @@ class StubRaidRepo(RaidRepository):
     async def update_raid_completion(self, raid_id, **kwargs) -> Raid | None:  # noqa: ANN001
         return await self.update_raid_status(raid_id, kwargs.get("status", RaidStatus.MERGED))
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        saga = await self.get_saga_for_raid(raid_id)
+        return saga.owner_id if saga else None
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return self._all_merged
 

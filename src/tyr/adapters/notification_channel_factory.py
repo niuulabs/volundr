@@ -8,12 +8,13 @@ from niuu.domain.models import IntegrationType
 from niuu.ports.credentials import CredentialStorePort
 from niuu.ports.integrations import IntegrationRepository
 from niuu.utils import import_class
+from tyr.ports.channel_resolver import ChannelResolverPort
 from tyr.ports.notification_channel import NotificationChannel
 
 logger = logging.getLogger(__name__)
 
 
-class NotificationChannelFactory:
+class NotificationChannelFactory(ChannelResolverPort):
     """Resolve notification channels for a user from their integration connections.
 
     Uses the dynamic adapter pattern: each connection specifies a fully-qualified

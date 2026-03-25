@@ -15,6 +15,7 @@ from tyr.adapters.notification_channel_factory import NotificationChannelFactory
 from tyr.adapters.telegram_notification import TelegramNotificationAdapter
 from tyr.domain.models import Phase, Raid, RaidStatus, Saga, SagaStatus
 from tyr.domain.services.notification import NotificationService
+from tyr.ports.channel_resolver import ChannelResolverPort
 from tyr.ports.event_bus import TyrEvent
 from tyr.ports.notification_channel import (
     Notification,
@@ -108,11 +109,15 @@ class StubRaidRepo(RaidRepository):
     async def save_raid(self, raid: object, *, conn: object = None) -> None:
         pass
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        saga = await self.get_saga_for_raid(raid_id)
+        return saga.owner_id if saga else None
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return False
 
 
-class StubChannelFactory(NotificationChannelFactory):
+class StubChannelFactory(ChannelResolverPort):
     """Factory that returns pre-configured channels."""
 
     def __init__(self, channels: dict[str, list[NotificationChannel]] | None = None) -> None:

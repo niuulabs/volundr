@@ -244,19 +244,9 @@ class RaidWatcher:
                 raid.session_id,
             )
 
-    async def _resolve_owner(self, raid_id: object) -> str:
-        """Resolve the owner_id for a raid via its parent saga."""
-        try:
-            saga = await self._raid_repo.get_saga_for_raid(raid_id)
-            if saga is not None:
-                return saga.owner_id
-        except Exception:
-            logger.debug("Could not resolve owner for raid %s", raid_id)
-        return ""
-
     async def _emit_state_changed(self, raid: Raid) -> None:
         """Emit a raid.state_changed event via the event bus."""
-        owner_id = await self._resolve_owner(raid.id)
+        owner_id = await self._raid_repo.get_owner_for_raid(raid.id) or ""
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.api.events import _sse_generator, create_events_router, resolve_event_bus
-from tyr.ports.event_bus import TyrEvent
+from tyr.ports.event_bus import EventBusPort, TyrEvent
 
 # ---------------------------------------------------------------------------
 # TyrEvent
@@ -277,7 +277,7 @@ class TestSseGenerator:
 # ---------------------------------------------------------------------------
 
 
-def _make_app(event_bus: InMemoryEventBus, keepalive_interval: float = 30.0) -> FastAPI:
+def _make_app(event_bus: EventBusPort, keepalive_interval: float = 30.0) -> FastAPI:
     app = FastAPI()
     app.include_router(create_events_router(keepalive_interval=keepalive_interval))
     app.dependency_overrides[resolve_event_bus] = lambda: event_bus

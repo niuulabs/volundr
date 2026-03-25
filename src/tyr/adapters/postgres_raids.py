@@ -223,6 +223,20 @@ class PostgresRaidRepository(RaidRepository):
             return None
         return self._row_to_raid(row)
 
+    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+        row = await self._pool.fetchrow(
+            """
+            SELECT s.owner_id FROM sagas s
+            JOIN phases p ON p.saga_id = s.id
+            JOIN raids r ON r.phase_id = p.id
+            WHERE r.id = $1
+            """,
+            raid_id,
+        )
+        if row is None:
+            return None
+        return row["owner_id"]
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         row = await self._pool.fetchrow(
             """
