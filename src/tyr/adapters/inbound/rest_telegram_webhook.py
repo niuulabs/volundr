@@ -452,7 +452,11 @@ async def _dispatch_command(
     dispatcher_repo: DispatcherRepository,
     review_service: RaidReviewService,
 ) -> str:
-    """Route a parsed command to the appropriate handler."""
+    """Route a parsed command to the appropriate handler.
+
+    To add a new command (e.g. /review, /confidence, /saga): add a case
+    branch below, implement _handle_<name>(), and update HELP_TEXT.
+    """
     match cmd.name:
         case "status":
             return await _handle_status(

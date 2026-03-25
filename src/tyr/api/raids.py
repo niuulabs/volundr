@@ -192,9 +192,16 @@ def create_raids_router() -> APIRouter:
         git: GitPort = Depends(resolve_git),
         tracker: TrackerPort = Depends(resolve_tracker),
     ) -> RaidResponse:
-        """Approve a raid: merge branch, update state, check phase gate."""
-        review_cfg = _get_review_config(request)
+        """Approve a raid: merge branch, update state, check phase gate.
 
+        REST-specific pre/post steps (CI check, git merge, tracker update)
+        wrap the shared RaidReviewService which handles confidence events,
+        state transition, and phase gate checks.
+        """
+        review_cfg = _get_review_config(request)
+        svc = RaidReviewService(raid_repo, review_cfg)
+
+        # Fetch raid for REST-specific pre-steps (CI check, git merge)
         raid = await raid_repo.get_raid(raid_id)
         if raid is None:
             raise HTTPException(
@@ -202,14 +209,7 @@ def create_raids_router() -> APIRouter:
                 detail=f"Raid not found: {raid_id}",
             )
 
-        saga = await raid_repo.get_saga_for_raid(raid_id)
-        if saga is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Parent saga not found for raid",
-            )
-
-        # 1. Check CI status (warn but don't block)
+        # Pre-step: check CI status (warn but don't block)
         if raid.session_id:
             try:
                 pr_status = await volundr.get_pr_status(raid.session_id)
@@ -222,7 +222,13 @@ def create_raids_router() -> APIRouter:
                     exc_info=True,
                 )
 
-        # 2. Merge raid branch into feature branch
+        # Pre-step: merge raid branch into feature branch before state transition
+        saga = await raid_repo.get_saga_for_raid(raid_id)
+        if saga is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Parent saga not found for raid",
+            )
         if raid.branch and saga.repos:
             repo = saga.repos[0]
             try:
@@ -233,20 +239,18 @@ def create_raids_router() -> APIRouter:
                     detail=f"Branch merge failed: {exc}",
                 )
 
-            # 3. Clean up raid branch
             try:
                 await git.delete_branch(repo, raid.branch)
             except Exception:
                 logger.warning("Failed to delete branch %s", raid.branch, exc_info=True)
 
-        # 4-7. Core review logic: confidence event, status transition, phase gate
-        svc = RaidReviewService(raid_repo, review_cfg)
+        # Core review: confidence event, state → MERGED, phase gate check
         try:
             result = await svc.approve(raid_id)
         except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Raid disappeared during approve",
+                detail=f"Raid not found: {raid_id}",
             )
         except InvalidRaidStateError as exc:
             raise HTTPException(
@@ -254,10 +258,10 @@ def create_raids_router() -> APIRouter:
                 detail=f"Cannot approve raid in {exc.current} state",
             )
 
-        # 8. Update tracker
+        # Post-step: update external tracker
         try:
-            await tracker.update_raid_state(raid.tracker_id, RaidStatus.MERGED)
-            await tracker.close_raid(raid.tracker_id)
+            await tracker.update_raid_state(result.raid.tracker_id, RaidStatus.MERGED)
+            await tracker.close_raid(result.raid.tracker_id)
         except Exception:
             logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
 
@@ -274,8 +278,9 @@ def create_raids_router() -> APIRouter:
         """Reject a raid: set FAILED, record reason, apply confidence penalty."""
         review_cfg = _get_review_config(request)
         reason = body.reason if body else None
-
         svc = RaidReviewService(raid_repo, review_cfg)
+
+        # Core review: confidence event, state → FAILED
         try:
             result = await svc.reject(raid_id, reason=reason)
         except RaidNotFoundError:
@@ -289,15 +294,11 @@ def create_raids_router() -> APIRouter:
                 detail=f"Cannot reject raid in {exc.current} state",
             )
 
-        # Update tracker
+        # Post-step: update external tracker
         try:
-            await tracker.update_raid_state(
-                result.raid.tracker_id, RaidStatus.FAILED
-            )
+            await tracker.update_raid_state(result.raid.tracker_id, result.raid.status)
         except Exception:
-            logger.warning(
-                "Failed to update tracker for raid %s", raid_id, exc_info=True
-            )
+            logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
 
         return _raid_response(result.raid, reason=reason)
 
@@ -308,10 +309,11 @@ def create_raids_router() -> APIRouter:
         raid_repo: RaidRepository = Depends(resolve_raid_repo),
         tracker: TrackerPort = Depends(resolve_tracker),
     ) -> RaidResponse:
-        """Retry a raid: reset to PENDING, increment retry_count."""
+        """Retry a raid: re-queue with incremented retry_count."""
         review_cfg = _get_review_config(request)
-
         svc = RaidReviewService(raid_repo, review_cfg)
+
+        # Core review: confidence event, state → PENDING or QUEUED
         try:
             result = await svc.retry(raid_id)
         except RaidNotFoundError:
@@ -325,15 +327,11 @@ def create_raids_router() -> APIRouter:
                 detail=f"Cannot retry raid in {exc.current} state",
             )
 
-        # Update tracker
+        # Post-step: update external tracker with actual result status
         try:
-            await tracker.update_raid_state(
-                result.raid.tracker_id, RaidStatus.PENDING
-            )
+            await tracker.update_raid_state(result.raid.tracker_id, result.raid.status)
         except Exception:
-            logger.warning(
-                "Failed to update tracker for raid %s", raid_id, exc_info=True
-            )
+            logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
 
         return _raid_response(result.raid)
 
