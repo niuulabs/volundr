@@ -15,7 +15,12 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Request, Response, status
 
+from tyr.config import ReviewConfig, TelegramConfig
 from tyr.domain.models import RaidStatus
+from tyr.domain.services.raid_review import (
+    InvalidRaidStateError,
+    RaidReviewService,
+)
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.notification_subscriptions import NotificationSubscriptionRepository
 from tyr.ports.raid_repository import RaidRepository
@@ -42,25 +47,31 @@ HELP_TEXT = (
 
 
 # ---------------------------------------------------------------------------
-# Telegram reply helper
+# Telegram reply client
 # ---------------------------------------------------------------------------
 
 
-async def send_telegram_reply(
-    bot_token: str,
-    chat_id: str,
-    text: str,
-) -> None:
-    """Send a text reply to a Telegram chat."""
-    if not bot_token:
-        logger.warning("Cannot reply — bot_token not configured")
-        return
-    url = f"{TELEGRAM_API}/bot{bot_token}/sendMessage"
-    async with httpx.AsyncClient(timeout=10.0) as client:
+class TelegramReplyClient:
+    """Wraps a shared httpx.AsyncClient for sending Telegram replies."""
+
+    def __init__(self, bot_token: str, timeout: float) -> None:
+        self._bot_token = bot_token
+        self._client = httpx.AsyncClient(timeout=timeout)
+
+    async def send(self, chat_id: str, text: str) -> None:
+        if not self._bot_token:
+            logger.warning("Cannot reply — bot_token not configured")
+            return
+        url = f"{TELEGRAM_API}/bot{self._bot_token}/sendMessage"
         try:
-            await client.post(url, json={"chat_id": chat_id, "text": text})
+            await self._client.post(url, json={"chat_id": chat_id, "text": text})
         except Exception:
-            logger.warning("Failed to send Telegram reply to %s", chat_id, exc_info=True)
+            logger.warning(
+                "Failed to send Telegram reply to %s", chat_id, exc_info=True
+            )
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +141,7 @@ async def _handle_approve(
     cmd: ParsedCommand,
     *,
     raid_repo: RaidRepository,
+    review_service: RaidReviewService,
 ) -> str:
     if not cmd.args:
         return "Usage: /approve <raid-tracker-id>"
@@ -139,11 +151,15 @@ async def _handle_approve(
     if raid is None:
         return f"Raid not found: {tracker_id}"
 
-    if raid.status != RaidStatus.REVIEW:
-        return f"Raid {tracker_id} is in {raid.status.value} state — can only approve from REVIEW"
+    try:
+        result = await review_service.approve(raid.id)
+    except InvalidRaidStateError as exc:
+        return f"Raid {tracker_id} is in {exc.current} state — can only approve from REVIEW"
 
-    await raid_repo.update_raid_status(raid.id, RaidStatus.MERGED)
-    return f"Raid {tracker_id} approved — status → MERGED"
+    suffix = ""
+    if result.phase_gate_unlocked:
+        suffix = "\nPhase gate unlocked — all raids in phase merged."
+    return f"Raid {tracker_id} approved — status → MERGED{suffix}"
 
 
 async def _handle_reject(
@@ -151,6 +167,7 @@ async def _handle_reject(
     cmd: ParsedCommand,
     *,
     raid_repo: RaidRepository,
+    review_service: RaidReviewService,
 ) -> str:
     if not cmd.args:
         return "Usage: /reject <raid-tracker-id> [reason]"
@@ -165,10 +182,11 @@ async def _handle_reject(
     if raid is None:
         return f"Raid not found: {tracker_id}"
 
-    if raid.status != RaidStatus.REVIEW:
-        return f"Raid {tracker_id} is in {raid.status.value} state — can only reject from REVIEW"
+    try:
+        await review_service.reject(raid.id, reason=reason)
+    except InvalidRaidStateError as exc:
+        return f"Raid {tracker_id} is in {exc.current} state — can only reject from REVIEW"
 
-    await raid_repo.update_raid_status(raid.id, RaidStatus.FAILED, reason=reason)
     suffix = f" — reason: {reason}" if reason else ""
     return f"Raid {tracker_id} rejected — status → FAILED{suffix}"
 
@@ -178,6 +196,7 @@ async def _handle_retry(
     cmd: ParsedCommand,
     *,
     raid_repo: RaidRepository,
+    review_service: RaidReviewService,
 ) -> str:
     if not cmd.args:
         return "Usage: /retry <raid-tracker-id>"
@@ -187,14 +206,15 @@ async def _handle_retry(
     if raid is None:
         return f"Raid not found: {tracker_id}"
 
-    if raid.status not in (RaidStatus.REVIEW, RaidStatus.FAILED):
+    try:
+        result = await review_service.retry(raid.id)
+    except InvalidRaidStateError as exc:
         return (
-            f"Raid {tracker_id} is in {raid.status.value} state "
+            f"Raid {tracker_id} is in {exc.current} state "
             "— can only retry from REVIEW or FAILED"
         )
 
-    await raid_repo.update_raid_status(raid.id, RaidStatus.PENDING, increment_retry=True)
-    return f"Raid {tracker_id} queued for retry — status → PENDING"
+    return f"Raid {tracker_id} queued for retry — status → {result.raid.status.value}"
 
 
 async def _handle_pause(
@@ -328,11 +348,17 @@ def create_telegram_webhook_router() -> APIRouter:
         tags=["Tyr Telegram"],
     )
 
-    def _get_bot_token(request: Request) -> str:
+    def _get_telegram_config(request: Request) -> TelegramConfig:
         settings = getattr(request.app.state, "settings", None)
         if settings is None:
-            return ""
-        return settings.telegram.bot_token
+            return TelegramConfig()
+        return settings.telegram
+
+    def _get_review_config(request: Request) -> ReviewConfig:
+        settings = getattr(request.app.state, "settings", None)
+        if settings is None:
+            return ReviewConfig()
+        return settings.review
 
     def _get_sub_repo(request: Request) -> NotificationSubscriptionRepository:
         return request.app.state.notification_sub_repo
@@ -349,11 +375,22 @@ def create_telegram_webhook_router() -> APIRouter:
     def _get_dispatcher_repo(request: Request) -> DispatcherRepository:
         return request.app.state.dispatcher_repo
 
+    def _get_reply_client(request: Request) -> TelegramReplyClient:
+        return request.app.state.telegram_reply_client
+
     @router.post("/webhook", status_code=status.HTTP_200_OK)
     async def telegram_webhook(request: Request) -> Response:
         """Receive a Telegram Bot API update and process commands."""
+        telegram_cfg = _get_telegram_config(request)
+
+        # Validate webhook secret (X-Telegram-Bot-Api-Secret-Token)
+        if telegram_cfg.webhook_secret:
+            token = request.headers.get("x-telegram-bot-api-secret-token", "")
+            if token != telegram_cfg.webhook_secret:
+                return Response(status_code=status.HTTP_403_FORBIDDEN)
+
         body = await request.json()
-        bot_token = _get_bot_token(request)
+        reply_client = _get_reply_client(request)
 
         message = body.get("message")
         if message is None:
@@ -371,8 +408,7 @@ def create_telegram_webhook_router() -> APIRouter:
         owner_id = await sub_repo.find_owner_by_telegram_chat_id(chat_id)
 
         if owner_id is None:
-            await send_telegram_reply(
-                bot_token,
+            await reply_client.send(
                 chat_id,
                 "This chat is not linked to a Tyr account. "
                 "Use the Tyr web UI to set up Telegram notifications.",
@@ -388,6 +424,8 @@ def create_telegram_webhook_router() -> APIRouter:
         saga_repo = _get_saga_repo(request)
         volundr = _get_volundr(request)
         dispatcher_repo = _get_dispatcher_repo(request)
+        review_config = _get_review_config(request)
+        review_service = RaidReviewService(raid_repo, review_config)
 
         try:
             reply = await _dispatch_command(
@@ -397,12 +435,13 @@ def create_telegram_webhook_router() -> APIRouter:
                 saga_repo=saga_repo,
                 volundr=volundr,
                 dispatcher_repo=dispatcher_repo,
+                review_service=review_service,
             )
         except Exception:
             logger.exception("Error handling Telegram command: /%s", cmd.name)
             reply = f"Error executing /{cmd.name}. Please try again."
 
-        await send_telegram_reply(bot_token, chat_id, reply)
+        await reply_client.send(chat_id, reply)
         return Response(status_code=status.HTTP_200_OK)
 
     return router
@@ -416,6 +455,7 @@ async def _dispatch_command(
     saga_repo: SagaRepository,
     volundr: VolundrPort,
     dispatcher_repo: DispatcherRepository,
+    review_service: RaidReviewService,
 ) -> str:
     """Route a parsed command to the appropriate handler."""
     match cmd.name:
@@ -429,11 +469,17 @@ async def _dispatch_command(
                 dispatcher_repo=dispatcher_repo,
             )
         case "approve":
-            return await _handle_approve(owner_id, cmd, raid_repo=raid_repo)
+            return await _handle_approve(
+                owner_id, cmd, raid_repo=raid_repo, review_service=review_service
+            )
         case "reject":
-            return await _handle_reject(owner_id, cmd, raid_repo=raid_repo)
+            return await _handle_reject(
+                owner_id, cmd, raid_repo=raid_repo, review_service=review_service
+            )
         case "retry":
-            return await _handle_retry(owner_id, cmd, raid_repo=raid_repo)
+            return await _handle_retry(
+                owner_id, cmd, raid_repo=raid_repo, review_service=review_service
+            )
         case "pause":
             return await _handle_pause(owner_id, cmd, dispatcher_repo=dispatcher_repo)
         case "resume":

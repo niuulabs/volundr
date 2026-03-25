@@ -7,19 +7,17 @@ that are in the REVIEW state.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from tyr.config import ReviewConfig
-from tyr.domain.exceptions import InvalidStateTransitionError
-from tyr.domain.models import (
-    ConfidenceEvent,
-    ConfidenceEventType,
-    RaidStatus,
-    validate_transition,
+from tyr.domain.models import RaidStatus
+from tyr.domain.services.raid_review import (
+    InvalidRaidStateError,
+    RaidNotFoundError,
+    RaidReviewService,
 )
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
@@ -126,23 +124,6 @@ def _raid_response(raid, reason: str | None = None) -> RaidResponse:
     )
 
 
-def _make_confidence_event(
-    raid_id: UUID,
-    event_type: ConfidenceEventType,
-    delta: float,
-    current_score: float,
-) -> ConfidenceEvent:
-    new_score = max(0.0, min(1.0, current_score + delta))
-    return ConfidenceEvent(
-        id=uuid4(),
-        raid_id=raid_id,
-        event_type=event_type,
-        delta=delta,
-        score_after=new_score,
-        created_at=datetime.now(UTC),
-    )
-
-
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -221,14 +202,6 @@ def create_raids_router() -> APIRouter:
                 detail=f"Raid not found: {raid_id}",
             )
 
-        try:
-            validate_transition(raid.status, RaidStatus.MERGED)
-        except InvalidStateTransitionError:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot approve raid in {raid.status.value} state",
-            )
-
         saga = await raid_repo.get_saga_for_raid(raid_id)
         if saga is None:
             raise HTTPException(
@@ -266,37 +239,29 @@ def create_raids_router() -> APIRouter:
             except Exception:
                 logger.warning("Failed to delete branch %s", raid.branch, exc_info=True)
 
-        # 4. Apply HUMAN_APPROVED confidence event
-        event = _make_confidence_event(
-            raid.id,
-            ConfidenceEventType.HUMAN_APPROVED,
-            review_cfg.confidence_delta_approved,
-            raid.confidence,
-        )
-        await raid_repo.add_confidence_event(event)
+        # 4-7. Core review logic: confidence event, status transition, phase gate
+        svc = RaidReviewService(raid_repo, review_cfg)
+        try:
+            result = await svc.approve(raid_id)
+        except RaidNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Raid disappeared during approve",
+            )
+        except InvalidRaidStateError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot approve raid in {exc.current} state",
+            )
 
-        # 5. Update raid status to MERGED
-        updated = await raid_repo.update_raid_status(raid_id, RaidStatus.MERGED)
-
-        # 6. Update tracker
+        # 8. Update tracker
         try:
             await tracker.update_raid_state(raid.tracker_id, RaidStatus.MERGED)
             await tracker.close_raid(raid.tracker_id)
         except Exception:
             logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
 
-        # 7. Check phase gate
-        phase = await raid_repo.get_phase_for_raid(raid_id)
-        if phase and await raid_repo.all_raids_merged(phase.id):
-            logger.info("Phase gate unlocked -- all raids merged in phase %s", phase.id)
-
-        if updated is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Raid disappeared during approve",
-            )
-
-        return _raid_response(updated)
+        return _raid_response(result.raid)
 
     @router.post("/{raid_id}/reject", response_model=RaidResponse)
     async def reject_raid(
@@ -308,53 +273,33 @@ def create_raids_router() -> APIRouter:
     ) -> RaidResponse:
         """Reject a raid: set FAILED, record reason, apply confidence penalty."""
         review_cfg = _get_review_config(request)
+        reason = body.reason if body else None
 
-        raid = await raid_repo.get_raid(raid_id)
-        if raid is None:
+        svc = RaidReviewService(raid_repo, review_cfg)
+        try:
+            result = await svc.reject(raid_id, reason=reason)
+        except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Raid not found: {raid_id}",
             )
-
-        try:
-            validate_transition(raid.status, RaidStatus.FAILED)
-        except InvalidStateTransitionError:
+        except InvalidRaidStateError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot reject raid in {raid.status.value} state",
+                detail=f"Cannot reject raid in {exc.current} state",
             )
-
-        reason = body.reason if body else None
-
-        # Apply HUMAN_REJECT confidence event
-        event = _make_confidence_event(
-            raid.id,
-            ConfidenceEventType.HUMAN_REJECT,
-            review_cfg.confidence_delta_rejected,
-            raid.confidence,
-        )
-        await raid_repo.add_confidence_event(event)
-
-        # Update status
-        updated = await raid_repo.update_raid_status(
-            raid_id,
-            RaidStatus.FAILED,
-            reason=reason,
-        )
 
         # Update tracker
         try:
-            await tracker.update_raid_state(raid.tracker_id, RaidStatus.FAILED)
+            await tracker.update_raid_state(
+                result.raid.tracker_id, RaidStatus.FAILED
+            )
         except Exception:
-            logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
-
-        if updated is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Raid disappeared during reject",
+            logger.warning(
+                "Failed to update tracker for raid %s", raid_id, exc_info=True
             )
 
-        return _raid_response(updated, reason=reason)
+        return _raid_response(result.raid, reason=reason)
 
     @router.post("/{raid_id}/retry", response_model=RaidResponse)
     async def retry_raid(
@@ -366,49 +311,30 @@ def create_raids_router() -> APIRouter:
         """Retry a raid: reset to PENDING, increment retry_count."""
         review_cfg = _get_review_config(request)
 
-        raid = await raid_repo.get_raid(raid_id)
-        if raid is None:
+        svc = RaidReviewService(raid_repo, review_cfg)
+        try:
+            result = await svc.retry(raid_id)
+        except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Raid not found: {raid_id}",
             )
-
-        try:
-            validate_transition(raid.status, RaidStatus.PENDING)
-        except InvalidStateTransitionError:
+        except InvalidRaidStateError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot retry raid in {raid.status.value} state",
+                detail=f"Cannot retry raid in {exc.current} state",
             )
-
-        # Apply RETRY confidence event
-        event = _make_confidence_event(
-            raid.id,
-            ConfidenceEventType.RETRY,
-            review_cfg.confidence_delta_retry,
-            raid.confidence,
-        )
-        await raid_repo.add_confidence_event(event)
-
-        # Reset to PENDING with incremented retry_count
-        updated = await raid_repo.update_raid_status(
-            raid_id,
-            RaidStatus.PENDING,
-            increment_retry=True,
-        )
 
         # Update tracker
         try:
-            await tracker.update_raid_state(raid.tracker_id, RaidStatus.PENDING)
+            await tracker.update_raid_state(
+                result.raid.tracker_id, RaidStatus.PENDING
+            )
         except Exception:
-            logger.warning("Failed to update tracker for raid %s", raid_id, exc_info=True)
-
-        if updated is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Raid disappeared during retry",
+            logger.warning(
+                "Failed to update tracker for raid %s", raid_id, exc_info=True
             )
 
-        return _raid_response(updated)
+        return _raid_response(result.raid)
 
     return router

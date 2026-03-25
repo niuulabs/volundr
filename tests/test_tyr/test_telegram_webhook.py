@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -14,20 +16,23 @@ from fastapi.testclient import TestClient
 from tyr.adapters.inbound.rest_telegram_webhook import (
     HELP_TEXT,
     ParsedCommand,
+    TelegramReplyClient,
     _dispatch_command,
     _find_raid_by_tracker_id,
     create_telegram_webhook_router,
     parse_command,
-    send_telegram_reply,
 )
-from tyr.config import TelegramConfig
+from tyr.config import ReviewConfig, TelegramConfig
 from tyr.domain.models import (
+    ConfidenceEvent,
+    ConfidenceEventType,
     DispatcherState,
     Raid,
     RaidStatus,
     Saga,
     SagaStatus,
 )
+from tyr.domain.services.raid_review import RaidReviewService
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.notification_subscriptions import NotificationSubscriptionRepository
 from tyr.ports.raid_repository import RaidRepository
@@ -72,7 +77,10 @@ class StubSagaRepo(SagaRepository):
 class StubRaidRepo(RaidRepository):
     def __init__(self) -> None:
         self.raids: dict[UUID, Raid] = {}
+        self.events: dict[UUID, list[ConfidenceEvent]] = {}
         self._tracker_id_map: dict[str, Raid] = {}
+        self._phase_for_raid: dict[UUID, object] = {}
+        self._all_merged: bool = False
 
     def add_raid(self, raid: Raid) -> None:
         self.raids[raid.id] = raid
@@ -92,6 +100,8 @@ class StubRaidRepo(RaidRepository):
         raid = self.raids.get(raid_id)
         if raid is None:
             return None
+        events = self.events.get(raid_id, [])
+        confidence = events[-1].score_after if events else raid.confidence
         updated = Raid(
             id=raid.id,
             phase_id=raid.phase_id,
@@ -102,7 +112,7 @@ class StubRaidRepo(RaidRepository):
             declared_files=raid.declared_files,
             estimate_hours=raid.estimate_hours,
             status=status,
-            confidence=raid.confidence,
+            confidence=confidence,
             session_id=raid.session_id,
             branch=raid.branch,
             chronicle_summary=raid.chronicle_summary,
@@ -114,20 +124,20 @@ class StubRaidRepo(RaidRepository):
         self._tracker_id_map[raid.tracker_id] = updated
         return updated
 
-    async def get_confidence_events(self, raid_id: UUID) -> list:
-        return []
+    async def get_confidence_events(self, raid_id: UUID) -> list[ConfidenceEvent]:
+        return self.events.get(raid_id, [])
 
-    async def add_confidence_event(self, event) -> None:
-        pass
+    async def add_confidence_event(self, event: ConfidenceEvent) -> None:
+        self.events.setdefault(event.raid_id, []).append(event)
 
     async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
         return None
 
     async def get_phase_for_raid(self, raid_id: UUID) -> None:
-        return None
+        return self._phase_for_raid.get(raid_id)
 
     async def all_raids_merged(self, phase_id: UUID) -> bool:
-        return False
+        return self._all_merged
 
     async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
         return self._tracker_id_map.get(tracker_id)
@@ -184,6 +194,19 @@ class StubVolundr(VolundrPort):
         self.sent_messages.append((session_id, message))
 
 
+class StubReplyClient(TelegramReplyClient):
+    """Captures replies instead of making HTTP calls."""
+
+    def __init__(self) -> None:
+        self.replies: list[tuple[str, str]] = []
+
+    async def send(self, chat_id: str, text: str) -> None:
+        self.replies.append((chat_id, text))
+
+    async def close(self) -> None:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -191,6 +214,7 @@ class StubVolundr(VolundrPort):
 OWNER_ID = "user-1"
 CHAT_ID = "123456"
 BOT_TOKEN = "test-bot-token"
+WEBHOOK_SECRET = "test-webhook-secret"
 
 
 def _make_raid(
@@ -283,12 +307,18 @@ def volundr() -> StubVolundr:
 
 
 @pytest.fixture
+def reply_client() -> StubReplyClient:
+    return StubReplyClient()
+
+
+@pytest.fixture
 def client(
     sub_repo: StubNotificationSubRepo,
     raid_repo: StubRaidRepo,
     saga_repo: StubSagaRepo,
     dispatcher_repo: StubDispatcherRepo,
     volundr: StubVolundr,
+    reply_client: StubReplyClient,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(create_telegram_webhook_router())
@@ -298,11 +328,26 @@ def client(
     app.state.saga_repo = saga_repo
     app.state.dispatcher_repo = dispatcher_repo
     app.state.volundr = volundr
+    app.state.telegram_reply_client = reply_client
     app.state.settings = SimpleNamespace(
-        telegram=TelegramConfig(bot_token=BOT_TOKEN),
+        telegram=TelegramConfig(
+            bot_token=BOT_TOKEN,
+            webhook_secret=WEBHOOK_SECRET,
+        ),
+        review=ReviewConfig(),
     )
 
     return TestClient(app)
+
+
+def _post_webhook(client: TestClient, text: str, **kwargs) -> Any:
+    """Helper to post a webhook update with the correct secret header."""
+    headers = {"X-Telegram-Bot-Api-Secret-Token": WEBHOOK_SECRET}
+    return client.post(
+        "/api/v1/tyr/telegram/webhook",
+        json=_make_update(text, **kwargs),
+        headers=headers,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -356,83 +401,125 @@ class TestParseCommand:
 
 
 # ---------------------------------------------------------------------------
+# Webhook secret validation
+# ---------------------------------------------------------------------------
+
+
+class TestWebhookSecretValidation:
+    def test_missing_secret_header_returns_403(self, client: TestClient):
+        """Request without X-Telegram-Bot-Api-Secret-Token is rejected."""
+        resp = client.post(
+            "/api/v1/tyr/telegram/webhook",
+            json=_make_update("/status"),
+            # No secret header
+        )
+        assert resp.status_code == 403
+
+    def test_wrong_secret_returns_403(self, client: TestClient):
+        resp = client.post(
+            "/api/v1/tyr/telegram/webhook",
+            json=_make_update("/status"),
+            headers={"X-Telegram-Bot-Api-Secret-Token": "wrong-secret"},
+        )
+        assert resp.status_code == 403
+
+    def test_correct_secret_passes(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/help")
+        assert resp.status_code == 200
+        assert len(reply_client.replies) == 1
+
+    def test_empty_secret_config_allows_all(
+        self,
+        sub_repo: StubNotificationSubRepo,
+        raid_repo: StubRaidRepo,
+        saga_repo: StubSagaRepo,
+        dispatcher_repo: StubDispatcherRepo,
+        volundr: StubVolundr,
+        reply_client: StubReplyClient,
+    ):
+        """When webhook_secret is empty in config, no validation occurs."""
+        app = FastAPI()
+        app.include_router(create_telegram_webhook_router())
+
+        app.state.notification_sub_repo = sub_repo
+        app.state.raid_repo = raid_repo
+        app.state.saga_repo = saga_repo
+        app.state.dispatcher_repo = dispatcher_repo
+        app.state.volundr = volundr
+        app.state.telegram_reply_client = reply_client
+        app.state.settings = SimpleNamespace(
+            telegram=TelegramConfig(bot_token=BOT_TOKEN, webhook_secret=""),
+            review=ReviewConfig(),
+        )
+
+        no_secret_client = TestClient(app)
+        resp = no_secret_client.post(
+            "/api/v1/tyr/telegram/webhook",
+            json=_make_update("/help"),
+            # No secret header
+        )
+        assert resp.status_code == 200
+        assert len(reply_client.replies) == 1
+
+
+# ---------------------------------------------------------------------------
 # Webhook endpoint tests
 # ---------------------------------------------------------------------------
 
 
 class TestWebhookEndpoint:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_unauthenticated_chat(self, mock_reply, client: TestClient):
+    def test_unauthenticated_chat(self, client: TestClient, reply_client: StubReplyClient):
         """Unlinked chat_id gets a 'not configured' message."""
         resp = client.post(
             "/api/v1/tyr/telegram/webhook",
             json=_make_update("/status", chat_id="999999"),
+            headers={"X-Telegram-Bot-Api-Secret-Token": WEBHOOK_SECRET},
         )
         assert resp.status_code == 200
-        mock_reply.assert_called_once()
-        reply_text = mock_reply.call_args[0][2]
-        assert "not linked" in reply_text.lower()
+        assert len(reply_client.replies) == 1
+        assert "not linked" in reply_client.replies[0][1].lower()
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_no_message_in_update(self, mock_reply, client: TestClient):
+    def test_no_message_in_update(self, client: TestClient, reply_client: StubReplyClient):
         """Updates without a message field are ignored."""
         resp = client.post(
             "/api/v1/tyr/telegram/webhook",
             json={"update_id": 1},
+            headers={"X-Telegram-Bot-Api-Secret-Token": WEBHOOK_SECRET},
         )
         assert resp.status_code == 200
-        mock_reply.assert_not_called()
+        assert len(reply_client.replies) == 0
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_empty_text_ignored(self, mock_reply, client: TestClient):
-        """Messages with empty text are ignored."""
+    def test_empty_text_ignored(self, client: TestClient, reply_client: StubReplyClient):
         update = _make_update("")
-        resp = client.post("/api/v1/tyr/telegram/webhook", json=update)
-        assert resp.status_code == 200
-        mock_reply.assert_not_called()
-
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_non_command_text_ignored(self, mock_reply, client: TestClient):
-        """Regular text (no /) is ignored after auth but before command dispatch."""
         resp = client.post(
             "/api/v1/tyr/telegram/webhook",
-            json=_make_update("hello there"),
+            json=update,
+            headers={"X-Telegram-Bot-Api-Secret-Token": WEBHOOK_SECRET},
         )
         assert resp.status_code == 200
-        mock_reply.assert_not_called()
+        assert len(reply_client.replies) == 0
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_unknown_command_returns_help(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/foobar"),
-        )
+    def test_non_command_text_ignored(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "hello there")
         assert resp.status_code == 200
-        mock_reply.assert_called_once()
-        reply_text = mock_reply.call_args[0][2]
-        assert "Unknown command" in reply_text
-        assert "/foobar" in reply_text
+        assert len(reply_client.replies) == 0
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_help_command(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/help"),
-        )
+    def test_unknown_command_returns_help(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/foobar")
         assert resp.status_code == 200
-        mock_reply.assert_called_once()
-        reply_text = mock_reply.call_args[0][2]
-        assert reply_text == HELP_TEXT
+        reply = reply_client.replies[0][1]
+        assert "Unknown command" in reply
+        assert "/foobar" in reply
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_start_command_returns_help(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/start"),
-        )
+    def test_help_command(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/help")
         assert resp.status_code == 200
-        reply_text = mock_reply.call_args[0][2]
-        assert reply_text == HELP_TEXT
+        assert reply_client.replies[0][1] == HELP_TEXT
+
+    def test_start_command_returns_help(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/start")
+        assert resp.status_code == 200
+        assert reply_client.replies[0][1] == HELP_TEXT
 
 
 # ---------------------------------------------------------------------------
@@ -441,14 +528,10 @@ class TestWebhookEndpoint:
 
 
 class TestStatusCommand:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_status_shows_overview(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/status"),
-        )
+    def test_status_shows_overview(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/status")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "Dispatcher: running" in reply
         assert "Active sagas: 1" in reply
         assert "Alpha" in reply
@@ -456,182 +539,192 @@ class TestStatusCommand:
 
 
 # ---------------------------------------------------------------------------
-# /approve command
+# /approve command — now verifies confidence events are recorded
 # ---------------------------------------------------------------------------
 
 
 class TestApproveCommand:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_approve_success(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_approve_success_with_confidence_event(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid()
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/approve NIU-221"),
-        )
+        resp = _post_webhook(client, "/approve NIU-221")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "approved" in reply.lower()
         assert "MERGED" in reply
         assert raid_repo.raids[raid.id].status == RaidStatus.MERGED
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_approve_no_args(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/approve"),
-        )
-        assert resp.status_code == 200
-        assert "Usage" in mock_reply.call_args[0][2]
+        # Verify confidence event was recorded
+        events = raid_repo.events[raid.id]
+        assert len(events) == 1
+        assert events[0].event_type == ConfidenceEventType.HUMAN_APPROVED
+        assert events[0].delta == ReviewConfig().confidence_delta_approved
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_approve_not_found(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/approve MISSING-1"),
-        )
+    def test_approve_no_args(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/approve")
         assert resp.status_code == 200
-        assert "not found" in mock_reply.call_args[0][2].lower()
+        assert "Usage" in reply_client.replies[0][1]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_approve_wrong_state(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_approve_not_found(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/approve MISSING-1")
+        assert resp.status_code == 200
+        assert "not found" in reply_client.replies[0][1].lower()
+
+    def test_approve_wrong_state(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid(status=RaidStatus.PENDING)
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/approve NIU-221"),
-        )
+        resp = _post_webhook(client, "/approve NIU-221")
         assert resp.status_code == 200
-        assert "PENDING" in mock_reply.call_args[0][2]
+        assert "PENDING" in reply_client.replies[0][1]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_approve_by_uuid(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_approve_by_uuid(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid()
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update(f"/approve {raid.id}"),
-        )
+        resp = _post_webhook(client, f"/approve {raid.id}")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
-        assert "approved" in reply.lower()
+        assert "approved" in reply_client.replies[0][1].lower()
 
 
 # ---------------------------------------------------------------------------
-# /reject command
+# /reject command — now verifies confidence events are recorded
 # ---------------------------------------------------------------------------
 
 
 class TestRejectCommand:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_reject_success(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_reject_success_with_confidence_event(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid()
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/reject NIU-221 scope drift"),
-        )
+        resp = _post_webhook(client, "/reject NIU-221 scope drift")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "rejected" in reply.lower()
         assert "FAILED" in reply
         assert "scope drift" in reply
         assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_reject_no_reason(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+        # Verify confidence event was recorded
+        events = raid_repo.events[raid.id]
+        assert len(events) == 1
+        assert events[0].event_type == ConfidenceEventType.HUMAN_REJECT
+        assert events[0].delta == ReviewConfig().confidence_delta_rejected
+
+    def test_reject_no_reason(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid()
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/reject NIU-221"),
-        )
+        resp = _post_webhook(client, "/reject NIU-221")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "rejected" in reply.lower()
         assert "reason" not in reply.lower()
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_reject_no_args(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/reject"),
-        )
+    def test_reject_no_args(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/reject")
         assert resp.status_code == 200
-        assert "Usage" in mock_reply.call_args[0][2]
+        assert "Usage" in reply_client.replies[0][1]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_reject_wrong_state(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_reject_wrong_state(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid(status=RaidStatus.MERGED)
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/reject NIU-221"),
-        )
+        resp = _post_webhook(client, "/reject NIU-221")
         assert resp.status_code == 200
-        assert "MERGED" in mock_reply.call_args[0][2]
+        assert "MERGED" in reply_client.replies[0][1]
 
 
 # ---------------------------------------------------------------------------
-# /retry command
+# /retry command — now verifies confidence events and retry_count
 # ---------------------------------------------------------------------------
 
 
 class TestRetryCommand:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_retry_from_review(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_retry_from_review_with_confidence_event(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid(status=RaidStatus.REVIEW)
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/retry NIU-221"),
-        )
+        resp = _post_webhook(client, "/retry NIU-221")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "retry" in reply.lower()
         assert "PENDING" in reply
         assert raid_repo.raids[raid.id].status == RaidStatus.PENDING
         assert raid_repo.raids[raid.id].retry_count == 1
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_retry_from_failed(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+        # Verify confidence event was recorded
+        events = raid_repo.events[raid.id]
+        assert len(events) == 1
+        assert events[0].event_type == ConfidenceEventType.RETRY
+        assert events[0].delta == ReviewConfig().confidence_delta_retry
+
+    def test_retry_from_failed(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid(status=RaidStatus.FAILED)
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/retry NIU-221"),
-        )
+        resp = _post_webhook(client, "/retry NIU-221")
         assert resp.status_code == 200
-        assert "PENDING" in mock_reply.call_args[0][2]
+        assert "QUEUED" in reply_client.replies[0][1]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_retry_wrong_state(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_retry_wrong_state(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid(status=RaidStatus.RUNNING)
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/retry NIU-221"),
-        )
+        resp = _post_webhook(client, "/retry NIU-221")
         assert resp.status_code == 200
-        assert "RUNNING" in mock_reply.call_args[0][2]
+        assert "RUNNING" in reply_client.replies[0][1]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_retry_no_args(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/retry"),
-        )
+    def test_retry_no_args(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/retry")
         assert resp.status_code == 200
-        assert "Usage" in mock_reply.call_args[0][2]
+        assert "Usage" in reply_client.replies[0][1]
 
 
 # ---------------------------------------------------------------------------
@@ -640,18 +733,16 @@ class TestRetryCommand:
 
 
 class TestPauseResumeCommands:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_pause_running_dispatcher(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/pause"),
-        )
+    def test_pause_running_dispatcher(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/pause")
         assert resp.status_code == 200
-        assert "paused" in mock_reply.call_args[0][2].lower()
+        assert "paused" in reply_client.replies[0][1].lower()
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
     def test_pause_already_paused(
-        self, mock_reply, client: TestClient, dispatcher_repo: StubDispatcherRepo
+        self,
+        client: TestClient,
+        dispatcher_repo: StubDispatcherRepo,
+        reply_client: StubReplyClient,
     ):
         dispatcher_repo._state = DispatcherState(
             id=uuid4(),
@@ -661,16 +752,15 @@ class TestPauseResumeCommands:
             max_concurrent_raids=3,
             updated_at=datetime.now(UTC),
         )
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/pause"),
-        )
+        resp = _post_webhook(client, "/pause")
         assert resp.status_code == 200
-        assert "already paused" in mock_reply.call_args[0][2].lower()
+        assert "already paused" in reply_client.replies[0][1].lower()
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
     def test_resume_paused_dispatcher(
-        self, mock_reply, client: TestClient, dispatcher_repo: StubDispatcherRepo
+        self,
+        client: TestClient,
+        dispatcher_repo: StubDispatcherRepo,
+        reply_client: StubReplyClient,
     ):
         dispatcher_repo._state = DispatcherState(
             id=uuid4(),
@@ -680,21 +770,14 @@ class TestPauseResumeCommands:
             max_concurrent_raids=3,
             updated_at=datetime.now(UTC),
         )
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/resume"),
-        )
+        resp = _post_webhook(client, "/resume")
         assert resp.status_code == 200
-        assert "resumed" in mock_reply.call_args[0][2].lower()
+        assert "resumed" in reply_client.replies[0][1].lower()
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_resume_already_running(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/resume"),
-        )
+    def test_resume_already_running(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/resume")
         assert resp.status_code == 200
-        assert "already running" in mock_reply.call_args[0][2].lower()
+        assert "already running" in reply_client.replies[0][1].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -703,41 +786,39 @@ class TestPauseResumeCommands:
 
 
 class TestDispatchCommand:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_dispatch_pending_raid(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_dispatch_pending_raid(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid(status=RaidStatus.PENDING)
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/dispatch NIU-221"),
-        )
+        resp = _post_webhook(client, "/dispatch NIU-221")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "queued" in reply.lower()
         assert "QUEUED" in reply
         assert raid_repo.raids[raid.id].status == RaidStatus.QUEUED
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_dispatch_wrong_state(self, mock_reply, client: TestClient, raid_repo: StubRaidRepo):
+    def test_dispatch_wrong_state(
+        self,
+        client: TestClient,
+        raid_repo: StubRaidRepo,
+        reply_client: StubReplyClient,
+    ):
         raid = _make_raid(status=RaidStatus.RUNNING)
         raid_repo.add_raid(raid)
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/dispatch NIU-221"),
-        )
+        resp = _post_webhook(client, "/dispatch NIU-221")
         assert resp.status_code == 200
-        assert "RUNNING" in mock_reply.call_args[0][2]
+        assert "RUNNING" in reply_client.replies[0][1]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_dispatch_no_args(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/dispatch"),
-        )
+    def test_dispatch_no_args(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/dispatch")
         assert resp.status_code == 200
-        assert "Usage" in mock_reply.call_args[0][2]
+        assert "Usage" in reply_client.replies[0][1]
 
 
 # ---------------------------------------------------------------------------
@@ -746,26 +827,23 @@ class TestDispatchCommand:
 
 
 class TestSessionsCommand:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_sessions_lists_running(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/sessions"),
-        )
+    def test_sessions_lists_running(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/sessions")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "sess-1" in reply
         assert "Alpha raid 1" in reply
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_sessions_empty(self, mock_reply, client: TestClient, volundr: StubVolundr):
+    def test_sessions_empty(
+        self,
+        client: TestClient,
+        volundr: StubVolundr,
+        reply_client: StubReplyClient,
+    ):
         volundr._sessions = []
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/sessions"),
-        )
+        resp = _post_webhook(client, "/sessions")
         assert resp.status_code == 200
-        assert "No running sessions" in mock_reply.call_args[0][2]
+        assert "No running sessions" in reply_client.replies[0][1]
 
 
 # ---------------------------------------------------------------------------
@@ -774,43 +852,32 @@ class TestSessionsCommand:
 
 
 class TestSayCommand:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_say_sends_message(self, mock_reply, client: TestClient, volundr: StubVolundr):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/say sess-1 fix the failing test"),
-        )
+    def test_say_sends_message(
+        self,
+        client: TestClient,
+        volundr: StubVolundr,
+        reply_client: StubReplyClient,
+    ):
+        resp = _post_webhook(client, "/say sess-1 fix the failing test")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "Message sent" in reply
         assert volundr.sent_messages == [("sess-1", "fix the failing test")]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_say_session_not_found(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/say nonexistent hello"),
-        )
+    def test_say_session_not_found(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/say nonexistent hello")
         assert resp.status_code == 200
-        assert "not found" in mock_reply.call_args[0][2].lower()
+        assert "not found" in reply_client.replies[0][1].lower()
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_say_no_args(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/say"),
-        )
+    def test_say_no_args(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/say")
         assert resp.status_code == 200
-        assert "Usage" in mock_reply.call_args[0][2]
+        assert "Usage" in reply_client.replies[0][1]
 
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_say_missing_message(self, mock_reply, client: TestClient):
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/say sess-1"),
-        )
+    def test_say_missing_message(self, client: TestClient, reply_client: StubReplyClient):
+        resp = _post_webhook(client, "/say sess-1")
         assert resp.status_code == 200
-        assert "Usage" in mock_reply.call_args[0][2]
+        assert "Usage" in reply_client.replies[0][1]
 
 
 # ---------------------------------------------------------------------------
@@ -819,47 +886,44 @@ class TestSayCommand:
 
 
 class TestErrorHandling:
-    @patch("tyr.adapters.inbound.rest_telegram_webhook.send_telegram_reply", new_callable=AsyncMock)
-    def test_command_handler_exception(self, mock_reply, client: TestClient):
+    def test_command_handler_exception(self, client: TestClient, reply_client: StubReplyClient):
         """If a command handler throws, we reply with an error message."""
         # Break the saga_repo to force an exception in /status
         client.app.state.saga_repo = None
 
-        resp = client.post(
-            "/api/v1/tyr/telegram/webhook",
-            json=_make_update("/status"),
-        )
+        resp = _post_webhook(client, "/status")
         assert resp.status_code == 200
-        reply = mock_reply.call_args[0][2]
+        reply = reply_client.replies[0][1]
         assert "Error" in reply
 
 
 # ---------------------------------------------------------------------------
-# send_telegram_reply unit tests
+# TelegramReplyClient unit tests
 # ---------------------------------------------------------------------------
 
 
-class TestSendTelegramReply:
+class TestTelegramReplyClient:
     @pytest.mark.asyncio
     async def test_no_token_logs_warning(self):
         """When bot_token is empty, no HTTP call is made."""
-        # Should not raise — just logs a warning
-        await send_telegram_reply("", "12345", "hello")
+        rc = TelegramReplyClient(bot_token="", timeout=5.0)
+        await rc.send("12345", "hello")
+        await rc.close()
 
     @pytest.mark.asyncio
     async def test_http_error_suppressed(self):
         """Network errors during reply do not propagate."""
-        with patch("tyr.adapters.inbound.rest_telegram_webhook.httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            import httpx as _httpx
+        rc = TelegramReplyClient(bot_token="token", timeout=5.0)
+        # Patch the internal client to fail
+        rc._client = AsyncMock()
+        rc._client.post.side_effect = httpx.ConnectError("fail")
+        # Should not raise
+        await rc.send("12345", "hello")
 
-            mock_client.post.side_effect = _httpx.ConnectError("fail")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_cls.return_value = mock_client
-
-            # Should not raise
-            await send_telegram_reply("token", "12345", "hello")
+    @pytest.mark.asyncio
+    async def test_close_closes_client(self):
+        rc = TelegramReplyClient(bot_token="token", timeout=5.0)
+        await rc.close()
 
 
 # ---------------------------------------------------------------------------
@@ -910,6 +974,7 @@ class TestDispatchCommandFunction:
             saga_repo=StubSagaRepo(),
             volundr=StubVolundr(),
             dispatcher_repo=StubDispatcherRepo(),
+            review_service=RaidReviewService(StubRaidRepo(), ReviewConfig()),
         )
         assert "Unknown command" in result
         assert "/xyz" in result

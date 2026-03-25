@@ -232,8 +232,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
+            # Wire Telegram reply client (shared httpx.AsyncClient)
+            from tyr.adapters.inbound.rest_telegram_webhook import (
+                TelegramReplyClient,
+            )
+
+            telegram_reply_client = TelegramReplyClient(
+                bot_token=settings.telegram.bot_token,
+                timeout=settings.telegram.reply_timeout,
+            )
+            app.state.telegram_reply_client = telegram_reply_client
+
             logger.info("Tyr started — database pool ready")
             yield
+
+            await telegram_reply_client.close()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan
