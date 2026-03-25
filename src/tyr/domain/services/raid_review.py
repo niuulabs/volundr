@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from tyr.config import ReviewConfig
-from tyr.domain.exceptions import InvalidStateTransitionError
+from tyr.domain.exceptions import InvalidStateTransitionError, RaidNotFoundError
 from tyr.domain.models import (
     ConfidenceEvent,
     ConfidenceEventType,
@@ -39,12 +39,6 @@ class ReviewResult:
     raid: Raid
     reason: str | None = None
     phase_gate_unlocked: bool = False
-
-
-class RaidNotFoundError(Exception):
-    def __init__(self, raid_id: UUID | str) -> None:
-        self.raid_id = raid_id
-        super().__init__(f"Raid not found: {raid_id}")
 
 
 class InvalidRaidStateError(Exception):
