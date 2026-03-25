@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from tyr.domain.exceptions import RaidNotFoundError
 from tyr.domain.models import (
     ConfidenceEvent,
     ConfidenceEventType,
@@ -25,12 +26,6 @@ from tyr.ports.volundr import VolundrPort
 logger = logging.getLogger(__name__)
 
 RUNNING_STATUSES = frozenset({RaidStatus.RUNNING, RaidStatus.REVIEW})
-
-
-class RaidNotFoundError(Exception):
-    def __init__(self, raid_id: UUID | str) -> None:
-        self.raid_id = raid_id
-        super().__init__(f"Raid not found: {raid_id}")
 
 
 class NoActiveSessionError(Exception):

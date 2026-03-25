@@ -17,6 +17,7 @@ from tyr.api.raids import (
     resolve_volundr,
 )
 from tyr.config import ReviewConfig
+from tyr.domain.exceptions import RaidNotFoundError
 from tyr.domain.models import (
     ConfidenceEventType,
     RaidStatus,
@@ -24,7 +25,6 @@ from tyr.domain.models import (
 )
 from tyr.domain.services.session_message import (
     NoActiveSessionError,
-    RaidNotFoundError,
     RaidNotRunningError,
     SessionMessageService,
 )

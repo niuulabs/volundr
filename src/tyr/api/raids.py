@@ -13,19 +13,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from tyr.config import ReviewConfig
+from tyr.domain.exceptions import RaidNotFoundError
 from tyr.domain.models import RaidStatus
 from tyr.domain.services.raid_review import (
     InvalidRaidStateError,
-    RaidNotFoundError,
     RaidReviewService,
 )
 from tyr.domain.services.session_message import (
     NoActiveSessionError,
     RaidNotRunningError,
     SessionMessageService,
-)
-from tyr.domain.services.session_message import (
-    RaidNotFoundError as MessageRaidNotFoundError,
 )
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
@@ -382,7 +379,7 @@ def create_raids_router() -> APIRouter:
 
         try:
             result = await svc.send_message(raid_id, body.content, sender="user")
-        except MessageRaidNotFoundError:
+        except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Raid not found: {raid_id}",
