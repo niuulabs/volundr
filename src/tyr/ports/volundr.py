@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
 from tyr.domain.models import PRStatus
@@ -31,6 +32,16 @@ class VolundrSession:
     name: str
     status: str
     tracker_issue_id: str | None
+
+
+@dataclass(frozen=True)
+class ActivityEvent:
+    """An activity state change received from Volundr SSE."""
+
+    session_id: str
+    state: str
+    metadata: dict
+    owner_id: str
 
 
 class VolundrPort(ABC):
@@ -75,3 +86,12 @@ class VolundrPort(ABC):
     ) -> None:
         """Send a human message to a running Volundr session."""
         ...
+
+    async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
+        """Subscribe to the Volundr SSE stream for session_activity events.
+
+        Default implementation yields nothing — adapters that support SSE
+        override this to stream real events.
+        """
+        return  # pragma: no cover
+        yield  # type: ignore[misc]  # pragma: no cover
