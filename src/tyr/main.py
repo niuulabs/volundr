@@ -38,6 +38,7 @@ from tyr.api.sagas import resolve_git as sagas_resolve_git
 from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.domain.services.watcher import RaidWatcher
 from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
@@ -225,8 +226,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
+            # Wire raid completion watcher
+            watcher = RaidWatcher(
+                volundr=volundr_adapter,
+                raid_repo=raid_repo,
+                dispatcher_repo=dispatcher_repo,
+                event_bus=event_bus,
+                config=settings.watcher,
+            )
+            app.state.watcher = watcher
+            await watcher.start()
+
             logger.info("Tyr started — database pool ready")
             yield
+
+            await watcher.stop()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan

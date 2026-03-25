@@ -91,6 +91,8 @@ def _make_raid(
         session_id="sess-1",
         branch="feat/test",
         chronicle_summary="Summary",
+        pr_url=None,
+        pr_id=None,
         retry_count=0,
         created_at=NOW,
         updated_at=NOW,

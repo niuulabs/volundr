@@ -207,13 +207,18 @@ class TestGetPRStatus:
         respx.get(pr_url).mock(
             return_value=httpx.Response(
                 200,
-                json={"state": "open", "mergeable": True},
+                json={
+                    "state": "open",
+                    "mergeable": True,
+                    "html_url": "https://github.com/org/repo/pull/42",
+                },
             )
         )
 
         status = await adapter.get_pr_status(pr_url)
 
         assert status.pr_id == pr_url
+        assert status.url == "https://github.com/org/repo/pull/42"
         assert status.state == "open"
         assert status.mergeable is True
         assert status.ci_passed is None
