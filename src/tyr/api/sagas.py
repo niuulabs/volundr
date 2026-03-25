@@ -29,6 +29,7 @@ from tyr.domain.models import (
     TrackerProject,
 )
 from tyr.ports.git import GitPort
+from tyr.ports.llm import LLMPort
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
@@ -96,6 +97,31 @@ class SagaDetailResponse(BaseModel):
     phases: list[PhaseResponse]
 
 
+class DecomposeRequest(BaseModel):
+    spec: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    model: str = Field(default="")
+
+
+class RaidSpecResponse(BaseModel):
+    name: str
+    description: str
+    acceptance_criteria: list[str]
+    declared_files: list[str]
+    estimate_hours: float
+    confidence: float
+
+
+class PhaseSpecResponse(BaseModel):
+    name: str
+    raids: list[RaidSpecResponse]
+
+
+class SagaStructureResponse(BaseModel):
+    name: str
+    phases: list[PhaseSpecResponse]
+
+
 # ---------------------------------------------------------------------------
 # Commit request / response models
 # ---------------------------------------------------------------------------
@@ -154,7 +180,7 @@ class CommittedSagaResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Dependency — overridden by main.py
+# Dependencies — overridden by main.py
 # ---------------------------------------------------------------------------
 
 
@@ -162,6 +188,13 @@ async def resolve_saga_repo() -> SagaRepository:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Saga repository not configured",
+    )
+
+
+async def resolve_llm() -> LLMPort:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="LLM adapter not configured",
     )
 
 
@@ -345,6 +378,44 @@ def create_sagas_router() -> APIRouter:
             progress=project.progress,
             url=project.url,
             phases=phase_responses,
+        )
+
+    @router.post("/decompose", response_model=SagaStructureResponse)
+    async def decompose_spec(
+        body: DecomposeRequest,
+        request: Request,
+        principal: Principal = Depends(extract_principal),
+        llm: LLMPort = Depends(resolve_llm),
+    ) -> SagaStructureResponse:
+        """Decompose a spec into a saga structure (stateless preview)."""
+        model = body.model or request.app.state.settings.llm.default_model
+        try:
+            structure = await llm.decompose_spec(body.spec, body.repo, model=model)
+        except Exception as exc:
+            logger.error("Decomposition failed: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"LLM decomposition failed: {exc}",
+            )
+        return SagaStructureResponse(
+            name=structure.name,
+            phases=[
+                PhaseSpecResponse(
+                    name=phase.name,
+                    raids=[
+                        RaidSpecResponse(
+                            name=raid.name,
+                            description=raid.description,
+                            acceptance_criteria=raid.acceptance_criteria,
+                            declared_files=raid.declared_files,
+                            estimate_hours=raid.estimate_hours,
+                            confidence=raid.confidence,
+                        )
+                        for raid in phase.raids
+                    ],
+                )
+                for phase in structure.phases
+            ],
         )
 
     @router.delete("/{saga_id}", status_code=204)

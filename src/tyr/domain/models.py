@@ -228,6 +228,7 @@ class RaidSpec:
     acceptance_criteria: list[str]
     declared_files: list[str]
     estimate_hours: float
+    confidence: float
 
 
 @dataclass(frozen=True)
@@ -238,6 +239,7 @@ class PhaseSpec:
 
 @dataclass(frozen=True)
 class SagaStructure:
+    name: str
     phases: list[PhaseSpec]
 
 
