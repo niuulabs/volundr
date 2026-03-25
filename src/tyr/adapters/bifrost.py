@@ -1,4 +1,8 @@
-"""BifröstAdapter — LLM spec decomposition via Bifröst HTTP API."""
+"""BifröstAdapter — LLM spec decomposition via Anthropic-compatible HTTP API.
+
+Works with the Anthropic API directly, Bifröst gateway, or any
+Anthropic-compatible endpoint (e.g. Ollama with Anthropic compat).
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,8 @@ from tyr.domain.models import PhaseSpec, RaidSpec, SagaStructure
 from tyr.ports.llm import LLMPort
 
 logger = logging.getLogger(__name__)
+
+ANTHROPIC_API_VERSION = "2023-06-01"
 
 DECOMPOSITION_PROMPT = """\
 You are a saga decomposition engine for the Niuu platform.
@@ -70,20 +76,35 @@ class DecompositionError(Exception):
 
 
 class BifrostAdapter(LLMPort):
-    """Routes spec decomposition to a configured model via Bifröst HTTP API."""
+    """Routes spec decomposition via an Anthropic-compatible Messages API.
+
+    Works with the Anthropic API, Bifröst gateway, or any compatible endpoint.
+    Constructor kwargs are forwarded from LLMConfig via the dynamic adapter pattern.
+    """
 
     def __init__(
         self,
-        base_url: str,
         *,
+        base_url: str = "https://api.anthropic.com",
+        api_key: str = "",
         timeout: float = 120.0,
         max_tokens: int = 8192,
         max_retries: int = 2,
     ) -> None:
         self._base_url = base_url.rstrip("/")
-        self._timeout = timeout
+        self._api_key = api_key
         self._max_tokens = max_tokens
         self._max_retries = max_retries
+        self._client = httpx.AsyncClient(timeout=timeout)
+
+    def _headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {
+            "anthropic-version": ANTHROPIC_API_VERSION,
+            "content-type": "application/json",
+        }
+        if self._api_key:
+            headers["x-api-key"] = self._api_key
+        return headers
 
     async def decompose_spec(self, spec: str, repo: str, *, model: str) -> SagaStructure:
         prompt = DECOMPOSITION_PROMPT.format(spec=spec, repo=repo)
@@ -91,7 +112,7 @@ class BifrostAdapter(LLMPort):
 
         for attempt in range(1, self._max_retries + 1):
             try:
-                raw = await self._call_bifrost(prompt, model=model)
+                raw = await self._call_api(prompt, model=model)
                 return _parse_and_validate(raw)
             except (json.JSONDecodeError, ValidationError) as exc:
                 logger.warning(
@@ -106,23 +127,26 @@ class BifrostAdapter(LLMPort):
             f"Failed to decompose spec after {self._max_retries} attempts: {last_error}"
         )
 
-    async def _call_bifrost(self, prompt: str, *, model: str) -> str:
-        """Call Bifröst HTTP API and return the raw response text."""
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(
-                f"{self._base_url}/api/v1/messages",
-                json={
-                    "model": model,
-                    "max_tokens": self._max_tokens,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            # Bifröst returns Anthropic-style response with content blocks
-            content_blocks = data.get("content", [])
-            text_parts = [block["text"] for block in content_blocks if block.get("type") == "text"]
-            return "".join(text_parts)
+    async def _call_api(self, prompt: str, *, model: str) -> str:
+        """Call the Anthropic-compatible Messages API and return the raw text."""
+        resp = await self._client.post(
+            f"{self._base_url}/v1/messages",
+            headers=self._headers(),
+            json={
+                "model": model,
+                "max_tokens": self._max_tokens,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        content_blocks = data.get("content", [])
+        text_parts = [block["text"] for block in content_blocks if block.get("type") == "text"]
+        return "".join(text_parts)
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._client.aclose()
 
 
 class ValidationError(Exception):

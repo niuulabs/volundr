@@ -221,24 +221,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
-            # Wire LLM adapter (Bifröst)
-            from tyr.adapters.bifrost import BifrostAdapter
+            # Wire LLM adapter (dynamic adapter pattern)
             from tyr.ports.llm import LLMPort as _LLMPort
 
-            bifrost = BifrostAdapter(
-                base_url=settings.bifrost.url,
-                timeout=settings.bifrost.timeout,
-                max_tokens=settings.bifrost.max_tokens,
-                max_retries=settings.bifrost.max_retries,
-            )
+            llm_cfg = settings.llm
+            llm_cls = import_class(llm_cfg.adapter)
+            llm_kwargs = resolve_secret_kwargs(llm_cfg.kwargs, llm_cfg.secret_kwargs_env)
+            llm_adapter = llm_cls(**llm_kwargs)
+            logger.info("LLM adapter: %s", llm_cfg.adapter.rsplit(".", 1)[-1])
 
             async def _resolve_llm() -> _LLMPort:
-                return bifrost
+                return llm_adapter
 
             app.dependency_overrides[resolve_llm] = _resolve_llm
 
             logger.info("Tyr started — database pool ready")
             yield
+
+            # Lifecycle cleanup
+            if hasattr(llm_adapter, "close"):
+                await llm_adapter.close()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from tyr.adapters.bifrost import DecompositionError
 from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
 from tyr.api.tracker import resolve_trackers
-from tyr.config import AuthConfig, BifrostConfig
+from tyr.config import AuthConfig, LLMConfig
 from tyr.domain.models import PhaseSpec, RaidSpec, SagaStructure
 from tyr.ports.llm import LLMPort
 
@@ -68,7 +68,7 @@ class MockLLM(LLMPort):
 def _dev_settings() -> MagicMock:
     s = MagicMock()
     s.auth = AuthConfig(allow_anonymous_dev=True)
-    s.bifrost = BifrostConfig()
+    s.llm = LLMConfig()
     return s
 
 
@@ -124,7 +124,7 @@ class TestDecomposeEndpoint:
             json={"spec": "Build something", "repo": "org/repo"},
         )
         assert resp.status_code == 200
-        assert llm.last_model == "claude-sonnet-4-6"  # default from BifrostConfig
+        assert llm.last_model == "claude-sonnet-4-6"  # default from LLMConfig
 
     def test_uses_default_model_when_model_empty_string(
         self, client: TestClient, llm: MockLLM

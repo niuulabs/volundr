@@ -9,6 +9,7 @@ import pytest
 import respx
 
 from tyr.adapters.bifrost import (
+    ANTHROPIC_API_VERSION,
     DECOMPOSITION_PROMPT,
     MAX_ESTIMATE_HOURS,
     MIN_ESTIMATE_HOURS,
@@ -43,9 +44,11 @@ VALID_RESPONSE = {
     ],
 }
 
+API_URL = "http://bifrost.test/v1/messages"
 
-def _bifrost_response(payload: dict) -> dict:
-    """Wrap payload as a Bifröst-style response."""
+
+def _api_response(payload: dict) -> dict:
+    """Wrap payload as an Anthropic-style response."""
     return {
         "content": [{"type": "text", "text": json.dumps(payload)}],
     }
@@ -259,8 +262,8 @@ class TestBifrostAdapter:
     @pytest.mark.asyncio
     @respx.mock
     async def test_decompose_spec_success(self, adapter: BifrostAdapter) -> None:
-        respx.post("http://bifrost.test/api/v1/messages").mock(
-            return_value=httpx.Response(200, json=_bifrost_response(VALID_RESPONSE))
+        respx.post(API_URL).mock(
+            return_value=httpx.Response(200, json=_api_response(VALID_RESPONSE))
         )
         result = await adapter.decompose_spec(
             "Build user management", "org/repo", model="claude-sonnet-4-6"
@@ -272,7 +275,7 @@ class TestBifrostAdapter:
     @pytest.mark.asyncio
     @respx.mock
     async def test_decompose_spec_retries_on_bad_json(self, adapter: BifrostAdapter) -> None:
-        respx.post("http://bifrost.test/api/v1/messages").mock(
+        respx.post(API_URL).mock(
             return_value=httpx.Response(
                 200, json={"content": [{"type": "text", "text": "not valid json"}]}
             )
@@ -286,19 +289,17 @@ class TestBifrostAdapter:
         self, adapter: BifrostAdapter
     ) -> None:
         invalid_data = {"name": "S", "phases": []}
-        respx.post("http://bifrost.test/api/v1/messages").mock(
-            return_value=httpx.Response(200, json=_bifrost_response(invalid_data))
-        )
+        respx.post(API_URL).mock(return_value=httpx.Response(200, json=_api_response(invalid_data)))
         with pytest.raises(DecompositionError):
             await adapter.decompose_spec("spec", "repo", model="claude-sonnet-4-6")
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_decompose_retries_then_succeeds(self, adapter: BifrostAdapter) -> None:
-        route = respx.post("http://bifrost.test/api/v1/messages")
+        route = respx.post(API_URL)
         route.side_effect = [
             httpx.Response(200, json={"content": [{"type": "text", "text": "bad"}]}),
-            httpx.Response(200, json=_bifrost_response(VALID_RESPONSE)),
+            httpx.Response(200, json=_api_response(VALID_RESPONSE)),
         ]
         result = await adapter.decompose_spec("spec", "repo", model="claude-sonnet-4-6")
         assert result.name == "User Management Saga"
@@ -307,15 +308,15 @@ class TestBifrostAdapter:
     @pytest.mark.asyncio
     @respx.mock
     async def test_decompose_http_error_propagates(self, adapter: BifrostAdapter) -> None:
-        respx.post("http://bifrost.test/api/v1/messages").mock(return_value=httpx.Response(500))
+        respx.post(API_URL).mock(return_value=httpx.Response(500))
         with pytest.raises(httpx.HTTPStatusError):
             await adapter.decompose_spec("spec", "repo", model="claude-sonnet-4-6")
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_call_bifrost_sends_correct_payload(self, adapter: BifrostAdapter) -> None:
-        route = respx.post("http://bifrost.test/api/v1/messages").mock(
-            return_value=httpx.Response(200, json=_bifrost_response(VALID_RESPONSE))
+    async def test_sends_correct_payload(self, adapter: BifrostAdapter) -> None:
+        route = respx.post(API_URL).mock(
+            return_value=httpx.Response(200, json=_api_response(VALID_RESPONSE))
         )
         await adapter.decompose_spec("my spec", "org/repo", model="claude-opus-4-6")
         assert route.called
@@ -329,8 +330,40 @@ class TestBifrostAdapter:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_call_bifrost_extracts_text_blocks(self, adapter: BifrostAdapter) -> None:
-        respx.post("http://bifrost.test/api/v1/messages").mock(
+    async def test_sends_anthropic_headers(self, adapter: BifrostAdapter) -> None:
+        route = respx.post(API_URL).mock(
+            return_value=httpx.Response(200, json=_api_response(VALID_RESPONSE))
+        )
+        await adapter.decompose_spec("spec", "repo", model="m")
+        req = route.calls.last.request
+        assert req.headers["anthropic-version"] == ANTHROPIC_API_VERSION
+        assert req.headers["content-type"] == "application/json"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_sends_api_key_header_when_set(self) -> None:
+        adapter = BifrostAdapter(base_url="http://bifrost.test", api_key="sk-test-123")
+        route = respx.post(API_URL).mock(
+            return_value=httpx.Response(200, json=_api_response(VALID_RESPONSE))
+        )
+        await adapter.decompose_spec("spec", "repo", model="m")
+        req = route.calls.last.request
+        assert req.headers["x-api-key"] == "sk-test-123"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_no_api_key_header_when_empty(self, adapter: BifrostAdapter) -> None:
+        route = respx.post(API_URL).mock(
+            return_value=httpx.Response(200, json=_api_response(VALID_RESPONSE))
+        )
+        await adapter.decompose_spec("spec", "repo", model="m")
+        req = route.calls.last.request
+        assert "x-api-key" not in req.headers
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_extracts_text_blocks(self, adapter: BifrostAdapter) -> None:
+        respx.post(API_URL).mock(
             return_value=httpx.Response(
                 200,
                 json={
@@ -356,12 +389,16 @@ class TestBifrostAdapter:
         adapter = BifrostAdapter(base_url="http://bifrost.test/")
         assert adapter._base_url == "http://bifrost.test"
 
+    def test_default_base_url(self) -> None:
+        adapter = BifrostAdapter()
+        assert adapter._base_url == "https://api.anthropic.com"
+
     @pytest.mark.asyncio
     @respx.mock
     async def test_custom_max_tokens(self) -> None:
         adapter = BifrostAdapter(base_url="http://bifrost.test", max_tokens=4096)
-        route = respx.post("http://bifrost.test/api/v1/messages").mock(
-            return_value=httpx.Response(200, json=_bifrost_response(VALID_RESPONSE))
+        route = respx.post(API_URL).mock(
+            return_value=httpx.Response(200, json=_api_response(VALID_RESPONSE))
         )
         await adapter.decompose_spec("spec", "repo", model="m")
         body = json.loads(route.calls.last.request.content)
@@ -371,11 +408,18 @@ class TestBifrostAdapter:
     @respx.mock
     async def test_custom_max_retries(self) -> None:
         adapter = BifrostAdapter(base_url="http://bifrost.test", max_retries=1)
-        respx.post("http://bifrost.test/api/v1/messages").mock(
+        respx.post(API_URL).mock(
             return_value=httpx.Response(200, json={"content": [{"type": "text", "text": "bad"}]})
         )
         with pytest.raises(DecompositionError, match="1 attempts"):
             await adapter.decompose_spec("spec", "repo", model="m")
+
+    @pytest.mark.asyncio
+    async def test_close_shuts_down_client(self) -> None:
+        adapter = BifrostAdapter(base_url="http://bifrost.test")
+        assert not adapter._client.is_closed
+        await adapter.close()
+        assert adapter._client.is_closed
 
 
 # ---------------------------------------------------------------------------
@@ -399,9 +443,9 @@ class TestDecompositionPrompt:
         assert "no markdown fences" in lower_prompt or "no markdown" in lower_prompt
 
     def test_default_max_retries(self) -> None:
-        adapter = BifrostAdapter(base_url="http://test")
+        adapter = BifrostAdapter()
         assert adapter._max_retries == 2
 
     def test_default_max_tokens(self) -> None:
-        adapter = BifrostAdapter(base_url="http://test")
+        adapter = BifrostAdapter()
         assert adapter._max_tokens == 8192

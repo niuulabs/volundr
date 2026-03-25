@@ -155,14 +155,16 @@ class TelegramConfig(BaseModel):
     )
 
 
-class BifrostConfig(BaseModel):
-    """Bifröst LLM gateway configuration."""
+class LLMConfig(BaseModel):
+    """LLM adapter configuration (dynamic adapter pattern)."""
 
-    url: str = Field(default="http://localhost:8080")
-    timeout: float = Field(default=120.0)
+    adapter: str = Field(
+        default="tyr.adapters.bifrost.BifrostAdapter",
+        description="Fully-qualified class path for the LLM adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    secret_kwargs_env: dict[str, str] = Field(default_factory=dict)
     default_model: str = Field(default="claude-sonnet-4-6")
-    max_tokens: int = Field(default=8192)
-    max_retries: int = Field(default=2)
 
 
 class TrackerConfig(BaseModel):
@@ -216,7 +218,7 @@ class Settings(BaseSettings):
     pat: PATConfig = Field(default_factory=PATConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
-    bifrost: BifrostConfig = Field(default_factory=BifrostConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 

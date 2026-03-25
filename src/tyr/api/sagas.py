@@ -303,7 +303,7 @@ def create_sagas_router() -> APIRouter:
         llm: LLMPort = Depends(resolve_llm),
     ) -> SagaStructureResponse:
         """Decompose a spec into a saga structure (stateless preview)."""
-        model = body.model or request.app.state.settings.bifrost.default_model
+        model = body.model or request.app.state.settings.llm.default_model
         try:
             structure = await llm.decompose_spec(body.spec, body.repo, model=model)
         except Exception as exc:
