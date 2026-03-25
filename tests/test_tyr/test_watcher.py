@@ -14,6 +14,8 @@ from tyr.domain.models import (
     PRStatus,
     Raid,
     RaidStatus,
+    Saga,
+    SagaStatus,
 )
 from tyr.domain.services.watcher import RaidWatcher, WatcherStats
 from tyr.events import EventBus
@@ -70,6 +72,7 @@ class StubRaidRepo(RaidRepository):
 
     def __init__(self) -> None:
         self.raids: dict[UUID, Raid] = {}
+        self.saga: Saga | None = None
 
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         return self.raids.get(raid_id)
@@ -128,13 +131,13 @@ class StubRaidRepo(RaidRepository):
     async def get_confidence_events(self, raid_id: UUID) -> list:
         return []
 
-    async def add_confidence_event(self, event) -> None:  # noqa: ANN001
+    async def add_confidence_event(self, event: object) -> None:
         pass
 
-    async def get_saga_for_raid(self, raid_id: UUID):  # noqa: ANN201
-        return None
+    async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
+        return self.saga
 
-    async def get_phase_for_raid(self, raid_id: UUID):  # noqa: ANN201
+    async def get_phase_for_raid(self, raid_id: UUID) -> None:
         return None
 
     async def all_raids_merged(self, phase_id: UUID) -> bool:
@@ -190,6 +193,22 @@ def _make_raid(
         retry_count=0,
         created_at=NOW,
         updated_at=NOW,
+    )
+
+
+def _make_saga(owner_id: str = "user-1") -> Saga:
+    return Saga(
+        id=uuid4(),
+        tracker_id="proj-1",
+        tracker_type="mock",
+        slug="alpha",
+        name="Test Saga",
+        repos=["org/repo"],
+        feature_branch="feat/test",
+        status=SagaStatus.ACTIVE,
+        confidence=0.5,
+        created_at=NOW,
+        owner_id=owner_id,
     )
 
 
@@ -361,14 +380,18 @@ class TestPollCycle:
             id=raid.session_id, name="s", status="completed", tracker_issue_id=None
         )
         volundr.pr_statuses[raid.session_id] = PRStatus(
-            pr_id="PR-42", state="open", mergeable=True, ci_passed=True
+            pr_id="PR-42",
+            url="https://github.com/org/repo/pull/42",
+            state="open",
+            mergeable=True,
+            ci_passed=True,
         )
 
         await watcher._poll_cycle()
 
         updated = raid_repo.raids[raid.id]
         assert updated.pr_id == "PR-42"
-        assert updated.pr_url == "PR-42"
+        assert updated.pr_url == "https://github.com/org/repo/pull/42"
 
     @pytest.mark.asyncio
     async def test_no_pr_still_transitions(self) -> None:
@@ -593,7 +616,11 @@ class TestEventEmission:
             id=raid.session_id, name="s", status="completed", tracker_issue_id=None
         )
         volundr.pr_statuses[raid.session_id] = PRStatus(
-            pr_id="PR-99", state="open", mergeable=True, ci_passed=True
+            pr_id="PR-99",
+            url="https://github.com/org/repo/pull/99",
+            state="open",
+            mergeable=True,
+            ci_passed=True,
         )
 
         q = event_bus.subscribe()
@@ -605,6 +632,7 @@ class TestEventEmission:
         assert event.data["status"] == "REVIEW"
         assert event.data["session_id"] == raid.session_id
         assert event.data["pr_id"] == "PR-99"
+        assert event.data["pr_url"] == "https://github.com/org/repo/pull/99"
 
     @pytest.mark.asyncio
     async def test_failed_event_data(self) -> None:
@@ -622,6 +650,63 @@ class TestEventEmission:
         event = await asyncio.wait_for(q.get(), timeout=1.0)
         assert event.event == "raid.state_changed"
         assert event.data["status"] == "FAILED"
+
+
+class TestDispatcherPauseFiltering:
+    @pytest.mark.asyncio
+    async def test_paused_dispatcher_skips_raids(self) -> None:
+        """Raids belonging to an owner with a paused dispatcher should be skipped."""
+        dispatcher_repo = StubDispatcherRepo(running=False)
+        raid_repo = StubRaidRepo()
+        raid_repo.saga = _make_saga(owner_id="user-paused")
+
+        watcher, volundr, _, _ = _make_watcher(raid_repo=raid_repo, dispatcher_repo=dispatcher_repo)
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+        volundr.sessions[raid.session_id] = VolundrSession(
+            id=raid.session_id, name="s", status="completed", tracker_issue_id=None
+        )
+
+        stats = await watcher._poll_cycle()
+        assert stats.checked == 0
+        assert raid_repo.raids[raid.id].status == RaidStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_running_dispatcher_allows_raids(self) -> None:
+        """Raids belonging to an owner with a running dispatcher should be checked."""
+        dispatcher_repo = StubDispatcherRepo(running=True)
+        raid_repo = StubRaidRepo()
+        raid_repo.saga = _make_saga(owner_id="user-active")
+
+        watcher, volundr, _, _ = _make_watcher(raid_repo=raid_repo, dispatcher_repo=dispatcher_repo)
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+        volundr.sessions[raid.session_id] = VolundrSession(
+            id=raid.session_id, name="s", status="completed", tracker_issue_id=None
+        )
+
+        stats = await watcher._poll_cycle()
+        assert stats.checked == 1
+        assert stats.transitioned == 1
+        assert raid_repo.raids[raid.id].status == RaidStatus.REVIEW
+
+    @pytest.mark.asyncio
+    async def test_no_saga_allows_raid(self) -> None:
+        """Raids with no parent saga should still be checked (graceful fallback)."""
+        dispatcher_repo = StubDispatcherRepo(running=False)
+        raid_repo = StubRaidRepo()
+        # saga is None by default
+
+        watcher, volundr, _, _ = _make_watcher(raid_repo=raid_repo, dispatcher_repo=dispatcher_repo)
+        raid = _make_raid()
+        raid_repo.raids[raid.id] = raid
+        volundr.sessions[raid.session_id] = VolundrSession(
+            id=raid.session_id, name="s", status="completed", tracker_issue_id=None
+        )
+
+        stats = await watcher._poll_cycle()
+        assert stats.checked == 1
+        assert stats.transitioned == 1
 
 
 class TestWatcherConfig:

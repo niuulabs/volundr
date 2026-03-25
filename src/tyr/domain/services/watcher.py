@@ -11,11 +11,11 @@ import logging
 from dataclasses import dataclass
 
 from tyr.config import WatcherConfig
-from tyr.domain.models import RaidStatus
+from tyr.domain.models import Raid, RaidStatus
 from tyr.events import EventBus, TyrEvent
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.raid_repository import RaidRepository
-from tyr.ports.volundr import VolundrPort
+from tyr.ports.volundr import VolundrPort, VolundrSession
 
 logger = logging.getLogger(__name__)
 
@@ -98,19 +98,23 @@ class RaidWatcher:
         if not running_raids:
             return WatcherStats()
 
-        stats = WatcherStats()
+        # Filter out raids whose owner has paused the dispatcher
+        active_raids = await self._filter_paused_owners(running_raids)
+        if not active_raids:
+            return WatcherStats()
+
         semaphore = asyncio.Semaphore(self._config.batch_size)
 
-        async def _check_with_semaphore(raid):  # noqa: ANN001
+        async def _check_with_semaphore(raid: Raid) -> bool:
             async with semaphore:
                 return await self._check_raid(raid)
 
         results = await asyncio.gather(
-            *[_check_with_semaphore(r) for r in running_raids],
+            *[_check_with_semaphore(r) for r in active_raids],
             return_exceptions=True,
         )
 
-        checked = len(running_raids)
+        checked = len(active_raids)
         transitioned = 0
         errors = 0
         for result in results:
@@ -130,7 +134,32 @@ class RaidWatcher:
             )
         return stats
 
-    async def _check_raid(self, raid) -> bool:  # noqa: ANN001
+    async def _filter_paused_owners(self, raids: list[Raid]) -> list[Raid]:
+        """Remove raids whose owner has paused the dispatcher.
+
+        Resolves the owning saga for each raid, then checks that owner's
+        dispatcher state. Results are cached per owner within a single cycle.
+        """
+        cache: dict[str, bool] = {}
+        active: list[Raid] = []
+
+        for raid in raids:
+            saga = await self._raid_repo.get_saga_for_raid(raid.id)
+            if saga is None:
+                active.append(raid)
+                continue
+
+            owner_id = saga.owner_id
+            if owner_id not in cache:
+                state = await self._dispatcher_repo.get_or_create(owner_id)
+                cache[owner_id] = state.running
+
+            if cache[owner_id]:
+                active.append(raid)
+
+        return active
+
+    async def _check_raid(self, raid: Raid) -> bool:
         """Check a single raid's session and transition if complete.
 
         Returns True if a state transition occurred.
@@ -153,7 +182,7 @@ class RaidWatcher:
 
         return False
 
-    async def _handle_completion(self, raid, session) -> None:  # noqa: ANN001
+    async def _handle_completion(self, raid: Raid, session: VolundrSession) -> None:
         """Transition a raid to REVIEW on session completion."""
         chronicle_summary = None
         if self._config.chronicle_on_complete:
@@ -169,7 +198,7 @@ class RaidWatcher:
             pr_status = await self._volundr.get_pr_status(raid.session_id)
             if pr_status.pr_id:
                 pr_id = pr_status.pr_id
-                pr_url = pr_status.pr_id  # PR ID serves as URL reference
+                pr_url = pr_status.url
         except Exception:
             logger.debug("No PR found for session %s", raid.session_id)
 
@@ -190,7 +219,7 @@ class RaidWatcher:
                 pr_id or "none",
             )
 
-    async def _handle_failure(self, raid, session) -> None:  # noqa: ANN001
+    async def _handle_failure(self, raid: Raid, session: VolundrSession) -> None:
         """Transition a raid to FAILED on session failure."""
         chronicle_summary = None
         if self._config.chronicle_on_complete:
@@ -215,7 +244,7 @@ class RaidWatcher:
                 raid.session_id,
             )
 
-    async def _emit_state_changed(self, raid) -> None:  # noqa: ANN001
+    async def _emit_state_changed(self, raid: Raid) -> None:
         """Emit a raid.state_changed event via the event bus."""
         await self._event_bus.emit(
             TyrEvent(

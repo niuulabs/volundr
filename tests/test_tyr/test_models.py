@@ -262,7 +262,14 @@ class TestSessionInfo:
 
 class TestPRStatus:
     def test_create(self) -> None:
-        pr = PRStatus(pr_id="PR-1", state="open", mergeable=True, ci_passed=None)
+        pr = PRStatus(
+            pr_id="PR-1",
+            url="https://github.com/org/repo/pull/1",
+            state="open",
+            mergeable=True,
+            ci_passed=None,
+        )
+        assert pr.url == "https://github.com/org/repo/pull/1"
         assert pr.mergeable is True
         assert pr.ci_passed is None
 

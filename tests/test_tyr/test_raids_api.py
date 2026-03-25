@@ -161,7 +161,8 @@ class MockVolundr(VolundrPort):
 
     def __init__(self) -> None:
         self.pr_status = PRStatus(
-            pr_id="https://github.com/org/repo/pull/42",
+            pr_id="42",
+            url="https://github.com/org/repo/pull/42",
             state="open",
             mergeable=True,
             ci_passed=True,
@@ -229,7 +230,13 @@ class MockGit(GitPort):
         return "pr-1"
 
     async def get_pr_status(self, pr_id: str) -> PRStatus:
-        return PRStatus(pr_id=pr_id, state="open", mergeable=True, ci_passed=True)
+        return PRStatus(
+            pr_id=pr_id,
+            url=f"https://github.com/org/repo/pull/{pr_id}",
+            state="open",
+            mergeable=True,
+            ci_passed=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -516,6 +523,7 @@ class TestApproveRaid:
         raid_repo.raids[raid.id] = raid
         volundr.pr_status = PRStatus(
             pr_id="pr-1",
+            url="https://github.com/org/repo/pull/1",
             state="open",
             mergeable=True,
             ci_passed=False,

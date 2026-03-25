@@ -156,6 +156,7 @@ class SessionInfo:
 @dataclass(frozen=True)
 class PRStatus:
     pr_id: str
+    url: str
     state: str
     mergeable: bool
     ci_passed: bool | None

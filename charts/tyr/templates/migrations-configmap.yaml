@@ -255,4 +255,14 @@ data:
 
   000013_raids_status_index.down.sql: |
     DROP INDEX IF EXISTS idx_raids_status;
+
+  000014_raid_pr_columns.up.sql: |
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS pr_url TEXT;
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS pr_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_raids_session_id ON raids(session_id) WHERE session_id IS NOT NULL;
+
+  000014_raid_pr_columns.down.sql: |
+    DROP INDEX IF EXISTS idx_raids_session_id;
+    ALTER TABLE raids DROP COLUMN IF EXISTS pr_id;
+    ALTER TABLE raids DROP COLUMN IF EXISTS pr_url;
 {{- end }}

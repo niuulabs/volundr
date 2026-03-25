@@ -92,6 +92,7 @@ class GitHubGitAdapter(GitPort):
         data = resp.json()
         return PRStatus(
             pr_id=pr_id,
+            url=data.get("html_url", ""),
             state=data["state"],
             mergeable=data.get("mergeable", False),
             ci_passed=None,
