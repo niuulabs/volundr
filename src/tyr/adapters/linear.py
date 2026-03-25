@@ -729,6 +729,8 @@ class LinearTrackerAdapter(TrackerPort):
             session_id=None,
             branch=None,
             chronicle_summary=None,
+            pr_url=None,
+            pr_id=None,
             retry_count=0,
             created_at=now,
             updated_at=now,

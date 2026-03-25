@@ -86,6 +86,10 @@ class ReviewConfig(BaseModel):
     confidence_delta_approved: float = Field(default=0.15)
     confidence_delta_rejected: float = Field(default=-0.20)
     confidence_delta_retry: float = Field(default=-0.05)
+    initial_confidence: float = Field(
+        default=0.5,
+        description="Starting confidence score for newly committed sagas, phases, and raids.",
+    )
 
 
 class GitConfig(BaseModel):
@@ -176,6 +180,17 @@ class TrackerConfig(BaseModel):
     rate_limit_max_retries: int = Field(default=3)
 
 
+class WatcherConfig(BaseModel):
+    """Raid completion watcher configuration."""
+
+    enabled: bool = Field(default=True)
+    poll_interval: float = Field(default=30.0, description="Seconds between polls.")
+    batch_size: int = Field(default=10, description="Max concurrent session checks.")
+    chronicle_on_complete: bool = Field(
+        default=True, description="Fetch chronicle summary on completion."
+    )
+
+
 class EventsConfig(BaseModel):
     """SSE event stream configuration."""
 
@@ -221,6 +236,7 @@ class Settings(BaseSettings):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     cerbos: CerbosConfig = Field(default_factory=CerbosConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    watcher: WatcherConfig = Field(default_factory=WatcherConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 

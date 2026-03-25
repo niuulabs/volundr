@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import asyncpg
@@ -25,6 +26,52 @@ class PostgresRaidRepository(RaidRepository):
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
+
+    async def save_phase(self, phase: Phase, *, conn: Any | None = None) -> None:
+        executor = conn or self._pool
+        await executor.execute(
+            """
+            INSERT INTO phases (id, saga_id, tracker_id, number, name, status, confidence)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            phase.id,
+            phase.saga_id,
+            phase.tracker_id,
+            phase.number,
+            phase.name,
+            phase.status.value,
+            phase.confidence,
+        )
+
+    async def save_raid(self, raid: Raid, *, conn: Any | None = None) -> None:
+        executor = conn or self._pool
+        await executor.execute(
+            """
+            INSERT INTO raids
+                (id, phase_id, tracker_id, name, description, acceptance_criteria,
+                 declared_files, estimate_hours, status, confidence, session_id,
+                 branch, chronicle_summary, retry_count, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            raid.id,
+            raid.phase_id,
+            raid.tracker_id,
+            raid.name,
+            raid.description,
+            raid.acceptance_criteria,
+            raid.declared_files,
+            raid.estimate_hours,
+            raid.status.value,
+            raid.confidence,
+            raid.session_id,
+            raid.branch,
+            raid.chronicle_summary,
+            raid.retry_count,
+            raid.created_at,
+            raid.updated_at,
+        )
 
     async def get_raid(self, raid_id: UUID) -> Raid | None:
         row = await self._pool.fetchrow("SELECT * FROM raids WHERE id = $1", raid_id)
@@ -125,6 +172,51 @@ class PostgresRaidRepository(RaidRepository):
             return None
         return self._row_to_phase(row)
 
+    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM raids WHERE status = $1 ORDER BY updated_at",
+            status.value,
+        )
+        return [self._row_to_raid(r) for r in rows]
+
+    async def update_raid_completion(
+        self,
+        raid_id: UUID,
+        *,
+        status: RaidStatus,
+        chronicle_summary: str | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        reason: str | None = None,
+        increment_retry: bool = False,
+    ) -> Raid | None:
+        now = datetime.now(UTC)
+        retry_expr = "retry_count + 1" if increment_retry else "retry_count"
+        row = await self._pool.fetchrow(
+            f"""
+            UPDATE raids
+            SET status = $2,
+                chronicle_summary = COALESCE($3, chronicle_summary),
+                pr_url = COALESCE($4, pr_url),
+                pr_id = COALESCE($5, pr_id),
+                reason = COALESCE($6, reason),
+                retry_count = {retry_expr},
+                updated_at = $7
+            WHERE id = $1
+            RETURNING *
+            """,  # noqa: S608
+            raid_id,
+            status.value,
+            chronicle_summary,
+            pr_url,
+            pr_id,
+            reason,
+            now,
+        )
+        if row is None:
+            return None
+        return self._row_to_raid(row)
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         row = await self._pool.fetchrow(
             """
@@ -153,6 +245,8 @@ class PostgresRaidRepository(RaidRepository):
             session_id=row.get("session_id"),
             branch=row.get("branch"),
             chronicle_summary=row.get("chronicle_summary"),
+            pr_url=row.get("pr_url"),
+            pr_id=row.get("pr_id"),
             retry_count=row.get("retry_count", 0) or 0,
             created_at=row["created_at"] or datetime.now(UTC),
             updated_at=row["updated_at"] or datetime.now(UTC),

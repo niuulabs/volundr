@@ -204,7 +204,9 @@ class TestRevoke:
 class TestDefaultTtl:
     @pytest.mark.asyncio
     async def test_default_ttl_is_365_days(
-        self, fake_repo: FakePATRepository, issuer: MemoryTokenIssuer,
+        self,
+        fake_repo: FakePATRepository,
+        issuer: MemoryTokenIssuer,
     ):
         service = PATService(repo=fake_repo, token_issuer=issuer)
         _, raw_jwt_str = await service.create("user-1", "tok", subject_token="fake")
