@@ -5,6 +5,12 @@ import pytest
 from volundr.skuld.config import SkuldSessionConfig, SkuldSettings
 
 
+@pytest.fixture(autouse=True)
+def _no_yaml_config(monkeypatch):
+    """Disable YAML config file loading so real files on disk don't interfere."""
+    monkeypatch.setitem(SkuldSettings.model_config, "yaml_file", [])
+
+
 class TestSkuldSessionConfig:
     """Tests for SkuldSessionConfig defaults."""
 
@@ -152,8 +158,7 @@ class TestSkuldSettings:
         ]:
             monkeypatch.delenv(var, raising=False)
 
-        # Patch model_config directly — yaml_file is baked at class definition
-        # time, so monkeypatching CONFIG_PATHS has no effect.
+        # Point to the test YAML file (overrides the autouse fixture)
         monkeypatch.setitem(SkuldSettings.model_config, "yaml_file", [config_file])
 
         s = SkuldSettings()
