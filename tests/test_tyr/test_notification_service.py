@@ -850,7 +850,7 @@ class TestNotificationServiceEventMapping:
                 event="confidence.updated",
                 data={
                     "raid_id": str(raid.id),
-                    "confidence": 0.2,
+                    "score_after": 0.2,
                     "tracker_id": "NIU-600",
                 },
             )
@@ -877,7 +877,7 @@ class TestNotificationServiceEventMapping:
         await event_bus.emit(
             TyrEvent(
                 event="confidence.updated",
-                data={"raid_id": str(uuid4()), "confidence": 0.5},
+                data={"raid_id": str(uuid4()), "score_after": 0.5},
             )
         )
 

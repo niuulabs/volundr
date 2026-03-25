@@ -196,7 +196,7 @@ class NotificationService:
 
     async def _map_confidence_updated(self, data: dict[str, Any]) -> Notification | None:
         """Map a confidence.updated event when confidence drops below threshold."""
-        confidence = data.get("confidence", 1.0)
+        confidence = data.get("score_after", 1.0)
         if confidence >= self._confidence_threshold:
             return None
 
