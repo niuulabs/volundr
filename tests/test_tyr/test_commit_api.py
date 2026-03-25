@@ -74,6 +74,22 @@ class MockRaidRepo(RaidRepository):
     async def get_phase_for_raid(self, raid_id: UUID) -> Phase | None:
         return None
 
+    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
+        return []
+
+    async def update_raid_completion(
+        self,
+        raid_id: UUID,
+        *,
+        status: RaidStatus,
+        chronicle_summary: str | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        reason: str | None = None,
+        increment_retry: bool = False,
+    ) -> Raid | None:
+        return None
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return False
 

@@ -140,6 +140,12 @@ class StubRaidRepo(RaidRepository):
     async def get_phase_for_raid(self, raid_id: UUID) -> None:
         return None
 
+    async def save_phase(self, phase: object, *, conn: object = None) -> None:
+        pass
+
+    async def save_raid(self, raid: object, *, conn: object = None) -> None:
+        pass
+
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return False
 

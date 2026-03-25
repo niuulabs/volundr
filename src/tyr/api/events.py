@@ -45,9 +45,7 @@ async def _sse_generator(
 
         while True:
             try:
-                event: TyrEvent = await asyncio.wait_for(
-                    q.get(), timeout=keepalive_interval
-                )
+                event: TyrEvent = await asyncio.wait_for(q.get(), timeout=keepalive_interval)
                 yield event.to_sse()
             except TimeoutError:
                 yield ": keepalive\n\n"
