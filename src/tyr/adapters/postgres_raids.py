@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import asyncpg
@@ -26,8 +27,9 @@ class PostgresRaidRepository(RaidRepository):
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def save_phase(self, phase: Phase) -> None:
-        await self._pool.execute(
+    async def save_phase(self, phase: Phase, *, conn: Any | None = None) -> None:
+        executor = conn or self._pool
+        await executor.execute(
             """
             INSERT INTO phases (id, saga_id, tracker_id, number, name, status, confidence)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -42,8 +44,9 @@ class PostgresRaidRepository(RaidRepository):
             phase.confidence,
         )
 
-    async def save_raid(self, raid: Raid) -> None:
-        await self._pool.execute(
+    async def save_raid(self, raid: Raid, *, conn: Any | None = None) -> None:
+        executor = conn or self._pool
+        await executor.execute(
             """
             INSERT INTO raids
                 (id, phase_id, tracker_id, name, description, acceptance_criteria,

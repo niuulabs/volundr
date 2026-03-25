@@ -86,6 +86,10 @@ class ReviewConfig(BaseModel):
     confidence_delta_approved: float = Field(default=0.15)
     confidence_delta_rejected: float = Field(default=-0.20)
     confidence_delta_retry: float = Field(default=-0.05)
+    initial_confidence: float = Field(
+        default=0.5,
+        description="Starting confidence score for newly committed sagas, phases, and raids.",
+    )
 
 
 class GitConfig(BaseModel):

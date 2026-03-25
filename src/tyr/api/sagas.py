@@ -10,12 +10,13 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.api.tracker import resolve_trackers
+from tyr.config import ReviewConfig
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -368,6 +369,7 @@ def create_sagas_router() -> APIRouter:
     @router.post("/commit", response_model=CommittedSagaResponse, status_code=201)
     async def commit_saga(
         body: CommitRequest,
+        request: Request,
         principal: Principal = Depends(extract_principal),
         saga_repo: SagaRepository = Depends(resolve_saga_repo),
         raid_repo: RaidRepository = Depends(resolve_raid_repo),
@@ -376,9 +378,14 @@ def create_sagas_router() -> APIRouter:
     ) -> CommittedSagaResponse:
         """Commit a previewed saga structure.
 
-        Persists the saga, phases, and raids to PostgreSQL, creates tracker
-        entities, and creates the feature branch. Returns 409 if the slug
-        already exists.
+        Persists the saga, phases, and raids to PostgreSQL inside a single
+        transaction, then creates tracker entities and the feature branch.
+
+        Tracker and git calls are best-effort — if they fail after the DB
+        transaction commits, the operator must retry.  The DB writes are
+        atomic: a failure in any save rolls back the entire transaction.
+
+        Returns 409 if the slug already exists.
         """
         # Idempotency: reject duplicate slugs
         existing = await saga_repo.get_saga_by_slug(body.slug)
@@ -401,10 +408,16 @@ def create_sagas_router() -> APIRouter:
                 detail="No tracker configured",
             )
 
+        review_cfg: ReviewConfig = getattr(
+            getattr(request.app.state, "settings", None),
+            "review",
+            ReviewConfig(),
+        )
+        initial_confidence = review_cfg.initial_confidence
+
         now = datetime.now(UTC)
         saga_id = uuid4()
         feature_branch = f"feat/{body.slug}"
-        initial_confidence = 0.5
 
         # Build saga domain object (tracker_id filled after create)
         saga = Saga(
@@ -422,7 +435,7 @@ def create_sagas_router() -> APIRouter:
             owner_id=principal.user_id,
         )
 
-        # 1. Create saga in tracker
+        # 1. Create saga in tracker (best-effort — not transactional)
         tracker_saga_id = await tracker.create_saga(saga)
         saga = Saga(
             id=saga.id,
@@ -439,10 +452,9 @@ def create_sagas_router() -> APIRouter:
             owner_id=saga.owner_id,
         )
 
-        # Persist saga
-        await saga_repo.save_saga(saga)
-
-        # 2. Create phases and raids
+        # 2. Build all phases and raids, creating tracker entities along the way
+        phases: list[Phase] = []
+        raids: list[Raid] = []
         phase_responses: list[CommittedPhaseResponse] = []
 
         for phase_num, phase_spec in enumerate(body.phases, start=1):
@@ -460,7 +472,7 @@ def create_sagas_router() -> APIRouter:
                 confidence=initial_confidence,
             )
 
-            # Create in tracker
+            # Create in tracker (best-effort)
             tracker_phase_id = await tracker.create_phase(phase)
             phase = Phase(
                 id=phase.id,
@@ -471,17 +483,12 @@ def create_sagas_router() -> APIRouter:
                 status=phase.status,
                 confidence=phase.confidence,
             )
+            phases.append(phase)
 
-            # Persist phase
-            await raid_repo.save_phase(phase)
-
-            # 3. Create raids for this phase
             raid_responses: list[CommittedRaidResponse] = []
 
             for raid_spec in phase_spec.raids:
-                raid_status = RaidStatus.PENDING if is_first_phase else RaidStatus.PENDING
                 raid_id = uuid4()
-
                 raid = Raid(
                     id=raid_id,
                     phase_id=phase_id,
@@ -491,7 +498,7 @@ def create_sagas_router() -> APIRouter:
                     acceptance_criteria=raid_spec.acceptance_criteria,
                     declared_files=raid_spec.declared_files,
                     estimate_hours=raid_spec.estimate_hours,
-                    status=raid_status,
+                    status=RaidStatus.PENDING,
                     confidence=initial_confidence,
                     session_id=None,
                     branch=None,
@@ -501,7 +508,7 @@ def create_sagas_router() -> APIRouter:
                     updated_at=now,
                 )
 
-                # Create in tracker
+                # Create in tracker (best-effort)
                 tracker_raid_id = await tracker.create_raid(raid)
                 raid = Raid(
                     id=raid.id,
@@ -521,9 +528,7 @@ def create_sagas_router() -> APIRouter:
                     created_at=raid.created_at,
                     updated_at=raid.updated_at,
                 )
-
-                # Persist raid
-                await raid_repo.save_raid(raid)
+                raids.append(raid)
 
                 raid_responses.append(
                     CommittedRaidResponse(
@@ -545,7 +550,15 @@ def create_sagas_router() -> APIRouter:
                 )
             )
 
-        # 4. Create feature branch for each repo
+        # 3. Persist all DB rows in a single transaction
+        async with saga_repo.begin() as conn:
+            await saga_repo.save_saga(saga, conn=conn)
+            for phase in phases:
+                await raid_repo.save_phase(phase, conn=conn)
+            for raid in raids:
+                await raid_repo.save_raid(raid, conn=conn)
+
+        # 4. Create feature branch for each repo (best-effort — not transactional)
         for repo in body.repos:
             await git.create_branch(repo, feature_branch, base=body.base_branch)
 

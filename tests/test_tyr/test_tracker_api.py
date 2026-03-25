@@ -227,7 +227,7 @@ class MockSagaRepo(SagaRepository):
     def __init__(self) -> None:
         self.sagas: list[Saga] = []
 
-    async def save_saga(self, saga: Saga) -> None:
+    async def save_saga(self, saga: Saga, *, conn=None) -> None:  # noqa: ANN001
         self.sagas.append(saga)
 
     async def get_saga_by_slug(self, slug: str) -> Saga | None:

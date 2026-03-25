@@ -17,7 +17,7 @@ from tyr.api.sagas import (
     resolve_saga_repo,
 )
 from tyr.api.tracker import resolve_trackers
-from tyr.config import AuthConfig
+from tyr.config import AuthConfig, ReviewConfig
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -43,10 +43,10 @@ class MockRaidRepo(RaidRepository):
         self.phases: list[Phase] = []
         self.raids: list[Raid] = []
 
-    async def save_phase(self, phase: Phase) -> None:
+    async def save_phase(self, phase: Phase, *, conn=None) -> None:  # noqa: ANN001
         self.phases.append(phase)
 
-    async def save_raid(self, raid: Raid) -> None:
+    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
         self.raids.append(raid)
 
     async def get_raid(self, raid_id: UUID) -> Raid | None:
@@ -103,6 +103,7 @@ class MockGit(GitPort):
 def _dev_settings() -> MagicMock:
     s = MagicMock()
     s.auth = AuthConfig(allow_anonymous_dev=True)
+    s.review = ReviewConfig()
     return s
 
 
@@ -340,10 +341,30 @@ class TestCommitSagaValidation:
 
 
 class TestCommitSagaConfidence:
-    def test_saga_has_initial_confidence(self, client: TestClient) -> None:
+    def test_saga_has_initial_confidence_from_config(self, client: TestClient) -> None:
         resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
         data = resp.json()
-        assert data["confidence"] == 0.5
+        assert data["confidence"] == ReviewConfig().initial_confidence
+
+    def test_custom_initial_confidence(
+        self,
+        mock_tracker: MockTracker,
+        saga_repo: MockSagaRepo,
+        raid_repo: MockRaidRepo,
+        mock_git: MockGit,
+    ) -> None:
+        app = FastAPI()
+        app.include_router(create_sagas_router())
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+        app.dependency_overrides[resolve_git] = lambda: mock_git
+        settings = _dev_settings()
+        settings.review = ReviewConfig(initial_confidence=0.8)
+        app.state.settings = settings
+        client = TestClient(app)
+        resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
+        assert resp.json()["confidence"] == 0.8
 
 
 class TestCommitSagaCustomBaseBranch:

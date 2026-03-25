@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import asyncpg
@@ -17,8 +20,16 @@ class PostgresSagaRepository(SagaRepository):
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def save_saga(self, saga: Saga) -> None:
-        await self._pool.execute(
+    @asynccontextmanager
+    async def begin(self) -> AsyncIterator[asyncpg.Connection]:
+        """Acquire a connection and start a transaction."""
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                yield conn
+
+    async def save_saga(self, saga: Saga, *, conn: Any | None = None) -> None:
+        executor = conn or self._pool
+        await executor.execute(
             """
             INSERT INTO sagas
                 (id, tracker_id, tracker_type, slug, name,

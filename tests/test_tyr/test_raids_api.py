@@ -58,10 +58,10 @@ class MockRaidRepository(RaidRepository):
         self.phase: Phase | None = None
         self._all_merged: bool = False
 
-    async def save_phase(self, phase: Phase) -> None:
+    async def save_phase(self, phase: Phase, *, conn=None) -> None:  # noqa: ANN001
         pass
 
-    async def save_raid(self, raid: Raid) -> None:
+    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
         self.raids[raid.id] = raid
 
     async def get_raid(self, raid_id: UUID) -> Raid | None:
@@ -151,9 +151,7 @@ class MockVolundr(VolundrPort):
         *,
         auth_token: str | None = None,
     ) -> VolundrSession | None:
-        return VolundrSession(
-            id=session_id, name="test", status="completed", tracker_issue_id=None
-        )
+        return VolundrSession(id=session_id, name="test", status="completed", tracker_issue_id=None)
 
     async def list_sessions(
         self,
@@ -190,9 +188,7 @@ class MockGit(GitPort):
     async def delete_branch(self, repo: str, branch: str) -> None:
         self.deleted.append((repo, branch))
 
-    async def create_pr(
-        self, repo: str, source: str, target: str, title: str
-    ) -> str:
+    async def create_pr(self, repo: str, source: str, target: str, title: str) -> str:
         return "pr-1"
 
     async def get_pr_status(self, pr_id: str) -> PRStatus:
@@ -333,9 +329,7 @@ class TestGetReview:
         assert data["confidence"] == 0.5
         assert data["confidence_events"] == []
 
-    def test_includes_confidence_events(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_includes_confidence_events(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
         event = ConfidenceEvent(
@@ -422,18 +416,14 @@ class TestApproveRaid:
         resp = client.post(f"/api/v1/tyr/raids/{uuid4()}/approve")
         assert resp.status_code == 404
 
-    def test_approve_wrong_state(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_approve_wrong_state(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid(status=RaidStatus.PENDING)
         raid_repo.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/approve")
         assert resp.status_code == 409
 
-    def test_approve_no_saga(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_approve_no_saga(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
         raid_repo.saga = None
@@ -503,9 +493,7 @@ class TestApproveRaid:
 
 
 class TestRejectRaid:
-    def test_reject_success(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_reject_success(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
 
@@ -520,9 +508,7 @@ class TestRejectRaid:
         assert events[0].event_type == ConfidenceEventType.HUMAN_REJECT
         assert events[0].delta == REVIEW_CFG.confidence_delta_rejected
 
-    def test_reject_with_reason(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_reject_with_reason(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
 
@@ -539,9 +525,7 @@ class TestRejectRaid:
         resp = client.post(f"/api/v1/tyr/raids/{uuid4()}/reject")
         assert resp.status_code == 404
 
-    def test_reject_wrong_state(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_reject_wrong_state(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid(status=RaidStatus.MERGED)
         raid_repo.raids[raid.id] = raid
 
@@ -566,9 +550,7 @@ class TestRejectRaid:
 
 
 class TestRetryRaid:
-    def test_retry_success(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_retry_success(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
 
@@ -587,18 +569,14 @@ class TestRetryRaid:
         resp = client.post(f"/api/v1/tyr/raids/{uuid4()}/retry")
         assert resp.status_code == 404
 
-    def test_retry_wrong_state(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_retry_wrong_state(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid(status=RaidStatus.MERGED)
         raid_repo.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/retry")
         assert resp.status_code == 409
 
-    def test_retry_from_review_state(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_retry_from_review_state(self, client: TestClient, raid_repo: MockRaidRepository):
         """Retry from REVIEW state resets to PENDING."""
         raid = _make_raid(status=RaidStatus.REVIEW)
         raid_repo.raids[raid.id] = raid
@@ -607,9 +585,7 @@ class TestRetryRaid:
         assert resp.status_code == 200
         assert resp.json()["status"] == "PENDING"
 
-    def test_retry_increments_count(
-        self, client: TestClient, raid_repo: MockRaidRepository
-    ):
+    def test_retry_increments_count(self, client: TestClient, raid_repo: MockRaidRepository):
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
 
