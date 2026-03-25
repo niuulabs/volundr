@@ -27,6 +27,7 @@ from tyr.domain.models import (
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
 )
 from tyr.ports.git import GitPort
 from tyr.ports.raid_repository import RaidRepository
@@ -166,6 +167,12 @@ class MockRaidRepository(RaidRepository):
 
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return self._all_merged
+
+    async def save_session_message(self, message: SessionMessage) -> None:
+        pass
+
+    async def get_session_messages(self, raid_id: UUID) -> list[SessionMessage]:
+        return []
 
 
 class MockVolundr(VolundrPort):
