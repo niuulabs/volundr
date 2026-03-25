@@ -21,6 +21,7 @@ from tyr.adapters.inbound.rest_integrations import (
 )
 from tyr.adapters.inbound.rest_pats import create_pats_router
 from tyr.adapters.inbound.rest_telegram_webhook import create_telegram_webhook_router
+from tyr.adapters.notification_channel_factory import NotificationChannelFactory
 from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_notification_subscriptions import (
     PostgresNotificationSubscriptionRepository,
@@ -42,6 +43,7 @@ from tyr.api.sagas import resolve_git as sagas_resolve_git
 from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
+from tyr.domain.services.notification import NotificationService
 from tyr.domain.services.watcher import RaidWatcher
 from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
@@ -264,6 +266,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_llm] = _resolve_llm
 
+            # Wire notification service
+            channel_factory = NotificationChannelFactory(integration_repo, credential_store)
+            app.state.channel_factory = channel_factory
+
+            notification_service = NotificationService(
+                event_bus=event_bus,
+                channel_factory=channel_factory,
+                raid_repo=raid_repo,
+                confidence_threshold=settings.notification.confidence_threshold,
+            )
+            app.state.notification_service = notification_service
+            if settings.notification.enabled:
+                await notification_service.start()
+
             # Wire raid completion watcher
             watcher = RaidWatcher(
                 volundr=volundr_adapter,
@@ -279,6 +295,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
 
             # Lifecycle cleanup
+            await notification_service.stop()
             await telegram_reply_client.close()
             if hasattr(llm_adapter, "close"):
                 await llm_adapter.close()

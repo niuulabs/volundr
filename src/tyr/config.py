@@ -207,6 +207,16 @@ class WatcherConfig(BaseModel):
     )
 
 
+class NotificationConfig(BaseModel):
+    """Notification service configuration."""
+
+    enabled: bool = Field(default=True)
+    confidence_threshold: float = Field(
+        default=0.3,
+        description="Notify when raid confidence drops below this value.",
+    )
+
+
 class EventsConfig(BaseModel):
     """SSE event stream configuration."""
 
@@ -255,6 +265,7 @@ class Settings(BaseSettings):
     watcher: WatcherConfig = Field(default_factory=WatcherConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    notification: NotificationConfig = Field(default_factory=NotificationConfig)
 
     @classmethod
     def settings_customise_sources(
