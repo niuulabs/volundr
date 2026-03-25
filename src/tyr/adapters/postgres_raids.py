@@ -248,6 +248,26 @@ class PostgresRaidRepository(RaidRepository):
         )
         return row is not None and row["remaining"] == 0
 
+    async def list_phases_for_saga(self, saga_id: UUID) -> list[Phase]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM phases WHERE saga_id = $1 ORDER BY number",
+            saga_id,
+        )
+        return [self._row_to_phase(r) for r in rows]
+
+    async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
+        row = await self._pool.fetchrow(
+            """
+            UPDATE phases SET status = $2 WHERE id = $1
+            RETURNING *
+            """,
+            phase_id,
+            status.value,
+        )
+        if row is None:
+            return None
+        return self._row_to_phase(row)
+
     async def save_session_message(self, message: SessionMessage) -> None:
         await self._pool.execute(
             """

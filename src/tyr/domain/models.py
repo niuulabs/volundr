@@ -43,6 +43,9 @@ class ConfidenceEventType(StrEnum):
     RETRY = "retry"
     HUMAN_REJECT = "human_reject"
     HUMAN_APPROVED = "human_approved"
+    AUTO_APPROVED = "auto_approved"
+    PR_CONFLICT = "pr_conflict"
+    PR_MERGEABLE = "pr_mergeable"
     MESSAGE_SENT = "message_sent"
 
 

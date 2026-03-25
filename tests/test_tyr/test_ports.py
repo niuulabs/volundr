@@ -84,7 +84,14 @@ class TestGitPort:
             GitPort()  # type: ignore[abstract]
 
     def test_methods_exist(self) -> None:
-        methods = {"create_branch", "merge_branch", "delete_branch", "create_pr", "get_pr_status"}
+        methods = {
+            "create_branch",
+            "merge_branch",
+            "delete_branch",
+            "create_pr",
+            "get_pr_status",
+            "get_pr_changed_files",
+        }
         abstract_methods = {
             name
             for name, _ in inspect.getmembers(GitPort, predicate=inspect.isfunction)

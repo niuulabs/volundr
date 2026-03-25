@@ -6,7 +6,15 @@ from abc import ABC, abstractmethod
 from typing import Any
 from uuid import UUID
 
-from tyr.domain.models import ConfidenceEvent, Phase, Raid, RaidStatus, Saga, SessionMessage
+from tyr.domain.models import (
+    ConfidenceEvent,
+    Phase,
+    PhaseStatus,
+    Raid,
+    RaidStatus,
+    Saga,
+    SessionMessage,
+)
 
 
 class RaidRepository(ABC):
@@ -92,6 +100,16 @@ class RaidRepository(ABC):
     @abstractmethod
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         """Check whether every raid in the phase has status MERGED."""
+        ...
+
+    @abstractmethod
+    async def list_phases_for_saga(self, saga_id: UUID) -> list[Phase]:
+        """Return all phases for a saga, ordered by phase number."""
+        ...
+
+    @abstractmethod
+    async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
+        """Update the status of a phase. Returns updated phase or None."""
         ...
 
     @abstractmethod

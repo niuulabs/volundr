@@ -99,6 +99,12 @@ class MockRaidRepo(RaidRepository):
     async def all_raids_merged(self, phase_id: UUID) -> bool:
         return False
 
+    async def list_phases_for_saga(self, saga_id: UUID) -> list[Phase]:
+        return []
+
+    async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
+        return None
+
     async def save_session_message(self, message: object) -> None:
         pass
 
@@ -126,6 +132,9 @@ class MockGit(GitPort):
 
     async def get_pr_status(self, pr_id: str):  # noqa: ANN201
         return None
+
+    async def get_pr_changed_files(self, pr_id: str) -> list[str]:
+        return []
 
 
 def _dev_settings() -> MagicMock:

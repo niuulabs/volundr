@@ -122,6 +122,12 @@ class StubRaidRepo(RaidRepository):
     async def get_session_messages(self, raid_id: UUID) -> list:
         return []
 
+    async def list_phases_for_saga(self, saga_id: UUID) -> list:
+        return []
+
+    async def update_phase_status(self, phase_id: UUID, status) -> None:  # noqa: ANN001
+        return None
+
 
 class StubChannelFactory(ChannelResolverPort):
     """Factory that returns pre-configured channels."""

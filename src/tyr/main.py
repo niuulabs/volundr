@@ -45,6 +45,7 @@ from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
 from tyr.domain.services.notification import NotificationService
+from tyr.domain.services.review_engine import ReviewEngine
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort
@@ -284,6 +285,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if settings.notification.enabled:
                 await notification_service.start()
 
+            # Wire automated review engine (subscribes to raid.state_changed events)
+            review_engine = ReviewEngine(
+                raid_repo=raid_repo,
+                git=git_adapter,
+                review_config=settings.review,
+                event_bus=event_bus,
+                volundr=volundr_adapter,
+            )
+            app.state.review_engine = review_engine
+            await review_engine.start()
+
             # Wire event-driven raid completion subscriber
             subscriber = SessionActivitySubscriber(
                 volundr=volundr_adapter,
@@ -299,6 +311,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
 
             # Lifecycle cleanup
+            await review_engine.stop()
             await notification_service.stop()
             await telegram_reply_client.close()
             if hasattr(llm_adapter, "close"):
