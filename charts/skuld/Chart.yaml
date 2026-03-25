@@ -2,7 +2,7 @@ apiVersion: v2
 name: skuld
 description: "Skuld — remote AI coding session broker with WebSocket transport and embedded VS Code editor"
 type: application
-version: 0.1.0-dev45
+version: 0.0.0-tyr.150
 appVersion: "0.1.0"
 keywords:
   - claude

@@ -21,12 +21,12 @@ class PostgresIntegrationRepository(IntegrationRepository):
 
     async def list_connections(
         self,
-        user_id: str,
+        owner_id: str,
         integration_type: IntegrationType | None = None,
     ) -> list[IntegrationConnection]:
         """List connections for a user, optionally filtered by type."""
-        conditions = ["user_id = $1"]
-        params: list = [user_id]
+        conditions = ["owner_id = $1"]
+        params: list = [owner_id]
         idx = 2
 
         if integration_type is not None:
@@ -57,7 +57,7 @@ class PostgresIntegrationRepository(IntegrationRepository):
         await self._pool.execute(
             """
             INSERT INTO integration_connections
-                (id, user_id, integration_type, adapter, credential_name,
+                (id, owner_id, integration_type, adapter, credential_name,
                  config, enabled, slug, created_at, updated_at)
             VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
             ON CONFLICT (id) DO UPDATE SET
@@ -68,7 +68,7 @@ class PostgresIntegrationRepository(IntegrationRepository):
                 updated_at = EXCLUDED.updated_at
             """,
             connection.id,
-            connection.user_id,
+            connection.owner_id,
             str(connection.integration_type),
             connection.adapter,
             connection.credential_name,
@@ -98,7 +98,7 @@ class PostgresIntegrationRepository(IntegrationRepository):
 
         return IntegrationConnection(
             id=str(row["id"]),
-            user_id=row["user_id"],
+            owner_id=row["owner_id"],
             integration_type=IntegrationType(row["integration_type"]),
             adapter=row["adapter"],
             credential_name=row["credential_name"],

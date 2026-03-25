@@ -7,6 +7,7 @@ _resolve_tracker_adapters FastAPI dependency with a mock TrackerPort.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -14,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tyr.api.tracker import create_tracker_router, resolve_trackers
+from tyr.config import AuthConfig
 from tyr.domain.models import (
     Phase,
     PhaseStatus,
@@ -228,15 +230,19 @@ class MockSagaRepo(SagaRepository):
     async def save_saga(self, saga: Saga) -> None:
         self.sagas.append(saga)
 
-    async def list_sagas(self) -> list[Saga]:
+    async def list_sagas(self, *, owner_id: str | None = None) -> list[Saga]:
         return list(self.sagas)
 
-    async def get_saga(self, saga_id) -> Saga | None:
+    async def get_saga(self, saga_id, *, owner_id: str | None = None) -> Saga | None:
         return next((s for s in self.sagas if s.id == saga_id), None)
 
-    async def delete_saga(self, saga_id) -> bool:
+    async def delete_saga(self, saga_id, *, owner_id=None) -> bool:
         before = len(self.sagas)
-        self.sagas = [s for s in self.sagas if s.id != saga_id]
+        self.sagas = [
+            s
+            for s in self.sagas
+            if not (s.id == saga_id and (owner_id is None or s.owner_id == owner_id))
+        ]
         return len(self.sagas) < before
 
 
@@ -246,6 +252,9 @@ def client(mock_tracker: MockTracker) -> TestClient:
     app.include_router(create_tracker_router())
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.state.saga_repo = MockSagaRepo()
+    mock_settings = MagicMock()
+    mock_settings.auth = AuthConfig(allow_anonymous_dev=True)
+    app.state.settings = mock_settings
     return TestClient(app)
 
 

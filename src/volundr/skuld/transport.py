@@ -107,8 +107,13 @@ def _filter_event(data: dict) -> dict | None:
         return None
 
     if msg_type == "content_block_delta":
-        text = data.get("delta", {}).get("text", "")
-        if not text:
+        delta = data.get("delta", {})
+        has_content = (
+            delta.get("text")
+            or delta.get("thinking")
+            or delta.get("partial_json")
+        )
+        if not has_content:
             logger.debug("Filtering out empty content_block_delta event")
             return None
 
@@ -343,12 +348,14 @@ class SdkWebSocketTransport(CLITransport):
         if self._system_prompt:
             cmd.extend(["--append-system-prompt", self._system_prompt])
         if self._initial_prompt and not resume_id:
-            self._pending_messages.append({
-                "type": "user",
-                "message": {"role": "user", "content": self._initial_prompt},
-                "parent_tool_use_id": None,
-                "session_id": "",
-            })
+            self._pending_messages.append(
+                {
+                    "type": "user",
+                    "message": {"role": "user", "content": self._initial_prompt},
+                    "parent_tool_use_id": None,
+                    "session_id": "",
+                }
+            )
         if resume_id:
             cmd.extend(["--resume", resume_id])
 

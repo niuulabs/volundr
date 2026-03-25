@@ -15,7 +15,7 @@ from volundr.domain.models import IntegrationConnection, IntegrationType
 def _mock_row(**overrides):
     defaults = {
         "id": "conn-001",
-        "user_id": "user-1",
+        "owner_id": "user-1",
         "integration_type": "issue_tracker",
         "adapter": "volundr.adapters.linear.LinearProvider",
         "credential_name": "linear-token",
@@ -48,7 +48,7 @@ class TestListConnections:
         assert len(result) == 2
         pool.fetch.assert_called_once()
         call_sql = pool.fetch.call_args[0][0]
-        assert "user_id = $1" in call_sql
+        assert "owner_id = $1" in call_sql
         assert pool.fetch.call_args[0][1] == "user-1"
 
     async def test_list_with_type_filter(self):
@@ -101,7 +101,7 @@ class TestSaveConnection:
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id="conn-new",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type=IntegrationType.SOURCE_CONTROL,
             adapter="volundr.adapters.github.GitHubProvider",
             credential_name="gh-token",
@@ -125,7 +125,7 @@ class TestSaveConnection:
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id="conn-upsert",
-            user_id="user-2",
+            owner_id="user-2",
             integration_type=IntegrationType.MESSAGING,
             adapter="volundr.adapters.slack.SlackProvider",
             credential_name="slack-token",
@@ -190,7 +190,7 @@ class TestRowToConnection:
     def test_slug_defaults_to_empty(self):
         defaults = {
             "id": "conn-001",
-            "user_id": "user-1",
+            "owner_id": "user-1",
             "integration_type": "issue_tracker",
             "adapter": "some.Adapter",
             "credential_name": "cred",

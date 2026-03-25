@@ -142,6 +142,10 @@ ingress:
       paths:
         - path: /api/v1/volundr
           pathType: Prefix
+        - path: /api/v1/users
+          pathType: Prefix
+        - path: /api/v1/niuu
+          pathType: Prefix
   # -- Ingress TLS configuration
   tls: []
   #   - secretName: volundr-tls
@@ -727,6 +731,13 @@ authDiscovery:
   cliClientId: "volundr-cli"
   # -- OIDC scopes
   scopes: "openid profile email"
+
+# Auth secrets (PAT signing key, etc.)
+auth:
+  # -- Create a K8s Secret for auth-related keys (disable if using an existing secret)
+  createSecret: true
+  # -- Symmetric signing key for PAT JWTs (overridden in production via values/sealed-secrets)
+  patSigningKey: ""
 
 # OAuth integration configuration
 oauth:

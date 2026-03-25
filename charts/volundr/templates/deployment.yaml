@@ -75,6 +75,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "volundr.databaseSecretName" . }}
                   key: {{ .Values.database.passwordKey | default "password" }}
+            # PAT token issuer secret (client_secret for IDP token exchange)
+            {{- if and .Values.pat .Values.pat.issuerSecretName }}
+            - name: PAT__TOKEN_ISSUER_KWARGS__CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pat.issuerSecretName }}
+                  key: {{ .Values.pat.issuerSecretKey | default "client-secret" }}
+            {{- end }}
             # Pod manager token (if configured)
             {{- if .Values.podManager.existingSecret }}
             - name: POD_MANAGER_TOKEN

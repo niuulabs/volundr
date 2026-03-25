@@ -130,7 +130,14 @@ export function SessionChat({
 
   // Filter system messages to render inline, separate from main flow
   const visibleMessages = useMemo(
-    () => messages.filter(m => m.role === 'user' || m.role === 'assistant'),
+    () =>
+      messages.filter(m => {
+        if (m.role === 'system') return false;
+        // Hide completed assistant messages with no text content
+        // (intermediate tool-use turns that only had thinking/tool calls)
+        if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
+        return true;
+      }),
     [messages]
   );
 

@@ -58,6 +58,13 @@ spec:
                   key: {{ .Values.database.passwordKey | default "password" }}
             - name: VOLUNDR_URL
               value: {{ .Values.volundr.url | quote }}
+            {{- if and .Values.pat .Values.pat.issuerSecretName }}
+            - name: PAT__TOKEN_ISSUER_KWARGS__CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pat.issuerSecretName }}
+                  key: {{ .Values.pat.issuerSecretKey | default "client-secret" }}
+            {{- end }}
             {{- range .Values.credentialStore.secretKwargs }}
             - name: CREDENTIAL_STORE_SK_{{ .kwarg | upper }}
               valueFrom:

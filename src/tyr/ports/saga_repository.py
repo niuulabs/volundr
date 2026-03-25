@@ -22,16 +22,16 @@ class SagaRepository(ABC):
         ...
 
     @abstractmethod
-    async def list_sagas(self) -> list[Saga]:
-        """List all saga references."""
+    async def list_sagas(self, *, owner_id: str | None = None) -> list[Saga]:
+        """List all saga references, optionally filtered by owner."""
         ...
 
     @abstractmethod
-    async def get_saga(self, saga_id: UUID) -> Saga | None:
-        """Get a saga by ID."""
+    async def get_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> Saga | None:
+        """Get a saga by ID, optionally scoped to an owner."""
         ...
 
     @abstractmethod
-    async def delete_saga(self, saga_id: UUID) -> bool:
-        """Delete a saga. Returns True if deleted."""
+    async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
+        """Delete a saga, optionally scoped to an owner. Returns True if deleted."""
         ...

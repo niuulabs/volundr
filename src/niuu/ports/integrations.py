@@ -13,7 +13,7 @@ class IntegrationRepository(ABC):
     @abstractmethod
     async def list_connections(
         self,
-        user_id: str,
+        owner_id: str,
         integration_type: IntegrationType | None = None,
     ) -> list[IntegrationConnection]:
         """List connections for a user, optionally filtered by type."""

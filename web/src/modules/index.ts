@@ -15,6 +15,8 @@ import {
   Palette,
   ToggleLeft,
   LayoutDashboard,
+  ShieldCheck,
+  Compass,
 } from 'lucide-react';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import { registerModule } from './shared/registry';
@@ -75,6 +77,15 @@ registerModule({
 // ── User modules ───────────────────────────────────────────────────
 
 registerModule({
+  key: 'tokens',
+  load: () =>
+    import('@/modules/volundr/pages/Settings/sections/AccessTokensSection').then(m => ({
+      default: m.AccessTokensSection,
+    })),
+  icon: ShieldCheck,
+});
+
+registerModule({
   key: 'credentials',
   load: () =>
     import('@/modules/volundr/pages/Settings/sections/CredentialsSection').then(m => ({
@@ -118,6 +129,15 @@ registerModule({
       default: m.LayoutSection,
     })),
   icon: LayoutDashboard,
+});
+
+registerModule({
+  key: 'tyr-connections',
+  load: () =>
+    import('@/modules/tyr/pages/Settings/TyrConnectionsWrapper').then(m => ({
+      default: m.TyrConnectionsWrapper,
+    })),
+  icon: Compass,
 });
 
 // Re-export registry utilities

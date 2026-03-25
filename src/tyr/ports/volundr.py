@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from tyr.domain.models import PRStatus
+
 
 @dataclass(frozen=True)
 class SpawnRequest:
@@ -18,6 +20,7 @@ class SpawnRequest:
     tracker_issue_url: str
     system_prompt: str
     initial_prompt: str
+    base_branch: str = "main"
 
 
 @dataclass(frozen=True)
@@ -34,10 +37,30 @@ class VolundrPort(ABC):
     """Abstract interface for Volundr session management."""
 
     @abstractmethod
-    async def spawn_session(self, request: SpawnRequest) -> VolundrSession: ...
+    async def spawn_session(
+        self,
+        request: SpawnRequest,
+        *,
+        auth_token: str | None = None,
+    ) -> VolundrSession: ...
 
     @abstractmethod
-    async def get_session(self, session_id: str) -> VolundrSession | None: ...
+    async def get_session(
+        self,
+        session_id: str,
+        *,
+        auth_token: str | None = None,
+    ) -> VolundrSession | None: ...
 
     @abstractmethod
-    async def list_sessions(self) -> list[VolundrSession]: ...
+    async def list_sessions(
+        self,
+        *,
+        auth_token: str | None = None,
+    ) -> list[VolundrSession]: ...
+
+    @abstractmethod
+    async def get_pr_status(self, session_id: str) -> PRStatus: ...
+
+    @abstractmethod
+    async def get_chronicle_summary(self, session_id: str) -> str: ...

@@ -712,6 +712,29 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
             },
             env_from_credentials={"OPENAI_API_KEY": "api_key"},
         ),
+        IntegrationDefinitionConfig(
+            slug="telegram",
+            name="Telegram",
+            description="Telegram bot — notifications, session alerts, and dispatch commands",
+            integration_type="messaging",
+            icon="telegram",
+            credential_schema={
+                "required": ["bot_token", "chat_id"],
+                "properties": {
+                    "bot_token": {
+                        "label": "Bot Token",
+                        "type": "password",
+                        "description": "Telegram bot API token (from @BotFather)",
+                    },
+                    "chat_id": {
+                        "label": "Chat ID",
+                        "type": "string",
+                        "description": "Chat or channel ID to send notifications to",
+                    },
+                },
+            },
+            auth_type="api_key",
+        ),
     ]
 
 
@@ -867,6 +890,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
         ),
         # User-scoped modules
         FeatureModuleConfig(
+            key="tokens",
+            label="Access Tokens",
+            icon="ShieldCheck",
+            scope="user",
+            default_enabled=True,
+            order=5,
+        ),
+        FeatureModuleConfig(
             key="credentials",
             label="Credentials",
             icon="KeyRound",
@@ -891,6 +922,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             order=30,
         ),
         FeatureModuleConfig(
+            key="tyr-connections",
+            label="Tyr Connections",
+            icon="Compass",
+            scope="user",
+            default_enabled=True,
+            order=35,
+        ),
+        FeatureModuleConfig(
             key="appearance",
             label="Appearance",
             icon="Palette",
@@ -907,6 +946,31 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             order=50,
         ),
     ]
+
+
+class PATConfig(BaseModel):
+    """Personal access token configuration."""
+
+    token_issuer_adapter: str = Field(
+        default="niuu.adapters.memory_token_issuer.MemoryTokenIssuer",
+        description="Fully-qualified class path for the token issuer adapter.",
+    )
+    token_issuer_kwargs: dict = Field(
+        default_factory=dict,
+        description="Kwargs passed to the token issuer adapter constructor.",
+    )
+    ttl_days: int = Field(
+        default=365,
+        description="Default PAT lifetime in days.",
+    )
+    revocation_cache_ttl: float = Field(
+        default=300.0,
+        description="Seconds to cache valid-token lookups before re-checking the DB.",
+    )
+    revoked_cache_ttl: float = Field(
+        default=60.0,
+        description="Seconds to cache revoked-token lookups (shorter for faster propagation).",
+    )
 
 
 class AuthDiscoveryConfig(BaseModel):
@@ -990,6 +1054,7 @@ class Settings(BaseSettings):
     resource_provider: ResourceProviderConfig = Field(default_factory=ResourceProviderConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
+    pat: PATConfig = Field(default_factory=PATConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)

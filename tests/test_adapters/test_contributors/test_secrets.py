@@ -37,7 +37,7 @@ def session():
 def _connection(credential_name="my-cred", slug="test"):
     return IntegrationConnection(
         id="conn-1",
-        user_id="user-1",
+        owner_id="user-1",
         integration_type="ai_provider",
         adapter="some.adapter",
         credential_name=credential_name,

@@ -42,6 +42,7 @@ class ConfidenceEventType(StrEnum):
     SCOPE_BREACH = "scope_breach"
     RETRY = "retry"
     HUMAN_REJECT = "human_reject"
+    HUMAN_APPROVED = "human_approved"
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +53,14 @@ RAID_TRANSITIONS: dict[RaidStatus, frozenset[RaidStatus]] = {
     RaidStatus.PENDING: frozenset({RaidStatus.QUEUED}),
     RaidStatus.QUEUED: frozenset({RaidStatus.RUNNING, RaidStatus.FAILED}),
     RaidStatus.RUNNING: frozenset({RaidStatus.REVIEW, RaidStatus.MERGED, RaidStatus.FAILED}),
-    RaidStatus.REVIEW: frozenset({RaidStatus.QUEUED, RaidStatus.MERGED, RaidStatus.FAILED}),
+    RaidStatus.REVIEW: frozenset(
+        {
+            RaidStatus.PENDING,
+            RaidStatus.QUEUED,
+            RaidStatus.MERGED,
+            RaidStatus.FAILED,
+        }
+    ),
     RaidStatus.MERGED: frozenset(),
     RaidStatus.FAILED: frozenset({RaidStatus.QUEUED}),
 }
@@ -82,6 +90,8 @@ class Saga:
     status: SagaStatus
     confidence: float
     created_at: datetime
+    base_branch: str = "main"
+    owner_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -128,8 +138,10 @@ class ConfidenceEvent:
 @dataclass(frozen=True)
 class DispatcherState:
     id: UUID
+    owner_id: str
     running: bool
     threshold: float
+    max_concurrent_raids: int
     updated_at: datetime
 
 
@@ -193,7 +205,7 @@ class TrackerIssue:
     status: str
     status_type: str = ""
     assignee: str | None = None
-    labels: list[str] = None  # type: ignore[assignment]
+    labels: list[str] | None = None
     priority: int = 0
     priority_label: str = ""
     estimate: float | None = None
@@ -224,3 +236,10 @@ class PhaseSpec:
 @dataclass(frozen=True)
 class SagaStructure:
     phases: list[PhaseSpec]
+
+
+# ---------------------------------------------------------------------------
+# Personal access tokens — re-exported from shared niuu module
+# ---------------------------------------------------------------------------
+
+from niuu.domain.models import PersonalAccessToken  # noqa: F401, E402

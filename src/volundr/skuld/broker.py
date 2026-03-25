@@ -401,6 +401,8 @@ class Broker:
         self._conversation_turns: list[ConversationTurn] = []
         self._pending_assistant_content: str = ""
         self._pending_assistant_parts: list[dict] = []
+        self._pending_block_type: str = ""
+        self._pending_reasoning_text: str = ""
         self._chronicle_watcher: ChronicleWatcher | None = None
 
         # JWT identity state — populated on first browser WebSocket connection
@@ -408,8 +410,9 @@ class Broker:
         self._user_claims: dict = {}
 
     def _conversation_history_path(self) -> Path:
-        """Return the path to the conversation history file."""
-        return Path(self.workspace_dir) / CONVERSATION_HISTORY_DIR / CONVERSATION_HISTORY_FILE
+        """Return the path to the conversation history file, scoped to session ID."""
+        filename = f"conversation_{self.session_id}.json"
+        return Path(self.workspace_dir) / CONVERSATION_HISTORY_DIR / filename
 
     def _load_conversation_history(self) -> None:
         """Load conversation history from disk if it exists."""
@@ -453,6 +456,33 @@ class Broker:
         """Append a turn and persist to disk."""
         self._conversation_turns.append(turn)
         self._save_conversation_history()
+
+    def _flush_pending_assistant_turn(self, metadata: dict | None = None) -> None:
+        """Save any accumulated assistant content as a conversation turn."""
+        content = self._pending_assistant_content
+        if not content:
+            return
+
+        # Flush remaining reasoning
+        if self._pending_reasoning_text:
+            summary = self._pending_reasoning_text[-500:]
+            self._pending_assistant_parts.append(
+                {"type": "reasoning", "text": summary}
+            )
+
+        parts = self._pending_assistant_parts if self._pending_assistant_parts else []
+        self._append_turn(
+            ConversationTurn(
+                id=str(uuid.uuid4()),
+                role="assistant",
+                content=content,
+                parts=parts,
+                metadata=metadata or {},
+            )
+        )
+        self._pending_assistant_content = ""
+        self._pending_assistant_parts = []
+        self._pending_reasoning_text = ""
 
     def _create_transport(self) -> CLITransport:
         """Create the configured CLI transport.
@@ -529,6 +559,17 @@ class Broker:
             asyncio.create_task(self._chronicle_watcher.start())
             logger.info("Chronicle watcher started for %s", watch_dir)
 
+        # Auto-start transport when an initial prompt is configured
+        # (dispatched sessions should begin work immediately, not wait
+        # for a browser to connect).
+        if self._settings.session.initial_prompt:
+            logger.info("Initial prompt configured — auto-starting transport")
+            try:
+                await self._transport.start()
+                logger.info("Transport auto-started successfully")
+            except Exception as e:
+                logger.error("Transport auto-start failed: %r", e, exc_info=True)
+
     async def shutdown(self) -> None:
         """Clean up on shutdown.
 
@@ -578,6 +619,10 @@ class Broker:
         # initial prompt flushed as a pending message) into conversation
         # history so late-joining browsers see them.
         if event_type == "user":
+            # A user event means the previous assistant turn is complete.
+            # Flush any pending assistant content as a saved turn.
+            self._flush_pending_assistant_turn()
+
             user_content = ""
             msg = data.get("message", {})
             if isinstance(msg, dict):
@@ -604,17 +649,51 @@ class Broker:
                     }
                 )
 
-        # Track conversation: start of a new assistant turn
+        # Track conversation from assistant messages.
+        # The SDK WebSocket protocol sends complete messages as type=assistant
+        # with content blocks already resolved (not as streaming deltas).
+        # We also handle the HTTP streaming format (content_block_delta, result)
+        # for backward compatibility.
         if event_type == "assistant":
-            self._pending_assistant_content = ""
-            self._pending_assistant_parts = []
+            # Extract content from the assistant message
+            message = data.get("message", {})
+            content_blocks = message.get("content", [])
+            if isinstance(content_blocks, list) and content_blocks:
+                text_parts = []
+                reasoning_parts = []
+                for block in content_blocks:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") == "text" and block.get("text"):
+                        text_parts.append(block["text"])
+                    elif block.get("type") == "thinking" and block.get("thinking"):
+                        reasoning_parts.append(block["thinking"])
+                text_content = "\n".join(text_parts)
+                if text_content:
+                    self._pending_assistant_content = text_content
+                    self._pending_assistant_parts = []
+                    if reasoning_parts:
+                        # Keep last 500 chars of reasoning as summary
+                        combined = "\n".join(reasoning_parts)
+                        self._pending_assistant_parts.append(
+                            {"type": "reasoning", "text": combined[-500:]}
+                        )
+                    self._pending_assistant_parts.append(
+                        {"type": "text", "text": text_content}
+                    )
 
-        # Track conversation: accumulate text deltas
+        # HTTP streaming format: accumulate deltas
         if event_type == "content_block_delta":
             delta = data.get("delta", {})
-            text = delta.get("text", "")
-            if text:
-                self._pending_assistant_content += text
+            delta_type = delta.get("type", "")
+            if delta_type == "thinking_delta":
+                thinking = delta.get("thinking", "")
+                if thinking:
+                    self._pending_reasoning_text += thinking
+            else:
+                text = delta.get("text", "")
+                if text:
+                    self._pending_assistant_content += text
 
         # Accumulate artifacts from assistant tool_use events
         if event_type == "assistant":
@@ -658,43 +737,31 @@ class Broker:
             self._artifacts.record_result()
             asyncio.create_task(self._report_usage(data))
 
-            # Finalize assistant conversation turn
-            content = self._pending_assistant_content
-            if not content:
-                content = data.get("result", "")
-            if not content:
-                for block in data.get("content", []):
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        content = block.get("text", "")
-                        break
-
-            # Record conversation turn for chat history
+            # Flush pending assistant turn (HTTP streaming format sends result)
+            if not self._pending_assistant_content:
+                # Try to extract from result event itself
+                self._pending_assistant_content = data.get("result", "")
+                if not self._pending_assistant_content:
+                    for block in data.get("content", []):
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            self._pending_assistant_content = block.get("text", "")
+                            break
+            # Build metadata from result event
             model_usage_for_turn = data.get("modelUsage", {})
-            result_cost_for_turn = None
-            result_model_for_turn = None
+            result_cost = None
+            result_model = None
             for model_id, usage in model_usage_for_turn.items():
-                result_model_for_turn = model_id
+                result_model = model_id
                 if usage.get("costUSD") is not None:
-                    result_cost_for_turn = (result_cost_for_turn or 0) + usage["costUSD"]
+                    result_cost = (result_cost or 0) + usage["costUSD"]
 
-            if content:
-                self._append_turn(
-                    ConversationTurn(
-                        id=str(uuid.uuid4()),
-                        role="assistant",
-                        content=content,
-                        parts=self._pending_assistant_parts,
-                        metadata={
-                            "usage": model_usage_for_turn,
-                            "cost": result_cost_for_turn,
-                            "model": result_model_for_turn,
-                        },
-                    )
-                )
-            self._pending_assistant_content = ""
-            self._pending_assistant_parts = []
-
-            # Use first non-empty line as label, falling back to turn number
+            # Capture content before flush clears it
+            content = self._pending_assistant_content or data.get("result", "")
+            self._flush_pending_assistant_turn(metadata={
+                "usage": model_usage_for_turn,
+                "cost": result_cost,
+                "model": result_model,
+            })
             first_line = ""
             if content:
                 for line in content.strip().splitlines():
@@ -844,13 +911,21 @@ class Broker:
 
                 # Record user turn in conversation history
                 content_str = message if isinstance(message, str) else json.dumps(message)
+                msg_id = str(uuid.uuid4())
                 self._append_turn(
                     ConversationTurn(
-                        id=str(uuid.uuid4()),
+                        id=msg_id,
                         role="user",
                         content=content_str,
                     )
                 )
+
+                # Echo back to all browsers so the message is confirmed
+                await self._channels.broadcast({
+                    "type": "user_confirmed",
+                    "id": msg_id,
+                    "content": content_str,
+                })
 
                 await self._transport.send_message(message)
 
@@ -1472,8 +1547,25 @@ async def get_broker_logs(
 
 @app.get("/api/conversation/history")
 async def get_conversation_history() -> dict:
-    """Return the full conversation history."""
-    return {"turns": [asdict(t) for t in broker._conversation_turns]}
+    """Return the full conversation history with activity state."""
+    is_active = (
+        broker._transport is not None
+        and broker._transport.is_alive
+        and bool(broker._pending_assistant_content or broker._pending_reasoning_text)
+    )
+    # Build a short activity description for the UI
+    last_activity = ""
+    if is_active:
+        if broker._pending_assistant_content:
+            # Last ~100 chars of what the assistant is writing
+            last_activity = broker._pending_assistant_content[-100:]
+        elif broker._pending_reasoning_text:
+            last_activity = "Thinking..."
+    return {
+        "turns": [asdict(t) for t in broker._conversation_turns],
+        "is_active": is_active,
+        "last_activity": last_activity,
+    }
 
 
 # --- Service Management API ---

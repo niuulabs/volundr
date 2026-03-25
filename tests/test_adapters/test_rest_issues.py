@@ -37,7 +37,7 @@ def _make_connection(
     now = datetime.now(UTC)
     return IntegrationConnection(
         id=conn_id,
-        user_id="u1",
+        owner_id="u1",
         integration_type=IntegrationType.ISSUE_TRACKER,
         adapter="volundr.adapters.linear.LinearProvider",
         credential_name="linear-token",

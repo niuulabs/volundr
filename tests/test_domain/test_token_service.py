@@ -30,10 +30,14 @@ def token_tracker() -> InMemoryTokenTracker:
 @pytest.fixture
 def pricing_provider() -> HardcodedPricingProvider:
     """Create a pricing provider with test models."""
-    return HardcodedPricingProvider([
-        AIModelConfig(id="claude-sonnet-4-20250514", name="Sonnet", cost_per_million_tokens=3.0),
-        AIModelConfig(id="claude-opus-4-20250514", name="Opus", cost_per_million_tokens=15.0),
-    ])
+    return HardcodedPricingProvider(
+        [
+            AIModelConfig(
+                id="claude-sonnet-4-20250514", name="Sonnet", cost_per_million_tokens=3.0
+            ),
+            AIModelConfig(id="claude-opus-4-20250514", name="Opus", cost_per_million_tokens=15.0),
+        ]
+    )
 
 
 @pytest.fixture

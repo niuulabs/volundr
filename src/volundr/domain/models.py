@@ -209,6 +209,11 @@ class GitSource(BaseModel):
         max_length=255,
         description="Git branch to checkout",
     )
+    base_branch: str = Field(
+        default="",
+        max_length=255,
+        description="Branch to create feature branch from if it doesn't exist",
+    )
 
     model_config = {"frozen": False}
 
@@ -1390,6 +1395,10 @@ class SessionSpec:
                 merged_pod_spec = _merge_pod_specs(merged_pod_spec, c.pod_spec)
 
         return SessionSpec(values=merged_values, pod_spec=merged_pod_spec)
+
+
+# PersonalAccessToken — re-exported from shared niuu module
+from niuu.domain.models import PersonalAccessToken  # noqa: F401, E402
 
 
 def _deep_merge(base: dict, override: dict) -> None:

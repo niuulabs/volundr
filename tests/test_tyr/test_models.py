@@ -71,9 +71,10 @@ class TestConfidenceEventType:
         assert ConfidenceEventType.SCOPE_BREACH == "scope_breach"
         assert ConfidenceEventType.RETRY == "retry"
         assert ConfidenceEventType.HUMAN_REJECT == "human_reject"
+        assert ConfidenceEventType.HUMAN_APPROVED == "human_approved"
 
     def test_member_count(self) -> None:
-        assert len(ConfidenceEventType) == 5
+        assert len(ConfidenceEventType) == 6
 
 
 # ---------------------------------------------------------------------------
@@ -239,12 +240,16 @@ class TestDispatcherState:
     def test_create(self) -> None:
         state = DispatcherState(
             id=uuid4(),
+            owner_id="user-1",
             running=True,
             threshold=0.7,
+            max_concurrent_raids=3,
             updated_at=NOW,
         )
         assert state.running is True
         assert state.threshold == 0.7
+        assert state.owner_id == "user-1"
+        assert state.max_concurrent_raids == 3
 
 
 class TestSessionInfo:

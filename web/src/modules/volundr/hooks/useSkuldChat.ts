@@ -289,9 +289,32 @@ export function useSkuldChat(
       .then(res => res.json())
       .then(data => {
         if (cancelled) return;
-        if (data.turns?.length) {
-          setMessages(transformTurns(data.turns));
-        }
+        const serverMsgs = data.turns?.length ? transformTurns(data.turns) : [];
+        const isActive = data.is_active === true;
+        const lastActivity = data.last_activity ?? '';
+        setMessages(prev => {
+          // Server history is authoritative. Only keep local messages
+          // that were added AFTER the last server message (i.e. messages
+          // the user typed that haven't been recorded server-side yet).
+          const lastServerTime =
+            serverMsgs.length > 0 ? serverMsgs[serverMsgs.length - 1].createdAt.getTime() : 0;
+          const localOnly = prev.filter(
+            m => m.role === 'user' && m.createdAt.getTime() > lastServerTime
+          );
+          const merged = [...serverMsgs, ...localOnly];
+          // If session is actively working, add a placeholder running message
+          if (isActive && lastActivity) {
+            merged.push({
+              id: 'activity-indicator',
+              role: 'assistant',
+              content: lastActivity,
+              createdAt: new Date(),
+              status: 'running',
+            });
+          }
+          return merged;
+        });
+        if (isActive) setIsRunning(true);
         setHistoryLoadedForUrl(url);
       })
       .catch(() => {
@@ -394,19 +417,25 @@ export function useSkuldChat(
                   }
                 : undefined,
             };
-            setMessages(prev =>
-              prev.map(m =>
-                m.id === prevId
-                  ? {
-                      ...m,
-                      content: prevText,
-                      parts: prevParts,
-                      status: 'complete' as const,
-                      metadata: prevMeta,
-                    }
-                  : m
-              )
-            );
+            if (prevText.trim()) {
+              // Has content — finalize as complete message
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === prevId
+                    ? {
+                        ...m,
+                        content: prevText,
+                        parts: prevParts,
+                        status: 'complete' as const,
+                        metadata: prevMeta,
+                      }
+                    : m
+                )
+              );
+            } else {
+              // Empty content (only thinking/tool calls) — remove to avoid clutter
+              setMessages(prev => prev.filter(m => m.id !== prevId));
+            }
             resetStreamingRefs();
           }
 
@@ -426,7 +455,8 @@ export function useSkuldChat(
           streamingIdRef.current = id;
           setIsRunning(true);
           setMessages(prev => [
-            ...prev,
+            // Remove any activity indicator placeholder
+            ...prev.filter(m => m.id !== 'activity-indicator'),
             {
               id,
               role: 'assistant',
@@ -442,10 +472,13 @@ export function useSkuldChat(
         if (eventType === 'content_block_start') {
           const blockType = event.content_block?.type;
           if (blockType === 'thinking') {
-            streamingPartsRef.current = [
-              ...streamingPartsRef.current,
-              { type: 'reasoning', text: '' },
-            ];
+            // Always ensure there's a reasoning part at the end for deltas to append to.
+            // If the last part is already reasoning, reuse it (groups consecutive thinking).
+            const parts = streamingPartsRef.current;
+            const last = parts[parts.length - 1];
+            if (!last || last.type !== 'reasoning') {
+              streamingPartsRef.current = [...parts, { type: 'reasoning', text: '' }];
+            }
           } else if (blockType === 'text') {
             streamingPartsRef.current = [...streamingPartsRef.current, { type: 'text', text: '' }];
           } else if (blockType === 'tool_use') {
@@ -685,6 +718,15 @@ export function useSkuldChat(
           continue;
         }
 
+        // ── user_confirmed: broker echo confirming message reached session ──
+        if (eventType === 'user_confirmed') {
+          // The broker confirmed the message was sent to the CLI.
+          // No UI update needed here — the user message was already added
+          // optimistically by sendMessage(). This event serves as
+          // confirmation for debugging and future delivery status.
+          continue;
+        }
+
         // ── control_request: queue permission request for the UI ──
         if (eventType === 'control_request') {
           const requestId = event.request_id;
@@ -834,7 +876,7 @@ export function useSkuldChat(
     (text: string, attachments?: ContentBlock[], attachmentMeta?: AttachmentMeta[]) => {
       const trimmed = text.trim();
       const hasAttachments = attachments && attachments.length > 0;
-      if ((!trimmed && !hasAttachments) || !connected || isRunning) {
+      if ((!trimmed && !hasAttachments) || !connected) {
         return;
       }
 
@@ -862,7 +904,7 @@ export function useSkuldChat(
       }
       setIsRunning(true);
     },
-    [connected, isRunning, sendJson]
+    [connected, sendJson]
   );
 
   const respondToPermission = useCallback(

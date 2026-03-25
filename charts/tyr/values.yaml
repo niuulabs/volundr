@@ -195,6 +195,16 @@ credentialStore:
   #     secretKey: client-id
   secretKwargs: []
 
+cerbos:
+  # -- Cerbos authorization service URL
+  url: "http://localhost:3592"
+
+auth:
+  # -- Symmetric signing key for PAT JWTs (same key Envoy uses for validation)
+  patSigningKey: ""
+  # -- Default PAT lifetime in days
+  patTtlDays: 365
+
 volundr:
   url: "http://volundr:8000"
 

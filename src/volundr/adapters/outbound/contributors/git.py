@@ -69,11 +69,13 @@ class GitContributor(SessionContributor):
         if not clone_url:
             return SessionContribution()
 
+        base_branch = getattr(session.source, "base_branch", "") if session.source else ""
         values: dict[str, Any] = {
             "git": {
                 "repoUrl": session.repo,
                 "cloneUrl": clone_url,
                 "branch": session.branch,
+                "baseBranch": base_branch,
             },
         }
         return SessionContribution(values=values)

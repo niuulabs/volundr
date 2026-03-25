@@ -216,7 +216,7 @@ class TestDisconnect:
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id="conn-1",
-            user_id="u1",
+            owner_id="u1",
             integration_type=IntegrationType.ISSUE_TRACKER,
             adapter="volundr.adapters.linear.LinearProvider",
             credential_name="linear-oauth-token",
@@ -247,7 +247,7 @@ class TestDisconnect:
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id="conn-2",
-            user_id="u1",
+            owner_id="u1",
             integration_type=IntegrationType.ISSUE_TRACKER,
             adapter="some.Adapter",
             credential_name="my-cred",

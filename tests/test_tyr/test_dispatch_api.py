@@ -22,7 +22,7 @@ from tyr.api.dispatch import (
     resolve_volundr,
 )
 from tyr.api.tracker import resolve_trackers
-from tyr.config import AIModelConfig, Settings
+from tyr.config import AIModelConfig, AuthConfig, Settings
 from tyr.config import DispatchConfig as DispatchCfg
 from tyr.domain.models import (
     Saga,
@@ -46,13 +46,16 @@ class MockVolundr(VolundrPort):
     def __init__(self) -> None:
         self.sessions: list[VolundrSession] = []
         self.spawned: list[SpawnRequest] = []
-        self.auth_token: str | None = None
+        self.last_auth_token: str | None = None
         self.fail_spawn: bool = False
 
-    def set_auth_token(self, token: str) -> None:
-        self.auth_token = token
-
-    async def spawn_session(self, request: SpawnRequest) -> VolundrSession:
+    async def spawn_session(
+        self,
+        request: SpawnRequest,
+        *,
+        auth_token: str | None = None,
+    ) -> VolundrSession:
+        self.last_auth_token = auth_token
         if self.fail_spawn:
             raise RuntimeError("spawn failed")
         self.spawned.append(request)
@@ -65,14 +68,32 @@ class MockVolundr(VolundrPort):
         self.sessions.append(session)
         return session
 
-    async def get_session(self, session_id: str) -> VolundrSession | None:
+    async def get_session(
+        self,
+        session_id: str,
+        *,
+        auth_token: str | None = None,
+    ) -> VolundrSession | None:
         return next(
             (s for s in self.sessions if s.id == session_id),
             None,
         )
 
-    async def list_sessions(self) -> list[VolundrSession]:
+    async def list_sessions(
+        self,
+        *,
+        auth_token: str | None = None,
+    ) -> list[VolundrSession]:
+        self.last_auth_token = auth_token
         return list(self.sessions)
+
+    async def get_pr_status(self, session_id: str):  # noqa: ANN201
+        from tyr.domain.models import PRStatus
+
+        return PRStatus(pr_id="pr-1", state="open", mergeable=True, ci_passed=True)
+
+    async def get_chronicle_summary(self, session_id: str) -> str:
+        return "summary"
 
 
 # -------------------------------------------------------------------
@@ -81,7 +102,8 @@ class MockVolundr(VolundrPort):
 
 
 def _make_settings(**overrides) -> Settings:
-    """Build a Settings with dispatch defaults."""
+    """Build a Settings with dispatch defaults and anonymous dev enabled."""
+    overrides.setdefault("auth", AuthConfig(allow_anonymous_dev=True))
     return Settings(
         dispatch=DispatchCfg(
             default_system_prompt="Be helpful.",
@@ -446,7 +468,7 @@ class TestGetQueue:
             headers={"Authorization": "Bearer test-tok"},
         )
         assert resp.status_code == 200
-        assert volundr.auth_token == "test-tok"
+        assert volundr.last_auth_token == "test-tok"
 
     def test_queue_item_has_saga_fields(self, client: TestClient, saga_repo: MockSagaRepo):
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -650,7 +672,7 @@ class TestApproveDispatch:
             },
             headers={"Authorization": "Bearer my-token"},
         )
-        assert volundr.auth_token == "my-token"
+        assert volundr.last_auth_token == "my-token"
 
     def test_multiple_items(
         self,

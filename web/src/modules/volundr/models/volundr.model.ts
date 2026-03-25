@@ -515,3 +515,19 @@ export interface VolundrTemplate {
   skills: SkillConfig[];
   rules: RuleConfig[];
 }
+
+/* ── Personal Access Tokens ─────────────────────────────────────── */
+
+export interface PersonalAccessToken {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface CreatePATResult {
+  id: string;
+  name: string;
+  token: string;
+  createdAt: string;
+}
