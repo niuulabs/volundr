@@ -42,7 +42,7 @@ from tyr.api.sagas import resolve_git as sagas_resolve_git
 from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
-from tyr.domain.services.watcher import RaidWatcher
+from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
 from tyr.events import EventBus
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
@@ -264,16 +264,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_llm] = _resolve_llm
 
-            # Wire raid completion watcher
-            watcher = RaidWatcher(
+            # Wire event-driven raid completion subscriber
+            subscriber = SessionActivitySubscriber(
                 volundr=volundr_adapter,
                 raid_repo=raid_repo,
                 dispatcher_repo=dispatcher_repo,
                 event_bus=event_bus,
                 config=settings.watcher,
             )
-            app.state.watcher = watcher
-            await watcher.start()
+            app.state.subscriber = subscriber
+            await subscriber.start()
 
             logger.info("Tyr started — database pool ready")
             yield
@@ -282,7 +282,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await telegram_reply_client.close()
             if hasattr(llm_adapter, "close"):
                 await llm_adapter.close()
-            await watcher.stop()
+            await subscriber.stop()
             logger.info("Tyr shutting down")
 
     app.router.lifespan_context = lifespan

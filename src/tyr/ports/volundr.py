@@ -87,11 +87,8 @@ class VolundrPort(ABC):
         """Send a human message to a running Volundr session."""
         ...
 
+    @abstractmethod
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
-        """Subscribe to the Volundr SSE stream for session_activity events.
-
-        Default implementation yields nothing — adapters that support SSE
-        override this to stream real events.
-        """
-        return  # pragma: no cover
+        """Subscribe to the Volundr SSE stream for session_activity events."""
+        ...
         yield  # type: ignore[misc]  # pragma: no cover

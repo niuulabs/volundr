@@ -27,6 +27,8 @@ class CompletionEvaluation:
     is_complete: bool
     signals: dict[str, bool]
     confidence: float
+    pr_id: str | None = None
+    pr_url: str | None = None
 
 
 class SessionActivitySubscriber:
@@ -137,7 +139,7 @@ class SessionActivitySubscriber:
         if not completion.is_complete:
             return
 
-        await self._handle_completion(raid)
+        await self._handle_completion(raid, completion)
 
     async def _find_raid_by_session(self, session_id: str) -> Raid | None:
         """Find a RUNNING raid by its session ID."""
@@ -167,11 +169,16 @@ class SessionActivitySubscriber:
         # Signal 2: PR exists (optional — not all raids produce PRs)
         signals["pr_exists"] = False
         signals["ci_passed"] = False
+        pr_id: str | None = None
+        pr_url: str | None = None
         if raid.branch:
             try:
                 pr = await self._volundr.get_pr_status(raid.session_id or "")
                 signals["pr_exists"] = bool(pr.pr_id)
                 signals["ci_passed"] = bool(pr.ci_passed)
+                if pr.pr_id:
+                    pr_id = pr.pr_id
+                    pr_url = pr.url
             except Exception:
                 pass
 
@@ -188,22 +195,27 @@ class SessionActivitySubscriber:
         if self._config.require_ci and not signals["ci_passed"]:
             is_complete = False
 
-        # Calculate confidence based on signal strength
-        confidence = 0.5 if is_complete else 0.0
+        # Calculate confidence based on configurable signal strength
+        cfg = self._config
+        confidence = cfg.confidence_base if is_complete else 0.0
         if signals["pr_exists"]:
-            confidence += 0.2
+            confidence += cfg.confidence_pr_bonus
         if signals["ci_passed"]:
-            confidence += 0.2
+            confidence += cfg.confidence_ci_bonus
         if signals["extended_idle"]:
-            confidence += 0.1
+            confidence += cfg.confidence_idle_bonus
 
         return CompletionEvaluation(
             is_complete=is_complete,
             signals=signals,
             confidence=min(confidence, 1.0),
+            pr_id=pr_id,
+            pr_url=pr_url,
         )
 
-    async def _handle_completion(self, raid: Raid) -> None:
+    async def _handle_completion(
+        self, raid: Raid, evaluation: CompletionEvaluation | None = None
+    ) -> None:
         """Transition a raid to REVIEW on session completion."""
         chronicle_summary = None
         if self._config.chronicle_on_complete and raid.session_id:
@@ -212,16 +224,9 @@ class SessionActivitySubscriber:
             except Exception:
                 logger.warning("Failed to fetch chronicle for session %s", raid.session_id)
 
-        pr_url: str | None = None
-        pr_id: str | None = None
-        if raid.session_id:
-            try:
-                pr_status = await self._volundr.get_pr_status(raid.session_id)
-                if pr_status.pr_id:
-                    pr_id = pr_status.pr_id
-                    pr_url = pr_status.url
-            except Exception:
-                logger.debug("No PR found for session %s", raid.session_id)
+        # Reuse PR info from evaluation to avoid a redundant HTTP call
+        pr_id = evaluation.pr_id if evaluation else None
+        pr_url = evaluation.pr_url if evaluation else None
 
         updated = await self._raid_repo.update_raid_completion(
             raid.id,

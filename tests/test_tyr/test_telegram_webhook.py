@@ -210,6 +210,10 @@ class StubVolundr(VolundrPort):
     async def send_message(self, session_id, message, *, auth_token=None):
         self.sent_messages.append((session_id, message))
 
+    async def subscribe_activity(self):
+        return
+        yield  # type: ignore[misc]  # pragma: no cover
+
 
 class StubReplyClient(TelegramReplyClient):
     """Captures replies instead of making HTTP calls."""

@@ -249,6 +249,10 @@ def _default_config(**overrides: object) -> WatcherConfig:
         "completion_check_delay": 0.0,  # No delay for tests
         "require_pr": False,
         "require_ci": False,
+        "confidence_base": 0.5,
+        "confidence_pr_bonus": 0.2,
+        "confidence_ci_bonus": 0.2,
+        "confidence_idle_bonus": 0.1,
     }
     defaults.update(overrides)
     return WatcherConfig(**defaults)
@@ -548,15 +552,16 @@ class TestCompletionHandling:
         sub, volundr, raid_repo, _ = _make_subscriber()
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
-        volundr.pr_statuses[raid.session_id or ""] = PRStatus(
+
+        evaluation = CompletionEvaluation(
+            is_complete=True,
+            signals={"session_idle": True, "has_turns": True, "pr_exists": True},
+            confidence=0.9,
             pr_id="PR-42",
-            url="https://github.com/org/repo/pull/42",
-            state="open",
-            mergeable=True,
-            ci_passed=True,
+            pr_url="https://github.com/org/repo/pull/42",
         )
 
-        await sub._handle_completion(raid)
+        await sub._handle_completion(raid, evaluation)
 
         updated = raid_repo.raids[raid.id]
         assert updated.status == RaidStatus.REVIEW
@@ -569,9 +574,14 @@ class TestCompletionHandling:
         sub, volundr, raid_repo, _ = _make_subscriber()
         raid = _make_raid()
         raid_repo.raids[raid.id] = raid
-        volundr.pr_error_sessions.add(raid.session_id or "")
 
-        await sub._handle_completion(raid)
+        evaluation = CompletionEvaluation(
+            is_complete=True,
+            signals={"session_idle": True, "has_turns": True},
+            confidence=0.5,
+        )
+
+        await sub._handle_completion(raid, evaluation)
 
         updated = raid_repo.raids[raid.id]
         assert updated.status == RaidStatus.REVIEW
@@ -718,6 +728,10 @@ class TestWatcherConfigNewFields:
         assert cfg.completion_check_delay == 5.0
         assert cfg.require_pr is False
         assert cfg.require_ci is False
+        assert cfg.confidence_base == 0.5
+        assert cfg.confidence_pr_bonus == 0.2
+        assert cfg.confidence_ci_bonus == 0.2
+        assert cfg.confidence_idle_bonus == 0.1
 
     def test_custom(self) -> None:
         cfg = WatcherConfig(
@@ -725,8 +739,16 @@ class TestWatcherConfigNewFields:
             completion_check_delay=10.0,
             require_pr=True,
             require_ci=True,
+            confidence_base=0.6,
+            confidence_pr_bonus=0.15,
+            confidence_ci_bonus=0.15,
+            confidence_idle_bonus=0.05,
         )
         assert cfg.idle_threshold == 60.0
         assert cfg.completion_check_delay == 10.0
         assert cfg.require_pr is True
         assert cfg.require_ci is True
+        assert cfg.confidence_base == 0.6
+        assert cfg.confidence_pr_bonus == 0.15
+        assert cfg.confidence_ci_bonus == 0.15
+        assert cfg.confidence_idle_bonus == 0.05

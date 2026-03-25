@@ -1260,6 +1260,18 @@ def create_router(
         Updates the session's activity_state and broadcasts a
         session_activity SSE event for downstream consumers (e.g. Tyr).
         """
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_activity")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report activity for session {session_id}",
+                )
+
         body = await request.json()
         raw_state = body.get("state", "")
         metadata = body.get("metadata", {})
