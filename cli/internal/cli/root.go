@@ -76,6 +76,9 @@ func init() {
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(whoamiCmd)
 	rootCmd.AddCommand(contextCmd)
+
+	// Forge (macOS session runner).
+	rootCmd.AddCommand(serveCmd)
 }
 
 // Execute runs the root command.
