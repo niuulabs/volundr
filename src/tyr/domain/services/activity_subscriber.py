@@ -13,22 +13,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Protocol
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-exported for consumers
-from tyr.ports.volundr import ActivityEvent, VolundrPort
+from tyr.ports.volundr import ActivityEvent, VolundrFactory, VolundrPort
 
 logger = logging.getLogger(__name__)
-
-
-class VolundrFactory(Protocol):
-    """Protocol for resolving per-owner Volundr adapters."""
-
-    async def for_owner(self, owner_id: str) -> VolundrPort | None: ...
 
 
 @dataclass(frozen=True)

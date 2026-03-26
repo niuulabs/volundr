@@ -280,10 +280,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Wire automated review engine (subscribes to raid.state_changed events)
             review_engine = ReviewEngine(
                 tracker_factory=app.state.tracker_factory,
+                volundr_factory=app.state.volundr_factory,
                 git=git_adapter,
                 review_config=settings.review,
                 event_bus=event_bus,
-                volundr=volundr_adapter,
             )
             app.state.review_engine = review_engine
             await review_engine.start()

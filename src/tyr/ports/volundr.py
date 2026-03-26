@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+from typing import Protocol
 
 from tyr.domain.models import PRStatus
 
@@ -109,3 +110,9 @@ class VolundrPort(ABC):
         """Subscribe to the Volundr SSE stream for session_activity events."""
         ...
         yield  # type: ignore[misc]  # pragma: no cover
+
+
+class VolundrFactory(Protocol):
+    """Protocol for resolving per-owner Volundr adapters."""
+
+    async def for_owner(self, owner_id: str) -> VolundrPort | None: ...

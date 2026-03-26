@@ -410,12 +410,18 @@ def _make_engine(
     g = git or StubGit()
     e = event_bus or InMemoryEventBus()
     c = config or _default_config()
+    v = volundr or StubVolundr()
+
+    class _StubVolundrFactory:
+        async def for_owner(self, owner_id: str) -> StubVolundr:
+            return v
+
     engine = ReviewEngine(
         tracker_factory=StubTrackerFactory(r),
+        volundr_factory=_StubVolundrFactory(),
         git=g,
         review_config=c,
         event_bus=e,
-        volundr=volundr,
     )
     return engine, r, g, e
 

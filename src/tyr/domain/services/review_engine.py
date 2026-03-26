@@ -29,8 +29,8 @@ from tyr.domain.models import (
 )
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
-from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-exported for consumers
-from tyr.ports.volundr import VolundrPort
+from tyr.ports.tracker import TrackerFactory, TrackerPort
+from tyr.ports.volundr import VolundrFactory
 
 logger = logging.getLogger(__name__)
 
@@ -103,16 +103,16 @@ class ReviewEngine:
     def __init__(
         self,
         tracker_factory: TrackerFactory,
+        volundr_factory: VolundrFactory,
         git: GitPort,
         review_config: ReviewConfig,
         event_bus: EventBusPort | None = None,
-        volundr: VolundrPort | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
+        self._volundr_factory = volundr_factory
         self._git = git
         self._cfg = review_config
         self._event_bus = event_bus
-        self._volundr = volundr
         self._task: asyncio.Task[None] | None = None
 
     @property
@@ -138,21 +138,48 @@ class ReviewEngine:
     async def _listen(self) -> None:
         """Listen for raid.state_changed events where status == REVIEW."""
         if self._event_bus is None:
+            logger.warning("Review engine has no event bus — cannot listen")
             return
         q = self._event_bus.subscribe()
+        logger.info("Review engine listening for raid.state_changed events")
         try:
             while True:
                 event = await q.get()
+                logger.debug(
+                    "Review engine received event: %s (data=%s)",
+                    event.event,
+                    event.data,
+                )
                 if event.event != "raid.state_changed":
                     continue
                 if event.data.get("status") != RaidStatus.REVIEW.value:
+                    logger.debug(
+                        "Skipping — status=%s (not REVIEW)",
+                        event.data.get("status"),
+                    )
                     continue
                 tracker_id = event.data.get("tracker_id")
                 owner_id = event.owner_id
                 if not tracker_id or not owner_id:
+                    logger.warning(
+                        "Skipping — missing tracker_id=%s or owner_id=%s",
+                        tracker_id,
+                        owner_id,
+                    )
                     continue
+                logger.info(
+                    "Review engine evaluating raid %s for owner %s",
+                    tracker_id,
+                    owner_id[:8],
+                )
                 try:
-                    await self.evaluate(tracker_id, owner_id)
+                    decision = await self.evaluate(tracker_id, owner_id)
+                    logger.info(
+                        "Review engine decision for %s: %s (confidence=%.2f)",
+                        tracker_id,
+                        decision.action,
+                        decision.confidence,
+                    )
                 except Exception:
                     logger.warning(
                         "Review engine failed for raid %s",
@@ -465,7 +492,7 @@ class ReviewEngine:
         await tracker.add_confidence_event(tracker_id, event)
 
         # Send failure context to the running session before resetting
-        await self._send_retry_feedback(raid, reason)
+        await self._send_retry_feedback(raid, owner_id, reason)
 
         validate_transition(raid.status, RaidStatus.PENDING)
         updated = await tracker.update_raid_progress(
@@ -477,15 +504,22 @@ class ReviewEngine:
 
     # -- Session feedback --
 
-    async def _send_retry_feedback(self, raid: Raid, reason: str) -> None:
+    async def _send_retry_feedback(
+        self, raid: Raid, owner_id: str, reason: str
+    ) -> None:
         """Send failure context to the session before retrying."""
-        if self._volundr is None or not raid.session_id:
+        if not raid.session_id:
+            return
+        volundr = await self._volundr_factory.for_owner(owner_id)
+        if volundr is None:
+            logger.warning("No Volundr adapter for owner %s — cannot send feedback", owner_id[:8])
             return
         try:
-            await self._volundr.send_message(
+            await volundr.send_message(
                 raid.session_id,
                 f"Review failed: {reason}. Please fix and push again.",
             )
+            logger.info("Sent retry feedback to session %s", raid.session_id)
         except Exception:
             logger.warning(
                 "Failed to send retry feedback to session %s for raid %s",
