@@ -70,10 +70,13 @@ class ProvisioningConfig(BaseModel):
 
 
 class LoggingConfig(BaseModel):
-    """Logging configuration."""
+    """Logging configuration.
 
-    level: str = Field(default="info")
-    format: str = Field(default="text")
+    Reads LOG_LEVEL and LOG_FORMAT environment variables if set.
+    """
+
+    level: str = Field(default_factory=lambda: os.environ.get("LOG_LEVEL", "info"))
+    format: str = Field(default_factory=lambda: os.environ.get("LOG_FORMAT", "text"))
 
 
 class DatabaseConfig(BaseModel):
