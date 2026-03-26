@@ -126,8 +126,7 @@ func TestConfig_ResolveAnthropicKey(t *testing.T) {
 	// Falls back to env var.
 	cfg.Anthropic.APIKey = ""
 	cfg.Anthropic.APIKeyEnv = "TEST_FORGE_API_KEY"
-	os.Setenv("TEST_FORGE_API_KEY", "sk-from-env")
-	defer os.Unsetenv("TEST_FORGE_API_KEY")
+	t.Setenv("TEST_FORGE_API_KEY", "sk-from-env")
 
 	if got := cfg.ResolveAnthropicKey(); got != "sk-from-env" {
 		t.Errorf("expected 'sk-from-env', got %q", got)

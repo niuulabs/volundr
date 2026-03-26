@@ -58,11 +58,14 @@ func TestSDKTransport_CLIConnectsAndReceivesMessage(t *testing.T) {
 
 	// Connect as the CLI.
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws/cli/test-session", transport.Port())
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 
 	// Wait for ready.
 	select {
@@ -114,11 +117,14 @@ func TestSDKTransport_EmitsActivityEvents(t *testing.T) {
 
 	// Connect as the CLI.
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws/cli/test-session", transport.Port())
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 
 	select {
 	case <-transport.Ready():
@@ -183,11 +189,14 @@ func TestSDKTransport_EmitsToolExecuting(t *testing.T) {
 	defer transport.Stop()
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws/cli/test-session", transport.Port())
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 
 	select {
 	case <-transport.Ready():

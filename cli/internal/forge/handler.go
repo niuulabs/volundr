@@ -211,7 +211,7 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 			OwnerID:       sess.OwnerID,
 			SessionStatus: string(sess.Status),
 		})
-		fmt.Fprintf(w, "event: session_activity\ndata: %s\n\n", data)
+		_, _ = fmt.Fprintf(w, "event: session_activity\ndata: %s\n\n", data)
 	}
 	flusher.Flush()
 
@@ -225,7 +225,7 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			data, _ := json.Marshal(event)
-			fmt.Fprintf(w, "event: session_activity\ndata: %s\n\n", data)
+			_, _ = fmt.Fprintf(w, "event: session_activity\ndata: %s\n\n", data)
 			flusher.Flush()
 		}
 	}

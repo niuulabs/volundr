@@ -337,9 +337,11 @@ func (r *Runner) writeClaudeMD(sess *Session) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		_, err = f.WriteString("\n\n# Forge Session Context\n\n" + content)
-		return err
+		_, writeErr := f.WriteString("\n\n# Forge Session Context\n\n" + content)
+		if closeErr := f.Close(); closeErr != nil && writeErr == nil {
+			return closeErr
+		}
+		return writeErr
 	}
 
 	return os.WriteFile(claudeMDPath, []byte(content), 0o644) //nolint:gosec // workspace file
