@@ -2,6 +2,10 @@
 
 Subscribes to Volundr's SSE stream for session_activity events, evaluates
 completion signals, and transitions raids accordingly.
+
+Uses VolundrAdapterFactory to resolve per-owner authenticated adapters —
+each user's PAT (from their IntegrationConnection) authenticates the SSE
+subscription to their Volundr instance.
 """
 
 from __future__ import annotations
@@ -9,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import Protocol
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
@@ -18,6 +23,12 @@ from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import ActivityEvent, VolundrPort
 
 logger = logging.getLogger(__name__)
+
+
+class VolundrFactory(Protocol):
+    """Protocol for resolving per-owner Volundr adapters."""
+
+    async def for_owner(self, owner_id: str) -> VolundrPort | None: ...
 
 
 @dataclass(frozen=True)
@@ -32,24 +43,32 @@ class CompletionEvaluation:
 
 
 class SessionActivitySubscriber:
-    """Subscribes to Volundr SSE and evaluates raid completion on activity events."""
+    """Subscribes to Volundr SSE and evaluates raid completion on activity events.
+
+    Uses the VolundrAdapterFactory to resolve per-owner authenticated adapters.
+    Each active owner (with RUNNING raids) gets their own SSE subscription using
+    their PAT from their IntegrationConnection.
+    """
 
     def __init__(
         self,
-        volundr: VolundrPort,
+        volundr_factory: VolundrFactory,
         raid_repo: RaidRepository,
         dispatcher_repo: DispatcherRepository,
         event_bus: EventBusPort,
         config: WatcherConfig,
     ) -> None:
-        self._volundr = volundr
+        self._factory = volundr_factory
         self._raid_repo = raid_repo
         self._dispatcher_repo = dispatcher_repo
         self._event_bus = event_bus
         self._config = config
         self._running = False
         self._task: asyncio.Task[None] | None = None
+        self._owner_tasks: dict[str, asyncio.Task[None]] = {}
         self._pending_evaluations: dict[str, asyncio.Task[None]] = {}
+        # Cache per-owner adapters so we don't re-resolve on every cycle
+        self._owner_adapters: dict[str, VolundrPort] = {}
 
     @property
     def running(self) -> bool:
@@ -71,10 +90,13 @@ class SessionActivitySubscriber:
     async def stop(self) -> None:
         """Gracefully stop the subscriber."""
         self._running = False
-        # Cancel any pending evaluations
         for task in self._pending_evaluations.values():
             task.cancel()
         self._pending_evaluations.clear()
+        for task in self._owner_tasks.values():
+            task.cancel()
+        self._owner_tasks.clear()
+        self._owner_adapters.clear()
         if self._task is not None:
             self._task.cancel()
             try:
@@ -85,47 +107,122 @@ class SessionActivitySubscriber:
         logger.info("Session activity subscriber stopped")
 
     async def _run(self) -> None:
-        """Main loop — subscribe to SSE, reconnect on failure."""
+        """Main loop — discover active owners and manage per-owner SSE subscriptions."""
         while self._running:
             try:
-                async for event in self._volundr.subscribe_activity():
-                    if not self._running:
-                        break
-                    await self._on_activity_event(event)
+                await self._sync_owner_subscriptions()
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("SSE subscription failed, reconnecting")
+                logger.exception("Failed to sync owner subscriptions")
             if self._running:
                 await asyncio.sleep(self._config.reconnect_delay)
 
+    async def _sync_owner_subscriptions(self) -> None:
+        """Discover owners with RUNNING raids and ensure each has an SSE subscription."""
+        running_raids = await self._raid_repo.list_by_status(RaidStatus.RUNNING)
+        if not running_raids:
+            # No running raids — cancel all subscriptions
+            for owner_id, task in list(self._owner_tasks.items()):
+                task.cancel()
+            self._owner_tasks.clear()
+            self._owner_adapters.clear()
+            await asyncio.sleep(self._config.reconnect_delay)
+            return
+
+        # Resolve unique owners from running raids
+        active_owners: set[str] = set()
+        for raid in running_raids:
+            owner_id = await self._raid_repo.get_owner_for_raid(raid.id)
+            if owner_id:
+                active_owners.add(owner_id)
+
+        # Start subscriptions for new owners
+        for owner_id in active_owners:
+            if owner_id not in self._owner_tasks or self._owner_tasks[owner_id].done():
+                task = asyncio.create_task(
+                    self._owner_subscription_loop(owner_id),
+                    name=f"sse-{owner_id[:8]}",
+                )
+                self._owner_tasks[owner_id] = task
+
+        # Cancel subscriptions for owners with no more running raids
+        for owner_id in list(self._owner_tasks):
+            if owner_id not in active_owners:
+                self._owner_tasks.pop(owner_id).cancel()
+                self._owner_adapters.pop(owner_id, None)
+
+        # Wait before re-syncing
+        await asyncio.sleep(self._config.reconnect_delay)
+
+    async def _owner_subscription_loop(self, owner_id: str) -> None:
+        """Maintain an SSE subscription for a single owner."""
+        while self._running:
+            volundr = await self._resolve_owner_adapter(owner_id)
+            if volundr is None:
+                logger.warning(
+                    "No Volundr connection for owner %s, retrying", owner_id[:8]
+                )
+                await asyncio.sleep(self._config.reconnect_delay)
+                continue
+
+            try:
+                logger.info("SSE subscription started for owner %s", owner_id[:8])
+                async for event in volundr.subscribe_activity():
+                    if not self._running:
+                        break
+                    await self._on_activity_event(event, volundr)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "SSE subscription failed for owner %s, reconnecting",
+                    owner_id[:8],
+                )
+                # Clear cached adapter so we re-resolve on reconnect
+                self._owner_adapters.pop(owner_id, None)
+
+            if self._running:
+                await asyncio.sleep(self._config.reconnect_delay)
+
+    async def _resolve_owner_adapter(self, owner_id: str) -> VolundrPort | None:
+        """Resolve and cache a per-owner Volundr adapter."""
+        if owner_id in self._owner_adapters:
+            return self._owner_adapters[owner_id]
+
+        adapter = await self._factory.for_owner(owner_id)
+        if adapter is not None:
+            self._owner_adapters[owner_id] = adapter
+        return adapter
+
     _FAILED_STATUSES: frozenset[str] = frozenset({"stopped", "failed"})
 
-    async def _on_activity_event(self, event: ActivityEvent) -> None:
+    async def _on_activity_event(
+        self, event: ActivityEvent, volundr: VolundrPort
+    ) -> None:
         """Handle a single activity or session lifecycle event from the SSE stream."""
-        # Session lifecycle event (stopped/failed) — handle failure
         if event.session_status in self._FAILED_STATUSES:
-            await self._on_session_failed(event)
+            await self._on_session_failed(event, volundr)
             return
 
         if event.state != "idle":
-            # Cancel any pending evaluation for this session — it's still working
             pending = self._pending_evaluations.pop(event.session_id, None)
             if pending is not None:
                 pending.cancel()
             return
 
-        # Session went idle — schedule a debounced completion check
         if event.session_id in self._pending_evaluations:
             return
 
         task = asyncio.create_task(
-            self._debounced_evaluation(event),
+            self._debounced_evaluation(event, volundr),
             name=f"eval-{event.session_id}",
         )
         self._pending_evaluations[event.session_id] = task
 
-    async def _debounced_evaluation(self, event: ActivityEvent) -> None:
+    async def _debounced_evaluation(
+        self, event: ActivityEvent, volundr: VolundrPort
+    ) -> None:
         """Wait for the debounce delay, then evaluate completion."""
         try:
             await asyncio.sleep(self._config.completion_check_delay)
@@ -138,24 +235,24 @@ class SessionActivitySubscriber:
         if raid is None:
             return
 
-        # Verify session still exists and is running before evaluating
-        session = await self._volundr.get_session(event.session_id)
+        session = await volundr.get_session(event.session_id)
         if session is None:
-            await self._handle_failure(raid, reason="Session not found")
+            await self._handle_failure(raid, volundr, reason="Session not found")
             return
         if session.status in ("stopped", "failed"):
-            await self._handle_failure(raid, reason=f"Session {session.status}")
+            await self._handle_failure(
+                raid, volundr, reason=f"Session {session.status}"
+            )
             return
 
-        # Check dispatcher pause state
         if not await self._is_owner_active(raid):
             return
 
-        completion = await self._evaluate_completion(raid, event.metadata)
+        completion = await self._evaluate_completion(raid, volundr, event.metadata)
         if not completion.is_complete:
             return
 
-        await self._handle_completion(raid, completion)
+        await self._handle_completion(raid, volundr, completion)
 
     async def _find_raid_by_session(self, session_id: str) -> Raid | None:
         """Find a RUNNING raid by its session ID."""
@@ -174,22 +271,22 @@ class SessionActivitySubscriber:
         state = await self._dispatcher_repo.get_or_create(owner_id)
         return state.running
 
-    async def _evaluate_completion(self, raid: Raid, metadata: dict) -> CompletionEvaluation:
+    async def _evaluate_completion(
+        self, raid: Raid, volundr: VolundrPort, metadata: dict
+    ) -> CompletionEvaluation:
         """Evaluate whether a raid's work is complete based on signals."""
         signals: dict[str, bool] = {}
 
-        # Signal 1: Session went idle after processing turns
         signals["session_idle"] = True
         signals["has_turns"] = metadata.get("turn_count", 0) > 1
 
-        # Signal 2: PR exists (optional — not all raids produce PRs)
         signals["pr_exists"] = False
         signals["ci_passed"] = False
         pr_id: str | None = None
         pr_url: str | None = None
         if raid.branch:
             try:
-                pr = await self._volundr.get_pr_status(raid.session_id or "")
+                pr = await volundr.get_pr_status(raid.session_id or "")
                 signals["pr_exists"] = bool(pr.pr_id)
                 signals["ci_passed"] = bool(pr.ci_passed)
                 if pr.pr_id:
@@ -230,13 +327,16 @@ class SessionActivitySubscriber:
         )
 
     async def _handle_completion(
-        self, raid: Raid, evaluation: CompletionEvaluation | None = None
+        self,
+        raid: Raid,
+        volundr: VolundrPort,
+        evaluation: CompletionEvaluation | None = None,
     ) -> None:
         """Transition a raid to REVIEW on session completion."""
         chronicle_summary = None
         if self._config.chronicle_on_complete and raid.session_id:
             try:
-                chronicle_summary = await self._volundr.get_chronicle_summary(raid.session_id)
+                chronicle_summary = await volundr.get_chronicle_summary(raid.session_id)
             except Exception:
                 logger.warning("Failed to fetch chronicle for session %s", raid.session_id)
 
@@ -261,9 +361,10 @@ class SessionActivitySubscriber:
                 pr_id or "none",
             )
 
-    async def _on_session_failed(self, event: ActivityEvent) -> None:
+    async def _on_session_failed(
+        self, event: ActivityEvent, volundr: VolundrPort
+    ) -> None:
         """Handle a session stopped/failed lifecycle event."""
-        # Cancel any pending completion evaluation for this session
         pending = self._pending_evaluations.pop(event.session_id, None)
         if pending is not None:
             pending.cancel()
@@ -272,14 +373,18 @@ class SessionActivitySubscriber:
         if raid is None:
             return
 
-        await self._handle_failure(raid, reason=f"Session {event.session_status}")
+        await self._handle_failure(
+            raid, volundr, reason=f"Session {event.session_status}"
+        )
 
-    async def _handle_failure(self, raid: Raid, *, reason: str) -> None:
+    async def _handle_failure(
+        self, raid: Raid, volundr: VolundrPort, *, reason: str
+    ) -> None:
         """Transition a raid to FAILED when its session crashes or stops."""
         chronicle_summary = None
         if self._config.chronicle_on_complete and raid.session_id:
             try:
-                chronicle_summary = await self._volundr.get_chronicle_summary(raid.session_id)
+                chronicle_summary = await volundr.get_chronicle_summary(raid.session_id)
             except Exception:
                 logger.warning("Failed to fetch chronicle for session %s", raid.session_id)
 

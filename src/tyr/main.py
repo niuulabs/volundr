@@ -297,8 +297,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await review_engine.start()
 
             # Wire event-driven raid completion subscriber
+            # Uses VolundrAdapterFactory for per-owner authenticated SSE subscriptions
             subscriber = SessionActivitySubscriber(
-                volundr=volundr_adapter,
+                volundr_factory=app.state.volundr_factory,
                 raid_repo=raid_repo,
                 dispatcher_repo=dispatcher_repo,
                 event_bus=event_bus,
