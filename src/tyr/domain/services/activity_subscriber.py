@@ -114,6 +114,11 @@ class SessionActivitySubscriber:
     async def _sync_owner_subscriptions(self) -> None:
         """Discover owners with active dispatchers, ensure each has an SSE sub."""
         active_owners = set(await self._dispatcher_repo.list_active_owner_ids())
+        logger.info(
+            "Sync: active_owners=%s, existing_tasks=%s",
+            active_owners,
+            {k: ("running" if not v.done() else "done") for k, v in self._owner_tasks.items()},
+        )
 
         if not active_owners:
             for owner_id, task in list(self._owner_tasks.items()):
