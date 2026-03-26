@@ -124,7 +124,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Wire adapter factories (used by autonomous dispatcher)
             app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
-            app.state.tracker_factory = TrackerAdapterFactory(integration_repo, credential_store)
+            app.state.tracker_factory = TrackerAdapterFactory(
+                integration_repo, credential_store, pool=pool
+            )
 
             # Override the tracker resolver dependency with factory delegation
             from tyr.adapters.inbound.auth import extract_principal

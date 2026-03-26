@@ -216,3 +216,39 @@ async def test_config_merged_with_credentials() -> None:
     assert result[0].kwargs["api_key"] == "tok-merge"
     assert result[0].kwargs["team_id"] == "TEAM-X"
     assert result[0].kwargs["extra_setting"] == "val"
+
+
+@pytest.mark.asyncio
+async def test_pool_injected_into_adapter() -> None:
+    """Factory must pass pool to adapter so LocalAdapter can use raid_progress table."""
+
+    class FakePool:
+        pass
+
+    pool = FakePool()
+    conn = _make_connection(enabled=True)
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=StubCredentialStore(
+            values={"user:owner-1:linear-cred": {"api_key": "tok-x"}}
+        ),
+        pool=pool,
+    )
+    result = await factory.for_owner("owner-1")
+    assert len(result) == 1
+    assert result[0].kwargs["pool"] is pool
+
+
+@pytest.mark.asyncio
+async def test_no_pool_does_not_inject_pool_kwarg() -> None:
+    """When factory has no pool, pool kwarg is not forwarded to the adapter."""
+    conn = _make_connection(enabled=True)
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=StubCredentialStore(
+            values={"user:owner-1:linear-cred": {"api_key": "tok-y"}}
+        ),
+    )
+    result = await factory.for_owner("owner-1")
+    assert len(result) == 1
+    assert "pool" not in result[0].kwargs

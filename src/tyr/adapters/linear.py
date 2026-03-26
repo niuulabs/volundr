@@ -995,10 +995,9 @@ class LinearTrackerAdapter(TrackerPort):
     def _issue_to_raid(node: dict, *, progress: dict | None = None) -> Raid:
         state_name = node.get("state", {}).get("name", "Todo")
         now = datetime.now(UTC)
+        raid_status = _LINEAR_TO_RAID.get(state_name, RaidStatus.PENDING)
         if progress and progress.get("status"):
             raid_status = RaidStatus(progress["status"])
-        else:
-            raid_status = _LINEAR_TO_RAID.get(state_name, RaidStatus.PENDING)
         raid_id = progress["raid_id"] if progress else uuid4()
         return Raid(
             id=raid_id,
