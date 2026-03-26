@@ -1,9 +1,4 @@
-import type {
-  ITyrService,
-  CommitSagaRequest,
-  PlanSession,
-  ExtractedStructure,
-} from '../../ports';
+import type { ITyrService, CommitSagaRequest, PlanSession, ExtractedStructure } from '../../ports';
 import type { Saga, Phase } from '../../models';
 import { mockSagas, mockPhases } from './data';
 

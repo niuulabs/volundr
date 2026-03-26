@@ -51,13 +51,16 @@ export function PlanSagaView() {
 
     lastCheckedMsgId.current = lastMsg.id;
 
-    tyrService.extractStructure(lastMsg.content).then((result: ExtractedStructure) => {
-      if (result.found && result.structure) {
-        setDetectedStructure(result.structure);
-      }
-    }).catch(() => {
-      // Extraction failed — ignore, user can still chat
-    });
+    tyrService
+      .extractStructure(lastMsg.content)
+      .then((result: ExtractedStructure) => {
+        if (result.found && result.structure) {
+          setDetectedStructure(result.structure);
+        }
+      })
+      .catch(() => {
+        // Extraction failed — ignore, user can still chat
+      });
   }, [skuld.messages]);
 
   const handleSpawn = async () => {

@@ -132,9 +132,7 @@ describe('PlanSagaView', () => {
   it('shows error on spawn failure', async () => {
     const user = userEvent.setup();
     const { tyrService } = await import('../../adapters');
-    vi.mocked(tyrService.spawnPlanSession).mockRejectedValueOnce(
-      new Error('Volundr unreachable')
-    );
+    vi.mocked(tyrService.spawnPlanSession).mockRejectedValueOnce(new Error('Volundr unreachable'));
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
