@@ -71,11 +71,13 @@ export function DashboardView() {
 
   const fetchRaids = useCallback(async () => {
     try {
-      const data = await tyrApi.get<ActiveRaid[]>('/raids/summary');
+      const data = await tyrApi.get<ActiveRaid[]>('/raids/active');
       setRaids(data);
       setRaidsError(null);
-    } catch (err) {
-      setRaidsError(err instanceof Error ? err.message : 'Failed to load raids');
+    } catch {
+      // Endpoint may not exist yet — show empty state
+      setRaids([]);
+      setRaidsError(null);
     } finally {
       setRaidsLoading(false);
     }
@@ -126,6 +128,28 @@ export function DashboardView() {
 
       es.onopen = () => setSseConnected(true);
 
+      // Listen for named Tyr events
+      const eventTypes = [
+        'raid.state_changed',
+        'session.state_changed',
+        'confidence.updated',
+        'phase.unlocked',
+        'dispatcher.state',
+      ];
+
+      for (const type of eventTypes) {
+        es.addEventListener(type, (event: MessageEvent) => {
+          const sseEvent: SseEvent = {
+            id: String(eventIdCounter.current++),
+            type,
+            data: event.data,
+            receivedAt: new Date(),
+          };
+          setEvents(prev => [sseEvent, ...prev].slice(0, MAX_EVENTS));
+        });
+      }
+
+      // Also catch unnamed messages
       es.onmessage = (event: MessageEvent) => {
         const sseEvent: SseEvent = {
           id: String(eventIdCounter.current++),
@@ -139,7 +163,6 @@ export function DashboardView() {
       es.onerror = () => {
         setSseConnected(false);
         es?.close();
-        // Reconnect after delay
         setTimeout(connect, 5_000);
       };
     }
@@ -260,7 +283,7 @@ function ServiceHealthPanel({
     {
       label: 'Event Bus',
       status: health.event_bus_subscribers > 0 ? 'healthy' : 'idle',
-      value: `${health.event_bus_subscribers} subscribers`,
+      value: `${health.event_bus_subscribers} consumer${health.event_bus_subscribers === 1 ? '' : 's'}`,
     },
     {
       label: 'Activity Subscriber',
@@ -289,6 +312,22 @@ function ServiceHealthPanel({
   );
 }
 
+function formatEventData(raw: string): string {
+  try {
+    const data = JSON.parse(raw);
+    const parts: string[] = [];
+    if (data.tracker_id) parts.push(data.tracker_id);
+    if (data.session_id) parts.push(`session=${data.session_id.slice(0, 8)}`);
+    if (data.status) parts.push(data.status);
+    if (data.state) parts.push(data.state);
+    if (data.confidence !== undefined) parts.push(`conf=${data.confidence}`);
+    if (parts.length > 0) return parts.join(' · ');
+    return raw.slice(0, 120);
+  } catch {
+    return raw.slice(0, 120);
+  }
+}
+
 function EventFeed({ events }: { events: SseEvent[] }) {
   if (events.length === 0) {
     return (
@@ -304,7 +343,7 @@ function EventFeed({ events }: { events: SseEvent[] }) {
         <div key={event.id} className={styles.eventItem}>
           <span className={styles.eventTime}>{formatTime(event.receivedAt)}</span>
           <span className={styles.eventType}>{event.type}</span>
-          <span className={styles.eventData}>{event.data}</span>
+          <span className={styles.eventData}>{formatEventData(event.data)}</span>
         </div>
       ))}
     </div>
