@@ -1,4 +1,7 @@
-"""Tests for TrackerAdapterFactory."""
+"""Tests for TrackerAdapterFactory.
+
+Covers: for_owner, pool injection, error handling, credential merging.
+"""
 
 from __future__ import annotations
 
