@@ -1184,12 +1184,22 @@ class Broker:
 
         try:
             client = await self._get_http_client()
-            await client.post(
+            resp = await client.post(
                 f"/api/v1/volundr/sessions/{self.session_id}/activity",
                 json={"state": state, "metadata": metadata},
             )
+            logger.info(
+                "Activity report: state=%s status=%d url=%s",
+                state,
+                resp.status_code,
+                resp.url,
+            )
         except Exception:
-            logger.debug("Failed to report activity state %s", state, exc_info=True)
+            logger.warning(
+                "Failed to report activity state %s",
+                state,
+                exc_info=True,
+            )
 
     async def _generate_summary(self) -> dict:
         """Ask the CLI to generate a session summary.
