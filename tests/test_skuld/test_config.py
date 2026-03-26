@@ -2,7 +2,7 @@
 
 import pytest
 
-from volundr.skuld.config import SkuldSessionConfig, SkuldSettings
+from skuld.config import SkuldSessionConfig, SkuldSettings
 
 
 @pytest.fixture(autouse=True)

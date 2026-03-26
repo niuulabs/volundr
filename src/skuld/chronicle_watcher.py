@@ -17,7 +17,7 @@ from pathlib import Path
 
 import httpx
 
-from volundr.skuld.event_mapper import EventMapper
+from skuld.event_mapper import EventMapper
 
 logger = logging.getLogger("skuld.chronicle_watcher")
 

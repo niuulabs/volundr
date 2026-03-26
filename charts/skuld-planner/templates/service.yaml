@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "skuld.fullname" . }}
+  labels:
+    {{- include "skuld.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    # Single entry point - nginx handles all internal routing
+    # When envoy is enabled, traffic flows: Service -> Envoy -> Nginx -> backends
+    - port: {{ .Values.service.port }}
+      targetPort: {{ if .Values.envoy.enabled }}envoy{{ else }}http{{ end }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "skuld.selectorLabels" . | nindent 4 }}

@@ -1,14 +1,14 @@
 """Skuld - Claude Code CLI broker service."""
 
-from volundr.skuld.broker import Broker, app
-from volundr.skuld.channels import (
+from skuld.broker import Broker, app
+from skuld.channels import (
     ChannelRegistry,
     MessageChannel,
     TelegramChannel,
     WebSocketChannel,
 )
-from volundr.skuld.config import SkuldSettings, TelegramConfig
-from volundr.skuld.transport import CLITransport, SdkWebSocketTransport, SubprocessTransport
+from skuld.config import SkuldSettings, TelegramConfig
+from skuld.transport import CLITransport, SdkWebSocketTransport, SubprocessTransport
 
 __all__ = [
     "Broker",

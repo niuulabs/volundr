@@ -1,0 +1,219 @@
+# Skuld Planner Helm Chart Values
+# Lightweight AI planning session broker — no IDE, no terminal
+
+# Global values (can be set by parent chart)
+global:
+  # -- Global image pull secrets (list of secret names)
+  imagePullSecrets: []
+  # - ghcr-pull-secret
+  image:
+    # -- Global image repository override
+    repository: ""
+    # -- Global image tag override
+    tag: ""
+
+# Session configuration (set by Tyr at deployment time)
+session:
+  # -- Session identifier (UUID, set by Tyr)
+  id: ""
+  # -- Human-readable session name
+  name: ""
+  # -- AI model to use for the session
+  model: "claude-sonnet-4-6"
+  # -- System prompt injected into the LLM context
+  systemPrompt: ""
+  # -- Initial user message sent when the CLI starts
+  initialPrompt: ""
+
+# Container image for the Skuld broker
+image:
+  # -- Skuld broker image repository
+  repository: ghcr.io/niuulabs/skuld
+  # -- Skuld broker image tag
+  tag: "latest"
+  # -- Image pull policy
+  pullPolicy: Always
+
+# Resource limits for the Skuld broker container (lighter than full sessions)
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "1Gi"
+    cpu: "1"
+
+# Nginx entry point (routes all traffic internally)
+nginx:
+  image:
+    repository: nginx
+    tag: "alpine"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "16Mi"
+      cpu: "10m"
+    limits:
+      memory: "64Mi"
+      cpu: "100m"
+
+# Service configuration
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Single entry point port (nginx)
+  port: 8080
+
+# Ingress configuration
+ingress:
+  # -- Enable ingress
+  enabled: true
+  # -- Ingress routing mode: "host" (hostname-based, default) or "path" (path-prefix)
+  mode: host
+  # -- Ingress class name
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  # -- Hostname for the session ingress
+  host: ""
+  paths:
+    session: /session
+    ide: /
+  tls:
+    enabled: true
+    secretName: ""
+
+# Shared storage for session workspace data
+persistence:
+  enabled: true
+  existingClaim: "volundr-sessions"
+  mountPath: "/volundr/sessions"
+
+# Persistent home directory
+homeVolume:
+  enabled: false
+  existingClaim: ""
+  mountPath: "/volundr/home"
+  credentialFiles:
+    secretName: ""
+    destDir: ".claude"
+    secretMountPath: "/volundr/secrets/credential-files"
+
+# Git repository to clone (optional)
+git:
+  repoUrl: ""
+  branch: ""
+  baseBranch: ""
+  credentials:
+    secretName: ""
+    tokenKey: "token"
+    username: "x-access-token"
+  image:
+    repository: alpine/git
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+# Broker configuration (Skuld application settings)
+broker:
+  cliType: claude
+  transport: sdk
+  skipPermissions: true
+  agentTeams: false
+
+# Volundr API (for token usage reporting)
+volundr:
+  apiUrl: ""
+  serviceUserId: "skuld-broker"
+  serviceTenantId: "default"
+
+# Secrets injected as environment variables
+envSecrets:
+  - envVar: ANTHROPIC_API_KEY
+    secretName: anthropic-api-key
+    secretKey: api-key
+
+# Plain environment variables
+envVars: []
+
+# Envoy sidecar proxy (JWT validation, header extraction)
+envoy:
+  enabled: false
+  image:
+    repository: envoyproxy/envoy
+    tag: "v1.32-latest"
+    pullPolicy: IfNotPresent
+  port: 8444
+  adminPort: 9901
+  connectTimeout: "0.25s"
+  upstreamTimeout: "3600s"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  headerNames:
+    userId: x-auth-user-id
+    email: x-auth-email
+    tenant: x-auth-tenant
+    roles: x-auth-roles
+  jwt:
+    enabled: false
+    issuer: ""
+    audiences: []
+    jwksUri: ""
+    jwksTimeout: "5s"
+    jwksCacheDurationSeconds: 300
+    tenantClaim: "tenant_id"
+    rolesClaim: "resource_access.volundr.roles"
+    keycloakHost: ""
+    keycloakPort: 8080
+    keycloakTls: false
+    extraClaimHeaders: []
+  extraHttpFilters: []
+  extraClusters: []
+
+# Gateway API routing
+gateway:
+  enabled: false
+  name: "volundr-gateway"
+  namespace: "volundr-system"
+  userId: ""
+  cors:
+    allowOrigins:
+      - "*"
+    allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+      - OPTIONS
+    allowHeaders:
+      - Authorization
+      - Content-Type
+    allowCredentials: true
+  jwt:
+    enabled: false
+    issuer: ""
+    audiences: []
+    jwksUri: ""
+
+# Pod configuration
+podLabels: {}
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+runtimeClassName: ""
+serviceAccountName: ""
+extraVolumes: []
+extraVolumeMounts: []
+secretManifest: {}
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000

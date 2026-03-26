@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from volundr.skuld.broker import (
+from skuld.broker import (
     Broker,
     _decode_jwt_claims,
     _extract_bearer_token,
     _extract_token_from_websocket,
 )
-from volundr.skuld.config import SkuldSettings
+from skuld.config import SkuldSettings
 
 
 def _make_jwt(claims: dict) -> str:

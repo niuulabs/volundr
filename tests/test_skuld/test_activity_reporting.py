@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from volundr.skuld.broker import Broker
-from volundr.skuld.config import SkuldSettings
+from skuld.broker import Broker
+from skuld.config import SkuldSettings
 
 
 class TestActivityStateReporting:
