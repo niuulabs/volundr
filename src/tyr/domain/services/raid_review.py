@@ -22,7 +22,7 @@ from tyr.domain.models import (
     validate_transition,
 )
 from tyr.ports.event_bus import EventBusPort, TyrEvent
-from tyr.ports.raid_repository import RaidRepository
+from tyr.ports.tracker import TrackerPort
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +86,13 @@ class RaidReviewService:
 
     def __init__(
         self,
-        raid_repo: RaidRepository,
+        tracker: TrackerPort,
+        owner_id: str,
         review_config: ReviewConfig,
         event_bus: EventBusPort | None = None,
     ) -> None:
-        self._raid_repo = raid_repo
+        self._tracker = tracker
+        self._owner_id = owner_id
         self._cfg = review_config
         self._event_bus = event_bus
 
@@ -98,11 +100,10 @@ class RaidReviewService:
         """Emit a raid.state_changed event if an EventBus is wired."""
         if self._event_bus is None:
             return
-        owner_id = await self._raid_repo.get_owner_for_raid(raid.id) or ""
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                owner_id=owner_id,
+                owner_id=self._owner_id,
                 data={
                     "raid_id": str(raid.id),
                     "status": raid.status.value,
@@ -115,7 +116,7 @@ class RaidReviewService:
 
     async def approve(self, raid_id: UUID) -> ReviewResult:
         """Approve a raid: HUMAN_APPROVED event → MERGED → phase gate check."""
-        raid = await self._raid_repo.get_raid(raid_id)
+        raid = await self._tracker.get_raid_by_id(raid_id)
         if raid is None:
             raise RaidNotFoundError(raid_id)
 
@@ -131,18 +132,18 @@ class RaidReviewService:
             self._cfg.confidence_delta_approved,
             raid.confidence,
         )
-        await self._raid_repo.add_confidence_event(event)
+        await self._tracker.add_confidence_event(raid.tracker_id, event)
 
         # Transition state
-        updated = await self._raid_repo.update_raid_status(raid_id, RaidStatus.MERGED)
-        if updated is None:
-            raise RaidNotFoundError(raid_id)
+        updated = await self._tracker.update_raid_progress(
+            raid.tracker_id, status=RaidStatus.MERGED
+        )
 
         # Phase gate check
         phase_gate_unlocked = False
-        phase = await self._raid_repo.get_phase_for_raid(raid_id)
-        if phase and await self._raid_repo.all_raids_merged(phase.id):
-            logger.info("Phase gate unlocked — all raids merged in phase %s", phase.id)
+        phase = await self._tracker.get_phase_for_raid(raid.tracker_id)
+        if phase and await self._tracker.all_raids_merged(phase.tracker_id):
+            logger.info("Phase gate unlocked — all raids merged in phase %s", phase.tracker_id)
             phase_gate_unlocked = True
 
         await self._emit_state_changed(updated, action="approved")
@@ -156,7 +157,7 @@ class RaidReviewService:
         reason: str | None = None,
     ) -> ReviewResult:
         """Reject a raid: HUMAN_REJECT event → FAILED."""
-        raid = await self._raid_repo.get_raid(raid_id)
+        raid = await self._tracker.get_raid_by_id(raid_id)
         if raid is None:
             raise RaidNotFoundError(raid_id)
 
@@ -171,13 +172,11 @@ class RaidReviewService:
             self._cfg.confidence_delta_rejected,
             raid.confidence,
         )
-        await self._raid_repo.add_confidence_event(event)
+        await self._tracker.add_confidence_event(raid.tracker_id, event)
 
-        updated = await self._raid_repo.update_raid_status(
-            raid_id, RaidStatus.FAILED, reason=reason
+        updated = await self._tracker.update_raid_progress(
+            raid.tracker_id, status=RaidStatus.FAILED, reason=reason
         )
-        if updated is None:
-            raise RaidNotFoundError(raid_id)
 
         await self._emit_state_changed(updated, action="rejected")
 
@@ -188,7 +187,7 @@ class RaidReviewService:
 
         REVIEW → PENDING, FAILED → QUEUED (per RAID_TRANSITIONS).
         """
-        raid = await self._raid_repo.get_raid(raid_id)
+        raid = await self._tracker.get_raid_by_id(raid_id)
         if raid is None:
             raise RaidNotFoundError(raid_id)
 
@@ -206,11 +205,11 @@ class RaidReviewService:
             self._cfg.confidence_delta_retry,
             raid.confidence,
         )
-        await self._raid_repo.add_confidence_event(event)
+        await self._tracker.add_confidence_event(raid.tracker_id, event)
 
-        updated = await self._raid_repo.update_raid_status(raid_id, target, increment_retry=True)
-        if updated is None:
-            raise RaidNotFoundError(raid_id)
+        updated = await self._tracker.update_raid_progress(
+            raid.tracker_id, status=target, retry_count=raid.retry_count + 1
+        )
 
         await self._emit_state_changed(updated, action="retried")
 

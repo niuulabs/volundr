@@ -13,7 +13,7 @@ from niuu.domain.models import IntegrationConnection, IntegrationType
 from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.adapters.notification_channel_factory import NotificationChannelFactory
 from tyr.adapters.telegram_notification import TelegramNotificationAdapter
-from tyr.domain.models import Phase, Raid, RaidStatus, Saga, SagaStatus
+from tyr.domain.models import Raid, RaidStatus  # Raid.id used in event construction
 from tyr.domain.services.notification import NotificationService
 from tyr.ports.channel_resolver import ChannelResolverPort
 from tyr.ports.event_bus import TyrEvent
@@ -22,7 +22,6 @@ from tyr.ports.notification_channel import (
     NotificationChannel,
     NotificationUrgency,
 )
-from tyr.ports.raid_repository import RaidRepository
 
 from .conftest import StubCredentialStore, StubIntegrationRepo
 
@@ -64,71 +63,6 @@ class FailingChannel(NotificationChannel):
         raise RuntimeError("Channel failed")
 
 
-class StubRaidRepo(RaidRepository):
-    """In-memory raid repository for notification tests."""
-
-    def __init__(self) -> None:
-        self.raids: dict[UUID, Raid] = {}
-        self.saga: Saga | None = None
-
-    async def get_raid(self, raid_id: UUID) -> Raid | None:
-        return self.raids.get(raid_id)
-
-    async def update_raid_status(
-        self, raid_id: UUID, status: RaidStatus, **kwargs: object
-    ) -> Raid | None:
-        raise NotImplementedError
-
-    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
-        return [r for r in self.raids.values() if r.status == status]
-
-    async def update_raid_completion(self, raid_id: UUID, **kwargs: object) -> Raid | None:
-        raise NotImplementedError
-
-    async def get_confidence_events(self, raid_id: UUID) -> list:
-        return []
-
-    async def add_confidence_event(self, event: object) -> None:
-        pass
-
-    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        for raid in self.raids.values():
-            if raid.tracker_id == tracker_id:
-                return raid
-        return None
-
-    async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
-        return self.saga
-
-    async def get_phase_for_raid(self, raid_id: UUID) -> Phase | None:
-        return None
-
-    async def save_phase(self, phase: object, *, conn: object = None) -> None:
-        pass
-
-    async def save_raid(self, raid: object, *, conn: object = None) -> None:
-        pass
-
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
-        saga = await self.get_saga_for_raid(raid_id)
-        return saga.owner_id if saga else None
-
-    async def all_raids_merged(self, phase_id: UUID) -> bool:
-        return False
-
-    async def save_session_message(self, message: object) -> None:
-        pass
-
-    async def get_session_messages(self, raid_id: UUID) -> list:
-        return []
-
-    async def list_phases_for_saga(self, saga_id: UUID) -> list:
-        return []
-
-    async def update_phase_status(self, phase_id: UUID, status) -> None:  # noqa: ANN001
-        return None
-
-
 class StubChannelFactory(ChannelResolverPort):
     """Factory that returns pre-configured channels."""
 
@@ -164,22 +98,6 @@ def _make_raid(
         retry_count=0,
         created_at=NOW,
         updated_at=NOW,
-    )
-
-
-def _make_saga(owner_id: str = "user-1") -> Saga:
-    return Saga(
-        id=uuid4(),
-        tracker_id="proj-1",
-        tracker_type="mock",
-        slug="alpha",
-        name="Test Saga",
-        repos=["org/repo"],
-        feature_branch="feat/test",
-        status=SagaStatus.ACTIVE,
-        confidence=0.5,
-        created_at=NOW,
-        owner_id=owner_id,
     )
 
 
@@ -482,8 +400,7 @@ class TestNotificationServiceLifecycle:
     async def test_start_stop(self) -> None:
         event_bus = InMemoryEventBus()
         factory = StubChannelFactory()
-        raid_repo = StubRaidRepo()
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
 
         assert service.running is False
         await service.start()
@@ -498,8 +415,7 @@ class TestNotificationServiceLifecycle:
     async def test_stop_when_not_started(self) -> None:
         event_bus = InMemoryEventBus()
         factory = StubChannelFactory()
-        raid_repo = StubRaidRepo()
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.stop()  # Should not raise
 
 
@@ -510,13 +426,10 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
         raid = _make_raid(tracker_id="NIU-200")
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -527,6 +440,7 @@ class TestNotificationServiceEventMapping:
                     "status": "REVIEW",
                     "tracker_id": "NIU-200",
                     "pr_url": "https://github.com/org/repo/pull/1",
+                    "owner_id": "user-1",
                 },
             )
         )
@@ -547,13 +461,10 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
         raid = _make_raid(tracker_id="NIU-201", status=RaidStatus.FAILED)
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -564,6 +475,7 @@ class TestNotificationServiceEventMapping:
                     "status": "FAILED",
                     "tracker_id": "NIU-201",
                     "retry_count": 2,
+                    "owner_id": "user-1",
                 },
             )
         )
@@ -582,13 +494,10 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
         raid = _make_raid(tracker_id="NIU-202", status=RaidStatus.MERGED)
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -598,6 +507,7 @@ class TestNotificationServiceEventMapping:
                     "raid_id": str(raid.id),
                     "status": "MERGED",
                     "tracker_id": "NIU-202",
+                    "owner_id": "user-1",
                 },
             )
         )
@@ -614,10 +524,8 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -637,9 +545,8 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(TyrEvent(event="some.unknown.event", data={"foo": "bar"}))
@@ -655,10 +562,9 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
         # saga is None → owner cannot be resolved
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -678,19 +584,21 @@ class TestNotificationServiceEventMapping:
         """If owner has no channels, notification is silently dropped."""
         event_bus = InMemoryEventBus()
         factory = StubChannelFactory()  # No channels for anyone
-        raid_repo = StubRaidRepo()
 
         raid = _make_raid(tracker_id="NIU-300")
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                data={"raid_id": str(raid.id), "status": "REVIEW", "tracker_id": "NIU-300"},
+                data={
+                    "raid_id": str(raid.id),
+                    "status": "REVIEW",
+                    "tracker_id": "NIU-300",
+                    "owner_id": "user-99",
+                },
             )
         )
 
@@ -705,19 +613,21 @@ class TestNotificationServiceEventMapping:
         failing = FailingChannel()
         recording = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [failing, recording]})
-        raid_repo = StubRaidRepo()
 
         raid = _make_raid(tracker_id="NIU-400")
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                data={"raid_id": str(raid.id), "status": "REVIEW", "tracker_id": "NIU-400"},
+                data={
+                    "raid_id": str(raid.id),
+                    "status": "REVIEW",
+                    "tracker_id": "NIU-400",
+                    "owner_id": "user-1",
+                },
             )
         )
 
@@ -732,19 +642,21 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel(min_urgency=NotificationUrgency.HIGH)
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
         raid = _make_raid(tracker_id="NIU-500", status=RaidStatus.MERGED)
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                data={"raid_id": str(raid.id), "status": "MERGED", "tracker_id": "NIU-500"},
+                data={
+                    "raid_id": str(raid.id),
+                    "status": "MERGED",
+                    "tracker_id": "NIU-500",
+                    "owner_id": "user-1",
+                },
             )
         )
 
@@ -758,9 +670,8 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -788,9 +699,8 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(TyrEvent(event="saga.pr_created", data={"saga_name": "X"}))
@@ -805,9 +715,8 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -835,9 +744,8 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -854,13 +762,10 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
         raid = _make_raid(tracker_id="NIU-600")
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -870,6 +775,7 @@ class TestNotificationServiceEventMapping:
                     "raid_id": str(raid.id),
                     "score_after": 0.2,
                     "tracker_id": "NIU-600",
+                    "owner_id": "user-1",
                 },
             )
         )
@@ -887,9 +793,8 @@ class TestNotificationServiceEventMapping:
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
         await event_bus.emit(
@@ -905,25 +810,22 @@ class TestNotificationServiceEventMapping:
         assert len(channel.sent) == 0
 
     @pytest.mark.asyncio
-    async def test_tracker_id_resolved_from_raid(self) -> None:
-        """When event data lacks tracker_id, resolve from raid repo."""
+    async def test_tracker_id_falls_back_to_raid_id(self) -> None:
+        """When event data lacks tracker_id, fall back to raid_id in notification body."""
         event_bus = InMemoryEventBus()
         channel = RecordingChannel()
         factory = StubChannelFactory(channels={"user-1": [channel]})
-        raid_repo = StubRaidRepo()
 
-        raid = _make_raid(tracker_id="NIU-700")
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga(owner_id="user-1")
+        raid_id = str(uuid4())
 
-        service = NotificationService(event_bus, factory, raid_repo, confidence_threshold=0.3)
+        service = NotificationService(event_bus, factory, confidence_threshold=0.3)
         await service.start()
 
-        # Emit without tracker_id in data
+        # Emit with raid_id but no tracker_id — service uses raid_id as fallback
         await event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                data={"raid_id": str(raid.id), "status": "REVIEW"},
+                data={"raid_id": raid_id, "status": "REVIEW", "owner_id": "user-1"},
             )
         )
 
@@ -931,7 +833,7 @@ class TestNotificationServiceEventMapping:
         await service.stop()
 
         assert len(channel.sent) == 1
-        assert "NIU-700" in channel.sent[0].body
+        assert raid_id in channel.sent[0].body
 
 
 # ---------------------------------------------------------------------------

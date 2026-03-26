@@ -42,6 +42,20 @@ class TestTrackerPortAbstract:
             "get_project",
             "list_milestones",
             "list_issues",
+            "update_raid_progress",
+            "get_raid_by_session",
+            "list_raids_by_status",
+            "get_raid_by_id",
+            "add_confidence_event",
+            "get_confidence_events",
+            "all_raids_merged",
+            "list_phases_for_saga",
+            "update_phase_status",
+            "get_saga_for_raid",
+            "get_phase_for_raid",
+            "get_owner_for_raid",
+            "save_session_message",
+            "get_session_messages",
         }
         actual = set(TrackerPort.__abstractmethods__)
         assert actual == expected_methods
@@ -139,6 +153,48 @@ class ConcreteTracker(TrackerPort):
         project_id: str,
         milestone_id: str | None = None,
     ) -> list[TrackerIssue]:
+        return []
+
+    async def update_raid_progress(self, tracker_id: str, **kwargs: object) -> Raid:
+        return await self.get_raid(tracker_id)
+
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
+        return None
+
+    async def list_raids_by_status(self, status: RaidStatus) -> list[Raid]:
+        return []
+
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
+        return None
+
+    async def add_confidence_event(self, tracker_id: str, event: object) -> None:
+        pass
+
+    async def get_confidence_events(self, tracker_id: str) -> list:
+        return []
+
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
+        return False
+
+    async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
+        return []
+
+    async def update_phase_status(self, phase_tracker_id: str, status: PhaseStatus) -> Phase | None:
+        return None
+
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
+        return None
+
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
+        return None
+
+    async def get_owner_for_raid(self, tracker_id: str) -> str | None:
+        return None
+
+    async def save_session_message(self, message: object) -> None:
+        pass
+
+    async def get_session_messages(self, tracker_id: str) -> list:
         return []
 
 

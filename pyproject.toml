@@ -24,9 +24,6 @@ dependencies = [
 rabbitmq = [
     "aio-pika>=9.0",
 ]
-litellm = [
-    "litellm>=1.40",
-]
 k8s = [
     "kubernetes-asyncio>=30.0",
 ]

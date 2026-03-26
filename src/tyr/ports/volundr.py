@@ -22,6 +22,7 @@ class SpawnRequest:
     system_prompt: str
     initial_prompt: str
     base_branch: str = "main"
+    workload_type: str = "default"
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class VolundrSession:
     name: str
     status: str
     tracker_issue_id: str | None
+    chat_endpoint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +92,16 @@ class VolundrPort(ABC):
         auth_token: str | None = None,
     ) -> None:
         """Send a human message to a running Volundr session."""
+        ...
+
+    @abstractmethod
+    async def stop_session(
+        self,
+        session_id: str,
+        *,
+        auth_token: str | None = None,
+    ) -> None:
+        """Stop a running Volundr session."""
         ...
 
     @abstractmethod

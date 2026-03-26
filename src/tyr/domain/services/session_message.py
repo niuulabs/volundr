@@ -20,7 +20,7 @@ from tyr.domain.models import (
     SessionMessage,
 )
 from tyr.ports.event_bus import EventBusPort, TyrEvent
-from tyr.ports.raid_repository import RaidRepository
+from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
@@ -55,11 +55,11 @@ class SessionMessageService:
 
     def __init__(
         self,
-        raid_repo: RaidRepository,
+        tracker: TrackerPort,
         volundr: VolundrPort,
         event_bus: EventBusPort | None = None,
     ) -> None:
-        self._raid_repo = raid_repo
+        self._tracker = tracker
         self._volundr = volundr
         self._event_bus = event_bus
 
@@ -79,7 +79,7 @@ class SessionMessageService:
         4. Record confidence event (zero delta)
         5. Emit SSE event
         """
-        raid = await self._raid_repo.get_raid(raid_id)
+        raid = await self._tracker.get_raid_by_id(raid_id)
         if raid is None:
             raise RaidNotFoundError(raid_id)
 
@@ -102,7 +102,7 @@ class SessionMessageService:
             sender=sender,
             created_at=now,
         )
-        await self._raid_repo.save_session_message(msg)
+        await self._tracker.save_session_message(msg)
 
         # Record confidence event with zero delta (message doesn't change score)
         event = ConfidenceEvent(
@@ -113,7 +113,7 @@ class SessionMessageService:
             score_after=raid.confidence,
             created_at=now,
         )
-        await self._raid_repo.add_confidence_event(event)
+        await self._tracker.add_confidence_event(raid.tracker_id, event)
 
         # Emit SSE event
         if self._event_bus:

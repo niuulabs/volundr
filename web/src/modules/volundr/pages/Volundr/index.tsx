@@ -35,7 +35,7 @@ import {
 import { MetricCard, Modal, SearchInput, StatusBadge, StatusDot } from '@/modules/shared';
 import { SessionCard } from '@/modules/volundr/components/organisms/SessionCard';
 import { SessionTerminal } from '@/modules/volundr/components/SessionTerminal';
-import { SessionChat } from '@/modules/volundr/components/SessionChat';
+import { SessionChat } from '@/modules/shared/components/SessionChat';
 import { SessionChronicles } from '@/modules/volundr/components/SessionChronicles';
 import { SessionStartingIndicator } from '@/modules/volundr/components/molecules/SessionStartingIndicator';
 import { SessionDiffs } from '@/modules/volundr/components/SessionDiffs';

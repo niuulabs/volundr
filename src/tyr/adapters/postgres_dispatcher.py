@@ -67,6 +67,10 @@ class PostgresDispatcherRepository(DispatcherRepository):
             return await self.get_or_create(owner_id)
         return self._row_to_state(row)
 
+    async def list_active_owner_ids(self) -> list[str]:
+        rows = await self._pool.fetch("SELECT owner_id FROM dispatcher_state WHERE running = TRUE")
+        return [row["owner_id"] for row in rows]
+
     @staticmethod
     def _row_to_state(row: asyncpg.Record) -> DispatcherState:
         return DispatcherState(
