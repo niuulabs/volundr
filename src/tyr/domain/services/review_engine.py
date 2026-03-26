@@ -115,6 +115,10 @@ class ReviewEngine:
         self._volundr = volundr
         self._task: asyncio.Task[None] | None = None
 
+    @property
+    def running(self) -> bool:
+        return self._task is not None
+
     async def start(self) -> None:
         """Subscribe to the event bus and react to raids entering REVIEW."""
         if self._event_bus is None:
