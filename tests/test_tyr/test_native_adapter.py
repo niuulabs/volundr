@@ -303,6 +303,36 @@ class TestUpdateRaidState:
 
 
 # ---------------------------------------------------------------------------
+# update_raid_progress
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateRaidProgress:
+    async def test_updates_fields_and_returns_raid(self):
+        raid = _make_raid()
+        record = _raid_record(raid, "t-1")
+        pool = _make_pool()
+        pool.fetchrow.return_value = record
+        adapter = _make_adapter(pool)
+
+        result = await adapter.update_raid_progress(
+            "t-1", status=RaidStatus.REVIEW, chronicle_summary="summary"
+        )
+
+        assert result.tracker_id == "t-1"
+        sql = pool.fetchrow.call_args[0][0]
+        assert "chronicle_summary" in sql
+
+    async def test_not_found_raises(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        with pytest.raises(LookupError, match="Raid not found"):
+            await adapter.update_raid_progress("missing", status=RaidStatus.REVIEW)
+
+
+# ---------------------------------------------------------------------------
 # close_raid
 # ---------------------------------------------------------------------------
 

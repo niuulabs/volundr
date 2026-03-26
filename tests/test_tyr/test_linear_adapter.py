@@ -39,6 +39,17 @@ def _make_adapter() -> LinearTrackerAdapter:
     return adapter
 
 
+def _make_adapter_with_pool() -> tuple[LinearTrackerAdapter, AsyncMock]:
+    pool = AsyncMock()
+    adapter = LinearTrackerAdapter(
+        api_key="test",
+        team_id="team-1",
+        api_url="https://test.linear.app/graphql",
+        pool=pool,
+    )
+    return adapter, pool
+
+
 def _mock_response(json_data: dict, status_code: int = 200):
     resp = MagicMock(spec=httpx.Response)
     resp.status_code = status_code
@@ -668,3 +679,55 @@ class TestStateMappings:
     def test_round_trip_merged(self):
         linear_name = _RAID_TO_LINEAR[RaidStatus.MERGED]
         assert _LINEAR_TO_RAID[linear_name] == RaidStatus.MERGED
+
+
+# ---------------------------------------------------------------------------
+# update_raid_progress
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateRaidProgress:
+    async def test_raises_when_pool_is_none(self):
+        adapter = _make_adapter()  # no pool
+        with pytest.raises(RuntimeError, match="pool is required"):
+            await adapter.update_raid_progress("t-1", status=RaidStatus.REVIEW)
+
+    async def test_executes_upsert_and_returns_raid(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.return_value = None  # _fetch_progress returns None
+
+        # get_raid GQL call
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": _issue_node(id="t-1")}}
+        )
+
+        result = await adapter.update_raid_progress("t-1", status=RaidStatus.REVIEW)
+
+        pool.execute.assert_called_once()
+        sql = pool.execute.call_args[0][0]
+        assert "INSERT INTO raid_progress" in sql
+        assert "chronicle_summary" in sql
+        assert result.tracker_id == "t-1"
+
+    async def test_status_sync_failure_is_logged_not_raised(self):
+        """update_raid_state error should be swallowed, not bubble up."""
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.return_value = None
+
+        # First GQL call (get_raid → _fetch_progress) returns None;
+        # update_raid_state calls also go through _gql but raise
+        adapter._gql._client.post.side_effect = [
+            # update_raid_state: get team id
+            _mock_response({"data": {"issue": {"team": {"id": "team-1"}}}}),
+            # update_raid_state: get team states — fails
+            _mock_response({"errors": [{"message": "boom"}]}, status_code=200),
+            # get_raid GQL call after the failure
+            _mock_response({"data": {"issue": _issue_node(id="t-1")}}),
+        ]
+        pool.fetchrow.return_value = None
+
+        # Should not raise even though update_raid_state fails
+        result = await adapter.update_raid_progress("t-1", status=RaidStatus.RUNNING)
+        assert result.tracker_id == "t-1"

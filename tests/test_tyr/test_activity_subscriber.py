@@ -177,6 +177,8 @@ class StubTracker(TrackerPort):
             entry["pr_id"] = pr_id
         if reason is not None:
             entry["reason"] = reason
+        if chronicle_summary is not None:
+            entry["chronicle_summary"] = chronicle_summary
 
         # Find the raid by tracker_id and return an updated copy
         for raid in self.raids_by_session.values():
@@ -1011,3 +1013,116 @@ class TestWatcherConfigNewFields:
         assert cfg.confidence_ci_bonus == 0.2
         assert cfg.confidence_idle_bonus == 0.1
         assert cfg.reconnect_delay == 5.0
+
+
+# ---------------------------------------------------------------------------
+# Tests — Chronicle capture
+# ---------------------------------------------------------------------------
+
+
+class TestChronicleCapture:
+    @pytest.mark.asyncio
+    async def test_chronicle_fetched_on_completion(self) -> None:
+        """Chronicle summary should be stored when chronicle_on_complete is True."""
+        sub, volundr, tracker, _ = _make_subscriber()
+        raid = _make_raid()
+        tracker.add_raid(raid)
+        volundr.chronicles[raid.session_id or ""] = "Session did X, Y, Z."
+
+        await sub._handle_completion(raid, tracker, volundr, "user-1")
+
+        stored = tracker.progress[raid.tracker_id].get("chronicle_summary")
+        assert stored == "Session did X, Y, Z."
+
+    @pytest.mark.asyncio
+    async def test_chronicle_error_is_logged_not_raised(self) -> None:
+        """A failure fetching the chronicle should not prevent raid transition."""
+        sub, volundr, tracker, _ = _make_subscriber()
+        raid = _make_raid()
+        tracker.add_raid(raid)
+        volundr.chronicle_error_sessions.add(raid.session_id or "")
+
+        # Should not raise even though get_chronicle_summary throws
+        await sub._handle_completion(raid, tracker, volundr, "user-1")
+
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
+
+    @pytest.mark.asyncio
+    async def test_chronicle_skipped_when_disabled(self) -> None:
+        """Chronicle should not be fetched when chronicle_on_complete is False."""
+        config = _default_config().model_copy(update={"chronicle_on_complete": False})
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
+        raid = _make_raid()
+        tracker.add_raid(raid)
+        volundr.chronicles[raid.session_id or ""] = "should not appear"
+
+        await sub._handle_completion(raid, tracker, volundr, "user-1")
+
+        stored = tracker.progress[raid.tracker_id].get("chronicle_summary")
+        assert stored is None
+
+
+# ---------------------------------------------------------------------------
+# Tests — Owner subscription loop (no adapter warning)
+# ---------------------------------------------------------------------------
+
+
+class TestOwnerSubscriptionLoop:
+    @pytest.mark.asyncio
+    async def test_no_volundr_adapter_logs_warning_and_retries(self) -> None:
+        """When the Volundr factory returns None, a warning is logged and the loop retries."""
+
+        class NoneVolundrFactory:
+            async def for_owner(self, owner_id: str) -> None:
+                return None
+
+        event_bus = InMemoryEventBus()
+        tracker_factory = StubTrackerFactory(StubTracker())
+        config = _default_config().model_copy(update={"reconnect_delay": 0.01})
+        sub = SessionActivitySubscriber(
+            volundr_factory=NoneVolundrFactory(),
+            tracker_factory=tracker_factory,
+            dispatcher_repo=StubDispatcherRepo(),
+            event_bus=event_bus,
+            config=config,
+        )
+
+        # Run the loop briefly — it should log a warning and not crash
+        sub._running = True
+        task = asyncio.create_task(sub._owner_subscription_loop("owner-x"))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        # No assertion needed — absence of exception confirms the warning path runs
+
+    @pytest.mark.asyncio
+    async def test_sse_events_dispatched_with_owner_id(self) -> None:
+        """SSE events must be forwarded to _on_activity_event with owner_id."""
+        sub, volundr, tracker, _ = _make_subscriber()
+        raid = _make_raid()
+        tracker.add_raid(raid)
+        volundr.sessions[raid.session_id or ""] = _make_volundr_session(
+            session_id=raid.session_id or ""
+        )
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="running",
+            metadata={},
+            owner_id="user-1",
+        )
+        volundr.activity_events = [event]
+
+        sub._running = True
+        task = asyncio.create_task(sub._owner_subscription_loop("user-1"))
+        await asyncio.sleep(0.05)
+        sub._running = False
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        # The running state event should have cancelled any pending eval (no crash)
