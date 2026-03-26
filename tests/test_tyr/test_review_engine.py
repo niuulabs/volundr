@@ -169,6 +169,7 @@ class StubTracker(TrackerPort):
         owner_id: str | None = None,
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
     ) -> Raid:
         raid = self.raids.get(tracker_id)
         if raid is None:

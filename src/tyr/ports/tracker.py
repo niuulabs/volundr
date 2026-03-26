@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Protocol
 from uuid import UUID
 
 from tyr.domain.models import (
@@ -17,6 +18,12 @@ from tyr.domain.models import (
     TrackerMilestone,
     TrackerProject,
 )
+
+
+class TrackerFactory(Protocol):
+    """Protocol for resolving per-owner TrackerPort adapters."""
+
+    async def for_owner(self, owner_id: str) -> list[TrackerPort]: ...
 
 
 class TrackerPort(ABC):
@@ -90,6 +97,7 @@ class TrackerPort(ABC):
         owner_id: str | None = None,
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
     ) -> Raid: ...
 
     @abstractmethod

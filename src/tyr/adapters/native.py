@@ -246,18 +246,20 @@ class NativeTrackerAdapter(TrackerPort):
         owner_id: str | None = None,
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
     ) -> Raid:
         row = await self._pool.fetchrow(
             """
             UPDATE raids SET
-                status     = COALESCE($2, status),
-                session_id = COALESCE($3, session_id),
-                confidence = COALESCE($4, confidence),
-                pr_url     = COALESCE($5, pr_url),
-                pr_id      = COALESCE($6, pr_id),
-                retry_count = COALESCE($7, retry_count),
-                reason     = COALESCE($8, reason),
-                updated_at = NOW()
+                status           = COALESCE($2, status),
+                session_id       = COALESCE($3, session_id),
+                confidence       = COALESCE($4, confidence),
+                pr_url           = COALESCE($5, pr_url),
+                pr_id            = COALESCE($6, pr_id),
+                retry_count      = COALESCE($7, retry_count),
+                reason           = COALESCE($8, reason),
+                chronicle_summary = COALESCE($9, chronicle_summary),
+                updated_at       = NOW()
             WHERE tracker_id = $1
             RETURNING *
             """,
@@ -269,6 +271,7 @@ class NativeTrackerAdapter(TrackerPort):
             pr_id,
             retry_count,
             reason,
+            chronicle_summary,
         )
         if row is None:
             raise LookupError(f"Raid not found: {tracker_id}")

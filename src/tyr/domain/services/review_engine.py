@@ -15,7 +15,6 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
 from uuid import UUID, uuid4
 
 from tyr.config import ReviewConfig
@@ -30,21 +29,10 @@ from tyr.domain.models import (
 )
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
-from tyr.ports.tracker import TrackerPort
+from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-exported for consumers
 from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Factory protocol
-# ---------------------------------------------------------------------------
-
-
-class TrackerFactory(Protocol):
-    """Protocol for resolving per-owner TrackerPort adapters."""
-
-    async def for_owner(self, owner_id: str) -> list[TrackerPort]: ...
 
 
 # ---------------------------------------------------------------------------

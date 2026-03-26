@@ -14,9 +14,9 @@ from tyr.config import WatcherConfig
 from tyr.domain.models import (
     ConfidenceEvent,
     DispatcherState,
-    PRStatus,
     Phase,
     PhaseStatus,
+    PRStatus,
     Raid,
     RaidStatus,
     Saga,
@@ -166,6 +166,7 @@ class StubTracker(TrackerPort):
         owner_id: str | None = None,
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
     ) -> Raid:
         entry = self.progress.setdefault(tracker_id, {})
         if status is not None:
@@ -657,9 +658,7 @@ class TestCompletionEvaluationLogic:
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
-        result = await sub._evaluate_completion(
-            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
-        )
+        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})  # noqa: E501
         assert result.is_complete is True
         assert result.signals["session_idle"] is True
         assert result.signals["has_turns"] is True
@@ -679,9 +678,7 @@ class TestCompletionEvaluationLogic:
             ci_passed=True,
         )
 
-        result = await sub._evaluate_completion(
-            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
-        )
+        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})  # noqa: E501
         assert result.is_complete is True
         assert result.signals["pr_exists"] is True
         assert result.signals["ci_passed"] is True
@@ -695,9 +692,7 @@ class TestCompletionEvaluationLogic:
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
-        result = await sub._evaluate_completion(
-            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
-        )
+        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})  # noqa: E501
         assert result.is_complete is False
 
     @pytest.mark.asyncio
@@ -714,9 +709,7 @@ class TestCompletionEvaluationLogic:
             ci_passed=False,
         )
 
-        result = await sub._evaluate_completion(
-            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
-        )
+        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})  # noqa: E501
         assert result.is_complete is False
 
     @pytest.mark.asyncio
@@ -727,9 +720,7 @@ class TestCompletionEvaluationLogic:
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
-        result = await sub._evaluate_completion(
-            raid, volundr, {"turn_count": 5, "duration_seconds": 120}
-        )
+        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 120})  # noqa: E501
         assert result.signals["extended_idle"] is True
         assert result.confidence >= 0.6
 
@@ -739,9 +730,7 @@ class TestCompletionEvaluationLogic:
         sub, volundr, _, _ = _make_subscriber()
         raid = _make_raid(branch=None)
 
-        result = await sub._evaluate_completion(
-            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
-        )
+        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})  # noqa: E501
         assert result.is_complete is True
         assert result.signals["pr_exists"] is False
 
@@ -768,7 +757,7 @@ class TestCompletionHandling:
             pr_url="https://github.com/org/repo/pull/42",
         )
 
-        await sub._handle_completion(raid, tracker, "user-1", evaluation)
+        await sub._handle_completion(raid, tracker, volundr, "user-1", evaluation)
 
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
         assert tracker.progress[raid.tracker_id]["pr_id"] == "PR-42"
@@ -788,7 +777,7 @@ class TestCompletionHandling:
             confidence=0.5,
         )
 
-        await sub._handle_completion(raid, tracker, "user-1", evaluation)
+        await sub._handle_completion(raid, tracker, volundr, "user-1", evaluation)
 
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
         assert tracker.progress[raid.tracker_id].get("pr_id") is None
@@ -802,7 +791,7 @@ class TestCompletionHandling:
         tracker.add_raid(raid)
 
         q = event_bus.subscribe()
-        await sub._handle_completion(raid, tracker, "user-1")
+        await sub._handle_completion(raid, tracker, volundr, "user-1")
 
         event = await asyncio.wait_for(q.get(), timeout=1.0)
         assert event.event == "raid.state_changed"

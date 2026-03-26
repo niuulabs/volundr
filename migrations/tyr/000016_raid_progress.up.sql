@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS raid_progress (
     pr_id               TEXT,
     retry_count         INT DEFAULT 0,
     reason              TEXT,
+    chronicle_summary   TEXT,
     updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 

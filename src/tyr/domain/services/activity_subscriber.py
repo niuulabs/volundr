@@ -19,7 +19,7 @@ from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
-from tyr.ports.tracker import TrackerPort
+from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-exported for consumers
 from tyr.ports.volundr import ActivityEvent, VolundrPort
 
 logger = logging.getLogger(__name__)
@@ -29,12 +29,6 @@ class VolundrFactory(Protocol):
     """Protocol for resolving per-owner Volundr adapters."""
 
     async def for_owner(self, owner_id: str) -> VolundrPort | None: ...
-
-
-class TrackerFactory(Protocol):
-    """Protocol for resolving per-owner TrackerPort adapters."""
-
-    async def for_owner(self, owner_id: str) -> list[TrackerPort]: ...
 
 
 @dataclass(frozen=True)
@@ -247,7 +241,7 @@ class SessionActivitySubscriber:
         if not completion.is_complete:
             return
 
-        await self._handle_completion(raid, tracker, owner_id, completion)
+        await self._handle_completion(raid, tracker, volundr, owner_id, completion)
 
     async def _find_raid_for_session(
         self, session_id: str, owner_id: str
@@ -323,26 +317,43 @@ class SessionActivitySubscriber:
         self,
         raid: Raid,
         tracker: TrackerPort,
+        volundr: VolundrPort,
         owner_id: str,
         evaluation: CompletionEvaluation | None = None,
     ) -> None:
-        """Mark a raid as complete (REVIEW state)."""
+        """Mark a raid as complete (REVIEW state).
+
+        Fetches a chronicle summary from Volundr when chronicle_on_complete is
+        enabled in config — this captures the session narrative alongside the
+        PR metadata for human reviewers.
+        """
         pr_id = evaluation.pr_id if evaluation else None
         pr_url = evaluation.pr_url if evaluation else None
+
+        chronicle_summary: str | None = None
+        if self._config.chronicle_on_complete and raid.session_id:
+            try:
+                chronicle_summary = await volundr.get_chronicle_summary(raid.session_id)
+            except Exception:
+                logger.warning(
+                    "Failed to fetch chronicle for session %s", raid.session_id, exc_info=True
+                )
 
         await tracker.update_raid_progress(
             raid.tracker_id,
             status=RaidStatus.REVIEW,
             pr_url=pr_url,
             pr_id=pr_id,
+            chronicle_summary=chronicle_summary,
         )
 
         await self._emit_state_changed(raid, owner_id, "REVIEW", pr_id=pr_id, pr_url=pr_url)
         logger.info(
-            "Session %s completed (tracker=%s, pr=%s)",
+            "Session %s completed (tracker=%s, pr=%s, chronicle=%s)",
             raid.session_id,
             raid.tracker_id,
             pr_id or "none",
+            "yes" if chronicle_summary else "no",
         )
 
     async def _on_session_failed(
