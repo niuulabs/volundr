@@ -14,6 +14,15 @@ from tyr.domain.exceptions import InvalidStateTransitionError
 # ---------------------------------------------------------------------------
 
 
+class PlanningSessionStatus(StrEnum):
+    SPAWNING = "SPAWNING"
+    ACTIVE = "ACTIVE"
+    STRUCTURE_PROPOSED = "STRUCTURE_PROPOSED"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
+
+
 class SagaStatus(StrEnum):
     ACTIVE = "ACTIVE"
     COMPLETE = "COMPLETE"
@@ -230,6 +239,37 @@ class TrackerIssue:
     estimate: float | None = None
     url: str = ""
     milestone_id: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Planning sessions (interactive saga decomposition)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PlanningSession:
+    """An interactive planning session for saga decomposition."""
+
+    id: UUID
+    owner_id: str
+    session_id: str
+    repo: str
+    spec: str
+    status: PlanningSessionStatus
+    structure: SagaStructure | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class PlanningMessage:
+    """A message in a planning session conversation."""
+
+    id: UUID
+    planning_session_id: UUID
+    content: str
+    sender: str
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------

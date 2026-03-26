@@ -35,6 +35,7 @@ from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.events import create_events_router, resolve_event_bus
+from tyr.api.planning import create_planning_router, resolve_planning_service
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
@@ -86,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- Routers --
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
+    app.include_router(create_planning_router())
     app.include_router(create_raids_router())
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
@@ -244,6 +246,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return event_bus
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
+
+            # Wire planning session service (in-memory for now)
+            from tyr.adapters.memory_planning_repo import InMemoryPlanningSessionRepository
+            from tyr.domain.services.planning_session import PlanningSessionService
+
+            planning_repo = InMemoryPlanningSessionRepository()
+            planning_service = PlanningSessionService(
+                repo=planning_repo,
+                volundr=volundr_adapter,
+                config=settings.planner,
+                event_bus=event_bus,
+            )
+            app.state.planning_service = planning_service
+
+            async def _resolve_planning_service() -> PlanningSessionService:
+                return planning_service
+
+            app.dependency_overrides[resolve_planning_service] = _resolve_planning_service
 
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (

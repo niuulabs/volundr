@@ -264,6 +264,32 @@ class WatcherConfig(BaseModel):
     )
 
 
+class PlannerConfig(BaseModel):
+    """Planning session configuration."""
+
+    idle_timeout_seconds: float = Field(
+        default=1800.0,
+        description="Seconds of idle before a planning session is expired.",
+    )
+    max_sessions_per_user: int = Field(
+        default=3,
+        description="Maximum concurrent planning sessions per user.",
+    )
+    default_model: str = Field(
+        default="claude-opus-4-6",
+        description="Default LLM model for planning sessions.",
+    )
+    system_prompt: str = Field(
+        default=(
+            "You are a saga decomposition planner for the Niuu platform. "
+            "Help the user iteratively decompose their specification into "
+            "phases and raids. When the user is satisfied, output the final "
+            "structure as a JSON block with the saga structure schema."
+        ),
+        description="System prompt for the planning session LLM.",
+    )
+
+
 class EventBusConfig(BaseModel):
     """Event bus adapter configuration (dynamic adapter pattern)."""
 
@@ -334,6 +360,7 @@ class Settings(BaseSettings):
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
+    planner: PlannerConfig = Field(default_factory=PlannerConfig)
 
     @classmethod
     def settings_customise_sources(

@@ -8,3 +8,4 @@ export type {
   TelegramSetupResult,
   CreateIntegrationParams,
 } from './integrations.port';
+export type { IPlanningService } from './planning.port';
