@@ -83,6 +83,9 @@ class StubVolundr(VolundrPort):
     ) -> None:
         pass
 
+    async def stop_session(self, session_id: str, *, auth_token: str | None = None) -> None:
+        pass
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         for event in self.activity_events:
             yield event
@@ -380,7 +383,6 @@ def _make_volundr_session(session_id: str = "session-1", status: str = "running"
         status=status,
         tracker_issue_id=None,
     )
-
 
 
 def _make_subscriber(

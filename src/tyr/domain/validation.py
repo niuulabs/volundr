@@ -7,6 +7,7 @@ against the SagaStructure schema and returns typed domain objects.
 from __future__ import annotations
 
 import json
+import re
 
 from tyr.domain.models import PhaseSpec, RaidSpec, SagaStructure
 
@@ -138,3 +139,34 @@ def validate_raid(
         estimate_hours=estimate,
         confidence=confidence,
     )
+
+
+_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
+
+
+def try_extract_structure(text: str) -> SagaStructure | None:
+    """Scan freeform text for a JSON block matching the SagaStructure schema.
+
+    Returns the first valid SagaStructure found, or None if no match.
+    """
+    candidates: list[str] = []
+
+    for match in _JSON_BLOCK_RE.finditer(text):
+        candidates.append(match.group(1).strip())
+
+    if not candidates:
+        # Try parsing the whole text as JSON (no fences)
+        try:
+            data = json.loads(text.strip())
+            if isinstance(data, dict) and "phases" in data:
+                candidates.append(text.strip())
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    for candidate in candidates:
+        try:
+            return parse_and_validate(candidate)
+        except (ValidationError, json.JSONDecodeError, ValueError, KeyError):
+            continue
+
+    return None

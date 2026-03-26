@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMentionMenu } from './useMentionMenu';
 
-vi.mock('@/modules/volundr/adapters/api/client', () => ({
+vi.mock('@/modules/shared/api/client', () => ({
   getAccessToken: vi.fn(() => null),
 }));
 
@@ -146,7 +146,7 @@ describe('useMentionMenu', () => {
   });
 
   it('includes auth token in fetch headers when available', async () => {
-    const { getAccessToken } = await import('@/modules/volundr/adapters/api/client');
+    const { getAccessToken } = await import('@/modules/shared/api/client');
     vi.mocked(getAccessToken).mockReturnValue('test-token');
 
     const { result } = renderHook(() => useMentionMenu('session-1', 'pod.local'));

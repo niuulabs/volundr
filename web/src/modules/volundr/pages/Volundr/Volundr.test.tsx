@@ -76,7 +76,7 @@ vi.mock('@/modules/volundr/components/SessionTerminal', () => ({
   ),
 }));
 
-vi.mock('@/modules/volundr/components/SessionChat', () => ({
+vi.mock('@/modules/shared/components/SessionChat', () => ({
   SessionChat: ({ url, className }: { url: string | null; className?: string }) => (
     <div data-testid="session-chat" data-url={url ?? ''} className={className}>
       Mock Chat

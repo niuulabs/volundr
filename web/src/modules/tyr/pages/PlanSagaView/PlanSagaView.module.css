@@ -1,0 +1,258 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 800px;
+}
+
+.heading {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.error {
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-accent-red);
+  background-color: color-mix(in srgb, var(--color-accent-red) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-red) 30%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.textarea {
+  width: 100%;
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+  transition: border-color var(--transition-fast);
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-accent-cyan);
+}
+
+.textarea::placeholder {
+  color: var(--color-text-faint);
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-accent-cyan);
+}
+
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.primaryButton {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-accent-cyan);
+  background-color: color-mix(in srgb, var(--color-accent-cyan) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-cyan) 30%, transparent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-accent-cyan) 25%, transparent);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background-color: var(--color-bg-elevated);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sessionArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sessionHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sessionStatus {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-tertiary);
+}
+
+.sessionStatus[data-status='ACTIVE'] {
+  color: var(--color-accent-emerald);
+  background-color: color-mix(in srgb, var(--color-accent-emerald) 15%, transparent);
+}
+
+.sessionRepo {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.structureArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.structurePreview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.previewHeading {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.structureName {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.phase {
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.phaseName {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-accent-purple);
+  margin-bottom: var(--space-1);
+}
+
+.raid {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.raidName {
+  color: var(--color-text-primary);
+}
+
+.raidEstimate {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.commitButton {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-accent-emerald);
+  background-color: color-mix(in srgb, var(--color-accent-emerald) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-emerald) 30%, transparent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.commitButton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-accent-emerald) 25%, transparent);
+}
+
+.commitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detectedStructure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: color-mix(in srgb, var(--color-accent-amber) 8%, var(--color-bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.detectedLabel {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-accent-amber);
+}

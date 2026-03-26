@@ -8,7 +8,7 @@ vi.mock('@/hooks/useWebSocket', () => ({
 }));
 
 // Mock the chat store
-vi.mock('@/modules/volundr/store/chat.store', () => ({
+vi.mock('@/modules/shared/store/chat.store', () => ({
   useChatStore: vi.fn(() => ({
     getMessages: vi.fn(() => []),
     setMessages: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock('@/modules/volundr/store/chat.store', () => ({
 }));
 
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useChatStore } from '@/modules/volundr/store/chat.store';
+import { useChatStore } from '@/modules/shared/store/chat.store';
 
 type MessageHandler = (raw: string) => void;
 type OpenHandler = () => void;

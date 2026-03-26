@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { StatusBadge } from '@/modules/shared';
 import { SessionTerminal } from '@/modules/volundr/components/SessionTerminal';
-import { SessionChat } from '@/modules/volundr/components/SessionChat';
+import { SessionChat } from '@/modules/shared/components/SessionChat';
 import { SessionStartingIndicator } from '@/modules/volundr/components/molecules/SessionStartingIndicator';
 import { useVolundr } from '@/modules/volundr/hooks/useVolundr';
 import { useBroadcastChannel } from '@/hooks/useBroadcastChannel';

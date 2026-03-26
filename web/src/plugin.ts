@@ -17,17 +17,17 @@ export { useBroadcastChannel } from '@/hooks/useBroadcastChannel';
 export { useWebSocket } from '@/hooks/useWebSocket';
 export type { WebSocketStatus } from '@/hooks/useWebSocket';
 export { useSessionProbe } from '@/modules/volundr/hooks/useSessionStartingPoll';
-export { useSkuldChat } from '@/modules/volundr/hooks/useSkuldChat';
+export { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 export type {
   SkuldChatMessage,
   ChatMessageMeta,
   ChatMessageRole,
-} from '@/modules/volundr/hooks/useSkuldChat';
+} from '@/modules/shared/hooks/useSkuldChat';
 export { useDiffViewer } from '@/modules/volundr/hooks/useDiffViewer';
 export type { UseDiffViewerResult } from '@/modules/volundr/hooks/useDiffViewer';
 
 // Components
-export { SessionChat } from '@/modules/volundr/components/SessionChat';
+export { SessionChat } from '@/modules/shared/components/SessionChat';
 export { SessionTerminal } from '@/modules/volundr/components/SessionTerminal';
 export { SessionChronicles } from '@/modules/volundr/components/SessionChronicles';
 export type { SessionChroniclesProps } from '@/modules/volundr/components/SessionChronicles';

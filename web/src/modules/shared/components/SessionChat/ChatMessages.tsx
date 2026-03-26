@@ -15,7 +15,7 @@ import {
 import { cn } from '@/utils';
 import { MarkdownContent } from './MarkdownContent';
 import { ToolBlock, ToolGroupBlock, groupContentBlocks } from './ToolBlock';
-import type { SkuldChatMessage, SkuldChatMessagePart } from '@/modules/volundr/hooks/useSkuldChat';
+import type { SkuldChatMessage, SkuldChatMessagePart } from '@/modules/shared/hooks/useSkuldChat';
 import type { ContentBlock as ToolContentBlock } from './ToolBlock';
 import styles from './ChatMessages.module.css';
 

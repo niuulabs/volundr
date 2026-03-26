@@ -67,6 +67,7 @@ class TestVolundrPort:
             "get_pr_status",
             "get_chronicle_summary",
             "send_message",
+            "stop_session",
             "subscribe_activity",
         }
         abstract_methods = {

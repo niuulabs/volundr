@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { MessageCostFooter } from './MessageCostFooter';
-import type { ChatMessageMeta } from '@/modules/volundr/hooks/useSkuldChat';
+import type { ChatMessageMeta } from '@/modules/shared/hooks/useSkuldChat';
 
 describe('MessageCostFooter', () => {
   it('renders nothing when metadata is undefined', () => {

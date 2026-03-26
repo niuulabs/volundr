@@ -65,7 +65,7 @@ export type { RealmDetailModalProps } from '@/modules/volundr/components/organis
 
 // Session components (volundr)
 export { SessionTerminal } from '@/modules/volundr/components/SessionTerminal';
-export { SessionChat } from '@/modules/volundr/components/SessionChat';
+export { SessionChat } from '@/modules/shared/components/SessionChat';
 export { TerminalTabBar } from '@/modules/volundr/components/TerminalTabBar';
 export type { TerminalTabBarProps } from '@/modules/volundr/components/TerminalTabBar';
 export { TerminalAccessoryBar } from '@/modules/volundr/components/TerminalAccessoryBar';

@@ -40,6 +40,7 @@ from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
 from tyr.api.sagas import resolve_git as sagas_resolve_git
+from tyr.api.sagas import resolve_volundr as sagas_resolve_volundr
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
@@ -170,6 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr
             app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr
+            app.dependency_overrides[sagas_resolve_volundr] = _resolve_volundr
 
             # Wire Git adapter
             git_adapter = GitHubGitAdapter(settings.git.token)

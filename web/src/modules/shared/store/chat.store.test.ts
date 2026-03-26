@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatStore } from './chat.store';
-import type { SkuldChatMessage } from '@/modules/volundr/hooks/useSkuldChat';
+import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
 
 function makeMessage(overrides: Partial<SkuldChatMessage> = {}): SkuldChatMessage {
   return {

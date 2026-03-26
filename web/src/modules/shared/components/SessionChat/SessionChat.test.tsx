@@ -2,12 +2,12 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // Mock the useSkuldChat hook
-vi.mock('@/modules/volundr/hooks/useSkuldChat', () => ({
+vi.mock('@/modules/shared/hooks/useSkuldChat', () => ({
   useSkuldChat: vi.fn(),
 }));
 
-import { useSkuldChat } from '@/modules/volundr/hooks/useSkuldChat';
-import type { SkuldChatMessage, PermissionRequest } from '@/modules/volundr/hooks/useSkuldChat';
+import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
+import type { SkuldChatMessage, PermissionRequest } from '@/modules/shared/hooks/useSkuldChat';
 import { SessionChat } from './SessionChat';
 
 function mockSkuldChat(overrides: Partial<ReturnType<typeof useSkuldChat>> = {}) {

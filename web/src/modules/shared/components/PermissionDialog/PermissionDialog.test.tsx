@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { PermissionDialog, PermissionStack } from './PermissionDialog';
-import type { PermissionRequest } from '@/modules/volundr/hooks/useSkuldChat';
+import type { PermissionRequest } from '@/modules/shared/hooks/useSkuldChat';
 
 function makeRequest(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
   return {

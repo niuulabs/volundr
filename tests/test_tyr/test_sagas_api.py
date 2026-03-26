@@ -254,3 +254,60 @@ class TestDeleteSaga:
     def test_delete_not_found(self, client: TestClient):
         resp = client.delete(f"/api/v1/tyr/sagas/{uuid4()}")
         assert resp.status_code == 404
+
+
+class TestExtractStructure:
+    """Tests for the POST /sagas/extract-structure endpoint."""
+
+    @pytest.fixture
+    def client(self) -> TestClient:
+        app = FastAPI()
+        app.state.settings = _dev_settings()
+        app.include_router(create_sagas_router())
+        return TestClient(app)
+
+    def test_extracts_valid_structure_from_json_block(self, client: TestClient):
+        text = (
+            "Here is the plan:\n"
+            "```json\n"
+            '{"name": "Auth Refactor", "phases": [{"name": "Phase 1", "raids": [{'
+            '"name": "Setup", "description": "Set up auth", '
+            '"acceptance_criteria": ["AC1"], "declared_files": ["src/auth.py"], '
+            '"estimate_hours": 4, "confidence": 0.8}]}]}\n'
+            "```"
+        )
+        resp = client.post("/api/v1/tyr/sagas/extract-structure", json={"text": text})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["found"] is True
+        assert data["structure"]["name"] == "Auth Refactor"
+        assert len(data["structure"]["phases"]) == 1
+        assert data["structure"]["phases"][0]["raids"][0]["name"] == "Setup"
+
+    def test_returns_not_found_for_plain_text(self, client: TestClient):
+        resp = client.post(
+            "/api/v1/tyr/sagas/extract-structure",
+            json={"text": "Just a regular message with no JSON."},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["found"] is False
+        assert data["structure"] is None
+
+    def test_returns_not_found_for_invalid_json(self, client: TestClient):
+        text = "```json\n{not valid json}\n```"
+        resp = client.post("/api/v1/tyr/sagas/extract-structure", json={"text": text})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["found"] is False
+
+    def test_returns_not_found_for_json_missing_required_fields(self, client: TestClient):
+        text = '```json\n{"key": "value"}\n```'
+        resp = client.post("/api/v1/tyr/sagas/extract-structure", json={"text": text})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["found"] is False
+
+    def test_rejects_empty_text(self, client: TestClient):
+        resp = client.post("/api/v1/tyr/sagas/extract-structure", json={"text": ""})
+        assert resp.status_code == 422

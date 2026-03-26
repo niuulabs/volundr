@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon } from 'lucide-react';
-import { PermissionStack } from '@/modules/volundr/components/PermissionDialog';
-import { useSkuldChat } from '@/modules/volundr/hooks/useSkuldChat';
-import type { PermissionBehavior } from '@/modules/volundr/hooks/useSkuldChat';
+import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
+import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
+import type { PermissionBehavior } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
 import { ChatInput } from './ChatInput';
