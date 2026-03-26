@@ -66,6 +66,9 @@ class MockDispatcherRepo(DispatcherRepository):
         self.states[owner_id] = new_state
         return new_state
 
+    async def list_active_owner_ids(self) -> list[str]:
+        return [oid for oid, s in self.states.items() if s.running]
+
 
 # -------------------------------------------------------------------
 # Fixtures

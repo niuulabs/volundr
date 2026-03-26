@@ -1,5 +1,10 @@
 import { createApiClient } from '@/modules/shared/api/client';
-import type { ITyrService, CommitSagaRequest, PlanSession } from '../../ports';
+import type {
+  ITyrService,
+  CommitSagaRequest,
+  PlanSession,
+  ExtractedStructure,
+} from '../../ports';
 import type { Saga, Phase } from '../../models';
 
 const api = createApiClient('/api/v1/tyr/sagas');
@@ -165,5 +170,9 @@ export class ApiTyrService implements ITyrService {
 
   async spawnPlanSession(spec: string, repo: string): Promise<PlanSession> {
     return api.post<PlanSession>('/plan', { spec, repo });
+  }
+
+  async extractStructure(text: string): Promise<ExtractedStructure> {
+    return api.post<ExtractedStructure>('/extract-structure', { text });
   }
 }

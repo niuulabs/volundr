@@ -30,7 +30,6 @@ from tyr.domain.models import (
 )
 from tyr.ports.git import GitPort
 from tyr.ports.llm import LLMPort
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrPort
@@ -156,6 +155,19 @@ class PlanSessionResponse(BaseModel):
     chat_endpoint: str | None = None
 
 
+class ExtractStructureRequest(BaseModel):
+    """Request to extract a saga structure from freeform text."""
+
+    text: str = Field(min_length=1)
+
+
+class ExtractStructureResponse(BaseModel):
+    """Extracted saga structure, or null if no valid structure found."""
+
+    found: bool
+    structure: SagaStructureResponse | None = None
+
+
 class CommitRequest(BaseModel):
     name: str
     slug: str
@@ -211,13 +223,6 @@ async def resolve_llm() -> LLMPort:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="LLM adapter not configured",
-    )
-
-
-async def resolve_raid_repo() -> RaidRepository:
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Raid repository not configured",
     )
 
 
@@ -499,6 +504,46 @@ def create_sagas_router() -> APIRouter:
             chat_endpoint=session.chat_endpoint,
         )
 
+    @router.post("/extract-structure", response_model=ExtractStructureResponse)
+    async def extract_structure(
+        body: ExtractStructureRequest,
+        _principal: Principal = Depends(extract_principal),
+    ) -> ExtractStructureResponse:
+        """Extract a saga structure from freeform assistant text.
+
+        Scans the text for JSON code blocks (or raw JSON) matching the
+        SagaStructure schema using tyr.domain.validation.try_extract_structure.
+        """
+        from tyr.domain.validation import try_extract_structure
+
+        result = try_extract_structure(body.text)
+        if result is None:
+            return ExtractStructureResponse(found=False)
+
+        return ExtractStructureResponse(
+            found=True,
+            structure=SagaStructureResponse(
+                name=result.name,
+                phases=[
+                    PhaseSpecResponse(
+                        name=phase.name,
+                        raids=[
+                            RaidSpecResponse(
+                                name=raid.name,
+                                description=raid.description,
+                                acceptance_criteria=raid.acceptance_criteria,
+                                declared_files=raid.declared_files,
+                                estimate_hours=raid.estimate_hours,
+                                confidence=raid.confidence,
+                            )
+                            for raid in phase.raids
+                        ],
+                    )
+                    for phase in result.phases
+                ],
+            ),
+        )
+
     @router.delete("/{saga_id}", status_code=204)
     async def delete_saga(
         saga_id: str,
@@ -526,7 +571,6 @@ def create_sagas_router() -> APIRouter:
         request: Request,
         principal: Principal = Depends(extract_principal),
         saga_repo: SagaRepository = Depends(resolve_saga_repo),
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         git: GitPort = Depends(resolve_git),
     ) -> CommittedSagaResponse:
@@ -685,9 +729,9 @@ def create_sagas_router() -> APIRouter:
         async with saga_repo.begin() as conn:
             await saga_repo.save_saga(saga, conn=conn)
             for phase in phases:
-                await raid_repo.save_phase(phase, conn=conn)
+                await saga_repo.save_phase(phase, conn=conn)
             for raid in raids:
-                await raid_repo.save_raid(raid, conn=conn)
+                await saga_repo.save_raid(raid, conn=conn)
 
         # 4. Create feature branch for each repo (best-effort — logged on failure)
         warnings: list[str] = []

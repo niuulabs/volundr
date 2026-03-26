@@ -36,27 +36,6 @@ from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 from .test_tracker_api import MockSagaRepo, MockTracker
 
 # -------------------------------------------------------------------
-# Mock RaidRepository (minimal — just stores raids)
-# -------------------------------------------------------------------
-
-
-class MockPool:
-    """Minimal mock for asyncpg.Pool — records execute calls."""
-
-    def __init__(self) -> None:
-        self.executed: list = []
-
-    async def execute(self, query: str, *args) -> None:  # noqa: ANN002
-        self.executed.append((query, args))
-
-    async def fetch(self, query: str, *args) -> list:  # noqa: ANN002
-        return []
-
-    async def fetchrow(self, query: str, *args):  # noqa: ANN002, ANN201
-        return None
-
-
-# -------------------------------------------------------------------
 # Mock VolundrPort
 # -------------------------------------------------------------------
 
@@ -261,7 +240,6 @@ def client(
     app = FastAPI()
     app.include_router(create_dispatch_router())
     app.state.settings = _make_settings()
-    app.state.pool = MockPool()
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
     app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
@@ -444,7 +422,6 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
-        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
@@ -466,7 +443,6 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
-        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
@@ -486,7 +462,6 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
-        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
@@ -505,7 +480,6 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
-        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
@@ -542,7 +516,6 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
-        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [FailingTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
@@ -669,7 +642,6 @@ class TestApproveDispatch:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
-        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
@@ -703,7 +675,6 @@ class TestApproveDispatch:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
-        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr

@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tyrService } from '../../adapters';
 import { SessionChat } from '@/modules/shared/components/SessionChat';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
-import type { CommitSagaRequest } from '../../ports/tyr.port';
+import type { CommitSagaRequest, ExtractedStructure } from '../../ports/tyr.port';
 import styles from './PlanSagaView.module.css';
 
 interface DetectedStructure {
@@ -28,23 +28,6 @@ function slugify(name: string): string {
     .slice(0, 40);
 }
 
-/** Try to extract a SagaStructure JSON from assistant message text. */
-function tryDetectStructure(text: string): DetectedStructure | null {
-  const fenceRe = /```(?:json)?\s*\n([\s\S]*?)```/g;
-  let match: RegExpExecArray | null;
-  while ((match = fenceRe.exec(text)) !== null) {
-    try {
-      const data = JSON.parse(match[1].trim());
-      if (data && typeof data === 'object' && Array.isArray(data.phases) && data.name) {
-        return data as DetectedStructure;
-      }
-    } catch {
-      // not valid JSON
-    }
-  }
-  return null;
-}
-
 export function PlanSagaView() {
   const [spec, setSpec] = useState('');
   const [repo, setRepo] = useState('');
@@ -54,20 +37,27 @@ export function PlanSagaView() {
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detectedStructure, setDetectedStructure] = useState<DetectedStructure | null>(null);
+  const lastCheckedMsgId = useRef<string | null>(null);
   const navigate = useNavigate();
 
   const skuld = useSkuldChat(chatEndpoint);
 
-  // Auto-detect structure in new assistant messages
+  // Auto-detect structure via backend validation when assistant messages complete
   useEffect(() => {
     if (skuld.messages.length === 0) return;
     const lastMsg = skuld.messages[skuld.messages.length - 1];
     if (lastMsg.role !== 'assistant' || lastMsg.status !== 'complete') return;
+    if (lastMsg.id === lastCheckedMsgId.current) return;
 
-    const found = tryDetectStructure(lastMsg.content);
-    if (found) {
-      setDetectedStructure(found);
-    }
+    lastCheckedMsgId.current = lastMsg.id;
+
+    tyrService.extractStructure(lastMsg.content).then((result: ExtractedStructure) => {
+      if (result.found && result.structure) {
+        setDetectedStructure(result.structure);
+      }
+    }).catch(() => {
+      // Extraction failed — ignore, user can still chat
+    });
   }, [skuld.messages]);
 
   const handleSpawn = async () => {

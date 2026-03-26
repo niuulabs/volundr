@@ -9,16 +9,20 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from uuid import UUID
 
 import asyncpg
 
 from tyr.domain.models import (
+    ConfidenceEvent,
+    ConfidenceEventType,
     Phase,
     PhaseStatus,
     Raid,
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
     TrackerIssue,
     TrackerMilestone,
     TrackerProject,
@@ -225,6 +229,239 @@ class NativeTrackerAdapter(TrackerPort):
                 project_id,
             )
         return [self._raid_row_to_issue(r) for r in rows]
+
+    # -- Raid progress --
+
+    async def update_raid_progress(
+        self,
+        tracker_id: str,
+        *,
+        status: RaidStatus | None = None,
+        session_id: str | None = None,
+        confidence: float | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        retry_count: int | None = None,
+        reason: str | None = None,
+        owner_id: str | None = None,
+        phase_tracker_id: str | None = None,
+        saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
+    ) -> Raid:
+        row = await self._pool.fetchrow(
+            """
+            UPDATE raids SET
+                status           = COALESCE($2, status),
+                session_id       = COALESCE($3, session_id),
+                confidence       = COALESCE($4, confidence),
+                pr_url           = COALESCE($5, pr_url),
+                pr_id            = COALESCE($6, pr_id),
+                retry_count      = COALESCE($7, retry_count),
+                reason           = COALESCE($8, reason),
+                chronicle_summary = COALESCE($9, chronicle_summary),
+                updated_at       = NOW()
+            WHERE tracker_id = $1
+            RETURNING *
+            """,
+            tracker_id,
+            status.value if status is not None else None,
+            session_id,
+            confidence,
+            pr_url,
+            pr_id,
+            retry_count,
+            reason,
+            chronicle_summary,
+        )
+        if row is None:
+            raise LookupError(f"Raid not found: {tracker_id}")
+        return self._row_to_raid(row)
+
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
+        row = await self._pool.fetchrow(
+            "SELECT * FROM raids WHERE session_id = $1",
+            session_id,
+        )
+        if row is None:
+            return None
+        return self._row_to_raid(row)
+
+    async def list_raids_by_status(self, status: RaidStatus) -> list[Raid]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM raids WHERE status = $1 ORDER BY updated_at",
+            status.value,
+        )
+        return [self._row_to_raid(r) for r in rows]
+
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
+        row = await self._pool.fetchrow("SELECT * FROM raids WHERE id = $1", raid_id)
+        if row is None:
+            return None
+        return self._row_to_raid(row)
+
+    # -- Confidence events --
+
+    async def add_confidence_event(self, tracker_id: str, event: ConfidenceEvent) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO confidence_events (id, raid_id, event_type, delta, score_after, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            event.id,
+            event.raid_id,
+            event.event_type.value,
+            event.delta,
+            event.score_after,
+            event.created_at,
+        )
+        await self._pool.execute(
+            "UPDATE raids SET confidence = $2, updated_at = $3 WHERE tracker_id = $1",
+            tracker_id,
+            event.score_after,
+            event.created_at,
+        )
+
+    async def get_confidence_events(self, tracker_id: str) -> list[ConfidenceEvent]:
+        rows = await self._pool.fetch(
+            """
+            SELECT ce.* FROM confidence_events ce
+            JOIN raids r ON r.id = ce.raid_id
+            WHERE r.tracker_id = $1
+            ORDER BY ce.created_at
+            """,
+            tracker_id,
+        )
+        return [
+            ConfidenceEvent(
+                id=r["id"],
+                raid_id=r["raid_id"],
+                event_type=ConfidenceEventType(r["event_type"]),
+                delta=r["delta"],
+                score_after=r["score_after"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
+    # -- Phase gate management --
+
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
+        row = await self._pool.fetchrow(
+            """
+            SELECT count(*) FILTER (WHERE r.status != 'MERGED') AS remaining
+            FROM raids r
+            JOIN phases p ON p.id = r.phase_id
+            WHERE p.tracker_id = $1
+            """,
+            phase_tracker_id,
+        )
+        return row is not None and row["remaining"] == 0
+
+    async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
+        rows = await self._pool.fetch(
+            """
+            SELECT p.* FROM phases p
+            JOIN sagas s ON s.id = p.saga_id
+            WHERE s.tracker_id = $1
+            ORDER BY p.number
+            """,
+            saga_tracker_id,
+        )
+        return [self._row_to_phase(r) for r in rows]
+
+    async def update_phase_status(self, phase_tracker_id: str, status: PhaseStatus) -> Phase | None:
+        row = await self._pool.fetchrow(
+            """
+            UPDATE phases SET status = $2 WHERE tracker_id = $1
+            RETURNING *
+            """,
+            phase_tracker_id,
+            status.value,
+        )
+        if row is None:
+            return None
+        return self._row_to_phase(row)
+
+    # -- Cross-entity navigation --
+
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
+        row = await self._pool.fetchrow(
+            """
+            SELECT s.* FROM sagas s
+            JOIN phases p ON p.saga_id = s.id
+            JOIN raids r ON r.phase_id = p.id
+            WHERE r.tracker_id = $1
+            """,
+            tracker_id,
+        )
+        if row is None:
+            return None
+        return self._row_to_saga(row)
+
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
+        row = await self._pool.fetchrow(
+            """
+            SELECT p.* FROM phases p
+            JOIN raids r ON r.phase_id = p.id
+            WHERE r.tracker_id = $1
+            """,
+            tracker_id,
+        )
+        if row is None:
+            return None
+        return self._row_to_phase(row)
+
+    async def get_owner_for_raid(self, tracker_id: str) -> str | None:
+        row = await self._pool.fetchrow(
+            """
+            SELECT s.owner_id FROM sagas s
+            JOIN phases p ON p.saga_id = s.id
+            JOIN raids r ON r.phase_id = p.id
+            WHERE r.tracker_id = $1
+            """,
+            tracker_id,
+        )
+        if row is None:
+            return None
+        return row["owner_id"] or None
+
+    # -- Session messages --
+
+    async def save_session_message(self, message: SessionMessage) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO session_messages (id, raid_id, session_id, content, sender, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            message.id,
+            message.raid_id,
+            message.session_id,
+            message.content,
+            message.sender,
+            message.created_at,
+        )
+
+    async def get_session_messages(self, tracker_id: str) -> list[SessionMessage]:
+        rows = await self._pool.fetch(
+            """
+            SELECT sm.* FROM session_messages sm
+            JOIN raids r ON r.id = sm.raid_id
+            WHERE r.tracker_id = $1
+            ORDER BY sm.created_at
+            """,
+            tracker_id,
+        )
+        return [
+            SessionMessage(
+                id=r["id"],
+                raid_id=r["raid_id"],
+                session_id=r["session_id"],
+                content=r["content"],
+                sender=r["sender"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
 
     async def close(self) -> None:
         """No-op — pool lifecycle is managed externally."""

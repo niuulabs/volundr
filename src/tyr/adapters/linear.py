@@ -10,15 +10,20 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+import asyncpg
+
 from niuu.adapters.linear import GraphQLError, LinearGraphQLClient
 from niuu.domain.models import LINEAR_API_URL
 from tyr.domain.models import (
+    ConfidenceEvent,
+    ConfidenceEventType,
     Phase,
     PhaseStatus,
     Raid,
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
     TrackerIssue,
     TrackerMilestone,
     TrackerProject,
@@ -345,9 +350,11 @@ class LinearTrackerAdapter(TrackerPort):
         api_url: str = LINEAR_API_URL,
         cache_ttl: float = 30.0,
         max_retries: int = 3,
+        pool: asyncpg.Pool | None = None,
         **_extra: object,
     ) -> None:
         self._team_id = team_id
+        self._pool = pool
         self._gql = LinearGraphQLClient(
             api_key=api_key,
             api_url=api_url,
@@ -477,7 +484,8 @@ class LinearTrackerAdapter(TrackerPort):
         issue = data.get("issue")
         if issue is None:
             raise GraphQLError(f"Issue not found: {tracker_id}")
-        return self._issue_to_raid(issue)
+        progress = await self._fetch_progress(tracker_id)
+        return self._issue_to_raid(issue, progress=progress)
 
     async def list_pending_raids(self, phase_id: str) -> list[Raid]:
         data = await self._gql.query(
@@ -593,7 +601,280 @@ class LinearTrackerAdapter(TrackerPort):
                         blocked.add(target)
         return blocked
 
+    # -- Raid progress --
+
+    async def update_raid_progress(
+        self,
+        tracker_id: str,
+        *,
+        status: RaidStatus | None = None,
+        session_id: str | None = None,
+        confidence: float | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        retry_count: int | None = None,
+        reason: str | None = None,
+        owner_id: str | None = None,
+        phase_tracker_id: str | None = None,
+        saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
+    ) -> Raid:
+        if self._pool is None:
+            raise RuntimeError("pool is required for update_raid_progress")
+        await self._pool.execute(
+            """
+            INSERT INTO raid_progress
+                (tracker_id, status, session_id, confidence, pr_url, pr_id,
+                 retry_count, reason, owner_id, phase_tracker_id, saga_tracker_id,
+                 chronicle_summary)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (tracker_id) DO UPDATE SET
+                status            = COALESCE($2, raid_progress.status),
+                session_id        = COALESCE($3, raid_progress.session_id),
+                confidence        = COALESCE($4, raid_progress.confidence),
+                pr_url            = COALESCE($5, raid_progress.pr_url),
+                pr_id             = COALESCE($6, raid_progress.pr_id),
+                retry_count       = COALESCE($7, raid_progress.retry_count),
+                reason            = COALESCE($8, raid_progress.reason),
+                owner_id          = COALESCE($9, raid_progress.owner_id),
+                phase_tracker_id  = COALESCE($10, raid_progress.phase_tracker_id),
+                saga_tracker_id   = COALESCE($11, raid_progress.saga_tracker_id),
+                chronicle_summary = COALESCE($12, raid_progress.chronicle_summary),
+                updated_at        = NOW()
+            """,
+            tracker_id,
+            status.value if status is not None else None,
+            session_id,
+            confidence,
+            pr_url,
+            pr_id,
+            retry_count,
+            reason,
+            owner_id,
+            phase_tracker_id,
+            saga_tracker_id,
+            chronicle_summary,
+        )
+        if status is not None:
+            try:
+                await self.update_raid_state(tracker_id, status)
+            except Exception:
+                logger.exception("Failed to sync status to Linear for %s", tracker_id)
+        return await self.get_raid(tracker_id)
+
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
+        if self._pool is None:
+            return None
+        row = await self._pool.fetchrow(
+            "SELECT tracker_id FROM raid_progress WHERE session_id = $1",
+            session_id,
+        )
+        if row is None:
+            return None
+        return await self.get_raid(row["tracker_id"])
+
+    async def list_raids_by_status(self, status: RaidStatus) -> list[Raid]:
+        if self._pool is None:
+            return []
+        rows = await self._pool.fetch(
+            "SELECT tracker_id FROM raid_progress WHERE status = $1 ORDER BY updated_at",
+            status.value,
+        )
+        raids: list[Raid] = []
+        for row in rows:
+            try:
+                raid = await self.get_raid(row["tracker_id"])
+                raids.append(raid)
+            except Exception:
+                logger.exception("Failed to fetch raid %s", row["tracker_id"])
+        return raids
+
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
+        if self._pool is None:
+            return None
+        row = await self._pool.fetchrow(
+            "SELECT tracker_id FROM raid_progress WHERE raid_id = $1",
+            raid_id,
+        )
+        if row is None:
+            return None
+        return await self.get_raid(row["tracker_id"])
+
+    # -- Confidence events --
+
+    async def add_confidence_event(self, tracker_id: str, event: ConfidenceEvent) -> None:
+        if self._pool is None:
+            raise RuntimeError("pool is required for add_confidence_event")
+        await self._pool.execute(
+            """
+            INSERT INTO raid_confidence_events
+                (id, raid_id, tracker_id, event_type, delta, score_after, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            """,
+            event.id,
+            event.raid_id,
+            tracker_id,
+            event.event_type.value,
+            event.delta,
+            event.score_after,
+            event.created_at,
+        )
+        await self._pool.execute(
+            "UPDATE raid_progress SET confidence = $2, updated_at = NOW() WHERE tracker_id = $1",
+            tracker_id,
+            event.score_after,
+        )
+
+    async def get_confidence_events(self, tracker_id: str) -> list[ConfidenceEvent]:
+        if self._pool is None:
+            return []
+        rows = await self._pool.fetch(
+            """
+            SELECT ce.* FROM raid_confidence_events ce
+            WHERE ce.tracker_id = $1
+            ORDER BY ce.created_at
+            """,
+            tracker_id,
+        )
+        return [
+            ConfidenceEvent(
+                id=r["id"],
+                raid_id=r["raid_id"],
+                event_type=ConfidenceEventType(r["event_type"]),
+                delta=r["delta"],
+                score_after=r["score_after"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
+    # -- Phase gate management --
+
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
+        if self._pool is None:
+            return False
+        row = await self._pool.fetchrow(
+            """
+            SELECT count(*) FILTER (WHERE status != 'MERGED') AS remaining
+            FROM raid_progress
+            WHERE phase_tracker_id = $1
+            """,
+            phase_tracker_id,
+        )
+        return row is not None and row["remaining"] == 0
+
+    async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
+        milestones = await self.list_milestones(saga_tracker_id)
+        return [
+            Phase(
+                id=uuid4(),
+                saga_id=UUID(int=0),
+                tracker_id=m.id,
+                number=m.sort_order,
+                name=m.name,
+                status=PhaseStatus.ACTIVE,
+                confidence=0.0,
+            )
+            for m in milestones
+        ]
+
+    async def update_phase_status(self, phase_tracker_id: str, status: PhaseStatus) -> Phase | None:
+        # Linear does not have GATED/ACTIVE phase concepts — no-op
+        return None
+
+    # -- Cross-entity navigation --
+
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
+        if self._pool is None:
+            return None
+        row = await self._pool.fetchrow(
+            "SELECT saga_tracker_id FROM raid_progress WHERE tracker_id = $1",
+            tracker_id,
+        )
+        if row is None or not row["saga_tracker_id"]:
+            return None
+        return await self.get_saga(row["saga_tracker_id"])
+
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
+        if self._pool is None:
+            return None
+        row = await self._pool.fetchrow(
+            "SELECT phase_tracker_id FROM raid_progress WHERE tracker_id = $1",
+            tracker_id,
+        )
+        if row is None or not row["phase_tracker_id"]:
+            return None
+        return await self.get_phase(row["phase_tracker_id"])
+
+    async def get_owner_for_raid(self, tracker_id: str) -> str | None:
+        if self._pool is None:
+            return None
+        row = await self._pool.fetchrow(
+            "SELECT owner_id FROM raid_progress WHERE tracker_id = $1",
+            tracker_id,
+        )
+        if row is None:
+            return None
+        return row["owner_id"] or None
+
+    # -- Session messages --
+
+    async def save_session_message(self, message: SessionMessage) -> None:
+        if self._pool is None:
+            raise RuntimeError("pool is required for save_session_message")
+        row = await self._pool.fetchrow(
+            "SELECT tracker_id FROM raid_progress WHERE raid_id = $1",
+            message.raid_id,
+        )
+        tracker_id = row["tracker_id"] if row else str(message.raid_id)
+        await self._pool.execute(
+            """
+            INSERT INTO raid_session_messages
+                (id, raid_id, tracker_id, session_id, content, sender, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            """,
+            message.id,
+            message.raid_id,
+            tracker_id,
+            message.session_id,
+            message.content,
+            message.sender,
+            message.created_at,
+        )
+
+    async def get_session_messages(self, tracker_id: str) -> list[SessionMessage]:
+        if self._pool is None:
+            return []
+        rows = await self._pool.fetch(
+            """
+            SELECT * FROM raid_session_messages
+            WHERE tracker_id = $1
+            ORDER BY created_at
+            """,
+            tracker_id,
+        )
+        return [
+            SessionMessage(
+                id=r["id"],
+                raid_id=r["raid_id"],
+                session_id=r["session_id"],
+                content=r["content"],
+                sender=r["sender"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
     # -- Internal helpers --
+
+    async def _fetch_progress(self, tracker_id: str) -> dict | None:
+        if self._pool is None:
+            return None
+        row = await self._pool.fetchrow(
+            "SELECT * FROM raid_progress WHERE tracker_id = $1",
+            tracker_id,
+        )
+        return dict(row) if row else None
 
     async def _resolve_state_id(self, issue_id: str, state_name: str) -> str:
         """Resolve a Linear workflow state ID by name for an issue's team."""
@@ -711,12 +992,15 @@ class LinearTrackerAdapter(TrackerPort):
         )
 
     @staticmethod
-    def _issue_to_raid(node: dict) -> Raid:
+    def _issue_to_raid(node: dict, *, progress: dict | None = None) -> Raid:
         state_name = node.get("state", {}).get("name", "Todo")
-        raid_status = _LINEAR_TO_RAID.get(state_name, RaidStatus.PENDING)
         now = datetime.now(UTC)
+        raid_status = _LINEAR_TO_RAID.get(state_name, RaidStatus.PENDING)
+        if progress and progress.get("status"):
+            raid_status = RaidStatus(progress["status"])
+        raid_id = progress["raid_id"] if progress else uuid4()
         return Raid(
-            id=uuid4(),
+            id=raid_id,
             phase_id=UUID(int=0),
             tracker_id=node["id"],
             name=node.get("title", ""),
@@ -725,13 +1009,17 @@ class LinearTrackerAdapter(TrackerPort):
             declared_files=[],
             estimate_hours=None,
             status=raid_status,
-            confidence=0.0,
-            session_id=None,
+            confidence=float(progress["confidence"])
+            if progress and progress.get("confidence")
+            else 0.0,
+            session_id=progress.get("session_id") if progress else None,
             branch=None,
             chronicle_summary=None,
-            pr_url=None,
-            pr_id=None,
-            retry_count=0,
+            pr_url=progress.get("pr_url") if progress else None,
+            pr_id=progress.get("pr_id") if progress else None,
+            retry_count=int(progress["retry_count"])
+            if progress and progress.get("retry_count")
+            else 0,
             created_at=now,
             updated_at=now,
         )

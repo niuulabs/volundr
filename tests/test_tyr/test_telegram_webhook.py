@@ -27,16 +27,22 @@ from tyr.domain.models import (
     ConfidenceEvent,
     ConfidenceEventType,
     DispatcherState,
+    Phase,
+    PhaseStatus,
     Raid,
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
+    TrackerIssue,
+    TrackerMilestone,
+    TrackerProject,
 )
 from tyr.domain.services.raid_review import RaidReviewService
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.notification_subscriptions import NotificationSubscriptionRepository
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
+from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort, VolundrSession
 
 # ---------------------------------------------------------------------------
@@ -59,7 +65,13 @@ class StubSagaRepo(SagaRepository):
     def __init__(self, sagas: list[Saga] | None = None) -> None:
         self._sagas = sagas or []
 
-    async def save_saga(self, saga: Saga) -> None:
+    async def save_saga(self, saga: Saga, *, conn=None) -> None:  # noqa: ANN001
+        pass
+
+    async def save_phase(self, phase: object, *, conn=None) -> None:  # noqa: ANN001
+        pass
+
+    async def save_raid(self, raid: object, *, conn=None) -> None:  # noqa: ANN001
         pass
 
     async def list_sagas(self, *, owner_id: str | None = None) -> list[Saga]:
@@ -77,40 +89,100 @@ class StubSagaRepo(SagaRepository):
         return False
 
 
-class StubRaidRepo(RaidRepository):
+class StubTracker(TrackerPort):
+    """In-memory TrackerPort implementation for tests."""
+
     def __init__(self) -> None:
         self.raids: dict[UUID, Raid] = {}
         self.events: dict[UUID, list[ConfidenceEvent]] = {}
         self._tracker_id_map: dict[str, Raid] = {}
-        self._phase_for_raid: dict[UUID, object] = {}
+        self._phase_for_raid: dict[str, object] = {}
         self._all_merged: bool = False
 
     def add_raid(self, raid: Raid) -> None:
         self.raids[raid.id] = raid
         self._tracker_id_map[raid.tracker_id] = raid
 
-    async def save_phase(self, phase, *, conn=None) -> None:  # noqa: ANN001
+    # -- CRUD: create entities --
+
+    async def create_saga(self, saga: Saga) -> str:
+        return saga.tracker_id
+
+    async def create_phase(self, phase: Phase) -> str:
+        return phase.tracker_id
+
+    async def create_raid(self, raid: Raid) -> str:
+        self.add_raid(raid)
+        return raid.tracker_id
+
+    # -- CRUD: update / close --
+
+    async def update_raid_state(self, raid_id: str, state: RaidStatus) -> None:
         pass
 
-    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
-        self.raids[raid.id] = raid
+    async def close_raid(self, raid_id: str) -> None:
+        pass
 
-    async def get_raid(self, raid_id: UUID) -> Raid | None:
-        return self.raids.get(raid_id)
+    # -- Read: fetch domain entities by tracker ID --
 
-    async def update_raid_status(
-        self,
-        raid_id: UUID,
-        status: RaidStatus,
-        *,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        raid = self.raids.get(raid_id)
+    async def get_saga(self, saga_id: str) -> Saga:
+        raise ValueError(f"Not found: {saga_id}")
+
+    async def get_phase(self, tracker_id: str) -> Phase:
+        raise ValueError(f"Not found: {tracker_id}")
+
+    async def get_raid(self, tracker_id: str) -> Raid:
+        raid = self._tracker_id_map.get(tracker_id)
         if raid is None:
-            return None
-        events = self.events.get(raid_id, [])
-        confidence = events[-1].score_after if events else raid.confidence
+            raise ValueError(f"Raid not found: {tracker_id}")
+        return raid
+
+    async def list_pending_raids(self, phase_id: str) -> list[Raid]:
+        return []
+
+    # -- Browsing --
+
+    async def list_projects(self) -> list[TrackerProject]:
+        return []
+
+    async def get_project(self, project_id: str) -> TrackerProject:
+        raise ValueError(f"Not found: {project_id}")
+
+    async def list_milestones(self, project_id: str) -> list[TrackerMilestone]:
+        return []
+
+    async def list_issues(
+        self,
+        project_id: str,
+        milestone_id: str | None = None,
+    ) -> list[TrackerIssue]:
+        return []
+
+    # -- Raid progress --
+
+    async def update_raid_progress(
+        self,
+        tracker_id: str,
+        *,
+        status: RaidStatus | None = None,
+        session_id: str | None = None,
+        confidence: float | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        retry_count: int | None = None,
+        reason: str | None = None,
+        owner_id: str | None = None,
+        phase_tracker_id: str | None = None,
+        saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
+    ) -> Raid:
+        raid = self._tracker_id_map.get(tracker_id)
+        if raid is None:
+            raise ValueError(f"Raid not found: {tracker_id}")
+
+        existing_events = self.events.get(raid.id, [])
+        new_confidence = existing_events[-1].score_after if existing_events else raid.confidence
+
         updated = Raid(
             id=raid.id,
             phase_id=raid.phase_id,
@@ -120,59 +192,80 @@ class StubRaidRepo(RaidRepository):
             acceptance_criteria=raid.acceptance_criteria,
             declared_files=raid.declared_files,
             estimate_hours=raid.estimate_hours,
-            status=status,
-            confidence=confidence,
-            session_id=raid.session_id,
+            status=status if status is not None else raid.status,
+            confidence=confidence if confidence is not None else new_confidence,
+            session_id=session_id if session_id is not None else raid.session_id,
             branch=raid.branch,
             chronicle_summary=raid.chronicle_summary,
-            pr_url=raid.pr_url,
-            pr_id=raid.pr_id,
-            retry_count=raid.retry_count + (1 if increment_retry else 0),
+            pr_url=pr_url if pr_url is not None else raid.pr_url,
+            pr_id=pr_id if pr_id is not None else raid.pr_id,
+            retry_count=retry_count if retry_count is not None else raid.retry_count,
             created_at=raid.created_at,
             updated_at=datetime.now(UTC),
         )
-        self.raids[raid_id] = updated
-        self._tracker_id_map[raid.tracker_id] = updated
+        self.raids[raid.id] = updated
+        self._tracker_id_map[tracker_id] = updated
         return updated
 
-    async def get_confidence_events(self, raid_id: UUID) -> list[ConfidenceEvent]:
-        return self.events.get(raid_id, [])
-
-    async def add_confidence_event(self, event: ConfidenceEvent) -> None:
-        self.events.setdefault(event.raid_id, []).append(event)
-
-    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        return self._tracker_id_map.get(tracker_id)
-
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
         return None
 
-    async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
-        return None
-
-    async def get_phase_for_raid(self, raid_id: UUID) -> None:
-        return self._phase_for_raid.get(raid_id)
-
-    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
+    async def list_raids_by_status(self, status: RaidStatus) -> list[Raid]:
         return [r for r in self.raids.values() if r.status == status]
 
-    async def update_raid_completion(self, raid_id, **kwargs) -> Raid | None:  # noqa: ANN001
-        return await self.update_raid_status(raid_id, kwargs.get("status", RaidStatus.MERGED))
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
+        return self.raids.get(raid_id)
 
-    async def all_raids_merged(self, phase_id: UUID) -> bool:
+    # -- Confidence events --
+
+    async def add_confidence_event(self, tracker_id: str, event: ConfidenceEvent) -> None:
+        raid = self._tracker_id_map.get(tracker_id)
+        if raid is not None:
+            self.events.setdefault(raid.id, []).append(event)
+
+    async def get_confidence_events(self, tracker_id: str) -> list[ConfidenceEvent]:
+        raid = self._tracker_id_map.get(tracker_id)
+        if raid is None:
+            return []
+        return self.events.get(raid.id, [])
+
+    # -- Phase gate management --
+
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
         return self._all_merged
 
-    async def list_phases_for_saga(self, saga_id: UUID) -> list:
+    async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
         return []
 
-    async def update_phase_status(self, phase_id: UUID, status) -> None:  # noqa: ANN001
+    async def update_phase_status(self, phase_tracker_id: str, status: PhaseStatus) -> Phase | None:
         return None
 
-    async def save_session_message(self, message: object) -> None:
+    # -- Cross-entity navigation --
+
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
+        return None
+
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
+        return self._phase_for_raid.get(tracker_id)  # type: ignore[return-value]
+
+    async def get_owner_for_raid(self, tracker_id: str) -> str | None:
+        return None
+
+    # -- Session messages --
+
+    async def save_session_message(self, message: SessionMessage) -> None:
         pass
 
-    async def get_session_messages(self, raid_id: UUID) -> list:
+    async def get_session_messages(self, tracker_id: str) -> list[SessionMessage]:
         return []
+
+
+class StubTrackerFactory:
+    def __init__(self, tracker: StubTracker) -> None:
+        self._tracker = tracker
+
+    async def for_owner(self, owner_id: str) -> list[StubTracker]:
+        return [self._tracker]
 
 
 class StubDispatcherRepo(DispatcherRepository):
@@ -200,6 +293,9 @@ class StubDispatcherRepo(DispatcherRepository):
             updated_at=datetime.now(UTC),
         )
         return self._state
+
+    async def list_active_owner_ids(self) -> list[str]:
+        return [self._state.owner_id] if self._state.running else []
 
 
 class StubVolundr(VolundrPort):
@@ -319,8 +415,8 @@ def sub_repo() -> StubNotificationSubRepo:
 
 
 @pytest.fixture
-def raid_repo() -> StubRaidRepo:
-    return StubRaidRepo()
+def tracker() -> StubTracker:
+    return StubTracker()
 
 
 @pytest.fixture
@@ -355,7 +451,7 @@ def reply_client() -> StubReplyClient:
 @pytest.fixture
 def client(
     sub_repo: StubNotificationSubRepo,
-    raid_repo: StubRaidRepo,
+    tracker: StubTracker,
     saga_repo: StubSagaRepo,
     dispatcher_repo: StubDispatcherRepo,
     volundr: StubVolundr,
@@ -365,7 +461,7 @@ def client(
     app.include_router(create_telegram_webhook_router())
 
     app.state.notification_sub_repo = sub_repo
-    app.state.raid_repo = raid_repo
+    app.state.tracker_factory = StubTrackerFactory(tracker)
     app.state.saga_repo = saga_repo
     app.state.dispatcher_repo = dispatcher_repo
     app.state.volundr = volundr
@@ -472,7 +568,7 @@ class TestWebhookSecretValidation:
     def test_empty_secret_config_allows_all(
         self,
         sub_repo: StubNotificationSubRepo,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         saga_repo: StubSagaRepo,
         dispatcher_repo: StubDispatcherRepo,
         volundr: StubVolundr,
@@ -483,7 +579,7 @@ class TestWebhookSecretValidation:
         app.include_router(create_telegram_webhook_router())
 
         app.state.notification_sub_repo = sub_repo
-        app.state.raid_repo = raid_repo
+        app.state.tracker_factory = StubTrackerFactory(tracker)
         app.state.saga_repo = saga_repo
         app.state.dispatcher_repo = dispatcher_repo
         app.state.volundr = volundr
@@ -588,21 +684,21 @@ class TestApproveCommand:
     def test_approve_success_with_confidence_event(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid()
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/approve NIU-221")
         assert resp.status_code == 200
         reply = reply_client.replies[0][1]
         assert "approved" in reply.lower()
         assert "MERGED" in reply
-        assert raid_repo.raids[raid.id].status == RaidStatus.MERGED
+        assert tracker.raids[raid.id].status == RaidStatus.MERGED
 
         # Verify confidence event was recorded
-        events = raid_repo.events[raid.id]
+        events = tracker.events[raid.id]
         assert len(events) == 1
         assert events[0].event_type == ConfidenceEventType.HUMAN_APPROVED
         assert events[0].delta == ReviewConfig().confidence_delta_approved
@@ -620,11 +716,11 @@ class TestApproveCommand:
     def test_approve_wrong_state(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid(status=RaidStatus.PENDING)
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/approve NIU-221")
         assert resp.status_code == 200
@@ -633,11 +729,11 @@ class TestApproveCommand:
     def test_approve_by_uuid(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid()
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, f"/approve {raid.id}")
         assert resp.status_code == 200
@@ -653,11 +749,11 @@ class TestRejectCommand:
     def test_reject_success_with_confidence_event(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid()
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/reject NIU-221 scope drift")
         assert resp.status_code == 200
@@ -665,10 +761,10 @@ class TestRejectCommand:
         assert "rejected" in reply.lower()
         assert "FAILED" in reply
         assert "scope drift" in reply
-        assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
+        assert tracker.raids[raid.id].status == RaidStatus.FAILED
 
         # Verify confidence event was recorded
-        events = raid_repo.events[raid.id]
+        events = tracker.events[raid.id]
         assert len(events) == 1
         assert events[0].event_type == ConfidenceEventType.HUMAN_REJECT
         assert events[0].delta == ReviewConfig().confidence_delta_rejected
@@ -676,11 +772,11 @@ class TestRejectCommand:
     def test_reject_no_reason(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid()
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/reject NIU-221")
         assert resp.status_code == 200
@@ -696,11 +792,11 @@ class TestRejectCommand:
     def test_reject_wrong_state(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid(status=RaidStatus.MERGED)
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/reject NIU-221")
         assert resp.status_code == 200
@@ -716,22 +812,22 @@ class TestRetryCommand:
     def test_retry_from_review_with_confidence_event(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid(status=RaidStatus.REVIEW)
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/retry NIU-221")
         assert resp.status_code == 200
         reply = reply_client.replies[0][1]
         assert "retry" in reply.lower()
         assert "PENDING" in reply
-        assert raid_repo.raids[raid.id].status == RaidStatus.PENDING
-        assert raid_repo.raids[raid.id].retry_count == 1
+        assert tracker.raids[raid.id].status == RaidStatus.PENDING
+        assert tracker.raids[raid.id].retry_count == 1
 
         # Verify confidence event was recorded
-        events = raid_repo.events[raid.id]
+        events = tracker.events[raid.id]
         assert len(events) == 1
         assert events[0].event_type == ConfidenceEventType.RETRY
         assert events[0].delta == ReviewConfig().confidence_delta_retry
@@ -739,11 +835,11 @@ class TestRetryCommand:
     def test_retry_from_failed(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid(status=RaidStatus.FAILED)
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/retry NIU-221")
         assert resp.status_code == 200
@@ -752,11 +848,11 @@ class TestRetryCommand:
     def test_retry_wrong_state(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/retry NIU-221")
         assert resp.status_code == 200
@@ -830,27 +926,27 @@ class TestDispatchCommand:
     def test_dispatch_pending_raid(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid(status=RaidStatus.PENDING)
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/dispatch NIU-221")
         assert resp.status_code == 200
         reply = reply_client.replies[0][1]
         assert "queued" in reply.lower()
         assert "QUEUED" in reply
-        assert raid_repo.raids[raid.id].status == RaidStatus.QUEUED
+        assert tracker.raids[raid.id].status == RaidStatus.QUEUED
 
     def test_dispatch_wrong_state(
         self,
         client: TestClient,
-        raid_repo: StubRaidRepo,
+        tracker: StubTracker,
         reply_client: StubReplyClient,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.add_raid(raid)
+        tracker.add_raid(raid)
 
         resp = _post_webhook(client, "/dispatch NIU-221")
         assert resp.status_code == 200
@@ -975,28 +1071,28 @@ class TestTelegramReplyClient:
 class TestFindRaidByTrackerId:
     @pytest.mark.asyncio
     async def test_uuid_lookup(self):
-        repo = StubRaidRepo()
+        stub = StubTracker()
         raid = _make_raid()
-        repo.add_raid(raid)
+        stub.add_raid(raid)
 
-        found = await _find_raid_by_tracker_id(repo, str(raid.id), OWNER_ID)
+        found = await _find_raid_by_tracker_id(stub, str(raid.id), OWNER_ID)
         assert found is not None
         assert found.id == raid.id
 
     @pytest.mark.asyncio
     async def test_tracker_id_lookup(self):
-        repo = StubRaidRepo()
+        stub = StubTracker()
         raid = _make_raid(tracker_id="NIU-300")
-        repo.add_raid(raid)
+        stub.add_raid(raid)
 
-        found = await _find_raid_by_tracker_id(repo, "NIU-300", OWNER_ID)
+        found = await _find_raid_by_tracker_id(stub, "NIU-300", OWNER_ID)
         assert found is not None
         assert found.tracker_id == "NIU-300"
 
     @pytest.mark.asyncio
     async def test_not_found(self):
-        repo = StubRaidRepo()
-        found = await _find_raid_by_tracker_id(repo, "MISSING-1", OWNER_ID)
+        stub = StubTracker()
+        found = await _find_raid_by_tracker_id(stub, "MISSING-1", OWNER_ID)
         assert found is None
 
 
@@ -1008,14 +1104,15 @@ class TestFindRaidByTrackerId:
 class TestDispatchCommandFunction:
     @pytest.mark.asyncio
     async def test_unknown_command(self):
+        stub_tracker = StubTracker()
         result = await _dispatch_command(
             OWNER_ID,
             ParsedCommand(name="xyz", args=[], raw_text=""),
-            raid_repo=StubRaidRepo(),
+            tracker=stub_tracker,
             saga_repo=StubSagaRepo(),
             volundr=StubVolundr(),
             dispatcher_repo=StubDispatcherRepo(),
-            review_service=RaidReviewService(StubRaidRepo(), ReviewConfig()),
+            review_service=RaidReviewService(stub_tracker, OWNER_ID, ReviewConfig()),
         )
         assert "Unknown command" in result
         assert "/xyz" in result

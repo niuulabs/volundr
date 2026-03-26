@@ -1,4 +1,9 @@
-import type { ITyrService, CommitSagaRequest, PlanSession } from '../../ports';
+import type {
+  ITyrService,
+  CommitSagaRequest,
+  PlanSession,
+  ExtractedStructure,
+} from '../../ports';
 import type { Saga, Phase } from '../../models';
 import { mockSagas, mockPhases } from './data';
 
@@ -60,6 +65,10 @@ export class MockTyrService implements ITyrService {
       session_id: crypto.randomUUID(),
       chat_endpoint: `wss://sessions.mock/s/${crypto.randomUUID()}/session`,
     };
+  }
+
+  async extractStructure(_text: string): Promise<ExtractedStructure> {
+    return { found: false, structure: null };
   }
 
   async decompose(spec: string, repo: string): Promise<Phase[]> {

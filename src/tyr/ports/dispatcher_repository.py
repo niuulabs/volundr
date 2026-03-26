@@ -23,3 +23,8 @@ class DispatcherRepository(ABC):
         Returns the full state after the update.
         """
         ...
+
+    @abstractmethod
+    async def list_active_owner_ids(self) -> list[str]:
+        """Return owner_ids of all dispatchers with running=True."""
+        ...

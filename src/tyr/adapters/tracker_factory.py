@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from niuu.domain.models import IntegrationType
 from niuu.ports.credentials import CredentialStorePort
@@ -14,20 +15,29 @@ logger = logging.getLogger(__name__)
 
 
 class TrackerAdapterFactory:
-    """Resolves tracker adapters for a specific owner from stored credentials."""
+    """Resolves tracker adapters for a specific owner from stored credentials.
+
+    The pool is injected into every adapter so that adapters that need local
+    postgres storage (e.g. LinearAdapter's raid_progress table) receive it
+    without exposing it as a user-config kwarg.
+    """
 
     def __init__(
         self,
         integration_repo: IntegrationRepository,
         credential_store: CredentialStorePort,
+        pool: Any | None = None,
     ) -> None:
         self._integration_repo = integration_repo
         self._credential_store = credential_store
+        self._pool = pool
 
     async def for_owner(self, owner_id: str) -> list[TrackerPort]:
         """Return all enabled TrackerPort adapters for the owner.
 
         Uses the dynamic adapter pattern: import_class(conn.adapter)(**kwargs).
+        The pool is injected alongside the credential/config kwargs so adapters
+        that require local postgres storage (LinearAdapter) receive it.
         """
         connections = await self._integration_repo.list_connections(
             owner_id,
@@ -48,6 +58,8 @@ class TrackerAdapterFactory:
 
                 cls = import_class(conn.adapter)
                 kwargs = {**cred, **conn.config}
+                if self._pool is not None:
+                    kwargs["pool"] = self._pool
                 adapters.append(cls(**kwargs))
             except (ImportError, TypeError, ValueError, AttributeError) as exc:
                 logger.error(

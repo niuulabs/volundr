@@ -47,6 +47,7 @@ vi.mock('../../adapters', () => ({
     spawnPlanSession: vi.fn(() => Promise.resolve({ ...mockPlanSession })),
     decompose: vi.fn(() => Promise.resolve([])),
     commitSaga: vi.fn(() => Promise.resolve({ id: 'saga-001' })),
+    extractStructure: vi.fn(() => Promise.resolve({ found: false, structure: null })),
   },
 }));
 
@@ -189,36 +190,45 @@ describe('PlanSagaView', () => {
     expect(screen.getByTestId('session-chat')).toHaveTextContent('No URL');
   });
 
-  it('auto-detects structure from assistant messages and shows commit button', async () => {
+  it('auto-detects structure via backend extractStructure and shows commit button', async () => {
     const user = userEvent.setup();
-    const structureObj = {
-      name: 'Detected Plan',
-      phases: [
-        {
-          name: 'P1',
-          raids: [
-            {
-              name: 'R1',
-              description: 'd',
-              acceptance_criteria: [],
-              declared_files: [],
-              estimate_hours: 2,
-            },
-          ],
-        },
-      ],
-    };
-    const structureJson = JSON.stringify(structureObj);
+    const { tyrService } = await import('../../adapters');
+    vi.mocked(tyrService.extractStructure).mockResolvedValueOnce({
+      found: true,
+      structure: {
+        name: 'Detected Plan',
+        phases: [
+          {
+            name: 'P1',
+            raids: [
+              {
+                name: 'R1',
+                description: 'd',
+                acceptance_criteria: ['ac1'],
+                declared_files: ['f1'],
+                estimate_hours: 2,
+                confidence: 0.8,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
     mockSkuldMessages.push({
       id: 'msg-1',
       role: 'assistant',
-      content: `Here is the plan:\n\`\`\`json\n${structureJson}\n\`\`\``,
+      content: 'Here is the plan with JSON',
       createdAt: new Date(),
       status: 'complete',
     });
 
     renderView();
     await spawnSession(user);
+
+    await waitFor(() => {
+      expect(tyrService.extractStructure).toHaveBeenCalledWith('Here is the plan with JSON');
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/structure detected/i)).toBeInTheDocument();
@@ -232,32 +242,38 @@ describe('PlanSagaView', () => {
 
   it('commits detected structure and navigates to saga', async () => {
     const user = userEvent.setup();
-    const structureObj = {
-      name: 'Auth Refactor',
-      phases: [
-        {
-          name: 'Phase 1',
-          raids: [
-            {
-              name: 'Setup middleware',
-              description: 'Implement auth middleware',
-              acceptance_criteria: ['Routes protected'],
-              declared_files: ['src/auth.py'],
-              estimate_hours: 4,
-            },
-          ],
-        },
-      ],
-    };
+    const { tyrService } = await import('../../adapters');
+
+    vi.mocked(tyrService.extractStructure).mockResolvedValueOnce({
+      found: true,
+      structure: {
+        name: 'Auth Refactor',
+        phases: [
+          {
+            name: 'Phase 1',
+            raids: [
+              {
+                name: 'Setup middleware',
+                description: 'Implement auth middleware',
+                acceptance_criteria: ['Routes protected'],
+                declared_files: ['src/auth.py'],
+                estimate_hours: 4,
+                confidence: 0.9,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
     mockSkuldMessages.push({
       id: 'msg-commit',
       role: 'assistant',
-      content: `\`\`\`json\n${JSON.stringify(structureObj)}\n\`\`\``,
+      content: 'Structure output',
       createdAt: new Date(),
       status: 'complete',
     });
 
-    const { tyrService } = await import('../../adapters');
     renderView();
     await spawnSession(user);
 
@@ -288,19 +304,24 @@ describe('PlanSagaView', () => {
 
   it('shows error on commit failure', async () => {
     const user = userEvent.setup();
-    const structureJson = JSON.stringify({
-      name: 'Plan',
-      phases: [{ name: 'P1', raids: [] }],
+    const { tyrService } = await import('../../adapters');
+
+    vi.mocked(tyrService.extractStructure).mockResolvedValueOnce({
+      found: true,
+      structure: {
+        name: 'Plan',
+        phases: [{ name: 'P1', raids: [] }],
+      },
     });
+
     mockSkuldMessages.push({
       id: 'msg-fail',
       role: 'assistant',
-      content: `\`\`\`json\n${structureJson}\n\`\`\``,
+      content: 'Structure output',
       createdAt: new Date(),
       status: 'complete',
     });
 
-    const { tyrService } = await import('../../adapters');
     vi.mocked(tyrService.commitSaga).mockRejectedValueOnce(new Error('Commit failed'));
     renderView();
     await spawnSession(user);
@@ -318,19 +339,24 @@ describe('PlanSagaView', () => {
 
   it('shows fallback error on commit non-Error throw', async () => {
     const user = userEvent.setup();
-    const structureJson = JSON.stringify({
-      name: 'Plan',
-      phases: [{ name: 'P1', raids: [] }],
+    const { tyrService } = await import('../../adapters');
+
+    vi.mocked(tyrService.extractStructure).mockResolvedValueOnce({
+      found: true,
+      structure: {
+        name: 'Plan',
+        phases: [{ name: 'P1', raids: [] }],
+      },
     });
+
     mockSkuldMessages.push({
       id: 'msg-fail-2',
       role: 'assistant',
-      content: `\`\`\`json\n${structureJson}\n\`\`\``,
+      content: 'Structure output',
       createdAt: new Date(),
       status: 'complete',
     });
 
-    const { tyrService } = await import('../../adapters');
     vi.mocked(tyrService.commitSaga).mockRejectedValueOnce(undefined);
     renderView();
     await spawnSession(user);
@@ -412,8 +438,9 @@ describe('PlanSagaView', () => {
     expect(screen.getByText('Plan Saga')).toBeInTheDocument();
   });
 
-  it('does not auto-detect structure from incomplete assistant messages', async () => {
+  it('does not call extractStructure for incomplete assistant messages', async () => {
     const user = userEvent.setup();
+    const { tyrService } = await import('../../adapters');
     mockSkuldMessages.push({
       id: 'msg-2',
       role: 'assistant',
@@ -424,67 +451,72 @@ describe('PlanSagaView', () => {
     renderView();
     await spawnSession(user);
 
+    expect(tyrService.extractStructure).not.toHaveBeenCalled();
     expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
   });
 
-  it('does not auto-detect structure from user messages', async () => {
+  it('does not call extractStructure for user messages', async () => {
     const user = userEvent.setup();
-    const structureJson = JSON.stringify({ name: 'Plan', phases: [{ name: 'P1', raids: [] }] });
+    const { tyrService } = await import('../../adapters');
     mockSkuldMessages.push({
       id: 'msg-3',
       role: 'user',
-      content: `\`\`\`json\n${structureJson}\n\`\`\``,
+      content: 'Some user content',
       createdAt: new Date(),
       status: 'complete',
     });
     renderView();
     await spawnSession(user);
 
+    expect(tyrService.extractStructure).not.toHaveBeenCalled();
     expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
   });
 
-  it('does not detect structure from non-JSON assistant messages', async () => {
+  it('does not show structure when backend returns found=false', async () => {
     const user = userEvent.setup();
+    const { tyrService } = await import('../../adapters');
+    vi.mocked(tyrService.extractStructure).mockResolvedValueOnce({
+      found: false,
+      structure: null,
+    });
+
     mockSkuldMessages.push({
       id: 'msg-6',
       role: 'assistant',
-      content: 'Here is some plain text with no JSON blocks.',
+      content: 'Here is some plain text with no valid structure.',
       createdAt: new Date(),
       status: 'complete',
     });
     renderView();
     await spawnSession(user);
+
+    await waitFor(() => {
+      expect(tyrService.extractStructure).toHaveBeenCalled();
+    });
 
     expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
   });
 
-  it('does not detect structure from invalid JSON in code blocks', async () => {
+  it('handles extractStructure API failure gracefully', async () => {
     const user = userEvent.setup();
+    const { tyrService } = await import('../../adapters');
+    vi.mocked(tyrService.extractStructure).mockRejectedValueOnce(new Error('Network error'));
+
     mockSkuldMessages.push({
-      id: 'msg-7',
+      id: 'msg-err',
       role: 'assistant',
-      content: '```json\n{not valid json}\n```',
+      content: 'Some message',
       createdAt: new Date(),
       status: 'complete',
     });
     renderView();
     await spawnSession(user);
 
-    expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
-  });
-
-  it('does not detect structure from JSON missing name or phases', async () => {
-    const user = userEvent.setup();
-    mockSkuldMessages.push({
-      id: 'msg-8',
-      role: 'assistant',
-      content: '```json\n{"key": "value"}\n```',
-      createdAt: new Date(),
-      status: 'complete',
+    await waitFor(() => {
+      expect(tyrService.extractStructure).toHaveBeenCalled();
     });
-    renderView();
-    await spawnSession(user);
 
+    // No crash, no structure shown
     expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
   });
 });

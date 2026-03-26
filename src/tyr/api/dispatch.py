@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import UTC, datetime
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -18,7 +16,7 @@ from pydantic import BaseModel, Field
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import TrackerIssue
+from tyr.domain.models import RaidStatus, TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrPort
@@ -334,25 +332,21 @@ def create_dispatch_router() -> APIRouter:
                     ),
                     auth_token=auth_token,
                 )
-                # Track the dispatched session — lightweight link between
-                # session, owner, saga, and tracker issue. The tracker remains
-                # the source of truth for issue data.
-                pool = request.app.state.pool
-                await pool.execute(
-                    """
-                    INSERT INTO dispatched_sessions
-                        (id, session_id, owner_id, saga_id, tracker_issue_id, status, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                    ON CONFLICT (session_id) DO NOTHING
-                    """,
-                    uuid4(),
-                    session.id,
-                    principal.user_id,
-                    saga.id,
-                    issue.id,
-                    "running",
-                    datetime.now(UTC),
-                )
+                # Record raid progress via TrackerPort
+                for adapter in adapters:
+                    try:
+                        await adapter.update_raid_progress(
+                            issue.id,
+                            status=RaidStatus.RUNNING,
+                            session_id=session.id,
+                            owner_id=principal.user_id,
+                            phase_tracker_id=issue.milestone_id,
+                            saga_tracker_id=saga.tracker_id,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to update raid progress for %s", issue.id, exc_info=True
+                        )
 
                 results.append(
                     DispatchResult(

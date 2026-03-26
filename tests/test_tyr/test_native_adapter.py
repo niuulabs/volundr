@@ -14,12 +14,15 @@ from tyr.adapters.native import (
     NativeTrackerAdapter,
 )
 from tyr.domain.models import (
+    ConfidenceEvent,
+    ConfidenceEventType,
     Phase,
     PhaseStatus,
     Raid,
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
 )
 
 # ---------------------------------------------------------------------------
@@ -300,6 +303,36 @@ class TestUpdateRaidState:
         args = pool.execute.call_args[0]
         # Second arg is datetime
         assert isinstance(args[2], datetime)
+
+
+# ---------------------------------------------------------------------------
+# update_raid_progress
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateRaidProgress:
+    async def test_updates_fields_and_returns_raid(self):
+        raid = _make_raid()
+        record = _raid_record(raid, "t-1")
+        pool = _make_pool()
+        pool.fetchrow.return_value = record
+        adapter = _make_adapter(pool)
+
+        result = await adapter.update_raid_progress(
+            "t-1", status=RaidStatus.REVIEW, chronicle_summary="summary"
+        )
+
+        assert result.tracker_id == "t-1"
+        sql = pool.fetchrow.call_args[0][0]
+        assert "chronicle_summary" in sql
+
+    async def test_not_found_raises(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        with pytest.raises(LookupError, match="Raid not found"):
+            await adapter.update_raid_progress("missing", status=RaidStatus.REVIEW)
 
 
 # ---------------------------------------------------------------------------
@@ -739,3 +772,384 @@ class TestTrackerPortContract:
         pool = _make_pool()
         adapter = NativeTrackerAdapter(pool=pool, foo="bar", baz=42)
         assert isinstance(adapter, NativeTrackerAdapter)
+
+
+# ---------------------------------------------------------------------------
+# get_raid_by_session
+# ---------------------------------------------------------------------------
+
+
+class TestGetRaidBySession:
+    async def test_found(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        raid = _make_raid()
+        tracker_id = str(raid.id)
+        pool.fetchrow.return_value = _raid_record(raid, tracker_id)
+
+        result = await adapter.get_raid_by_session("sess-1")
+
+        assert result is not None
+        assert result.tracker_id == tracker_id
+
+    async def test_not_found_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_raid_by_session("sess-missing")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# list_raids_by_status
+# ---------------------------------------------------------------------------
+
+
+class TestListRaidsByStatus:
+    async def test_returns_matching_raids(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        raid = _make_raid(status=RaidStatus.RUNNING)
+        tracker_id = str(raid.id)
+        pool.fetch.return_value = [_raid_record(raid, tracker_id)]
+
+        result = await adapter.list_raids_by_status(RaidStatus.RUNNING)
+
+        assert len(result) == 1
+        assert result[0].status == RaidStatus.RUNNING
+
+    async def test_empty(self):
+        pool = _make_pool()
+        pool.fetch.return_value = []
+        adapter = _make_adapter(pool)
+
+        result = await adapter.list_raids_by_status(RaidStatus.PENDING)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# get_raid_by_id
+# ---------------------------------------------------------------------------
+
+
+class TestGetRaidById:
+    async def test_found(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        raid = _make_raid()
+        tracker_id = str(raid.id)
+        pool.fetchrow.return_value = _raid_record(raid, tracker_id)
+
+        result = await adapter.get_raid_by_id(raid.id)
+
+        assert result is not None
+        assert result.tracker_id == tracker_id
+
+    async def test_not_found_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_raid_by_id(uuid4())
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# add_confidence_event
+# ---------------------------------------------------------------------------
+
+
+class TestAddConfidenceEvent:
+    async def test_inserts_event_and_updates_confidence(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        raid = _make_raid()
+        event = ConfidenceEvent(
+            id=uuid4(),
+            raid_id=raid.id,
+            event_type=ConfidenceEventType.CI_PASS,
+            delta=0.05,
+            score_after=0.75,
+            created_at=NOW,
+        )
+
+        await adapter.add_confidence_event("tracker-1", event)
+
+        assert pool.execute.call_count == 2
+        insert_sql = pool.execute.call_args_list[0][0][0]
+        assert "INSERT INTO confidence_events" in insert_sql
+        update_sql = pool.execute.call_args_list[1][0][0]
+        assert "UPDATE raids SET confidence" in update_sql
+
+
+# ---------------------------------------------------------------------------
+# get_confidence_events
+# ---------------------------------------------------------------------------
+
+
+class TestGetConfidenceEvents:
+    async def test_returns_events(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        raid_id = uuid4()
+        pool.fetch.return_value = [
+            {
+                "id": uuid4(),
+                "raid_id": raid_id,
+                "event_type": "ci_pass",
+                "delta": 0.05,
+                "score_after": 0.75,
+                "created_at": NOW,
+            }
+        ]
+
+        result = await adapter.get_confidence_events("tracker-1")
+
+        assert len(result) == 1
+        assert result[0].event_type == ConfidenceEventType.CI_PASS
+        assert result[0].score_after == 0.75
+
+    async def test_empty(self):
+        pool = _make_pool()
+        pool.fetch.return_value = []
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_confidence_events("tracker-1")
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# all_raids_merged
+# ---------------------------------------------------------------------------
+
+
+class TestAllRaidsMerged:
+    async def test_true_when_remaining_is_zero(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = {"remaining": 0}
+        adapter = _make_adapter(pool)
+
+        result = await adapter.all_raids_merged("phase-tid")
+        assert result is True
+
+    async def test_false_when_remaining_nonzero(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = {"remaining": 2}
+        adapter = _make_adapter(pool)
+
+        result = await adapter.all_raids_merged("phase-tid")
+        assert result is False
+
+    async def test_false_when_row_is_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        result = await adapter.all_raids_merged("phase-tid")
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# list_phases_for_saga
+# ---------------------------------------------------------------------------
+
+
+class TestListPhasesForSaga:
+    async def test_returns_phases(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        phase = _make_phase()
+        tracker_id = str(phase.id)
+        pool.fetch.return_value = [_phase_record(phase, tracker_id)]
+
+        result = await adapter.list_phases_for_saga("saga-tid")
+
+        assert len(result) == 1
+        assert result[0].tracker_id == tracker_id
+
+    async def test_empty(self):
+        pool = _make_pool()
+        pool.fetch.return_value = []
+        adapter = _make_adapter(pool)
+
+        result = await adapter.list_phases_for_saga("saga-tid")
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# update_phase_status
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePhaseStatus:
+    async def test_returns_updated_phase(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        phase = _make_phase()
+        tracker_id = str(phase.id)
+        updated_record = _phase_record(phase, tracker_id)
+        updated_record["status"] = PhaseStatus.GATED.value
+        pool.fetchrow.return_value = updated_record
+
+        result = await adapter.update_phase_status(tracker_id, PhaseStatus.GATED)
+
+        assert result is not None
+        assert result.tracker_id == tracker_id
+
+    async def test_returns_none_when_not_found(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        result = await adapter.update_phase_status("missing-tid", PhaseStatus.GATED)
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_saga_for_raid
+# ---------------------------------------------------------------------------
+
+
+class TestGetSagaForRaid:
+    async def test_found(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        saga = _make_saga()
+        tracker_id = str(saga.id)
+        pool.fetchrow.return_value = _saga_record(saga, tracker_id)
+
+        result = await adapter.get_saga_for_raid("raid-tid")
+
+        assert result is not None
+        assert result.name == "Test Saga"
+
+    async def test_not_found_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_saga_for_raid("raid-tid")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_phase_for_raid
+# ---------------------------------------------------------------------------
+
+
+class TestGetPhaseForRaid:
+    async def test_found(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        phase = _make_phase()
+        tracker_id = str(phase.id)
+        pool.fetchrow.return_value = _phase_record(phase, tracker_id)
+
+        result = await adapter.get_phase_for_raid("raid-tid")
+
+        assert result is not None
+        assert result.name == "Phase 1"
+
+    async def test_not_found_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_phase_for_raid("raid-tid")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_owner_for_raid
+# ---------------------------------------------------------------------------
+
+
+class TestGetOwnerForRaid:
+    async def test_found(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = {"owner_id": "owner-42"}
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_owner_for_raid("raid-tid")
+        assert result == "owner-42"
+
+    async def test_not_found_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_owner_for_raid("raid-tid")
+        assert result is None
+
+    async def test_null_owner_id_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = {"owner_id": None}
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_owner_for_raid("raid-tid")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# save_session_message
+# ---------------------------------------------------------------------------
+
+
+class TestSaveSessionMessage:
+    async def test_inserts_message(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        raid_id = uuid4()
+        message = SessionMessage(
+            id=uuid4(),
+            raid_id=raid_id,
+            session_id="sess-1",
+            content="hello",
+            sender="user",
+            created_at=NOW,
+        )
+
+        await adapter.save_session_message(message)
+
+        pool.execute.assert_called_once()
+        sql = pool.execute.call_args[0][0]
+        assert "INSERT INTO session_messages" in sql
+
+
+# ---------------------------------------------------------------------------
+# get_session_messages
+# ---------------------------------------------------------------------------
+
+
+class TestGetSessionMessages:
+    async def test_returns_messages(self):
+        pool = _make_pool()
+        adapter = _make_adapter(pool)
+        msg_id = uuid4()
+        raid_id = uuid4()
+        pool.fetch.return_value = [
+            {
+                "id": msg_id,
+                "raid_id": raid_id,
+                "session_id": "sess-1",
+                "content": "hello",
+                "sender": "user",
+                "created_at": NOW,
+            }
+        ]
+
+        result = await adapter.get_session_messages("tracker-1")
+
+        assert len(result) == 1
+        assert result[0].content == "hello"
+        assert result[0].sender == "user"
+        assert result[0].session_id == "sess-1"
+
+    async def test_empty(self):
+        pool = _make_pool()
+        pool.fetch.return_value = []
+        adapter = _make_adapter(pool)
+
+        result = await adapter.get_session_messages("tracker-1")
+        assert result == []

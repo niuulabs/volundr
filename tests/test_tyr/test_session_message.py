@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -13,11 +14,10 @@ from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.api.raids import (
     create_raids_router,
     resolve_git,
-    resolve_raid_repo,
     resolve_tracker,
     resolve_volundr,
 )
-from tyr.config import ReviewConfig
+from tyr.config import AuthConfig, ReviewConfig
 from tyr.domain.exceptions import RaidNotFoundError
 from tyr.domain.models import (
     ConfidenceEventType,
@@ -32,32 +32,14 @@ from tyr.domain.services.session_message import (
 
 from .test_raids_api import (
     MockGit,
-    MockRaidRepository,
     MockVolundr,
+    StatefulMockTracker,
+    _make_phase,
     _make_raid,
+    _make_saga,
 )
-from .test_tracker_api import MockTracker
 
 REVIEW_CFG = ReviewConfig()
-
-
-# ---------------------------------------------------------------------------
-# Extend MockRaidRepository with session message support
-# ---------------------------------------------------------------------------
-
-
-class MessageAwareMockRaidRepo(MockRaidRepository):
-    """MockRaidRepository extended with session message methods."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.messages: dict[UUID, list[SessionMessage]] = {}
-
-    async def save_session_message(self, message: SessionMessage) -> None:
-        self.messages.setdefault(message.raid_id, []).append(message)
-
-    async def get_session_messages(self, raid_id: UUID) -> list[SessionMessage]:
-        return self.messages.get(raid_id, [])
 
 
 # ---------------------------------------------------------------------------
@@ -91,13 +73,11 @@ class MessageTrackingVolundr(MockVolundr):
 
 
 @pytest.fixture
-def raid_repo() -> MessageAwareMockRaidRepo:
-    from .test_raids_api import _make_phase, _make_saga
-
-    repo = MessageAwareMockRaidRepo()
-    repo.saga = _make_saga()
-    repo.phase = _make_phase()
-    return repo
+def tracker() -> StatefulMockTracker:
+    t = StatefulMockTracker()
+    t.saga = _make_saga()
+    t.phase = _make_phase()
+    return t
 
 
 @pytest.fixture
@@ -112,29 +92,29 @@ def event_bus() -> InMemoryEventBus:
 
 @pytest.fixture
 def service(
-    raid_repo: MessageAwareMockRaidRepo,
+    tracker: StatefulMockTracker,
     volundr: MessageTrackingVolundr,
     event_bus: InMemoryEventBus,
 ) -> SessionMessageService:
-    return SessionMessageService(raid_repo, volundr, event_bus=event_bus)
+    return SessionMessageService(tracker, volundr, event_bus=event_bus)
 
 
 @pytest.fixture
 def client(
-    raid_repo: MessageAwareMockRaidRepo,
+    tracker: StatefulMockTracker,
     volundr: MessageTrackingVolundr,
     event_bus: InMemoryEventBus,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(create_raids_router())
-    app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+    app.dependency_overrides[resolve_tracker] = lambda: tracker
     app.dependency_overrides[resolve_volundr] = lambda: volundr
     app.dependency_overrides[resolve_git] = lambda: MockGit()
-    app.dependency_overrides[resolve_tracker] = lambda: MockTracker()
 
-    from types import SimpleNamespace
-
-    app.state.settings = SimpleNamespace(review=REVIEW_CFG)
+    app.state.settings = SimpleNamespace(
+        review=REVIEW_CFG,
+        auth=AuthConfig(allow_anonymous_dev=True),
+    )
     app.state.event_bus = event_bus
 
     return TestClient(app)
@@ -150,11 +130,11 @@ class TestSessionMessageService:
     async def test_send_message_success(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
         volundr: MessageTrackingVolundr,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         result = await service.send_message(raid.id, "Fix the failing test")
 
@@ -168,12 +148,12 @@ class TestSessionMessageService:
         assert volundr.sent_messages[0] == ("session-1", "Fix the failing test", None)
 
         # Verify audit record persisted
-        messages = await raid_repo.get_session_messages(raid.id)
+        messages = tracker.messages.get(raid.id, [])
         assert len(messages) == 1
         assert messages[0].content == "Fix the failing test"
 
         # Verify confidence event recorded
-        events = raid_repo.events[raid.id]
+        events = tracker.events.get(raid.tracker_id, [])
         assert len(events) == 1
         assert events[0].event_type == ConfidenceEventType.MESSAGE_SENT
         assert events[0].delta == 0.0
@@ -183,11 +163,11 @@ class TestSessionMessageService:
     async def test_send_message_with_auth_token(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
         volundr: MessageTrackingVolundr,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         await service.send_message(raid.id, "hello", auth_token="pat-123")
 
@@ -197,10 +177,10 @@ class TestSessionMessageService:
     async def test_send_message_custom_sender(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         result = await service.send_message(raid.id, "auto-retry", sender="tyr:watcher")
 
@@ -210,10 +190,10 @@ class TestSessionMessageService:
     async def test_send_message_in_review_state(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.REVIEW)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         result = await service.send_message(raid.id, "feedback")
 
@@ -231,10 +211,10 @@ class TestSessionMessageService:
     async def test_send_message_raid_not_running(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.PENDING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         with pytest.raises(RaidNotRunningError) as exc_info:
             await service.send_message(raid.id, "hello")
@@ -244,10 +224,10 @@ class TestSessionMessageService:
     async def test_send_message_no_active_session(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING, session_id=None)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         with pytest.raises(NoActiveSessionError):
             await service.send_message(raid.id, "hello")
@@ -256,10 +236,10 @@ class TestSessionMessageService:
     async def test_send_message_merged_state_rejected(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.MERGED)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         with pytest.raises(RaidNotRunningError):
             await service.send_message(raid.id, "hello")
@@ -268,10 +248,10 @@ class TestSessionMessageService:
     async def test_send_message_failed_state_rejected(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.FAILED)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         with pytest.raises(RaidNotRunningError):
             await service.send_message(raid.id, "hello")
@@ -280,11 +260,11 @@ class TestSessionMessageService:
     async def test_send_message_emits_event(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
         event_bus: InMemoryEventBus,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         q = event_bus.subscribe()
         await service.send_message(raid.id, "CI failed on test_auth.py")
@@ -299,12 +279,12 @@ class TestSessionMessageService:
     @pytest.mark.asyncio
     async def test_send_message_no_event_bus(
         self,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
         volundr: MessageTrackingVolundr,
     ):
-        svc = SessionMessageService(raid_repo, volundr, event_bus=None)
+        svc = SessionMessageService(tracker, volundr, event_bus=None)
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         result = await svc.send_message(raid.id, "hello")
         assert result.message.content == "hello"
@@ -313,18 +293,18 @@ class TestSessionMessageService:
     async def test_send_message_volundr_failure_propagates(
         self,
         service: SessionMessageService,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
         volundr: MessageTrackingVolundr,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
         volundr.fail_send_message = True
 
         with pytest.raises(ConnectionError):
             await service.send_message(raid.id, "hello")
 
         # No audit record should be persisted on failure
-        messages = await raid_repo.get_session_messages(raid.id)
+        messages = tracker.messages.get(raid.id, [])
         assert len(messages) == 0
 
 
@@ -337,11 +317,11 @@ class TestSendMessageEndpoint:
     def test_send_message_success(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
         volundr: MessageTrackingVolundr,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(
             f"/api/v1/tyr/raids/{raid.id}/message",
@@ -369,10 +349,10 @@ class TestSendMessageEndpoint:
     def test_send_message_not_running(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.PENDING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(
             f"/api/v1/tyr/raids/{raid.id}/message",
@@ -384,10 +364,10 @@ class TestSendMessageEndpoint:
     def test_send_message_no_session(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING, session_id=None)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(
             f"/api/v1/tyr/raids/{raid.id}/message",
@@ -399,10 +379,10 @@ class TestSendMessageEndpoint:
     def test_send_message_empty_content(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(
             f"/api/v1/tyr/raids/{raid.id}/message",
@@ -413,10 +393,10 @@ class TestSendMessageEndpoint:
     def test_send_message_missing_content(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(
             f"/api/v1/tyr/raids/{raid.id}/message",
@@ -427,10 +407,10 @@ class TestSendMessageEndpoint:
     def test_send_message_review_state(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.REVIEW)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(
             f"/api/v1/tyr/raids/{raid.id}/message",
@@ -448,10 +428,10 @@ class TestListMessagesEndpoint:
     def test_list_messages_empty(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.get(f"/api/v1/tyr/raids/{raid.id}/messages")
         assert resp.status_code == 200
@@ -460,10 +440,10 @@ class TestListMessagesEndpoint:
     def test_list_messages_with_history(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         now = datetime.now(UTC)
         msg1 = SessionMessage(
@@ -482,7 +462,7 @@ class TestListMessagesEndpoint:
             sender="tyr:watcher",
             created_at=now,
         )
-        raid_repo.messages[raid.id] = [msg1, msg2]
+        tracker.messages[raid.id] = [msg1, msg2]
 
         resp = client.get(f"/api/v1/tyr/raids/{raid.id}/messages")
         assert resp.status_code == 200
@@ -500,10 +480,10 @@ class TestListMessagesEndpoint:
     def test_send_then_list(
         self,
         client: TestClient,
-        raid_repo: MessageAwareMockRaidRepo,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid(status=RaidStatus.RUNNING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         # Send a message
         client.post(

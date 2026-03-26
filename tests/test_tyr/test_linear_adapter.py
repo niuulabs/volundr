@@ -17,12 +17,15 @@ from tyr.adapters.linear import (
     _parse_progress,
 )
 from tyr.domain.models import (
+    ConfidenceEvent,
+    ConfidenceEventType,
     Phase,
     PhaseStatus,
     Raid,
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
 )
 
 # ---------------------------------------------------------------------------
@@ -37,6 +40,17 @@ def _make_adapter() -> LinearTrackerAdapter:
         api_url="https://test.linear.app/graphql",
     )
     return adapter
+
+
+def _make_adapter_with_pool() -> tuple[LinearTrackerAdapter, AsyncMock]:
+    pool = AsyncMock()
+    adapter = LinearTrackerAdapter(
+        api_key="test",
+        team_id="team-1",
+        api_url="https://test.linear.app/graphql",
+        pool=pool,
+    )
+    return adapter, pool
 
 
 def _mock_response(json_data: dict, status_code: int = 200):
@@ -668,3 +682,1002 @@ class TestStateMappings:
     def test_round_trip_merged(self):
         linear_name = _RAID_TO_LINEAR[RaidStatus.MERGED]
         assert _LINEAR_TO_RAID[linear_name] == RaidStatus.MERGED
+
+
+# ---------------------------------------------------------------------------
+# update_raid_progress
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateRaidProgress:
+    async def test_raises_when_pool_is_none(self):
+        adapter = _make_adapter()  # no pool
+        with pytest.raises(RuntimeError, match="pool is required"):
+            await adapter.update_raid_progress("t-1", status=RaidStatus.REVIEW)
+
+    async def test_executes_upsert_and_returns_raid(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.return_value = None  # _fetch_progress returns None
+
+        # get_raid GQL call
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": _issue_node(id="t-1")}}
+        )
+
+        result = await adapter.update_raid_progress("t-1", status=RaidStatus.REVIEW)
+
+        pool.execute.assert_called_once()
+        sql = pool.execute.call_args[0][0]
+        assert "INSERT INTO raid_progress" in sql
+        assert "chronicle_summary" in sql
+        assert result.tracker_id == "t-1"
+
+    async def test_status_sync_failure_is_logged_not_raised(self):
+        """update_raid_state error should be swallowed, not bubble up."""
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.return_value = None
+
+        # First GQL call (get_raid → _fetch_progress) returns None;
+        # update_raid_state calls also go through _gql but raise
+        adapter._gql._client.post.side_effect = [
+            # update_raid_state: get team id
+            _mock_response({"data": {"issue": {"team": {"id": "team-1"}}}}),
+            # update_raid_state: get team states — fails
+            _mock_response({"errors": [{"message": "boom"}]}, status_code=200),
+            # get_raid GQL call after the failure
+            _mock_response({"data": {"issue": _issue_node(id="t-1")}}),
+        ]
+        pool.fetchrow.return_value = None
+
+        # Should not raise even though update_raid_state fails
+        result = await adapter.update_raid_progress("t-1", status=RaidStatus.RUNNING)
+        assert result.tracker_id == "t-1"
+
+    async def test_no_status_skips_linear_sync(self):
+        """When status is None, update_raid_state is not called."""
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.return_value = None
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": _issue_node(id="t-1")}}
+        )
+
+        result = await adapter.update_raid_progress("t-1", confidence=0.9)
+
+        # Only the get_raid GQL call (no update_raid_state calls)
+        assert adapter._gql._client.post.call_count == 1
+        assert result.tracker_id == "t-1"
+
+
+# ---------------------------------------------------------------------------
+# _get_team_id discovery path
+# ---------------------------------------------------------------------------
+
+
+class TestGetTeamId:
+    async def test_discovery_when_no_team_id_configured(self):
+        adapter = LinearTrackerAdapter(
+            api_key="test",
+            api_url="https://test.linear.app/graphql",
+        )
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"teams": {"nodes": [{"id": "discovered-team"}]}}}
+        )
+
+        result = await adapter._get_team_id()
+
+        assert result == "discovered-team"
+        assert adapter._team_id == "discovered-team"
+
+    async def test_raises_when_no_teams_found(self):
+        adapter = LinearTrackerAdapter(
+            api_key="test",
+            api_url="https://test.linear.app/graphql",
+        )
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"teams": {"nodes": []}}})
+
+        from niuu.adapters.linear import GraphQLError as GQLError
+
+        with pytest.raises(GQLError, match="No Linear teams accessible"):
+            await adapter._get_team_id()
+
+
+# ---------------------------------------------------------------------------
+# create_phase failure
+# ---------------------------------------------------------------------------
+
+
+class TestCreatePhaseFailure:
+    async def test_raises_when_milestone_null(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"projectMilestoneCreate": {"projectMilestone": None, "success": False}}}
+        )
+
+        phase = Phase(
+            id=uuid4(),
+            saga_id=uuid4(),
+            tracker_id="proj-1",
+            number=1,
+            name="Phase Fail",
+            status=PhaseStatus.PENDING,
+            confidence=0.0,
+        )
+
+        with pytest.raises(GraphQLError, match="Failed to create Linear milestone"):
+            await adapter.create_phase(phase)
+
+
+# ---------------------------------------------------------------------------
+# create_raid with confidence and failure
+# ---------------------------------------------------------------------------
+
+
+class TestCreateRaidExtended:
+    async def test_includes_confidence_in_description(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issueCreate": {"issue": {"id": "new-issue"}, "success": True}}}
+        )
+        now = datetime.now(UTC)
+        raid = Raid(
+            id=uuid4(),
+            phase_id=uuid4(),
+            tracker_id="proj-1",
+            name="Raid",
+            description="desc",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=None,
+            status=RaidStatus.PENDING,
+            confidence=0.75,
+            session_id=None,
+            branch=None,
+            chronicle_summary=None,
+            pr_url=None,
+            pr_id=None,
+            retry_count=0,
+            created_at=now,
+            updated_at=now,
+        )
+
+        await adapter.create_raid(raid)
+
+        payload = adapter._gql._client.post.call_args[1]["json"]
+        assert "75%" in payload["variables"]["description"]
+
+    async def test_raises_when_issue_null(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issueCreate": {"issue": None, "success": False}}}
+        )
+        now = datetime.now(UTC)
+        raid = Raid(
+            id=uuid4(),
+            phase_id=uuid4(),
+            tracker_id="proj-1",
+            name="Raid",
+            description="desc",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=None,
+            status=RaidStatus.PENDING,
+            confidence=0.0,
+            session_id=None,
+            branch=None,
+            chronicle_summary=None,
+            pr_url=None,
+            pr_id=None,
+            retry_count=0,
+            created_at=now,
+            updated_at=now,
+        )
+
+        with pytest.raises(GraphQLError, match="Failed to create Linear issue"):
+            await adapter.create_raid(raid)
+
+
+# ---------------------------------------------------------------------------
+# update_raid_state: invalid mapping
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateRaidStateInvalid:
+    async def test_raises_for_unmapped_status(self):
+        adapter = _make_adapter()
+        with pytest.raises(ValueError, match="No Linear state mapping"):
+            await adapter.update_raid_state("i-1", "UNMAPPED_STATUS")  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# _resolve_state_id: issue not found
+# ---------------------------------------------------------------------------
+
+
+class TestResolveStateIdIssueNotFound:
+    async def test_raises_when_issue_node_is_null(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issue": None}})
+
+        with pytest.raises(GraphQLError, match="Issue not found"):
+            await adapter._resolve_state_id("bad-id", "In Progress")
+
+
+# ---------------------------------------------------------------------------
+# list_pending_raids
+# ---------------------------------------------------------------------------
+
+
+class TestListPendingRaids:
+    async def test_returns_pending_and_queued(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "issues": {
+                        "nodes": [
+                            _issue_node(id="i-1", state={"name": "Todo"}),
+                            _issue_node(id="i-2", state={"name": "Backlog"}),
+                            _issue_node(id="i-3", state={"name": "Done"}),
+                        ]
+                    }
+                }
+            }
+        )
+
+        result = await adapter.list_pending_raids("ms-1")
+
+        # Done maps to MERGED, which is not PENDING/QUEUED — filtered out
+        assert len(result) == 2
+        assert all(r.status in (RaidStatus.PENDING, RaidStatus.QUEUED) for r in result)
+
+    async def test_empty(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issues": {"nodes": []}}})
+
+        result = await adapter.list_pending_raids("ms-1")
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# list_milestones: cached path
+# ---------------------------------------------------------------------------
+
+
+class TestListMilestonesCached:
+    async def test_cache_hit_skips_second_gql_call(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"project": {"projectMilestones": {"nodes": [_milestone_node()]}}}}
+        )
+
+        first = await adapter.list_milestones("proj-1")
+        second = await adapter.list_milestones("proj-1")
+
+        assert first == second
+        assert adapter._gql._client.post.call_count == 1  # cached on second call
+
+
+# ---------------------------------------------------------------------------
+# get_project_full
+# ---------------------------------------------------------------------------
+
+
+class TestGetProjectFull:
+    async def test_happy_path(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "project": {
+                        "id": "proj-1",
+                        "name": "Full Project",
+                        "description": "desc",
+                        "state": "started",
+                        "url": "https://linear.app/proj",
+                        "slugId": "abc",
+                        "issueCount": {"nodes": []},
+                        "projectMilestones": {"nodes": [_milestone_node()]},
+                        "issuesFull": {"nodes": [_issue_node()]},
+                    }
+                }
+            }
+        )
+
+        project, milestones, issues = await adapter.get_project_full("proj-1")
+
+        assert project.id == "proj-1"
+        assert len(milestones) == 1
+        assert len(issues) == 1
+
+    async def test_raises_when_project_not_found(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"project": None}})
+
+        with pytest.raises(GraphQLError, match="Project not found"):
+            await adapter.get_project_full("bad-id")
+
+
+# ---------------------------------------------------------------------------
+# get_blocked_identifiers
+# ---------------------------------------------------------------------------
+
+
+class TestGetBlockedIdentifiers:
+    async def test_returns_blocked_set(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "issues": {
+                        "nodes": [
+                            {
+                                "id": "i-1",
+                                "state": {"type": "started"},
+                                "relations": {
+                                    "nodes": [
+                                        {
+                                            "type": "blocks",
+                                            "relatedIssue": {"identifier": "TEST-2"},
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                }
+            }
+        )
+
+        result = await adapter.get_blocked_identifiers("proj-1")
+
+        assert "TEST-2" in result
+
+    async def test_completed_issues_not_blocking(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "issues": {
+                        "nodes": [
+                            {
+                                "id": "i-1",
+                                "state": {"type": "completed"},
+                                "relations": {
+                                    "nodes": [
+                                        {
+                                            "type": "blocks",
+                                            "relatedIssue": {"identifier": "TEST-3"},
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                }
+            }
+        )
+
+        result = await adapter.get_blocked_identifiers("proj-1")
+        assert "TEST-3" not in result
+        assert result == set()
+
+    async def test_empty(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issues": {"nodes": []}}})
+
+        result = await adapter.get_blocked_identifiers("proj-1")
+        assert result == set()
+
+    async def test_non_blocks_relation_type_not_counted(self):
+        """Relations with type != 'blocks' are ignored (branch 598->597)."""
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "issues": {
+                        "nodes": [
+                            {
+                                "id": "i-1",
+                                "state": {"type": "started"},
+                                "relations": {
+                                    "nodes": [
+                                        {
+                                            "type": "related",
+                                            "relatedIssue": {"identifier": "TEST-5"},
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                }
+            }
+        )
+
+        result = await adapter.get_blocked_identifiers("proj-1")
+        assert "TEST-5" not in result
+        assert result == set()
+
+    async def test_blocks_relation_with_empty_identifier_not_counted(self):
+        """Blocks relations with empty identifier are ignored (branch 600->597)."""
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "issues": {
+                        "nodes": [
+                            {
+                                "id": "i-1",
+                                "state": {"type": "started"},
+                                "relations": {
+                                    "nodes": [
+                                        {
+                                            "type": "blocks",
+                                            "relatedIssue": {"identifier": ""},
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                }
+            }
+        )
+
+        result = await adapter.get_blocked_identifiers("proj-1")
+        assert result == set()
+
+
+# ---------------------------------------------------------------------------
+# get_raid_by_session
+# ---------------------------------------------------------------------------
+
+
+class TestGetRaidBySession:
+    async def test_no_pool_returns_none(self):
+        adapter = _make_adapter()
+        result = await adapter.get_raid_by_session("sess-1")
+        assert result is None
+
+    async def test_with_pool_not_found_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = None
+
+        result = await adapter.get_raid_by_session("sess-1")
+        assert result is None
+
+    async def test_with_pool_found_returns_raid(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.side_effect = [
+            {"tracker_id": "issue-1"},  # raid_progress lookup
+            None,  # _fetch_progress
+        ]
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": _issue_node(id="issue-1")}}
+        )
+
+        result = await adapter.get_raid_by_session("sess-1")
+
+        assert result is not None
+        assert result.tracker_id == "issue-1"
+
+
+# ---------------------------------------------------------------------------
+# list_raids_by_status
+# ---------------------------------------------------------------------------
+
+
+class TestListRaidsByStatus:
+    async def test_no_pool_returns_empty(self):
+        adapter = _make_adapter()
+        result = await adapter.list_raids_by_status(RaidStatus.PENDING)
+        assert result == []
+
+    async def test_with_pool_returns_raids(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetch.return_value = [{"tracker_id": "issue-1"}]
+        pool.fetchrow.return_value = None  # _fetch_progress
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": _issue_node(id="issue-1")}}
+        )
+
+        result = await adapter.list_raids_by_status(RaidStatus.PENDING)
+
+        assert len(result) == 1
+        assert result[0].tracker_id == "issue-1"
+
+    async def test_with_pool_gql_failure_skips_raid(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetch.return_value = [{"tracker_id": "bad-id"}]
+        pool.fetchrow.return_value = None
+        adapter._gql._client.post.return_value = _mock_response({"data": {"issue": None}})
+
+        result = await adapter.list_raids_by_status(RaidStatus.PENDING)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# get_raid_by_id
+# ---------------------------------------------------------------------------
+
+
+class TestGetRaidById:
+    async def test_no_pool_returns_none(self):
+        adapter = _make_adapter()
+        result = await adapter.get_raid_by_id(uuid4())
+        assert result is None
+
+    async def test_with_pool_not_found_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = None
+
+        result = await adapter.get_raid_by_id(uuid4())
+        assert result is None
+
+    async def test_with_pool_found(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.side_effect = [
+            {"tracker_id": "issue-1"},  # raid_progress lookup
+            None,  # _fetch_progress
+        ]
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": _issue_node(id="issue-1")}}
+        )
+
+        result = await adapter.get_raid_by_id(uuid4())
+
+        assert result is not None
+        assert result.tracker_id == "issue-1"
+
+
+# ---------------------------------------------------------------------------
+# add_confidence_event
+# ---------------------------------------------------------------------------
+
+
+class TestAddConfidenceEvent:
+    async def test_no_pool_raises(self):
+        adapter = _make_adapter()
+        event = ConfidenceEvent(
+            id=uuid4(),
+            raid_id=uuid4(),
+            event_type=ConfidenceEventType.CI_PASS,
+            delta=0.05,
+            score_after=0.75,
+            created_at=datetime.now(UTC),
+        )
+        with pytest.raises(RuntimeError, match="pool is required for add_confidence_event"):
+            await adapter.add_confidence_event("t-1", event)
+
+    async def test_with_pool_inserts_event(self):
+        adapter, pool = _make_adapter_with_pool()
+        event = ConfidenceEvent(
+            id=uuid4(),
+            raid_id=uuid4(),
+            event_type=ConfidenceEventType.CI_PASS,
+            delta=0.05,
+            score_after=0.75,
+            created_at=datetime.now(UTC),
+        )
+
+        await adapter.add_confidence_event("t-1", event)
+
+        assert pool.execute.call_count == 2
+        insert_sql = pool.execute.call_args_list[0][0][0]
+        assert "INSERT INTO raid_confidence_events" in insert_sql
+        update_sql = pool.execute.call_args_list[1][0][0]
+        assert "UPDATE raid_progress SET confidence" in update_sql
+
+
+# ---------------------------------------------------------------------------
+# get_confidence_events
+# ---------------------------------------------------------------------------
+
+
+class TestGetConfidenceEvents:
+    async def test_no_pool_returns_empty(self):
+        adapter = _make_adapter()
+        result = await adapter.get_confidence_events("t-1")
+        assert result == []
+
+    async def test_with_pool_returns_events(self):
+        adapter, pool = _make_adapter_with_pool()
+        raid_id = uuid4()
+        pool.fetch.return_value = [
+            {
+                "id": uuid4(),
+                "raid_id": raid_id,
+                "event_type": "ci_pass",
+                "delta": 0.05,
+                "score_after": 0.8,
+                "created_at": datetime.now(UTC),
+            }
+        ]
+
+        result = await adapter.get_confidence_events("t-1")
+
+        assert len(result) == 1
+        assert result[0].event_type == ConfidenceEventType.CI_PASS
+
+
+# ---------------------------------------------------------------------------
+# all_raids_merged
+# ---------------------------------------------------------------------------
+
+
+class TestAllRaidsMerged:
+    async def test_no_pool_returns_false(self):
+        adapter = _make_adapter()
+        result = await adapter.all_raids_merged("phase-tid")
+        assert result is False
+
+    async def test_with_pool_all_merged(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = {"remaining": 0}
+
+        result = await adapter.all_raids_merged("phase-tid")
+        assert result is True
+
+    async def test_with_pool_some_not_merged(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = {"remaining": 3}
+
+        result = await adapter.all_raids_merged("phase-tid")
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# list_phases_for_saga
+# ---------------------------------------------------------------------------
+
+
+class TestListPhasesForSaga:
+    async def test_returns_phases_from_milestones(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "project": {
+                        "projectMilestones": {"nodes": [_milestone_node(id="ms-1", name="Phase 1")]}
+                    }
+                }
+            }
+        )
+
+        result = await adapter.list_phases_for_saga("proj-id")
+
+        assert len(result) == 1
+        assert result[0].tracker_id == "ms-1"
+        assert result[0].name == "Phase 1"
+
+    async def test_empty_milestones(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"project": {"projectMilestones": {"nodes": []}}}}
+        )
+
+        result = await adapter.list_phases_for_saga("proj-id")
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# update_phase_status (no-op)
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePhaseStatus:
+    async def test_always_returns_none(self):
+        adapter = _make_adapter()
+        result = await adapter.update_phase_status("phase-tid", PhaseStatus.GATED)
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_saga_for_raid
+# ---------------------------------------------------------------------------
+
+
+class TestGetSagaForRaid:
+    async def test_no_pool_returns_none(self):
+        adapter = _make_adapter()
+        result = await adapter.get_saga_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_not_found_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = None
+
+        result = await adapter.get_saga_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_empty_saga_tracker_id_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = {"saga_tracker_id": None}
+
+        result = await adapter.get_saga_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_found(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.return_value = {"saga_tracker_id": "proj-1"}
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"project": _project_node()}}
+        )
+
+        result = await adapter.get_saga_for_raid("t-1")
+
+        assert result is not None
+        assert result.tracker_id == "proj-1"
+
+
+# ---------------------------------------------------------------------------
+# get_phase_for_raid
+# ---------------------------------------------------------------------------
+
+
+class TestGetPhaseForRaid:
+    async def test_no_pool_returns_none(self):
+        adapter = _make_adapter()
+        result = await adapter.get_phase_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_not_found_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = None
+
+        result = await adapter.get_phase_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_empty_phase_tracker_id_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = {"phase_tracker_id": ""}
+
+        result = await adapter.get_phase_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_found(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        pool.fetchrow.return_value = {"phase_tracker_id": "ms-1"}
+        adapter._gql._client.post.return_value = _mock_response(
+            {
+                "data": {
+                    "projectMilestone": {
+                        "id": "ms-1",
+                        "name": "Phase 1",
+                        "sortOrder": 1,
+                    }
+                }
+            }
+        )
+
+        result = await adapter.get_phase_for_raid("t-1")
+
+        assert result is not None
+        assert result.tracker_id == "ms-1"
+
+
+# ---------------------------------------------------------------------------
+# get_owner_for_raid
+# ---------------------------------------------------------------------------
+
+
+class TestGetOwnerForRaid:
+    async def test_no_pool_returns_none(self):
+        adapter = _make_adapter()
+        result = await adapter.get_owner_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_not_found_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = None
+
+        result = await adapter.get_owner_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_null_owner_returns_none(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = {"owner_id": None}
+
+        result = await adapter.get_owner_for_raid("t-1")
+        assert result is None
+
+    async def test_with_pool_found(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetchrow.return_value = {"owner_id": "owner-99"}
+
+        result = await adapter.get_owner_for_raid("t-1")
+        assert result == "owner-99"
+
+
+# ---------------------------------------------------------------------------
+# save_session_message
+# ---------------------------------------------------------------------------
+
+
+class TestSaveSessionMessage:
+    async def test_no_pool_raises(self):
+        adapter = _make_adapter()
+        message = SessionMessage(
+            id=uuid4(),
+            raid_id=uuid4(),
+            session_id="sess-1",
+            content="hi",
+            sender="user",
+            created_at=datetime.now(UTC),
+        )
+        with pytest.raises(RuntimeError, match="pool is required for save_session_message"):
+            await adapter.save_session_message(message)
+
+    async def test_with_pool_inserts_message(self):
+        adapter, pool = _make_adapter_with_pool()
+        raid_id = uuid4()
+        message = SessionMessage(
+            id=uuid4(),
+            raid_id=raid_id,
+            session_id="sess-1",
+            content="hello",
+            sender="user",
+            created_at=datetime.now(UTC),
+        )
+        pool.fetchrow.return_value = {"tracker_id": "t-1"}
+
+        await adapter.save_session_message(message)
+
+        pool.execute.assert_called_once()
+        sql = pool.execute.call_args[0][0]
+        assert "INSERT INTO raid_session_messages" in sql
+
+    async def test_with_pool_no_progress_row_uses_raid_id(self):
+        adapter, pool = _make_adapter_with_pool()
+        raid_id = uuid4()
+        message = SessionMessage(
+            id=uuid4(),
+            raid_id=raid_id,
+            session_id="sess-1",
+            content="hello",
+            sender="user",
+            created_at=datetime.now(UTC),
+        )
+        pool.fetchrow.return_value = None  # No progress row
+
+        await adapter.save_session_message(message)
+
+        pool.execute.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# get_session_messages
+# ---------------------------------------------------------------------------
+
+
+class TestGetSessionMessages:
+    async def test_no_pool_returns_empty(self):
+        adapter = _make_adapter()
+        result = await adapter.get_session_messages("t-1")
+        assert result == []
+
+    async def test_with_pool_returns_messages(self):
+        adapter, pool = _make_adapter_with_pool()
+        msg_id = uuid4()
+        raid_id = uuid4()
+        pool.fetch.return_value = [
+            {
+                "id": msg_id,
+                "raid_id": raid_id,
+                "session_id": "sess-1",
+                "content": "hello",
+                "sender": "user",
+                "created_at": datetime.now(UTC),
+            }
+        ]
+
+        result = await adapter.get_session_messages("t-1")
+
+        assert len(result) == 1
+        assert result[0].content == "hello"
+
+    async def test_with_pool_empty(self):
+        adapter, pool = _make_adapter_with_pool()
+        pool.fetch.return_value = []
+
+        result = await adapter.get_session_messages("t-1")
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# close
+# ---------------------------------------------------------------------------
+
+
+class TestClose:
+    async def test_close_calls_gql_close(self):
+        adapter = _make_adapter()
+        adapter._gql.close = AsyncMock()
+
+        await adapter.close()
+
+        adapter._gql.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _node_to_tracker_project: edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestNodeToTrackerProject:
+    def test_progress_from_node_when_no_milestones(self):
+        node = {
+            "id": "proj-1",
+            "name": "Project",
+            "description": "desc",
+            "state": "started",
+            "url": "https://linear.app/proj",
+            "projectMilestones": {"nodes": []},
+            "issues": {"nodes": []},
+            "progress": 50.0,
+        }
+        project = LinearTrackerAdapter._node_to_tracker_project(node)
+        # progress=50.0 → 50.0/100 = 0.5
+        assert project.progress == 0.5
+
+    def test_slug_extracted_from_url_with_slug_id(self):
+        node = {
+            "id": "proj-1",
+            "name": "My Project",
+            "description": "",
+            "state": "started",
+            "url": "https://linear.app/workspace/project/my-project-abc123",
+            "slugId": "abc123",
+            "projectMilestones": {"nodes": []},
+            "issues": {"nodes": []},
+        }
+        project = LinearTrackerAdapter._node_to_tracker_project(node)
+        assert project.slug == "my-project"
+
+
+# ---------------------------------------------------------------------------
+# _issue_to_raid: progress status override
+# ---------------------------------------------------------------------------
+
+
+class TestIssueToRaid:
+    def test_progress_status_overrides_linear_state(self):
+        node = _issue_node(state={"name": "Todo"})
+        progress = {
+            "status": "RUNNING",
+            "raid_id": uuid4(),
+            "confidence": None,
+            "session_id": None,
+            "pr_url": None,
+            "pr_id": None,
+            "retry_count": None,
+        }
+        raid = LinearTrackerAdapter._issue_to_raid(node, progress=progress)
+        assert raid.status == RaidStatus.RUNNING
