@@ -8,16 +8,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 // Server is the main forge server that ties together the store, runner,
 // event bus, auth, and HTTP handler.
 type Server struct {
 	cfg    *Config
-	store  *Store
+	store  SessionStore
 	runner *Runner
-	bus    *EventBus
+	bus    EventEmitter
 	auth   *PATAuth
 	srv    *http.Server
 }
@@ -51,7 +50,7 @@ func NewServer(cfg *Config) (*Server, error) {
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
-	handler := NewHandler(s.runner, s.cfg)
+	handler := NewHandler(s.runner)
 	handler.RegisterRoutes(mux)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
@@ -59,7 +58,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.srv = &http.Server{
 		Addr:              addr,
 		Handler:           s.auth.Wrap(mux),
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: s.cfg.Listen.ReadHeaderTimeout,
 	}
 
 	// Graceful shutdown on signals.
@@ -71,7 +70,7 @@ func (s *Server) Run(ctx context.Context) error {
 		log.Println("shutting down...")
 		s.runner.StopAll()
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.Listen.ShutdownTimeout)
 		defer cancel()
 		_ = s.srv.Shutdown(shutdownCtx)
 	}()

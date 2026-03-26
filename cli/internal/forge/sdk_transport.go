@@ -17,7 +17,7 @@ import (
 type SDKTransport struct {
 	sessionID string
 	port      int
-	bus       *EventBus
+	bus       EventEmitter
 
 	mu       sync.Mutex
 	conn     *websocket.Conn
@@ -30,7 +30,7 @@ type SDKTransport struct {
 }
 
 // NewSDKTransport creates a transport that listens on the given port.
-func NewSDKTransport(sessionID string, port int, bus *EventBus) *SDKTransport {
+func NewSDKTransport(sessionID string, port int, bus EventEmitter) *SDKTransport {
 	return &SDKTransport{
 		sessionID: sessionID,
 		port:      port,

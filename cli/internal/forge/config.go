@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,18 +21,21 @@ type Config struct {
 
 // ListenConfig holds the listener settings.
 type ListenConfig struct {
-	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
+	Host              string        `yaml:"host"`
+	Port              int           `yaml:"port"`
+	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout"`
+	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout"`
 }
 
 // ForgeConfig holds session runner settings.
 type ForgeConfig struct {
-	WorkspacesDir string      `yaml:"workspaces_dir"`
-	StateFile     string      `yaml:"state_file"`
-	ClaudeBinary  string      `yaml:"claude_binary"`
-	MaxConcurrent int         `yaml:"max_concurrent"`
-	SDKPortStart  int         `yaml:"sdk_port_start"`
-	Xcode         XcodeConfig `yaml:"xcode"`
+	WorkspacesDir string        `yaml:"workspaces_dir"`
+	StateFile     string        `yaml:"state_file"`
+	ClaudeBinary  string        `yaml:"claude_binary"`
+	MaxConcurrent int           `yaml:"max_concurrent"`
+	SDKPortStart  int           `yaml:"sdk_port_start"`
+	StopTimeout   time.Duration `yaml:"stop_timeout"`
+	Xcode         XcodeConfig   `yaml:"xcode"`
 }
 
 // XcodeConfig holds Xcode toolchain settings.
@@ -78,8 +82,10 @@ func DefaultForgeConfig() *Config {
 
 	cfg := &Config{
 		Listen: ListenConfig{
-			Host: "0.0.0.0",
-			Port: 8080,
+			Host:              "0.0.0.0",
+			Port:              8080,
+			ReadHeaderTimeout: 10 * time.Second,
+			ShutdownTimeout:   10 * time.Second,
 		},
 		Forge: ForgeConfig{
 			WorkspacesDir: filepath.Join(volundrDir, "workspaces"),
@@ -87,6 +93,7 @@ func DefaultForgeConfig() *Config {
 			ClaudeBinary:  "claude",
 			MaxConcurrent: 4,
 			SDKPortStart:  9100,
+			StopTimeout:   10 * time.Second,
 			Xcode: XcodeConfig{
 				SearchPaths: []string{"/Applications"},
 			},

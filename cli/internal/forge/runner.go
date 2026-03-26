@@ -2,6 +2,7 @@ package forge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,17 +19,20 @@ import (
 // Claude Code process spawning, and cleanup.
 type Runner struct {
 	cfg   *Config
-	store *Store
-	bus   *EventBus
+	store SessionStore
+	bus   EventEmitter
 
 	mu         sync.Mutex
-	processes  map[string]*exec.Cmd      // session ID -> Claude Code process
-	transports map[string]*SDKTransport  // session ID -> SDK WebSocket transport
-	nextPort   int                       // next SDK port to allocate
+	processes  map[string]*exec.Cmd     // session ID -> Claude Code process
+	transports map[string]*SDKTransport // session ID -> SDK WebSocket transport
+	nextPort   int                      // next SDK port to allocate
 }
 
+// Compile-time check that Runner satisfies SessionRunner.
+var _ SessionRunner = (*Runner)(nil)
+
 // NewRunner creates a new session runner.
-func NewRunner(cfg *Config, store *Store, bus *EventBus) *Runner {
+func NewRunner(cfg *Config, store SessionStore, bus EventEmitter) *Runner {
 	return &Runner{
 		cfg:        cfg,
 		store:      store,
@@ -108,13 +112,12 @@ func (r *Runner) Stop(id string) error {
 	}
 
 	if cmd != nil && cmd.Process != nil {
-		// Send SIGTERM, wait up to 10s, then SIGKILL.
 		_ = cmd.Process.Signal(syscall.SIGTERM)
 		done := make(chan error, 1)
 		go func() { done <- cmd.Wait() }()
 		select {
 		case <-done:
-		case <-time.After(10 * time.Second):
+		case <-time.After(r.cfg.Forge.StopTimeout):
 			_ = cmd.Process.Kill()
 		}
 	}
@@ -181,6 +184,58 @@ func (r *Runner) StopAll() {
 		}
 	}
 }
+
+// --- Methods that expose store/bus through the SessionRunner interface ---
+
+// ListSessions returns all sessions from the store.
+func (r *Runner) ListSessions() []*Session {
+	return r.store.List()
+}
+
+// GetSession returns a session by ID, or nil if not found.
+func (r *Runner) GetSession(id string) *Session {
+	return r.store.Get(id)
+}
+
+// GetStats returns aggregate session statistics.
+func (r *Runner) GetStats() StatsResponse {
+	return StatsResponse{
+		ActiveSessions: r.store.Count(StatusRunning),
+		TotalSessions:  r.store.Count(""),
+	}
+}
+
+// GetPRStatus detects PR status by running `gh pr view` in the session workspace.
+func (r *Runner) GetPRStatus(id string) (PRStatusResponse, error) {
+	sess := r.store.Get(id)
+	if sess == nil {
+		return PRStatusResponse{}, fmt.Errorf("session %s not found", id)
+	}
+
+	return r.detectPR(sess), nil
+}
+
+// GetChronicle reads the Claude log for a session and returns a summary.
+func (r *Runner) GetChronicle(id string) (string, error) {
+	sess := r.store.Get(id)
+	if sess == nil {
+		return "", fmt.Errorf("session %s not found", id)
+	}
+
+	return r.readChronicle(sess), nil
+}
+
+// SubscribeActivity returns a channel that receives activity events.
+func (r *Runner) SubscribeActivity() (string, <-chan ActivityEvent) {
+	return r.bus.Subscribe()
+}
+
+// UnsubscribeActivity removes an activity subscription.
+func (r *Runner) UnsubscribeActivity(id string) {
+	r.bus.Unsubscribe(id)
+}
+
+// --- Internal methods ---
 
 // provision clones the repo and starts Claude Code. Runs in a goroutine.
 func (r *Runner) provision(ctx context.Context, sess *Session) {
@@ -390,6 +445,61 @@ func (r *Runner) monitor(sessionID string, cmd *exec.Cmd, logFile *os.File) {
 			r.transition(sess, StatusStopped, ActivityStateIdle)
 		}
 	}
+}
+
+// detectPR runs `gh pr view --json` in the session workspace.
+func (r *Runner) detectPR(sess *Session) PRStatusResponse {
+	if sess.WorkspaceDir == "" {
+		return PRStatusResponse{State: ActivityStateNone}
+	}
+
+	cmd := exec.Command("gh", "pr", "view", "--json", "number,url,state,mergeable,statusCheckRollup") //nolint:gosec // fixed args
+	cmd.Dir = sess.WorkspaceDir
+	output, err := cmd.Output()
+	if err != nil {
+		return PRStatusResponse{State: ActivityStateNone}
+	}
+
+	var pr struct {
+		Number    int    `json:"number"`
+		URL       string `json:"url"`
+		State     string `json:"state"`
+		Mergeable string `json:"mergeable"`
+		Checks    []struct {
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+		} `json:"statusCheckRollup"`
+	}
+	if err := json.Unmarshal(output, &pr); err != nil {
+		return PRStatusResponse{State: ActivityStateNone}
+	}
+
+	ciPassed := true
+	for _, check := range pr.Checks {
+		if check.Conclusion != "SUCCESS" && check.Conclusion != "NEUTRAL" && check.Conclusion != "SKIPPED" {
+			ciPassed = false
+			break
+		}
+	}
+
+	return PRStatusResponse{
+		PRID:      fmt.Sprintf("%d", pr.Number),
+		URL:       pr.URL,
+		State:     strings.ToLower(pr.State),
+		Mergeable: strings.EqualFold(pr.Mergeable, "MERGEABLE"),
+		CIPassed:  &ciPassed,
+	}
+}
+
+// readChronicle reads the Claude log and returns a summary.
+func (r *Runner) readChronicle(sess *Session) string {
+	logPath := filepath.Join(sess.WorkspaceDir, ".forge-claude.log")
+	cmd := exec.Command("tail", "-100", logPath) //nolint:gosec // fixed args, path from trusted session state
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(output)
 }
 
 // transition updates a session's status, persists it, and emits an activity event.

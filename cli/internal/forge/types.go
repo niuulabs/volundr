@@ -4,6 +4,7 @@
 package forge
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -23,6 +24,42 @@ const (
 	ActivityStateNone          = "none"
 	ActivityStateGit           = "git"
 )
+
+// --- Port interfaces (hexagonal architecture) ---
+
+// SessionStore is the port for session state persistence.
+type SessionStore interface {
+	Get(id string) *Session
+	Put(sess *Session)
+	List() []*Session
+	Delete(id string)
+	Count(status SessionStatus) int
+}
+
+// EventEmitter is the port for publishing and subscribing to activity events.
+type EventEmitter interface {
+	Emit(event ActivityEvent)
+	Subscribe() (string, <-chan ActivityEvent)
+	Unsubscribe(id string)
+}
+
+// SessionRunner is the port the HTTP handler depends on for all session operations.
+type SessionRunner interface {
+	CreateAndStart(ctx context.Context, req CreateSessionRequest, ownerID string) (*Session, error)
+	Stop(id string) error
+	Delete(id string) error
+	SendMessage(id string, content string) error
+	StopAll()
+
+	ListSessions() []*Session
+	GetSession(id string) *Session
+	GetStats() StatsResponse
+	GetPRStatus(id string) (PRStatusResponse, error)
+	GetChronicle(id string) (string, error)
+
+	SubscribeActivity() (string, <-chan ActivityEvent)
+	UnsubscribeActivity(id string)
+}
 
 // --- API request/response types matching Volundr's REST surface ---
 

@@ -5,22 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
 // Handler holds the HTTP handlers for the Volundr-compatible REST API.
 type Handler struct {
-	runner *Runner
-	cfg    *Config
+	runner SessionRunner
 }
 
 // NewHandler creates a new API handler.
-func NewHandler(runner *Runner, cfg *Config) *Handler {
+func NewHandler(runner SessionRunner) *Handler {
 	return &Handler{
 		runner: runner,
-		cfg:    cfg,
 	}
 }
 
@@ -68,7 +63,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listSessions(w http.ResponseWriter, _ *http.Request) {
-	sessions := h.runner.store.List()
+	sessions := h.runner.ListSessions()
 	responses := make([]SessionResponse, len(sessions))
 	for i, sess := range sessions {
 		responses[i] = sess.ToResponse()
@@ -78,7 +73,7 @@ func (h *Handler) listSessions(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.runner.store.Get(id)
+	sess := h.runner.GetSession(id)
 	if sess == nil {
 		writeError(w, http.StatusNotFound, "session %s not found", id)
 		return
@@ -88,7 +83,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.runner.store.Get(id)
+	sess := h.runner.GetSession(id)
 	if sess == nil {
 		writeError(w, http.StatusNotFound, "session %s not found", id)
 		return
@@ -130,7 +125,7 @@ func (h *Handler) stopSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := h.runner.store.Get(id)
+	sess := h.runner.GetSession(id)
 	if sess == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -172,27 +167,21 @@ func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getPRStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.runner.store.Get(id)
-	if sess == nil {
-		writeError(w, http.StatusNotFound, "session %s not found", id)
+	pr, err := h.runner.GetPRStatus(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "%v", err)
 		return
 	}
-
-	// Detect PR by running `gh pr view` in the workspace.
-	pr := h.detectPR(sess)
 	writeJSON(w, http.StatusOK, pr)
 }
 
 func (h *Handler) getChronicle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.runner.store.Get(id)
-	if sess == nil {
-		writeError(w, http.StatusNotFound, "session %s not found", id)
+	summary, err := h.runner.GetChronicle(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "%v", err)
 		return
 	}
-
-	// Read the Claude log for a summary.
-	summary := h.readChronicle(sess)
 	writeJSON(w, http.StatusOK, ChronicleResponse{Summary: summary})
 }
 
@@ -207,11 +196,11 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	subID, ch := h.runner.bus.Subscribe()
-	defer h.runner.bus.Unsubscribe(subID)
+	subID, ch := h.runner.SubscribeActivity()
+	defer h.runner.UnsubscribeActivity(subID)
 
 	// Send current state as initial snapshot.
-	for _, sess := range h.runner.store.List() {
+	for _, sess := range h.runner.ListSessions() {
 		state := ActivityStateIdle
 		if sess.Status == StatusRunning {
 			state = ActivityStateActive
@@ -243,10 +232,7 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getStats(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, StatsResponse{
-		ActiveSessions: h.runner.store.Count(StatusRunning),
-		TotalSessions:  h.runner.store.Count(""),
-	})
+	writeJSON(w, http.StatusOK, h.runner.GetStats())
 }
 
 func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
@@ -265,62 +251,6 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-// detectPR runs `gh pr view --json` in the session workspace.
-func (h *Handler) detectPR(sess *Session) PRStatusResponse {
-	if sess.WorkspaceDir == "" {
-		return PRStatusResponse{State: ActivityStateNone}
-	}
-
-	cmd := exec.Command("gh", "pr", "view", "--json", "number,url,state,mergeable,statusCheckRollup") //nolint:gosec // fixed args
-	cmd.Dir = sess.WorkspaceDir
-	output, err := cmd.Output()
-	if err != nil {
-		return PRStatusResponse{State: ActivityStateNone}
-	}
-
-	var pr struct {
-		Number    int    `json:"number"`
-		URL       string `json:"url"`
-		State     string `json:"state"`
-		Mergeable string `json:"mergeable"`
-		Checks    []struct {
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-		} `json:"statusCheckRollup"`
-	}
-	if err := json.Unmarshal(output, &pr); err != nil {
-		return PRStatusResponse{State: ActivityStateNone}
-	}
-
-	ciPassed := true
-	for _, check := range pr.Checks {
-		if check.Conclusion != "SUCCESS" && check.Conclusion != "NEUTRAL" && check.Conclusion != "SKIPPED" {
-			ciPassed = false
-			break
-		}
-	}
-
-	return PRStatusResponse{
-		PRID:      fmt.Sprintf("%d", pr.Number),
-		URL:       pr.URL,
-		State:     strings.ToLower(pr.State),
-		Mergeable: strings.EqualFold(pr.Mergeable, "MERGEABLE"),
-		CIPassed:  &ciPassed,
-	}
-}
-
-// readChronicle reads the Claude log and returns a summary.
-func (h *Handler) readChronicle(sess *Session) string {
-	logPath := filepath.Join(sess.WorkspaceDir, ".forge-claude.log")
-	// Return last portion of the log as a basic summary.
-	cmd := exec.Command("tail", "-100", logPath) //nolint:gosec // fixed args, path from trusted session state
-	output, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return string(output)
 }
 
 // --- helpers ---

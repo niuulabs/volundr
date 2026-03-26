@@ -5,6 +5,8 @@
 listen:
   host: "0.0.0.0"       # bind address (use 127.0.0.1 for local-only)
   port: 8080             # listen port
+  read_header_timeout: 10s  # max time to read request headers
+  shutdown_timeout: 10s     # max time to wait for graceful shutdown
 
 # Session runner settings
 forge:
@@ -24,6 +26,9 @@ forge:
   # Starting port for per-session SDK WebSocket servers.
   # Each session gets its own port (sdk_port_start, sdk_port_start+1, ...).
   sdk_port_start: 9100
+
+  # Max time to wait for a Claude process to exit after SIGTERM before SIGKILL.
+  stop_timeout: 10s
 
   # Xcode toolchain settings (macOS only)
   xcode:

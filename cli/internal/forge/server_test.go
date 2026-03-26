@@ -53,14 +53,7 @@ func TestNewServer_InvalidAuthMode(t *testing.T) {
 func TestServer_GracefulShutdown(t *testing.T) {
 	cfg := DefaultForgeConfig()
 	cfg.Forge.WorkspacesDir = t.TempDir()
-	// Use port 0 to get an ephemeral port.
-	cfg.Listen.Port = 0
 	cfg.Listen.Host = "127.0.0.1"
-
-	srv, err := NewServer(cfg)
-	if err != nil {
-		t.Fatalf("NewServer: %v", err)
-	}
 
 	// Find an available port for the test.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -71,6 +64,11 @@ func TestServer_GracefulShutdown(t *testing.T) {
 	_ = ln.Close()
 
 	cfg.Listen.Port = port
+
+	srv, err := NewServer(cfg)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -107,5 +105,20 @@ func TestServer_MaxConcurrentFromConfig(t *testing.T) {
 
 	if srv.cfg.Forge.MaxConcurrent != 8 {
 		t.Errorf("expected max_concurrent 8, got %d", srv.cfg.Forge.MaxConcurrent)
+	}
+}
+
+func TestServer_ConfigTimeoutDefaults(t *testing.T) {
+	cfg := DefaultForgeConfig()
+	cfg.Forge.WorkspacesDir = t.TempDir()
+
+	if cfg.Listen.ReadHeaderTimeout != 10*time.Second {
+		t.Errorf("expected ReadHeaderTimeout 10s, got %v", cfg.Listen.ReadHeaderTimeout)
+	}
+	if cfg.Listen.ShutdownTimeout != 10*time.Second {
+		t.Errorf("expected ShutdownTimeout 10s, got %v", cfg.Listen.ShutdownTimeout)
+	}
+	if cfg.Forge.StopTimeout != 10*time.Second {
+		t.Errorf("expected StopTimeout 10s, got %v", cfg.Forge.StopTimeout)
 	}
 }
