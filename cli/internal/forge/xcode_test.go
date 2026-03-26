@@ -65,6 +65,61 @@ func TestDetectXcodeInstallations_FakeXcodeApp(t *testing.T) {
 	t.Logf("found %d installations in fake dir", len(installs))
 }
 
+func TestDetectXcodeInstallations_NonAppXcodeDir(t *testing.T) {
+	// Create a dir named Xcode but without .app suffix.
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "XcodeStuff"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	installs := DetectXcodeInstallations([]string{dir})
+	if len(installs) != 0 {
+		t.Errorf("expected 0 installations for non-.app dir, got %d", len(installs))
+	}
+}
+
+func TestDetectXcodeInstallations_XcodeAppNoVersionPlist(t *testing.T) {
+	// Xcode.app exists but no version.plist — version will be empty, should skip.
+	dir := t.TempDir()
+	xcodeApp := filepath.Join(dir, "Xcode.app")
+	if err := os.MkdirAll(filepath.Join(xcodeApp, "Contents"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	installs := DetectXcodeInstallations([]string{dir})
+	// Without version.plist, xcodeVersion returns "" and entry is skipped.
+	if len(installs) != 0 {
+		t.Errorf("expected 0 installations without version.plist, got %d", len(installs))
+	}
+}
+
+func TestSelectXcode_InvalidPath(t *testing.T) {
+	err := SelectXcode("/nonexistent/path/Xcode.app")
+	if err == nil {
+		t.Error("expected error for invalid Xcode path")
+	}
+}
+
+func TestActiveXcodePath_NoXcodeSelect(t *testing.T) {
+	// activeXcodePath should return "" when xcode-select is not found.
+	path := activeXcodePath()
+	if runtime.GOOS != "darwin" && path != "" {
+		t.Errorf("expected empty path on non-macOS, got %q", path)
+	}
+}
+
+func TestXcodeVersion_NoFile(t *testing.T) {
+	version, build := xcodeVersion("/nonexistent/Xcode.app")
+	if version != "" || build != "" {
+		t.Errorf("expected empty version/build, got %q/%q", version, build)
+	}
+}
+
+func TestPlistValue_InvalidPath(t *testing.T) {
+	val := plistValue("/nonexistent/file.plist", "SomeKey")
+	if val != "" {
+		t.Errorf("expected empty value, got %q", val)
+	}
+}
+
 func TestIsMacOS(t *testing.T) {
 	got := IsMacOS()
 	expected := runtime.GOOS == "darwin"

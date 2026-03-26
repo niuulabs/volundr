@@ -108,6 +108,82 @@ func TestStore_Persistence(t *testing.T) {
 	}
 }
 
+func TestStore_Persistence_AllStatuses(t *testing.T) {
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "state.json")
+
+	store1 := NewStore(fp)
+	store1.Put(&Session{ID: "created", Status: StatusCreated})
+	store1.Put(&Session{ID: "starting", Status: StatusStarting})
+	store1.Put(&Session{ID: "provisioning", Status: StatusProvisioning})
+	store1.Put(&Session{ID: "running", Status: StatusRunning})
+	store1.Put(&Session{ID: "stopping", Status: StatusStopping})
+	store1.Put(&Session{ID: "stopped", Status: StatusStopped})
+	store1.Put(&Session{ID: "failed", Status: StatusFailed})
+
+	store2 := NewStore(fp)
+
+	// Running, starting, provisioning should become stopped.
+	for _, id := range []string{"starting", "provisioning", "running"} {
+		got := store2.Get(id)
+		if got == nil {
+			t.Fatalf("expected session %s", id)
+		}
+		if got.Status != StatusStopped {
+			t.Errorf("session %s: expected stopped, got %q", id, got.Status)
+		}
+	}
+
+	// Terminal states should be preserved.
+	for _, tc := range []struct {
+		id     string
+		status SessionStatus
+	}{
+		{"created", StatusCreated},
+		{"stopping", StatusStopping},
+		{"stopped", StatusStopped},
+		{"failed", StatusFailed},
+	} {
+		got := store2.Get(tc.id)
+		if got == nil {
+			t.Fatalf("expected session %s", tc.id)
+		}
+		if got.Status != tc.status {
+			t.Errorf("session %s: expected %s, got %q", tc.id, tc.status, got.Status)
+		}
+	}
+}
+
+func TestStore_LoadInvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(fp, []byte("{bad json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should log warning but not panic.
+	store := NewStore(fp)
+	if store.Count("") != 0 {
+		t.Error("expected empty store after invalid JSON")
+	}
+}
+
+func TestStore_PersistToInvalidPath(t *testing.T) {
+	// Writing to an invalid path should log a warning, not panic.
+	store := NewStore("/nonexistent/dir/state.json")
+	store.Put(&Session{ID: "x", Status: StatusRunning})
+	// No panic = success (error is logged, not returned).
+}
+
+func TestStore_NewStoreWithNoFile(t *testing.T) {
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "nonexistent.json")
+	store := NewStore(fp)
+	if store.Count("") != 0 {
+		t.Error("expected empty store when no file exists")
+	}
+}
+
 func TestStore_GetReturnsCopy(t *testing.T) {
 	store := NewStore("")
 	store.Put(&Session{ID: "a", Name: "original"})

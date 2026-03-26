@@ -157,6 +157,51 @@ func TestExtractJWTSub(t *testing.T) {
 	}
 }
 
+func TestExtractBearerToken(t *testing.T) {
+	tests := []struct {
+		name string
+		auth string
+		want string
+	}{
+		{"empty", "", ""},
+		{"bearer token", "Bearer secret", "secret"},
+		{"bearer lowercase", "bearer secret", "secret"},
+		{"no space", "Bearersecret", ""},
+		{"basic auth", "Basic dXNlcjpwYXNz", ""},
+		{"just bearer", "Bearer", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			if tt.auth != "" {
+				req.Header.Set("Authorization", tt.auth)
+			}
+			got := extractBearerToken(req)
+			if got != tt.want {
+				t.Errorf("extractBearerToken() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractJWTSub_InvalidBase64(t *testing.T) {
+	// JWT with invalid base64 payload.
+	got := extractJWTSub("header.!!!invalid!!!.sig")
+	if got != "" {
+		t.Errorf("expected empty, got %q", got)
+	}
+}
+
+func TestExtractJWTSub_InvalidJSON(t *testing.T) {
+	// JWT with valid base64 but invalid JSON payload.
+	payload := base64.RawURLEncoding.EncodeToString([]byte("not json"))
+	got := extractJWTSub("header." + payload + ".sig")
+	if got != "" {
+		t.Errorf("expected empty, got %q", got)
+	}
+}
+
 func TestPATAuth_HealthBypassesAuth(t *testing.T) {
 	auth := NewPATAuth(&AuthConfig{
 		Mode:   "pat",

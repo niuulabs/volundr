@@ -176,6 +176,164 @@ func TestSDKTransport_EmitsActivityEvents(t *testing.T) {
 	}
 }
 
+func TestSDKTransport_PortBeforeStart(t *testing.T) {
+	bus := NewEventBus()
+	transport := NewSDKTransport("test-session", 9999, bus)
+	if transport.Port() != 9999 {
+		t.Errorf("expected port 9999 before start, got %d", transport.Port())
+	}
+}
+
+func TestSDKTransport_InitMessage(t *testing.T) {
+	bus := NewEventBus()
+	transport := NewSDKTransport("test-session", 0, bus)
+
+	if err := transport.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer transport.Stop()
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws/cli/test-session", transport.Port())
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
+
+	select {
+	case <-transport.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("not ready")
+	}
+
+	// Send a system init message to set CLI session ID.
+	initMsg := map[string]any{
+		"type":       "system",
+		"subtype":    "init",
+		"session_id": "cli-session-42",
+	}
+	payload, _ := json.Marshal(initMsg)
+	if err := conn.WriteMessage(websocket.TextMessage, append(payload, '\n')); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Give time for processing.
+	time.Sleep(50 * time.Millisecond)
+
+	// Send a message and verify session_id is populated in the sent message.
+	if err := transport.SendMessage("hello"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	var msg map[string]any
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if msg["session_id"] != "cli-session-42" {
+		t.Errorf("expected session_id 'cli-session-42', got %v", msg["session_id"])
+	}
+}
+
+func TestSDKTransport_InvalidJSON(t *testing.T) {
+	bus := NewEventBus()
+	transport := NewSDKTransport("test-session", 0, bus)
+
+	if err := transport.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer transport.Stop()
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws/cli/test-session", transport.Port())
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
+
+	select {
+	case <-transport.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("not ready")
+	}
+
+	// Send invalid JSON — should not crash.
+	if err := conn.WriteMessage(websocket.TextMessage, []byte("{bad json}\n")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Give time for processing; no panic means success.
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestSDKTransport_SessionIDFromNonSystemMessage(t *testing.T) {
+	bus := NewEventBus()
+	transport := NewSDKTransport("test-session", 0, bus)
+
+	if err := transport.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer transport.Stop()
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws/cli/test-session", transport.Port())
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
+
+	select {
+	case <-transport.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("not ready")
+	}
+
+	// Send an assistant message with session_id.
+	msg := map[string]any{
+		"type":       "assistant",
+		"session_id": "from-assistant-msg",
+		"content":    []any{map[string]any{"type": "text", "text": "hi"}},
+	}
+	payload, _ := json.Marshal(msg)
+	if err := conn.WriteMessage(websocket.TextMessage, append(payload, '\n')); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Give time for processing.
+	time.Sleep(50 * time.Millisecond)
+
+	// The session_id should now be captured.
+	if err := transport.SendMessage("response"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	var reply map[string]any
+	if err := json.Unmarshal(raw, &reply); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if reply["session_id"] != "from-assistant-msg" {
+		t.Errorf("expected session_id 'from-assistant-msg', got %v", reply["session_id"])
+	}
+}
+
 func TestSDKTransport_EmitsToolExecuting(t *testing.T) {
 	bus := NewEventBus()
 	subID, ch := bus.Subscribe()

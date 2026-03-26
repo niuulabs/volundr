@@ -132,3 +132,65 @@ func TestConfig_ResolveAnthropicKey(t *testing.T) {
 		t.Errorf("expected 'sk-from-env', got %q", got)
 	}
 }
+
+func TestConfig_ResolveAnthropicKey_DefaultEnv(t *testing.T) {
+	cfg := DefaultForgeConfig()
+	cfg.Anthropic.APIKey = ""
+	cfg.Anthropic.APIKeyEnv = ""
+	t.Setenv("ANTHROPIC_API_KEY", "sk-default-env")
+
+	if got := cfg.ResolveAnthropicKey(); got != "sk-default-env" {
+		t.Errorf("expected 'sk-default-env', got %q", got)
+	}
+}
+
+func TestConfig_ResolveGitHubToken(t *testing.T) {
+	cfg := DefaultForgeConfig()
+
+	// Direct value takes precedence.
+	cfg.Git.GitHub.Token = "ghp-direct"
+	if got := cfg.ResolveGitHubToken(); got != "ghp-direct" {
+		t.Errorf("expected 'ghp-direct', got %q", got)
+	}
+
+	// Falls back to env var.
+	cfg.Git.GitHub.Token = ""
+	cfg.Git.GitHub.TokenEnv = "TEST_GH_TOKEN"
+	t.Setenv("TEST_GH_TOKEN", "ghp-from-env")
+
+	if got := cfg.ResolveGitHubToken(); got != "ghp-from-env" {
+		t.Errorf("expected 'ghp-from-env', got %q", got)
+	}
+
+	// Default env var.
+	cfg.Git.GitHub.TokenEnv = ""
+	t.Setenv("GITHUB_TOKEN", "ghp-default")
+	if got := cfg.ResolveGitHubToken(); got != "ghp-default" {
+		t.Errorf("expected 'ghp-default', got %q", got)
+	}
+}
+
+func TestLoadForgeConfig_NotFound(t *testing.T) {
+	_, err := LoadForgeConfig("/nonexistent/path/config.yaml")
+	if err == nil {
+		t.Error("expected error for nonexistent file")
+	}
+}
+
+func TestLoadForgeConfig_InvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "bad.yaml")
+	if err := os.WriteFile(cfgPath, []byte("{{not yaml"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadForgeConfig(cfgPath)
+	if err == nil {
+		t.Error("expected error for invalid YAML")
+	}
+}
+
+func TestConfig_IsMacOS(t *testing.T) {
+	// Just verify the function runs without panic.
+	_ = IsMacOS()
+}
