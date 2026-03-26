@@ -30,7 +30,7 @@ func TestRunner_CreateAndStart_CreatesWorkspace(t *testing.T) {
 		Model: "claude-sonnet-4-6",
 	}
 
-	sess, err := runner.CreateAndStart(context.Background(), req, "test-user")
+	sess, err := runner.CreateAndStart(context.Background(), &req, "test-user")
 	if err != nil {
 		t.Fatalf("CreateAndStart: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestRunner_CreateAndStart_MaxConcurrent(t *testing.T) {
 	store.Put(&Session{ID: "existing", Status: StatusRunning})
 
 	req := CreateSessionRequest{Name: "overflow"}
-	_, err := runner.CreateAndStart(context.Background(), req, "user")
+	_, err := runner.CreateAndStart(context.Background(), &req, "user")
 	if err == nil {
 		t.Error("expected error when max concurrent reached")
 	}

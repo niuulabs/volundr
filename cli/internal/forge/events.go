@@ -22,7 +22,7 @@ func NewEventBus() *EventBus {
 
 // Subscribe returns a channel that receives activity events and an ID
 // for unsubscribing. The channel has a buffer of 64 events.
-func (b *EventBus) Subscribe() (string, <-chan ActivityEvent) {
+func (b *EventBus) Subscribe() (id string, ch <-chan ActivityEvent) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

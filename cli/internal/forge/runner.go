@@ -52,7 +52,7 @@ func (r *Runner) allocatePort() int {
 
 // CreateAndStart creates a new session from the request, provisions its
 // workspace, and starts the Claude Code process.
-func (r *Runner) CreateAndStart(ctx context.Context, req CreateSessionRequest, ownerID string) (*Session, error) {
+func (r *Runner) CreateAndStart(ctx context.Context, req *CreateSessionRequest, ownerID string) (*Session, error) {
 	if r.store.Count(StatusRunning) >= r.cfg.Forge.MaxConcurrent {
 		return nil, fmt.Errorf("max concurrent sessions (%d) reached", r.cfg.Forge.MaxConcurrent)
 	}
@@ -148,7 +148,7 @@ func (r *Runner) Delete(id string) error {
 }
 
 // SendMessage sends a message to the Claude Code process via SDK WebSocket.
-func (r *Runner) SendMessage(id string, content string) error {
+func (r *Runner) SendMessage(id, content string) error {
 	sess := r.store.Get(id)
 	if sess == nil {
 		return fmt.Errorf("session %s: %w", id, ErrSessionNotFound)
@@ -226,7 +226,7 @@ func (r *Runner) GetChronicle(id string) (string, error) {
 }
 
 // SubscribeActivity returns a channel that receives activity events.
-func (r *Runner) SubscribeActivity() (string, <-chan ActivityEvent) {
+func (r *Runner) SubscribeActivity() (id string, ch <-chan ActivityEvent) {
 	return r.bus.Subscribe()
 }
 

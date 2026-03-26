@@ -18,7 +18,7 @@ func newMockRunner() *mockRunner {
 	return &mockRunner{sessions: make(map[string]*Session)}
 }
 
-func (m *mockRunner) CreateAndStart(_ context.Context, req CreateSessionRequest, ownerID string) (*Session, error) {
+func (m *mockRunner) CreateAndStart(_ context.Context, req *CreateSessionRequest, ownerID string) (*Session, error) {
 	sess := &Session{
 		ID:      "mock-id",
 		Name:    req.Name,
@@ -47,7 +47,7 @@ func (m *mockRunner) Delete(id string) error {
 	return nil
 }
 
-func (m *mockRunner) SendMessage(id string, _ string) error {
+func (m *mockRunner) SendMessage(id, _ string) error {
 	sess := m.sessions[id]
 	if sess == nil {
 		return ErrSessionNotFound
@@ -106,7 +106,7 @@ func (m *mockRunner) GetChronicle(id string) (string, error) {
 	return "mock chronicle", nil
 }
 
-func (m *mockRunner) SubscribeActivity() (string, <-chan ActivityEvent) {
+func (m *mockRunner) SubscribeActivity() (id string, ch <-chan ActivityEvent) {
 	ch := make(chan ActivityEvent, 64)
 	return "mock-sub", ch
 }
@@ -126,7 +126,7 @@ func TestHandler_Health(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/health", nil)
+	req := httptest.NewRequest("GET", "/health", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -143,7 +143,7 @@ func TestHandler_GetStats(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/stats", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/stats", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -168,7 +168,7 @@ func TestHandler_ListSessions_Empty(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -190,7 +190,7 @@ func TestHandler_GetSession_NotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/nonexistent", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/nonexistent", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -211,7 +211,7 @@ func TestHandler_GetSession_Found(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/sess-1", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/sess-1", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -252,7 +252,7 @@ func TestHandler_StopSession_NotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("POST", "/api/v1/volundr/sessions/nonexistent/stop", nil)
+	req := httptest.NewRequest("POST", "/api/v1/volundr/sessions/nonexistent/stop", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -266,7 +266,7 @@ func TestHandler_DeleteSession_NotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("DELETE", "/api/v1/volundr/sessions/nonexistent", nil)
+	req := httptest.NewRequest("DELETE", "/api/v1/volundr/sessions/nonexistent", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -280,7 +280,7 @@ func TestHandler_GetMe(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/me", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/me", http.NoBody)
 	req.Header.Set("X-Auth-User-Id", "alice")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -303,7 +303,7 @@ func TestHandler_GetPRStatus_NotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/nonexistent/pr", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/nonexistent/pr", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -317,7 +317,7 @@ func TestHandler_GetChronicle_NotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/nonexistent/chronicle", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions/nonexistent/chronicle", http.NoBody)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

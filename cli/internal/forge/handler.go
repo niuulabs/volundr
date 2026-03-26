@@ -53,7 +53,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		ownerID = "local"
 	}
 
-	sess, err := h.runner.CreateAndStart(r.Context(), req, ownerID)
+	sess, err := h.runner.CreateAndStart(r.Context(), &req, ownerID)
 	if err != nil {
 		writeError(w, http.StatusConflict, "%v", err)
 		return
@@ -109,7 +109,7 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 		IssueURL:      sess.IssueURL,
 	}
 
-	newSess, err := h.runner.CreateAndStart(r.Context(), req, ownerID)
+	newSess, err := h.runner.CreateAndStart(r.Context(), &req, ownerID)
 	if err != nil {
 		writeError(w, http.StatusConflict, "%v", err)
 		return

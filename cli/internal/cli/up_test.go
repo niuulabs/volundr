@@ -125,7 +125,7 @@ func TestExpandHome(t *testing.T) {
 	}
 
 	got := expandHome("~/foo/bar")
-	expected := filepath.Join(home, "foo/bar")
+	expected := filepath.Join(home, "foo", "bar")
 	if got != expected {
 		t.Errorf("expandHome(~/foo/bar) = %q, want %q", got, expected)
 	}

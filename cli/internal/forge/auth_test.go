@@ -14,7 +14,7 @@ func TestPATAuth_NoneMode(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", http.NoBody)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -37,7 +37,7 @@ func TestPATAuth_ValidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret-token-123")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -62,7 +62,7 @@ func TestPATAuth_InvalidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", http.NoBody)
 	req.Header.Set("Authorization", "Bearer wrong-token")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -82,7 +82,7 @@ func TestPATAuth_MissingToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", http.NoBody)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -110,7 +110,7 @@ func TestPATAuth_JWTSubAsOwnerID(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", nil)
+	req := httptest.NewRequest("GET", "/api/v1/volundr/sessions", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+jwtToken)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -167,7 +167,7 @@ func TestPATAuth_HealthBypassesAuth(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/health", nil)
+	req := httptest.NewRequest("GET", "/health", http.NoBody)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

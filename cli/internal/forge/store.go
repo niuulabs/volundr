@@ -135,6 +135,8 @@ func (s *Store) load() error {
 		switch sess.Status {
 		case StatusRunning, StatusStarting, StatusProvisioning:
 			sess.Status = StatusStopped
+		case StatusCreated, StatusStopping, StatusStopped, StatusFailed:
+			// Already in a terminal or pre-start state — nothing to do.
 		}
 	}
 
