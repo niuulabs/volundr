@@ -1289,7 +1289,8 @@ def create_router(
             )
 
         import sys
-        print(f"ACTIVITY_DEBUG: session={session_id} state={data.state}", file=sys.stderr, flush=True)
+
+        print(f"ACTIVITY_DEBUG: session={session_id} state={data.state}", file=sys.stderr, flush=True)  # noqa: E501
         logger.info(
             "Activity report: session=%s state=%s metadata=%s",
             session_id,
