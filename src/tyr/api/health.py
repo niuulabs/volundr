@@ -11,6 +11,7 @@ Returns the status of internal services and infrastructure:
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -21,8 +22,8 @@ logger = logging.getLogger(__name__)
 class DetailedHealthResponse(BaseModel):
     """Detailed health status for Tyr services."""
 
-    status: str
-    database: str
+    status: Literal["ok", "degraded"]
+    database: Literal["ok", "unavailable"]
     event_bus_subscriber_count: int
     activity_subscriber_running: bool
     notification_service_running: bool
@@ -50,11 +51,10 @@ def create_health_router() -> APIRouter:
         )
 
         review_engine = getattr(request.app.state, "review_engine", None)
-        review_running = (
-            review_engine._task is not None if review_engine is not None else False
-        )
+        review_running = review_engine.running if review_engine is not None else False
 
-        overall = "ok" if db_status == "ok" else "degraded"
+        services_healthy = activity_running and notification_running and review_running
+        overall = "ok" if db_status == "ok" and services_healthy else "degraded"
 
         return DetailedHealthResponse(
             status=overall,

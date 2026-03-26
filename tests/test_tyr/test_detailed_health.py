@@ -50,7 +50,7 @@ def mock_notification_service():
 @pytest.fixture
 def mock_review_engine():
     engine = MagicMock()
-    engine._task = MagicMock()  # non-None => running
+    engine.running = True
     return engine
 
 
@@ -82,7 +82,7 @@ class TestDetailedHealthEndpoint:
         response = client.get("/api/v1/tyr/health/detailed")
         assert response.status_code == 200
 
-    def test_overall_status_ok_when_db_ok(self, client: TestClient) -> None:
+    def test_overall_status_ok_when_db_ok_and_services_running(self, client: TestClient) -> None:
         response = client.get("/api/v1/tyr/health/detailed")
         assert response.json()["status"] == "ok"
 
@@ -104,7 +104,9 @@ class TestDetailedHealthEndpoint:
 
     def test_review_engine_running(self, client: TestClient) -> None:
         response = client.get("/api/v1/tyr/health/detailed")
-        assert response.json()["review_engine_running"] is True
+        data = response.json()
+        assert data["review_engine_running"] is True
+        assert data["status"] == "ok"
 
     def test_database_unavailable_when_pool_missing(self, app) -> None:
         """When pool is not on app.state, database should be 'unavailable'."""
@@ -132,13 +134,13 @@ class TestDetailedHealthEndpoint:
         assert response.json()["status"] == "degraded"
 
     def test_services_report_false_when_stopped(self, app, mock_pool) -> None:
-        """Services report False when not running."""
+        """Services report False and overall is degraded when not running."""
         stopped_subscriber = MagicMock()
         stopped_subscriber.running = False
         stopped_notification = MagicMock()
         stopped_notification.running = False
         stopped_engine = MagicMock()
-        stopped_engine._task = None
+        stopped_engine.running = False
 
         with patch("tyr.main.database_pool") as mock_db:
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_pool)
@@ -154,6 +156,7 @@ class TestDetailedHealthEndpoint:
         assert data["activity_subscriber_running"] is False
         assert data["notification_service_running"] is False
         assert data["review_engine_running"] is False
+        assert data["status"] == "degraded"
 
     def test_services_default_false_when_absent(self, app, mock_pool) -> None:
         """When services are missing from app.state, values default to False/0."""
@@ -173,6 +176,26 @@ class TestDetailedHealthEndpoint:
         assert data["activity_subscriber_running"] is False
         assert data["notification_service_running"] is False
         assert data["review_engine_running"] is False
+        assert data["status"] == "degraded"
+
+    def test_overall_degraded_when_single_service_down(self, app, mock_pool) -> None:
+        """Overall status is 'degraded' when any one service is not running."""
+        running = MagicMock()
+        running.running = True
+        stopped = MagicMock()
+        stopped.running = False
+
+        with patch("tyr.main.database_pool") as mock_db:
+            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_pool)
+            mock_db.return_value.__aexit__ = AsyncMock(return_value=False)
+            with TestClient(app) as c:
+                c.app.state.pool = mock_pool
+                c.app.state.subscriber = running
+                c.app.state.notification_service = running
+                c.app.state.review_engine = stopped  # only review_engine down
+                response = c.get("/api/v1/tyr/health/detailed")
+
+        assert response.json()["status"] == "degraded"
 
     def test_response_has_correlation_id(self, client: TestClient) -> None:
         response = client.get("/api/v1/tyr/health/detailed")
