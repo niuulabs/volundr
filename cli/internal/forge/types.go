@@ -4,7 +4,23 @@
 package forge
 
 import (
+	"fmt"
 	"time"
+)
+
+// Sentinel errors for typed error handling in handlers.
+var (
+	ErrSessionNotFound   = fmt.Errorf("session not found")
+	ErrSessionNotRunning = fmt.Errorf("session is not running")
+)
+
+// Activity state constants for SSE events.
+const (
+	ActivityStateActive   = "active"
+	ActivityStateIdle     = "idle"
+	ActivityStateStarting = "starting"
+	ActivityStateNone     = "none"
+	ActivityStateGit      = "git"
 )
 
 // --- API request/response types matching Volundr's REST surface ---
@@ -31,25 +47,25 @@ type CreateSessionRequest struct {
 
 // SessionResponse is returned for session CRUD operations.
 type SessionResponse struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	Model           string  `json:"model"`
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Model           string         `json:"model"`
 	Source          *SessionSource `json:"source,omitempty"`
-	Status          string  `json:"status"`
-	ChatEndpoint    string  `json:"chat_endpoint,omitempty"`
-	CodeEndpoint    string  `json:"code_endpoint,omitempty"`
-	CreatedAt       string  `json:"created_at"`
-	UpdatedAt       string  `json:"updated_at"`
-	LastActive      string  `json:"last_active"`
-	MessageCount    int     `json:"message_count"`
-	TokensUsed      int     `json:"tokens_used"`
-	PodName         string  `json:"pod_name,omitempty"`
-	Error           string  `json:"error,omitempty"`
-	TrackerIssueID  string  `json:"tracker_issue_id,omitempty"`
-	IssueTrackerURL string  `json:"issue_tracker_url,omitempty"`
-	OwnerID         string  `json:"owner_id,omitempty"`
-	TenantID        string  `json:"tenant_id,omitempty"`
-	CostEstimate    float64 `json:"cost_estimate,omitempty"`
+	Status          string         `json:"status"`
+	ChatEndpoint    string         `json:"chat_endpoint,omitempty"`
+	CodeEndpoint    string         `json:"code_endpoint,omitempty"`
+	CreatedAt       string         `json:"created_at"`
+	UpdatedAt       string         `json:"updated_at"`
+	LastActive      string         `json:"last_active"`
+	MessageCount    int            `json:"message_count"`
+	TokensUsed      int            `json:"tokens_used"`
+	PodName         string         `json:"pod_name,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	TrackerIssueID  string         `json:"tracker_issue_id,omitempty"`
+	IssueTrackerURL string         `json:"issue_tracker_url,omitempty"`
+	OwnerID         string         `json:"owner_id,omitempty"`
+	TenantID        string         `json:"tenant_id,omitempty"`
+	CostEstimate    float64        `json:"cost_estimate,omitempty"`
 }
 
 // SendMessageRequest is the body for POST /sessions/{id}/messages.
@@ -105,25 +121,25 @@ const (
 
 // Session is the internal representation of a running or completed session.
 type Session struct {
-	ID             string        `json:"id"`
-	Name           string        `json:"name"`
-	Model          string        `json:"model"`
-	Source         *SessionSource `json:"source,omitempty"`
-	Status         SessionStatus `json:"status"`
-	WorkspaceDir   string        `json:"workspace_dir"`
-	ChatEndpoint   string        `json:"chat_endpoint,omitempty"`
-	CodeEndpoint   string        `json:"code_endpoint,omitempty"`
-	SystemPrompt   string        `json:"system_prompt,omitempty"`
-	InitialPrompt  string        `json:"initial_prompt,omitempty"`
-	IssueID        string        `json:"issue_id,omitempty"`
-	IssueURL       string        `json:"issue_url,omitempty"`
-	OwnerID        string        `json:"owner_id,omitempty"`
-	Error          string        `json:"error,omitempty"`
-	MessageCount   int           `json:"message_count"`
-	TokensUsed     int           `json:"tokens_used"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
-	LastActive     time.Time     `json:"last_active"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Model         string         `json:"model"`
+	Source        *SessionSource `json:"source,omitempty"`
+	Status        SessionStatus  `json:"status"`
+	WorkspaceDir  string         `json:"workspace_dir"`
+	ChatEndpoint  string         `json:"chat_endpoint,omitempty"`
+	CodeEndpoint  string         `json:"code_endpoint,omitempty"`
+	SystemPrompt  string         `json:"system_prompt,omitempty"`
+	InitialPrompt string         `json:"initial_prompt,omitempty"`
+	IssueID       string         `json:"issue_id,omitempty"`
+	IssueURL      string         `json:"issue_url,omitempty"`
+	OwnerID       string         `json:"owner_id,omitempty"`
+	Error         string         `json:"error,omitempty"`
+	MessageCount  int            `json:"message_count"`
+	TokensUsed    int            `json:"tokens_used"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	LastActive    time.Time      `json:"last_active"`
 }
 
 // ToResponse converts internal Session to the API response shape.

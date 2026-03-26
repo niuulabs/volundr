@@ -51,7 +51,7 @@ func NewServer(cfg *Config) (*Server, error) {
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
-	handler := NewHandler(s.runner, s.store, s.bus, s.cfg)
+	handler := NewHandler(s.runner, s.cfg)
 	handler.RegisterRoutes(mux)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)

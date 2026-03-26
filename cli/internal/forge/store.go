@@ -3,6 +3,7 @@ package forge
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -23,7 +24,9 @@ func NewStore(filePath string) *Store {
 		filePath: filePath,
 	}
 	if filePath != "" {
-		_ = s.load()
+		if err := s.load(); err != nil {
+			log.Printf("warning: failed to load state file: %v", err)
+		}
 	}
 	return s
 }
@@ -94,15 +97,19 @@ func (s *Store) persist() {
 
 	dir := filepath.Dir(s.filePath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		log.Printf("warning: failed to create state dir: %v", err)
 		return
 	}
 
 	data, err := json.MarshalIndent(s.sessions, "", "  ")
 	if err != nil {
+		log.Printf("warning: failed to marshal state: %v", err)
 		return
 	}
 
-	_ = os.WriteFile(s.filePath, data, 0o600)
+	if err := os.WriteFile(s.filePath, data, 0o600); err != nil {
+		log.Printf("warning: failed to write state file: %v", err)
+	}
 }
 
 // load restores state from disk.

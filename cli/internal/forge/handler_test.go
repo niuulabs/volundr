@@ -21,7 +21,7 @@ func newTestHandler(t *testing.T) (*Handler, *Store, *EventBus) {
 	store := NewStore("")
 	runner := NewRunner(cfg, store, bus)
 
-	h := NewHandler(runner, store, bus, cfg)
+	h := NewHandler(runner, cfg)
 	return h, store, bus
 }
 

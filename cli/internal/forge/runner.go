@@ -65,14 +65,7 @@ func (r *Runner) CreateAndStart(ctx context.Context, req CreateSessionRequest, o
 	}
 	sess.WorkspaceDir = wsDir
 
-	sess.Status = StatusStarting
-	r.store.Put(sess)
-	r.bus.Emit(ActivityEvent{
-		SessionID:     sess.ID,
-		State:         "starting",
-		OwnerID:       ownerID,
-		SessionStatus: string(StatusStarting),
-	})
+	r.transition(sess, StatusStarting, ActivityStateStarting)
 
 	// Clone repo in background, then start Claude Code.
 	go r.provision(ctx, sess)
@@ -108,15 +101,7 @@ func (r *Runner) Stop(id string) error {
 		}
 	}
 
-	sess.Status = StatusStopped
-	sess.UpdatedAt = time.Now().UTC()
-	r.store.Put(sess)
-	r.bus.Emit(ActivityEvent{
-		SessionID:     id,
-		State:         "idle",
-		OwnerID:       sess.OwnerID,
-		SessionStatus: string(StatusStopped),
-	})
+	r.transition(sess, StatusStopped, ActivityStateIdle)
 
 	return nil
 }
@@ -145,10 +130,10 @@ func (r *Runner) Delete(id string) error {
 func (r *Runner) SendMessage(id string, content string) error {
 	sess := r.store.Get(id)
 	if sess == nil {
-		return fmt.Errorf("session %s not found", id)
+		return fmt.Errorf("session %s: %w", id, ErrSessionNotFound)
 	}
 	if sess.Status != StatusRunning {
-		return fmt.Errorf("session %s is not running (status: %s)", id, sess.Status)
+		return fmt.Errorf("session %s (status: %s): %w", id, sess.Status, ErrSessionNotRunning)
 	}
 
 	// For now, write to a message file that the session's CLAUDE.md can
@@ -201,15 +186,7 @@ func (r *Runner) provision(ctx context.Context, sess *Session) {
 		return
 	}
 
-	sess.Status = StatusRunning
-	sess.UpdatedAt = time.Now().UTC()
-	r.store.Put(sess)
-	r.bus.Emit(ActivityEvent{
-		SessionID:     sess.ID,
-		State:         "active",
-		OwnerID:       sess.OwnerID,
-		SessionStatus: string(StatusRunning),
-	})
+	r.transition(sess, StatusRunning, ActivityStateActive)
 }
 
 // gitClone clones the repository into the workspace directory.
@@ -357,19 +334,11 @@ func (r *Runner) monitor(sessionID string, cmd *exec.Cmd, logFile *os.File) {
 	// If we didn't explicitly stop it, it completed or failed.
 	if sess.Status == StatusRunning {
 		if err != nil {
-			sess.Status = StatusFailed
 			sess.Error = fmt.Sprintf("claude exited: %v", err)
+			r.transition(sess, StatusFailed, ActivityStateIdle)
 		} else {
-			sess.Status = StatusStopped
+			r.transition(sess, StatusStopped, ActivityStateIdle)
 		}
-		sess.UpdatedAt = time.Now().UTC()
-		r.store.Put(sess)
-		r.bus.Emit(ActivityEvent{
-			SessionID:     sessionID,
-			State:         "idle",
-			OwnerID:       sess.OwnerID,
-			SessionStatus: string(sess.Status),
-		})
 	}
 }
 
@@ -384,17 +353,25 @@ func newUUID() string {
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// failSession marks a session as failed with the given error message.
-func (r *Runner) failSession(sess *Session, errMsg string) {
-	sess.Status = StatusFailed
-	sess.Error = errMsg
+// transition updates a session's status, persists it, and emits an activity event.
+func (r *Runner) transition(sess *Session, status SessionStatus, activityState string) {
+	sess.Status = status
 	sess.UpdatedAt = time.Now().UTC()
 	r.store.Put(sess)
-	r.bus.Emit(ActivityEvent{
+	event := ActivityEvent{
 		SessionID:     sess.ID,
-		State:         "idle",
+		State:         activityState,
 		OwnerID:       sess.OwnerID,
-		SessionStatus: string(StatusFailed),
-		Metadata:      map[string]any{"error": errMsg},
-	})
+		SessionStatus: string(status),
+	}
+	if sess.Error != "" && status == StatusFailed {
+		event.Metadata = map[string]any{"error": sess.Error}
+	}
+	r.bus.Emit(event)
+}
+
+// failSession marks a session as failed with the given error message.
+func (r *Runner) failSession(sess *Session, errMsg string) {
+	sess.Error = errMsg
+	r.transition(sess, StatusFailed, ActivityStateIdle)
 }

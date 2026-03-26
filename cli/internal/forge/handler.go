@@ -2,28 +2,24 @@ package forge
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // Handler holds the HTTP handlers for the Volundr-compatible REST API.
 type Handler struct {
 	runner *Runner
-	store  *Store
-	bus    *EventBus
 	cfg    *Config
 }
 
 // NewHandler creates a new API handler.
-func NewHandler(runner *Runner, store *Store, bus *EventBus, cfg *Config) *Handler {
+func NewHandler(runner *Runner, cfg *Config) *Handler {
 	return &Handler{
 		runner: runner,
-		store:  store,
-		bus:    bus,
 		cfg:    cfg,
 	}
 }
@@ -72,7 +68,7 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listSessions(w http.ResponseWriter, _ *http.Request) {
-	sessions := h.store.List()
+	sessions := h.runner.store.List()
 	responses := make([]SessionResponse, len(sessions))
 	for i, sess := range sessions {
 		responses[i] = sess.ToResponse()
@@ -82,7 +78,7 @@ func (h *Handler) listSessions(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.store.Get(id)
+	sess := h.runner.store.Get(id)
 	if sess == nil {
 		writeError(w, http.StatusNotFound, "session %s not found", id)
 		return
@@ -92,7 +88,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.store.Get(id)
+	sess := h.runner.store.Get(id)
 	if sess == nil {
 		writeError(w, http.StatusNotFound, "session %s not found", id)
 		return
@@ -134,7 +130,7 @@ func (h *Handler) stopSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := h.store.Get(id)
+	sess := h.runner.store.Get(id)
 	if sess == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -161,9 +157,10 @@ func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.runner.SendMessage(id, req.Content); err != nil {
 		status := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "not found") {
+		switch {
+		case errors.Is(err, ErrSessionNotFound):
 			status = http.StatusNotFound
-		} else if strings.Contains(err.Error(), "not running") {
+		case errors.Is(err, ErrSessionNotRunning):
 			status = http.StatusConflict
 		}
 		writeError(w, status, "%v", err)
@@ -175,7 +172,7 @@ func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getPRStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.store.Get(id)
+	sess := h.runner.store.Get(id)
 	if sess == nil {
 		writeError(w, http.StatusNotFound, "session %s not found", id)
 		return
@@ -188,7 +185,7 @@ func (h *Handler) getPRStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getChronicle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sess := h.store.Get(id)
+	sess := h.runner.store.Get(id)
 	if sess == nil {
 		writeError(w, http.StatusNotFound, "session %s not found", id)
 		return
@@ -210,14 +207,14 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	subID, ch := h.bus.Subscribe()
-	defer h.bus.Unsubscribe(subID)
+	subID, ch := h.runner.bus.Subscribe()
+	defer h.runner.bus.Unsubscribe(subID)
 
 	// Send current state as initial snapshot.
-	for _, sess := range h.store.List() {
-		state := "idle"
+	for _, sess := range h.runner.store.List() {
+		state := ActivityStateIdle
 		if sess.Status == StatusRunning {
-			state = "active"
+			state = ActivityStateActive
 		}
 		data, _ := json.Marshal(ActivityEvent{
 			SessionID:     sess.ID,
@@ -247,8 +244,8 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, StatsResponse{
-		ActiveSessions: h.store.Count(StatusRunning),
-		TotalSessions:  h.store.Count(""),
+		ActiveSessions: h.runner.store.Count(StatusRunning),
+		TotalSessions:  h.runner.store.Count(""),
 	})
 }
 
@@ -273,14 +270,14 @@ func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 // detectPR runs `gh pr view --json` in the session workspace.
 func (h *Handler) detectPR(sess *Session) PRStatusResponse {
 	if sess.WorkspaceDir == "" {
-		return PRStatusResponse{State: "none"}
+		return PRStatusResponse{State: ActivityStateNone}
 	}
 
 	cmd := exec.Command("gh", "pr", "view", "--json", "number,url,state,mergeable,statusCheckRollup") //nolint:gosec // fixed args
 	cmd.Dir = sess.WorkspaceDir
 	output, err := cmd.Output()
 	if err != nil {
-		return PRStatusResponse{State: "none"}
+		return PRStatusResponse{State: ActivityStateNone}
 	}
 
 	var pr struct {
@@ -294,7 +291,7 @@ func (h *Handler) detectPR(sess *Session) PRStatusResponse {
 		} `json:"statusCheckRollup"`
 	}
 	if err := json.Unmarshal(output, &pr); err != nil {
-		return PRStatusResponse{State: "none"}
+		return PRStatusResponse{State: ActivityStateNone}
 	}
 
 	ciPassed := true
@@ -337,19 +334,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func writeError(w http.ResponseWriter, status int, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	writeJSON(w, status, map[string]string{"detail": msg})
-}
-
-// keepAlive sends periodic SSE comments to keep the connection alive.
-func keepAlive(w http.ResponseWriter, flusher http.Flusher, done <-chan struct{}) {
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-done:
-			return
-		case <-ticker.C:
-			fmt.Fprint(w, ": keepalive\n\n")
-			flusher.Flush()
-		}
-	}
 }
