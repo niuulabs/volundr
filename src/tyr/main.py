@@ -65,6 +65,10 @@ def _configure_logging(settings: Settings) -> None:
         if settings.logging.format == "text"
         else "%(message)s",
     )
+    # Silence noisy loggers
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
