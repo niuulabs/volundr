@@ -2,6 +2,8 @@ package forge
 
 import (
 	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -51,8 +53,13 @@ func (a *PATAuth) Wrap(next http.Handler) http.Handler {
 			return
 		}
 
-		// Set the token name as the user ID for downstream handlers.
-		r.Header.Set("X-Auth-User-Id", name)
+		// Use JWT sub claim as owner_id if available, otherwise fall back
+		// to the configured token name.
+		ownerID := name
+		if sub := extractJWTSub(token); sub != "" {
+			ownerID = sub
+		}
+		r.Header.Set("X-Auth-User-Id", ownerID)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -78,4 +85,23 @@ func extractBearerToken(r *http.Request) string {
 		return ""
 	}
 	return parts[1]
+}
+
+// extractJWTSub decodes a JWT token (without verification — the token is
+// already validated by constant-time comparison) and returns the "sub" claim.
+func extractJWTSub(token string) string {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return ""
+	}
+	sub, _ := claims["sub"].(string)
+	return sub
 }

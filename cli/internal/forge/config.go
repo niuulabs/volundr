@@ -82,7 +82,7 @@ func DefaultForgeConfig() *Config {
 
 	cfg := &Config{
 		Listen: ListenConfig{
-			Host:              "0.0.0.0",
+			Host:              "127.0.0.1",
 			Port:              8080,
 			ReadHeaderTimeout: 10 * time.Second,
 			ShutdownTimeout:   10 * time.Second,

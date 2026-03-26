@@ -12,8 +12,8 @@ func TestDefaultForgeConfig(t *testing.T) {
 	if cfg.Listen.Port != 8080 {
 		t.Errorf("expected default port 8080, got %d", cfg.Listen.Port)
 	}
-	if cfg.Listen.Host != "0.0.0.0" {
-		t.Errorf("expected default host '0.0.0.0', got %q", cfg.Listen.Host)
+	if cfg.Listen.Host != "127.0.0.1" {
+		t.Errorf("expected default host '127.0.0.1', got %q", cfg.Listen.Host)
 	}
 	if cfg.Forge.MaxConcurrent != 4 {
 		t.Errorf("expected max_concurrent 4, got %d", cfg.Forge.MaxConcurrent)

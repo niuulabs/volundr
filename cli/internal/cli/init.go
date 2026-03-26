@@ -16,7 +16,7 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
-var initRuntimeFlag string
+var initModeFlag string
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -26,7 +26,7 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initRuntimeFlag, "runtime", "", "Set runtime (local, k3s)")
+	initCmd.Flags().StringVar(&initModeFlag, "mode", "", "Set mode (mini, k3s)")
 }
 
 func runInit(_ *cobra.Command, _ []string) error {
@@ -63,21 +63,21 @@ func runInit(_ *cobra.Command, _ []string) error {
 		cfg = existing
 	}
 
-	// Apply --runtime flag or prompt interactively.
-	if initRuntimeFlag != "" {
-		cfg.Runtime = initRuntimeFlag
-		fmt.Printf("Runtime: %s\n", cfg.Runtime)
+	// Apply --mode flag or prompt interactively.
+	if initModeFlag != "" {
+		cfg.Volundr.Mode = initModeFlag
+		fmt.Printf("Mode: %s\n", cfg.Volundr.Mode)
 	} else {
-		fmt.Printf("Runtime [local/k3s] (%s): ", cfg.Runtime)
-		runtimeStr, _ := reader.ReadString('\n')
-		runtimeStr = strings.TrimSpace(runtimeStr)
-		if runtimeStr != "" {
-			cfg.Runtime = runtimeStr
+		fmt.Printf("Mode [mini/k3s] (%s): ", cfg.Volundr.Mode)
+		modeStr, _ := reader.ReadString('\n')
+		modeStr = strings.TrimSpace(modeStr)
+		if modeStr != "" {
+			cfg.Volundr.Mode = modeStr
 		}
 	}
 
 	// Preflight checks for container runtimes.
-	if cfg.Runtime == "k3s" {
+	if cfg.Volundr.Mode == "k3s" {
 		fmt.Println()
 		fmt.Println("Checking prerequisites...")
 
@@ -338,11 +338,13 @@ func runInit(_ *cobra.Command, _ []string) error {
 		fmt.Println("  credentials.enc    ... done")
 	}
 
-	// Run runtime-specific init.
-	rt := runtime.NewRuntime(cfg.Runtime)
-	ctx := context.Background()
-	if err := rt.Init(ctx, cfg); err != nil {
-		return fmt.Errorf("runtime init: %w", err)
+	// Run runtime-specific init (k3s only — mini mode needs no runtime setup).
+	if cfg.Volundr.Mode == "k3s" {
+		rt := runtime.NewRuntime("k3s")
+		ctx := context.Background()
+		if err := rt.Init(ctx, cfg); err != nil {
+			return fmt.Errorf("runtime init: %w", err)
+		}
 	}
 
 	fmt.Println()

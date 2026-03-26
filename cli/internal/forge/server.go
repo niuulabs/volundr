@@ -80,6 +80,13 @@ func (s *Server) Run(ctx context.Context) error {
 	log.Printf("  max concurrent sessions: %d", s.cfg.Forge.MaxConcurrent)
 	log.Printf("  auth mode: %s", s.cfg.Auth.Mode)
 
+	if s.cfg.Listen.Host == "0.0.0.0" && s.cfg.Auth.Mode == "none" {
+		log.Println("WARNING: listening on all interfaces with auth=none — any network client can create sessions")
+	}
+	if s.cfg.Auth.Mode == "none" {
+		log.Println("WARNING: authentication disabled — all requests are unauthenticated")
+	}
+
 	if IsMacOS() {
 		installs := DetectXcodeInstallations(s.cfg.Forge.Xcode.SearchPaths)
 		if len(installs) > 0 {
