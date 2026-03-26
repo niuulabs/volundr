@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from volundr.skuld.service_manager import (
+from skuld.service_manager import (
     ServiceCreateRequest,
     ServiceManager,
 )

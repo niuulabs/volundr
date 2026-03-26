@@ -26,20 +26,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from volundr.config import LoggingConfig
-from volundr.skuld.channels import (
+from niuu.domain.logging import LoggingConfig
+from skuld.channels import (
     ChannelRegistry,
     TelegramChannel,
     WebSocketChannel,
 )
-from volundr.skuld.chronicle_watcher import ChronicleWatcher
-from volundr.skuld.config import SkuldSettings
-from volundr.skuld.service_manager import (
+from skuld.chronicle_watcher import ChronicleWatcher
+from skuld.config import SkuldSettings
+from skuld.service_manager import (
     ServiceCreateRequest,
     ServiceManager,
     ServiceStatus,
 )
-from volundr.skuld.transport import (
+from skuld.transport import (
     CLITransport,
     CodexSubprocessTransport,
     SdkWebSocketTransport,

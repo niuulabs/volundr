@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from volundr.skuld.channels import (
+from skuld.channels import (
     ChannelRegistry,
     MessageChannel,
     TelegramChannel,
@@ -264,7 +264,7 @@ class TestTelegramChannelWithoutLib:
     """Tests for TelegramChannel when python-telegram-bot is not installed."""
 
     def test_raises_without_telegram_lib(self):
-        with patch("volundr.skuld.channels.HAS_TELEGRAM", False):
+        with patch("skuld.channels.HAS_TELEGRAM", False):
             with pytest.raises(RuntimeError, match="python-telegram-bot"):
                 TelegramChannel(bot_token="test", chat_id="123")
 
@@ -279,7 +279,7 @@ class TestTelegramChannelMocked:
 
     @pytest.fixture
     def channel(self):
-        with patch("volundr.skuld.channels.HAS_TELEGRAM", True):
+        with patch("skuld.channels.HAS_TELEGRAM", True):
             ch = TelegramChannel.__new__(TelegramChannel)
             ch._bot_token = "test-token"
             ch._chat_id = "12345"
@@ -582,7 +582,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_with_command(self, channel):
-        ch_mod = sys.modules["volundr.skuld.channels"]
+        ch_mod = sys.modules["skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
@@ -596,7 +596,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_with_file_path(self, channel):
-        ch_mod = sys.modules["volundr.skuld.channels"]
+        ch_mod = sys.modules["skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
@@ -610,7 +610,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_no_detail(self, channel):
-        ch_mod = sys.modules["volundr.skuld.channels"]
+        ch_mod = sys.modules["skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
@@ -624,7 +624,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_send_permission_request_error(self, channel):
-        ch_mod = sys.modules["volundr.skuld.channels"]
+        ch_mod = sys.modules["skuld.channels"]
 
         orig_has = ch_mod.HAS_TELEGRAM
         ch_mod.HAS_TELEGRAM = True
@@ -701,7 +701,7 @@ class TestTelegramChannelMocked:
     @pytest.mark.asyncio
     async def test_scheduled_flush(self, channel):
         channel._text_buffer = ["buffered text"]
-        with patch("volundr.skuld.channels.asyncio.sleep", new_callable=AsyncMock):
+        with patch("skuld.channels.asyncio.sleep", new_callable=AsyncMock):
             await channel._scheduled_flush()
         channel._bot.send_message.assert_called_once_with(
             chat_id="12345",
@@ -710,7 +710,7 @@ class TestTelegramChannelMocked:
 
     @pytest.mark.asyncio
     async def test_streaming_creates_flush_task(self, channel):
-        with patch("volundr.skuld.channels.asyncio.create_task") as mock_create:
+        with patch("skuld.channels.asyncio.create_task") as mock_create:
             mock_create.return_value = MagicMock(done=MagicMock(return_value=False))
             delta_event = {
                 "type": "content_block_delta",
@@ -724,7 +724,7 @@ class TestTelegramChannelMocked:
         active_task = MagicMock()
         active_task.done.return_value = False
         channel._flush_task = active_task
-        with patch("volundr.skuld.channels.asyncio.create_task") as mock_create:
+        with patch("skuld.channels.asyncio.create_task") as mock_create:
             delta_event = {
                 "type": "content_block_delta",
                 "delta": {"text": "chunk"},

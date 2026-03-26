@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from volundr.skuld.broker import (
+from skuld.broker import (
     Broker,
     SessionArtifacts,
     _extract_git_commit_info,
 )
-from volundr.skuld.config import SkuldSettings
+from skuld.config import SkuldSettings
 
 
 class TestGitCommitExtraction:

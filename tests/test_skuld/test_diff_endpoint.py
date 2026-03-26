@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from volundr.skuld.broker import _parse_diff_output, app, broker
+from skuld.broker import _parse_diff_output, app, broker
 
 
 class TestParseDiffOutput:
@@ -105,7 +105,7 @@ class TestDiffEndpoint:
         assert response.status_code == 400
         assert "Path traversal" in response.json()["detail"]
 
-    @patch("volundr.skuld.broker.asyncio")
+    @patch("skuld.broker.asyncio")
     def test_successful_diff(self, mock_asyncio):
         diff_output = "@@ -1,2 +1,3 @@\n line1\n+added\n line2\n"
 
@@ -126,7 +126,7 @@ class TestDiffEndpoint:
         assert data["filePath"] == "src/main.py"
         assert len(data["hunks"]) == 1
 
-    @patch("volundr.skuld.broker.asyncio")
+    @patch("skuld.broker.asyncio")
     def test_git_diff_failure_returns_502(self, mock_asyncio):
         mock_proc = AsyncMock()
         mock_proc.returncode = 128
@@ -143,7 +143,7 @@ class TestDiffEndpoint:
         assert response.status_code == 502
         assert "git diff failed" in response.json()["detail"]
 
-    @patch("volundr.skuld.broker.asyncio")
+    @patch("skuld.broker.asyncio")
     def test_default_branch_diff_command(self, mock_asyncio):
         mock_proc = AsyncMock()
         mock_proc.returncode = 0

@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from volundr.skuld.broker import (
+from skuld.broker import (
     CONVERSATION_HISTORY_DIR,
     Broker,
     ConversationTurn,
     app,
     broker,
 )
-from volundr.skuld.config import SkuldSettings
+from skuld.config import SkuldSettings
 
 
 class TestConversationTurn:
