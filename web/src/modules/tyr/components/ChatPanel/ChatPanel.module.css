@@ -30,12 +30,12 @@
   background-color: var(--color-bg-tertiary);
 }
 
-.message[data-sender="user"] {
+.message[data-sender='user'] {
   background-color: color-mix(in srgb, var(--color-accent-cyan) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-accent-cyan) 20%, transparent);
 }
 
-.message[data-sender="system"] {
+.message[data-sender='system'] {
   background-color: color-mix(in srgb, var(--color-accent-purple) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-accent-purple) 20%, transparent);
 }

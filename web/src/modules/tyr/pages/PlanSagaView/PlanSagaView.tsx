@@ -40,7 +40,7 @@ export function PlanSagaView() {
         setError(err instanceof Error ? err.message : 'Failed to send message');
       }
     },
-    [session],
+    [session]
   );
 
   const handleProposeStructure = async () => {
@@ -151,11 +151,7 @@ export function PlanSagaView() {
             <span className={styles.sessionRepo}>{session.repo}</span>
           </div>
 
-          <ChatPanel
-            messages={messages}
-            onSend={handleSendMessage}
-            disabled={!isActive}
-          />
+          <ChatPanel messages={messages} onSend={handleSendMessage} disabled={!isActive} />
 
           {isActive && (
             <div className={styles.structureArea}>
@@ -193,9 +189,7 @@ export function PlanSagaView() {
                   {phase.raids.map((raid, ri) => (
                     <div key={ri} className={styles.raid}>
                       <span className={styles.raidName}>{raid.name}</span>
-                      <span className={styles.raidEstimate}>
-                        {raid.estimate_hours}h
-                      </span>
+                      <span className={styles.raidEstimate}>{raid.estimate_hours}h</span>
                     </div>
                   ))}
                 </div>

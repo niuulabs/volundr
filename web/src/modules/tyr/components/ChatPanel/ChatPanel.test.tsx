@@ -32,9 +32,7 @@ describe('ChatPanel', () => {
     render(<ChatPanel messages={mockMessages} onSend={onSend} />);
 
     expect(screen.getByText('Should we split the auth phase?')).toBeInTheDocument();
-    expect(
-      screen.getByText(/splitting into middleware/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/splitting into middleware/)).toBeInTheDocument();
   });
 
   it('renders sender labels', () => {
@@ -91,9 +89,7 @@ describe('ChatPanel', () => {
 
   it('renders message data-sender attributes', () => {
     const onSend = vi.fn();
-    const { container } = render(
-      <ChatPanel messages={mockMessages} onSend={onSend} />,
-    );
+    const { container } = render(<ChatPanel messages={mockMessages} onSend={onSend} />);
 
     const userMsg = container.querySelector('[data-sender="user"]');
     const systemMsg = container.querySelector('[data-sender="system"]');

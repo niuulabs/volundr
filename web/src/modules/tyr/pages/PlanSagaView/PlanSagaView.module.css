@@ -149,17 +149,17 @@
   background-color: var(--color-bg-tertiary);
 }
 
-.sessionStatus[data-status="ACTIVE"] {
+.sessionStatus[data-status='ACTIVE'] {
   color: var(--color-accent-emerald);
   background-color: color-mix(in srgb, var(--color-accent-emerald) 15%, transparent);
 }
 
-.sessionStatus[data-status="STRUCTURE_PROPOSED"] {
+.sessionStatus[data-status='STRUCTURE_PROPOSED'] {
   color: var(--color-accent-amber);
   background-color: color-mix(in srgb, var(--color-accent-amber) 15%, transparent);
 }
 
-.sessionStatus[data-status="COMPLETED"] {
+.sessionStatus[data-status='COMPLETED'] {
   color: var(--color-accent-cyan);
   background-color: color-mix(in srgb, var(--color-accent-cyan) 15%, transparent);
 }

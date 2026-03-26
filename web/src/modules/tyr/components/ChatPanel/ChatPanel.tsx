@@ -35,11 +35,7 @@ export function ChatPanel({ messages, onSend, disabled = false }: ChatPanelProps
           </div>
         )}
         {messages.map(msg => (
-          <div
-            key={msg.id}
-            className={styles.message}
-            data-sender={msg.sender}
-          >
+          <div key={msg.id} className={styles.message} data-sender={msg.sender}>
             <span className={styles.sender}>{msg.sender}</span>
             <p className={styles.content}>{msg.content}</p>
           </div>
@@ -55,11 +51,7 @@ export function ChatPanel({ messages, onSend, disabled = false }: ChatPanelProps
           placeholder="Discuss the decomposition..."
           disabled={disabled}
         />
-        <button
-          type="submit"
-          className={styles.sendButton}
-          disabled={disabled || !input.trim()}
-        >
+        <button type="submit" className={styles.sendButton} disabled={disabled || !input.trim()}>
           Send
         </button>
       </form>

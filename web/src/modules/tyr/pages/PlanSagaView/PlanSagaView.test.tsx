@@ -52,7 +52,7 @@ vi.mock('../../adapters', () => ({
     sendMessage: vi.fn(() => Promise.resolve({ ...mockMessage })),
     proposeStructure: vi.fn(() => Promise.resolve({ ...mockSessionWithStructure })),
     completeSession: vi.fn(() =>
-      Promise.resolve({ ...mockSessionWithStructure, status: 'COMPLETED' }),
+      Promise.resolve({ ...mockSessionWithStructure, status: 'COMPLETED' })
     ),
     deleteSession: vi.fn(() => Promise.resolve()),
   },
@@ -70,7 +70,7 @@ function renderView() {
         <Route path="/tyr/sagas/:id" element={<div>Saga Detail</div>} />
         <Route path="/tyr/new" element={<div>New Saga</div>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -132,9 +132,7 @@ describe('PlanSagaView', () => {
   it('shows error on spawn failure', async () => {
     const user = userEvent.setup();
     const { planningService } = await import('../../adapters');
-    vi.mocked(planningService.spawnSession).mockRejectedValueOnce(
-      new Error('Volundr unreachable'),
-    );
+    vi.mocked(planningService.spawnSession).mockRejectedValueOnce(new Error('Volundr unreachable'));
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
