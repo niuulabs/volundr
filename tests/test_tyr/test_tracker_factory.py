@@ -128,6 +128,94 @@ class FakeTracker(TrackerPort):
         return []
 
 
+class BoomTracker(TrackerPort):
+    """TrackerPort stub that raises RuntimeError on instantiation."""
+
+    def __init__(self, **kwargs) -> None:  # noqa: ANN003
+        raise RuntimeError("unexpected boom")
+
+    async def create_saga(self, saga):  # noqa: ANN001
+        return ""
+
+    async def create_phase(self, phase):  # noqa: ANN001
+        return ""
+
+    async def create_raid(self, raid):  # noqa: ANN001
+        return ""
+
+    async def update_raid_state(self, raid_id, state):  # noqa: ANN001
+        pass
+
+    async def close_raid(self, raid_id):  # noqa: ANN001
+        pass
+
+    async def get_saga(self, saga_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def get_phase(self, tracker_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def get_raid(self, tracker_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def list_pending_raids(self, phase_id):  # noqa: ANN001
+        return []
+
+    async def list_projects(self):
+        return []
+
+    async def get_project(self, project_id):  # noqa: ANN001
+        raise NotImplementedError
+
+    async def list_milestones(self, project_id):  # noqa: ANN001
+        return []
+
+    async def list_issues(self, project_id, milestone_id=None):  # noqa: ANN001
+        return []
+
+    async def update_raid_progress(self, tracker_id, **kwargs):  # noqa: ANN001, ANN003
+        raise NotImplementedError
+
+    async def get_raid_by_session(self, session_id):  # noqa: ANN001
+        return None
+
+    async def list_raids_by_status(self, status):  # noqa: ANN001
+        return []
+
+    async def get_raid_by_id(self, raid_id):  # noqa: ANN001
+        return None
+
+    async def add_confidence_event(self, tracker_id, event):  # noqa: ANN001
+        pass
+
+    async def get_confidence_events(self, tracker_id):  # noqa: ANN001
+        return []
+
+    async def all_raids_merged(self, phase_tracker_id):  # noqa: ANN001
+        return False
+
+    async def list_phases_for_saga(self, saga_tracker_id):  # noqa: ANN001
+        return []
+
+    async def update_phase_status(self, phase_tracker_id, status):  # noqa: ANN001
+        return None
+
+    async def get_saga_for_raid(self, tracker_id):  # noqa: ANN001
+        return None
+
+    async def get_phase_for_raid(self, tracker_id):  # noqa: ANN001
+        return None
+
+    async def get_owner_for_raid(self, tracker_id):  # noqa: ANN001
+        return None
+
+    async def save_session_message(self, message):  # noqa: ANN001
+        pass
+
+    async def get_session_messages(self, tracker_id):  # noqa: ANN001
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -252,3 +340,24 @@ async def test_no_pool_does_not_inject_pool_kwarg() -> None:
     result = await factory.for_owner("owner-1")
     assert len(result) == 1
     assert "pool" not in result[0].kwargs
+
+
+@pytest.mark.asyncio
+async def test_unexpected_exception_logged_and_skipped(caplog) -> None:  # noqa: ANN001
+    """Unexpected exceptions (not ImportError/TypeError/etc.) are caught and logged."""
+    conn = _make_connection(
+        id="conn-boom",
+        enabled=True,
+        adapter="tests.test_tyr.test_tracker_factory.BoomTracker",
+    )
+    factory = TrackerAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=StubCredentialStore(
+            values={"user:owner-1:linear-cred": {"api_key": "tok-z"}}
+        ),
+    )
+    with caplog.at_level(logging.ERROR):
+        result = await factory.for_owner("owner-1")
+
+    assert result == []
+    assert "Unexpected error creating tracker adapter for connection conn-boom" in caplog.text
