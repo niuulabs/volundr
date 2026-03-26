@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { NewSagaView } from './NewSagaView';
 
 vi.mock('../../adapters', () => ({
@@ -15,6 +15,17 @@ function renderView() {
   return render(
     <MemoryRouter>
       <NewSagaView />
+    </MemoryRouter>
+  );
+}
+
+function renderViewWithState(state: Record<string, unknown>) {
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: '/tyr/new', state }]}>
+      <Routes>
+        <Route path="/tyr/new" element={<NewSagaView />} />
+        <Route path="/tyr/sagas/:id" element={<div>Saga Detail</div>} />
+      </Routes>
     </MemoryRouter>
   );
 }
@@ -130,5 +141,24 @@ describe('NewSagaView', () => {
     const input = screen.getByLabelText('Repository') as HTMLInputElement;
     await userEvent.type(input, 'niuulabs/app');
     expect(input.value).toBe('niuulabs/app');
+  });
+
+  it('initializes spec and repo from navigation state', () => {
+    renderViewWithState({ spec: 'Auth refactor', repo: 'niuu/volundr' });
+
+    const textarea = screen.getByLabelText('Specification') as HTMLTextAreaElement;
+    const input = screen.getByLabelText('Repository') as HTMLInputElement;
+    expect(textarea.value).toBe('Auth refactor');
+    expect(input.value).toBe('niuu/volundr');
+  });
+
+  it('initializes with preview from navigation state phases', () => {
+    renderViewWithState({
+      spec: 'Auth',
+      repo: 'niuu/volundr',
+      phases: [{ id: 'p1', name: 'Phase 1', raids: [] }],
+    });
+
+    expect(screen.getByText('Phase Preview')).toBeInTheDocument();
   });
 });

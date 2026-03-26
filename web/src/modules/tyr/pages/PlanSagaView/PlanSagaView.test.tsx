@@ -376,4 +376,216 @@ describe('PlanSagaView', () => {
       expect(screen.getByText('4h')).toBeInTheDocument();
     });
   });
+
+  it('auto-detects structure from assistant messages and shows use-structure banner', async () => {
+    const user = userEvent.setup();
+    const structureObj = {
+      name: 'Detected Plan',
+      phases: [
+        {
+          name: 'P1',
+          raids: [
+            {
+              name: 'R1',
+              description: 'd',
+              acceptance_criteria: [],
+              declared_files: [],
+              estimate_hours: 2,
+            },
+          ],
+        },
+      ],
+    };
+    const structureJson = JSON.stringify(structureObj);
+    // Push an assistant message with JSON before render so useEffect fires on mount
+    mockSkuldMessages.push({
+      id: 'msg-1',
+      role: 'assistant',
+      content: `Here is the plan:\n\`\`\`json\n${structureJson}\n\`\`\``,
+      createdAt: new Date(),
+      status: 'complete',
+    });
+
+    const { planningService } = await import('../../adapters');
+    // Spawn session immediately so the detected structure banner shows (session must be ACTIVE)
+    vi.mocked(planningService.spawnSession).mockResolvedValueOnce({ ...mockSession });
+    renderView();
+
+    await user.type(screen.getByLabelText(/specification/i), 'Build auth');
+    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await user.click(screen.getByRole('button', { name: /start planning session/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('ACTIVE')).toBeInTheDocument();
+    });
+
+    // The structure detection effect should have fired — wait for banner
+    await waitFor(() => {
+      expect(screen.getByText(/structure detected/i)).toBeInTheDocument();
+    });
+
+    // Click "Use this structure?" to propose it
+    await user.click(screen.getByRole('button', { name: /use this structure/i }));
+
+    await waitFor(() => {
+      expect(planningService.proposeStructure).toHaveBeenCalledWith(
+        'plan-001',
+        JSON.stringify(structureObj)
+      );
+    });
+  });
+
+  it('does not auto-detect structure from incomplete assistant messages', async () => {
+    const user = userEvent.setup();
+    mockSkuldMessages.push({
+      id: 'msg-2',
+      role: 'assistant',
+      content: 'Still thinking...',
+      createdAt: new Date(),
+      status: 'streaming',
+    });
+    renderView();
+    await spawnSession(user);
+
+    expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
+  });
+
+  it('does not auto-detect structure from user messages', async () => {
+    const user = userEvent.setup();
+    const structureJson = JSON.stringify({ name: 'Plan', phases: [{ name: 'P1', raids: [] }] });
+    mockSkuldMessages.push({
+      id: 'msg-3',
+      role: 'user',
+      content: `\`\`\`json\n${structureJson}\n\`\`\``,
+      createdAt: new Date(),
+      status: 'complete',
+    });
+    renderView();
+    await spawnSession(user);
+
+    expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
+  });
+
+  it('shows error on propose structure failure', async () => {
+    const user = userEvent.setup();
+    const structureJson = JSON.stringify({
+      name: 'Detected Plan',
+      phases: [{ name: 'P1', raids: [] }],
+    });
+    mockSkuldMessages.push({
+      id: 'msg-4',
+      role: 'assistant',
+      content: `\`\`\`json\n${structureJson}\n\`\`\``,
+      createdAt: new Date(),
+      status: 'complete',
+    });
+
+    const { planningService } = await import('../../adapters');
+    vi.mocked(planningService.proposeStructure).mockRejectedValueOnce(new Error('Bad structure'));
+    renderView();
+    await spawnSession(user);
+
+    await waitFor(() => {
+      expect(screen.getByText(/use this structure/i)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /use this structure/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/bad structure/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows fallback error on propose structure non-Error throw', async () => {
+    const user = userEvent.setup();
+    const structureJson = JSON.stringify({
+      name: 'Detected Plan',
+      phases: [{ name: 'P1', raids: [] }],
+    });
+    mockSkuldMessages.push({
+      id: 'msg-5',
+      role: 'assistant',
+      content: `\`\`\`json\n${structureJson}\n\`\`\``,
+      createdAt: new Date(),
+      status: 'complete',
+    });
+
+    const { planningService } = await import('../../adapters');
+    vi.mocked(planningService.proposeStructure).mockRejectedValueOnce(42);
+    renderView();
+    await spawnSession(user);
+
+    await waitFor(() => {
+      expect(screen.getByText(/use this structure/i)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /use this structure/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/invalid saga structure/i)).toBeInTheDocument();
+    });
+  });
+
+  it('spawns session without chat_endpoint gracefully', async () => {
+    const user = userEvent.setup();
+    const { planningService } = await import('../../adapters');
+    vi.mocked(planningService.spawnSession).mockResolvedValueOnce({
+      ...mockSession,
+      chat_endpoint: null,
+    });
+    renderView();
+
+    await user.type(screen.getByLabelText(/specification/i), 'Build auth');
+    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await user.click(screen.getByRole('button', { name: /start planning session/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('ACTIVE')).toBeInTheDocument();
+    });
+  });
+
+  it('does not detect structure from non-JSON assistant messages', async () => {
+    const user = userEvent.setup();
+    mockSkuldMessages.push({
+      id: 'msg-6',
+      role: 'assistant',
+      content: 'Here is some plain text with no JSON blocks.',
+      createdAt: new Date(),
+      status: 'complete',
+    });
+    renderView();
+    await spawnSession(user);
+
+    expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
+  });
+
+  it('does not detect structure from invalid JSON in code blocks', async () => {
+    const user = userEvent.setup();
+    mockSkuldMessages.push({
+      id: 'msg-7',
+      role: 'assistant',
+      content: '```json\n{not valid json}\n```',
+      createdAt: new Date(),
+      status: 'complete',
+    });
+    renderView();
+    await spawnSession(user);
+
+    expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
+  });
+
+  it('does not detect structure from JSON missing name or phases', async () => {
+    const user = userEvent.setup();
+    mockSkuldMessages.push({
+      id: 'msg-8',
+      role: 'assistant',
+      content: '```json\n{"key": "value"}\n```',
+      createdAt: new Date(),
+      status: 'complete',
+    });
+    renderView();
+    await spawnSession(user);
+
+    expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
+  });
 });
