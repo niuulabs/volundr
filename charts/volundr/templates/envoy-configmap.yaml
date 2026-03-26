@@ -21,6 +21,12 @@ data:
                     "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                     stat_prefix: ingress_http
                     codec_type: AUTO
+                    access_log:
+                      - name: envoy.access_loggers.stdout
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                          log_format:
+                            text_format: "[ENVOY] %REQ(:METHOD)% %REQ(:PATH)% %RESPONSE_CODE% %UPSTREAM_HOST% %RESPONSE_FLAGS%\n"
                     route_config:
                       name: local_route
                       virtual_hosts:
