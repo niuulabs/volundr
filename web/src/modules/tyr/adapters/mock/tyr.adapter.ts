@@ -1,4 +1,4 @@
-import type { ITyrService } from '../../ports';
+import type { ITyrService, CommitSagaRequest } from '../../ports';
 import type { Saga, Phase } from '../../models';
 import { mockSagas, mockPhases } from './data';
 
@@ -34,6 +34,22 @@ export class MockTyrService implements ITyrService {
       phase_summary: { total: 0, completed: 0 },
     };
     return saga;
+  }
+
+  async commitSaga(request: CommitSagaRequest): Promise<Saga> {
+    return {
+      id: crypto.randomUUID(),
+      tracker_id: `NIU-${Math.floor(Math.random() * 900) + 100}`,
+      tracker_type: 'linear',
+      slug: request.slug,
+      name: request.name,
+      repos: request.repos,
+      feature_branch: `feat/${request.slug}`,
+      status: 'active',
+      confidence: 0.5,
+      created_at: new Date().toISOString(),
+      phase_summary: { total: request.phases.length, completed: 0 },
+    };
   }
 
   async decompose(spec: string, repo: string): Promise<Phase[]> {

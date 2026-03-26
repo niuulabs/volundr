@@ -245,6 +245,9 @@ class MockVolundr(VolundrPort):
     ) -> None:
         pass
 
+    async def stop_session(self, session_id, *, auth_token=None):
+        pass
+
     async def subscribe_activity(self):
         return
         yield  # type: ignore[misc]  # pragma: no cover

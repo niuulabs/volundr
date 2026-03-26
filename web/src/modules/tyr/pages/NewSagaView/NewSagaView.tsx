@@ -1,14 +1,22 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import type { Phase } from '../../models';
 import { tyrService } from '../../adapters';
 import { PhaseBlock } from '../../components/PhaseBlock';
 import styles from './NewSagaView.module.css';
 
+interface LocationState {
+  phases?: Phase[];
+  spec?: string;
+  repo?: string;
+}
+
 export function NewSagaView() {
-  const [spec, setSpec] = useState('');
-  const [repo, setRepo] = useState('');
-  const [preview, setPreview] = useState<Phase[] | null>(null);
+  const location = useLocation();
+  const navState = (location.state ?? {}) as LocationState;
+  const [spec, setSpec] = useState(navState.spec ?? '');
+  const [repo, setRepo] = useState(navState.repo ?? '');
+  const [preview, setPreview] = useState<Phase[] | null>(navState.phases ?? null);
   const [decomposing, setDecomposing] = useState(false);
   const [committing, setCommitting] = useState(false);
   const navigate = useNavigate();

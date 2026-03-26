@@ -32,6 +32,7 @@ export interface PlanningSession {
   repo: string;
   status: PlanningSessionStatus;
   structure: PlanningStructure | null;
+  chat_endpoint: string | null;
   created_at: string;
   updated_at: string;
 }

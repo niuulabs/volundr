@@ -8,6 +8,7 @@ const mockSession: PlanningSession = {
   repo: 'niuulabs/volundr',
   status: 'ACTIVE',
   structure: null,
+  chat_endpoint: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };

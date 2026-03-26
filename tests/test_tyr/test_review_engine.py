@@ -235,6 +235,9 @@ class StubVolundr(VolundrPort):
             raise RuntimeError("Send failed")
         self.messages.append((session_id, message))
 
+    async def stop_session(self, session_id, *, auth_token=None):
+        pass
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         return
         yield  # type: ignore[misc]  # pragma: no cover

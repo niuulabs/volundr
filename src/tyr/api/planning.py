@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
+from tyr.api.sagas import PhaseSpecResponse, RaidSpecResponse, SagaStructureResponse
 from tyr.domain.services.planning_session import (
     InvalidPlanningStateError,
     PlanningSessionNotFoundError,
@@ -43,32 +44,14 @@ class ProposeStructureRequest(BaseModel):
     raw_json: str = Field(min_length=1)
 
 
-class RaidSpecResponse(BaseModel):
-    name: str
-    description: str
-    acceptance_criteria: list[str]
-    declared_files: list[str]
-    estimate_hours: float
-    confidence: float
-
-
-class PhaseSpecResponse(BaseModel):
-    name: str
-    raids: list[RaidSpecResponse]
-
-
-class StructureResponse(BaseModel):
-    name: str
-    phases: list[PhaseSpecResponse]
-
-
 class PlanningSessionResponse(BaseModel):
     id: str
     owner_id: str
     session_id: str
     repo: str
     status: str
-    structure: StructureResponse | None = None
+    structure: SagaStructureResponse | None = None
+    chat_endpoint: str | None = None
     created_at: str
     updated_at: str
 
@@ -100,7 +83,7 @@ async def resolve_planning_service() -> PlanningSessionService:
 def _session_response(session) -> PlanningSessionResponse:  # noqa: ANN001
     structure = None
     if session.structure is not None:
-        structure = StructureResponse(
+        structure = SagaStructureResponse(
             name=session.structure.name,
             phases=[
                 PhaseSpecResponse(
@@ -127,6 +110,7 @@ def _session_response(session) -> PlanningSessionResponse:  # noqa: ANN001
         repo=session.repo,
         status=session.status.value,
         structure=structure,
+        chat_endpoint=session.chat_endpoint,
         created_at=session.created_at.isoformat(),
         updated_at=session.updated_at.isoformat(),
     )

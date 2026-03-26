@@ -65,6 +65,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 name=data["name"],
                 status=data["status"],
                 tracker_issue_id=data.get("tracker_issue_id"),
+                chat_endpoint=data.get("chat_endpoint"),
             )
 
     async def get_session(
@@ -87,6 +88,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 name=data["name"],
                 status=data["status"],
                 tracker_issue_id=data.get("tracker_issue_id"),
+                chat_endpoint=data.get("chat_endpoint"),
             )
 
     async def list_sessions(
@@ -148,6 +150,21 @@ class VolundrHTTPAdapter(VolundrPort):
                 headers=self._headers(auth_token),
                 json={"content": message},
             )
+            resp.raise_for_status()
+
+    async def stop_session(
+        self,
+        session_id: str,
+        *,
+        auth_token: str | None = None,
+    ) -> None:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.delete(
+                f"{self._base_url}/api/v1/volundr/sessions/{session_id}",
+                headers=self._headers(auth_token),
+            )
+            if resp.status_code == 404:
+                return
             resp.raise_for_status()
 
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:

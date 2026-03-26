@@ -25,7 +25,7 @@ from tyr.domain.services.planning_session import (
     PlanningSessionService,
     SessionLimitReachedError,
 )
-from tyr.domain.validation import ValidationError
+from tyr.domain.validation import ValidationError, try_extract_structure
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,9 @@ class MockVolundr(VolundrPort):
     def __init__(self) -> None:
         self.spawn_calls: list[SpawnRequest] = []
         self.sent_messages: list[tuple[str, str]] = []
+        self.stopped_sessions: list[str] = []
         self.fail_spawn = False
+        self.fail_stop = False
 
     async def spawn_session(self, request, *, auth_token=None):
         self.spawn_calls.append(request)
@@ -50,6 +52,7 @@ class MockVolundr(VolundrPort):
             name=request.name,
             status="RUNNING",
             tracker_issue_id=None,
+            chat_endpoint="wss://sessions.test/s/volundr-sess-001/session",
         )
 
     async def get_session(self, session_id, *, auth_token=None):
@@ -66,6 +69,11 @@ class MockVolundr(VolundrPort):
 
     async def send_message(self, session_id, message, *, auth_token=None):
         self.sent_messages.append((session_id, message))
+
+    async def stop_session(self, session_id, *, auth_token=None):
+        if self.fail_stop:
+            raise ConnectionError("Volundr unreachable")
+        self.stopped_sessions.append(session_id)
 
     async def subscribe_activity(self):
         return
@@ -342,14 +350,36 @@ class TestPlanningSessionService:
         assert updated.status == PlanningSessionStatus.STRUCTURE_PROPOSED
 
     @pytest.mark.asyncio
+    async def test_spawn_stores_chat_endpoint(
+        self,
+        service: PlanningSessionService,
+    ):
+        session = await service.spawn("user-1", "Spec", "repo")
+        assert session.chat_endpoint == "wss://sessions.test/s/volundr-sess-001/session"
+
+    @pytest.mark.asyncio
     async def test_complete_success(
         self,
         service: PlanningSessionService,
+        volundr: MockVolundr,
     ):
         session = await service.spawn("user-1", "Spec", "repo")
         await service.propose_structure(session.id, VALID_STRUCTURE_JSON)
         completed = await service.complete(session.id)
 
+        assert completed.status == PlanningSessionStatus.COMPLETED
+        assert "volundr-sess-001" in volundr.stopped_sessions
+
+    @pytest.mark.asyncio
+    async def test_complete_stop_failure_does_not_block(
+        self,
+        service: PlanningSessionService,
+        volundr: MockVolundr,
+    ):
+        session = await service.spawn("user-1", "Spec", "repo")
+        await service.propose_structure(session.id, VALID_STRUCTURE_JSON)
+        volundr.fail_stop = True
+        completed = await service.complete(session.id)
         assert completed.status == PlanningSessionStatus.COMPLETED
 
     @pytest.mark.asyncio
@@ -407,6 +437,7 @@ class TestPlanningSessionService:
     async def test_delete_session(
         self,
         service: PlanningSessionService,
+        volundr: MockVolundr,
     ):
         session = await service.spawn("user-1", "Spec", "repo")
         deleted = await service.delete(session.id)
@@ -414,6 +445,23 @@ class TestPlanningSessionService:
 
         found = await service.get(session.id)
         assert found is None
+        assert "volundr-sess-001" in volundr.stopped_sessions
+
+    @pytest.mark.asyncio
+    async def test_delete_completed_session_does_not_stop(
+        self,
+        service: PlanningSessionService,
+        volundr: MockVolundr,
+    ):
+        session = await service.spawn("user-1", "Spec", "repo")
+        await service.propose_structure(session.id, VALID_STRUCTURE_JSON)
+        await service.complete(session.id)
+        volundr.stopped_sessions.clear()
+
+        deleted = await service.delete(session.id)
+        assert deleted is True
+        # Session was already completed; stop_session should NOT be called again
+        assert len(volundr.stopped_sessions) == 0
 
     @pytest.mark.asyncio
     async def test_delete_session_not_found(
@@ -446,12 +494,39 @@ class TestPlanningSessionService:
             await service.get_messages(uuid4())
 
     @pytest.mark.asyncio
-    async def test_cleanup_expired(
+    async def test_cleanup_expired_no_sessions(
         self,
         service: PlanningSessionService,
     ):
         count = await service.cleanup_expired()
         assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_cleanup_expired_expires_idle_sessions(
+        self,
+        service: PlanningSessionService,
+        planning_repo: InMemoryPlanningSessionRepository,
+        volundr: MockVolundr,
+    ):
+        session = await service.spawn("user-1", "Spec", "repo")
+
+        # Force updated_at to 2 hours ago (well past 1800s idle timeout)
+        from dataclasses import replace
+        from datetime import timedelta
+
+        stale = replace(
+            session,
+            updated_at=datetime.now(UTC) - timedelta(hours=2),
+        )
+        await planning_repo.save(stale)
+
+        count = await service.cleanup_expired()
+        assert count == 1
+        assert "volundr-sess-001" in volundr.stopped_sessions
+
+        updated = await service.get(session.id)
+        assert updated is not None
+        assert updated.status == PlanningSessionStatus.EXPIRED
 
     @pytest.mark.asyncio
     async def test_send_message_in_structure_proposed_state(
@@ -796,3 +871,41 @@ class TestPlanningModels:
         assert config.max_sessions_per_user == 3
         assert config.default_model == "claude-opus-4-6"
         assert len(config.system_prompt) > 0
+
+
+# ---------------------------------------------------------------------------
+# try_extract_structure tests
+# ---------------------------------------------------------------------------
+
+
+class TestTryExtractStructure:
+    def test_extracts_from_fenced_json(self):
+        text = "Here is the structure:\n```json\n" + VALID_STRUCTURE_JSON + "\n```\nDone."
+        result = try_extract_structure(text)
+        assert result is not None
+        assert result.name == "Auth Refactor"
+
+    def test_extracts_from_fenced_no_lang(self):
+        text = "```\n" + VALID_STRUCTURE_JSON + "\n```"
+        result = try_extract_structure(text)
+        assert result is not None
+        assert result.name == "Auth Refactor"
+
+    def test_returns_none_for_plain_text(self):
+        result = try_extract_structure("Just some discussion about the saga")
+        assert result is None
+
+    def test_returns_none_for_invalid_structure(self):
+        text = '```json\n{"name": "Bad"}\n```'
+        result = try_extract_structure(text)
+        assert result is None
+
+    def test_returns_none_for_non_json_fence(self):
+        text = "```python\nprint('hello')\n```"
+        result = try_extract_structure(text)
+        assert result is None
+
+    def test_extracts_from_bare_json(self):
+        result = try_extract_structure(VALID_STRUCTURE_JSON)
+        assert result is not None
+        assert result.name == "Auth Refactor"

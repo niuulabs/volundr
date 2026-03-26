@@ -259,6 +259,7 @@ class PlanningSession:
     structure: SagaStructure | None
     created_at: datetime
     updated_at: datetime
+    chat_endpoint: str | None = None
 
 
 @dataclass(frozen=True)

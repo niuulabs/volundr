@@ -71,6 +71,9 @@ class StubVolundr(VolundrPort):
     ) -> None:
         pass
 
+    async def stop_session(self, session_id, *, auth_token=None):
+        pass
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         for event in self.activity_events:
             yield event
@@ -155,6 +158,7 @@ class StubPool:
         tracker_issue_id: str = "issue-1",
     ) -> None:
         from uuid import UUID
+
         self.sessions[session_id] = {
             "id": UUID("00000000-0000-0000-0000-000000000001"),
             "session_id": session_id,

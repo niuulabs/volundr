@@ -1,21 +1,80 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { planningService, tyrService } from '../../adapters';
 import { ChatPanel } from '../../components/ChatPanel';
-import type { PlanningSession, PlanningMessage } from '../../models/planning';
+import { useSkuldChat } from '@/modules/volundr/hooks/useSkuldChat';
+import type { PlanningSession, PlanningStructure } from '../../models/planning';
+import type { CommitSagaRequest } from '../../ports/tyr.port';
 import styles from './PlanSagaView.module.css';
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+}
+
+/** Try to extract a SagaStructure JSON from assistant message text. */
+function tryDetectStructure(text: string): PlanningStructure | null {
+  const fenceRe = /```(?:json)?\s*\n([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRe.exec(text)) !== null) {
+    try {
+      const data = JSON.parse(match[1].trim());
+      if (data && typeof data === 'object' && Array.isArray(data.phases) && data.name) {
+        return data as PlanningStructure;
+      }
+    } catch {
+      // not valid JSON
+    }
+  }
+  return null;
+}
 
 export function PlanSagaView() {
   const [spec, setSpec] = useState('');
   const [repo, setRepo] = useState('');
   const [session, setSession] = useState<PlanningSession | null>(null);
-  const [messages, setMessages] = useState<PlanningMessage[]>([]);
   const [spawning, setSpawning] = useState(false);
-  const [structureJson, setStructureJson] = useState('');
   const [proposing, setProposing] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detectedStructure, setDetectedStructure] = useState<PlanningStructure | null>(null);
   const navigate = useNavigate();
+
+  // Derive the skuld WebSocket URL from the planning session's chat_endpoint
+  const chatWsUrl = useMemo(() => {
+    if (!session?.chat_endpoint) return null;
+    if (session.status !== 'ACTIVE' && session.status !== 'STRUCTURE_PROPOSED') return null;
+    return session.chat_endpoint;
+  }, [session?.chat_endpoint, session?.status]);
+
+  const skuld = useSkuldChat(chatWsUrl);
+
+  // Convert skuld messages into PlanningMessage format for display
+  const displayMessages = useMemo(
+    () =>
+      skuld.messages.map(m => ({
+        id: m.id,
+        content: m.content,
+        sender: m.role === 'user' ? 'user' : 'assistant',
+        created_at: m.createdAt.toISOString(),
+      })),
+    [skuld.messages]
+  );
+
+  // Auto-detect structure in new assistant messages
+  useEffect(() => {
+    if (skuld.messages.length === 0) return;
+    const lastMsg = skuld.messages[skuld.messages.length - 1];
+    if (lastMsg.role !== 'assistant' || lastMsg.status !== 'complete') return;
+
+    const found = tryDetectStructure(lastMsg.content);
+    if (found) {
+      setDetectedStructure(found);
+    }
+  }, [skuld.messages]);
 
   const handleSpawn = async () => {
     setSpawning(true);
@@ -31,25 +90,24 @@ export function PlanSagaView() {
   };
 
   const handleSendMessage = useCallback(
-    async (content: string) => {
-      if (!session) return;
-      try {
-        const msg = await planningService.sendMessage(session.id, content);
-        setMessages(prev => [...prev, msg]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to send message');
-      }
+    (content: string) => {
+      if (!session || !skuld.connected) return;
+      skuld.sendMessage(content);
     },
-    [session]
+    [session, skuld]
   );
 
-  const handleProposeStructure = async () => {
-    if (!session) return;
+  const handleUseDetectedStructure = async () => {
+    if (!session || !detectedStructure) return;
     setProposing(true);
     setError(null);
     try {
-      const updated = await planningService.proposeStructure(session.id, structureJson);
+      const updated = await planningService.proposeStructure(
+        session.id,
+        JSON.stringify(detectedStructure)
+      );
       setSession(updated);
+      setDetectedStructure(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid saga structure');
     } finally {
@@ -63,7 +121,23 @@ export function PlanSagaView() {
     setError(null);
     try {
       await planningService.completeSession(session.id);
-      const saga = await tyrService.createSaga(spec, repo);
+      const commitRequest: CommitSagaRequest = {
+        name: session.structure.name,
+        slug: slugify(session.structure.name),
+        repos: [session.repo],
+        base_branch: 'main',
+        phases: session.structure.phases.map(phase => ({
+          name: phase.name,
+          raids: phase.raids.map(raid => ({
+            name: raid.name,
+            description: raid.description,
+            acceptance_criteria: raid.acceptance_criteria,
+            declared_files: raid.declared_files,
+            estimate_hours: raid.estimate_hours,
+          })),
+        })),
+      };
+      const saga = await tyrService.commitSaga(commitRequest);
       navigate(`/tyr/sagas/${saga.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to commit saga');
@@ -78,7 +152,7 @@ export function PlanSagaView() {
     try {
       const phases = await tyrService.decompose(spec, repo);
       if (phases.length > 0) {
-        navigate('/tyr/new');
+        navigate('/tyr/new', { state: { phases, spec, repo } });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fallback decomposition failed');
@@ -151,29 +225,22 @@ export function PlanSagaView() {
             <span className={styles.sessionRepo}>{session.repo}</span>
           </div>
 
-          <ChatPanel messages={messages} onSend={handleSendMessage} disabled={!isActive} />
+          <ChatPanel messages={displayMessages} onSend={handleSendMessage} disabled={!isActive} />
 
-          {isActive && (
-            <div className={styles.structureArea}>
-              <label className={styles.label} htmlFor="structure-json">
-                Paste saga structure JSON
-              </label>
-              <textarea
-                id="structure-json"
-                className={styles.textarea}
-                value={structureJson}
-                onChange={e => setStructureJson(e.target.value)}
-                placeholder='{"name": "...", "phases": [...]}'
-                rows={6}
-              />
+          {detectedStructure && isActive && (
+            <div className={styles.detectedStructure}>
+              <span className={styles.detectedLabel}>
+                Structure detected: {detectedStructure.name} ({detectedStructure.phases.length}{' '}
+                phases)
+              </span>
               <div className={styles.actions}>
                 <button
                   type="button"
-                  className={styles.primaryButton}
-                  onClick={handleProposeStructure}
-                  disabled={!structureJson.trim() || proposing}
+                  className={styles.useStructureButton}
+                  onClick={handleUseDetectedStructure}
+                  disabled={proposing}
                 >
-                  {proposing ? 'Validating...' : 'Propose Structure'}
+                  {proposing ? 'Validating...' : 'Use this structure?'}
                 </button>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { createApiClient } from '@/modules/shared/api/client';
-import type { ITyrService } from '../../ports';
+import type { ITyrService, CommitSagaRequest } from '../../ports';
 import type { Saga, Phase } from '../../models';
 
 const api = createApiClient('/api/v1/tyr/sagas');
@@ -130,6 +130,33 @@ export class ApiTyrService implements ITyrService {
 
   async createSaga(_spec: string, _repo: string): Promise<Saga> {
     throw new Error('Use the import flow instead');
+  }
+
+  async commitSaga(request: CommitSagaRequest): Promise<Saga> {
+    const data = await api.post<{
+      id: string;
+      tracker_id: string;
+      tracker_type: string;
+      slug: string;
+      name: string;
+      repos: string[];
+      feature_branch: string;
+      base_branch: string;
+      status: string;
+    }>('/commit', request);
+    return {
+      id: data.id,
+      tracker_id: data.tracker_id,
+      tracker_type: data.tracker_type,
+      slug: data.slug,
+      name: data.name,
+      repos: data.repos,
+      feature_branch: data.feature_branch,
+      status: data.status.toLowerCase() as Saga['status'],
+      confidence: 0,
+      created_at: '',
+      phase_summary: { total: request.phases.length, completed: 0 },
+    };
   }
 
   async decompose(_spec: string, _repo: string): Promise<Phase[]> {

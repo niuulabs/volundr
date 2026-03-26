@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from tyr.domain.models import PlanningMessage, PlanningSession
+from tyr.domain.models import PlanningMessage, PlanningSession, PlanningSessionStatus
 from tyr.ports.planning_repository import PlanningSessionRepository
 
 
@@ -29,6 +29,13 @@ class InMemoryPlanningSessionRepository(PlanningSessionRepository):
 
     async def list_by_owner(self, owner_id: str) -> list[PlanningSession]:
         return [s for s in self._sessions.values() if s.owner_id == owner_id]
+
+    async def list_active(self) -> list[PlanningSession]:
+        return [
+            s
+            for s in self._sessions.values()
+            if s.status in (PlanningSessionStatus.ACTIVE, PlanningSessionStatus.STRUCTURE_PROPOSED)
+        ]
 
     async def delete(self, session_id: UUID) -> bool:
         if session_id in self._sessions:

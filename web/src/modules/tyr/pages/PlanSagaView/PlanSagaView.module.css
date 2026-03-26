@@ -250,3 +250,40 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.detectedStructure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: color-mix(in srgb, var(--color-accent-amber) 8%, var(--color-bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.detectedLabel {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-accent-amber);
+}
+
+.useStructureButton {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-accent-amber);
+  background-color: color-mix(in srgb, var(--color-accent-amber) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.useStructureButton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-accent-amber) 25%, transparent);
+}
+
+.useStructureButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

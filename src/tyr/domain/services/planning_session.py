@@ -125,6 +125,7 @@ class PlanningSessionService:
         planning_session = replace(
             planning_session,
             session_id=volundr_session.id,
+            chat_endpoint=volundr_session.chat_endpoint,
             status=PlanningSessionStatus.ACTIVE,
             updated_at=datetime.now(UTC),
         )
@@ -244,6 +245,17 @@ class PlanningSessionService:
             updated_at=datetime.now(UTC),
         )
         await self._repo.save(updated)
+
+        if session.session_id:
+            try:
+                await self._volundr.stop_session(session.session_id)
+            except Exception:
+                logger.warning(
+                    "Failed to stop Volundr session %s on complete",
+                    session.session_id,
+                    exc_info=True,
+                )
+
         return updated
 
     async def get(self, session_id: UUID) -> PlanningSession | None:
@@ -255,14 +267,57 @@ class PlanningSessionService:
         return await self._repo.list_by_owner(owner_id)
 
     async def delete(self, session_id: UUID) -> bool:
-        """Delete a planning session."""
+        """Delete a planning session, stopping the Volundr session if active."""
+        session = await self._repo.get(session_id)
+        if session is None:
+            return False
+
+        if session.session_id and session.status in (
+            PlanningSessionStatus.ACTIVE,
+            PlanningSessionStatus.STRUCTURE_PROPOSED,
+            PlanningSessionStatus.SPAWNING,
+        ):
+            try:
+                await self._volundr.stop_session(session.session_id)
+            except Exception:
+                logger.warning(
+                    "Failed to stop Volundr session %s on delete",
+                    session.session_id,
+                    exc_info=True,
+                )
+
         return await self._repo.delete(session_id)
 
     async def cleanup_expired(self) -> int:
         """Expire idle planning sessions past the timeout. Returns count expired."""
-        # This would be called by a periodic task; for now it's a manual method.
-        # Real implementation would scan all active sessions.
-        return 0
+        now = datetime.now(UTC)
+        idle_cutoff = now.timestamp() - self._config.idle_timeout_seconds
+        all_sessions = await self._repo.list_active()
+        expired = 0
+
+        for session in all_sessions:
+            if session.updated_at.timestamp() >= idle_cutoff:
+                continue
+
+            if session.session_id:
+                try:
+                    await self._volundr.stop_session(session.session_id)
+                except Exception:
+                    logger.warning(
+                        "Failed to stop Volundr session %s during cleanup",
+                        session.session_id,
+                        exc_info=True,
+                    )
+
+            updated = replace(
+                session,
+                status=PlanningSessionStatus.EXPIRED,
+                updated_at=now,
+            )
+            await self._repo.save(updated)
+            expired += 1
+
+        return expired
 
     async def get_messages(self, session_id: UUID) -> list[PlanningMessage]:
         """Get all messages for a planning session."""

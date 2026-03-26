@@ -1,9 +1,36 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { PlanSagaView } from './PlanSagaView';
-import type { PlanningSession, PlanningMessage } from '../../models/planning';
+import type { PlanningSession } from '../../models/planning';
+
+const mockSendMessage = vi.fn();
+const mockSkuldMessages: Array<{
+  id: string;
+  role: string;
+  content: string;
+  createdAt: Date;
+  status: string;
+}> = [];
+
+vi.mock('@/modules/volundr/hooks/useSkuldChat', () => ({
+  useSkuldChat: () => ({
+    messages: mockSkuldMessages,
+    connected: true,
+    isRunning: false,
+    historyLoaded: true,
+    pendingPermissions: [],
+    availableCommands: [],
+    sendMessage: mockSendMessage,
+    respondToPermission: vi.fn(),
+    sendInterrupt: vi.fn(),
+    sendSetModel: vi.fn(),
+    sendSetMaxThinkingTokens: vi.fn(),
+    sendRewindFiles: vi.fn(),
+    clearMessages: vi.fn(),
+  }),
+}));
 
 const mockSession: PlanningSession = {
   id: 'plan-001',
@@ -12,15 +39,9 @@ const mockSession: PlanningSession = {
   repo: 'niuu/volundr',
   status: 'ACTIVE',
   structure: null,
+  chat_endpoint: 'wss://sessions.test/s/volundr-sess-001/session',
   created_at: '2026-03-25T10:00:00Z',
   updated_at: '2026-03-25T10:00:00Z',
-};
-
-const mockMessage: PlanningMessage = {
-  id: 'msg-001',
-  content: 'Split the auth phase',
-  sender: 'user',
-  created_at: '2026-03-25T10:00:00Z',
 };
 
 const mockSessionWithStructure: PlanningSession = {
@@ -49,7 +70,7 @@ const mockSessionWithStructure: PlanningSession = {
 vi.mock('../../adapters', () => ({
   planningService: {
     spawnSession: vi.fn(() => Promise.resolve({ ...mockSession })),
-    sendMessage: vi.fn(() => Promise.resolve({ ...mockMessage })),
+    sendMessage: vi.fn(),
     proposeStructure: vi.fn(() => Promise.resolve({ ...mockSessionWithStructure })),
     completeSession: vi.fn(() =>
       Promise.resolve({ ...mockSessionWithStructure, status: 'COMPLETED' })
@@ -59,6 +80,7 @@ vi.mock('../../adapters', () => ({
   tyrService: {
     decompose: vi.fn(() => Promise.resolve([])),
     createSaga: vi.fn(() => Promise.resolve({ id: 'saga-001' })),
+    commitSaga: vi.fn(() => Promise.resolve({ id: 'saga-001' })),
   },
 }));
 
@@ -86,6 +108,7 @@ async function spawnSession(user: ReturnType<typeof userEvent.setup>) {
 describe('PlanSagaView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSkuldMessages.length = 0;
   });
 
   it('renders the initial form', () => {
@@ -159,9 +182,8 @@ describe('PlanSagaView', () => {
     });
   });
 
-  it('sends a message in the chat panel', async () => {
+  it('sends a message via skuld WebSocket', async () => {
     const user = userEvent.setup();
-    const { planningService } = await import('../../adapters');
     renderView();
 
     await spawnSession(user);
@@ -170,104 +192,12 @@ describe('PlanSagaView', () => {
     await user.type(chatInput, 'Should we add caching?');
     await user.click(screen.getByRole('button', { name: /send/i }));
 
-    await waitFor(() => {
-      expect(planningService.sendMessage).toHaveBeenCalledWith(
-        'plan-001',
-        'Should we add caching?'
-      );
-    });
+    expect(mockSendMessage).toHaveBeenCalledWith('Should we add caching?');
   });
 
-  it('shows error on send message failure', async () => {
+  it('commits saga with structure and navigates', async () => {
     const user = userEvent.setup();
-    const { planningService } = await import('../../adapters');
-    vi.mocked(planningService.sendMessage).mockRejectedValueOnce(new Error('Send failed'));
-    renderView();
-
-    await spawnSession(user);
-
-    const chatInput = screen.getByPlaceholderText(/discuss/i);
-    await user.type(chatInput, 'Test msg');
-    await user.click(screen.getByRole('button', { name: /send/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/send failed/i)).toBeInTheDocument();
-    });
-  });
-
-  it('shows fallback error on send message non-Error throw', async () => {
-    const user = userEvent.setup();
-    const { planningService } = await import('../../adapters');
-    vi.mocked(planningService.sendMessage).mockRejectedValueOnce(42);
-    renderView();
-
-    await spawnSession(user);
-
-    const chatInput = screen.getByPlaceholderText(/discuss/i);
-    await user.type(chatInput, 'Test msg');
-    await user.click(screen.getByRole('button', { name: /send/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/failed to send message/i)).toBeInTheDocument();
-    });
-  });
-
-  it('shows structure preview after proposing', async () => {
-    const user = userEvent.setup();
-    renderView();
-
-    await spawnSession(user);
-
-    const jsonInput = screen.getByPlaceholderText(/name.*phases/i);
-    fireEvent.change(jsonInput, { target: { value: '{"name":"test"}' } });
-    await user.click(screen.getByRole('button', { name: /propose structure/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Auth Refactor')).toBeInTheDocument();
-      expect(screen.getByText('Phase 1')).toBeInTheDocument();
-      expect(screen.getByText('Setup middleware')).toBeInTheDocument();
-    });
-  });
-
-  it('shows error on propose structure failure', async () => {
-    const user = userEvent.setup();
-    const { planningService } = await import('../../adapters');
-    vi.mocked(planningService.proposeStructure).mockRejectedValueOnce(
-      new Error('Invalid JSON schema')
-    );
-    renderView();
-
-    await spawnSession(user);
-
-    const jsonInput = screen.getByPlaceholderText(/name.*phases/i);
-    fireEvent.change(jsonInput, { target: { value: '{"bad": true}' } });
-    await user.click(screen.getByRole('button', { name: /propose structure/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/invalid json schema/i)).toBeInTheDocument();
-    });
-  });
-
-  it('shows fallback error on propose structure non-Error throw', async () => {
-    const user = userEvent.setup();
-    const { planningService } = await import('../../adapters');
-    vi.mocked(planningService.proposeStructure).mockRejectedValueOnce(null);
-    renderView();
-
-    await spawnSession(user);
-
-    const jsonInput = screen.getByPlaceholderText(/name.*phases/i);
-    fireEvent.change(jsonInput, { target: { value: '{"x":1}' } });
-    await user.click(screen.getByRole('button', { name: /propose structure/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/invalid saga structure/i)).toBeInTheDocument();
-    });
-  });
-
-  it('commits saga and navigates on success', async () => {
-    const user = userEvent.setup();
-    const { planningService } = await import('../../adapters');
+    const { planningService, tyrService } = await import('../../adapters');
     vi.mocked(planningService.spawnSession).mockResolvedValueOnce({
       ...mockSessionWithStructure,
     });
@@ -282,6 +212,21 @@ describe('PlanSagaView', () => {
     });
 
     await user.click(screen.getByRole('button', { name: /commit saga/i }));
+
+    await waitFor(() => {
+      expect(planningService.completeSession).toHaveBeenCalledWith('plan-001');
+      expect(tyrService.commitSaga).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Auth Refactor',
+          repos: ['niuu/volundr'],
+          phases: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'Phase 1',
+            }),
+          ]),
+        })
+      );
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Saga Detail')).toBeInTheDocument();
@@ -401,5 +346,34 @@ describe('PlanSagaView', () => {
 
     // Should still be on the plan page
     expect(screen.getByText('Plan Saga')).toBeInTheDocument();
+  });
+
+  it('shows session status and repo after spawn', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    await spawnSession(user);
+
+    expect(screen.getByText('niuu/volundr')).toBeInTheDocument();
+  });
+
+  it('shows structure preview with phase and raid details', async () => {
+    const user = userEvent.setup();
+    const { planningService } = await import('../../adapters');
+    vi.mocked(planningService.spawnSession).mockResolvedValueOnce({
+      ...mockSessionWithStructure,
+    });
+    renderView();
+
+    await user.type(screen.getByLabelText(/specification/i), 'Build auth');
+    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await user.click(screen.getByRole('button', { name: /start planning session/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Auth Refactor')).toBeInTheDocument();
+      expect(screen.getByText('Phase 1')).toBeInTheDocument();
+      expect(screen.getByText('Setup middleware')).toBeInTheDocument();
+      expect(screen.getByText('4h')).toBeInTheDocument();
+    });
   });
 });

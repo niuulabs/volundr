@@ -24,6 +24,9 @@ class PlanningSessionRepository(ABC):
     async def list_by_owner(self, owner_id: str) -> list[PlanningSession]: ...
 
     @abstractmethod
+    async def list_active(self) -> list[PlanningSession]: ...
+
+    @abstractmethod
     async def delete(self, session_id: UUID) -> bool: ...
 
     @abstractmethod
