@@ -16,11 +16,12 @@ var (
 
 // Activity state constants for SSE events.
 const (
-	ActivityStateActive   = "active"
-	ActivityStateIdle     = "idle"
-	ActivityStateStarting = "starting"
-	ActivityStateNone     = "none"
-	ActivityStateGit      = "git"
+	ActivityStateActive        = "active"
+	ActivityStateIdle          = "idle"
+	ActivityStateStarting      = "starting"
+	ActivityStateToolExecuting = "tool_executing"
+	ActivityStateNone          = "none"
+	ActivityStateGit           = "git"
 )
 
 // --- API request/response types matching Volundr's REST surface ---

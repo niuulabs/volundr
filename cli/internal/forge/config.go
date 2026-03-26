@@ -30,6 +30,7 @@ type ForgeConfig struct {
 	StateFile     string      `yaml:"state_file"`
 	ClaudeBinary  string      `yaml:"claude_binary"`
 	MaxConcurrent int         `yaml:"max_concurrent"`
+	SDKPortStart  int         `yaml:"sdk_port_start"`
 	Xcode         XcodeConfig `yaml:"xcode"`
 }
 
@@ -85,6 +86,7 @@ func DefaultForgeConfig() *Config {
 			StateFile:     filepath.Join(volundrDir, "forge-state.json"),
 			ClaudeBinary:  "claude",
 			MaxConcurrent: 4,
+			SDKPortStart:  9100,
 			Xcode: XcodeConfig{
 				SearchPaths: []string{"/Applications"},
 			},

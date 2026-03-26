@@ -2,7 +2,6 @@ package forge
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +10,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Runner manages session lifecycles: workspace creation, git clone,
@@ -20,18 +21,29 @@ type Runner struct {
 	store *Store
 	bus   *EventBus
 
-	mu        sync.Mutex
-	processes map[string]*exec.Cmd // session ID -> Claude Code process
+	mu         sync.Mutex
+	processes  map[string]*exec.Cmd      // session ID -> Claude Code process
+	transports map[string]*SDKTransport  // session ID -> SDK WebSocket transport
+	nextPort   int                       // next SDK port to allocate
 }
 
 // NewRunner creates a new session runner.
 func NewRunner(cfg *Config, store *Store, bus *EventBus) *Runner {
 	return &Runner{
-		cfg:       cfg,
-		store:     store,
-		bus:       bus,
-		processes: make(map[string]*exec.Cmd),
+		cfg:        cfg,
+		store:      store,
+		bus:        bus,
+		processes:  make(map[string]*exec.Cmd),
+		transports: make(map[string]*SDKTransport),
+		nextPort:   cfg.Forge.SDKPortStart,
 	}
+}
+
+// allocatePort returns the next available SDK port for a session.
+func (r *Runner) allocatePort() int {
+	port := r.nextPort
+	r.nextPort++
+	return port
 }
 
 // CreateAndStart creates a new session from the request, provisions its
@@ -43,7 +55,7 @@ func (r *Runner) CreateAndStart(ctx context.Context, req CreateSessionRequest, o
 
 	now := time.Now().UTC()
 	sess := &Session{
-		ID:            newUUID(),
+		ID:            uuid.New().String(),
 		Name:          req.Name,
 		Model:         req.Model,
 		Source:        req.Source,
@@ -87,7 +99,13 @@ func (r *Runner) Stop(id string) error {
 	r.mu.Lock()
 	cmd := r.processes[id]
 	delete(r.processes, id)
+	transport := r.transports[id]
+	delete(r.transports, id)
 	r.mu.Unlock()
+
+	if transport != nil {
+		transport.Stop()
+	}
 
 	if cmd != nil && cmd.Process != nil {
 		// Send SIGTERM, wait up to 10s, then SIGKILL.
@@ -126,7 +144,7 @@ func (r *Runner) Delete(id string) error {
 	return nil
 }
 
-// SendMessage writes a message to the Claude Code process stdin.
+// SendMessage sends a message to the Claude Code process via SDK WebSocket.
 func (r *Runner) SendMessage(id string, content string) error {
 	sess := r.store.Get(id)
 	if sess == nil {
@@ -136,12 +154,16 @@ func (r *Runner) SendMessage(id string, content string) error {
 		return fmt.Errorf("session %s (status: %s): %w", id, sess.Status, ErrSessionNotRunning)
 	}
 
-	// For now, write to a message file that the session's CLAUDE.md can
-	// reference, or use the Claude CLI's stdin pipe. This will be enhanced
-	// to use the SDK WebSocket transport when available.
-	msgFile := filepath.Join(sess.WorkspaceDir, ".forge-message")
-	if err := os.WriteFile(msgFile, []byte(content), 0o600); err != nil {
-		return fmt.Errorf("write message: %w", err)
+	r.mu.Lock()
+	transport := r.transports[id]
+	r.mu.Unlock()
+
+	if transport == nil {
+		return fmt.Errorf("session %s: no active transport", id)
+	}
+
+	if err := transport.SendMessage(content); err != nil {
+		return fmt.Errorf("send message via sdk: %w", err)
 	}
 
 	sess.MessageCount++
@@ -268,19 +290,38 @@ func (r *Runner) writeClaudeMD(sess *Session) error {
 	return os.WriteFile(claudeMDPath, []byte(content), 0o644) //nolint:gosec // workspace file
 }
 
-// startClaude spawns the Claude Code CLI process in the workspace.
+// startClaude spawns the Claude Code CLI process with --sdk-url for
+// WebSocket-based communication.
 func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 	claudeBin := r.cfg.Forge.ClaudeBinary
 	if claudeBin == "" {
 		claudeBin = "claude"
 	}
 
-	args := []string{}
-	if sess.InitialPrompt != "" {
-		args = append(args, "--print", sess.InitialPrompt)
+	// Start SDK WebSocket transport so Claude Code can connect back.
+	r.mu.Lock()
+	port := r.allocatePort()
+	r.mu.Unlock()
+
+	transport := NewSDKTransport(sess.ID, port, r.bus)
+	if err := transport.Start(); err != nil {
+		return fmt.Errorf("start sdk transport: %w", err)
+	}
+
+	args := []string{
+		"--sdk-url", transport.SDKURL(),
+		"--output-format", "stream-json",
+		"--input-format", "stream-json",
+		"--verbose",
 	}
 	if sess.Model != "" {
 		args = append(args, "--model", sess.Model)
+	}
+	if sess.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", sess.SystemPrompt)
+	}
+	if sess.InitialPrompt != "" {
+		args = append(args, "--print", sess.InitialPrompt)
 	}
 
 	cmd := exec.CommandContext(ctx, claudeBin, args...) //nolint:gosec // binary path from trusted config
@@ -296,6 +337,7 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 	logPath := filepath.Join(sess.WorkspaceDir, ".forge-claude.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // workspace log
 	if err != nil {
+		transport.Stop()
 		return fmt.Errorf("open log file: %w", err)
 	}
 	cmd.Stdout = logFile
@@ -303,11 +345,13 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
+		transport.Stop()
 		return fmt.Errorf("start claude: %w", err)
 	}
 
 	r.mu.Lock()
 	r.processes[sess.ID] = cmd
+	r.transports[sess.ID] = transport
 	r.mu.Unlock()
 
 	// Monitor the process in the background.
@@ -324,7 +368,13 @@ func (r *Runner) monitor(sessionID string, cmd *exec.Cmd, logFile *os.File) {
 
 	r.mu.Lock()
 	delete(r.processes, sessionID)
+	transport := r.transports[sessionID]
+	delete(r.transports, sessionID)
 	r.mu.Unlock()
+
+	if transport != nil {
+		transport.Stop()
+	}
 
 	sess := r.store.Get(sessionID)
 	if sess == nil {
@@ -340,17 +390,6 @@ func (r *Runner) monitor(sessionID string, cmd *exec.Cmd, logFile *os.File) {
 			r.transition(sess, StatusStopped, ActivityStateIdle)
 		}
 	}
-}
-
-// newUUID generates a random UUID v4 string.
-// TODO: replace with github.com/google/uuid after go mod tidy.
-func newUUID() string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	b[6] = (b[6] & 0x0f) | 0x40 // version 4
-	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // transition updates a session's status, persists it, and emits an activity event.

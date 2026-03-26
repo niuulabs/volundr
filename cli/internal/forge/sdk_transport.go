@@ -1,0 +1,255 @@
+package forge
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"strings"
+	"sync"
+
+	"github.com/gorilla/websocket"
+)
+
+// SDKTransport manages a WebSocket server that Claude Code connects back to
+// via --sdk-url. Messages are exchanged as NDJSON (newline-delimited JSON).
+type SDKTransport struct {
+	sessionID string
+	port      int
+	bus       *EventBus
+
+	mu       sync.Mutex
+	conn     *websocket.Conn
+	ready    chan struct{} // closed when CLI connects
+	listener net.Listener
+	srv      *http.Server
+
+	// cliSessionID is the Claude Code session ID received from the init message.
+	cliSessionID string
+}
+
+// NewSDKTransport creates a transport that listens on the given port.
+func NewSDKTransport(sessionID string, port int, bus *EventBus) *SDKTransport {
+	return &SDKTransport{
+		sessionID: sessionID,
+		port:      port,
+		bus:       bus,
+		ready:     make(chan struct{}),
+	}
+}
+
+// SDKURL returns the WebSocket URL the CLI should connect to.
+func (t *SDKTransport) SDKURL() string {
+	return fmt.Sprintf("ws://localhost:%d/ws/cli/%s", t.port, t.sessionID)
+}
+
+// Port returns the actual listening port (useful when port 0 is used).
+func (t *SDKTransport) Port() int {
+	if t.listener != nil {
+		return t.listener.Addr().(*net.TCPAddr).Port
+	}
+	return t.port
+}
+
+// Start begins listening for the CLI WebSocket connection.
+func (t *SDKTransport) Start() error {
+	mux := http.NewServeMux()
+	mux.HandleFunc(fmt.Sprintf("/ws/cli/%s", t.sessionID), t.handleCLIConnect)
+
+	addr := fmt.Sprintf("127.0.0.1:%d", t.port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("sdk transport listen on %s: %w", addr, err)
+	}
+	t.listener = ln
+
+	t.srv = &http.Server{Handler: mux}
+	go func() {
+		if err := t.srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Printf("sdk transport server error (session %s): %v", t.sessionID, err)
+		}
+	}()
+
+	log.Printf("sdk transport listening on port %d for session %s", t.Port(), t.sessionID)
+	return nil
+}
+
+// Ready returns a channel that is closed when the CLI has connected.
+func (t *SDKTransport) Ready() <-chan struct{} {
+	return t.ready
+}
+
+// Stop shuts down the WebSocket server and closes the connection.
+func (t *SDKTransport) Stop() {
+	t.mu.Lock()
+	conn := t.conn
+	t.conn = nil
+	t.mu.Unlock()
+
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if t.srv != nil {
+		_ = t.srv.Close()
+	}
+}
+
+// SendMessage sends a user message to the CLI via WebSocket.
+func (t *SDKTransport) SendMessage(content string) error {
+	t.mu.Lock()
+	conn := t.conn
+	t.mu.Unlock()
+
+	if conn == nil {
+		return fmt.Errorf("cli not connected")
+	}
+
+	msg := map[string]any{
+		"type": "user",
+		"message": map[string]any{
+			"role":    "user",
+			"content": content,
+		},
+		"parent_tool_use_id": nil,
+		"session_id":         t.cliSessionID,
+	}
+
+	return t.sendJSON(msg)
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(_ *http.Request) bool { return true },
+}
+
+func (t *SDKTransport) handleCLIConnect(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("sdk transport: websocket upgrade failed: %v", err)
+		return
+	}
+
+	t.mu.Lock()
+	t.conn = conn
+	t.mu.Unlock()
+
+	log.Printf("sdk transport: CLI connected for session %s", t.sessionID)
+
+	// Signal that CLI is ready.
+	select {
+	case <-t.ready:
+		// Already closed, CLI reconnected.
+	default:
+		close(t.ready)
+	}
+
+	// Read messages from CLI.
+	t.receiveLoop(conn)
+}
+
+func (t *SDKTransport) receiveLoop(conn *websocket.Conn) {
+	defer func() {
+		t.mu.Lock()
+		if t.conn == conn {
+			t.conn = nil
+		}
+		t.mu.Unlock()
+	}()
+
+	for {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				log.Printf("sdk transport: read error (session %s): %v", t.sessionID, err)
+			}
+			return
+		}
+
+		// Messages may be NDJSON (multiple JSON objects separated by newlines).
+		for _, line := range strings.Split(string(raw), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			var data map[string]any
+			if err := json.Unmarshal([]byte(line), &data); err != nil {
+				log.Printf("sdk transport: invalid JSON from CLI: %v", err)
+				continue
+			}
+
+			t.handleCLIMessage(data)
+		}
+	}
+}
+
+func (t *SDKTransport) handleCLIMessage(data map[string]any) {
+	msgType, _ := data["type"].(string)
+
+	// Capture CLI session ID from init message.
+	if msgType == "system" {
+		subtype, _ := data["subtype"].(string)
+		if subtype == "init" {
+			if sid, ok := data["session_id"].(string); ok && sid != "" {
+				t.cliSessionID = sid
+			}
+			log.Printf("sdk transport: CLI init (session_id=%s)", t.cliSessionID)
+		}
+	}
+
+	// Capture session_id from non-system messages.
+	if sid, ok := data["session_id"].(string); ok && sid != "" && msgType != "system" {
+		t.cliSessionID = sid
+	}
+
+	// Emit activity state events based on message type.
+	switch msgType {
+	case "assistant":
+		t.emitActivity(ActivityStateActive)
+	case "result":
+		t.emitActivity(ActivityStateIdle)
+	}
+
+	// Check for tool_use in assistant messages to emit tool_executing.
+	if msgType == "assistant" {
+		if content, ok := data["content"].([]any); ok {
+			for _, item := range content {
+				if m, ok := item.(map[string]any); ok {
+					if m["type"] == "tool_use" {
+						t.emitActivity(ActivityStateToolExecuting)
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
+func (t *SDKTransport) emitActivity(state string) {
+	t.bus.Emit(ActivityEvent{
+		SessionID: t.sessionID,
+		State:     state,
+	})
+}
+
+func (t *SDKTransport) sendJSON(msg map[string]any) error {
+	t.mu.Lock()
+	conn := t.conn
+	t.mu.Unlock()
+
+	if conn == nil {
+		return fmt.Errorf("cli not connected")
+	}
+
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal message: %w", err)
+	}
+
+	// NDJSON: append newline.
+	payload = append(payload, '\n')
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.conn.WriteMessage(websocket.TextMessage, payload)
+}
