@@ -1,4 +1,4 @@
-import type { PlanningSession, PlanningMessage, PlanningStructure } from '../models/planning';
+import type { PlanningSession, PlanningMessage } from '../models/planning';
 
 export interface IPlanningService {
   spawnSession(spec: string, repo: string): Promise<PlanningSession>;

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { planningService, tyrService } from '../../adapters';
 import { ChatPanel } from '../../components/ChatPanel';
-import type { PlanningSession, PlanningMessage, PlanningStructure } from '../../models/planning';
+import type { PlanningSession, PlanningMessage } from '../../models/planning';
 import styles from './PlanSagaView.module.css';
 
 export function PlanSagaView() {
