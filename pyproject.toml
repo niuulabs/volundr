@@ -24,9 +24,6 @@ dependencies = [
 rabbitmq = [
     "aio-pika>=9.0",
 ]
-litellm = [
-    "litellm>=1.40",
-]
 k8s = [
     "kubernetes-asyncio>=30.0",
 ]
@@ -50,7 +47,6 @@ dev = [
 [project.scripts]
 volundr = "volundr.main:main"
 skuld = "volundr.skuld.broker:main"
-bifrost = "volundr.bifrost.__main__:main"
 tyr = "tyr.main:main"
 
 [project.urls]

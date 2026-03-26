@@ -65,7 +65,6 @@ Install only what you need:
 
 ```bash
 uv sync --extra rabbitmq   # RabbitMQ event sink (aio-pika)
-uv sync --extra litellm    # LiteLLM model routing
 uv sync --extra k8s        # Kubernetes client (kubernetes-asyncio)
 uv sync --extra otel       # OpenTelemetry export (traces + metrics)
 ```
