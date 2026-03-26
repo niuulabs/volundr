@@ -250,7 +250,7 @@
 /* Activity state indicators */
 .statusDot[data-activity='active'],
 .statusDot[data-activity='tool_executing'] {
-  animation: activityPulse 1.2s ease-in-out infinite;
+  animation: activityPulse 2.4s ease-in-out infinite;
 }
 
 @keyframes activityPulse {
