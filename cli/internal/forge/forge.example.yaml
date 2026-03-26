@@ -1,0 +1,85 @@
+# Volundr — example config for mini mode (Forge)
+# These settings go under the "volundr:" key in ~/.niuu/config.yaml.
+#
+# Example ~/.niuu/config.yaml:
+#
+# volundr:
+#   mode: mini
+#   web: true
+#   forge:
+#     listen: "127.0.0.1:8080"
+#     workspace: "~/.niuu/sessions"
+#     max_concurrent: 4
+#     auth:
+#       mode: none
+#     stop_timeout: 10s
+#     shutdown_timeout: 10s
+#     read_header_timeout: 10s
+#
+# anthropic:
+#   api_key: "sk-ant-..."
+
+volundr:
+  # Mode: mini (lightweight local runner) or k3s (full stack)
+  mode: mini
+
+  # Whether to serve the web UI alongside the API.
+  web: true
+
+  forge:
+    # Bind address. Use 0.0.0.0 to expose to the network.
+    # WARNING: 0.0.0.0 with auth=none allows any network client to create sessions.
+    listen: "127.0.0.1:8080"
+
+    # Directory where session workspaces are created (one subdir per session).
+    workspace: "~/.niuu/sessions"
+
+    # Path to the Claude Code CLI binary. Resolved via $PATH if relative.
+    claude_binary: "claude"
+
+    # Maximum number of concurrently running sessions.
+    max_concurrent: 4
+
+    # Starting port for per-session SDK WebSocket servers.
+    # Each session gets its own port (sdk_port_start, sdk_port_start+1, ...).
+    sdk_port_start: 9100
+
+    # Authentication
+    auth:
+      # "none" — no authentication (suitable for local development)
+      # "pat"  — require a valid personal access token (JWT) in the Authorization header
+      #          The JWT "sub" claim is used as the owner_id.
+      mode: "none"
+
+      # PAT entries (only used when mode is "pat")
+      # tokens:
+      #   - name: "tyr-dispatcher"
+      #     token: "eyJhbGciOiJIUzI1NiIs..."
+      #   - name: "developer"
+      #     token: "eyJhbGciOiJIUzI1NiIs..."
+
+    # Timeouts
+    stop_timeout: 10s           # max wait for Claude process to exit after SIGTERM
+    shutdown_timeout: 10s       # max wait for HTTP server graceful shutdown
+    read_header_timeout: 10s    # max time to read request headers
+
+    # Xcode toolchain settings (macOS only)
+    xcode:
+      # Preferred Xcode version (e.g. "16.2"). Leave empty for system default.
+      default_version: ""
+      # Directories to scan for Xcode.app installations.
+      search_paths:
+        - "/Applications"
+
+# Anthropic API settings
+anthropic:
+  # API key for Claude. Set directly or via env var.
+  # api_key: "sk-ant-..."
+  api_key_env: "ANTHROPIC_API_KEY"
+
+# Git provider settings (used by both mini and k3s modes)
+git:
+  github:
+    # GitHub token for authenticated clones.
+    # token: "ghp_..."
+    token_env: "GITHUB_TOKEN"

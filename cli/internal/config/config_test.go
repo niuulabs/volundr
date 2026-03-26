@@ -12,8 +12,14 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatalf("DefaultConfig() error: %v", err)
 	}
 
-	if cfg.Runtime != "local" {
-		t.Errorf("expected runtime 'local', got %q", cfg.Runtime)
+	if cfg.Volundr.Mode != "mini" {
+		t.Errorf("expected mode 'mini', got %q", cfg.Volundr.Mode)
+	}
+	if !cfg.Volundr.Web {
+		t.Error("expected web=true by default")
+	}
+	if cfg.Volundr.Forge.MaxConcurrent != 4 {
+		t.Errorf("expected forge max_concurrent 4, got %d", cfg.Volundr.Forge.MaxConcurrent)
 	}
 	if cfg.Listen.Host != DefaultListenHost {
 		t.Errorf("expected listen host %q, got %q", DefaultListenHost, cfg.Listen.Host)
@@ -62,8 +68,8 @@ func TestConfigSaveAndLoad(t *testing.T) {
 		t.Fatalf("LoadFrom() error: %v", err)
 	}
 
-	if loaded.Runtime != cfg.Runtime {
-		t.Errorf("runtime: expected %q, got %q", cfg.Runtime, loaded.Runtime)
+	if loaded.Volundr.Mode != cfg.Volundr.Mode {
+		t.Errorf("mode: expected %q, got %q", cfg.Volundr.Mode, loaded.Volundr.Mode)
 	}
 	if loaded.Listen.Port != cfg.Listen.Port {
 		t.Errorf("listen port: expected %d, got %d", cfg.Listen.Port, loaded.Listen.Port)
@@ -86,52 +92,65 @@ func TestConfigValidate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "valid default config",
+			name:    "valid default config (mini)",
 			modify:  func(_ *Config) {},
 			wantErr: false,
 		},
 		{
-			name:    "invalid runtime",
-			modify:  func(c *Config) { c.Runtime = "invalid" },
+			name:    "invalid mode",
+			modify:  func(c *Config) { c.Volundr.Mode = "invalid" },
 			wantErr: true,
 		},
 		{
-			name:    "invalid listen port zero",
-			modify:  func(c *Config) { c.Listen.Port = 0 },
-			wantErr: true,
-		},
-		{
-			name:    "invalid listen port too high",
-			modify:  func(c *Config) { c.Listen.Port = 70000 },
-			wantErr: true,
-		},
-		{
-			name:    "invalid database mode",
-			modify:  func(c *Config) { c.Database.Mode = "sqlite" },
-			wantErr: true,
-		},
-		{
-			name:    "external db without host",
-			modify:  func(c *Config) { c.Database.Mode = "external"; c.Database.Host = "" },
-			wantErr: true,
-		},
-		{
-			name: "external db with host",
+			name: "k3s mode with invalid listen port",
 			modify: func(c *Config) {
+				c.Volundr.Mode = "k3s"
+				c.Listen.Port = 0
+			},
+			wantErr: true,
+		},
+		{
+			name: "k3s mode with invalid database mode",
+			modify: func(c *Config) {
+				c.Volundr.Mode = "k3s"
+				c.Database.Mode = "sqlite"
+			},
+			wantErr: true,
+		},
+		{
+			name: "k3s mode external db without host",
+			modify: func(c *Config) {
+				c.Volundr.Mode = "k3s"
+				c.Database.Mode = "external"
+				c.Database.Host = ""
+			},
+			wantErr: true,
+		},
+		{
+			name: "k3s mode external db with host",
+			modify: func(c *Config) {
+				c.Volundr.Mode = "k3s"
 				c.Database.Mode = "external"
 				c.Database.Host = "db.example.com"
 			},
 			wantErr: false,
 		},
 		{
-			name:    "docker runtime is invalid",
-			modify:  func(c *Config) { c.Runtime = "docker" },
+			name:    "docker mode is invalid",
+			modify:  func(c *Config) { c.Volundr.Mode = "docker" },
 			wantErr: true,
 		},
 		{
-			name:    "k3s runtime is valid",
-			modify:  func(c *Config) { c.Runtime = "k3s" },
+			name:    "k3s mode is valid",
+			modify:  func(c *Config) { c.Volundr.Mode = "k3s" },
 			wantErr: false,
+		},
+		{
+			name: "mini mode with zero max_concurrent",
+			modify: func(c *Config) {
+				c.Volundr.Forge.MaxConcurrent = 0
+			},
+			wantErr: true,
 		},
 	}
 
@@ -311,8 +330,8 @@ func TestLoadAndSaveViaDefaults(t *testing.T) {
 	if loaded.Anthropic.APIKey != "sk-ant-roundtrip" {
 		t.Errorf("Load() APIKey = %q, want %q", loaded.Anthropic.APIKey, "sk-ant-roundtrip")
 	}
-	if loaded.Runtime != "local" {
-		t.Errorf("Load() Runtime = %q, want %q", loaded.Runtime, "local")
+	if loaded.Volundr.Mode != "mini" {
+		t.Errorf("Load() Mode = %q, want %q", loaded.Volundr.Mode, "mini")
 	}
 }
 
@@ -384,6 +403,7 @@ func TestValidateDBPortOutOfRange(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DefaultConfig() error: %v", err)
 			}
+			cfg.Volundr.Mode = "k3s"
 			cfg.Database.Port = tt.port
 			if err := cfg.Validate(); err == nil {
 				t.Errorf("Validate() expected error for db port %d", tt.port)
@@ -464,7 +484,7 @@ func TestSaveErrorWhenNoHome(t *testing.T) {
 	t.Setenv(LegacyEnvHome, "")
 	t.Setenv("HOME", "")
 
-	cfg := &Config{Runtime: "local"}
+	cfg := &Config{Volundr: VolundrConfig{Mode: "mini"}}
 	if err := cfg.Save(); err == nil {
 		t.Error("expected error when HOME is unset")
 	}
@@ -497,6 +517,69 @@ func TestSaveToReadOnlyDir(t *testing.T) {
 	nested := filepath.Join(readOnly, "sub", "config.yaml")
 	if err := cfg.SaveTo(nested); err == nil {
 		t.Error("expected error saving to read-only directory")
+	}
+}
+
+func TestMigrateLegacyRuntime(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a config with the legacy "runtime" field.
+	content := `runtime: local
+listen:
+  host: "127.0.0.1"
+  port: 8080
+database:
+  mode: embedded
+  port: 5433
+  user: volundr
+  password: test
+  name: volundr
+tls:
+  mode: "off"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+
+	if cfg.Volundr.Mode != "mini" {
+		t.Errorf("expected mode 'mini' after migration from runtime 'local', got %q", cfg.Volundr.Mode)
+	}
+}
+
+func TestMigrateLegacyRuntimeK3s(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	content := `runtime: k3s
+listen:
+  host: "127.0.0.1"
+  port: 8080
+database:
+  mode: embedded
+  port: 5433
+  user: volundr
+  password: test
+  name: volundr
+tls:
+  mode: "off"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+
+	if cfg.Volundr.Mode != "k3s" {
+		t.Errorf("expected mode 'k3s' after migration, got %q", cfg.Volundr.Mode)
 	}
 }
 

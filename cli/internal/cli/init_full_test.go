@@ -8,13 +8,13 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/config"
 )
 
-func TestRunInit_WithRuntimeFlag(t *testing.T) {
+func TestRunInit_WithModeFlag(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe stdin with answers: API key, db mode, github access
 	input := strings.Join([]string{
@@ -31,8 +31,8 @@ func TestRunInit_WithRuntimeFlag(t *testing.T) {
 	defer func() { os.Stdin = oldStdin }()
 
 	err := runInit(nil, nil)
-	// The runtime init (local) will likely fail because it tries to
-	// find/install postgres, but we still cover the config flow.
+	// Mini mode has no runtime init, so this should succeed through
+	// the config flow.
 	if err != nil {
 		// Acceptable - runtime init fails in test env.
 		t.Logf("runInit error (expected in test env): %v", err)
@@ -52,9 +52,9 @@ func TestRunInit_ExistingConfig_Abort(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = ""
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = ""
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe "n" to abort overwrite.
 	oldStdin := os.Stdin
@@ -83,9 +83,9 @@ func TestRunInit_ExistingConfig_Overwrite(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe "y" to confirm overwrite, then answers for prompts.
 	input := strings.Join([]string{
@@ -103,7 +103,7 @@ func TestRunInit_ExistingConfig_Overwrite(t *testing.T) {
 	defer func() { os.Stdin = oldStdin }()
 
 	err = runInit(nil, nil)
-	// Runtime init will fail in test env.
+	// Mini mode has no runtime init, so this may succeed.
 	if err != nil {
 		t.Logf("runInit error (expected in test env): %v", err)
 	}
@@ -113,9 +113,9 @@ func TestRunInit_WithExternalDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe answers: API key, external db, db params, no github.
 	input := strings.Join([]string{
@@ -146,9 +146,9 @@ func TestRunInit_WithGitHub(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe answers: API key, embedded db, github config.
 	input := strings.Join([]string{
@@ -178,9 +178,9 @@ func TestRunInit_WithGitHub_DirectToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe answers: API key, embedded db, github config with direct token.
 	input := strings.Join([]string{
@@ -210,9 +210,9 @@ func TestRunInit_ListenAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe answers: listen=all, API key, db mode, no github.
 	input := strings.Join([]string{
@@ -239,9 +239,9 @@ func TestRunInit_ListenCustomIP(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe answers: listen=custom IP, API key, db mode, no github.
 	input := strings.Join([]string{
@@ -268,9 +268,9 @@ func TestRunInit_ExternalDB_CustomPort(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe answers: listen, API key, external db with custom port, no github.
 	input := strings.Join([]string{
@@ -302,9 +302,9 @@ func TestRunInit_GitHubWithDefaultCloneToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Pipe answers: listen, API key, db, github with direct token and default clone token.
 	input := strings.Join([]string{
@@ -354,9 +354,9 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Overwrite and press Enter on everything — should keep existing values.
 	input := strings.Join([]string{
@@ -427,9 +427,9 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Overwrite and provide new values for some fields.
 	input := strings.Join([]string{
@@ -498,9 +498,9 @@ func TestRunInit_PrefillExternalDB(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "local"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "mini"
+	defer func() { initModeFlag = oldFlag }()
 
 	// Overwrite, keep external DB defaults.
 	input := strings.Join([]string{
@@ -540,16 +540,16 @@ func TestRunInit_PrefillExternalDB(t *testing.T) {
 	}
 }
 
-func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
+func TestRunInit_K3sMode_PreflightChecks(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
 	// Override PATH to ensure docker/kubectl/helm are not found.
 	t.Setenv("PATH", tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = "k3s"
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = "k3s"
+	defer func() { initModeFlag = oldFlag }()
 
 	oldStdin := os.Stdin
 	r, w, _ := os.Pipe()
@@ -567,17 +567,17 @@ func TestRunInit_K3sRuntime_PreflightChecks(t *testing.T) {
 	}
 }
 
-func TestRunInit_InteractiveRuntime(t *testing.T) {
+func TestRunInit_InteractiveMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	oldFlag := initRuntimeFlag
-	initRuntimeFlag = ""
-	defer func() { initRuntimeFlag = oldFlag }()
+	oldFlag := initModeFlag
+	initModeFlag = ""
+	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: runtime, API key, db mode, no github.
+	// Pipe answers: mode, API key, db mode, no github.
 	input := strings.Join([]string{
-		"local",        // Runtime (interactive prompt)
+		"mini",         // Mode (interactive prompt)
 		"test-api-key", // Anthropic API key
 		"",             // Database mode (default embedded)
 		"n",            // Configure GitHub? No
