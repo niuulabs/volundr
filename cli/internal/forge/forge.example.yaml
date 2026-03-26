@@ -1,0 +1,60 @@
+# Forge — macOS-native session runner for Volundr
+# Copy this file to ~/.niuu/forge.yaml and adjust to your environment.
+
+# HTTP server settings
+listen:
+  host: "0.0.0.0"       # bind address (use 127.0.0.1 for local-only)
+  port: 8080             # listen port
+
+# Session runner settings
+forge:
+  # Directory where session workspaces are created (one subdir per session).
+  workspaces_dir: "~/.niuu/workspaces"
+
+  # JSON file for persisting session state across restarts.
+  # Set to "" to disable persistence.
+  state_file: "~/.niuu/forge-state.json"
+
+  # Path to the Claude Code CLI binary. Resolved via $PATH if relative.
+  claude_binary: "claude"
+
+  # Maximum number of concurrently running sessions.
+  max_concurrent: 4
+
+  # Starting port for per-session SDK WebSocket servers.
+  # Each session gets its own port (sdk_port_start, sdk_port_start+1, ...).
+  sdk_port_start: 9100
+
+  # Xcode toolchain settings (macOS only)
+  xcode:
+    # Preferred Xcode version (e.g. "16.2"). Leave empty for system default.
+    default_version: ""
+    # Directories to scan for Xcode.app installations.
+    search_paths:
+      - "/Applications"
+
+# Authentication
+auth:
+  # "none" — no authentication (suitable for local development)
+  # "pat"  — require a valid personal access token in the Authorization header
+  mode: "none"
+
+  # PAT entries (only used when mode is "pat")
+  # tokens:
+  #   - name: "tyr-dispatcher"
+  #     token: "forge_pat_..."
+  #   - name: "developer"
+  #     token: "forge_pat_..."
+
+# Git provider settings
+git:
+  github:
+    # GitHub token for authenticated clones. Set directly or via env var.
+    # token: "ghp_..."
+    token_env: "GITHUB_TOKEN"
+
+# Anthropic API settings
+anthropic:
+  # API key for Claude. Set directly or via env var.
+  # api_key: "sk-ant-..."
+  api_key_env: "ANTHROPIC_API_KEY"
