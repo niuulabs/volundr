@@ -18,8 +18,7 @@ from pydantic import BaseModel, Field
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import Raid, RaidStatus, TrackerIssue
-from tyr.ports.raid_repository import RaidRepository
+from tyr.domain.models import TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrPort
@@ -109,11 +108,6 @@ async def resolve_volundr() -> VolundrPort:
     )
 
 
-async def resolve_raid_repo() -> RaidRepository:
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Raid repository not configured",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +271,6 @@ def create_dispatch_router() -> APIRouter:
         body: DispatchRequest,
         principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> list[DispatchResult]:
@@ -343,29 +336,25 @@ def create_dispatch_router() -> APIRouter:
                     ),
                     auth_token=auth_token,
                 )
-                # Create a local raid record linking session to issue
-                now = datetime.now(UTC)
-                raid = Raid(
-                    id=uuid4(),
-                    phase_id=uuid4(),  # placeholder — no phase in direct dispatch
-                    tracker_id=issue.id,
-                    name=issue.title,
-                    description=issue.description,
-                    acceptance_criteria=[],
-                    declared_files=[],
-                    estimate_hours=None,
-                    status=RaidStatus.RUNNING,
-                    confidence=0.0,
-                    session_id=session.id,
-                    branch=saga.feature_branch,
-                    chronicle_summary=None,
-                    pr_url=None,
-                    pr_id=None,
-                    retry_count=0,
-                    created_at=now,
-                    updated_at=now,
+                # Track the dispatched session — lightweight link between
+                # session, owner, saga, and tracker issue. The tracker remains
+                # the source of truth for issue data.
+                pool = request.app.state.pool
+                await pool.execute(
+                    """
+                    INSERT INTO dispatched_sessions
+                        (id, session_id, owner_id, saga_id, tracker_issue_id, status, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (session_id) DO NOTHING
+                    """,
+                    uuid4(),
+                    session.id,
+                    principal.user_id,
+                    saga.id,
+                    issue.id,
+                    "running",
+                    datetime.now(UTC),
                 )
-                await raid_repo.save_raid(raid)
 
                 results.append(
                     DispatchResult(

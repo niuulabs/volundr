@@ -18,7 +18,6 @@ from tyr.api.dispatch import (
     _is_ready,
     _slugify,
     create_dispatch_router,
-    resolve_raid_repo,
     resolve_saga_repo,
     resolve_volundr,
 )
@@ -41,14 +40,20 @@ from .test_tracker_api import MockSagaRepo, MockTracker
 # -------------------------------------------------------------------
 
 
-class MockRaidRepo:
-    """Minimal mock that accepts save_raid calls."""
+class MockPool:
+    """Minimal mock for asyncpg.Pool — records execute calls."""
 
     def __init__(self) -> None:
-        self.saved: list = []
+        self.executed: list = []
 
-    async def save_raid(self, raid, *, conn=None) -> None:  # noqa: ANN001
-        self.saved.append(raid)
+    async def execute(self, query: str, *args) -> None:  # noqa: ANN002
+        self.executed.append((query, args))
+
+    async def fetch(self, query: str, *args) -> list:  # noqa: ANN002
+        return []
+
+    async def fetchrow(self, query: str, *args):  # noqa: ANN002, ANN201
+        return None
 
 
 # -------------------------------------------------------------------
@@ -253,10 +258,10 @@ def client(
     app = FastAPI()
     app.include_router(create_dispatch_router())
     app.state.settings = _make_settings()
+    app.state.pool = MockPool()
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
     app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-    app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
     return TestClient(app)
 
 
@@ -436,10 +441,10 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
+        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -458,10 +463,10 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
+        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -478,10 +483,10 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
+        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -497,10 +502,10 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
+        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get(
@@ -534,10 +539,10 @@ class TestGetQueue:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
+        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [FailingTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -661,10 +666,10 @@ class TestApproveDispatch:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
+        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -695,10 +700,10 @@ class TestApproveDispatch:
         app = FastAPI()
         app.include_router(create_dispatch_router())
         app.state.settings = _make_settings()
+        app.state.pool = MockPool()
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)

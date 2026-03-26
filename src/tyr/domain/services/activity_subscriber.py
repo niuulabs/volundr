@@ -13,13 +13,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
+
+import asyncpg
 
 from tyr.config import WatcherConfig
-from tyr.domain.models import Raid, RaidStatus
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import ActivityEvent, VolundrPort
 
 logger = logging.getLogger(__name__)
@@ -53,13 +53,13 @@ class SessionActivitySubscriber:
     def __init__(
         self,
         volundr_factory: VolundrFactory,
-        raid_repo: RaidRepository,
+        pool: asyncpg.Pool,
         dispatcher_repo: DispatcherRepository,
         event_bus: EventBusPort,
         config: WatcherConfig,
     ) -> None:
         self._factory = volundr_factory
-        self._raid_repo = raid_repo
+        self._pool = pool
         self._dispatcher_repo = dispatcher_repo
         self._event_bus = event_bus
         self._config = config
@@ -119,23 +119,19 @@ class SessionActivitySubscriber:
                 await asyncio.sleep(self._config.reconnect_delay)
 
     async def _sync_owner_subscriptions(self) -> None:
-        """Discover owners with RUNNING raids and ensure each has an SSE subscription."""
-        running_raids = await self._raid_repo.list_by_status(RaidStatus.RUNNING)
-        if not running_raids:
-            # No running raids — cancel all subscriptions
+        """Discover owners with running sessions, ensure each has an SSE sub."""
+        rows = await self._pool.fetch(
+            "SELECT DISTINCT owner_id FROM dispatched_sessions WHERE status = 'running'"
+        )
+        active_owners = {row["owner_id"] for row in rows}
+
+        if not active_owners:
             for owner_id, task in list(self._owner_tasks.items()):
                 task.cancel()
             self._owner_tasks.clear()
             self._owner_adapters.clear()
             await asyncio.sleep(self._config.reconnect_delay)
             return
-
-        # Resolve unique owners from running raids
-        active_owners: set[str] = set()
-        for raid in running_raids:
-            owner_id = await self._raid_repo.get_owner_for_raid(raid.id)
-            if owner_id:
-                active_owners.add(owner_id)
 
         # Start subscriptions for new owners
         for owner_id in active_owners:
@@ -231,50 +227,46 @@ class SessionActivitySubscriber:
         finally:
             self._pending_evaluations.pop(event.session_id, None)
 
-        raid = await self._find_raid_by_session(event.session_id)
-        if raid is None:
+        record = await self._find_session_record(event.session_id)
+        if record is None:
             return
 
         session = await volundr.get_session(event.session_id)
         if session is None:
-            await self._handle_failure(raid, volundr, reason="Session not found")
+            await self._handle_failure(record, reason="Session not found")
             return
         if session.status in ("stopped", "failed"):
-            await self._handle_failure(
-                raid, volundr, reason=f"Session {session.status}"
-            )
+            await self._handle_failure(record, reason=f"Session {session.status}")
             return
 
-        if not await self._is_owner_active(raid):
+        if not await self._is_owner_active(record["owner_id"]):
             return
 
-        completion = await self._evaluate_completion(raid, volundr, event.metadata)
+        completion = await self._evaluate_completion(record, volundr, event.metadata)
         if not completion.is_complete:
             return
 
-        await self._handle_completion(raid, volundr, completion)
+        await self._handle_completion(record, completion)
 
-    async def _find_raid_by_session(self, session_id: str) -> Raid | None:
-        """Find a RUNNING raid by its session ID."""
-        running = await self._raid_repo.list_by_status(RaidStatus.RUNNING)
-        for raid in running:
-            if raid.session_id == session_id:
-                return raid
-        return None
+    async def _find_session_record(self, session_id: str) -> dict[str, Any] | None:
+        """Find a running dispatched session by session ID."""
+        row = await self._pool.fetchrow(
+            "SELECT * FROM dispatched_sessions WHERE session_id = $1 AND status = 'running'",
+            session_id,
+        )
+        if row is None:
+            return None
+        return dict(row)
 
-    async def _is_owner_active(self, raid: Raid) -> bool:
-        """Check if the raid owner's dispatcher is running."""
-        owner_id = await self._raid_repo.get_owner_for_raid(raid.id)
-        if owner_id is None:
-            return True
-
+    async def _is_owner_active(self, owner_id: str) -> bool:
+        """Check if the owner's dispatcher is running."""
         state = await self._dispatcher_repo.get_or_create(owner_id)
         return state.running
 
     async def _evaluate_completion(
-        self, raid: Raid, volundr: VolundrPort, metadata: dict
+        self, record: dict[str, Any], volundr: VolundrPort, metadata: dict
     ) -> CompletionEvaluation:
-        """Evaluate whether a raid's work is complete based on signals."""
+        """Evaluate whether a session's work is complete based on signals."""
         signals: dict[str, bool] = {}
 
         signals["session_idle"] = True
@@ -284,16 +276,15 @@ class SessionActivitySubscriber:
         signals["ci_passed"] = False
         pr_id: str | None = None
         pr_url: str | None = None
-        if raid.branch:
-            try:
-                pr = await volundr.get_pr_status(raid.session_id or "")
-                signals["pr_exists"] = bool(pr.pr_id)
-                signals["ci_passed"] = bool(pr.ci_passed)
-                if pr.pr_id:
-                    pr_id = pr.pr_id
-                    pr_url = pr.url
-            except Exception:
-                pass
+        try:
+            pr = await volundr.get_pr_status(record["session_id"])
+            signals["pr_exists"] = bool(pr.pr_id)
+            signals["ci_passed"] = bool(pr.ci_passed)
+            if pr.pr_id:
+                pr_id = pr.pr_id
+                pr_url = pr.url
+        except Exception:
+            pass
 
         # Signal 3: Extended idle (metadata.duration_seconds as proxy)
         idle_seconds = metadata.get("duration_seconds", 0)
@@ -328,38 +319,26 @@ class SessionActivitySubscriber:
 
     async def _handle_completion(
         self,
-        raid: Raid,
-        volundr: VolundrPort,
+        record: dict[str, Any],
         evaluation: CompletionEvaluation | None = None,
     ) -> None:
-        """Transition a raid to REVIEW on session completion."""
-        chronicle_summary = None
-        if self._config.chronicle_on_complete and raid.session_id:
-            try:
-                chronicle_summary = await volundr.get_chronicle_summary(raid.session_id)
-            except Exception:
-                logger.warning("Failed to fetch chronicle for session %s", raid.session_id)
+        """Mark a dispatched session as complete."""
+        session_id = record["session_id"]
+        await self._pool.execute(
+            "UPDATE dispatched_sessions SET status = 'complete' WHERE session_id = $1",
+            session_id,
+        )
 
-        # Reuse PR info from evaluation to avoid a redundant HTTP call
         pr_id = evaluation.pr_id if evaluation else None
         pr_url = evaluation.pr_url if evaluation else None
 
-        updated = await self._raid_repo.update_raid_completion(
-            raid.id,
-            status=RaidStatus.REVIEW,
-            chronicle_summary=chronicle_summary,
-            pr_url=pr_url,
-            pr_id=pr_id,
+        await self._emit_state_changed(record, "complete", pr_id=pr_id, pr_url=pr_url)
+        logger.info(
+            "Session %s completed (issue=%s, pr=%s)",
+            session_id,
+            record.get("tracker_issue_id"),
+            pr_id or "none",
         )
-
-        if updated:
-            await self._emit_state_changed(updated)
-            logger.info(
-                "Raid %s transitioned to REVIEW (session=%s, pr=%s)",
-                raid.id,
-                raid.session_id,
-                pr_id or "none",
-            )
 
     async def _on_session_failed(
         self, event: ActivityEvent, volundr: VolundrPort
@@ -369,53 +348,50 @@ class SessionActivitySubscriber:
         if pending is not None:
             pending.cancel()
 
-        raid = await self._find_raid_by_session(event.session_id)
-        if raid is None:
+        record = await self._find_session_record(event.session_id)
+        if record is None:
             return
 
-        await self._handle_failure(
-            raid, volundr, reason=f"Session {event.session_status}"
-        )
+        await self._handle_failure(record, reason=f"Session {event.session_status}")
 
     async def _handle_failure(
-        self, raid: Raid, volundr: VolundrPort, *, reason: str
+        self, record: dict[str, Any], *, reason: str
     ) -> None:
-        """Transition a raid to FAILED when its session crashes or stops."""
-        chronicle_summary = None
-        if self._config.chronicle_on_complete and raid.session_id:
-            try:
-                chronicle_summary = await volundr.get_chronicle_summary(raid.session_id)
-            except Exception:
-                logger.warning("Failed to fetch chronicle for session %s", raid.session_id)
-
-        updated = await self._raid_repo.update_raid_completion(
-            raid.id,
-            status=RaidStatus.FAILED,
-            chronicle_summary=chronicle_summary,
-            reason=reason,
-            increment_retry=True,
+        """Mark a dispatched session as failed."""
+        session_id = record["session_id"]
+        await self._pool.execute(
+            "UPDATE dispatched_sessions SET status = 'failed' WHERE session_id = $1",
+            session_id,
         )
 
-        if updated:
-            await self._emit_state_changed(updated)
-            logger.info(
-                "Raid %s transitioned to FAILED (session=%s, reason=%s)",
-                raid.id,
-                raid.session_id,
-                reason,
-            )
+        await self._emit_state_changed(record, "failed")
+        logger.info(
+            "Session %s failed (issue=%s, reason=%s)",
+            session_id,
+            record.get("tracker_issue_id"),
+            reason,
+        )
 
-    async def _emit_state_changed(self, raid: Raid) -> None:
-        """Emit a raid.state_changed event via the event bus."""
+    async def _emit_state_changed(
+        self,
+        record: dict[str, Any],
+        status: str,
+        *,
+        pr_id: str | None = None,
+        pr_url: str | None = None,
+    ) -> None:
+        """Emit a session.state_changed event via the event bus."""
         await self._event_bus.emit(
             TyrEvent(
-                event="raid.state_changed",
+                event="session.state_changed",
                 data={
-                    "raid_id": str(raid.id),
-                    "status": raid.status.value,
-                    "session_id": raid.session_id,
-                    "pr_url": raid.pr_url,
-                    "pr_id": raid.pr_id,
+                    "session_id": record["session_id"],
+                    "owner_id": record["owner_id"],
+                    "saga_id": str(record["saga_id"]),
+                    "tracker_issue_id": record.get("tracker_issue_id"),
+                    "status": status,
+                    "pr_id": pr_id,
+                    "pr_url": pr_url,
                 },
             )
         )

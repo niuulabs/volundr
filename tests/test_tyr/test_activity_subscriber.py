@@ -295,26 +295,75 @@ class StubVolundrFactory:
         return self._adapter
 
 
+class StubPool:
+    """Mock asyncpg.Pool for dispatched_sessions queries."""
+
+    def __init__(self) -> None:
+        self.sessions: dict[str, dict] = {}
+        self.executed: list = []
+
+    def add_session(self, session_id: str, owner_id: str = "user-1", saga_id: str = "saga-1", tracker_issue_id: str = "issue-1") -> None:
+        from uuid import UUID
+        self.sessions[session_id] = {
+            "id": UUID("00000000-0000-0000-0000-000000000001"),
+            "session_id": session_id,
+            "owner_id": owner_id,
+            "saga_id": UUID("00000000-0000-0000-0000-000000000002"),
+            "tracker_issue_id": tracker_issue_id,
+            "status": "running",
+        }
+
+    async def fetch(self, query: str, *args) -> list:
+        if "DISTINCT owner_id" in query:
+            owners = {s["owner_id"] for s in self.sessions.values() if s["status"] == "running"}
+            return [{"owner_id": o} for o in owners]
+        return []
+
+    async def fetchrow(self, query: str, *args) -> dict | None:
+        if "dispatched_sessions" in query and args:
+            session_id = args[0]
+            s = self.sessions.get(session_id)
+            if s and s["status"] == "running":
+                return s
+        return None
+
+    async def execute(self, query: str, *args) -> None:
+        self.executed.append((query, args))
+        if "UPDATE dispatched_sessions SET status" in query and len(args) >= 2:
+            new_status = args[1] if "= $2" in query else args[0]
+            session_id = args[0] if "$1" in query else args[1]
+            # Simple: first arg is status value from the SET clause
+            for s in self.sessions.values():
+                if s["session_id"] == session_id:
+                    # Parse status from the query
+                    if "'complete'" in query:
+                        s["status"] = "complete"
+                    elif "'failed'" in query:
+                        s["status"] = "failed"
+                    break
+
+
 def _make_subscriber(
     volundr: StubVolundr | None = None,
-    raid_repo: StubRaidRepo | None = None,
+    pool: StubPool | None = None,
     dispatcher_repo: StubDispatcherRepo | None = None,
     event_bus: InMemoryEventBus | None = None,
     config: WatcherConfig | None = None,
-) -> tuple[SessionActivitySubscriber, StubVolundr, StubRaidRepo, InMemoryEventBus]:
+) -> tuple[SessionActivitySubscriber, StubVolundr, StubPool, InMemoryEventBus]:
     v = volundr or StubVolundr()
-    # Register a default running session so debounced evaluation can verify it
     if "session-1" not in v.sessions:
         v.sessions["session-1"] = _make_volundr_session()
-    r = raid_repo or StubRaidRepo()
+    p = pool or StubPool()
+    if not p.sessions:
+        p.add_session("session-1")
     d = dispatcher_repo or StubDispatcherRepo()
     e = event_bus or InMemoryEventBus()
     c = config or _default_config()
     factory = StubVolundrFactory(v)
     sub = SessionActivitySubscriber(
-        volundr_factory=factory, raid_repo=r, dispatcher_repo=d, event_bus=e, config=c
+        volundr_factory=factory, pool=p, dispatcher_repo=d, event_bus=e, config=c
     )
-    return sub, v, r, e
+    return sub, v, p, e
 
 
 # ---------------------------------------------------------------------------
