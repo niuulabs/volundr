@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
+from tyr.api.tracker import resolve_trackers
 from tyr.config import ReviewConfig
 from tyr.domain.exceptions import RaidNotFoundError
 from tyr.domain.models import RaidStatus
@@ -158,8 +159,51 @@ def _raid_response(raid, reason: str | None = None) -> RaidResponse:
 # ---------------------------------------------------------------------------
 
 
+class ActiveRaidResponse(BaseModel):
+    """A raid with progress data from the tracker."""
+
+    tracker_id: str
+    identifier: str = ""
+    title: str = ""
+    status: str
+    session_id: str | None = None
+    confidence: float = 0.0
+    pr_url: str | None = None
+    last_updated: str = ""
+
+
 def create_raids_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/tyr/raids", tags=["Raids"])
+
+    @router.get("/active", response_model=list[ActiveRaidResponse])
+    async def list_active_raids(
+        principal: Principal = Depends(extract_principal),
+        adapters: list[TrackerPort] = Depends(resolve_trackers),
+    ) -> list[ActiveRaidResponse]:
+        """List all raids with progress data for the authenticated user."""
+        results: list[ActiveRaidResponse] = []
+        for tracker in adapters:
+            for raid_status in RaidStatus:
+                try:
+                    raids = await tracker.list_raids_by_status(raid_status)
+                except Exception:
+                    continue
+                for raid in raids:
+                    results.append(
+                        ActiveRaidResponse(
+                            tracker_id=raid.tracker_id,
+                            identifier=getattr(raid, "identifier", raid.tracker_id),
+                            title=raid.name,
+                            status=raid.status.value,
+                            session_id=raid.session_id,
+                            confidence=raid.confidence,
+                            pr_url=raid.pr_url,
+                            last_updated=raid.updated_at.isoformat()
+                            if raid.updated_at
+                            else "",
+                        )
+                    )
+        return results
 
     @router.get("/{raid_id}/review", response_model=ReviewResponse)
     async def get_review(
