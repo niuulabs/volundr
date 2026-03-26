@@ -188,9 +188,7 @@ class MockTracker(TrackerPort):
     async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
         return []
 
-    async def update_phase_status(
-        self, phase_tracker_id: str, status: PhaseStatus
-    ) -> Phase | None:
+    async def update_phase_status(self, phase_tracker_id: str, status: PhaseStatus) -> Phase | None:
         return None
 
     async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:

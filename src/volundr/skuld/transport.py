@@ -108,11 +108,7 @@ def _filter_event(data: dict) -> dict | None:
 
     if msg_type == "content_block_delta":
         delta = data.get("delta", {})
-        has_content = (
-            delta.get("text")
-            or delta.get("thinking")
-            or delta.get("partial_json")
-        )
+        has_content = delta.get("text") or delta.get("thinking") or delta.get("partial_json")
         if not has_content:
             logger.debug("Filtering out empty content_block_delta event")
             return None
