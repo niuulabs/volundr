@@ -1744,6 +1744,18 @@ export class ApiVolundrService implements IVolundrService {
         this.notifySessionSubscribers();
         break;
       }
+      case 'session_activity': {
+        const payload = JSON.parse(rawData);
+        const idx = this.cachedSessions.findIndex(s => s.id === payload.session_id);
+        if (idx !== -1) {
+          this.cachedSessions[idx] = {
+            ...this.cachedSessions[idx],
+            activityState: payload.state || null,
+          };
+          this.notifySessionSubscribers();
+        }
+        break;
+      }
       case 'session_deleted': {
         const payload: SSESessionDeletedPayload = JSON.parse(rawData);
         this.cachedSessions = this.cachedSessions.filter(s => s.id !== payload.id);
