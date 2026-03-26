@@ -25,7 +25,7 @@ const (
 	ActivityStateGit           = "git"
 )
 
-// --- Port interfaces (hexagonal architecture) ---
+// Port interfaces (hexagonal architecture).
 
 // SessionStore is the port for session state persistence.
 type SessionStore interface {
@@ -61,7 +61,7 @@ type SessionRunner interface {
 	UnsubscribeActivity(id string)
 }
 
-// --- API request/response types matching Volundr's REST surface ---
+// API request/response types matching Volundr's REST surface.
 
 // SessionSource describes where the session code comes from.
 type SessionSource struct {
@@ -142,11 +142,12 @@ type StatsResponse struct {
 	CostToday      float64 `json:"cost_today"`
 }
 
-// --- Internal session state ---
+// Internal session state.
 
 // SessionStatus enumerates session lifecycle states.
 type SessionStatus string
 
+// SessionStatus values for the session lifecycle.
 const (
 	StatusCreated      SessionStatus = "created"
 	StatusStarting     SessionStatus = "starting"

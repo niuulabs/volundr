@@ -28,7 +28,7 @@ type ListenConfig struct {
 }
 
 // ForgeConfig holds session runner settings.
-type ForgeConfig struct {
+type ForgeConfig struct { //nolint:revive // name is intentional; Config is already taken
 	WorkspacesDir string        `yaml:"workspaces_dir"`
 	StateFile     string        `yaml:"state_file"`
 	ClaudeBinary  string        `yaml:"claude_binary"`
@@ -72,7 +72,7 @@ type GitHubConfig struct {
 // AnthropicConfig holds Anthropic API settings.
 type AnthropicConfig struct {
 	APIKey    string `yaml:"api_key,omitempty"`
-	APIKeyEnv string `yaml:"api_key_env,omitempty"`
+	APIKeyEnv string `yaml:"api_key_env,omitempty"` //nolint:gosec // G101: env var name, not a credential
 }
 
 // DefaultForgeConfig returns a Config with sensible defaults for macOS.
@@ -101,7 +101,7 @@ func DefaultForgeConfig() *Config {
 		Auth: AuthConfig{
 			Mode: "none",
 		},
-		Anthropic: AnthropicConfig{
+		Anthropic: AnthropicConfig{ //nolint:gosec // G101: env var name, not a credential
 			APIKeyEnv: "ANTHROPIC_API_KEY",
 		},
 	}

@@ -96,7 +96,7 @@ func (s *Store) persist() {
 	}
 
 	dir := filepath.Dir(s.filePath)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil { //nolint:gosec // path from trusted config
 		log.Printf("warning: failed to create state dir: %v", err)
 		return
 	}
@@ -107,7 +107,7 @@ func (s *Store) persist() {
 		return
 	}
 
-	if err := os.WriteFile(s.filePath, data, 0o600); err != nil {
+	if err := os.WriteFile(s.filePath, data, 0o600); err != nil { //nolint:gosec // path from trusted config
 		log.Printf("warning: failed to write state file: %v", err)
 	}
 }

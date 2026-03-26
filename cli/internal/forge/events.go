@@ -27,9 +27,10 @@ func (b *EventBus) Subscribe() (id string, ch <-chan ActivityEvent) {
 	defer b.mu.Unlock()
 
 	b.nextID++
-	id := fmt.Sprintf("sub-%d", b.nextID)
-	ch := make(chan ActivityEvent, 64)
-	b.subscribers[id] = ch
+	id = fmt.Sprintf("sub-%d", b.nextID)
+	raw := make(chan ActivityEvent, 64)
+	b.subscribers[id] = raw
+	ch = raw
 	return id, ch
 }
 

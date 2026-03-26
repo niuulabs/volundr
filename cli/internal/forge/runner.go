@@ -76,7 +76,7 @@ func (r *Runner) CreateAndStart(ctx context.Context, req *CreateSessionRequest, 
 
 	// Create workspace directory.
 	wsDir := filepath.Join(r.cfg.Forge.WorkspacesDir, sess.ID)
-	if err := os.MkdirAll(wsDir, 0o755); err != nil {
+	if err := os.MkdirAll(wsDir, 0o750); err != nil { //nolint:gosec // path from trusted config
 		return nil, fmt.Errorf("create workspace dir: %w", err)
 	}
 	sess.WorkspaceDir = wsDir
@@ -140,7 +140,7 @@ func (r *Runner) Delete(id string) error {
 
 	// Remove workspace directory.
 	if sess.WorkspaceDir != "" {
-		_ = os.RemoveAll(sess.WorkspaceDir)
+		_ = os.RemoveAll(sess.WorkspaceDir) //nolint:gosec // path from trusted session state
 	}
 
 	r.store.Delete(id)
@@ -185,7 +185,7 @@ func (r *Runner) StopAll() {
 	}
 }
 
-// --- Methods that expose store/bus through the SessionRunner interface ---
+// Methods that expose store/bus through the SessionRunner interface.
 
 // ListSessions returns all sessions from the store.
 func (r *Runner) ListSessions() []*Session {
@@ -235,7 +235,7 @@ func (r *Runner) UnsubscribeActivity(id string) {
 	r.bus.Unsubscribe(id)
 }
 
-// --- Internal methods ---
+// Internal methods for session lifecycle management.
 
 // provision clones the repo and starts Claude Code. Runs in a goroutine.
 func (r *Runner) provision(ctx context.Context, sess *Session) {
@@ -310,16 +310,16 @@ func (r *Runner) writeClaudeMD(sess *Session) error {
 	}
 
 	if sess.IssueID != "" {
-		b.WriteString(fmt.Sprintf("# Task: %s\n\n", sess.IssueID))
+		fmt.Fprintf(&b, "# Task: %s\n\n", sess.IssueID)
 		if sess.IssueURL != "" {
-			b.WriteString(fmt.Sprintf("Issue: %s\n\n", sess.IssueURL))
+			fmt.Fprintf(&b, "Issue: %s\n\n", sess.IssueURL)
 		}
 	}
 
 	if sess.Source != nil && sess.Source.Branch != "" {
-		b.WriteString(fmt.Sprintf("Working branch: `%s`\n", sess.Source.Branch))
+		fmt.Fprintf(&b, "Working branch: `%s`\n", sess.Source.Branch)
 		if sess.Source.BaseBranch != "" {
-			b.WriteString(fmt.Sprintf("Base branch: `%s`\n", sess.Source.BaseBranch))
+			fmt.Fprintf(&b, "Base branch: `%s`\n", sess.Source.BaseBranch)
 		}
 		b.WriteString("\n")
 	}
@@ -455,7 +455,7 @@ func (r *Runner) detectPR(sess *Session) PRStatusResponse {
 		return PRStatusResponse{State: ActivityStateNone}
 	}
 
-	cmd := exec.Command("gh", "pr", "view", "--json", "number,url,state,mergeable,statusCheckRollup") //nolint:gosec // fixed args
+	cmd := exec.CommandContext(context.Background(), "gh", "pr", "view", "--json", "number,url,state,mergeable,statusCheckRollup") //nolint:gosec // fixed args
 	cmd.Dir = sess.WorkspaceDir
 	output, err := cmd.Output()
 	if err != nil {
@@ -496,7 +496,7 @@ func (r *Runner) detectPR(sess *Session) PRStatusResponse {
 // readChronicle reads the Claude log and returns a summary.
 func (r *Runner) readChronicle(sess *Session) string {
 	logPath := filepath.Join(sess.WorkspaceDir, ".forge-claude.log")
-	cmd := exec.Command("tail", "-100", logPath) //nolint:gosec // fixed args, path from trusted session state
+	cmd := exec.CommandContext(context.Background(), "tail", "-100", logPath) //nolint:gosec // fixed args, path from trusted session state
 	output, err := cmd.Output()
 	if err != nil {
 		return ""

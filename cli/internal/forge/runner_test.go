@@ -216,7 +216,7 @@ func TestRunner_WriteClaudeMD_NewFile(t *testing.T) {
 	}
 
 	s := string(content)
-	if len(s) == 0 {
+	if s == "" {
 		t.Error("expected non-empty CLAUDE.md")
 	}
 }

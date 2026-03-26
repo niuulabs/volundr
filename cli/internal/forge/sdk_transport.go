@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -58,20 +60,24 @@ func (t *SDKTransport) Start() error {
 	mux.HandleFunc(fmt.Sprintf("/ws/cli/%s", t.sessionID), t.handleCLIConnect)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", t.port)
-	ln, err := net.Listen("tcp", addr)
+	lc := net.ListenConfig{}
+	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("sdk transport listen on %s: %w", addr, err)
 	}
 	t.listener = ln
 
-	t.srv = &http.Server{Handler: mux}
+	t.srv = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go func() {
 		if err := t.srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			log.Printf("sdk transport server error (session %s): %v", t.sessionID, err)
+			log.Printf("sdk transport server error (session %s): %v", t.sessionID, err) //nolint:gosec // session ID is internal
 		}
 	}()
 
-	log.Printf("sdk transport listening on port %d for session %s", t.Port(), t.sessionID)
+	log.Printf("sdk transport listening on port %d for session %s", t.Port(), t.sessionID) //nolint:gosec // session ID is internal
 	return nil
 }
 

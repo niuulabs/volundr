@@ -253,7 +253,7 @@ func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// --- helpers ---
+// WriteJSON and writeError are shared HTTP response helpers.
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

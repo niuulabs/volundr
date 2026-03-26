@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -65,7 +66,7 @@ func SelectXcode(appPath string) error {
 		return fmt.Errorf("xcode developer dir not found at %s: %w", devDir, err)
 	}
 
-	cmd := exec.Command("sudo", "xcode-select", "-s", devDir) //nolint:gosec // appPath validated above
+	cmd := exec.CommandContext(context.Background(), "sudo", "xcode-select", "-s", devDir) //nolint:gosec // appPath validated above
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("xcode-select failed: %s: %w", strings.TrimSpace(string(output)), err)
@@ -75,7 +76,7 @@ func SelectXcode(appPath string) error {
 
 // activeXcodePath returns the current xcode-select path's parent .app bundle.
 func activeXcodePath() string {
-	cmd := exec.Command("xcode-select", "-p")
+	cmd := exec.CommandContext(context.Background(), "xcode-select", "-p")
 	output, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -105,7 +106,7 @@ func xcodeVersion(appPath string) (version, build string) {
 }
 
 func plistValue(plistPath, key string) string {
-	cmd := exec.Command("/usr/libexec/PlistBuddy", "-c", fmt.Sprintf("Print :%s", key), plistPath) //nolint:gosec // key is a fixed string constant
+	cmd := exec.CommandContext(context.Background(), "/usr/libexec/PlistBuddy", "-c", fmt.Sprintf("Print :%s", key), plistPath) //nolint:gosec // key is a fixed string constant
 	output, err := cmd.Output()
 	if err != nil {
 		return ""

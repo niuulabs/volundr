@@ -28,7 +28,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 
 	// Ensure workspaces directory exists.
-	if err := os.MkdirAll(cfg.Forge.WorkspacesDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.Forge.WorkspacesDir, 0o750); err != nil {
 		return nil, fmt.Errorf("create workspaces dir: %w", err)
 	}
 
@@ -65,7 +65,7 @@ func (s *Server) Run(ctx context.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go func() {
+	go func() { //nolint:gosec // shutdown handler must outlive request context
 		<-ctx.Done()
 		log.Println("shutting down...")
 		s.runner.StopAll()
