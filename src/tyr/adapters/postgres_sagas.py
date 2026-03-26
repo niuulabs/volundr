@@ -10,7 +10,7 @@ from uuid import UUID
 
 import asyncpg
 
-from tyr.domain.models import Saga, SagaStatus
+from tyr.domain.models import Phase, Raid, Saga, SagaStatus
 from tyr.ports.saga_repository import SagaRepository
 
 
@@ -26,6 +26,52 @@ class PostgresSagaRepository(SagaRepository):
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 yield conn
+
+    async def save_phase(self, phase: Phase, *, conn: Any | None = None) -> None:
+        executor = conn or self._pool
+        await executor.execute(
+            """
+            INSERT INTO phases (id, saga_id, tracker_id, number, name, status, confidence)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            phase.id,
+            phase.saga_id,
+            phase.tracker_id,
+            phase.number,
+            phase.name,
+            phase.status.value,
+            phase.confidence,
+        )
+
+    async def save_raid(self, raid: Raid, *, conn: Any | None = None) -> None:
+        executor = conn or self._pool
+        await executor.execute(
+            """
+            INSERT INTO raids
+                (id, phase_id, tracker_id, name, description, acceptance_criteria,
+                 declared_files, estimate_hours, status, confidence, session_id,
+                 branch, chronicle_summary, retry_count, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            raid.id,
+            raid.phase_id,
+            raid.tracker_id,
+            raid.name,
+            raid.description,
+            raid.acceptance_criteria,
+            raid.declared_files,
+            raid.estimate_hours,
+            raid.status.value,
+            raid.confidence,
+            raid.session_id,
+            raid.branch,
+            raid.chronicle_summary,
+            raid.retry_count,
+            raid.created_at,
+            raid.updated_at,
+        )
 
     async def save_saga(self, saga: Saga, *, conn: Any | None = None) -> None:
         executor = conn or self._pool

@@ -17,7 +17,6 @@ from tyr.ports.notification_channel import (
     Notification,
     NotificationUrgency,
 )
-from tyr.ports.raid_repository import RaidRepository
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +59,11 @@ class NotificationService:
         self,
         event_bus: EventBusPort,
         channel_factory: ChannelResolverPort,
-        raid_repo: RaidRepository,
         *,
         confidence_threshold: float,
     ) -> None:
         self._event_bus = event_bus
         self._channel_factory = channel_factory
-        self._raid_repo = raid_repo
         self._confidence_threshold = confidence_threshold
         self._running = False
         self._task: asyncio.Task[None] | None = None
@@ -139,9 +136,9 @@ class NotificationService:
         """Convert a TyrEvent into a Notification, or None if unmapped."""
         match event.event:
             case "raid.state_changed":
-                return await self._map_raid_state_changed(event.data)
+                return self._map_raid_state_changed(event)
             case "confidence.updated":
-                return await self._map_confidence_updated(event.data)
+                return self._map_confidence_updated(event)
             case "saga.pr_created":
                 return self._map_saga_pr_created(event.data)
             case "phase.unlocked":
@@ -149,30 +146,24 @@ class NotificationService:
             case _:
                 return None
 
-    async def _map_raid_state_changed(self, data: dict[str, Any]) -> Notification | None:
+    def _map_raid_state_changed(self, event: TyrEvent) -> Notification | None:
         """Map a raid.state_changed event to a notification."""
+        data = event.data
         status = data.get("status", "")
         mapping = _STATUS_NOTIFICATION_MAP.get(status)
         if mapping is None:
             return None
 
-        raid_id = data.get("raid_id", "")
-        tracker_id = data.get("tracker_id", "")
-        pr_url = data.get("pr_url", "")
-
-        # Resolve owner_id from the raid's parent saga
-        owner_id = await self._resolve_owner(raid_id)
+        owner_id = event.owner_id or data.get("owner_id", "")
         if not owner_id:
             return None
 
-        # Resolve tracker_id from raid if not in event data
-        if not tracker_id:
-            tracker_id = await self._resolve_tracker_id(raid_id)
-
+        tracker_id = data.get("tracker_id", "") or data.get("raid_id", "")
+        pr_url = data.get("pr_url", "")
         retry_count = data.get("retry_count", 0)
 
         body = mapping["body_template"].format(
-            tracker_id=tracker_id or raid_id,
+            tracker_id=tracker_id,
             retry_count=retry_count,
         )
 
@@ -194,25 +185,22 @@ class NotificationService:
             metadata=metadata,
         )
 
-    async def _map_confidence_updated(self, data: dict[str, Any]) -> Notification | None:
+    def _map_confidence_updated(self, event: TyrEvent) -> Notification | None:
         """Map a confidence.updated event when confidence drops below threshold."""
+        data = event.data
         confidence = data.get("score_after", 1.0)
         if confidence >= self._confidence_threshold:
             return None
 
-        raid_id = data.get("raid_id", "")
-        tracker_id = data.get("tracker_id", "")
-
-        owner_id = await self._resolve_owner(raid_id)
+        owner_id = event.owner_id or data.get("owner_id", "")
         if not owner_id:
             return None
 
-        if not tracker_id:
-            tracker_id = await self._resolve_tracker_id(raid_id)
+        tracker_id = data.get("tracker_id", "") or data.get("raid_id", "")
 
         return Notification(
             title="Confidence dropped",
-            body=f"Raid {tracker_id or raid_id} confidence dropped to {confidence:.0%}.",
+            body=f"Raid {tracker_id} confidence dropped to {confidence:.0%}.",
             urgency=NotificationUrgency.MEDIUM,
             owner_id=owner_id,
             event_type="confidence.low",
@@ -264,29 +252,3 @@ class NotificationService:
             owner_id=owner_id,
             event_type="phase.unlocked",
         )
-
-    async def _resolve_owner(self, raid_id: str) -> str:
-        """Resolve the owner_id for a raid via the repository."""
-        if not raid_id:
-            return ""
-        try:
-            from uuid import UUID
-
-            return await self._raid_repo.get_owner_for_raid(UUID(raid_id)) or ""
-        except (ValueError, Exception):
-            logger.debug("Could not resolve owner for raid %s", raid_id)
-        return ""
-
-    async def _resolve_tracker_id(self, raid_id: str) -> str:
-        """Resolve the tracker_id for a raid."""
-        if not raid_id:
-            return ""
-        try:
-            from uuid import UUID
-
-            raid = await self._raid_repo.get_raid(UUID(raid_id))
-            if raid is not None:
-                return raid.tracker_id
-        except (ValueError, Exception):
-            logger.debug("Could not resolve tracker_id for raid %s", raid_id)
-        return ""

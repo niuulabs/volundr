@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,11 +13,10 @@ from fastapi.testclient import TestClient
 from tyr.api.raids import (
     create_raids_router,
     resolve_git,
-    resolve_raid_repo,
     resolve_tracker,
     resolve_volundr,
 )
-from tyr.config import ReviewConfig
+from tyr.config import AuthConfig, ReviewConfig
 from tyr.domain.models import (
     ConfidenceEvent,
     ConfidenceEventType,
@@ -30,7 +30,6 @@ from tyr.domain.models import (
     SessionMessage,
 )
 from tyr.ports.git import GitPort
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 from .test_tracker_api import MockTracker
@@ -42,46 +41,43 @@ from .test_tracker_api import MockTracker
 REVIEW_CFG = ReviewConfig()
 
 # ---------------------------------------------------------------------------
-# Mock implementations
+# Constants
 # ---------------------------------------------------------------------------
 
 PHASE_ID = uuid4()
 SAGA_ID = uuid4()
 
 
-class MockRaidRepository(RaidRepository):
-    """In-memory raid repository for tests."""
+# ---------------------------------------------------------------------------
+# Stateful mock tracker for raid API tests
+# ---------------------------------------------------------------------------
+
+
+class StatefulMockTracker(MockTracker):
+    """MockTracker with stateful storage for raid review tests."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.raids: dict[UUID, Raid] = {}
-        self.events: dict[UUID, list[ConfidenceEvent]] = {}
+        self.events: dict[str, list[ConfidenceEvent]] = {}  # keyed by tracker_id
+        self.events_by_raid_id: dict[UUID, list[ConfidenceEvent]] = {}
         self.saga: Saga | None = None
         self.phase: Phase | None = None
         self._all_merged: bool = False
+        self.messages: dict[UUID, list[SessionMessage]] = {}
 
-    async def save_phase(self, phase: Phase, *, conn=None) -> None:  # noqa: ANN001
-        pass
-
-    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
-        self.raids[raid.id] = raid
-
-    async def get_raid(self, raid_id: UUID) -> Raid | None:
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
         return self.raids.get(raid_id)
 
-    async def update_raid_status(
-        self,
-        raid_id: UUID,
-        status: RaidStatus,
-        *,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        raid = self.raids.get(raid_id)
+    async def update_raid_progress(self, tracker_id: str, **kwargs: object) -> Raid:  # noqa: ANN003
+        raid = next((r for r in self.raids.values() if r.tracker_id == tracker_id), None)
         if raid is None:
-            return None
-        retry_count = raid.retry_count + 1 if increment_retry else raid.retry_count
-        # Get latest confidence from events
-        events = self.events.get(raid_id, [])
+            raise ValueError(f"Raid not found: {tracker_id}")
+        now = datetime.now(UTC)
+        status = kwargs.get("status", raid.status)
+        reason = kwargs.get("reason", None)
+        retry_count = kwargs.get("retry_count", raid.retry_count)
+        events = self.events.get(tracker_id, [])
         confidence = events[-1].score_after if events else raid.confidence
         updated = Raid(
             id=raid.id,
@@ -92,98 +88,51 @@ class MockRaidRepository(RaidRepository):
             acceptance_criteria=raid.acceptance_criteria,
             declared_files=raid.declared_files,
             estimate_hours=raid.estimate_hours,
-            status=status,
+            status=status,  # type: ignore[arg-type]
             confidence=confidence,
             session_id=raid.session_id,
             branch=raid.branch,
             chronicle_summary=raid.chronicle_summary,
             pr_url=raid.pr_url,
             pr_id=raid.pr_id,
-            retry_count=retry_count,
+            retry_count=retry_count,  # type: ignore[arg-type]
             created_at=raid.created_at,
-            updated_at=datetime.now(UTC),
+            updated_at=now,
         )
-        self.raids[raid_id] = updated
+        self.raids[raid.id] = updated
         return updated
 
-    async def get_confidence_events(self, raid_id: UUID) -> list[ConfidenceEvent]:
-        return self.events.get(raid_id, [])
+    async def add_confidence_event(self, tracker_id: str, event: object) -> None:  # noqa: ANN001
+        self.events.setdefault(tracker_id, []).append(event)  # type: ignore[arg-type]
+        ce = event  # type: ignore[assignment]
+        self.events_by_raid_id.setdefault(ce.raid_id, []).append(ce)  # type: ignore[union-attr]
 
-    async def add_confidence_event(self, event: ConfidenceEvent) -> None:
-        self.events.setdefault(event.raid_id, []).append(event)
+    async def get_confidence_events(self, tracker_id: str) -> list:
+        return self.events.get(tracker_id, [])
 
-    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        for raid in self.raids.values():
-            if raid.tracker_id == tracker_id:
-                return raid
-        return None
-
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
-        if self.saga is None:
-            return None
-        return self.saga.owner_id or None
-
-    async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
         return self.saga
 
-    async def get_phase_for_raid(self, raid_id: UUID) -> Phase | None:
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
         return self.phase
 
-    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
-        return [r for r in self.raids.values() if r.status == status]
-
-    async def update_raid_completion(
-        self,
-        raid_id: UUID,
-        *,
-        status: RaidStatus,
-        chronicle_summary: str | None = None,
-        pr_url: str | None = None,
-        pr_id: str | None = None,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        raid = self.raids.get(raid_id)
-        if raid is None:
-            return None
-        retry_count = raid.retry_count + 1 if increment_retry else raid.retry_count
-        updated = Raid(
-            id=raid.id,
-            phase_id=raid.phase_id,
-            tracker_id=raid.tracker_id,
-            name=raid.name,
-            description=raid.description,
-            acceptance_criteria=raid.acceptance_criteria,
-            declared_files=raid.declared_files,
-            estimate_hours=raid.estimate_hours,
-            status=status,
-            confidence=raid.confidence,
-            session_id=raid.session_id,
-            branch=raid.branch,
-            chronicle_summary=chronicle_summary or raid.chronicle_summary,
-            pr_url=pr_url or raid.pr_url,
-            pr_id=pr_id or raid.pr_id,
-            retry_count=retry_count,
-            created_at=raid.created_at,
-            updated_at=datetime.now(UTC),
-        )
-        self.raids[raid_id] = updated
-        return updated
-
-    async def all_raids_merged(self, phase_id: UUID) -> bool:
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
         return self._all_merged
 
-    async def list_phases_for_saga(self, saga_id: UUID) -> list[Phase]:
-        return []
-
-    async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
-        return None
-
     async def save_session_message(self, message: SessionMessage) -> None:
-        pass
+        self.messages.setdefault(message.raid_id, []).append(message)
 
-    async def get_session_messages(self, raid_id: UUID) -> list[SessionMessage]:
+    async def get_session_messages(self, tracker_id: str) -> list:
+        # Find raids matching tracker_id
+        for raid in self.raids.values():
+            if raid.tracker_id == tracker_id:
+                return self.messages.get(raid.id, [])
         return []
+
+
+# ---------------------------------------------------------------------------
+# Mock implementations
+# ---------------------------------------------------------------------------
 
 
 class MockVolundr(VolundrPort):
@@ -353,11 +302,11 @@ def _make_phase() -> Phase:
 
 
 @pytest.fixture
-def raid_repo() -> MockRaidRepository:
-    repo = MockRaidRepository()
-    repo.saga = _make_saga()
-    repo.phase = _make_phase()
-    return repo
+def tracker() -> StatefulMockTracker:
+    t = StatefulMockTracker()
+    t.saga = _make_saga()
+    t.phase = _make_phase()
+    return t
 
 
 @pytest.fixture
@@ -371,28 +320,22 @@ def git() -> MockGit:
 
 
 @pytest.fixture
-def tracker() -> MockTracker:
-    return MockTracker()
-
-
-@pytest.fixture
 def client(
-    raid_repo: MockRaidRepository,
+    tracker: StatefulMockTracker,
     volundr: MockVolundr,
     git: MockGit,
-    tracker: MockTracker,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(create_raids_router())
-    app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
+    app.dependency_overrides[resolve_tracker] = lambda: tracker
     app.dependency_overrides[resolve_volundr] = lambda: volundr
     app.dependency_overrides[resolve_git] = lambda: git
-    app.dependency_overrides[resolve_tracker] = lambda: tracker
 
-    # Provide settings with ReviewConfig on app.state so _get_review_config works
-    from types import SimpleNamespace
-
-    app.state.settings = SimpleNamespace(review=REVIEW_CFG)
+    # Provide settings with ReviewConfig and auth on app.state
+    app.state.settings = SimpleNamespace(
+        review=REVIEW_CFG,
+        auth=AuthConfig(allow_anonymous_dev=True),
+    )
 
     return TestClient(app)
 
@@ -404,10 +347,10 @@ def client(
 
 class TestGetReview:
     def test_returns_review_state(
-        self, client: TestClient, raid_repo: MockRaidRepository, volundr: MockVolundr
+        self, client: TestClient, tracker: StatefulMockTracker, volundr: MockVolundr
     ):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.get(f"/api/v1/tyr/raids/{raid.id}/review")
         assert resp.status_code == 200
@@ -421,9 +364,9 @@ class TestGetReview:
         assert data["confidence"] == 0.5
         assert data["confidence_events"] == []
 
-    def test_includes_confidence_events(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_includes_confidence_events(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
         event = ConfidenceEvent(
             id=uuid4(),
             raid_id=raid.id,
@@ -432,7 +375,7 @@ class TestGetReview:
             score_after=0.6,
             created_at=datetime.now(UTC),
         )
-        raid_repo.events[raid.id] = [event]
+        tracker.events[raid.tracker_id] = [event]
 
         resp = client.get(f"/api/v1/tyr/raids/{raid.id}/review")
         data = resp.json()
@@ -444,9 +387,9 @@ class TestGetReview:
         resp = client.get(f"/api/v1/tyr/raids/{uuid4()}/review")
         assert resp.status_code == 404
 
-    def test_no_session_id(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_no_session_id(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid(session_id=None)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.get(f"/api/v1/tyr/raids/{raid.id}/review")
         assert resp.status_code == 200
@@ -457,11 +400,11 @@ class TestGetReview:
     def test_volundr_unreachable(
         self,
         client: TestClient,
-        raid_repo: MockRaidRepository,
+        tracker: StatefulMockTracker,
         volundr: MockVolundr,
     ):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
         volundr.fail_pr_status = True
 
         resp = client.get(f"/api/v1/tyr/raids/{raid.id}/review")
@@ -480,11 +423,11 @@ class TestApproveRaid:
     def test_approve_success(
         self,
         client: TestClient,
-        raid_repo: MockRaidRepository,
+        tracker: StatefulMockTracker,
         git: MockGit,
     ):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/approve")
         assert resp.status_code == 200
@@ -499,7 +442,7 @@ class TestApproveRaid:
         assert git.deleted[0] == ("org/repo", "raid/test-branch")
 
         # Verify confidence event was added
-        events = raid_repo.events[raid.id]
+        events = tracker.events[raid.tracker_id]
         assert len(events) == 1
         assert events[0].event_type == ConfidenceEventType.HUMAN_APPROVED
         assert events[0].delta == REVIEW_CFG.confidence_delta_approved
@@ -508,27 +451,27 @@ class TestApproveRaid:
         resp = client.post(f"/api/v1/tyr/raids/{uuid4()}/approve")
         assert resp.status_code == 404
 
-    def test_approve_wrong_state(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_approve_wrong_state(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid(status=RaidStatus.PENDING)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/approve")
         assert resp.status_code == 409
 
-    def test_approve_no_saga(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_approve_no_saga(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = None
+        tracker.raids[raid.id] = raid
+        tracker.saga = None
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/approve")
         assert resp.status_code == 404
         assert "saga" in resp.json()["detail"].lower()
 
     def test_approve_merge_failure(
-        self, client: TestClient, raid_repo: MockRaidRepository, git: MockGit
+        self, client: TestClient, tracker: StatefulMockTracker, git: MockGit
     ):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
         git.fail_merge = True
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/approve")
@@ -536,10 +479,10 @@ class TestApproveRaid:
         assert "merge" in resp.json()["detail"].lower()
 
     def test_approve_no_branch(
-        self, client: TestClient, raid_repo: MockRaidRepository, git: MockGit
+        self, client: TestClient, tracker: StatefulMockTracker, git: MockGit
     ):
         raid = _make_raid(branch=None)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/approve")
         assert resp.status_code == 200
@@ -550,11 +493,11 @@ class TestApproveRaid:
     def test_approve_phase_gate_check(
         self,
         client: TestClient,
-        raid_repo: MockRaidRepository,
+        tracker: StatefulMockTracker,
     ):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        raid_repo._all_merged = True
+        tracker.raids[raid.id] = raid
+        tracker._all_merged = True
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/approve")
         assert resp.status_code == 200
@@ -562,11 +505,11 @@ class TestApproveRaid:
     def test_approve_ci_failing_still_succeeds(
         self,
         client: TestClient,
-        raid_repo: MockRaidRepository,
+        tracker: StatefulMockTracker,
         volundr: MockVolundr,
     ):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
         volundr.pr_status = PRStatus(
             pr_id="pr-1",
             url="https://github.com/org/repo/pull/1",
@@ -586,9 +529,9 @@ class TestApproveRaid:
 
 
 class TestRejectRaid:
-    def test_reject_success(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_reject_success(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/reject")
         assert resp.status_code == 200
@@ -596,14 +539,14 @@ class TestRejectRaid:
         assert data["status"] == "FAILED"
         assert data["reason"] is None
 
-        events = raid_repo.events[raid.id]
+        events = tracker.events[raid.tracker_id]
         assert len(events) == 1
         assert events[0].event_type == ConfidenceEventType.HUMAN_REJECT
         assert events[0].delta == REVIEW_CFG.confidence_delta_rejected
 
-    def test_reject_with_reason(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_reject_with_reason(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(
             f"/api/v1/tyr/raids/{raid.id}/reject",
@@ -618,22 +561,22 @@ class TestRejectRaid:
         resp = client.post(f"/api/v1/tyr/raids/{uuid4()}/reject")
         assert resp.status_code == 404
 
-    def test_reject_wrong_state(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_reject_wrong_state(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid(status=RaidStatus.MERGED)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/reject")
         assert resp.status_code == 409
 
     def test_reject_confidence_clamped_at_zero(
-        self, client: TestClient, raid_repo: MockRaidRepository
+        self, client: TestClient, tracker: StatefulMockTracker
     ):
         raid = _make_raid(confidence=0.05)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/reject")
         assert resp.status_code == 200
-        events = raid_repo.events[raid.id]
+        events = tracker.events[raid.tracker_id]
         assert events[0].score_after == 0.0
 
 
@@ -643,9 +586,9 @@ class TestRejectRaid:
 
 
 class TestRetryRaid:
-    def test_retry_success(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_retry_success(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/retry")
         assert resp.status_code == 200
@@ -653,7 +596,7 @@ class TestRetryRaid:
         assert data["status"] == "PENDING"
         assert data["retry_count"] == 1
 
-        events = raid_repo.events[raid.id]
+        events = tracker.events[raid.tracker_id]
         assert len(events) == 1
         assert events[0].event_type == ConfidenceEventType.RETRY
         assert events[0].delta == REVIEW_CFG.confidence_delta_retry
@@ -662,29 +605,30 @@ class TestRetryRaid:
         resp = client.post(f"/api/v1/tyr/raids/{uuid4()}/retry")
         assert resp.status_code == 404
 
-    def test_retry_wrong_state(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_retry_wrong_state(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid(status=RaidStatus.MERGED)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/retry")
         assert resp.status_code == 409
 
-    def test_retry_from_review_state(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_retry_from_review_state(self, client: TestClient, tracker: StatefulMockTracker):
         """Retry from REVIEW state resets to PENDING."""
         raid = _make_raid(status=RaidStatus.REVIEW)
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/retry")
         assert resp.status_code == 200
         assert resp.json()["status"] == "PENDING"
 
-    def test_retry_increments_count(self, client: TestClient, raid_repo: MockRaidRepository):
+    def test_retry_increments_count(self, client: TestClient, tracker: StatefulMockTracker):
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.raids[raid.id] = raid
 
         client.post(f"/api/v1/tyr/raids/{raid.id}/retry")
-        # Now the raid is PENDING, set it back to REVIEW to retry again
-        raid_repo.raids[raid.id] = Raid(
+        # Reset to REVIEW with retry_count=1 to test second retry
+        now = datetime.now(UTC)
+        tracker.raids[raid.id] = Raid(
             id=raid.id,
             phase_id=raid.phase_id,
             tracker_id=raid.tracker_id,
@@ -702,7 +646,7 @@ class TestRetryRaid:
             pr_id=raid.pr_id,
             retry_count=1,
             created_at=raid.created_at,
-            updated_at=datetime.now(UTC),
+            updated_at=now,
         )
 
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/retry")

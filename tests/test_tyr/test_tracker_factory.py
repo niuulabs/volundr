@@ -85,6 +85,48 @@ class FakeTracker(TrackerPort):
     async def list_issues(self, project_id, milestone_id=None):  # noqa: ANN001
         return []
 
+    async def update_raid_progress(self, tracker_id, **kwargs):  # noqa: ANN001, ANN003
+        raise NotImplementedError
+
+    async def get_raid_by_session(self, session_id):  # noqa: ANN001
+        return None
+
+    async def list_raids_by_status(self, status):  # noqa: ANN001
+        return []
+
+    async def get_raid_by_id(self, raid_id):  # noqa: ANN001
+        return None
+
+    async def add_confidence_event(self, tracker_id, event):  # noqa: ANN001
+        pass
+
+    async def get_confidence_events(self, tracker_id):  # noqa: ANN001
+        return []
+
+    async def all_raids_merged(self, phase_tracker_id):  # noqa: ANN001
+        return False
+
+    async def list_phases_for_saga(self, saga_tracker_id):  # noqa: ANN001
+        return []
+
+    async def update_phase_status(self, phase_tracker_id, status):  # noqa: ANN001
+        return None
+
+    async def get_saga_for_raid(self, tracker_id):  # noqa: ANN001
+        return None
+
+    async def get_phase_for_raid(self, tracker_id):  # noqa: ANN001
+        return None
+
+    async def get_owner_for_raid(self, tracker_id):  # noqa: ANN001
+        return None
+
+    async def save_session_message(self, message):  # noqa: ANN001
+        pass
+
+    async def get_session_messages(self, tracker_id):  # noqa: ANN001
+        return []
+
 
 # ---------------------------------------------------------------------------
 # Tests

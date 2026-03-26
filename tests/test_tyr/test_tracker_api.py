@@ -6,6 +6,7 @@ _resolve_tracker_adapters FastAPI dependency with a mock TrackerPort.
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 from uuid import UUID, uuid4
@@ -143,6 +144,70 @@ class MockTracker(TrackerPort):
     async def get_blocked_identifiers(self, project_id: str) -> set[str]:
         return getattr(self, "_blocked", set())
 
+    async def update_raid_progress(self, tracker_id: str, **kwargs: object) -> Raid:  # noqa: ANN003
+        now = datetime.now(UTC)
+        return Raid(
+            id=uuid4(),
+            phase_id=UUID(int=0),
+            tracker_id=tracker_id,
+            name="R1",
+            description="",
+            acceptance_criteria=[],
+            declared_files=[],
+            estimate_hours=None,
+            status=RaidStatus.PENDING,
+            confidence=0.0,
+            session_id=None,
+            branch=None,
+            chronicle_summary=None,
+            pr_url=None,
+            pr_id=None,
+            retry_count=0,
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
+        return None
+
+    async def list_raids_by_status(self, status: RaidStatus) -> list[Raid]:
+        return []
+
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
+        return None
+
+    async def add_confidence_event(self, tracker_id: str, event: object) -> None:  # noqa: ANN001
+        pass
+
+    async def get_confidence_events(self, tracker_id: str) -> list:
+        return []
+
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
+        return False
+
+    async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
+        return []
+
+    async def update_phase_status(
+        self, phase_tracker_id: str, status: PhaseStatus
+    ) -> Phase | None:
+        return None
+
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
+        return None
+
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
+        return None
+
+    async def get_owner_for_raid(self, tracker_id: str) -> str | None:
+        return None
+
+    async def save_session_message(self, message: object) -> None:  # noqa: ANN001
+        pass
+
+    async def get_session_messages(self, tracker_id: str) -> list:
+        return []
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -228,9 +293,21 @@ class MockSagaRepo(SagaRepository):
 
     def __init__(self) -> None:
         self.sagas: list[Saga] = []
+        self.phases: list[Phase] = []
+        self.raids: list[Raid] = []
+
+    @contextlib.asynccontextmanager
+    async def begin(self):  # noqa: ANN201
+        yield None
 
     async def save_saga(self, saga: Saga, *, conn=None) -> None:  # noqa: ANN001
         self.sagas.append(saga)
+
+    async def save_phase(self, phase: Phase, *, conn=None) -> None:  # noqa: ANN001
+        self.phases.append(phase)
+
+    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
+        self.raids.append(raid)
 
     async def get_saga_by_slug(self, slug: str) -> Saga | None:
         return next((s for s in self.sagas if s.slug == slug), None)

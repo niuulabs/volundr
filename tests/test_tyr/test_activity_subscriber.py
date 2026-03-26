@@ -12,19 +12,26 @@ import pytest
 from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.config import WatcherConfig
 from tyr.domain.models import (
+    ConfidenceEvent,
     DispatcherState,
     PRStatus,
+    Phase,
+    PhaseStatus,
     Raid,
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
+    TrackerIssue,
+    TrackerMilestone,
+    TrackerProject,
 )
 from tyr.domain.services.activity_subscriber import (
     CompletionEvaluation,
     SessionActivitySubscriber,
 )
 from tyr.ports.dispatcher_repository import DispatcherRepository
-from tyr.ports.raid_repository import RaidRepository
+from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrSession
 
 # ---------------------------------------------------------------------------
@@ -81,110 +88,174 @@ class StubVolundr(VolundrPort):
             yield event
 
 
-class StubRaidRepo(RaidRepository):
-    """In-memory raid repository for activity subscriber tests."""
+class StubTracker(TrackerPort):
+    """In-memory tracker stub for activity subscriber tests."""
 
     def __init__(self) -> None:
-        self.raids: dict[UUID, Raid] = {}
-        self.saga: Saga | None = None
+        # Indexed by session_id for lookup
+        self.raids_by_session: dict[str, Raid] = {}
+        # Indexed by tracker_id for progress updates
+        self.progress: dict[str, dict] = {}
 
-    async def get_raid(self, raid_id: UUID) -> Raid | None:
-        return self.raids.get(raid_id)
+    def add_raid(self, raid: Raid) -> None:
+        if raid.session_id:
+            self.raids_by_session[raid.session_id] = raid
+        self.progress[raid.tracker_id] = {
+            "status": raid.status,
+            "pr_url": raid.pr_url,
+            "pr_id": raid.pr_id,
+            "reason": None,
+        }
 
-    async def update_raid_status(
-        self,
-        raid_id: UUID,
-        status: RaidStatus,
-        *,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        raise NotImplementedError
+    # -- TrackerPort abstract methods --
 
-    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
-        return [r for r in self.raids.values() if r.status == status]
+    async def create_saga(self, saga: Saga) -> str:
+        return ""
 
-    async def update_raid_completion(
-        self,
-        raid_id: UUID,
-        *,
-        status: RaidStatus,
-        chronicle_summary: str | None = None,
-        pr_url: str | None = None,
-        pr_id: str | None = None,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        raid = self.raids.get(raid_id)
-        if raid is None:
-            return None
-        retry_count = raid.retry_count + 1 if increment_retry else raid.retry_count
-        updated = Raid(
-            id=raid.id,
-            phase_id=raid.phase_id,
-            tracker_id=raid.tracker_id,
-            name=raid.name,
-            description=raid.description,
-            acceptance_criteria=raid.acceptance_criteria,
-            declared_files=raid.declared_files,
-            estimate_hours=raid.estimate_hours,
-            status=status,
-            confidence=raid.confidence,
-            session_id=raid.session_id,
-            branch=raid.branch,
-            chronicle_summary=chronicle_summary or raid.chronicle_summary,
-            pr_url=pr_url or raid.pr_url,
-            pr_id=pr_id or raid.pr_id,
-            retry_count=retry_count,
-            created_at=raid.created_at,
-            updated_at=datetime.now(UTC),
-        )
-        self.raids[raid_id] = updated
-        return updated
+    async def create_phase(self, phase: Phase) -> str:
+        return ""
 
-    async def get_confidence_events(self, raid_id: UUID) -> list:
-        return []
+    async def create_raid(self, raid: Raid) -> str:
+        return ""
 
-    async def add_confidence_event(self, event: object) -> None:
+    async def update_raid_state(self, raid_id: str, state: RaidStatus) -> None:
         pass
 
-    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        for raid in self.raids.values():
+    async def close_raid(self, raid_id: str) -> None:
+        pass
+
+    async def get_saga(self, saga_id: str) -> Saga:
+        raise NotImplementedError
+
+    async def get_phase(self, tracker_id: str) -> Phase:
+        raise NotImplementedError
+
+    async def get_raid(self, tracker_id: str) -> Raid:
+        raise NotImplementedError
+
+    async def list_pending_raids(self, phase_id: str) -> list[Raid]:
+        return []
+
+    async def list_projects(self) -> list[TrackerProject]:
+        return []
+
+    async def get_project(self, project_id: str) -> TrackerProject:
+        raise NotImplementedError
+
+    async def list_milestones(self, project_id: str) -> list[TrackerMilestone]:
+        return []
+
+    async def list_issues(
+        self,
+        project_id: str,
+        milestone_id: str | None = None,
+    ) -> list[TrackerIssue]:
+        return []
+
+    async def update_raid_progress(
+        self,
+        tracker_id: str,
+        *,
+        status: RaidStatus | None = None,
+        session_id: str | None = None,
+        confidence: float | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        retry_count: int | None = None,
+        reason: str | None = None,
+        owner_id: str | None = None,
+        phase_tracker_id: str | None = None,
+        saga_tracker_id: str | None = None,
+    ) -> Raid:
+        entry = self.progress.setdefault(tracker_id, {})
+        if status is not None:
+            entry["status"] = status
+        if pr_url is not None:
+            entry["pr_url"] = pr_url
+        if pr_id is not None:
+            entry["pr_id"] = pr_id
+        if reason is not None:
+            entry["reason"] = reason
+
+        # Find the raid by tracker_id and return an updated copy
+        for raid in self.raids_by_session.values():
             if raid.tracker_id == tracker_id:
+                updated = Raid(
+                    id=raid.id,
+                    phase_id=raid.phase_id,
+                    tracker_id=raid.tracker_id,
+                    name=raid.name,
+                    description=raid.description,
+                    acceptance_criteria=raid.acceptance_criteria,
+                    declared_files=raid.declared_files,
+                    estimate_hours=raid.estimate_hours,
+                    status=entry.get("status", raid.status),
+                    confidence=raid.confidence,
+                    session_id=raid.session_id,
+                    branch=raid.branch,
+                    chronicle_summary=raid.chronicle_summary,
+                    pr_url=entry.get("pr_url", raid.pr_url),
+                    pr_id=entry.get("pr_id", raid.pr_id),
+                    retry_count=raid.retry_count,
+                    created_at=raid.created_at,
+                    updated_at=datetime.now(UTC),
+                )
+                if raid.session_id:
+                    self.raids_by_session[raid.session_id] = updated
+                return updated
+        raise KeyError(f"No raid with tracker_id={tracker_id!r}")
+
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
+        return self.raids_by_session.get(session_id)
+
+    async def list_raids_by_status(self, status: RaidStatus) -> list[Raid]:
+        return [r for r in self.raids_by_session.values() if r.status == status]
+
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
+        for raid in self.raids_by_session.values():
+            if raid.id == raid_id:
                 return raid
         return None
 
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
-        if self.saga is None:
-            return None
-        return self.saga.owner_id or None
-
-    async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
-        return self.saga
-
-    async def get_phase_for_raid(self, raid_id: UUID) -> None:
-        return None
-
-    async def save_phase(self, phase: object, *, conn: object = None) -> None:
+    async def add_confidence_event(self, tracker_id: str, event: ConfidenceEvent) -> None:
         pass
 
-    async def save_raid(self, raid: object, *, conn: object = None) -> None:
-        pass
+    async def get_confidence_events(self, tracker_id: str) -> list[ConfidenceEvent]:
+        return []
 
-    async def all_raids_merged(self, phase_id: UUID) -> bool:
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
         return False
 
-    async def save_session_message(self, message: object) -> None:
+    async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
+        return []
+
+    async def update_phase_status(self, phase_tracker_id: str, status: PhaseStatus) -> Phase | None:
+        return None
+
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
+        return None
+
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
+        return None
+
+    async def get_owner_for_raid(self, tracker_id: str) -> str | None:
+        return None
+
+    async def save_session_message(self, message: SessionMessage) -> None:
         pass
 
-    async def get_session_messages(self, raid_id: UUID) -> list:
+    async def get_session_messages(self, tracker_id: str) -> list[SessionMessage]:
         return []
 
-    async def list_phases_for_saga(self, saga_id: UUID) -> list:
-        return []
 
-    async def update_phase_status(self, phase_id: UUID, status) -> None:  # noqa: ANN001
-        return None
+class StubTrackerFactory:
+    """Stub factory that always returns the same tracker for any owner."""
+
+    def __init__(self, tracker: StubTracker) -> None:
+        self._tracker = tracker
+
+    async def for_owner(self, owner_id: str) -> list[StubTracker]:
+        return [self._tracker]
 
 
 class StubDispatcherRepo(DispatcherRepository):
@@ -206,6 +277,19 @@ class StubDispatcherRepo(DispatcherRepository):
     async def update(self, owner_id: str, **fields: object) -> DispatcherState:
         return await self.get_or_create(owner_id)
 
+    async def list_active_owner_ids(self) -> list[str]:
+        return []
+
+
+class StubVolundrFactory:
+    """Stub factory that always returns the same adapter for any owner."""
+
+    def __init__(self, adapter: StubVolundr) -> None:
+        self._adapter = adapter
+
+    async def for_owner(self, owner_id: str) -> StubVolundr:
+        return self._adapter
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -217,11 +301,12 @@ def _make_raid(
     status: RaidStatus = RaidStatus.RUNNING,
     session_id: str = "session-1",
     branch: str | None = "raid/test",
+    tracker_id: str = "tracker-1",
 ) -> Raid:
     return Raid(
         id=raid_id or uuid4(),
         phase_id=uuid4(),
-        tracker_id="tracker-1",
+        tracker_id=tracker_id,
         name="Test raid",
         description="Implement feature",
         acceptance_criteria=["tests pass"],
@@ -253,6 +338,15 @@ def _make_saga(owner_id: str = "user-1") -> Saga:
         confidence=0.5,
         created_at=NOW,
         owner_id=owner_id,
+    )
+
+
+def _make_volundr_session(session_id: str = "session-1", status: str = "running") -> VolundrSession:
+    return VolundrSession(
+        id=session_id,
+        name="Test Session",
+        status=status,
+        tracker_issue_id=None,
     )
 
 
@@ -350,25 +444,28 @@ class StubPool:
 
 def _make_subscriber(
     volundr: StubVolundr | None = None,
-    pool: StubPool | None = None,
+    tracker: StubTracker | None = None,
     dispatcher_repo: StubDispatcherRepo | None = None,
     event_bus: InMemoryEventBus | None = None,
     config: WatcherConfig | None = None,
-) -> tuple[SessionActivitySubscriber, StubVolundr, StubPool, InMemoryEventBus]:
+) -> tuple[SessionActivitySubscriber, StubVolundr, StubTracker, InMemoryEventBus]:
     v = volundr or StubVolundr()
     if "session-1" not in v.sessions:
         v.sessions["session-1"] = _make_volundr_session()
-    p = pool or StubPool()
-    if not p.sessions:
-        p.add_session("session-1")
+    t = tracker or StubTracker()
     d = dispatcher_repo or StubDispatcherRepo()
     e = event_bus or InMemoryEventBus()
     c = config or _default_config()
-    factory = StubVolundrFactory(v)
+    volundr_factory = StubVolundrFactory(v)
+    tracker_factory = StubTrackerFactory(t)
     sub = SessionActivitySubscriber(
-        volundr_factory=factory, pool=p, dispatcher_repo=d, event_bus=e, config=c
+        volundr_factory=volundr_factory,
+        tracker_factory=tracker_factory,
+        dispatcher_repo=d,
+        event_bus=e,
+        config=c,
     )
-    return sub, v, p, e
+    return sub, v, t, e
 
 
 # ---------------------------------------------------------------------------
@@ -433,10 +530,9 @@ class TestActivityEventHandling:
     @pytest.mark.asyncio
     async def test_idle_event_triggers_completion_for_running_raid(self) -> None:
         """An idle event with sufficient turns should transition the raid to REVIEW."""
-        sub, volundr, raid_repo, event_bus = _make_subscriber()
+        sub, volundr, tracker, event_bus = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga()
+        tracker.add_raid(raid)
 
         event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -446,13 +542,12 @@ class TestActivityEventHandling:
         )
 
         q = event_bus.subscribe()
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
 
         # Wait for debounced evaluation (delay=0)
         await asyncio.sleep(0.1)
 
-        updated = raid_repo.raids[raid.id]
-        assert updated.status == RaidStatus.REVIEW
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
 
         bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
         assert bus_event.event == "raid.state_changed"
@@ -462,10 +557,9 @@ class TestActivityEventHandling:
     @pytest.mark.asyncio
     async def test_idle_with_no_turns_does_not_complete(self) -> None:
         """Idle with turn_count <= 1 should not trigger completion."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga()
+        tracker.add_raid(raid)
 
         event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -474,19 +568,19 @@ class TestActivityEventHandling:
             owner_id="user-1",
         )
 
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
         await asyncio.sleep(0.1)
 
-        assert raid_repo.raids[raid.id].status == RaidStatus.RUNNING
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.RUNNING
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_active_event_cancels_pending_evaluation(self) -> None:
         """An active event should cancel any pending idle evaluation."""
         config = _default_config(completion_check_delay=1.0)
-        sub, volundr, raid_repo, _ = _make_subscriber(config=config)
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         idle_event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -494,7 +588,7 @@ class TestActivityEventHandling:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-1",
         )
-        await sub._on_activity_event(idle_event, volundr)
+        await sub._on_activity_event(idle_event, volundr, owner_id="user-1")
         assert raid.session_id in sub._pending_evaluations
 
         # Active event cancels it
@@ -504,18 +598,18 @@ class TestActivityEventHandling:
             metadata={},
             owner_id="user-1",
         )
-        await sub._on_activity_event(active_event, volundr)
+        await sub._on_activity_event(active_event, volundr, owner_id="user-1")
         assert raid.session_id not in sub._pending_evaluations
-        assert raid_repo.raids[raid.id].status == RaidStatus.RUNNING
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.RUNNING
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_tool_executing_cancels_pending_evaluation(self) -> None:
         """A tool_executing event should cancel pending idle evaluation."""
         config = _default_config(completion_check_delay=1.0)
-        sub, volundr, raid_repo, _ = _make_subscriber(config=config)
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         idle_event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -523,7 +617,7 @@ class TestActivityEventHandling:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-1",
         )
-        await sub._on_activity_event(idle_event, volundr)
+        await sub._on_activity_event(idle_event, volundr, owner_id="user-1")
 
         tool_event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -531,13 +625,13 @@ class TestActivityEventHandling:
             metadata={},
             owner_id="user-1",
         )
-        await sub._on_activity_event(tool_event, volundr)
+        await sub._on_activity_event(tool_event, volundr, owner_id="user-1")
         assert raid.session_id not in sub._pending_evaluations
 
     @pytest.mark.asyncio
     async def test_no_raid_for_session_is_ignored(self) -> None:
         """Idle event for a session with no RUNNING raid should be ignored."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
             session_id="unknown-session",
@@ -545,7 +639,7 @@ class TestActivityEventHandling:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-1",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
         await asyncio.sleep(0.1)
         # No crash, no transitions
 
@@ -559,7 +653,7 @@ class TestCompletionEvaluationLogic:
     @pytest.mark.asyncio
     async def test_basic_completion(self) -> None:
         """Session idle with turns > 1 should evaluate as complete."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, _, _ = _make_subscriber()
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
@@ -575,7 +669,7 @@ class TestCompletionEvaluationLogic:
     @pytest.mark.asyncio
     async def test_pr_increases_confidence(self) -> None:
         """PR existence should increase confidence."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, _, _ = _make_subscriber()
         raid = _make_raid()
         volundr.pr_statuses[raid.session_id or ""] = PRStatus(
             pr_id="PR-1",
@@ -597,7 +691,7 @@ class TestCompletionEvaluationLogic:
     async def test_require_pr_blocks_completion(self) -> None:
         """When require_pr=True and no PR, should not complete."""
         config = _default_config(require_pr=True)
-        sub, volundr, raid_repo, _ = _make_subscriber(config=config)
+        sub, volundr, _, _ = _make_subscriber(config=config)
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
@@ -610,7 +704,7 @@ class TestCompletionEvaluationLogic:
     async def test_require_ci_blocks_completion(self) -> None:
         """When require_ci=True and CI not passed, should not complete."""
         config = _default_config(require_ci=True)
-        sub, volundr, raid_repo, _ = _make_subscriber(config=config)
+        sub, volundr, _, _ = _make_subscriber(config=config)
         raid = _make_raid()
         volundr.pr_statuses[raid.session_id or ""] = PRStatus(
             pr_id="PR-1",
@@ -662,9 +756,9 @@ class TestCompletionHandling:
     @pytest.mark.asyncio
     async def test_pr_info_stored_on_completion(self) -> None:
         """PR URL and ID should be stored when PR is detected."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         evaluation = CompletionEvaluation(
             is_complete=True,
@@ -674,20 +768,19 @@ class TestCompletionHandling:
             pr_url="https://github.com/org/repo/pull/42",
         )
 
-        await sub._handle_completion(raid, volundr, evaluation)
+        await sub._handle_completion(raid, tracker, "user-1", evaluation)
 
-        updated = raid_repo.raids[raid.id]
-        assert updated.status == RaidStatus.REVIEW
-        assert updated.pr_id == "PR-42"
-        assert updated.pr_url == "https://github.com/org/repo/pull/42"
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
+        assert tracker.progress[raid.tracker_id]["pr_id"] == "PR-42"
+        assert tracker.progress[raid.tracker_id]["pr_url"] == "https://github.com/org/repo/pull/42"
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_no_pr_still_transitions(self) -> None:
         """Completion without a PR should still transition to REVIEW."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         evaluation = CompletionEvaluation(
             is_complete=True,
@@ -695,69 +788,24 @@ class TestCompletionHandling:
             confidence=0.5,
         )
 
-        await sub._handle_completion(raid, volundr, evaluation)
+        await sub._handle_completion(raid, tracker, "user-1", evaluation)
 
-        updated = raid_repo.raids[raid.id]
-        assert updated.status == RaidStatus.REVIEW
-        assert updated.pr_id is None
-
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
-    @pytest.mark.asyncio
-    async def test_chronicle_stored_on_completion(self) -> None:
-        """Chronicle summary should be stored on completion."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
-        raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        volundr.chronicles[raid.session_id or ""] = "Work completed successfully"
-
-        await sub._handle_completion(raid, volundr)
-
-        updated = raid_repo.raids[raid.id]
-        assert updated.chronicle_summary == "Work completed successfully"
-
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
-    @pytest.mark.asyncio
-    async def test_chronicle_fetch_failure_does_not_block(self) -> None:
-        """Chronicle fetch failure should not prevent transition."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
-        raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        volundr.chronicle_error_sessions.add(raid.session_id or "")
-
-        await sub._handle_completion(raid, volundr)
-
-        updated = raid_repo.raids[raid.id]
-        assert updated.status == RaidStatus.REVIEW
-
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
-    @pytest.mark.asyncio
-    async def test_chronicle_disabled(self) -> None:
-        """When chronicle_on_complete is False, no chronicle fetch occurs."""
-        config = _default_config(chronicle_on_complete=False)
-        sub, volundr, raid_repo, _ = _make_subscriber(config=config)
-        raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        volundr.chronicles[raid.session_id or ""] = "Should not be fetched"
-
-        await sub._handle_completion(raid, volundr)
-
-        updated = raid_repo.raids[raid.id]
-        assert updated.chronicle_summary is None
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
+        assert tracker.progress[raid.tracker_id].get("pr_id") is None
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_event_emitted_on_completion(self) -> None:
         """Event bus should receive raid.state_changed on completion."""
-        sub, volundr, raid_repo, event_bus = _make_subscriber()
+        sub, volundr, tracker, event_bus = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         q = event_bus.subscribe()
-        await sub._handle_completion(raid, volundr)
+        await sub._handle_completion(raid, tracker, "user-1")
 
         event = await asyncio.wait_for(q.get(), timeout=1.0)
         assert event.event == "raid.state_changed"
-        assert event.data["raid_id"] == str(raid.id)
         assert event.data["status"] == "REVIEW"
 
 
@@ -772,12 +820,11 @@ class TestDispatcherPauseFiltering:
     async def test_paused_dispatcher_skips_completion(self) -> None:
         """Raids belonging to paused owners should not complete."""
         dispatcher_repo = StubDispatcherRepo(running=False)
-        raid_repo = StubRaidRepo()
-        raid_repo.saga = _make_saga(owner_id="user-paused")
+        tracker = StubTracker()
 
-        sub, volundr, _, _ = _make_subscriber(raid_repo=raid_repo, dispatcher_repo=dispatcher_repo)
+        sub, volundr, _, _ = _make_subscriber(tracker=tracker, dispatcher_repo=dispatcher_repo)
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -785,22 +832,21 @@ class TestDispatcherPauseFiltering:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-paused",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-paused")
         await asyncio.sleep(0.1)
 
-        assert raid_repo.raids[raid.id].status == RaidStatus.RUNNING
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.RUNNING
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_running_dispatcher_allows_completion(self) -> None:
         """Raids belonging to running owners should complete normally."""
         dispatcher_repo = StubDispatcherRepo(running=True)
-        raid_repo = StubRaidRepo()
-        raid_repo.saga = _make_saga(owner_id="user-active")
+        tracker = StubTracker()
 
-        sub, volundr, _, _ = _make_subscriber(raid_repo=raid_repo, dispatcher_repo=dispatcher_repo)
+        sub, volundr, _, _ = _make_subscriber(tracker=tracker, dispatcher_repo=dispatcher_repo)
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -808,33 +854,10 @@ class TestDispatcherPauseFiltering:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-active",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-active")
         await asyncio.sleep(0.1)
 
-        assert raid_repo.raids[raid.id].status == RaidStatus.REVIEW
-
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
-    @pytest.mark.asyncio
-    async def test_no_saga_allows_completion(self) -> None:
-        """Raids with no parent saga should still complete (graceful fallback)."""
-        dispatcher_repo = StubDispatcherRepo(running=False)
-        raid_repo = StubRaidRepo()
-        # saga is None by default
-
-        sub, volundr, _, _ = _make_subscriber(raid_repo=raid_repo, dispatcher_repo=dispatcher_repo)
-        raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-
-        event = ActivityEvent(
-            session_id=raid.session_id or "",
-            state="idle",
-            metadata={"turn_count": 5, "duration_seconds": 60},
-            owner_id="user-1",
-        )
-        await sub._on_activity_event(event, volundr)
-        await asyncio.sleep(0.1)
-
-        assert raid_repo.raids[raid.id].status == RaidStatus.REVIEW
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
 
 
 # ---------------------------------------------------------------------------
@@ -847,9 +870,9 @@ class TestFailureDetection:
     @pytest.mark.asyncio
     async def test_session_stopped_transitions_raid_to_failed(self) -> None:
         """A session_updated event with status=stopped should transition raid to FAILED."""
-        sub, volundr, raid_repo, event_bus = _make_subscriber()
+        sub, volundr, tracker, event_bus = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -860,11 +883,9 @@ class TestFailureDetection:
         )
 
         q = event_bus.subscribe()
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
 
-        updated = raid_repo.raids[raid.id]
-        assert updated.status == RaidStatus.FAILED
-        assert updated.retry_count == 1
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
         bus_event = await asyncio.wait_for(q.get(), timeout=1.0)
         assert bus_event.event == "raid.state_changed"
@@ -874,9 +895,9 @@ class TestFailureDetection:
     @pytest.mark.asyncio
     async def test_session_failed_transitions_raid_to_failed(self) -> None:
         """A session_updated event with status=failed should transition raid to FAILED."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
+        tracker.add_raid(raid)
 
         event = ActivityEvent(
             session_id=raid.session_id or "",
@@ -886,20 +907,18 @@ class TestFailureDetection:
             session_status="failed",
         )
 
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
 
-        updated = raid_repo.raids[raid.id]
-        assert updated.status == RaidStatus.FAILED
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_failed_cancels_pending_evaluation(self) -> None:
         """A failure event should cancel any pending idle evaluation."""
         config = _default_config(completion_check_delay=1.0)
-        sub, volundr, raid_repo, _ = _make_subscriber(config=config)
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga()
+        tracker.add_raid(raid)
 
         # Schedule an idle evaluation
         idle_event = ActivityEvent(
@@ -908,7 +927,7 @@ class TestFailureDetection:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-1",
         )
-        await sub._on_activity_event(idle_event, volundr)
+        await sub._on_activity_event(idle_event, volundr, owner_id="user-1")
         assert raid.session_id in sub._pending_evaluations
 
         # Session crashes
@@ -919,19 +938,18 @@ class TestFailureDetection:
             owner_id="user-1",
             session_status="failed",
         )
-        await sub._on_activity_event(fail_event, volundr)
+        await sub._on_activity_event(fail_event, volundr, owner_id="user-1")
 
         assert raid.session_id not in sub._pending_evaluations
-        assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_not_found_during_evaluation_transitions_to_failed(self) -> None:
         """If get_session returns None during debounced evaluation, raid should fail."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga()
+        tracker.add_raid(raid)
 
         # Remove the session so get_session returns None
         volundr.sessions.pop(raid.session_id or "", None)
@@ -942,20 +960,18 @@ class TestFailureDetection:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-1",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
         await asyncio.sleep(0.1)
 
-        assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
-        assert raid_repo.raids[raid.id].retry_count == 1
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
     @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_stopped_during_evaluation_transitions_to_failed(self) -> None:
         """If get_session returns a stopped session during evaluation, raid should fail."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        raid_repo.saga = _make_saga()
+        tracker.add_raid(raid)
 
         # Session is stopped
         volundr.sessions[raid.session_id or ""] = _make_volundr_session(
@@ -968,15 +984,15 @@ class TestFailureDetection:
             metadata={"turn_count": 5, "duration_seconds": 60},
             owner_id="user-1",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
         await asyncio.sleep(0.1)
 
-        assert raid_repo.raids[raid.id].status == RaidStatus.FAILED
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_failure_no_raid_is_ignored(self) -> None:
         """A failure event for a session with no RUNNING raid should be ignored."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
+        sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
             session_id="unknown-session",
@@ -985,30 +1001,8 @@ class TestFailureDetection:
             owner_id="user-1",
             session_status="stopped",
         )
-        await sub._on_activity_event(event, volundr)
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
         # No crash, no transitions
-
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
-    @pytest.mark.asyncio
-    async def test_chronicle_fetched_on_failure(self) -> None:
-        """Chronicle summary should be fetched when a raid fails."""
-        sub, volundr, raid_repo, _ = _make_subscriber()
-        raid = _make_raid()
-        raid_repo.raids[raid.id] = raid
-        volundr.chronicles[raid.session_id or ""] = "Session crashed"
-
-        event = ActivityEvent(
-            session_id=raid.session_id or "",
-            state="",
-            metadata={},
-            owner_id="user-1",
-            session_status="failed",
-        )
-        await sub._on_activity_event(event, volundr)
-
-        updated = raid_repo.raids[raid.id]
-        assert updated.status == RaidStatus.FAILED
-        assert updated.chronicle_summary == "Session crashed"
 
 
 # ---------------------------------------------------------------------------
@@ -1028,25 +1022,3 @@ class TestWatcherConfigNewFields:
         assert cfg.confidence_ci_bonus == 0.2
         assert cfg.confidence_idle_bonus == 0.1
         assert cfg.reconnect_delay == 5.0
-
-    def test_custom(self) -> None:
-        cfg = WatcherConfig(
-            idle_threshold=60.0,
-            completion_check_delay=10.0,
-            require_pr=True,
-            require_ci=True,
-            confidence_base=0.6,
-            confidence_pr_bonus=0.15,
-            confidence_ci_bonus=0.15,
-            confidence_idle_bonus=0.05,
-            reconnect_delay=3.0,
-        )
-        assert cfg.idle_threshold == 60.0
-        assert cfg.completion_check_delay == 10.0
-        assert cfg.require_pr is True
-        assert cfg.require_ci is True
-        assert cfg.confidence_base == 0.6
-        assert cfg.confidence_pr_bonus == 0.15
-        assert cfg.confidence_ci_bonus == 0.15
-        assert cfg.confidence_idle_bonus == 0.05
-        assert cfg.reconnect_delay == 3.0

@@ -23,8 +23,8 @@ from tyr.domain.services.raid_review import (
 )
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.notification_subscriptions import NotificationSubscriptionRepository
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
+from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,6 @@ async def _handle_status(
     _cmd: ParsedCommand,
     *,
     saga_repo: SagaRepository,
-    raid_repo: RaidRepository,
     volundr: VolundrPort,
     dispatcher_repo: DispatcherRepository,
 ) -> str:
@@ -138,14 +137,14 @@ async def _handle_approve(
     owner_id: str,
     cmd: ParsedCommand,
     *,
-    raid_repo: RaidRepository,
+    tracker: TrackerPort,
     review_service: RaidReviewService,
 ) -> str:
     if not cmd.args:
         return "Usage: /approve <raid-tracker-id>"
 
     tracker_id = cmd.args[0]
-    raid = await _find_raid_by_tracker_id(raid_repo, tracker_id, owner_id)
+    raid = await _find_raid_by_tracker_id(tracker, tracker_id, owner_id)
     if raid is None:
         return f"Raid not found: {tracker_id}"
 
@@ -164,7 +163,7 @@ async def _handle_reject(
     owner_id: str,
     cmd: ParsedCommand,
     *,
-    raid_repo: RaidRepository,
+    tracker: TrackerPort,
     review_service: RaidReviewService,
 ) -> str:
     if not cmd.args:
@@ -176,7 +175,7 @@ async def _handle_reject(
     if reason:
         reason = reason.strip("\"'")
 
-    raid = await _find_raid_by_tracker_id(raid_repo, tracker_id, owner_id)
+    raid = await _find_raid_by_tracker_id(tracker, tracker_id, owner_id)
     if raid is None:
         return f"Raid not found: {tracker_id}"
 
@@ -193,14 +192,14 @@ async def _handle_retry(
     owner_id: str,
     cmd: ParsedCommand,
     *,
-    raid_repo: RaidRepository,
+    tracker: TrackerPort,
     review_service: RaidReviewService,
 ) -> str:
     if not cmd.args:
         return "Usage: /retry <raid-tracker-id>"
 
     tracker_id = cmd.args[0]
-    raid = await _find_raid_by_tracker_id(raid_repo, tracker_id, owner_id)
+    raid = await _find_raid_by_tracker_id(tracker, tracker_id, owner_id)
     if raid is None:
         return f"Raid not found: {tracker_id}"
 
@@ -242,20 +241,20 @@ async def _handle_dispatch(
     owner_id: str,
     cmd: ParsedCommand,
     *,
-    raid_repo: RaidRepository,
+    tracker: TrackerPort,
 ) -> str:
     if not cmd.args:
         return "Usage: /dispatch <raid-tracker-id>"
 
     tracker_id = cmd.args[0]
-    raid = await _find_raid_by_tracker_id(raid_repo, tracker_id, owner_id)
+    raid = await _find_raid_by_tracker_id(tracker, tracker_id, owner_id)
     if raid is None:
         return f"Raid not found: {tracker_id}"
 
     if raid.status != RaidStatus.PENDING:
         return f"Raid {tracker_id} is in {raid.status.value} state — can only dispatch from PENDING"
 
-    await raid_repo.update_raid_status(raid.id, RaidStatus.QUEUED)
+    await tracker.update_raid_progress(raid.tracker_id, status=RaidStatus.QUEUED)
     return f"Raid {tracker_id} queued for dispatch — status → QUEUED"
 
 
@@ -301,7 +300,7 @@ async def _handle_say(
 
 
 async def _find_raid_by_tracker_id(
-    raid_repo: RaidRepository,
+    tracker: TrackerPort,
     tracker_id: str,
     owner_id: str,
 ) -> Any:
@@ -309,18 +308,21 @@ async def _find_raid_by_tracker_id(
 
     Raids are identified by tracker_id (e.g. NIU-221) rather than internal UUID,
     so we search through the owner's sagas → phases → raids.
-    Falls back to treating tracker_id as a UUID if the repo supports get_raid.
+    Falls back to treating tracker_id as a UUID if the tracker supports get_raid_by_id.
     """
     from uuid import UUID
 
     # Try direct UUID lookup as a fallback
     try:
         raid_uuid = UUID(tracker_id)
-        return await raid_repo.get_raid(raid_uuid)
+        return await tracker.get_raid_by_id(raid_uuid)
     except ValueError:
         pass
 
-    return await raid_repo.find_raid_by_tracker_id(tracker_id)
+    try:
+        return await tracker.get_raid(tracker_id)
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +333,7 @@ async def _find_raid_by_tracker_id(
 def create_telegram_webhook_router() -> APIRouter:
     """Create the Telegram webhook router.
 
-    Dependencies (notification_sub_repo, raid_repo, etc.) are resolved
+    Dependencies (notification_sub_repo, tracker_factory, etc.) are resolved
     from ``request.app.state`` — wired by ``main.py`` lifespan.
     """
     router = APIRouter(
@@ -354,8 +356,8 @@ def create_telegram_webhook_router() -> APIRouter:
     def _get_sub_repo(request: Request) -> NotificationSubscriptionRepository:
         return request.app.state.notification_sub_repo
 
-    def _get_raid_repo(request: Request) -> RaidRepository:
-        return request.app.state.raid_repo
+    def _get_tracker_factory(request: Request) -> Any:
+        return request.app.state.tracker_factory
 
     def _get_saga_repo(request: Request) -> SagaRepository:
         return request.app.state.saga_repo
@@ -415,20 +417,28 @@ def create_telegram_webhook_router() -> APIRouter:
         if cmd is None:
             return Response(status_code=status.HTTP_200_OK)
 
+        # Resolve tracker for this owner
+        tracker_factory = _get_tracker_factory(request)
+        trackers = await tracker_factory.for_owner(owner_id)
+        tracker = trackers[0] if trackers else None
+
+        if tracker is None:
+            await reply_client.send(chat_id, "No tracker configured.")
+            return Response(status_code=status.HTTP_200_OK)
+
         # Dispatch command
-        raid_repo = _get_raid_repo(request)
         saga_repo = _get_saga_repo(request)
         volundr = _get_volundr(request)
         dispatcher_repo = _get_dispatcher_repo(request)
         review_config = _get_review_config(request)
         event_bus = getattr(request.app.state, "event_bus", None)
-        review_service = RaidReviewService(raid_repo, review_config, event_bus=event_bus)
+        review_service = RaidReviewService(tracker, owner_id, review_config, event_bus=event_bus)
 
         try:
             reply = await _dispatch_command(
                 owner_id,
                 cmd,
-                raid_repo=raid_repo,
+                tracker=tracker,
                 saga_repo=saga_repo,
                 volundr=volundr,
                 dispatcher_repo=dispatcher_repo,
@@ -448,7 +458,7 @@ async def _dispatch_command(
     owner_id: str,
     cmd: ParsedCommand,
     *,
-    raid_repo: RaidRepository,
+    tracker: TrackerPort,
     saga_repo: SagaRepository,
     volundr: VolundrPort,
     dispatcher_repo: DispatcherRepository,
@@ -465,28 +475,27 @@ async def _dispatch_command(
                 owner_id,
                 cmd,
                 saga_repo=saga_repo,
-                raid_repo=raid_repo,
                 volundr=volundr,
                 dispatcher_repo=dispatcher_repo,
             )
         case "approve":
             return await _handle_approve(
-                owner_id, cmd, raid_repo=raid_repo, review_service=review_service
+                owner_id, cmd, tracker=tracker, review_service=review_service
             )
         case "reject":
             return await _handle_reject(
-                owner_id, cmd, raid_repo=raid_repo, review_service=review_service
+                owner_id, cmd, tracker=tracker, review_service=review_service
             )
         case "retry":
             return await _handle_retry(
-                owner_id, cmd, raid_repo=raid_repo, review_service=review_service
+                owner_id, cmd, tracker=tracker, review_service=review_service
             )
         case "pause":
             return await _handle_pause(owner_id, cmd, dispatcher_repo=dispatcher_repo)
         case "resume":
             return await _handle_resume(owner_id, cmd, dispatcher_repo=dispatcher_repo)
         case "dispatch":
-            return await _handle_dispatch(owner_id, cmd, raid_repo=raid_repo)
+            return await _handle_dispatch(owner_id, cmd, tracker=tracker)
         case "sessions":
             return await _handle_sessions(owner_id, cmd, volundr=volundr)
         case "say":

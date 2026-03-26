@@ -30,7 +30,6 @@ from tyr.domain.models import (
 )
 from tyr.ports.git import GitPort
 from tyr.ports.llm import LLMPort
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 
@@ -195,13 +194,6 @@ async def resolve_llm() -> LLMPort:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="LLM adapter not configured",
-    )
-
-
-async def resolve_raid_repo() -> RaidRepository:
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Raid repository not configured",
     )
 
 
@@ -445,7 +437,6 @@ def create_sagas_router() -> APIRouter:
         request: Request,
         principal: Principal = Depends(extract_principal),
         saga_repo: SagaRepository = Depends(resolve_saga_repo),
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         git: GitPort = Depends(resolve_git),
     ) -> CommittedSagaResponse:
@@ -604,9 +595,9 @@ def create_sagas_router() -> APIRouter:
         async with saga_repo.begin() as conn:
             await saga_repo.save_saga(saga, conn=conn)
             for phase in phases:
-                await raid_repo.save_phase(phase, conn=conn)
+                await saga_repo.save_phase(phase, conn=conn)
             for raid in raids:
-                await raid_repo.save_raid(raid, conn=conn)
+                await saga_repo.save_raid(raid, conn=conn)
 
         # 4. Create feature branch for each repo (best-effort — logged on failure)
         warnings: list[str] = []

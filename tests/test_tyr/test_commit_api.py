@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 from tyr.api.sagas import (
     create_sagas_router,
     resolve_git,
-    resolve_raid_repo,
     resolve_saga_repo,
 )
 from tyr.api.tracker import resolve_trackers
@@ -27,89 +26,12 @@ from tyr.domain.models import (
     SagaStatus,
 )
 from tyr.ports.git import GitPort
-from tyr.ports.raid_repository import RaidRepository
 
 from .test_tracker_api import MockSagaRepo, MockTracker
 
 # ---------------------------------------------------------------------------
 # Mock implementations
 # ---------------------------------------------------------------------------
-
-
-class MockRaidRepo(RaidRepository):
-    """In-memory raid repository for tests."""
-
-    def __init__(self) -> None:
-        self.phases: list[Phase] = []
-        self.raids: list[Raid] = []
-
-    async def save_phase(self, phase: Phase, *, conn=None) -> None:  # noqa: ANN001
-        self.phases.append(phase)
-
-    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
-        self.raids.append(raid)
-
-    async def get_raid(self, raid_id: UUID) -> Raid | None:
-        return next((r for r in self.raids if r.id == raid_id), None)
-
-    async def update_raid_status(
-        self,
-        raid_id: UUID,
-        status: RaidStatus,
-        *,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        return None
-
-    async def get_confidence_events(self, raid_id: UUID) -> list:
-        return []
-
-    async def add_confidence_event(self, event) -> None:  # noqa: ANN001
-        pass
-
-    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        return next((r for r in self.raids if r.tracker_id == tracker_id), None)
-
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
-        return None
-
-    async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
-        return None
-
-    async def get_phase_for_raid(self, raid_id: UUID) -> Phase | None:
-        return None
-
-    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
-        return []
-
-    async def update_raid_completion(
-        self,
-        raid_id: UUID,
-        *,
-        status: RaidStatus,
-        chronicle_summary: str | None = None,
-        pr_url: str | None = None,
-        pr_id: str | None = None,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        return None
-
-    async def all_raids_merged(self, phase_id: UUID) -> bool:
-        return False
-
-    async def list_phases_for_saga(self, saga_id: UUID) -> list[Phase]:
-        return []
-
-    async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
-        return None
-
-    async def save_session_message(self, message: object) -> None:
-        pass
-
-    async def get_session_messages(self, raid_id: UUID) -> list:
-        return []
 
 
 class MockGit(GitPort):
@@ -201,11 +123,6 @@ def saga_repo() -> MockSagaRepo:
 
 
 @pytest.fixture
-def raid_repo() -> MockRaidRepo:
-    return MockRaidRepo()
-
-
-@pytest.fixture
 def mock_git() -> MockGit:
     return MockGit()
 
@@ -214,14 +131,12 @@ def mock_git() -> MockGit:
 def client(
     mock_tracker: MockTracker,
     saga_repo: MockSagaRepo,
-    raid_repo: MockRaidRepo,
     mock_git: MockGit,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(create_sagas_router())
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-    app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
     app.dependency_overrides[resolve_git] = lambda: mock_git
     app.state.settings = _dev_settings()
     return TestClient(app)
@@ -289,16 +204,16 @@ class TestCommitSaga:
         assert saga.tracker_id == "saga-created"
         assert saga.status == SagaStatus.ACTIVE
 
-    def test_persists_phases(self, client: TestClient, raid_repo: MockRaidRepo) -> None:
+    def test_persists_phases(self, client: TestClient, saga_repo: MockSagaRepo) -> None:
         client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
-        assert len(raid_repo.phases) == 2
-        assert raid_repo.phases[0].status == PhaseStatus.ACTIVE
-        assert raid_repo.phases[1].status == PhaseStatus.GATED
+        assert len(saga_repo.phases) == 2
+        assert saga_repo.phases[0].status == PhaseStatus.ACTIVE
+        assert saga_repo.phases[1].status == PhaseStatus.GATED
 
-    def test_persists_raids(self, client: TestClient, raid_repo: MockRaidRepo) -> None:
+    def test_persists_raids(self, client: TestClient, saga_repo: MockSagaRepo) -> None:
         client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
-        assert len(raid_repo.raids) == 3
-        for raid in raid_repo.raids:
+        assert len(saga_repo.raids) == 3
+        for raid in saga_repo.raids:
             assert raid.status == RaidStatus.PENDING
             assert raid.tracker_id == "raid-created"
 
@@ -352,14 +267,12 @@ class TestCommitSagaValidation:
     def test_no_tracker_returns_503(
         self,
         saga_repo: MockSagaRepo,
-        raid_repo: MockRaidRepo,
         mock_git: MockGit,
     ) -> None:
         app = FastAPI()
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: []
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
         app.dependency_overrides[resolve_git] = lambda: mock_git
         app.state.settings = _dev_settings()
         client = TestClient(app)
@@ -387,14 +300,12 @@ class TestCommitSagaConfidence:
         self,
         mock_tracker: MockTracker,
         saga_repo: MockSagaRepo,
-        raid_repo: MockRaidRepo,
         mock_git: MockGit,
     ) -> None:
         app = FastAPI()
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
         app.dependency_overrides[resolve_git] = lambda: mock_git
         settings = _dev_settings()
         settings.review = ReviewConfig(initial_confidence=0.8)
@@ -435,7 +346,6 @@ class TestCommitSagaTrackerFailure:
     def test_tracker_create_saga_failure_still_commits(
         self,
         saga_repo: MockSagaRepo,
-        raid_repo: MockRaidRepo,
         mock_git: MockGit,
     ) -> None:
         class FailingSagaTracker(MockTracker):
@@ -446,7 +356,6 @@ class TestCommitSagaTrackerFailure:
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: [FailingSagaTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
         app.dependency_overrides[resolve_git] = lambda: mock_git
         app.state.settings = _dev_settings()
         client = TestClient(app)
@@ -462,7 +371,6 @@ class TestCommitSagaTrackerFailure:
     def test_tracker_create_phase_failure_still_commits(
         self,
         saga_repo: MockSagaRepo,
-        raid_repo: MockRaidRepo,
         mock_git: MockGit,
     ) -> None:
         class FailingPhaseTracker(MockTracker):
@@ -473,7 +381,6 @@ class TestCommitSagaTrackerFailure:
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: [FailingPhaseTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
         app.dependency_overrides[resolve_git] = lambda: mock_git
         app.state.settings = _dev_settings()
         client = TestClient(app)
@@ -481,13 +388,12 @@ class TestCommitSagaTrackerFailure:
         resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
         assert resp.status_code == 201
         # Phases have empty tracker_id but are still persisted
-        assert len(raid_repo.phases) == 2
-        assert raid_repo.phases[0].tracker_id == ""
+        assert len(saga_repo.phases) == 2
+        assert saga_repo.phases[0].tracker_id == ""
 
     def test_tracker_create_raid_failure_still_commits(
         self,
         saga_repo: MockSagaRepo,
-        raid_repo: MockRaidRepo,
         mock_git: MockGit,
     ) -> None:
         class FailingRaidTracker(MockTracker):
@@ -498,7 +404,6 @@ class TestCommitSagaTrackerFailure:
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: [FailingRaidTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
         app.dependency_overrides[resolve_git] = lambda: mock_git
         app.state.settings = _dev_settings()
         client = TestClient(app)
@@ -506,8 +411,8 @@ class TestCommitSagaTrackerFailure:
         resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
         assert resp.status_code == 201
         # Raids have empty tracker_id but are still persisted
-        assert len(raid_repo.raids) == 3
-        assert raid_repo.raids[0].tracker_id == ""
+        assert len(saga_repo.raids) == 3
+        assert saga_repo.raids[0].tracker_id == ""
 
 
 class TestCommitSagaGitFailure:
@@ -516,7 +421,6 @@ class TestCommitSagaGitFailure:
     def test_git_failure_still_returns_201(
         self,
         saga_repo: MockSagaRepo,
-        raid_repo: MockRaidRepo,
     ) -> None:
         class FailingGit(MockGit):
             async def create_branch(self, repo: str, branch: str, base: str) -> None:
@@ -526,7 +430,6 @@ class TestCommitSagaGitFailure:
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: [MockTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
         app.dependency_overrides[resolve_git] = lambda: FailingGit()
         app.state.settings = _dev_settings()
         client = TestClient(app)
@@ -536,8 +439,8 @@ class TestCommitSagaGitFailure:
         data = resp.json()
         # Saga is persisted despite git failure
         assert len(saga_repo.sagas) == 1
-        assert len(raid_repo.phases) == 2
-        assert len(raid_repo.raids) == 3
+        assert len(saga_repo.phases) == 2
+        assert len(saga_repo.raids) == 3
         # Response includes warning about the failure
         assert len(data["warnings"]) == 1
         assert "feat/my-saga" in data["warnings"][0]
@@ -546,7 +449,6 @@ class TestCommitSagaGitFailure:
     def test_partial_git_failure_reports_failed_repos(
         self,
         saga_repo: MockSagaRepo,
-        raid_repo: MockRaidRepo,
     ) -> None:
         class PartialFailGit(MockGit):
             async def create_branch(self, repo: str, branch: str, base: str) -> None:
@@ -559,7 +461,6 @@ class TestCommitSagaGitFailure:
         app.include_router(create_sagas_router())
         app.dependency_overrides[resolve_trackers] = lambda: [MockTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_raid_repo] = lambda: raid_repo
         app.dependency_overrides[resolve_git] = lambda: git
         app.state.settings = _dev_settings()
         client = TestClient(app)
