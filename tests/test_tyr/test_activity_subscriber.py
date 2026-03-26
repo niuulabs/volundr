@@ -382,16 +382,6 @@ def _make_volundr_session(session_id: str = "session-1", status: str = "running"
     )
 
 
-class StubVolundrFactory:
-    """Stub factory that always returns the same adapter for any owner."""
-
-    def __init__(self, adapter: StubVolundr) -> None:
-        self._adapter = adapter
-
-    async def for_owner(self, owner_id: str) -> StubVolundr:
-        return self._adapter
-
-
 class StubPool:
     """Mock asyncpg.Pool for dispatched_sessions queries."""
 
