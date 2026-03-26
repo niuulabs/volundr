@@ -1,7 +1,8 @@
--- Lightweight session tracking for the activity subscriber.
--- The tracker (Linear, etc.) remains the source of truth for issue data.
--- This table only links Volundr sessions to owners and sagas.
+DROP TABLE IF EXISTS raid_session_messages;
+DROP TABLE IF EXISTS raid_confidence_events;
+DROP TABLE IF EXISTS raid_progress;
 
+-- Restore the dispatched_sessions table that migration 000016 up dropped.
 CREATE TABLE IF NOT EXISTS dispatched_sessions (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id        TEXT NOT NULL UNIQUE,
@@ -13,4 +14,4 @@ CREATE TABLE IF NOT EXISTS dispatched_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatched_sessions_status ON dispatched_sessions(status);
-CREATE INDEX IF NOT EXISTS idx_dispatched_sessions_owner ON dispatched_sessions(owner_id);
+CREATE INDEX IF NOT EXISTS idx_dispatched_sessions_owner  ON dispatched_sessions(owner_id);

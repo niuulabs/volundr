@@ -54,9 +54,7 @@ async def test_code_forge(url: str, token: str) -> ConnectionTestResult:
             success=False, message=f"Cannot reach {test_url}", provider="volundr"
         )
     except Exception as e:
-        return ConnectionTestResult(
-            success=False, message=str(e), provider="volundr"
-        )
+        return ConnectionTestResult(success=False, message=str(e), provider="volundr")
 
 
 async def test_telegram_bot(bot_token: str) -> ConnectionTestResult:
@@ -65,9 +63,7 @@ async def test_telegram_bot(bot_token: str) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="No bot token")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"https://api.telegram.org/bot{bot_token}/getMe"
-            )
+            resp = await client.get(f"https://api.telegram.org/bot{bot_token}/getMe")
             if resp.status_code == 200 and resp.json().get("ok"):
                 bot_name = resp.json()["result"].get("username", "bot")
                 return ConnectionTestResult(
@@ -82,9 +78,7 @@ async def test_telegram_bot(bot_token: str) -> ConnectionTestResult:
                 provider="telegram",
             )
     except Exception as e:
-        return ConnectionTestResult(
-            success=False, message=str(e), provider="telegram"
-        )
+        return ConnectionTestResult(success=False, message=str(e), provider="telegram")
 
 
 async def test_connection(

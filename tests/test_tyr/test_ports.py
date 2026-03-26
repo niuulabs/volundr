@@ -31,6 +31,20 @@ class TestTrackerPort:
             "get_project",
             "list_milestones",
             "list_issues",
+            "update_raid_progress",
+            "get_raid_by_session",
+            "list_raids_by_status",
+            "get_raid_by_id",
+            "add_confidence_event",
+            "get_confidence_events",
+            "all_raids_merged",
+            "list_phases_for_saga",
+            "update_phase_status",
+            "get_saga_for_raid",
+            "get_phase_for_raid",
+            "get_owner_for_raid",
+            "save_session_message",
+            "get_session_messages",
         }
         abstract_methods = {
             name

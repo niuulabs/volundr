@@ -46,8 +46,7 @@ class MemoryTokenIssuer(TokenIssuer):
             sub = claims.get("sub", "")
         except Exception:
             sub = (
-                hashlib.sha256(subject_token.encode()).hexdigest()[:16]
-                if subject_token else "dev"
+                hashlib.sha256(subject_token.encode()).hexdigest()[:16] if subject_token else "dev"
             )
 
         now = int(time.time())

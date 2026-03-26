@@ -12,6 +12,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from niuu.domain.models import Principal
+from tyr.adapters.inbound.auth import extract_principal
 from tyr.config import ReviewConfig
 from tyr.domain.exceptions import RaidNotFoundError
 from tyr.domain.models import RaidStatus
@@ -25,7 +27,6 @@ from tyr.domain.services.session_message import (
     SessionMessageService,
 )
 from tyr.ports.git import GitPort
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
 
@@ -96,10 +97,10 @@ class SessionMessageResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def resolve_raid_repo() -> RaidRepository:
+async def resolve_tracker() -> TrackerPort:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Raid repository not configured",
+        detail="Tracker port not configured",
     )
 
 
@@ -117,13 +118,6 @@ async def resolve_git() -> GitPort:
     )
 
 
-async def resolve_tracker() -> TrackerPort:
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Tracker port not configured",
-    )
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -137,11 +131,13 @@ def _get_review_config(request: Request) -> ReviewConfig:
     return settings.review
 
 
-def _build_review_service(request: Request, raid_repo: RaidRepository) -> RaidReviewService:
+def _build_review_service(
+    request: Request, tracker: TrackerPort, owner_id: str
+) -> RaidReviewService:
     """Construct a RaidReviewService with config and event bus from app state."""
     review_cfg = _get_review_config(request)
     event_bus = getattr(request.app.state, "event_bus", None)
-    return RaidReviewService(raid_repo, review_cfg, event_bus=event_bus)
+    return RaidReviewService(tracker, owner_id, review_cfg, event_bus=event_bus)
 
 
 def _raid_response(raid, reason: str | None = None) -> RaidResponse:
@@ -168,11 +164,11 @@ def create_raids_router() -> APIRouter:
     @router.get("/{raid_id}/review", response_model=ReviewResponse)
     async def get_review(
         raid_id: UUID,
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        tracker: TrackerPort = Depends(resolve_tracker),
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> ReviewResponse:
         """Get review state for a raid: chronicle summary, CI status, confidence."""
-        raid = await raid_repo.get_raid(raid_id)
+        raid = await tracker.get_raid_by_id(raid_id)
         if raid is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -194,7 +190,7 @@ def create_raids_router() -> APIRouter:
                     exc_info=True,
                 )
 
-        events = await raid_repo.get_confidence_events(raid_id)
+        events = await tracker.get_confidence_events(raid.tracker_id)
 
         return ReviewResponse(
             raid_id=str(raid.id),
@@ -220,10 +216,10 @@ def create_raids_router() -> APIRouter:
     async def approve_raid(
         raid_id: UUID,
         request: Request,
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        principal: Principal = Depends(extract_principal),
+        tracker: TrackerPort = Depends(resolve_tracker),
         volundr: VolundrPort = Depends(resolve_volundr),
         git: GitPort = Depends(resolve_git),
-        tracker: TrackerPort = Depends(resolve_tracker),
     ) -> RaidResponse:
         """Approve a raid: merge branch, update state, check phase gate.
 
@@ -231,10 +227,10 @@ def create_raids_router() -> APIRouter:
         wrap the shared RaidReviewService which handles confidence events,
         state transition, and phase gate checks.
         """
-        svc = _build_review_service(request, raid_repo)
+        svc = _build_review_service(request, tracker, principal.user_id)
 
         # Fetch raid for REST-specific pre-steps (CI check, git merge)
-        raid = await raid_repo.get_raid(raid_id)
+        raid = await tracker.get_raid_by_id(raid_id)
         if raid is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -255,7 +251,7 @@ def create_raids_router() -> APIRouter:
                 )
 
         # Pre-step: merge raid branch into feature branch before state transition
-        saga = await raid_repo.get_saga_for_raid(raid_id)
+        saga = await tracker.get_saga_for_raid(raid.tracker_id)
         if saga is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -304,12 +300,12 @@ def create_raids_router() -> APIRouter:
         raid_id: UUID,
         request: Request,
         body: RejectRequest | None = None,
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        principal: Principal = Depends(extract_principal),
         tracker: TrackerPort = Depends(resolve_tracker),
     ) -> RaidResponse:
         """Reject a raid: set FAILED, record reason, apply confidence penalty."""
         reason = body.reason if body else None
-        svc = _build_review_service(request, raid_repo)
+        svc = _build_review_service(request, tracker, principal.user_id)
 
         # Core review: confidence event, state → FAILED
         try:
@@ -337,11 +333,11 @@ def create_raids_router() -> APIRouter:
     async def retry_raid(
         raid_id: UUID,
         request: Request,
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        principal: Principal = Depends(extract_principal),
         tracker: TrackerPort = Depends(resolve_tracker),
     ) -> RaidResponse:
         """Retry a raid: re-queue with incremented retry_count."""
-        svc = _build_review_service(request, raid_repo)
+        svc = _build_review_service(request, tracker, principal.user_id)
 
         # Core review: confidence event, state → PENDING or QUEUED
         try:
@@ -370,12 +366,12 @@ def create_raids_router() -> APIRouter:
         raid_id: UUID,
         body: SendMessageRequest,
         request: Request,
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        tracker: TrackerPort = Depends(resolve_tracker),
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> SendMessageResponse:
         """Send a message to the running session for a raid."""
         event_bus = getattr(request.app.state, "event_bus", None)
-        svc = SessionMessageService(raid_repo, volundr, event_bus=event_bus)
+        svc = SessionMessageService(tracker, volundr, event_bus=event_bus)
 
         try:
             result = await svc.send_message(raid_id, body.content, sender="user")
@@ -407,17 +403,17 @@ def create_raids_router() -> APIRouter:
     @router.get("/{raid_id}/messages", response_model=list[SessionMessageResponse])
     async def list_messages(
         raid_id: UUID,
-        raid_repo: RaidRepository = Depends(resolve_raid_repo),
+        tracker: TrackerPort = Depends(resolve_tracker),
     ) -> list[SessionMessageResponse]:
         """List all messages sent to a raid's session (audit trail)."""
-        raid = await raid_repo.get_raid(raid_id)
+        raid = await tracker.get_raid_by_id(raid_id)
         if raid is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Raid not found: {raid_id}",
             )
 
-        messages = await raid_repo.get_session_messages(raid_id)
+        messages = await tracker.get_session_messages(raid.tracker_id)
         return [
             SessionMessageResponse(
                 id=str(m.id),

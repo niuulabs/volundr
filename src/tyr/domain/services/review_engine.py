@@ -29,7 +29,7 @@ from tyr.domain.models import (
 )
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
-from tyr.ports.raid_repository import RaidRepository
+from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-exported for consumers
 from tyr.ports.volundr import VolundrPort
 
 logger = logging.getLogger(__name__)
@@ -102,13 +102,13 @@ class ReviewEngine:
 
     def __init__(
         self,
-        raid_repo: RaidRepository,
+        tracker_factory: TrackerFactory,
         git: GitPort,
         review_config: ReviewConfig,
         event_bus: EventBusPort | None = None,
         volundr: VolundrPort | None = None,
     ) -> None:
-        self._raid_repo = raid_repo
+        self._tracker_factory = tracker_factory
         self._git = git
         self._cfg = review_config
         self._event_bus = event_bus
@@ -147,16 +147,16 @@ class ReviewEngine:
                     continue
                 if event.data.get("status") != RaidStatus.REVIEW.value:
                     continue
-                raid_id_str = event.data.get("raid_id")
-                if not raid_id_str:
+                tracker_id = event.data.get("tracker_id")
+                owner_id = event.owner_id
+                if not tracker_id or not owner_id:
                     continue
                 try:
-                    raid_id = UUID(raid_id_str)
-                    await self.evaluate(raid_id)
+                    await self.evaluate(tracker_id, owner_id)
                 except Exception:
                     logger.warning(
                         "Review engine failed for raid %s",
-                        raid_id_str,
+                        tracker_id,
                         exc_info=True,
                     )
         except asyncio.CancelledError:
@@ -165,14 +165,16 @@ class ReviewEngine:
             if self._event_bus is not None:
                 self._event_bus.unsubscribe(q)
 
-    async def evaluate(self, raid_id: UUID) -> ReviewDecision:
+    async def evaluate(self, tracker_id: str, owner_id: str) -> ReviewDecision:
         """Run the full review pipeline for a raid in REVIEW state."""
-        raid = await self._raid_repo.get_raid(raid_id)
-        if raid is None:
-            raise ValueError(f"Raid not found: {raid_id}")
+        trackers = await self._tracker_factory.for_owner(owner_id)
+        if not trackers:
+            raise ValueError(f"No tracker adapter found for owner {owner_id}")
+        tracker = trackers[0]
 
+        raid = await tracker.get_raid(tracker_id)
         if raid.status != RaidStatus.REVIEW:
-            raise ValueError(f"Raid {raid_id} not in REVIEW state: {raid.status}")
+            raise ValueError(f"Raid {tracker_id} not in REVIEW state: {raid.status}")
 
         # Gather signals
         pr_status = await self._fetch_pr_status(raid)
@@ -180,24 +182,28 @@ class ReviewEngine:
         score = raid.confidence
 
         # Apply confidence signals
-        score = await self._apply_ci_signal(raid.id, score, pr_status)
-        score = await self._apply_mergeable_signal(raid.id, score, pr_status)
+        score = await self._apply_ci_signal(tracker, tracker_id, raid.id, score, pr_status)
+        score = await self._apply_mergeable_signal(tracker, tracker_id, raid.id, score, pr_status)
         score = await self._apply_scope_breach_signal(
-            raid.id, score, raid.declared_files, changed_files
+            tracker, tracker_id, raid.id, score, raid.declared_files, changed_files
         )
-        score = await self._apply_retry_penalty(raid.id, score, raid.retry_count)
+        score = await self._apply_retry_penalty(
+            tracker, tracker_id, raid.id, score, raid.retry_count
+        )
 
         # Decision logic
         if pr_status and not pr_status.ci_passed:
-            return await self._handle_ci_failure(raid, pr_status, score)
+            return await self._handle_ci_failure(
+                tracker, tracker_id, owner_id, raid, pr_status, score
+            )
 
         if pr_status and not pr_status.mergeable:
-            return await self._handle_conflict(raid, score)
+            return await self._handle_conflict(tracker, tracker_id, owner_id, raid, score)
 
         if score >= self._cfg.auto_approve_threshold and self._can_auto_approve(pr_status):
-            return await self._handle_auto_approve(raid, score)
+            return await self._handle_auto_approve(tracker, tracker_id, owner_id, raid, score)
 
-        return await self._handle_escalation(raid, score)
+        return await self._handle_escalation(tracker_id, owner_id, raid, score)
 
     # -- Signal fetchers --
 
@@ -222,7 +228,12 @@ class ReviewEngine:
     # -- Confidence signal application --
 
     async def _apply_ci_signal(
-        self, raid_id: UUID, score: float, pr_status: PRStatus | None
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        raid_id: UUID,
+        score: float,
+        pr_status: PRStatus | None,
     ) -> float:
         if pr_status is None or pr_status.ci_passed is None:
             return score
@@ -236,12 +247,17 @@ class ReviewEngine:
                 raid_id, ConfidenceEventType.CI_FAIL, self._cfg.confidence_delta_ci_fail, score
             )
 
-        await self._raid_repo.add_confidence_event(event)
+        await tracker.add_confidence_event(tracker_id, event)
         await self._emit_confidence_updated(raid_id, event)
         return event.score_after
 
     async def _apply_mergeable_signal(
-        self, raid_id: UUID, score: float, pr_status: PRStatus | None
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        raid_id: UUID,
+        score: float,
+        pr_status: PRStatus | None,
     ) -> float:
         if pr_status is None:
             return score
@@ -258,12 +274,14 @@ class ReviewEngine:
                 raid_id, ConfidenceEventType.PR_CONFLICT, self._cfg.confidence_delta_conflict, score
             )
 
-        await self._raid_repo.add_confidence_event(event)
+        await tracker.add_confidence_event(tracker_id, event)
         await self._emit_confidence_updated(raid_id, event)
         return event.score_after
 
     async def _apply_scope_breach_signal(
         self,
+        tracker: TrackerPort,
+        tracker_id: str,
         raid_id: UUID,
         score: float,
         declared_files: list[str],
@@ -278,18 +296,25 @@ class ReviewEngine:
             self._cfg.confidence_delta_scope_breach,
             score,
         )
-        await self._raid_repo.add_confidence_event(event)
+        await tracker.add_confidence_event(tracker_id, event)
         await self._emit_confidence_updated(raid_id, event)
-        logger.info("Scope breach detected for raid %s", raid_id)
+        logger.info("Scope breach detected for raid %s", tracker_id)
         return event.score_after
 
-    async def _apply_retry_penalty(self, raid_id: UUID, score: float, retry_count: int) -> float:
+    async def _apply_retry_penalty(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        raid_id: UUID,
+        score: float,
+        retry_count: int,
+    ) -> float:
         if retry_count == 0:
             return score
 
         delta = self._cfg.confidence_delta_retry_multiplier * retry_count
         event = _make_event(raid_id, ConfidenceEventType.RETRY, delta, score)
-        await self._raid_repo.add_confidence_event(event)
+        await tracker.add_confidence_event(tracker_id, event)
         await self._emit_confidence_updated(raid_id, event)
         return event.score_after
 
@@ -300,32 +325,39 @@ class ReviewEngine:
             return False
         return bool(pr_status.ci_passed and pr_status.mergeable)
 
-    async def _handle_auto_approve(self, raid: Raid, score: float) -> ReviewDecision:
+    async def _handle_auto_approve(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+        score: float,
+    ) -> ReviewDecision:
         """Auto-approve: merge PR, transition REVIEW → MERGED."""
         event = _make_event(
             raid.id, ConfidenceEventType.AUTO_APPROVED, self._cfg.confidence_delta_approved, score
         )
-        await self._raid_repo.add_confidence_event(event)
+        await tracker.add_confidence_event(tracker_id, event)
 
         validate_transition(raid.status, RaidStatus.MERGED)
-        updated = await self._raid_repo.update_raid_status(raid.id, RaidStatus.MERGED)
-        if updated is None:
-            raise ValueError(f"Failed to update raid {raid.id}")
+        updated = await tracker.update_raid_progress(tracker_id, status=RaidStatus.MERGED)
 
         # Merge PR branch
-        saga = await self._raid_repo.get_saga_for_raid(raid.id)
+        saga = await tracker.get_saga_for_raid(tracker_id)
         if saga and raid.branch and saga.repos:
             repo = saga.repos[0]
             try:
                 await self._git.merge_branch(repo, raid.branch, saga.feature_branch)
                 await self._git.delete_branch(repo, raid.branch)
             except Exception:
-                logger.warning("Failed to merge/delete branch for raid %s", raid.id, exc_info=True)
+                logger.warning(
+                    "Failed to merge/delete branch for raid %s", tracker_id, exc_info=True
+                )
 
         # Phase gate check
-        phase_gate_unlocked = await self._check_phase_gate(raid.id)
+        phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
 
-        await self._emit_state_changed(updated, action="auto_approved")
+        await self._emit_state_changed(updated, owner_id=owner_id, action="auto_approved")
 
         return ReviewDecision(
             raid=updated,
@@ -335,54 +367,76 @@ class ReviewEngine:
         )
 
     async def _handle_ci_failure(
-        self, raid: Raid, pr_status: PRStatus, score: float
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+        pr_status: PRStatus,
+        score: float,
     ) -> ReviewDecision:
         """CI failed: auto-retry if retries remain, otherwise FAILED + escalate."""
         if raid.retry_count < self._cfg.max_retries:
             return await self._auto_retry(
-                raid, reason=f"CI failed (attempt {raid.retry_count + 1}/{self._cfg.max_retries})"
+                tracker,
+                tracker_id,
+                owner_id,
+                raid,
+                reason=f"CI failed (attempt {raid.retry_count + 1}/{self._cfg.max_retries})",
             )
 
         # Retries exhausted → FAILED
         validate_transition(raid.status, RaidStatus.FAILED)
-        updated = await self._raid_repo.update_raid_status(
-            raid.id, RaidStatus.FAILED, reason="CI failed, retries exhausted"
+        updated = await tracker.update_raid_progress(
+            tracker_id, status=RaidStatus.FAILED, reason="CI failed, retries exhausted"
         )
-        if updated is None:
-            raise ValueError(f"Failed to update raid {raid.id}")
 
-        await self._emit_state_changed(updated, action="failed")
+        await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
             raid=updated,
             action="failed",
             reason=f"CI failed after {self._cfg.max_retries} retries",
         )
 
-    async def _handle_conflict(self, raid: Raid, score: float) -> ReviewDecision:
+    async def _handle_conflict(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+        score: float,
+    ) -> ReviewDecision:
         """PR has conflicts: auto-retry if retries remain, otherwise escalate."""
         if raid.retry_count < self._cfg.max_retries:
             return await self._auto_retry(
+                tracker,
+                tracker_id,
+                owner_id,
                 raid,
                 reason=f"PR conflicts (attempt {raid.retry_count + 1}/{self._cfg.max_retries})",
             )
 
         validate_transition(raid.status, RaidStatus.FAILED)
-        updated = await self._raid_repo.update_raid_status(
-            raid.id, RaidStatus.FAILED, reason="PR conflicts, retries exhausted"
+        updated = await tracker.update_raid_progress(
+            tracker_id, status=RaidStatus.FAILED, reason="PR conflicts, retries exhausted"
         )
-        if updated is None:
-            raise ValueError(f"Failed to update raid {raid.id}")
 
-        await self._emit_state_changed(updated, action="failed")
+        await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
             raid=updated,
             action="failed",
             reason=f"PR conflicts after {self._cfg.max_retries} retries",
         )
 
-    async def _handle_escalation(self, raid: Raid, score: float) -> ReviewDecision:
+    async def _handle_escalation(
+        self,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+        score: float,
+    ) -> ReviewDecision:
         """Confidence too low or conditions not met — escalate to human review."""
-        await self._emit_state_changed(raid, action="escalated")
+        await self._emit_state_changed(raid, owner_id=owner_id, action="escalated")
         return ReviewDecision(
             raid=raid,
             action="escalated",
@@ -392,7 +446,15 @@ class ReviewEngine:
             ),
         )
 
-    async def _auto_retry(self, raid: Raid, *, reason: str) -> ReviewDecision:
+    async def _auto_retry(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+        *,
+        reason: str,
+    ) -> ReviewDecision:
         """Transition raid back to PENDING for re-dispatch."""
         event = _make_event(
             raid.id,
@@ -400,19 +462,17 @@ class ReviewEngine:
             self._cfg.confidence_delta_retry,
             raid.confidence,
         )
-        await self._raid_repo.add_confidence_event(event)
+        await tracker.add_confidence_event(tracker_id, event)
 
         # Send failure context to the running session before resetting
         await self._send_retry_feedback(raid, reason)
 
         validate_transition(raid.status, RaidStatus.PENDING)
-        updated = await self._raid_repo.update_raid_status(
-            raid.id, RaidStatus.PENDING, increment_retry=True
+        updated = await tracker.update_raid_progress(
+            tracker_id, status=RaidStatus.PENDING, retry_count=raid.retry_count + 1
         )
-        if updated is None:
-            raise ValueError(f"Failed to update raid {raid.id}")
 
-        await self._emit_state_changed(updated, action="retried")
+        await self._emit_state_changed(updated, owner_id=owner_id, action="retried")
         return ReviewDecision(raid=updated, action="retried", reason=reason)
 
     # -- Session feedback --
@@ -435,42 +495,45 @@ class ReviewEngine:
 
     # -- Phase gate --
 
-    async def _check_phase_gate(self, raid_id: UUID) -> bool:
+    async def _check_phase_gate(self, tracker: TrackerPort, tracker_id: str, owner_id: str) -> bool:
         """Check if all raids in the phase are merged, and unlock next phase if so."""
-        phase = await self._raid_repo.get_phase_for_raid(raid_id)
+        phase = await tracker.get_phase_for_raid(tracker_id)
         if phase is None:
             return False
 
-        if not await self._raid_repo.all_raids_merged(phase.id):
+        if not await tracker.all_raids_merged(phase.tracker_id):
             return False
 
-        logger.info("Phase gate unlocked — all raids merged in phase %s", phase.id)
+        logger.info("Phase gate unlocked — all raids merged in phase %s", phase.tracker_id)
 
         # Unlock the next phase
-        saga = await self._raid_repo.get_saga_for_raid(raid_id)
+        saga = await tracker.get_saga_for_raid(tracker_id)
         if saga is None:
             return True
 
-        phases = await self._raid_repo.list_phases_for_saga(saga.id)
-        current_idx = next((i for i, p in enumerate(phases) if p.id == phase.id), -1)
+        phases = await tracker.list_phases_for_saga(saga.tracker_id)
+        current_idx = next(
+            (i for i, p in enumerate(phases) if p.tracker_id == phase.tracker_id), -1
+        )
         if current_idx < 0 or current_idx + 1 >= len(phases):
             return True
 
         next_phase = phases[current_idx + 1]
         if next_phase.status == PhaseStatus.GATED:
-            await self._raid_repo.update_phase_status(next_phase.id, PhaseStatus.ACTIVE)
-            logger.info("Next phase %s unlocked (GATED → ACTIVE)", next_phase.id)
+            await tracker.update_phase_status(next_phase.tracker_id, PhaseStatus.ACTIVE)
+            logger.info("Next phase %s unlocked (GATED → ACTIVE)", next_phase.tracker_id)
 
             if self._event_bus:
                 await self._event_bus.emit(
                     TyrEvent(
                         event="phase.unlocked",
+                        owner_id=owner_id,
                         data={
-                            "phase_id": str(next_phase.id),
-                            "saga_id": str(saga.id),
+                            "phase_id": next_phase.tracker_id,
+                            "saga_id": saga.tracker_id,
                             "phase_number": next_phase.number,
                             "phase_name": next_phase.name,
-                            "owner_id": saga.owner_id,
+                            "owner_id": owner_id,
                         },
                     )
                 )
@@ -479,12 +542,13 @@ class ReviewEngine:
 
     # -- Event emission --
 
-    async def _emit_state_changed(self, raid: Raid, *, action: str) -> None:
+    async def _emit_state_changed(self, raid: Raid, *, owner_id: str, action: str) -> None:
         if self._event_bus is None:
             return
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
+                owner_id=owner_id,
                 data={
                     "raid_id": str(raid.id),
                     "status": raid.status.value,

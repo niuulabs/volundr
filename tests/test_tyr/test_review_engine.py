@@ -20,13 +20,17 @@ from tyr.domain.models import (
     RaidStatus,
     Saga,
     SagaStatus,
+    SessionMessage,
+    TrackerIssue,
+    TrackerMilestone,
+    TrackerProject,
 )
 from tyr.domain.services.review_engine import (
     ReviewEngine,
     detect_scope_breach,
 )
 from tyr.ports.git import GitPort
-from tyr.ports.raid_repository import RaidRepository
+from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrSession
 
 NOW = datetime.now(UTC)
@@ -76,41 +80,102 @@ class StubGit(GitPort):
         return self.changed_files.get(pr_id, [])
 
 
-class StubRaidRepo(RaidRepository):
-    """In-memory raid repository for review engine tests."""
+class StubTracker(TrackerPort):
+    """In-memory tracker stub for review engine tests."""
 
     def __init__(self) -> None:
-        self.raids: dict[UUID, Raid] = {}
-        self.events: dict[UUID, list[ConfidenceEvent]] = {}
+        # raids keyed by tracker_id (str)
+        self.raids: dict[str, Raid] = {}
+        # confidence events keyed by tracker_id (str)
+        self.events: dict[str, list[ConfidenceEvent]] = {}
         self.saga: Saga | None = None
         self.phase: Phase | None = None
         self.phases: list[Phase] = []
         self._all_merged: bool = False
-        self.phase_status_updates: list[tuple[UUID, PhaseStatus]] = []
+        self.phase_status_updates: list[tuple[str, PhaseStatus]] = []
 
-    async def save_phase(self, phase: Phase, *, conn=None) -> None:  # noqa: ANN001
+    # -- CRUD: create entities --
+
+    async def create_saga(self, saga: Saga) -> str:
+        return saga.tracker_id
+
+    async def create_phase(self, phase: Phase) -> str:
+        return phase.tracker_id
+
+    async def create_raid(self, raid: Raid) -> str:
+        self.raids[raid.tracker_id] = raid
+        return raid.tracker_id
+
+    # -- CRUD: update / close --
+
+    async def update_raid_state(self, raid_id: str, state: RaidStatus) -> None:
         pass
 
-    async def save_raid(self, raid: Raid, *, conn=None) -> None:  # noqa: ANN001
-        self.raids[raid.id] = raid
+    async def close_raid(self, raid_id: str) -> None:
+        pass
 
-    async def get_raid(self, raid_id: UUID) -> Raid | None:
-        return self.raids.get(raid_id)
+    # -- Read: fetch domain entities by tracker ID --
 
-    async def update_raid_status(
-        self,
-        raid_id: UUID,
-        status: RaidStatus,
-        *,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        raid = self.raids.get(raid_id)
+    async def get_saga(self, saga_id: str) -> Saga:
+        if self.saga is None:
+            raise ValueError(f"Saga not found: {saga_id}")
+        return self.saga
+
+    async def get_phase(self, tracker_id: str) -> Phase:
+        if self.phase is None:
+            raise ValueError(f"Phase not found: {tracker_id}")
+        return self.phase
+
+    async def get_raid(self, tracker_id: str) -> Raid:
+        raid = self.raids.get(tracker_id)
         if raid is None:
-            return None
-        retry_count = raid.retry_count + 1 if increment_retry else raid.retry_count
-        events = self.events.get(raid_id, [])
-        confidence = events[-1].score_after if events else raid.confidence
+            raise ValueError(f"Raid not found: {tracker_id}")
+        return raid
+
+    async def list_pending_raids(self, phase_id: str) -> list[Raid]:
+        return []
+
+    # -- Browsing --
+
+    async def list_projects(self) -> list[TrackerProject]:
+        return []
+
+    async def get_project(self, project_id: str) -> TrackerProject:
+        raise NotImplementedError
+
+    async def list_milestones(self, project_id: str) -> list[TrackerMilestone]:
+        return []
+
+    async def list_issues(
+        self,
+        project_id: str,
+        milestone_id: str | None = None,
+    ) -> list[TrackerIssue]:
+        return []
+
+    # -- Raid progress --
+
+    async def update_raid_progress(
+        self,
+        tracker_id: str,
+        *,
+        status: RaidStatus | None = None,
+        session_id: str | None = None,
+        confidence: float | None = None,
+        pr_url: str | None = None,
+        pr_id: str | None = None,
+        retry_count: int | None = None,
+        reason: str | None = None,
+        owner_id: str | None = None,
+        phase_tracker_id: str | None = None,
+        saga_tracker_id: str | None = None,
+        chronicle_summary: str | None = None,
+    ) -> Raid:
+        raid = self.raids.get(tracker_id)
+        if raid is None:
+            raise ValueError(f"Raid not found: {tracker_id}")
+        events = self.events.get(tracker_id, [])
+        new_confidence = events[-1].score_after if events else raid.confidence
         updated = Raid(
             id=raid.id,
             phase_id=raid.phase_id,
@@ -120,63 +185,49 @@ class StubRaidRepo(RaidRepository):
             acceptance_criteria=raid.acceptance_criteria,
             declared_files=raid.declared_files,
             estimate_hours=raid.estimate_hours,
-            status=status,
-            confidence=confidence,
-            session_id=raid.session_id,
+            status=status if status is not None else raid.status,
+            confidence=confidence if confidence is not None else new_confidence,
+            session_id=session_id if session_id is not None else raid.session_id,
             branch=raid.branch,
             chronicle_summary=raid.chronicle_summary,
-            pr_url=raid.pr_url,
-            pr_id=raid.pr_id,
-            retry_count=retry_count,
+            pr_url=pr_url if pr_url is not None else raid.pr_url,
+            pr_id=pr_id if pr_id is not None else raid.pr_id,
+            retry_count=retry_count if retry_count is not None else raid.retry_count,
             created_at=raid.created_at,
             updated_at=datetime.now(UTC),
         )
-        self.raids[raid_id] = updated
+        self.raids[tracker_id] = updated
         return updated
 
-    async def get_confidence_events(self, raid_id: UUID) -> list[ConfidenceEvent]:
-        return self.events.get(raid_id, [])
+    async def get_raid_by_session(self, session_id: str) -> Raid | None:
+        return next((r for r in self.raids.values() if r.session_id == session_id), None)
 
-    async def add_confidence_event(self, event: ConfidenceEvent) -> None:
-        self.events.setdefault(event.raid_id, []).append(event)
-
-    async def find_raid_by_tracker_id(self, tracker_id: str) -> Raid | None:
-        return next((r for r in self.raids.values() if r.tracker_id == tracker_id), None)
-
-    async def get_saga_for_raid(self, raid_id: UUID) -> Saga | None:
-        return self.saga
-
-    async def get_phase_for_raid(self, raid_id: UUID) -> Phase | None:
-        return self.phase
-
-    async def list_by_status(self, status: RaidStatus) -> list[Raid]:
+    async def list_raids_by_status(self, status: RaidStatus) -> list[Raid]:
         return [r for r in self.raids.values() if r.status == status]
 
-    async def update_raid_completion(
-        self,
-        raid_id: UUID,
-        *,
-        status: RaidStatus,
-        chronicle_summary: str | None = None,
-        pr_url: str | None = None,
-        pr_id: str | None = None,
-        reason: str | None = None,
-        increment_retry: bool = False,
-    ) -> Raid | None:
-        return await self.update_raid_status(
-            raid_id, status, reason=reason, increment_retry=increment_retry
-        )
+    async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
+        return next((r for r in self.raids.values() if r.id == raid_id), None)
 
-    async def all_raids_merged(self, phase_id: UUID) -> bool:
+    # -- Confidence events --
+
+    async def add_confidence_event(self, tracker_id: str, event: ConfidenceEvent) -> None:
+        self.events.setdefault(tracker_id, []).append(event)
+
+    async def get_confidence_events(self, tracker_id: str) -> list[ConfidenceEvent]:
+        return self.events.get(tracker_id, [])
+
+    # -- Phase gate management --
+
+    async def all_raids_merged(self, phase_tracker_id: str) -> bool:
         return self._all_merged
 
-    async def list_phases_for_saga(self, saga_id: UUID) -> list[Phase]:
+    async def list_phases_for_saga(self, saga_tracker_id: str) -> list[Phase]:
         return self.phases
 
-    async def update_phase_status(self, phase_id: UUID, status: PhaseStatus) -> Phase | None:
-        self.phase_status_updates.append((phase_id, status))
+    async def update_phase_status(self, phase_tracker_id: str, status: PhaseStatus) -> Phase | None:
+        self.phase_status_updates.append((phase_tracker_id, status))
         for i, p in enumerate(self.phases):
-            if p.id == phase_id:
+            if p.tracker_id == phase_tracker_id:
                 updated = Phase(
                     id=p.id,
                     saga_id=p.saga_id,
@@ -190,16 +241,36 @@ class StubRaidRepo(RaidRepository):
                 return updated
         return None
 
-    async def save_session_message(self, message: object) -> None:
-        pass
+    # -- Cross-entity navigation --
 
-    async def get_session_messages(self, raid_id: UUID) -> list:
-        return []
+    async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
+        return self.saga
 
-    async def get_owner_for_raid(self, raid_id: UUID) -> str | None:
+    async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
+        return self.phase
+
+    async def get_owner_for_raid(self, tracker_id: str) -> str | None:
         if self.saga:
             return self.saga.owner_id
         return None
+
+    # -- Session messages --
+
+    async def save_session_message(self, message: SessionMessage) -> None:
+        pass
+
+    async def get_session_messages(self, tracker_id: str) -> list[SessionMessage]:
+        return []
+
+
+class StubTrackerFactory:
+    """In-memory tracker factory stub for review engine tests."""
+
+    def __init__(self, tracker: StubTracker) -> None:
+        self._tracker = tracker
+
+    async def for_owner(self, owner_id: str) -> list[StubTracker]:
+        return [self._tracker]
 
 
 class StubVolundr(VolundrPort):
@@ -247,9 +318,13 @@ class StubVolundr(VolundrPort):
 PHASE_ID = uuid4()
 SAGA_ID = uuid4()
 
+OWNER_ID = "user-1"
+TRACKER_ID = "NIU-100"
+
 
 def _make_raid(
     raid_id: UUID | None = None,
+    tracker_id: str = TRACKER_ID,
     status: RaidStatus = RaidStatus.REVIEW,
     confidence: float = 0.5,
     pr_id: str | None = "https://api.github.com/repos/org/repo/pulls/42",
@@ -260,7 +335,7 @@ def _make_raid(
     return Raid(
         id=raid_id or uuid4(),
         phase_id=PHASE_ID,
-        tracker_id="NIU-100",
+        tracker_id=tracker_id,
         name="Test raid",
         description="A test raid",
         acceptance_criteria=["tests pass"],
@@ -291,7 +366,7 @@ def _make_saga() -> Saga:
         status=SagaStatus.ACTIVE,
         confidence=0.5,
         created_at=NOW,
-        owner_id="user-1",
+        owner_id=OWNER_ID,
     )
 
 
@@ -322,17 +397,23 @@ def _default_config(**overrides: object) -> ReviewConfig:
 
 
 def _make_engine(
-    raid_repo: StubRaidRepo | None = None,
+    tracker: StubTracker | None = None,
     git: StubGit | None = None,
     config: ReviewConfig | None = None,
     event_bus: InMemoryEventBus | None = None,
     volundr: StubVolundr | None = None,
-) -> tuple[ReviewEngine, StubRaidRepo, StubGit, InMemoryEventBus]:
-    r = raid_repo or StubRaidRepo()
+) -> tuple[ReviewEngine, StubTracker, StubGit, InMemoryEventBus]:
+    r = tracker or StubTracker()
     g = git or StubGit()
     e = event_bus or InMemoryEventBus()
     c = config or _default_config()
-    engine = ReviewEngine(raid_repo=r, git=g, review_config=c, event_bus=e, volundr=volundr)
+    engine = ReviewEngine(
+        tracker_factory=StubTrackerFactory(r),
+        git=g,
+        review_config=c,
+        event_bus=e,
+        volundr=volundr,
+    )
     return engine, r, g, e
 
 
@@ -418,7 +499,7 @@ class TestAutoApprove:
         """Raid with high confidence, passing CI, and mergeable PR is auto-approved."""
         engine, repo, git, bus = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
@@ -426,24 +507,24 @@ class TestAutoApprove:
         _setup_passing_pr(git, pr_id)
         git.changed_files[pr_id] = ["src/main.py", "tests/test_main.py"]
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "auto_approved"
-        assert repo.raids[raid.id].status == RaidStatus.MERGED
+        assert repo.raids[raid.tracker_id].status == RaidStatus.MERGED
 
     @pytest.mark.asyncio
     async def test_auto_approve_merges_branch(self) -> None:
         """Auto-approve should merge the raid branch into the feature branch."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert len(git.merged) == 1
         assert git.merged[0] == ("org/repo", "raid/test-branch", "feat/alpha")
@@ -455,7 +536,7 @@ class TestAutoApprove:
         """Auto-approve should emit raid.state_changed and confidence.updated events."""
         engine, repo, git, bus = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
@@ -463,7 +544,7 @@ class TestAutoApprove:
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
         q = bus.subscribe()
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         events = []
         while not q.empty():
@@ -481,16 +562,16 @@ class TestAutoApprove:
         """Auto-approve should record CI_PASS and AUTO_APPROVED confidence events."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         event_types = [e.event_type for e in events]
         assert ConfidenceEventType.CI_PASS in event_types
         assert ConfidenceEventType.AUTO_APPROVED in event_types
@@ -500,7 +581,7 @@ class TestAutoApprove:
         """If branch merge fails, the raid should still transition to MERGED."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
@@ -508,10 +589,10 @@ class TestAutoApprove:
         git.changed_files[raid.pr_id] = ["src/main.py"]
         git.fail_merge = True
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "auto_approved"
-        assert repo.raids[raid.id].status == RaidStatus.MERGED
+        assert repo.raids[raid.tracker_id].status == RaidStatus.MERGED
 
 
 # ---------------------------------------------------------------------------
@@ -525,15 +606,15 @@ class TestCIFailure:
         """CI failure with retries remaining should auto-retry (REVIEW → PENDING)."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(retry_count=0)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_failing_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "retried"
-        assert repo.raids[raid.id].status == RaidStatus.PENDING
-        assert repo.raids[raid.id].retry_count == 1
+        assert repo.raids[raid.tracker_id].status == RaidStatus.PENDING
+        assert repo.raids[raid.tracker_id].retry_count == 1
 
     @pytest.mark.asyncio
     async def test_ci_failure_retries_exhausted(self) -> None:
@@ -541,27 +622,27 @@ class TestCIFailure:
         config = _default_config(max_retries=3)
         engine, repo, git, _ = _make_engine(config=config)
         raid = _make_raid(retry_count=3)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_failing_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "failed"
-        assert repo.raids[raid.id].status == RaidStatus.FAILED
+        assert repo.raids[raid.tracker_id].status == RaidStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_ci_failure_emits_ci_fail_event(self) -> None:
         """CI failure should record a CI_FAIL confidence event."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid()
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_failing_pr(git, raid.pr_id)
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         event_types = [e.event_type for e in events]
         assert ConfidenceEventType.CI_FAIL in event_types
 
@@ -577,14 +658,14 @@ class TestPRConflicts:
         """PR with conflicts and retries remaining should auto-retry."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(retry_count=0)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_conflicted_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "retried"
-        assert repo.raids[raid.id].status == RaidStatus.PENDING
+        assert repo.raids[raid.tracker_id].status == RaidStatus.PENDING
 
     @pytest.mark.asyncio
     async def test_conflict_retries_exhausted(self) -> None:
@@ -592,27 +673,27 @@ class TestPRConflicts:
         config = _default_config(max_retries=2)
         engine, repo, git, _ = _make_engine(config=config)
         raid = _make_raid(retry_count=2)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_conflicted_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "failed"
-        assert repo.raids[raid.id].status == RaidStatus.FAILED
+        assert repo.raids[raid.tracker_id].status == RaidStatus.FAILED
 
     @pytest.mark.asyncio
     async def test_conflict_records_pr_conflict_event(self) -> None:
         """PR conflict should record a PR_CONFLICT confidence event."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid()
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_conflicted_pr(git, raid.pr_id)
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         event_types = [e.event_type for e in events]
         assert ConfidenceEventType.PR_CONFLICT in event_types
 
@@ -630,7 +711,7 @@ class TestScopeBreach:
         raid = _make_raid(
             declared_files=["src/main.py"],
         )
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
@@ -643,9 +724,9 @@ class TestScopeBreach:
             "src/extra3.py",
         ]
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         event_types = [e.event_type for e in events]
         assert ConfidenceEventType.SCOPE_BREACH in event_types
 
@@ -656,7 +737,7 @@ class TestScopeBreach:
         raid = _make_raid(
             declared_files=["src/main.py", "src/b.py", "src/c.py"],
         )
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
@@ -664,9 +745,9 @@ class TestScopeBreach:
         # 1 out of 4 files undeclared → 25% < 30%
         git.changed_files[raid.pr_id] = ["src/main.py", "src/b.py", "src/c.py", "src/d.py"]
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         event_types = [e.event_type for e in events]
         assert ConfidenceEventType.SCOPE_BREACH not in event_types
 
@@ -683,25 +764,25 @@ class TestEscalation:
         config = _default_config(auto_approve_threshold=0.95)
         engine, repo, git, _ = _make_engine(config=config)
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "escalated"
         # Raid stays in REVIEW
-        assert repo.raids[raid.id].status == RaidStatus.REVIEW
+        assert repo.raids[raid.tracker_id].status == RaidStatus.REVIEW
 
     @pytest.mark.asyncio
     async def test_no_pr_escalates(self) -> None:
         """Raid without a PR ID should escalate to human review."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(pr_id=None, confidence=0.9)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "escalated"
 
@@ -710,10 +791,10 @@ class TestEscalation:
         """If PR status cannot be fetched, escalate to human review."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.9)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         git.fail_pr_status = True
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "escalated"
 
@@ -729,16 +810,16 @@ class TestRetryPenalty:
         """Previous retries should apply a cumulative confidence penalty."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5, retry_count=2)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         retry_events = [e for e in events if e.event_type == ConfidenceEventType.RETRY]
         assert len(retry_events) == 1
         # -0.05 * 2 = -0.10
@@ -749,16 +830,16 @@ class TestRetryPenalty:
         """First attempt should not apply a retry penalty."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5, retry_count=0)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         retry_events = [e for e in events if e.event_type == ConfidenceEventType.RETRY]
         assert len(retry_events) == 0
 
@@ -774,7 +855,7 @@ class TestPhaseGate:
         """When all raids in a phase are merged, the next phase is unlocked."""
         engine, repo, git, bus = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo._all_merged = True
 
@@ -788,13 +869,13 @@ class TestPhaseGate:
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
         q = bus.subscribe()
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.phase_gate_unlocked is True
 
-        # Verify next phase was unlocked
+        # Verify next phase was unlocked by tracker_id (string)
         assert len(repo.phase_status_updates) == 1
-        assert repo.phase_status_updates[0] == (next_phase_id, PhaseStatus.ACTIVE)
+        assert repo.phase_status_updates[0] == (phase2.tracker_id, PhaseStatus.ACTIVE)
 
         # Verify phase.unlocked event emitted
         events = []
@@ -802,15 +883,15 @@ class TestPhaseGate:
             events.append(await q.get())
         phase_events = [e for e in events if e.event == "phase.unlocked"]
         assert len(phase_events) == 1
-        assert phase_events[0].data["phase_id"] == str(next_phase_id)
-        assert phase_events[0].data["owner_id"] == "user-1"
+        assert phase_events[0].data["phase_id"] == phase2.tracker_id
+        assert phase_events[0].data["owner_id"] == OWNER_ID
 
     @pytest.mark.asyncio
     async def test_no_phase_gate_when_raids_remain(self) -> None:
         """Phase gate should not unlock when not all raids are merged."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
         repo._all_merged = False
@@ -818,7 +899,7 @@ class TestPhaseGate:
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.phase_gate_unlocked is False
         assert len(repo.phase_status_updates) == 0
@@ -828,7 +909,7 @@ class TestPhaseGate:
         """Phase gate unlocked but no next phase — should return True without error."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo._all_merged = True
         repo.phase = _make_phase()
@@ -837,7 +918,7 @@ class TestPhaseGate:
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.phase_gate_unlocked is True
         assert len(repo.phase_status_updates) == 0
@@ -854,31 +935,31 @@ class TestErrorHandling:
         """Evaluating a non-existent raid should raise ValueError."""
         engine, _, _, _ = _make_engine()
         with pytest.raises(ValueError, match="Raid not found"):
-            await engine.evaluate(uuid4())
+            await engine.evaluate("NIU-NONEXISTENT", OWNER_ID)
 
     @pytest.mark.asyncio
     async def test_wrong_state(self) -> None:
         """Evaluating a raid not in REVIEW should raise ValueError."""
         engine, repo, _, _ = _make_engine()
         raid = _make_raid(status=RaidStatus.RUNNING)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         with pytest.raises(ValueError, match="not in REVIEW"):
-            await engine.evaluate(raid.id)
+            await engine.evaluate(raid.tracker_id, OWNER_ID)
 
     @pytest.mark.asyncio
     async def test_changed_files_failure_does_not_block(self) -> None:
         """If fetching changed files fails, review should still proceed."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
         _setup_passing_pr(git, raid.pr_id)
         git.fail_changed_files = True
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         # Should still auto-approve (no scope breach without file data)
         assert result.action == "auto_approved"
@@ -923,7 +1004,7 @@ class TestEventDrivenReview:
 
         engine, repo, git, bus = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
@@ -937,6 +1018,7 @@ class TestEventDrivenReview:
         await bus.emit(
             TyrEvent(
                 event="raid.state_changed",
+                owner_id=OWNER_ID,
                 data={
                     "raid_id": str(raid.id),
                     "status": RaidStatus.REVIEW.value,
@@ -952,7 +1034,7 @@ class TestEventDrivenReview:
         await engine.stop()
 
         # The engine should have auto-approved the raid
-        assert repo.raids[raid.id].status == RaidStatus.MERGED
+        assert repo.raids[raid.tracker_id].status == RaidStatus.MERGED
 
     @pytest.mark.asyncio
     async def test_review_engine_ignores_non_review_events(self) -> None:
@@ -963,7 +1045,7 @@ class TestEventDrivenReview:
 
         engine, repo, git, bus = _make_engine()
         raid = _make_raid(confidence=0.5, status=RaidStatus.RUNNING)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         await engine.start()
         await asyncio.sleep(0)
@@ -971,6 +1053,7 @@ class TestEventDrivenReview:
         await bus.emit(
             TyrEvent(
                 event="raid.state_changed",
+                owner_id=OWNER_ID,
                 data={
                     "raid_id": str(raid.id),
                     "status": RaidStatus.RUNNING.value,
@@ -985,7 +1068,7 @@ class TestEventDrivenReview:
         await engine.stop()
 
         # Raid should still be RUNNING (not evaluated)
-        assert repo.raids[raid.id].status == RaidStatus.RUNNING
+        assert repo.raids[raid.tracker_id].status == RaidStatus.RUNNING
 
     @pytest.mark.asyncio
     async def test_review_engine_handles_evaluation_error(self) -> None:
@@ -1003,6 +1086,7 @@ class TestEventDrivenReview:
         await bus.emit(
             TyrEvent(
                 event="raid.state_changed",
+                owner_id=OWNER_ID,
                 data={
                     "raid_id": str(uuid4()),
                     "status": RaidStatus.REVIEW.value,
@@ -1050,16 +1134,16 @@ class TestMergeableSignal:
         """Mergeable PR should record PR_MERGEABLE, not CI_PASS."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
         repo.phase = _make_phase()
 
         _setup_passing_pr(git, raid.pr_id)
         git.changed_files[raid.pr_id] = ["src/main.py"]
 
-        await engine.evaluate(raid.id)
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        events = repo.events[raid.id]
+        events = repo.events[raid.tracker_id]
         event_types = [e.event_type for e in events]
         assert ConfidenceEventType.PR_MERGEABLE in event_types
         # CI_PASS should only appear once (from CI signal, not mergeable)
@@ -1079,11 +1163,11 @@ class TestSessionFeedback:
         volundr = StubVolundr()
         engine, repo, git, _ = _make_engine(volundr=volundr)
         raid = _make_raid(retry_count=0)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_failing_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "retried"
         assert len(volundr.messages) == 1
@@ -1097,11 +1181,11 @@ class TestSessionFeedback:
         volundr = StubVolundr()
         engine, repo, git, _ = _make_engine(volundr=volundr)
         raid = _make_raid(retry_count=0)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_conflicted_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "retried"
         assert len(volundr.messages) == 1
@@ -1112,11 +1196,11 @@ class TestSessionFeedback:
         """Auto-retry without VolundrPort should still work."""
         engine, repo, git, _ = _make_engine()  # no volundr
         raid = _make_raid(retry_count=0)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_failing_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "retried"
 
@@ -1127,14 +1211,14 @@ class TestSessionFeedback:
         volundr.fail_send = True
         engine, repo, git, _ = _make_engine(volundr=volundr)
         raid = _make_raid(retry_count=0)
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_failing_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "retried"
-        assert repo.raids[raid.id].status == RaidStatus.PENDING
+        assert repo.raids[raid.tracker_id].status == RaidStatus.PENDING
 
     @pytest.mark.asyncio
     async def test_retry_no_session_id_skips_message(self) -> None:
@@ -1163,11 +1247,11 @@ class TestSessionFeedback:
             created_at=raid.created_at,
             updated_at=raid.updated_at,
         )
-        repo.raids[raid.id] = raid
+        repo.raids[raid.tracker_id] = raid
 
         _setup_failing_pr(git, raid.pr_id)
 
-        result = await engine.evaluate(raid.id)
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "retried"
         assert len(volundr.messages) == 0

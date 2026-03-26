@@ -26,7 +26,6 @@ from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_notification_subscriptions import (
     PostgresNotificationSubscriptionRepository,
 )
-from tyr.adapters.postgres_raids import PostgresRaidRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
@@ -36,12 +35,11 @@ from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.health import create_health_router
-from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
+from tyr.api.raids import create_raids_router, resolve_git
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
 from tyr.api.sagas import resolve_git as sagas_resolve_git
-from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
@@ -51,7 +49,6 @@ from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort
 from tyr.ports.git import GitPort
-from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
@@ -127,7 +124,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Wire adapter factories (used by autonomous dispatcher)
             app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
-            app.state.tracker_factory = TrackerAdapterFactory(integration_repo, credential_store)
+            app.state.tracker_factory = TrackerAdapterFactory(
+                integration_repo, credential_store, pool=pool
+            )
 
             # Override the tracker resolver dependency with factory delegation
             from tyr.adapters.inbound.auth import extract_principal
@@ -196,17 +195,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return trackers[0]
 
             app.dependency_overrides[resolve_raids_tracker] = _resolve_raids_tracker_dep
-
-            # Wire raid repository
-            raid_repo = PostgresRaidRepository(pool)
-            app.state.raid_repo = raid_repo
-
-            async def _resolve_raid_repo() -> RaidRepository:
-                return raid_repo
-
-            app.dependency_overrides[resolve_raid_repo] = _resolve_raid_repo
-            app.dependency_overrides[sagas_resolve_raid_repo] = _resolve_raid_repo
-
 
             # Wire personal access token service
             from tyr.adapters.postgres_pats import PostgresPATRepository
@@ -281,7 +269,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             notification_service = NotificationService(
                 event_bus=event_bus,
                 channel_factory=channel_factory,
-                raid_repo=raid_repo,
                 confidence_threshold=settings.notification.confidence_threshold,
             )
             app.state.notification_service = notification_service
@@ -290,7 +277,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Wire automated review engine (subscribes to raid.state_changed events)
             review_engine = ReviewEngine(
-                raid_repo=raid_repo,
+                tracker_factory=app.state.tracker_factory,
                 git=git_adapter,
                 review_config=settings.review,
                 event_bus=event_bus,
@@ -303,7 +290,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Uses VolundrAdapterFactory for per-owner authenticated SSE subscriptions
             subscriber = SessionActivitySubscriber(
                 volundr_factory=app.state.volundr_factory,
-                pool=pool,
+                tracker_factory=app.state.tracker_factory,
                 dispatcher_repo=dispatcher_repo,
                 event_bus=event_bus,
                 config=settings.watcher,
