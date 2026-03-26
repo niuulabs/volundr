@@ -32,6 +32,7 @@ from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr
+from tyr.api.dispatch import resolve_raid_repo as dispatch_resolve_raid_repo
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.events import create_events_router, resolve_event_bus
@@ -204,6 +205,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_raid_repo] = _resolve_raid_repo
             app.dependency_overrides[sagas_resolve_raid_repo] = _resolve_raid_repo
+            app.dependency_overrides[dispatch_resolve_raid_repo] = _resolve_raid_repo
 
             # Wire personal access token service
             from tyr.adapters.postgres_pats import PostgresPATRepository

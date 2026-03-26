@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import UTC, datetime
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -16,7 +18,8 @@ from pydantic import BaseModel, Field
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import TrackerIssue
+from tyr.domain.models import Raid, RaidStatus, TrackerIssue
+from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrPort
@@ -103,6 +106,13 @@ async def resolve_volundr() -> VolundrPort:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Volundr adapter not configured",
+    )
+
+
+async def resolve_raid_repo() -> RaidRepository:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Raid repository not configured",
     )
 
 
@@ -267,6 +277,7 @@ def create_dispatch_router() -> APIRouter:
         body: DispatchRequest,
         principal: Principal = Depends(extract_principal),
         repo: SagaRepository = Depends(resolve_saga_repo),
+        raid_repo: RaidRepository = Depends(resolve_raid_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> list[DispatchResult]:
@@ -332,6 +343,30 @@ def create_dispatch_router() -> APIRouter:
                     ),
                     auth_token=auth_token,
                 )
+                # Create a local raid record linking session to issue
+                now = datetime.now(UTC)
+                raid = Raid(
+                    id=uuid4(),
+                    phase_id=uuid4(),  # placeholder — no phase in direct dispatch
+                    tracker_id=issue.id,
+                    name=issue.title,
+                    description=issue.description,
+                    acceptance_criteria=[],
+                    declared_files=[],
+                    estimate_hours=None,
+                    status=RaidStatus.RUNNING,
+                    confidence=0.0,
+                    session_id=session.id,
+                    branch=saga.feature_branch,
+                    chronicle_summary=None,
+                    pr_url=None,
+                    pr_id=None,
+                    retry_count=0,
+                    created_at=now,
+                    updated_at=now,
+                )
+                await raid_repo.save_raid(raid)
+
                 results.append(
                     DispatchResult(
                         issue_id=item.issue_id,

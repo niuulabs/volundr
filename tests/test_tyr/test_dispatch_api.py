@@ -18,6 +18,7 @@ from tyr.api.dispatch import (
     _is_ready,
     _slugify,
     create_dispatch_router,
+    resolve_raid_repo,
     resolve_saga_repo,
     resolve_volundr,
 )
@@ -34,6 +35,21 @@ from tyr.domain.models import (
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 from .test_tracker_api import MockSagaRepo, MockTracker
+
+# -------------------------------------------------------------------
+# Mock RaidRepository (minimal — just stores raids)
+# -------------------------------------------------------------------
+
+
+class MockRaidRepo:
+    """Minimal mock that accepts save_raid calls."""
+
+    def __init__(self) -> None:
+        self.saved: list = []
+
+    async def save_raid(self, raid, *, conn=None) -> None:  # noqa: ANN001
+        self.saved.append(raid)
+
 
 # -------------------------------------------------------------------
 # Mock VolundrPort
@@ -240,6 +256,7 @@ def client(
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
     app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+    app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
     return TestClient(app)
 
 
@@ -422,6 +439,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -443,6 +461,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -462,6 +481,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -480,6 +500,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get(
@@ -516,6 +537,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [FailingTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -642,6 +664,7 @@ class TestApproveDispatch:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -675,6 +698,7 @@ class TestApproveDispatch:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_raid_repo] = lambda: MockRaidRepo()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
