@@ -73,7 +73,7 @@ type AnthropicConfig struct {
 // DefaultForgeConfig returns a Config with sensible defaults for macOS.
 func DefaultForgeConfig() *Config {
 	home, _ := os.UserHomeDir()
-	volundrDir := filepath.Join(home, ".volundr")
+	volundrDir := filepath.Join(home, ".niuu")
 
 	cfg := &Config{
 		Listen: ListenConfig{

@@ -373,7 +373,8 @@ func (r *Runner) monitor(sessionID string, cmd *exec.Cmd, logFile *os.File) {
 	}
 }
 
-// newUUID generates a random UUID v4 string without external dependencies.
+// newUUID generates a random UUID v4 string.
+// TODO: replace with github.com/google/uuid after go mod tidy.
 func newUUID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])

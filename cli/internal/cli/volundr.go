@@ -19,4 +19,5 @@ func init() {
 	volundrCmd.AddCommand(downCmd)
 	volundrCmd.AddCommand(statusCmd)
 	volundrCmd.AddCommand(sessionsCmd)
+	volundrCmd.AddCommand(serveCmd)
 }

@@ -17,23 +17,23 @@ var (
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "Run the forge — a macOS-native session runner",
-	Long: `Run Volundr Forge, a lightweight session runner that manages Claude Code
-sessions as local processes. Exposes a Volundr-compatible REST API that Tyr
-(or any Volundr client) can dispatch work to.
+	Short: "Run the forge — a lightweight session runner",
+	Long: `Start the Volundr Forge, a lightweight session runner that manages Claude
+Code sessions as local processes. Exposes a Volundr-compatible REST API
+that Tyr (or any Volundr client) can dispatch work to.
 
-Designed for macOS hosts where iOS development toolchains (Xcode, simulators)
-are available. No Python or Kubernetes required.
+Designed for macOS hosts where iOS development toolchains (Xcode,
+simulators) are available. No Python or Kubernetes required.
 
 Example:
-  volundr serve                          # Start with defaults
-  volundr serve --config forge.yaml      # Start with custom config
-  volundr serve --port 9090              # Override listen port`,
+  niuu volundr serve                          # Start with defaults
+  niuu volundr serve --config forge.yaml      # Start with custom config
+  niuu volundr serve --port 9090              # Override listen port`,
 	RunE: runServe,
 }
 
 func init() {
-	serveCmd.Flags().StringVarP(&serveConfigFile, "config", "c", "", "forge config file (default: ~/.volundr/forge.yaml)")
+	serveCmd.Flags().StringVarP(&serveConfigFile, "config", "c", "", "forge config file (default: ~/.niuu/forge.yaml)")
 	serveCmd.Flags().IntVar(&servePort, "port", 0, "override listen port")
 	serveCmd.Flags().StringVar(&serveHost, "host", "", "override listen host")
 }
