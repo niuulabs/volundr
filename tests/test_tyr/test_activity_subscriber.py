@@ -554,7 +554,9 @@ class TestCompletionEvaluationLogic:
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
-        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})
+        result = await sub._evaluate_completion(
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
+        )
         assert result.is_complete is True
         assert result.signals["session_idle"] is True
         assert result.signals["has_turns"] is True
@@ -573,7 +575,9 @@ class TestCompletionEvaluationLogic:
             ci_passed=True,
         )
 
-        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})
+        result = await sub._evaluate_completion(
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
+        )
         assert result.is_complete is True
         assert result.signals["pr_exists"] is True
         assert result.signals["ci_passed"] is True
@@ -587,7 +591,9 @@ class TestCompletionEvaluationLogic:
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
-        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})
+        result = await sub._evaluate_completion(
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
+        )
         assert result.is_complete is False
 
     @pytest.mark.asyncio
@@ -604,7 +610,9 @@ class TestCompletionEvaluationLogic:
             ci_passed=False,
         )
 
-        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})
+        result = await sub._evaluate_completion(
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
+        )
         assert result.is_complete is False
 
     @pytest.mark.asyncio
@@ -615,7 +623,9 @@ class TestCompletionEvaluationLogic:
         raid = _make_raid()
         volundr.pr_error_sessions.add(raid.session_id or "")
 
-        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 120})
+        result = await sub._evaluate_completion(
+            raid, volundr, {"turn_count": 5, "duration_seconds": 120}
+        )
         assert result.signals["extended_idle"] is True
         assert result.confidence >= 0.6
 
@@ -625,7 +635,9 @@ class TestCompletionEvaluationLogic:
         sub, volundr, _, _ = _make_subscriber()
         raid = _make_raid(branch=None)
 
-        result = await sub._evaluate_completion(raid, volundr, {"turn_count": 5, "duration_seconds": 60})
+        result = await sub._evaluate_completion(
+            raid, volundr, {"turn_count": 5, "duration_seconds": 60}
+        )
         assert result.is_complete is True
         assert result.signals["pr_exists"] is False
 
