@@ -35,6 +35,13 @@ class TestTyrEvent:
         assert e1.id
         assert e1.id != e2.id
 
+    def test_timestamp_auto_generated(self):
+        from datetime import UTC, datetime
+
+        e = TyrEvent(event="session.spawned", data={})
+        assert isinstance(e.timestamp, datetime)
+        assert e.timestamp.tzinfo is UTC
+
     def test_to_sse_ends_with_double_newline(self):
         event = TyrEvent(
             id="x",
@@ -154,6 +161,62 @@ class TestEventBus:
         s1 = bus.get_snapshot()
         s2 = bus.get_snapshot()
         assert s1 is not s2
+
+    async def test_get_log_returns_emitted_events(self):
+        bus = InMemoryEventBus(max_clients=5, log_size=10)
+        e1 = TyrEvent(event="session.spawned", data={"session_id": "s1"})
+        e2 = TyrEvent(event="raid.state_changed", data={"raid_id": "r1"})
+        await bus.emit(e1)
+        await bus.emit(e2)
+        log = bus.get_log(10)
+        assert len(log) == 2
+        assert log[0] is e1
+        assert log[1] is e2
+
+    async def test_get_log_limits_to_n(self):
+        bus = InMemoryEventBus(max_clients=5, log_size=20)
+        for i in range(10):
+            await bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
+        log = bus.get_log(3)
+        assert len(log) == 3
+        # Newest 3 — indices 7, 8, 9
+        assert log[-1].data["i"] == 9
+        assert log[0].data["i"] == 7
+
+    async def test_get_log_ring_buffer_evicts_oldest(self):
+        bus = InMemoryEventBus(max_clients=5, log_size=3)
+        for i in range(5):
+            await bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
+        log = bus.get_log(10)
+        assert len(log) == 3
+        assert log[0].data["i"] == 2
+        assert log[-1].data["i"] == 4
+
+    async def test_get_log_empty_when_no_events(self):
+        bus = InMemoryEventBus(max_clients=5, log_size=10)
+        assert bus.get_log(10) == []
+
+    async def test_get_log_returns_list_copy(self):
+        bus = InMemoryEventBus(max_clients=5, log_size=10)
+        await bus.emit(TyrEvent(event="session.spawned", data={}))
+        l1 = bus.get_log(10)
+        l2 = bus.get_log(10)
+        assert l1 is not l2
+
+    async def test_emit_records_all_event_types_in_log(self):
+        bus = InMemoryEventBus(max_clients=5, log_size=20)
+        event_types = [
+            "dispatcher.state",
+            "session.spawned",
+            "raid.state_changed",
+            "confidence.updated",
+            "dispatcher.log",
+        ]
+        for ev_type in event_types:
+            await bus.emit(TyrEvent(event=ev_type, data={}))
+        log = bus.get_log(20)
+        assert len(log) == len(event_types)
+        assert [e.event for e in log] == event_types
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +401,7 @@ class TestEventsConfig:
         cfg = EventsConfig()
         assert cfg.max_sse_clients == 10
         assert cfg.keepalive_interval == 15.0
+        assert cfg.activity_log_size == 100
 
     def test_settings_includes_events(self):
         from tyr.config import Settings
@@ -345,6 +409,7 @@ class TestEventsConfig:
         s = Settings()
         assert s.events.max_sse_clients == 10
         assert s.events.keepalive_interval == 15.0
+        assert s.events.activity_log_size == 100
 
 
 class TestEventBusConfig:

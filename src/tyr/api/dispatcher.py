@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
 from tyr.adapters.inbound.auth import extract_principal
 from tyr.ports.dispatcher_repository import DispatcherRepository
+from tyr.ports.event_bus import EventBusPort
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -30,6 +32,19 @@ class PatchDispatcherRequest(BaseModel):
     max_concurrent_raids: int | None = Field(None, ge=1, le=20)
 
 
+class ActivityEventResponse(BaseModel):
+    id: str
+    event: str
+    data: dict
+    owner_id: str
+    timestamp: datetime
+
+
+class ActivityLogResponse(BaseModel):
+    events: list[ActivityEventResponse]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
@@ -39,6 +54,13 @@ async def resolve_dispatcher_repo() -> DispatcherRepository:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Dispatcher repository not configured",
+    )
+
+
+async def resolve_event_bus() -> EventBusPort:  # pragma: no cover
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Event bus not configured",
     )
 
 
@@ -80,6 +102,32 @@ def create_dispatcher_router() -> APIRouter:
             threshold=state.threshold,
             max_concurrent_raids=state.max_concurrent_raids,
             updated_at=state.updated_at,
+        )
+
+    @router.get("/log", response_model=ActivityLogResponse)
+    async def get_activity_log(
+        n: Annotated[int, Query(ge=1, le=1000, description="Number of events to return.")] = 100,
+        _principal: Principal = Depends(extract_principal),
+        event_bus: EventBusPort = Depends(resolve_event_bus),
+    ) -> ActivityLogResponse:
+        """Return the last N activity events from the dispatcher event bus.
+
+        Events are ordered oldest-first.  Use the ``n`` query parameter to
+        control how many events are returned (default 100, max 1000).
+        """
+        events = event_bus.get_log(n)
+        return ActivityLogResponse(
+            events=[
+                ActivityEventResponse(
+                    id=e.id,
+                    event=e.event,
+                    data=e.data,
+                    owner_id=e.owner_id,
+                    timestamp=e.timestamp,
+                )
+                for e in events
+            ],
+            total=len(events),
         )
 
     return router

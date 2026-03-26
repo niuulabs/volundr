@@ -289,6 +289,10 @@ class EventsConfig(BaseModel):
 
     max_sse_clients: int = Field(default=10)
     keepalive_interval: float = Field(default=15.0)
+    activity_log_size: int = Field(
+        default=100,
+        description="Number of events retained in the dispatcher activity ring buffer.",
+    )
 
 
 class Settings(BaseSettings):
