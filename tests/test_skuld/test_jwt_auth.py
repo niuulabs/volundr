@@ -149,10 +149,10 @@ class TestBrokerJwtIntegration:
         headers = test_broker._build_auth_headers()
         assert headers == {"Authorization": f"Bearer {token}"}
 
-    def test_build_auth_headers_fallback_service_identity(self, test_broker):
+    def test_build_auth_headers_fallback_no_token(self, test_broker):
+        # When no JWT and no VOLUNDR_API_TOKEN, returns empty headers (dev mode)
         headers = test_broker._build_auth_headers()
-        assert "x-auth-user-id" in headers
-        assert headers["x-auth-roles"] == "volundr:service"
+        assert headers == {}
         assert "Authorization" not in headers
 
     @pytest.mark.asyncio
@@ -225,9 +225,9 @@ class TestBrokerJwtIntegration:
 
     @pytest.mark.asyncio
     async def test_get_http_client_fallback_when_no_jwt(self, test_broker):
-        """When no JWT is set, client uses service identity headers."""
+        """When no JWT is set and no VOLUNDR_API_TOKEN, client has no auth headers."""
         client = await test_broker._get_http_client()
-        assert client.headers.get("x-auth-user-id") == "skuld-broker"
+        assert client.headers.get("x-auth-user-id") is None
         assert "authorization" not in {k.lower() for k in client.headers.keys()}
 
         # Cleanup
