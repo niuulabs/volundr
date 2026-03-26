@@ -75,7 +75,6 @@ class StatefulMockTracker(MockTracker):
             raise ValueError(f"Raid not found: {tracker_id}")
         now = datetime.now(UTC)
         status = kwargs.get("status", raid.status)
-        reason = kwargs.get("reason", None)
         retry_count = kwargs.get("retry_count", raid.retry_count)
         events = self.events.get(tracker_id, [])
         confidence = events[-1].score_after if events else raid.confidence

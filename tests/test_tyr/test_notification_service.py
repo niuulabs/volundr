@@ -593,7 +593,12 @@ class TestNotificationServiceEventMapping:
         await event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                data={"raid_id": str(raid.id), "status": "REVIEW", "tracker_id": "NIU-300", "owner_id": "user-99"},
+                data={
+                    "raid_id": str(raid.id),
+                    "status": "REVIEW",
+                    "tracker_id": "NIU-300",
+                    "owner_id": "user-99",
+                },
             )
         )
 
@@ -617,7 +622,12 @@ class TestNotificationServiceEventMapping:
         await event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                data={"raid_id": str(raid.id), "status": "REVIEW", "tracker_id": "NIU-400", "owner_id": "user-1"},
+                data={
+                    "raid_id": str(raid.id),
+                    "status": "REVIEW",
+                    "tracker_id": "NIU-400",
+                    "owner_id": "user-1",
+                },
             )
         )
 
@@ -641,7 +651,12 @@ class TestNotificationServiceEventMapping:
         await event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
-                data={"raid_id": str(raid.id), "status": "MERGED", "tracker_id": "NIU-500", "owner_id": "user-1"},
+                data={
+                    "raid_id": str(raid.id),
+                    "status": "MERGED",
+                    "tracker_id": "NIU-500",
+                    "owner_id": "user-1",
+                },
             )
         )
 

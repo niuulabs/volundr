@@ -18,9 +18,7 @@ from tyr.api.sagas import (
 from tyr.api.tracker import resolve_trackers
 from tyr.config import AuthConfig, ReviewConfig
 from tyr.domain.models import (
-    Phase,
     PhaseStatus,
-    Raid,
     RaidStatus,
     Saga,
     SagaStatus,
