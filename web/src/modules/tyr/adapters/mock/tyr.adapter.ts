@@ -2,6 +2,8 @@ import type { ITyrService, CommitSagaRequest } from '../../ports';
 import type { Saga, Phase } from '../../models';
 import { mockSagas, mockPhases } from './data';
 
+let mockTrackerSeq = 100;
+
 export class MockTyrService implements ITyrService {
   async getSagas(): Promise<Saga[]> {
     return [...mockSagas];
@@ -22,7 +24,7 @@ export class MockTyrService implements ITyrService {
   async createSaga(spec: string, repo: string): Promise<Saga> {
     const saga: Saga = {
       id: crypto.randomUUID(),
-      tracker_id: `NIU-${Math.floor(Math.random() * 900) + 100}`,
+      tracker_id: `NIU-${++mockTrackerSeq}`,
       tracker_type: 'linear',
       slug: spec.toLowerCase().replace(/\s+/g, '-').slice(0, 40),
       name: spec,
@@ -39,7 +41,7 @@ export class MockTyrService implements ITyrService {
   async commitSaga(request: CommitSagaRequest): Promise<Saga> {
     return {
       id: crypto.randomUUID(),
-      tracker_id: `NIU-${Math.floor(Math.random() * 900) + 100}`,
+      tracker_id: `NIU-${++mockTrackerSeq}`,
       tracker_type: 'linear',
       slug: request.slug,
       name: request.name,
@@ -61,7 +63,7 @@ export class MockTyrService implements ITyrService {
       {
         id: crypto.randomUUID(),
         saga_id: sagaId,
-        tracker_id: `NIU-${Math.floor(Math.random() * 900) + 100}`,
+        tracker_id: `NIU-${++mockTrackerSeq}`,
         number: 1,
         name: `Phase 1: Setup for ${spec}`,
         status: 'pending',
@@ -70,7 +72,7 @@ export class MockTyrService implements ITyrService {
           {
             id: crypto.randomUUID(),
             phase_id: '',
-            tracker_id: `NIU-${Math.floor(Math.random() * 900) + 100}`,
+            tracker_id: `NIU-${++mockTrackerSeq}`,
             name: `Scaffold ${spec} infrastructure`,
             description: `Set up the foundational infrastructure for ${spec} in ${repo}.`,
             acceptance_criteria: [

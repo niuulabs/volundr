@@ -51,6 +51,10 @@ data:
     auth:
       pat_ttl_days: {{ .Values.auth.patTtlDays | default 365 }}
 
+    planner:
+      adapter: {{ .Values.planner.adapter | quote }}
+      kwargs: {{ .Values.planner.kwargs | toJson }}
+
     credential_store:
       adapter: {{ .Values.credentialStore.adapter | quote }}
       kwargs: {{ .Values.credentialStore.kwargs | toJson }}

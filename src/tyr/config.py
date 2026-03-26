@@ -265,8 +265,13 @@ class WatcherConfig(BaseModel):
 
 
 class PlannerConfig(BaseModel):
-    """Planning session configuration."""
+    """Planning session configuration (dynamic adapter pattern)."""
 
+    adapter: str = Field(
+        default="tyr.adapters.memory_planning_repo.InMemoryPlanningSessionRepository",
+        description="Fully-qualified class path for the PlanningSessionRepository adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
     idle_timeout_seconds: float = Field(
         default=1800.0,
         description="Seconds of idle before a planning session is expired.",

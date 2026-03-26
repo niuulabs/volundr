@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tyr.adapters.memory_event_bus import InMemoryEventBus
-from tyr.adapters.memory_planning_repo import InMemoryPlanningSessionRepository
 from tyr.api.planning import create_planning_router, resolve_planning_service
 from tyr.config import PlannerConfig
 from tyr.domain.models import (
@@ -26,6 +25,8 @@ from tyr.domain.services.planning_session import (
     SessionLimitReachedError,
 )
 from tyr.domain.validation import ValidationError, try_extract_structure
+from tyr.ports.event_bus import EventBusPort, TyrEvent
+from tyr.ports.planning_repository import PlanningSessionRepository
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,91 @@ class MockVolundr(VolundrPort):
 
 
 # ---------------------------------------------------------------------------
+# Stub PlanningSessionRepository (implements the port, no adapter import)
+# ---------------------------------------------------------------------------
+
+
+class StubPlanningSessionRepository(PlanningSessionRepository):
+    """In-memory stub implementing PlanningSessionRepository port for tests."""
+
+    def __init__(self) -> None:
+        self._sessions: dict[UUID, PlanningSession] = {}
+        self._messages: dict[UUID, list[PlanningMessage]] = {}
+
+    async def save(self, session: PlanningSession) -> None:
+        self._sessions[session.id] = session
+
+    async def get(self, session_id: UUID) -> PlanningSession | None:
+        return self._sessions.get(session_id)
+
+    async def get_by_volundr_id(self, volundr_session_id: str) -> PlanningSession | None:
+        for s in self._sessions.values():
+            if s.session_id == volundr_session_id:
+                return s
+        return None
+
+    async def list_by_owner(self, owner_id: str) -> list[PlanningSession]:
+        return [s for s in self._sessions.values() if s.owner_id == owner_id]
+
+    async def list_active(self) -> list[PlanningSession]:
+        active = {PlanningSessionStatus.ACTIVE, PlanningSessionStatus.STRUCTURE_PROPOSED}
+        return [s for s in self._sessions.values() if s.status in active]
+
+    async def delete(self, session_id: UUID) -> bool:
+        if session_id not in self._sessions:
+            return False
+        del self._sessions[session_id]
+        self._messages.pop(session_id, None)
+        return True
+
+    async def save_message(self, message: PlanningMessage) -> None:
+        self._messages.setdefault(message.planning_session_id, []).append(message)
+
+    async def get_messages(self, session_id: UUID) -> list[PlanningMessage]:
+        return list(self._messages.get(session_id, []))
+
+
+# ---------------------------------------------------------------------------
+# Stub EventBus (implements the port, no adapter import)
+# ---------------------------------------------------------------------------
+
+
+class StubEventBus(EventBusPort):
+    """In-memory stub implementing EventBusPort for tests."""
+
+    def __init__(self, max_clients: int = 100) -> None:
+        self._subscribers: list[asyncio.Queue[TyrEvent]] = []
+        self._snapshot: list[TyrEvent] = []
+        self._max_clients = max_clients
+
+    def subscribe(self) -> asyncio.Queue[TyrEvent]:
+        q: asyncio.Queue[TyrEvent] = asyncio.Queue()
+        self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue[TyrEvent]) -> None:
+        try:
+            self._subscribers.remove(q)
+        except ValueError:
+            pass
+
+    async def emit(self, event: TyrEvent) -> None:
+        for q in self._subscribers:
+            q.put_nowait(event)
+
+    def get_snapshot(self) -> list[TyrEvent]:
+        return list(self._snapshot)
+
+    @property
+    def client_count(self) -> int:
+        return len(self._subscribers)
+
+    @property
+    def at_capacity(self) -> bool:
+        return len(self._subscribers) >= self._max_clients
+
+
+# ---------------------------------------------------------------------------
 # Valid saga structure JSON for testing
 # ---------------------------------------------------------------------------
 
@@ -114,8 +200,8 @@ INVALID_STRUCTURE_JSON = json.dumps({"name": "Bad"})
 
 
 @pytest.fixture
-def planning_repo() -> InMemoryPlanningSessionRepository:
-    return InMemoryPlanningSessionRepository()
+def planning_repo() -> StubPlanningSessionRepository:
+    return StubPlanningSessionRepository()
 
 
 @pytest.fixture
@@ -124,8 +210,8 @@ def volundr() -> MockVolundr:
 
 
 @pytest.fixture
-def event_bus() -> InMemoryEventBus:
-    return InMemoryEventBus()
+def event_bus() -> StubEventBus:
+    return StubEventBus()
 
 
 @pytest.fixture
@@ -135,10 +221,10 @@ def config() -> PlannerConfig:
 
 @pytest.fixture
 def service(
-    planning_repo: InMemoryPlanningSessionRepository,
+    planning_repo: StubPlanningSessionRepository,
     volundr: MockVolundr,
     config: PlannerConfig,
-    event_bus: InMemoryEventBus,
+    event_bus: StubEventBus,
 ) -> PlanningSessionService:
     return PlanningSessionService(planning_repo, volundr, config, event_bus=event_bus)
 
@@ -183,7 +269,7 @@ class TestPlanningSessionService:
     async def test_spawn_emits_event(
         self,
         service: PlanningSessionService,
-        event_bus: InMemoryEventBus,
+        event_bus: StubEventBus,
     ):
         q = event_bus.subscribe()
         await service.spawn("user-1", "Build auth", "niuu/volundr")
@@ -220,7 +306,7 @@ class TestPlanningSessionService:
         self,
         service: PlanningSessionService,
         volundr: MockVolundr,
-        planning_repo: InMemoryPlanningSessionRepository,
+        planning_repo: StubPlanningSessionRepository,
     ):
         volundr.fail_spawn = True
 
@@ -258,7 +344,7 @@ class TestPlanningSessionService:
     async def test_send_message_invalid_state(
         self,
         service: PlanningSessionService,
-        planning_repo: InMemoryPlanningSessionRepository,
+        planning_repo: StubPlanningSessionRepository,
     ):
         session = await service.spawn("user-1", "Spec", "repo")
 
@@ -289,7 +375,7 @@ class TestPlanningSessionService:
     async def test_propose_structure_emits_event(
         self,
         service: PlanningSessionService,
-        event_bus: InMemoryEventBus,
+        event_bus: StubEventBus,
     ):
         q = event_bus.subscribe()
         session = await service.spawn("user-1", "Spec", "repo")
@@ -326,7 +412,7 @@ class TestPlanningSessionService:
     async def test_propose_structure_invalid_state(
         self,
         service: PlanningSessionService,
-        planning_repo: InMemoryPlanningSessionRepository,
+        planning_repo: StubPlanningSessionRepository,
     ):
         session = await service.spawn("user-1", "Spec", "repo")
         from dataclasses import replace
@@ -505,7 +591,7 @@ class TestPlanningSessionService:
     async def test_cleanup_expired_expires_idle_sessions(
         self,
         service: PlanningSessionService,
-        planning_repo: InMemoryPlanningSessionRepository,
+        planning_repo: StubPlanningSessionRepository,
         volundr: MockVolundr,
     ):
         session = await service.spawn("user-1", "Spec", "repo")
@@ -548,7 +634,7 @@ class TestPlanningSessionService:
 
 class TestInMemoryPlanningRepo:
     @pytest.mark.asyncio
-    async def test_save_and_get(self, planning_repo: InMemoryPlanningSessionRepository):
+    async def test_save_and_get(self, planning_repo: StubPlanningSessionRepository):
         session = PlanningSession(
             id=uuid4(),
             owner_id="user-1",
@@ -566,7 +652,7 @@ class TestInMemoryPlanningRepo:
         assert found.id == session.id
 
     @pytest.mark.asyncio
-    async def test_get_by_volundr_id(self, planning_repo: InMemoryPlanningSessionRepository):
+    async def test_get_by_volundr_id(self, planning_repo: StubPlanningSessionRepository):
         session = PlanningSession(
             id=uuid4(),
             owner_id="user-1",
@@ -587,7 +673,7 @@ class TestInMemoryPlanningRepo:
         assert not_found is None
 
     @pytest.mark.asyncio
-    async def test_delete_removes_messages(self, planning_repo: InMemoryPlanningSessionRepository):
+    async def test_delete_removes_messages(self, planning_repo: StubPlanningSessionRepository):
         session_id = uuid4()
         session = PlanningSession(
             id=session_id,
@@ -867,6 +953,9 @@ class TestPlanningModels:
 
     def test_planner_config_defaults(self):
         config = PlannerConfig()
+        expected_adapter = "tyr.adapters.memory_planning_repo.InMemoryPlanningSessionRepository"
+        assert config.adapter == expected_adapter
+        assert config.kwargs == {}
         assert config.idle_timeout_seconds == 1800.0
         assert config.max_sessions_per_user == 3
         assert config.default_model == "claude-opus-4-6"

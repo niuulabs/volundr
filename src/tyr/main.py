@@ -247,15 +247,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
 
-            # Wire planning session service (in-memory for now)
-            from tyr.adapters.memory_planning_repo import InMemoryPlanningSessionRepository
+            # Wire planning session service (dynamic adapter pattern)
             from tyr.domain.services.planning_session import PlanningSessionService
 
-            planning_repo = InMemoryPlanningSessionRepository()
+            planner_cfg = settings.planner
+            planner_repo_cls = import_class(planner_cfg.adapter)
+            planning_repo = planner_repo_cls(**planner_cfg.kwargs)
             planning_service = PlanningSessionService(
                 repo=planning_repo,
                 volundr=volundr_adapter,
-                config=settings.planner,
+                config=planner_cfg,
                 event_bus=event_bus,
             )
             app.state.planning_service = planning_service
