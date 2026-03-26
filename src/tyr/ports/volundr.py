@@ -22,6 +22,7 @@ class SpawnRequest:
     system_prompt: str
     initial_prompt: str
     base_branch: str = "main"
+    workload_type: str = "default"
 
 
 @dataclass(frozen=True)

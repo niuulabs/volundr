@@ -1,5 +1,5 @@
 import { formatTokens } from '@/utils';
-import type { ChatMessageMeta } from '@/modules/volundr/hooks/useSkuldChat';
+import type { ChatMessageMeta } from '@/modules/shared/hooks/useSkuldChat';
 import styles from './MessageCostFooter.module.css';
 
 export interface MessageCostFooterProps {

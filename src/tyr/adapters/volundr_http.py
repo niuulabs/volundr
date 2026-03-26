@@ -56,6 +56,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     "initial_prompt": request.initial_prompt,
                     "issue_id": request.tracker_issue_id,
                     "issue_url": request.tracker_issue_url,
+                    "workload_type": request.workload_type,
                 },
             )
             resp.raise_for_status()

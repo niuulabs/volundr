@@ -2,7 +2,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
 import { groupContentBlocks } from './ToolBlock';
-import type { SkuldChatMessage } from '@/modules/volundr/hooks/useSkuldChat';
+import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
 import type { GroupedContent } from './ToolBlock';
 
 /* ------------------------------------------------------------------ */

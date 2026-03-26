@@ -1,0 +1,39 @@
+# Skuld Planner Profile
+# Lightweight session broker for interactive saga planning.
+# Disables VS Code REH and devrunner — only the chat broker runs.
+#
+# Usage (Helm):
+#   helm install plan-session ./charts/skuld \
+#     -f ./charts/skuld/values-planner.yaml \
+#     --set session.id=<uuid> --set session.initialPrompt="..."
+#
+# Usage (Flux Kustomization):
+#   Set workload_type: "planner" in the SpawnRequest — Volundr's
+#   FluxPodManager selects this values overlay automatically.
+
+# Disable VS Code REH (no editor needed for planning)
+reh:
+  enabled: false
+
+# Disable devrunner sidecar (no local services needed)
+localServices:
+  enabled: false
+
+# Smaller resource footprint — planning sessions are chat-only
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "50m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
+
+# Lighter nginx (no REH/devrunner routes)
+nginx:
+  resources:
+    requests:
+      memory: "16Mi"
+      cpu: "5m"
+    limits:
+      memory: "64Mi"
+      cpu: "50m"

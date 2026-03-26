@@ -1,4 +1,4 @@
-import type { ITyrService, CommitSagaRequest } from '../../ports';
+import type { ITyrService, CommitSagaRequest, PlanSession } from '../../ports';
 import type { Saga, Phase } from '../../models';
 import { mockSagas, mockPhases } from './data';
 
@@ -51,6 +51,14 @@ export class MockTyrService implements ITyrService {
       confidence: 0.5,
       created_at: new Date().toISOString(),
       phase_summary: { total: request.phases.length, completed: 0 },
+    };
+  }
+
+  async spawnPlanSession(_spec: string, _repo: string): Promise<PlanSession> {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return {
+      session_id: crypto.randomUUID(),
+      chat_endpoint: `wss://sessions.mock/s/${crypto.randomUUID()}/session`,
     };
   }
 

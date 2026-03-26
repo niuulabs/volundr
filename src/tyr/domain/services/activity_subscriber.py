@@ -156,9 +156,7 @@ class SessionActivitySubscriber:
         while self._running:
             volundr = await self._resolve_owner_adapter(owner_id)
             if volundr is None:
-                logger.warning(
-                    "No Volundr connection for owner %s, retrying", owner_id[:8]
-                )
+                logger.warning("No Volundr connection for owner %s, retrying", owner_id[:8])
                 await asyncio.sleep(self._config.reconnect_delay)
                 continue
 
@@ -193,9 +191,7 @@ class SessionActivitySubscriber:
 
     _FAILED_STATUSES: frozenset[str] = frozenset({"stopped", "failed"})
 
-    async def _on_activity_event(
-        self, event: ActivityEvent, volundr: VolundrPort
-    ) -> None:
+    async def _on_activity_event(self, event: ActivityEvent, volundr: VolundrPort) -> None:
         """Handle a single activity or session lifecycle event from the SSE stream."""
         if event.session_status in self._FAILED_STATUSES:
             await self._on_session_failed(event, volundr)
@@ -216,9 +212,7 @@ class SessionActivitySubscriber:
         )
         self._pending_evaluations[event.session_id] = task
 
-    async def _debounced_evaluation(
-        self, event: ActivityEvent, volundr: VolundrPort
-    ) -> None:
+    async def _debounced_evaluation(self, event: ActivityEvent, volundr: VolundrPort) -> None:
         """Wait for the debounce delay, then evaluate completion."""
         try:
             await asyncio.sleep(self._config.completion_check_delay)
@@ -340,9 +334,7 @@ class SessionActivitySubscriber:
             pr_id or "none",
         )
 
-    async def _on_session_failed(
-        self, event: ActivityEvent, volundr: VolundrPort
-    ) -> None:
+    async def _on_session_failed(self, event: ActivityEvent, volundr: VolundrPort) -> None:
         """Handle a session stopped/failed lifecycle event."""
         pending = self._pending_evaluations.pop(event.session_id, None)
         if pending is not None:
@@ -354,9 +346,7 @@ class SessionActivitySubscriber:
 
         await self._handle_failure(record, reason=f"Session {event.session_status}")
 
-    async def _handle_failure(
-        self, record: dict[str, Any], *, reason: str
-    ) -> None:
+    async def _handle_failure(self, record: dict[str, Any], *, reason: str) -> None:
         """Mark a dispatched session as failed."""
         session_id = record["session_id"]
         await self._pool.execute(

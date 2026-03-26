@@ -1,11 +1,24 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { planningService, tyrService } from '../../adapters';
-import { ChatPanel } from '../../components/ChatPanel';
-import { useSkuldChat } from '@/modules/volundr/hooks/useSkuldChat';
-import type { PlanningSession, PlanningStructure } from '../../models/planning';
+import { tyrService } from '../../adapters';
+import { SessionChat } from '@/modules/shared/components/SessionChat';
+import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 import type { CommitSagaRequest } from '../../ports/tyr.port';
 import styles from './PlanSagaView.module.css';
+
+interface DetectedStructure {
+  name: string;
+  phases: {
+    name: string;
+    raids: {
+      name: string;
+      description: string;
+      acceptance_criteria: string[];
+      declared_files: string[];
+      estimate_hours: number;
+    }[];
+  }[];
+}
 
 function slugify(name: string): string {
   return name
@@ -16,14 +29,14 @@ function slugify(name: string): string {
 }
 
 /** Try to extract a SagaStructure JSON from assistant message text. */
-function tryDetectStructure(text: string): PlanningStructure | null {
+function tryDetectStructure(text: string): DetectedStructure | null {
   const fenceRe = /```(?:json)?\s*\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
   while ((match = fenceRe.exec(text)) !== null) {
     try {
       const data = JSON.parse(match[1].trim());
       if (data && typeof data === 'object' && Array.isArray(data.phases) && data.name) {
-        return data as PlanningStructure;
+        return data as DetectedStructure;
       }
     } catch {
       // not valid JSON
@@ -35,34 +48,15 @@ function tryDetectStructure(text: string): PlanningStructure | null {
 export function PlanSagaView() {
   const [spec, setSpec] = useState('');
   const [repo, setRepo] = useState('');
-  const [session, setSession] = useState<PlanningSession | null>(null);
+  const [chatEndpoint, setChatEndpoint] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [spawning, setSpawning] = useState(false);
-  const [proposing, setProposing] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detectedStructure, setDetectedStructure] = useState<PlanningStructure | null>(null);
+  const [detectedStructure, setDetectedStructure] = useState<DetectedStructure | null>(null);
   const navigate = useNavigate();
 
-  // Derive the skuld WebSocket URL from the planning session's chat_endpoint
-  const chatWsUrl = useMemo(() => {
-    if (!session?.chat_endpoint) return null;
-    if (session.status !== 'ACTIVE' && session.status !== 'STRUCTURE_PROPOSED') return null;
-    return session.chat_endpoint;
-  }, [session?.chat_endpoint, session?.status]);
-
-  const skuld = useSkuldChat(chatWsUrl);
-
-  // Convert skuld messages into PlanningMessage format for display
-  const displayMessages = useMemo(
-    () =>
-      skuld.messages.map(m => ({
-        id: m.id,
-        content: m.content,
-        sender: m.role === 'user' ? 'user' : 'assistant',
-        created_at: m.createdAt.toISOString(),
-      })),
-    [skuld.messages]
-  );
+  const skuld = useSkuldChat(chatEndpoint);
 
   // Auto-detect structure in new assistant messages
   useEffect(() => {
@@ -80,8 +74,9 @@ export function PlanSagaView() {
     setSpawning(true);
     setError(null);
     try {
-      const s = await planningService.spawnSession(spec, repo);
-      setSession(s);
+      const session = await tyrService.spawnPlanSession(spec, repo);
+      setSessionId(session.session_id);
+      setChatEndpoint(session.chat_endpoint);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to spawn planning session');
     } finally {
@@ -89,44 +84,17 @@ export function PlanSagaView() {
     }
   };
 
-  const handleSendMessage = useCallback(
-    (content: string) => {
-      if (!session || !skuld.connected) return;
-      skuld.sendMessage(content);
-    },
-    [session, skuld]
-  );
-
-  const handleUseDetectedStructure = async () => {
-    if (!session || !detectedStructure) return;
-    setProposing(true);
-    setError(null);
-    try {
-      const updated = await planningService.proposeStructure(
-        session.id,
-        JSON.stringify(detectedStructure)
-      );
-      setSession(updated);
-      setDetectedStructure(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid saga structure');
-    } finally {
-      setProposing(false);
-    }
-  };
-
   const handleCommit = async () => {
-    if (!session?.structure) return;
+    if (!detectedStructure) return;
     setCommitting(true);
     setError(null);
     try {
-      await planningService.completeSession(session.id);
       const commitRequest: CommitSagaRequest = {
-        name: session.structure.name,
-        slug: slugify(session.structure.name),
-        repos: [session.repo],
+        name: detectedStructure.name,
+        slug: slugify(detectedStructure.name),
+        repos: [repo],
         base_branch: 'main',
-        phases: session.structure.phases.map(phase => ({
+        phases: detectedStructure.phases.map(phase => ({
           name: phase.name,
           raids: phase.raids.map(raid => ({
             name: raid.name,
@@ -161,7 +129,8 @@ export function PlanSagaView() {
     }
   };
 
-  const isActive = session?.status === 'ACTIVE' || session?.status === 'STRUCTURE_PROPOSED';
+  // Memoize whether we have an active session to avoid unnecessary re-renders
+  const hasSession = useMemo(() => sessionId !== null, [sessionId]);
 
   return (
     <div className={styles.container}>
@@ -169,7 +138,7 @@ export function PlanSagaView() {
 
       {error && <div className={styles.error}>{error}</div>}
 
-      {!session && (
+      {!hasSession && (
         <div className={styles.form}>
           <label className={styles.label} htmlFor="plan-spec">
             Specification
@@ -216,51 +185,38 @@ export function PlanSagaView() {
         </div>
       )}
 
-      {session && (
+      {hasSession && (
         <div className={styles.sessionArea}>
           <div className={styles.sessionHeader}>
-            <span className={styles.sessionStatus} data-status={session.status}>
-              {session.status}
+            <span className={styles.sessionStatus} data-status="ACTIVE">
+              ACTIVE
             </span>
-            <span className={styles.sessionRepo}>{session.repo}</span>
+            <span className={styles.sessionRepo}>{repo}</span>
           </div>
 
-          <ChatPanel messages={displayMessages} onSend={handleSendMessage} disabled={!isActive} />
+          <SessionChat url={chatEndpoint} chatEndpoint={chatEndpoint} />
 
-          {detectedStructure && isActive && (
+          {detectedStructure && (
             <div className={styles.detectedStructure}>
               <span className={styles.detectedLabel}>
                 Structure detected: {detectedStructure.name} ({detectedStructure.phases.length}{' '}
                 phases)
               </span>
-              <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.useStructureButton}
-                  onClick={handleUseDetectedStructure}
-                  disabled={proposing}
-                >
-                  {proposing ? 'Validating...' : 'Use this structure?'}
-                </button>
+              <div className={styles.structurePreview}>
+                <h3 className={styles.previewHeading}>Proposed Structure</h3>
+                <div className={styles.structureName}>{detectedStructure.name}</div>
+                {detectedStructure.phases.map((phase, pi) => (
+                  <div key={pi} className={styles.phase}>
+                    <div className={styles.phaseName}>{phase.name}</div>
+                    {phase.raids.map((raid, ri) => (
+                      <div key={ri} className={styles.raid}>
+                        <span className={styles.raidName}>{raid.name}</span>
+                        <span className={styles.raidEstimate}>{raid.estimate_hours}h</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
-
-          {session.structure && (
-            <div className={styles.structurePreview}>
-              <h3 className={styles.previewHeading}>Proposed Structure</h3>
-              <div className={styles.structureName}>{session.structure.name}</div>
-              {session.structure.phases.map((phase, pi) => (
-                <div key={pi} className={styles.phase}>
-                  <div className={styles.phaseName}>{phase.name}</div>
-                  {phase.raids.map((raid, ri) => (
-                    <div key={ri} className={styles.raid}>
-                      <span className={styles.raidName}>{raid.name}</span>
-                      <span className={styles.raidEstimate}>{raid.estimate_hours}h</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
               <div className={styles.actions}>
                 <button
                   type="button"

@@ -35,13 +35,13 @@ from tyr.api.dispatch import create_dispatch_router, resolve_volundr
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.events import create_events_router, resolve_event_bus
-from tyr.api.planning import create_planning_router, resolve_planning_service
 from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
 from tyr.api.sagas import resolve_git as sagas_resolve_git
 from tyr.api.sagas import resolve_raid_repo as sagas_resolve_raid_repo
+from tyr.api.sagas import resolve_volundr as sagas_resolve_volundr
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
@@ -87,7 +87,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- Routers --
     app.include_router(create_tracker_router())
     app.include_router(create_sagas_router())
-    app.include_router(create_planning_router())
     app.include_router(create_raids_router())
     app.include_router(create_dispatch_router())
     app.include_router(create_dispatcher_router())
@@ -171,6 +170,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr
             app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr
+            app.dependency_overrides[sagas_resolve_volundr] = _resolve_volundr
 
             # Wire Git adapter
             git_adapter = GitHubGitAdapter(settings.git.token)
@@ -206,7 +206,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_raid_repo] = _resolve_raid_repo
             app.dependency_overrides[sagas_resolve_raid_repo] = _resolve_raid_repo
-
 
             # Wire personal access token service
             from tyr.adapters.postgres_pats import PostgresPATRepository
@@ -246,25 +245,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return event_bus
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
-
-            # Wire planning session service (dynamic adapter pattern)
-            from tyr.domain.services.planning_session import PlanningSessionService
-
-            planner_cfg = settings.planner
-            planner_repo_cls = import_class(planner_cfg.adapter)
-            planning_repo = planner_repo_cls(**planner_cfg.kwargs)
-            planning_service = PlanningSessionService(
-                repo=planning_repo,
-                volundr=volundr_adapter,
-                config=planner_cfg,
-                event_bus=event_bus,
-            )
-            app.state.planning_service = planning_service
-
-            async def _resolve_planning_service() -> PlanningSessionService:
-                return planning_service
-
-            app.dependency_overrides[resolve_planning_service] = _resolve_planning_service
 
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (

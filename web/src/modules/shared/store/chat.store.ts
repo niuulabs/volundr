@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { SkuldChatMessage } from '@/modules/volundr/hooks/useSkuldChat';
+import type { SkuldChatMessage } from '@/modules/shared/hooks/useSkuldChat';
 
 /**
  * Serialisable shape stored in sessionStorage.

@@ -1,9 +1,9 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useChatStore } from '@/modules/volundr/store/chat.store';
-import { getAccessToken } from '@/modules/volundr/adapters/api/client';
-import type { SlashCommand } from '@/modules/volundr/components/SessionChat/slashCommands';
-import { buildCommandList } from '@/modules/volundr/components/SessionChat/slashCommands';
+import { useChatStore } from '@/modules/shared/store/chat.store';
+import { getAccessToken } from '@/modules/shared/api/client';
+import type { SlashCommand } from '@/modules/shared/components/SessionChat/slashCommands';
+import { buildCommandList } from '@/modules/shared/components/SessionChat/slashCommands';
 
 /**
  * Shape of events from Claude CLI `--output-format stream-json`

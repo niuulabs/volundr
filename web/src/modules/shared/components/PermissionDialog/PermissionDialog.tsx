@@ -12,7 +12,7 @@ import {
   ChevronRightIcon,
   ShieldCheckIcon,
 } from 'lucide-react';
-import type { PermissionRequest, PermissionBehavior } from '@/modules/volundr/hooks/useSkuldChat';
+import type { PermissionRequest, PermissionBehavior } from '@/modules/shared/hooks/useSkuldChat';
 import styles from './PermissionDialog.module.css';
 
 function ToolBadgeIcon({ tool }: { tool: string }) {

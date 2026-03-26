@@ -1,5 +1,5 @@
 import { createApiClient } from '@/modules/shared/api/client';
-import type { ITyrService, CommitSagaRequest } from '../../ports';
+import type { ITyrService, CommitSagaRequest, PlanSession } from '../../ports';
 import type { Saga, Phase } from '../../models';
 
 const api = createApiClient('/api/v1/tyr/sagas');
@@ -161,5 +161,9 @@ export class ApiTyrService implements ITyrService {
 
   async decompose(_spec: string, _repo: string): Promise<Phase[]> {
     throw new Error('Not yet implemented');
+  }
+
+  async spawnPlanSession(spec: string, repo: string): Promise<PlanSession> {
+    return api.post<PlanSession>('/plan', { spec, repo });
   }
 }

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from niuu.domain.models import Principal
-from tyr.adapters.inbound.auth import extract_principal
+from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.config import ReviewConfig
 from tyr.domain.models import (
@@ -33,6 +33,7 @@ from tyr.ports.llm import LLMPort
 from tyr.ports.raid_repository import RaidRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
+from tyr.ports.volundr import SpawnRequest, VolundrPort
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,21 @@ class PhaseSpecRequest(BaseModel):
     raids: list[RaidSpecRequest]
 
 
+class PlanRequest(BaseModel):
+    """Request to spawn an interactive planning session."""
+
+    spec: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    model: str = Field(default="")
+
+
+class PlanSessionResponse(BaseModel):
+    """Response from spawning a planning session."""
+
+    session_id: str
+    chat_endpoint: str | None = None
+
+
 class CommitRequest(BaseModel):
     name: str
     slug: str
@@ -209,6 +225,13 @@ async def resolve_git() -> GitPort:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Git adapter not configured",
+    )
+
+
+async def resolve_volundr() -> VolundrPort:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Volundr adapter not configured",
     )
 
 
@@ -416,6 +439,64 @@ def create_sagas_router() -> APIRouter:
                 )
                 for phase in structure.phases
             ],
+        )
+
+    @router.post("/plan", response_model=PlanSessionResponse, status_code=201)
+    async def spawn_plan_session(
+        body: PlanRequest,
+        request: Request,
+        principal: Principal = Depends(extract_principal),
+        volundr: VolundrPort = Depends(resolve_volundr),
+    ) -> PlanSessionResponse:
+        """Spawn an interactive planning session via Volundr.
+
+        Creates a lightweight skuld-planner session that the user chats with
+        to iteratively decompose a specification into a saga structure.
+        """
+        auth_token = extract_bearer_token(request)
+        settings = request.app.state.settings
+        model = body.model or settings.dispatch.default_model
+
+        planner_prompt = (
+            "You are a saga planning assistant for the Niuu platform.\n\n"
+            "The user will describe a feature specification. Help them decompose it "
+            "into phases and raids (discrete tasks).\n\n"
+            "When the user is satisfied, output the final structure as a JSON code "
+            "block with this schema:\n"
+            "```json\n"
+            '{"name": "Saga Name", "phases": [{"name": "Phase 1", "raids": '
+            '[{"name": "...", "description": "...", "acceptance_criteria": [...], '
+            '"declared_files": [...], "estimate_hours": N}]}]}\n'
+            "```\n\n"
+            f"Repository: {body.repo}\n"
+            f"Specification:\n{body.spec}"
+        )
+
+        try:
+            session = await volundr.spawn_session(
+                SpawnRequest(
+                    name=f"plan-{principal.user_id[:8]}",
+                    repo=body.repo,
+                    branch="main",
+                    model=model,
+                    tracker_issue_id="",
+                    tracker_issue_url="",
+                    system_prompt=settings.dispatch.default_system_prompt,
+                    initial_prompt=planner_prompt,
+                    workload_type="planner",
+                ),
+                auth_token=auth_token,
+            )
+        except Exception as exc:
+            logger.error("Failed to spawn planning session: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to spawn planning session: {exc}",
+            )
+
+        return PlanSessionResponse(
+            session_id=session.id,
+            chat_endpoint=session.chat_endpoint,
         )
 
     @router.delete("/{saga_id}", status_code=204)

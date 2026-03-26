@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import type { FileTreeEntry } from '@/modules/volundr/models';
-import { getAccessToken } from '@/modules/volundr/adapters/api/client';
+import { getAccessToken } from '@/modules/shared/api/client';
 
 /**
  * Fuzzy match: every character in the pattern must appear in order in the target.

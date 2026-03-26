@@ -99,9 +99,7 @@ class KeycloakTokenIssuer(TokenIssuer):
                 resp.status_code,
                 detail,
             )
-            raise RuntimeError(
-                f"Token exchange failed (HTTP {resp.status_code}): {detail}"
-            )
+            raise RuntimeError(f"Token exchange failed (HTTP {resp.status_code}): {detail}")
 
         body = resp.json()
         raw_token = body["access_token"]

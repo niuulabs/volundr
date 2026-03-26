@@ -216,12 +216,6 @@ auth:
   # -- Default PAT lifetime in days
   patTtlDays: 365
 
-planner:
-  # -- Fully-qualified class path for the PlanningSessionRepository adapter
-  adapter: "tyr.adapters.memory_planning_repo.InMemoryPlanningSessionRepository"
-  # -- Extra kwargs forwarded to the adapter constructor
-  kwargs: {}
-
 volundr:
   url: "http://volundr:8000"
 
