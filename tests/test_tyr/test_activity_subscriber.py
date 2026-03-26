@@ -382,58 +382,6 @@ def _make_volundr_session(session_id: str = "session-1", status: str = "running"
     )
 
 
-class StubPool:
-    """Mock asyncpg.Pool for dispatched_sessions queries."""
-
-    def __init__(self) -> None:
-        self.sessions: dict[str, dict] = {}
-        self.executed: list = []
-
-    def add_session(
-        self,
-        session_id: str,
-        owner_id: str = "user-1",
-        saga_id: str = "saga-1",
-        tracker_issue_id: str = "issue-1",
-    ) -> None:
-        from uuid import UUID
-        self.sessions[session_id] = {
-            "id": UUID("00000000-0000-0000-0000-000000000001"),
-            "session_id": session_id,
-            "owner_id": owner_id,
-            "saga_id": UUID("00000000-0000-0000-0000-000000000002"),
-            "tracker_issue_id": tracker_issue_id,
-            "status": "running",
-        }
-
-    async def fetch(self, query: str, *args) -> list:
-        if "DISTINCT owner_id" in query:
-            owners = {s["owner_id"] for s in self.sessions.values() if s["status"] == "running"}
-            return [{"owner_id": o} for o in owners]
-        return []
-
-    async def fetchrow(self, query: str, *args) -> dict | None:
-        if "dispatched_sessions" in query and args:
-            session_id = args[0]
-            s = self.sessions.get(session_id)
-            if s and s["status"] == "running":
-                return s
-        return None
-
-    async def execute(self, query: str, *args) -> None:
-        self.executed.append((query, args))
-        if "UPDATE dispatched_sessions SET status" in query and len(args) >= 2:
-            session_id = args[0] if "$1" in query else args[1]
-            # Simple: first arg is status value from the SET clause
-            for s in self.sessions.values():
-                if s["session_id"] == session_id:
-                    # Parse status from the query
-                    if "'complete'" in query:
-                        s["status"] = "complete"
-                    elif "'failed'" in query:
-                        s["status"] = "failed"
-                    break
-
 
 def _make_subscriber(
     volundr: StubVolundr | None = None,
@@ -519,7 +467,6 @@ class TestSubscriberLifecycle:
 
 
 class TestActivityEventHandling:
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_idle_event_triggers_completion_for_running_raid(self) -> None:
         """An idle event with sufficient turns should transition the raid to REVIEW."""
@@ -546,7 +493,6 @@ class TestActivityEventHandling:
         assert bus_event.event == "raid.state_changed"
         assert bus_event.data["status"] == "REVIEW"
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_idle_with_no_turns_does_not_complete(self) -> None:
         """Idle with turn_count <= 1 should not trigger completion."""
@@ -566,7 +512,6 @@ class TestActivityEventHandling:
 
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.RUNNING
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_active_event_cancels_pending_evaluation(self) -> None:
         """An active event should cancel any pending idle evaluation."""
@@ -595,7 +540,6 @@ class TestActivityEventHandling:
         assert raid.session_id not in sub._pending_evaluations
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.RUNNING
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_tool_executing_cancels_pending_evaluation(self) -> None:
         """A tool_executing event should cancel pending idle evaluation."""
@@ -658,7 +602,6 @@ class TestCompletionEvaluationLogic:
         assert result.signals["has_turns"] is True
         assert result.confidence >= 0.5
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_pr_increases_confidence(self) -> None:
         """PR existence should increase confidence."""
@@ -745,7 +688,6 @@ class TestCompletionEvaluationLogic:
 
 
 class TestCompletionHandling:
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_pr_info_stored_on_completion(self) -> None:
         """PR URL and ID should be stored when PR is detected."""
@@ -767,7 +709,6 @@ class TestCompletionHandling:
         assert tracker.progress[raid.tracker_id]["pr_id"] == "PR-42"
         assert tracker.progress[raid.tracker_id]["pr_url"] == "https://github.com/org/repo/pull/42"
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_no_pr_still_transitions(self) -> None:
         """Completion without a PR should still transition to REVIEW."""
@@ -786,7 +727,6 @@ class TestCompletionHandling:
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
         assert tracker.progress[raid.tracker_id].get("pr_id") is None
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_event_emitted_on_completion(self) -> None:
         """Event bus should receive raid.state_changed on completion."""
@@ -808,7 +748,6 @@ class TestCompletionHandling:
 
 
 class TestDispatcherPauseFiltering:
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_paused_dispatcher_skips_completion(self) -> None:
         """Raids belonging to paused owners should not complete."""
@@ -830,7 +769,6 @@ class TestDispatcherPauseFiltering:
 
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.RUNNING
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_running_dispatcher_allows_completion(self) -> None:
         """Raids belonging to running owners should complete normally."""
@@ -859,7 +797,6 @@ class TestDispatcherPauseFiltering:
 
 
 class TestFailureDetection:
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_stopped_transitions_raid_to_failed(self) -> None:
         """A session_updated event with status=stopped should transition raid to FAILED."""
@@ -884,7 +821,6 @@ class TestFailureDetection:
         assert bus_event.event == "raid.state_changed"
         assert bus_event.data["status"] == "FAILED"
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_failed_transitions_raid_to_failed(self) -> None:
         """A session_updated event with status=failed should transition raid to FAILED."""
@@ -904,7 +840,6 @@ class TestFailureDetection:
 
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_failed_cancels_pending_evaluation(self) -> None:
         """A failure event should cancel any pending idle evaluation."""
@@ -936,7 +871,6 @@ class TestFailureDetection:
         assert raid.session_id not in sub._pending_evaluations
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_not_found_during_evaluation_transitions_to_failed(self) -> None:
         """If get_session returns None during debounced evaluation, raid should fail."""
@@ -958,7 +892,6 @@ class TestFailureDetection:
 
         assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.FAILED
 
-    @pytest.mark.xfail(reason="NIU-252: subscriber being refactored to TrackerPort")
     @pytest.mark.asyncio
     async def test_session_stopped_during_evaluation_transitions_to_failed(self) -> None:
         """If get_session returns a stopped session during evaluation, raid should fail."""
