@@ -19,6 +19,7 @@ interface PlanSession {
   status: string;
   chat_endpoint: string | null;
   task_type: string | null;
+  source?: { type: string; repo: string; branch: string; base_branch: string };
 }
 
 interface DetectedStructure {
@@ -57,6 +58,7 @@ export function PlanSagaView() {
   const [error, setError] = useState<string | null>(null);
   const [detectedStructure, setDetectedStructure] = useState<DetectedStructure | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [commitRepo, setCommitRepo] = useState('');
   const lastCheckedMsgId = useRef<string | null>(null);
   const navigate = useNavigate();
 
@@ -107,6 +109,7 @@ export function PlanSagaView() {
       .then((result: ExtractedStructure) => {
         if (result.found) {
           setDetectedStructure(result.structure as DetectedStructure);
+          setCommitRepo(activeSession?.source?.repo || repo || '');
           setShowReviewModal(true);
         }
       })
@@ -147,7 +150,7 @@ export function PlanSagaView() {
       const commitRequest: CommitSagaRequest = {
         name: detectedStructure.name,
         slug: slugify(detectedStructure.name),
-        repos: [repo || repoDisplayName],
+        repos: [commitRepo],
         base_branch: 'main',
         phases: detectedStructure.phases.map(phase => ({
           name: phase.name,
@@ -351,6 +354,13 @@ export function PlanSagaView() {
                 onChange={e => {
                   setDetectedStructure(prev => (prev ? { ...prev, name: e.target.value } : prev));
                 }}
+                placeholder="Saga name"
+              />
+              <input
+                className={styles.reviewRepoInput}
+                value={commitRepo}
+                onChange={e => setCommitRepo(e.target.value)}
+                placeholder="owner/repo"
               />
               {detectedStructure.phases.map((phase, pi) => (
                 <div key={pi} className={styles.reviewPhase}>

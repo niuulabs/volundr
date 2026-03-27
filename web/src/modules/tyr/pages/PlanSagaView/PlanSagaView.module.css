@@ -460,6 +460,27 @@
   gap: var(--space-3);
 }
 
+.reviewRepoInput {
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.reviewRepoInput:hover {
+  border-color: var(--color-border-subtle);
+}
+
+.reviewRepoInput:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
 .reviewPhaseName {
   font-size: var(--text-sm);
   font-weight: 600;
