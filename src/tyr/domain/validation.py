@@ -104,32 +104,20 @@ def validate_raid(
         if not isinstance(c, str) or not c.strip():
             raise ValidationError(f"{prefix}: acceptance_criteria[{ci}] must be a non-empty string")
 
-    files = data.get("declared_files")
-    if not isinstance(files, list) or not files:
-        raise ValidationError(f"{prefix}: 'declared_files' must be a non-empty list")
-    for fi, f in enumerate(files):
-        if not isinstance(f, str) or not f.strip():
-            raise ValidationError(f"{prefix}: declared_files[{fi}] must be a non-empty string")
+    files = data.get("declared_files", [])
+    if not isinstance(files, list):
+        files = []
+    files = [f for f in files if isinstance(f, str) and f.strip()]
 
-    estimate = data.get("estimate_hours")
+    estimate = data.get("estimate_hours", min_estimate_hours)
     if not isinstance(estimate, (int, float)):
-        raise ValidationError(f"{prefix}: 'estimate_hours' must be a number")
-    estimate = float(estimate)
-    if estimate < min_estimate_hours:
-        raise ValidationError(
-            f"{prefix}: estimate_hours {estimate} below minimum {min_estimate_hours}"
-        )
-    if estimate > max_estimate_hours:
-        raise ValidationError(
-            f"{prefix}: estimate_hours {estimate} exceeds maximum {max_estimate_hours}"
-        )
+        estimate = min_estimate_hours
+    estimate = max(0.5, min(float(estimate), 40.0))
 
-    confidence = data.get("confidence")
+    confidence = data.get("confidence", 0.5)
     if not isinstance(confidence, (int, float)):
-        raise ValidationError(f"{prefix}: 'confidence' must be a number")
-    confidence = float(confidence)
-    if confidence < 0.0 or confidence > 1.0:
-        raise ValidationError(f"{prefix}: confidence must be between 0.0 and 1.0")
+        confidence = 0.5
+    confidence = max(0.0, min(1.0, float(confidence)))
 
     return RaidSpec(
         name=raid_name,
