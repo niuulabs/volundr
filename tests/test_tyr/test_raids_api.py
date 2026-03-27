@@ -716,7 +716,7 @@ class TestRaidsSummary:
         resp = client.get("/api/v1/tyr/raids/summary")
         assert resp.status_code == 200
         data = resp.json()
-        assert set(data.keys()) == {"PENDING", "QUEUED", "RUNNING", "REVIEW", "MERGED", "FAILED"}
+        assert set(data.keys()) == {"PENDING", "QUEUED", "RUNNING", "REVIEW", "ESCALATED", "MERGED", "FAILED"}
 
     def test_returns_correct_counts(self):
         counts = {

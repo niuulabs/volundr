@@ -192,7 +192,7 @@ class TestCountByStatus:
     ):
         mock_pool.fetch.return_value = []
         result = await repo.count_by_status()
-        assert set(result.keys()) == {"PENDING", "QUEUED", "RUNNING", "REVIEW", "MERGED", "FAILED"}
+        assert set(result.keys()) == {"PENDING", "QUEUED", "RUNNING", "REVIEW", "ESCALATED", "MERGED", "FAILED"}
         assert all(v == 0 for v in result.values())
 
     @pytest.mark.asyncio
