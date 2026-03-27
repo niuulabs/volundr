@@ -231,10 +231,9 @@ class PlannerConfig(BaseModel):
             'in exactly this format:\n\n```json\n{\n  "name": "Saga Name",\n  "phases": [\n'
             '    {\n      "name": "Phase 1",\n      "raids": [\n        {\n'
             '          "name": "Raid name",\n          "description": "What this raid does",\n'
-            '          "acceptance_criteria": ["criterion 1", "criterion 2"],\n'
-            '          "declared_files": ["src/path/to/file.py"],\n'
-            '          "estimate_hours": 2\n        }\n      ]\n    }\n  ]\n}\n```\n\n'
-            "Make sure every raid has clear acceptance criteria and declared files."
+            '          "acceptance_criteria": ["criterion 1", "criterion 2"]\n'
+            "        }\n      ]\n    }\n  ]\n}\n```\n\n"
+            "Make sure every raid has a clear name, description, and acceptance criteria."
         ),
         description="Prompt injected when the user clicks Finalize Plan.",
     )
