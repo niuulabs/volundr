@@ -48,7 +48,10 @@ export function RepoSelector(props: RepoSelectorProps) {
     }
   }, [open]);
 
-  const selectedIds = mode === 'multi' ? props.selected.map(r => r.repoId) : [];
+  const selectedIds =
+    mode === 'multi' && 'selected' in props && props.selected
+      ? props.selected.map(r => r.repoId)
+      : [];
   const singleValue = mode === 'single' ? (props.value ?? '') : '';
 
   const selectedRepo =
@@ -114,11 +117,11 @@ export function RepoSelector(props: RepoSelectorProps) {
                   className={styles.dropdownItem}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => {
-                    if (mode === 'single') {
+                    if (mode === 'single' && 'onSelect' in props && props.onSelect) {
                       props.onSelect(repoId);
                       setSearch('');
                       setOpen(false);
-                    } else {
+                    } else if ('onToggle' in props && props.onToggle) {
                       props.onToggle(repoId);
                       setSearch('');
                     }
@@ -141,7 +144,7 @@ export function RepoSelector(props: RepoSelectorProps) {
         )}
       </div>
 
-      {mode === 'multi' && props.selected.length > 0 && (
+      {mode === 'multi' && 'selected' in props && props.selected && props.selected.length > 0 && (
         <div className={styles.selectedList}>
           {props.selected.map(sel => {
             const repo = repos.find(r => r.url === sel.repoId);
@@ -154,7 +157,10 @@ export function RepoSelector(props: RepoSelectorProps) {
                   <select
                     className={styles.branchSelect}
                     value={sel.branch}
-                    onChange={e => props.onBranchChange(sel.repoId, e.target.value)}
+                    onChange={e =>
+                      'onBranchChange' in props &&
+                      props.onBranchChange?.(sel.repoId, e.target.value)
+                    }
                   >
                     {branches.map(b => (
                       <option key={b} value={b}>
@@ -168,7 +174,7 @@ export function RepoSelector(props: RepoSelectorProps) {
                 <button
                   type="button"
                   className={styles.removeButton}
-                  onClick={() => props.onToggle(sel.repoId)}
+                  onClick={() => 'onToggle' in props && props.onToggle?.(sel.repoId)}
                   aria-label={`Remove ${sel.repoId}`}
                 >
                   {'\u2715'}
