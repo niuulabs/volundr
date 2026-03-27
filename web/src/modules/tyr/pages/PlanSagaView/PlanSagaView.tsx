@@ -148,6 +148,15 @@ export function PlanSagaView() {
     setCommitting(true);
     setError(null);
     try {
+      // Format transcript if requested
+      let transcript: string | undefined;
+      if (includeTranscript && skuld.messages.length > 0) {
+        transcript = skuld.messages
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .map(m => `### ${m.role === 'user' ? 'Human' : 'AI'}\n\n${m.content}`)
+          .join('\n\n---\n\n');
+      }
+
       const commitRequest: CommitSagaRequest = {
         name: detectedStructure.name,
         slug: slugify(detectedStructure.name),
@@ -163,6 +172,7 @@ export function PlanSagaView() {
             estimate_hours: raid.estimate_hours,
           })),
         })),
+        transcript,
       };
       const saga = await tyrService.commitSaga(commitRequest);
       navigate(`/tyr/sagas/${saga.id}`);

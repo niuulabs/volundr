@@ -174,6 +174,7 @@ class CommitRequest(BaseModel):
     repos: list[str]
     base_branch: str = "main"
     phases: list[PhaseSpecRequest]
+    transcript: str | None = None
 
 
 class CommittedRaidResponse(BaseModel):
@@ -774,6 +775,19 @@ def create_sagas_router() -> APIRouter:
                 msg = f"Failed to create branch '{feature_branch}' in {repo}"
                 logger.warning(msg, exc_info=True)
                 warnings.append(msg)
+
+        # 5. Attach planning transcript as a document (best-effort)
+        if body.transcript and saga.tracker_id:
+            try:
+                await tracker.attach_document(
+                    saga.tracker_id,
+                    f"Planning Transcript — {saga.name}",
+                    body.transcript,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to attach transcript for saga %s", saga.slug, exc_info=True
+                )
 
         return CommittedSagaResponse(
             id=str(saga.id),

@@ -15,6 +15,7 @@ export interface CommitSagaRequest {
       estimate_hours: number;
     }[];
   }[];
+  transcript?: string;
 }
 
 export interface PlanSession {

@@ -250,6 +250,15 @@ mutation CreateMilestone($name: String!, $projectId: String!, $sortOrder: Float!
 }
 """
 
+_CREATE_DOCUMENT_QUERY = """
+mutation CreateDocument($title: String!, $content: String, $projectId: String) {
+  documentCreate(input: { title: $title, content: $content, projectId: $projectId }) {
+    document { id }
+    success
+  }
+}
+"""
+
 _CREATE_ISSUE_QUERY = """
 mutation CreateIssue(
   $title: String!,
@@ -395,6 +404,16 @@ class LinearTrackerAdapter(TrackerPort):
             raise GraphQLError("Failed to create Linear project")
         self._gql.invalidate_cache("projects")
         return project["id"]
+
+    async def attach_document(self, project_id: str, title: str, content: str) -> str:
+        data = await self._gql.query(
+            _CREATE_DOCUMENT_QUERY,
+            {"title": title, "content": content, "projectId": project_id},
+        )
+        doc = data.get("documentCreate", {}).get("document")
+        if doc is None:
+            raise GraphQLError("Failed to create Linear document")
+        return doc["id"]
 
     async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         parent_id = project_id or phase.tracker_id

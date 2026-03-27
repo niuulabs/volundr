@@ -42,6 +42,12 @@ class TrackerPort(ABC):
         self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
     ) -> str: ...
 
+    async def attach_document(
+        self, project_id: str, title: str, content: str
+    ) -> str:
+        """Attach a document to a project. Returns document ID. Optional — noop by default."""
+        return ""
+
     # -- CRUD: update / close --
 
     @abstractmethod
