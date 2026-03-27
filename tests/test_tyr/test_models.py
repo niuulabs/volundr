@@ -77,9 +77,10 @@ class TestConfidenceEventType:
         assert ConfidenceEventType.PR_CONFLICT == "pr_conflict"
         assert ConfidenceEventType.PR_MERGEABLE == "pr_mergeable"
         assert ConfidenceEventType.MESSAGE_SENT == "message_sent"
+        assert ConfidenceEventType.REVIEWER_SCORE == "reviewer_score"
 
     def test_member_count(self) -> None:
-        assert len(ConfidenceEventType) == 10
+        assert len(ConfidenceEventType) == 11
 
 
 # ---------------------------------------------------------------------------
