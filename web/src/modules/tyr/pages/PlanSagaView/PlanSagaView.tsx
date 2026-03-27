@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, CheckCircle } from 'lucide-react';
+import { Plus, CheckCircle, Square } from 'lucide-react';
 import { tyrService } from '../../adapters';
 import { SessionChat } from '@/modules/shared/components/SessionChat';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
@@ -59,6 +59,7 @@ export function PlanSagaView() {
   const [detectedStructure, setDetectedStructure] = useState<DetectedStructure | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [commitRepo, setCommitRepo] = useState('');
+  const [includeTranscript, setIncludeTranscript] = useState(true);
   const lastCheckedMsgId = useRef<string | null>(null);
   const navigate = useNavigate();
 
@@ -194,6 +195,16 @@ export function PlanSagaView() {
     [setSearchParams]
   );
 
+  const handleStopSession = useCallback(async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      await volundrApi.delete(`/sessions/${id}`);
+      setSessions(prev => prev.map(s => (s.id === id ? { ...s, status: 'stopped' } : s)));
+    } catch {
+      setError('Failed to stop session');
+    }
+  }, []);
+
   return (
     <div className={styles.page}>
       {/* Header */}
@@ -227,7 +238,16 @@ export function PlanSagaView() {
                 <span className={styles.sessionCardStatus} data-status={s.status}>
                   {s.status}
                 </span>
-                <span>{s.model}</span>
+                {s.status === 'running' && (
+                  <button
+                    type="button"
+                    className={styles.stopBtn}
+                    onClick={e => handleStopSession(s.id, e)}
+                    title="Stop session"
+                  >
+                    <Square className={styles.stopIcon} />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -244,15 +264,27 @@ export function PlanSagaView() {
                   </span>
                   <span className={styles.chatRepo}>{activeSession.name}</span>
                 </div>
-                <button
-                  type="button"
-                  className={styles.finalizeButton}
-                  onClick={handleFinalize}
-                  disabled={!finalizePrompt}
-                >
-                  <CheckCircle className={styles.finalizeIcon} />
-                  Finalize Plan
-                </button>
+                <div className={styles.chatHeaderActions}>
+                  <button
+                    type="button"
+                    className={styles.finalizeButton}
+                    onClick={handleFinalize}
+                    disabled={!finalizePrompt}
+                  >
+                    <CheckCircle className={styles.finalizeIcon} />
+                    Finalize Plan
+                  </button>
+                  {activeSession.status === 'running' && (
+                    <button
+                      type="button"
+                      className={styles.stopButton}
+                      onClick={() => handleStopSession(activeSession.id)}
+                    >
+                      <Square className={styles.stopIcon} />
+                      Stop
+                    </button>
+                  )}
+                </div>
               </div>
               <div className={styles.chatBody}>
                 <SessionChat url={chatEndpoint} chatEndpoint={chatEndpoint} />
@@ -428,21 +460,31 @@ export function PlanSagaView() {
               ))}
             </div>
             <div className={styles.formFooter}>
-              <button
-                type="button"
-                className={styles.cancelButton}
-                onClick={() => setShowReviewModal(false)}
-              >
-                Keep Editing
-              </button>
-              <button
-                type="button"
-                className={styles.commitButton}
-                onClick={handleCommit}
-                disabled={committing}
-              >
-                {committing ? 'Creating...' : 'Create Saga'}
-              </button>
+              <label className={styles.transcriptToggle}>
+                <input
+                  type="checkbox"
+                  checked={includeTranscript}
+                  onChange={e => setIncludeTranscript(e.target.checked)}
+                />
+                <span>Attach planning transcript</span>
+              </label>
+              <div className={styles.footerActions}>
+                <button
+                  type="button"
+                  className={styles.cancelButton}
+                  onClick={() => setShowReviewModal(false)}
+                >
+                  Keep Editing
+                </button>
+                <button
+                  type="button"
+                  className={styles.commitButton}
+                  onClick={handleCommit}
+                  disabled={committing}
+                >
+                  {committing ? 'Creating...' : 'Create Saga'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

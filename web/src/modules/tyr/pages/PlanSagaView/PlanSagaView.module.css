@@ -618,3 +618,73 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ── Stop button ── */
+.chatHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stopButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-accent-red) 30%, transparent);
+  background: transparent;
+  color: var(--color-accent-red);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.stopButton:hover {
+  background-color: color-mix(in srgb, var(--color-accent-red) 10%, transparent);
+}
+
+.stopBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent-red);
+  cursor: pointer;
+  margin-left: auto;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.stopBtn:hover {
+  opacity: 1;
+}
+
+.stopIcon {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Transcript toggle ── */
+.transcriptToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.transcriptToggle input {
+  accent-color: var(--color-brand);
+}
+
+.footerActions {
+  display: flex;
+  gap: var(--space-3);
+  margin-left: auto;
+}
