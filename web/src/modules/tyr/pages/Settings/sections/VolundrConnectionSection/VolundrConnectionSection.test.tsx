@@ -115,6 +115,39 @@ describe('VolundrConnectionSection', () => {
     });
   });
 
+  it('sends cluster name and custom URL in config', async () => {
+    const onConnect = vi.fn().mockResolvedValue(undefined);
+    render(
+      <VolundrConnectionSection
+        connections={[]}
+        onConnect={onConnect}
+        onDisconnect={vi.fn()}
+        service={mockService}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Cluster Name (optional)'), {
+      target: { value: 'staging' },
+    });
+    fireEvent.change(screen.getByLabelText('Volundr URL'), {
+      target: { value: 'http://staging' },
+    });
+    fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+      target: { value: 'pat-123' },
+    });
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(onConnect).toHaveBeenCalledWith({
+        integrationType: 'code_forge',
+        adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
+        credentialName: 'volundr-pat',
+        credentialValue: 'pat-123',
+        config: { url: 'http://staging', name: 'staging' },
+      });
+    });
+  });
+
   it('shows error when PAT is empty', async () => {
     render(
       <VolundrConnectionSection
