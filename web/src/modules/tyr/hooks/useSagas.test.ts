@@ -48,6 +48,13 @@ describe('useSagas', () => {
     expect(result.current.sagas).toHaveLength(0);
   });
 
+  it('should handle non-Error rejection', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue('string error');
+    const { result } = renderHook(() => useSagas());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('string error');
+  });
+
   it('should delete a saga', async () => {
     const { result } = renderHook(() => useSagas());
     await waitFor(() => expect(result.current.loading).toBe(false));
