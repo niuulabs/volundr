@@ -233,7 +233,7 @@ query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
 )
 
 _CREATE_PROJECT_QUERY = """
-mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
+mutation CreateProject($name: String!, $description: String, $teamIds: [String!]!) {
   projectCreate(input: { name: $name, description: $description, teamIds: $teamIds }) {
     project { id }
     success
