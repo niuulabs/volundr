@@ -61,9 +61,9 @@ export function VolundrConnectionSection({
 
   return (
     <>
-      {/* Header toolbar — matches credentials page pattern */}
+      {/* Add button — top right, aligned with parent page heading */}
       <div className={styles.contentHeader}>
-        <h3 className={styles.sectionTitle}>Volundr Clusters</h3>
+        <div />
         <button type="button" className={styles.addButton} onClick={() => setShowForm(true)}>
           <Plus className={styles.addButtonIcon} />
           Add Cluster

@@ -27,17 +27,21 @@ export function TyrSettings({ service }: TyrSettingsProps) {
 
   return (
     <div className={styles.page}>
-      <h2 className={styles.heading}>Tyr Connections</h2>
-      <p className={styles.subheading}>Connect Tyr to your Volundr instance for session dispatch</p>
-      {error && <p className={styles.error}>{error}</p>}
-      <div className={styles.sections}>
-        <VolundrConnectionSection
-          connections={volundrConnections}
-          onConnect={createConnection}
-          onDisconnect={deleteConnection}
-          service={service}
-        />
+      <div className={styles.header}>
+        <div>
+          <h2 className={styles.heading}>Tyr Connections</h2>
+          <p className={styles.subheading}>
+            Connect Tyr to your Volundr instances for session dispatch
+          </p>
+        </div>
       </div>
+      {error && <p className={styles.error}>{error}</p>}
+      <VolundrConnectionSection
+        connections={volundrConnections}
+        onConnect={createConnection}
+        onDisconnect={deleteConnection}
+        service={service}
+      />
     </div>
   );
 }
