@@ -85,6 +85,11 @@ class StubSagaRepo(SagaRepository):
     async def get_saga_by_slug(self, slug: str) -> Saga | None:
         return next((s for s in self._sagas if s.slug == slug), None)
 
+    async def count_by_status(self) -> dict[str, int]:
+        from tyr.domain.models import RaidStatus
+
+        return {s.value: 0 for s in RaidStatus}
+
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         return False
 

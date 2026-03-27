@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
-from tyr.domain.models import Saga, SagaStatus
+from tyr.domain.models import RaidStatus, Saga, SagaStatus
 
 
 @pytest.fixture
@@ -183,3 +183,38 @@ class TestDeleteSaga:
         mock_pool.execute.return_value = "DELETE 0"
         result = await repo.delete_saga(uuid4())
         assert result is False
+
+
+class TestCountByStatus:
+    @pytest.mark.asyncio
+    async def test_returns_all_statuses_zero_when_no_raids(
+        self, repo: PostgresSagaRepository, mock_pool: MagicMock
+    ):
+        mock_pool.fetch.return_value = []
+        result = await repo.count_by_status()
+        assert set(result.keys()) == {s.value for s in RaidStatus}
+        assert all(v == 0 for v in result.values())
+
+    @pytest.mark.asyncio
+    async def test_counts_raids_by_status(self, repo: PostgresSagaRepository, mock_pool: MagicMock):
+        mock_pool.fetch.return_value = [
+            {"status": "PENDING", "cnt": 3},
+            {"status": "RUNNING", "cnt": 2},
+            {"status": "MERGED", "cnt": 5},
+        ]
+        result = await repo.count_by_status()
+        assert result["PENDING"] == 3
+        assert result["RUNNING"] == 2
+        assert result["MERGED"] == 5
+        assert result["QUEUED"] == 0
+        assert result["REVIEW"] == 0
+        assert result["FAILED"] == 0
+
+    @pytest.mark.asyncio
+    async def test_queries_raids_table(self, repo: PostgresSagaRepository, mock_pool: MagicMock):
+        mock_pool.fetch.return_value = []
+        await repo.count_by_status()
+        call_sql = mock_pool.fetch.call_args[0][0]
+        assert "raids" in call_sql
+        assert "status" in call_sql
+        assert "COUNT" in call_sql

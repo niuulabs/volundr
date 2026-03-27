@@ -36,7 +36,7 @@ from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.health import create_health_router
-from tyr.api.raids import create_raids_router, resolve_git
+from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
@@ -155,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
             app.dependency_overrides[dispatch_resolve_saga_repo] = _resolve_saga_repo
+            app.dependency_overrides[resolve_raid_repo] = _resolve_saga_repo
 
             # Wire notification subscription repository (Telegram webhook auth)
             notification_sub_repo = PostgresNotificationSubscriptionRepository(pool)

@@ -54,6 +54,15 @@ class SagaRepository(ABC):
         """Delete a saga, optionally scoped to an owner. Returns True if deleted."""
         ...
 
+    @abstractmethod
+    async def count_by_status(self) -> dict[str, int]:
+        """Return a count of raids grouped by status.
+
+        All RaidStatus values are always present in the result, with zero counts
+        for statuses that have no raids.
+        """
+        ...
+
     @asynccontextmanager
     async def begin(self) -> AsyncIterator[Any]:
         """Yield a transactional connection.

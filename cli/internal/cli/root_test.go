@@ -216,3 +216,21 @@ func TestRootCmd_UseName(t *testing.T) {
 		t.Errorf("expected root command Use %q, got %q", "niuu", rootCmd.Use)
 	}
 }
+
+func TestExecute_Tyr(t *testing.T) {
+	// tyr subcommand prints info and returns nil.
+	rootCmd.SetArgs([]string{"tyr"})
+	defer rootCmd.SetArgs(nil)
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute tyr: %v", err)
+	}
+}
+
+func TestExecute_HomeFlag(t *testing.T) {
+	// --home flag sets the home directory env var via PersistentPreRun.
+	rootCmd.SetArgs([]string{"--home", "/tmp/test-niuu-home", "version"})
+	defer rootCmd.SetArgs(nil)
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute with --home: %v", err)
+	}
+}
