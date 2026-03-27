@@ -10,13 +10,13 @@ LLM-powered review that understands code context, architecture, and quality.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from tyr.config import ReviewConfig
 from tyr.domain.models import PRStatus, Raid
-from tyr.ports.git import GitPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrSession
 
 logger = logging.getLogger(__name__)
@@ -112,15 +112,15 @@ def build_reviewer_initial_prompt(
             "2. Check every changed file against ALL project rules",
             "3. Verify the implementation matches the acceptance criteria above",
             "4. Score your confidence from 0.0 to 1.0",
-            "5. Report your findings in this exact format:",
+            "5. Report your findings as JSON in this exact format:",
             "",
-            "```",
-            "CONFIDENCE: <score>",
-            "APPROVED: <yes|no>",
-            "SUMMARY: <one-line summary>",
-            "ISSUES:",
-            "- <issue 1>",
-            "- <issue 2>",
+            "```json",
+            "{",
+            '  "confidence": <score>,',
+            '  "approved": <true|false>,',
+            '  "summary": "<one-line summary>",',
+            '  "issues": ["<issue 1>", "<issue 2>"]',
+            "}",
             "```",
         ]
     )
@@ -128,11 +128,49 @@ def build_reviewer_initial_prompt(
     return "\n".join(lines)
 
 
-def parse_reviewer_response(text: str) -> ReviewerResult | None:
-    """Parse the structured response from a reviewer session.
+def _try_parse_json(text: str) -> ReviewerResult | None:
+    """Attempt to parse the reviewer response as JSON."""
+    # Extract JSON from markdown code fences if present
+    cleaned = text.strip()
+    for prefix in ("```json", "```"):
+        if prefix in cleaned:
+            start = cleaned.index(prefix) + len(prefix)
+            end = cleaned.index("```", start) if "```" in cleaned[start:] else len(cleaned)
+            cleaned = cleaned[start:end].strip()
+            break
 
-    Returns None if the response cannot be parsed.
-    """
+    try:
+        data = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    confidence = data.get("confidence", 0.0)
+    if not isinstance(confidence, (int, float)):
+        return None
+    confidence = max(0.0, min(1.0, float(confidence)))
+
+    approved = bool(data.get("approved", False))
+    summary = str(data.get("summary", ""))
+    raw_issues = data.get("issues", [])
+    issues = [str(i) for i in raw_issues] if isinstance(raw_issues, list) else []
+
+    if not summary and confidence == 0.0:
+        return None
+
+    return ReviewerResult(
+        session_id="",
+        confidence=confidence,
+        summary=summary,
+        issues=issues,
+        approved=approved,
+    )
+
+
+def _try_parse_text(text: str) -> ReviewerResult | None:
+    """Parse the text-based CONFIDENCE:/APPROVED:/SUMMARY:/ISSUES: format."""
     confidence = 0.0
     approved = False
     summary = ""
@@ -182,13 +220,24 @@ def parse_reviewer_response(text: str) -> ReviewerResult | None:
     )
 
 
+def parse_reviewer_response(text: str) -> ReviewerResult | None:
+    """Parse the structured response from a reviewer session.
+
+    Tries JSON first, falls back to the text-based format.
+    Returns None if the response cannot be parsed.
+    """
+    result = _try_parse_json(text)
+    if result is not None:
+        return result
+    return _try_parse_text(text)
+
+
 class ReviewerSessionService:
     """Spawns and manages LLM-powered reviewer sessions.
 
     Responsibilities:
     - Build the reviewer system prompt and initial prompt
     - Spawn a reviewer session via Volundr
-    - Wait for the reviewer to complete
     - Parse the reviewer's confidence score and feedback
     - Send feedback to the working session when issues are found
     """
@@ -196,11 +245,9 @@ class ReviewerSessionService:
     def __init__(
         self,
         volundr_factory: VolundrFactory,
-        git: GitPort,
         review_config: ReviewConfig,
     ) -> None:
         self._volundr_factory = volundr_factory
-        self._git = git
         self._cfg = review_config
         self._system_prompt: str | None = None
 
@@ -225,7 +272,7 @@ class ReviewerSessionService:
             logger.warning("No Volundr adapter for owner %s — cannot spawn reviewer", owner_id[:8])
             return None
 
-        diff_summary = await self._fetch_diff_summary(raid)
+        diff_summary = self._get_diff_summary(raid)
 
         initial_prompt = build_reviewer_initial_prompt(
             raid=raid,
@@ -304,8 +351,8 @@ class ReviewerSessionService:
                 exc_info=True,
             )
 
-    async def _fetch_diff_summary(self, raid: Raid) -> str:
-        """Fetch a diff summary for the PR."""
+    def _get_diff_summary(self, raid: Raid) -> str:
+        """Get a diff summary from the raid's chronicle summary."""
         if not raid.chronicle_summary:
             return ""
         return raid.chronicle_summary

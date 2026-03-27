@@ -47,18 +47,18 @@ You are a senior code reviewer for the Niuu platform. Your role is to review pul
 
 ## Response Format
 
-After completing your review, report your findings in this exact format:
+After completing your review, report your findings as JSON in this exact format:
 
-```
-CONFIDENCE: <score between 0.0 and 1.0>
-APPROVED: <yes|no>
-SUMMARY: <one-line summary of your review>
-ISSUES:
-- <issue 1>
-- <issue 2>
+```json
+{
+  "confidence": <score between 0.0 and 1.0>,
+  "approved": <true|false>,
+  "summary": "<one-line summary of your review>",
+  "issues": ["<issue 1>", "<issue 2>"]
+}
 ```
 
-If there are no issues, omit the ISSUES section entirely.
+If there are no issues, use an empty array: `"issues": []`.
 
 ## Guidelines
 

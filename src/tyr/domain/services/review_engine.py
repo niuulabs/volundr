@@ -7,6 +7,14 @@ When a raid enters REVIEW (detected by the watcher), this engine evaluates:
   4. Confidence scoring based on signals
   5. (Optional) LLM-powered reviewer session for deeper code review
 
+When reviewer sessions are enabled, the engine spawns a reviewer session via
+Volundr and tracks it. The reviewer session is detected as complete by the
+ActivitySubscriber (via SSE idle events), which calls back into the engine's
+``handle_reviewer_completion`` method with the chronicle summary. The engine
+parses the reviewer's structured output, blends its confidence score, sends
+feedback to the working session, and proceeds with the auto-approve / retry /
+escalate decision.
+
 The engine then decides: auto-approve, auto-retry, or escalate to human review.
 """
 
@@ -28,7 +36,10 @@ from tyr.domain.models import (
     RaidStatus,
     validate_transition,
 )
-from tyr.domain.services.reviewer_session import ReviewerSessionService
+from tyr.domain.services.reviewer_session import (
+    ReviewerSessionService,
+    parse_reviewer_response,
+)
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
 from tyr.ports.tracker import TrackerFactory, TrackerPort
@@ -47,7 +58,7 @@ class ReviewDecision:
     """Outcome of the automated review engine evaluation."""
 
     raid: Raid
-    action: str  # "auto_approved", "retried", "escalated", "failed"
+    action: str  # "auto_approved", "retried", "escalated", "failed", "reviewer_pending"
     reason: str
     phase_gate_unlocked: bool = False
 
@@ -100,6 +111,11 @@ class ReviewEngine:
     Called by the watcher after a raid transitions to REVIEW. Gathers signals,
     scores confidence, and decides whether to auto-approve, auto-retry, or
     escalate.
+
+    When reviewer sessions are enabled, the engine spawns a reviewer session
+    and tracks the mapping from reviewer_session_id → raid_tracker_id. The
+    ActivitySubscriber detects reviewer completion via SSE idle events and
+    calls ``handle_reviewer_completion`` to close the loop.
     """
 
     def __init__(
@@ -119,10 +135,103 @@ class ReviewEngine:
         self._reviewer = reviewer_service
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
+        # Maps reviewer_session_id → (raid_tracker_id, owner_id)
+        self._reviewer_sessions: dict[str, tuple[str, str]] = {}
 
     @property
     def running(self) -> bool:
         return self._task is not None
+
+    def get_reviewer_raid(self, session_id: str) -> tuple[str, str] | None:
+        """Look up the raid tracker_id and owner_id for a reviewer session.
+
+        Returns (tracker_id, owner_id) if the session is a tracked reviewer,
+        None otherwise.
+        """
+        return self._reviewer_sessions.get(session_id)
+
+    async def handle_reviewer_completion(self, session_id: str, chronicle_summary: str) -> None:
+        """Handle a reviewer session completing (called by ActivitySubscriber).
+
+        Parses the reviewer's structured output from the chronicle summary,
+        applies the confidence score, sends feedback to the working session,
+        and proceeds with the decision logic.
+        """
+        mapping = self._reviewer_sessions.pop(session_id, None)
+        if mapping is None:
+            logger.warning("Reviewer session %s not tracked — ignoring completion", session_id)
+            return
+
+        tracker_id, owner_id = mapping
+
+        trackers = await self._tracker_factory.for_owner(owner_id)
+        if not trackers:
+            logger.warning("No tracker for owner %s — cannot process reviewer result", owner_id[:8])
+            return
+        tracker = trackers[0]
+
+        raid = await tracker.get_raid(tracker_id)
+        if raid.status != RaidStatus.REVIEW:
+            logger.info(
+                "Raid %s no longer in REVIEW (status=%s) — skipping reviewer result",
+                tracker_id,
+                raid.status,
+            )
+            return
+
+        result = parse_reviewer_response(chronicle_summary)
+        if result is None:
+            logger.warning(
+                "Could not parse reviewer output for raid %s — skipping",
+                tracker_id,
+            )
+            return
+
+        score = raid.confidence
+
+        # Apply reviewer confidence delta
+        reviewer_delta = self._cfg.reviewer_confidence_weight * (result.confidence - score)
+        event = _make_event(raid.id, ConfidenceEventType.REVIEWER_SCORE, reviewer_delta, score)
+        await tracker.add_confidence_event(tracker_id, event)
+        await self._emit_confidence_updated(raid.id, event)
+        score = event.score_after
+
+        logger.info(
+            "Reviewer session %s result: confidence=%.2f approved=%s issues=%d",
+            session_id,
+            result.confidence,
+            result.approved,
+            len(result.issues),
+        )
+
+        # Send feedback to the working session if there are issues
+        if self._reviewer and result.issues:
+            await self._reviewer.send_feedback_to_working_session(
+                raid=raid,
+                owner_id=owner_id,
+                result=result,
+            )
+
+        # Re-evaluate the decision with updated score
+        pr_status = await self._fetch_pr_status(raid)
+
+        if pr_status and not pr_status.ci_passed:
+            decision = await self._handle_ci_failure(
+                tracker, tracker_id, owner_id, raid, pr_status, score
+            )
+        elif pr_status and not pr_status.mergeable:
+            decision = await self._handle_conflict(tracker, tracker_id, owner_id, raid, score)
+        elif score >= self._cfg.auto_approve_threshold and self._can_auto_approve(pr_status):
+            decision = await self._handle_auto_approve(tracker, tracker_id, owner_id, raid, score)
+        else:
+            decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+
+        logger.info(
+            "Post-reviewer decision for %s: %s (reason=%s)",
+            tracker_id,
+            decision.action,
+            decision.reason,
+        )
 
     async def start(self) -> None:
         """Subscribe to the event bus and react to raids entering REVIEW."""
@@ -207,9 +316,11 @@ class ReviewEngine:
     async def evaluate(self, tracker_id: str, owner_id: str) -> ReviewDecision:
         """Run the full review pipeline for a raid in REVIEW state.
 
-        When reviewer sessions are enabled, spawns an LLM reviewer to
-        provide deeper code analysis. The reviewer's confidence score
-        is blended with the signal-based score.
+        When reviewer sessions are enabled, spawns an LLM reviewer and
+        defers the final decision until the reviewer completes (via
+        handle_reviewer_completion). A small spawn bonus is applied
+        immediately. If the reviewer is not available, falls through
+        to the signal-based decision.
         """
         trackers = await self._tracker_factory.for_owner(owner_id)
         if not trackers:
@@ -235,12 +346,19 @@ class ReviewEngine:
             tracker, tracker_id, raid.id, score, raid.retry_count
         )
 
-        # Spawn reviewer session if enabled
-        score = await self._apply_reviewer_session(
+        # Spawn reviewer session if enabled — defers final decision
+        reviewer_spawned = await self._spawn_reviewer_session(
             tracker, tracker_id, raid, owner_id, score, pr_status, changed_files
         )
+        if reviewer_spawned:
+            # Reviewer is running; final decision deferred to handle_reviewer_completion
+            return ReviewDecision(
+                raid=raid,
+                action="reviewer_pending",
+                reason="Reviewer session spawned, awaiting completion",
+            )
 
-        # Decision logic
+        # No reviewer — decide immediately based on signals
         if pr_status and not pr_status.ci_passed:
             return await self._handle_ci_failure(
                 tracker, tracker_id, owner_id, raid, pr_status, score
@@ -369,7 +487,7 @@ class ReviewEngine:
 
     # -- Reviewer session --
 
-    async def _apply_reviewer_session(
+    async def _spawn_reviewer_session(
         self,
         tracker: TrackerPort,
         tracker_id: str,
@@ -378,17 +496,17 @@ class ReviewEngine:
         score: float,
         pr_status: PRStatus | None,
         changed_files: list[str],
-    ) -> float:
-        """Spawn an LLM reviewer session and blend its confidence score.
+    ) -> bool:
+        """Spawn an LLM reviewer session and track it.
 
-        If reviewer sessions are disabled or the service is unavailable,
-        returns the score unchanged.
+        Returns True if a reviewer was spawned (decision deferred),
+        False if no reviewer was spawned (decide immediately).
         """
         if not self._cfg.reviewer_session_enabled:
-            return score
+            return False
 
         if self._reviewer is None:
-            return score
+            return False
 
         session = await self._reviewer.spawn_reviewer(
             raid=raid,
@@ -398,16 +516,19 @@ class ReviewEngine:
         )
         if session is None:
             logger.warning("Reviewer session not spawned for raid %s — skipping", tracker_id)
-            return score
+            return False
+
+        # Track the reviewer session for completion callback
+        self._reviewer_sessions[session.id] = (tracker_id, owner_id)
 
         logger.info(
-            "Reviewer session %s spawned for raid %s, awaiting completion",
+            "Reviewer session %s spawned for raid %s, awaiting completion via SSE",
             session.id,
             tracker_id,
         )
 
-        # Record the reviewer session spawn as a confidence event
-        reviewer_delta = self._cfg.reviewer_confidence_weight * 0.1  # small positive for spawning
+        # Record a small spawn bonus
+        reviewer_delta = self._cfg.reviewer_spawn_bonus
         event = _make_event(
             raid.id,
             ConfidenceEventType.REVIEWER_SCORE,
@@ -417,7 +538,7 @@ class ReviewEngine:
         await tracker.add_confidence_event(tracker_id, event)
         await self._emit_confidence_updated(raid.id, event)
 
-        return event.score_after
+        return True
 
     # -- Decision handlers --
 

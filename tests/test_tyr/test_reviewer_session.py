@@ -17,7 +17,6 @@ from tyr.domain.services.reviewer_session import (
     load_reviewer_system_prompt,
     parse_reviewer_response,
 )
-from tyr.ports.git import GitPort
 from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrSession
 
 NOW = datetime.now(UTC)
@@ -30,28 +29,6 @@ OWNER_ID = "user-1"
 # ---------------------------------------------------------------------------
 
 
-class StubGit(GitPort):
-    """Minimal Git stub for reviewer session tests."""
-
-    async def create_branch(self, repo: str, branch: str, base: str) -> None:
-        pass
-
-    async def merge_branch(self, repo: str, source: str, target: str) -> None:
-        pass
-
-    async def delete_branch(self, repo: str, branch: str) -> None:
-        pass
-
-    async def create_pr(self, repo: str, source: str, target: str, title: str) -> str:
-        return "pr-1"
-
-    async def get_pr_status(self, pr_id: str) -> PRStatus:
-        raise NotImplementedError
-
-    async def get_pr_changed_files(self, pr_id: str) -> list[str]:
-        return []
-
-
 class StubVolundr(VolundrPort):
     """In-memory Volundr stub for reviewer session tests."""
 
@@ -60,6 +37,7 @@ class StubVolundr(VolundrPort):
         self.messages: list[tuple[str, str]] = []
         self.fail_spawn: bool = False
         self.fail_send: bool = False
+        self.chronicle_summaries: dict[str, str] = {}
 
     async def spawn_session(
         self, request: SpawnRequest, *, auth_token: str | None = None
@@ -86,7 +64,7 @@ class StubVolundr(VolundrPort):
         raise NotImplementedError
 
     async def get_chronicle_summary(self, session_id: str) -> str:
-        return ""
+        return self.chronicle_summaries.get(session_id, "")
 
     async def send_message(
         self, session_id: str, message: str, *, auth_token: str | None = None
@@ -177,19 +155,18 @@ def _make_service(
     factory = StubVolundrFactory(v)
     service = ReviewerSessionService(
         volundr_factory=factory,
-        git=StubGit(),
         review_config=c,
     )
     return service, v
 
 
 # ---------------------------------------------------------------------------
-# Tests: parse_reviewer_response
+# Tests: parse_reviewer_response — text format
 # ---------------------------------------------------------------------------
 
 
-class TestParseReviewerResponse:
-    """Tests for parsing structured reviewer output."""
+class TestParseReviewerResponseText:
+    """Tests for parsing text-based reviewer output."""
 
     def test_parse_complete_response(self) -> None:
         text = """
@@ -286,6 +263,67 @@ SUMMARY: Good implementation
 
 
 # ---------------------------------------------------------------------------
+# Tests: parse_reviewer_response — JSON format
+# ---------------------------------------------------------------------------
+
+
+class TestParseReviewerResponseJSON:
+    """Tests for parsing JSON-formatted reviewer output."""
+
+    def test_parse_json_complete(self) -> None:
+        text = '{"confidence": 0.85, "approved": true, "summary": "Clean code", "issues": ["nit"]}'
+        result = parse_reviewer_response(text)
+        assert result is not None
+        assert result.confidence == 0.85
+        assert result.approved is True
+        assert result.summary == "Clean code"
+        assert result.issues == ["nit"]
+
+    def test_parse_json_in_code_fence(self) -> None:
+        text = """```json
+{"confidence": 0.92, "approved": true, "summary": "All good", "issues": []}
+```"""
+        result = parse_reviewer_response(text)
+        assert result is not None
+        assert result.confidence == 0.92
+        assert result.approved is True
+        assert result.issues == []
+
+    def test_parse_json_no_issues(self) -> None:
+        text = '{"confidence": 0.95, "approved": true, "summary": "Perfect"}'
+        result = parse_reviewer_response(text)
+        assert result is not None
+        assert result.confidence == 0.95
+        assert result.issues == []
+
+    def test_parse_json_clamped_confidence(self) -> None:
+        text = '{"confidence": 1.5, "approved": true, "summary": "test"}'
+        result = parse_reviewer_response(text)
+        assert result is not None
+        assert result.confidence == 1.0
+
+    def test_parse_json_rejected(self) -> None:
+        text = '{"confidence": 0.3, "approved": false, "summary": "Bad", "issues": ["a", "b"]}'
+        result = parse_reviewer_response(text)
+        assert result is not None
+        assert result.approved is False
+        assert len(result.issues) == 2
+
+    def test_json_preferred_over_text(self) -> None:
+        """When text contains valid JSON, JSON parser wins."""
+        text = '{"confidence": 0.77, "approved": false, "summary": "JSON wins"}'
+        result = parse_reviewer_response(text)
+        assert result is not None
+        assert result.summary == "JSON wins"
+
+    def test_invalid_json_falls_back_to_text(self) -> None:
+        text = "CONFIDENCE: 0.88\nAPPROVED: yes\nSUMMARY: text fallback"
+        result = parse_reviewer_response(text)
+        assert result is not None
+        assert result.summary == "text fallback"
+
+
+# ---------------------------------------------------------------------------
 # Tests: build_reviewer_initial_prompt
 # ---------------------------------------------------------------------------
 
@@ -307,8 +345,8 @@ class TestBuildReviewerInitialPrompt:
         assert "Test raid" in prompt
         assert "tests pass" in prompt
         assert "src/main.py" in prompt
-        assert "CONFIDENCE:" in prompt
-        assert "APPROVED:" in prompt
+        assert "confidence" in prompt.lower()
+        assert "json" in prompt.lower()
 
     def test_prompt_without_pr(self) -> None:
         raid = _make_raid()
@@ -405,7 +443,6 @@ class TestSpawnReviewer:
         factory = StubVolundrFactory(None)
         service = ReviewerSessionService(
             volundr_factory=factory,
-            git=StubGit(),
             review_config=_default_config(),
         )
         raid = _make_raid()
@@ -561,7 +598,6 @@ class TestSendFeedback:
         factory = StubVolundrFactory(None)
         service = ReviewerSessionService(
             volundr_factory=factory,
-            git=StubGit(),
             review_config=_default_config(),
         )
         raid = _make_raid()
@@ -582,121 +618,11 @@ class TestSendFeedback:
 
 
 # ---------------------------------------------------------------------------
-# Tests: ReviewEngine integration with reviewer sessions
-# ---------------------------------------------------------------------------
-
-
-class TestReviewEngineReviewerIntegration:
-    """Tests for the ReviewEngine spawning reviewer sessions."""
-
-    @pytest.mark.asyncio
-    async def test_engine_spawns_reviewer_when_enabled(self) -> None:
-        """Verify the ReviewEngine calls _apply_reviewer_session during evaluate."""
-        from tyr.adapters.memory_event_bus import InMemoryEventBus
-        from tyr.domain.models import ConfidenceEventType
-        from tyr.domain.services.review_engine import ReviewEngine
-
-        volundr = StubVolundr()
-        event_bus = InMemoryEventBus()
-        config = _default_config(
-            reviewer_session_enabled=True,
-            auto_approve_threshold=0.80,
-        )
-
-        factory = StubVolundrFactory(volundr)
-        reviewer = ReviewerSessionService(
-            volundr_factory=factory,
-            git=StubGit(),
-            review_config=config,
-        )
-
-        raid = _make_raid(confidence=0.5)
-        tracker_stub = _TrackerStub(raid)
-
-        engine = ReviewEngine(
-            tracker_factory=_TrackerFactoryStub(tracker_stub),
-            volundr_factory=factory,
-            git=_FullGitStub(),
-            review_config=config,
-            event_bus=event_bus,
-            reviewer_service=reviewer,
-        )
-
-        await engine.evaluate(raid.tracker_id, OWNER_ID)
-
-        # Reviewer session was spawned
-        assert len(volundr.spawn_calls) == 1
-        assert volundr.spawn_calls[0].profile == "reviewer"
-
-        # A REVIEWER_SCORE confidence event was recorded
-        events = tracker_stub.events.get(raid.tracker_id, [])
-        reviewer_events = [e for e in events if e.event_type == ConfidenceEventType.REVIEWER_SCORE]
-        assert len(reviewer_events) == 1
-
-    @pytest.mark.asyncio
-    async def test_engine_skips_reviewer_when_disabled(self) -> None:
-        """When reviewer_session_enabled=False, no reviewer is spawned."""
-        from tyr.adapters.memory_event_bus import InMemoryEventBus
-        from tyr.domain.services.review_engine import ReviewEngine
-
-        volundr = StubVolundr()
-        config = _default_config(reviewer_session_enabled=False)
-        factory = StubVolundrFactory(volundr)
-        reviewer = ReviewerSessionService(
-            volundr_factory=factory,
-            git=StubGit(),
-            review_config=config,
-        )
-
-        raid = _make_raid(confidence=0.5)
-        tracker_stub = _TrackerStub(raid)
-
-        engine = ReviewEngine(
-            tracker_factory=_TrackerFactoryStub(tracker_stub),
-            volundr_factory=factory,
-            git=_FullGitStub(),
-            review_config=config,
-            event_bus=InMemoryEventBus(),
-            reviewer_service=reviewer,
-        )
-
-        await engine.evaluate(raid.tracker_id, OWNER_ID)
-        assert len(volundr.spawn_calls) == 0
-
-    @pytest.mark.asyncio
-    async def test_engine_works_without_reviewer_service(self) -> None:
-        """Engine works fine when reviewer_service is None (backward compat)."""
-        from tyr.adapters.memory_event_bus import InMemoryEventBus
-        from tyr.domain.services.review_engine import ReviewEngine
-
-        config = _default_config(reviewer_session_enabled=True)
-        volundr = StubVolundr()
-        factory = StubVolundrFactory(volundr)
-
-        raid = _make_raid(confidence=0.5)
-        tracker_stub = _TrackerStub(raid)
-
-        engine = ReviewEngine(
-            tracker_factory=_TrackerFactoryStub(tracker_stub),
-            volundr_factory=factory,
-            git=_FullGitStub(),
-            review_config=config,
-            event_bus=InMemoryEventBus(),
-            reviewer_service=None,
-        )
-
-        decision = await engine.evaluate(raid.tracker_id, OWNER_ID)
-        assert decision is not None
-        # No reviewer spawned
-        assert len(volundr.spawn_calls) == 0
-
-
-# ---------------------------------------------------------------------------
 # Shared stubs for ReviewEngine integration tests
 # ---------------------------------------------------------------------------
 
 
-class _FullGitStub(GitPort):
+class _FullGitStub:
     """Git stub that returns plausible data for review engine tests."""
 
     async def create_branch(self, repo: str, branch: str, base: str) -> None:
@@ -722,11 +648,6 @@ class _FullGitStub(GitPort):
 
     async def get_pr_changed_files(self, pr_id: str) -> list[str]:
         return ["src/main.py"]
-
-
-def _make_stub_tracker() -> None:
-    """Placeholder — actual stubs are _TrackerStub instances."""
-    return None
 
 
 class _TrackerStub:
@@ -798,6 +719,310 @@ class _TrackerFactoryStub:
 
 
 # ---------------------------------------------------------------------------
+# Tests: ReviewEngine integration with reviewer sessions
+# ---------------------------------------------------------------------------
+
+
+class TestReviewEngineReviewerIntegration:
+    """Tests for the ReviewEngine spawning reviewer sessions."""
+
+    @pytest.mark.asyncio
+    async def test_engine_spawns_reviewer_when_enabled(self) -> None:
+        """Verify the ReviewEngine spawns a reviewer and defers decision."""
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.models import ConfidenceEventType
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        volundr = StubVolundr()
+        event_bus = InMemoryEventBus()
+        config = _default_config(
+            reviewer_session_enabled=True,
+            auto_approve_threshold=0.80,
+        )
+
+        factory = StubVolundrFactory(volundr)
+        reviewer = ReviewerSessionService(
+            volundr_factory=factory,
+            review_config=config,
+        )
+
+        raid = _make_raid(confidence=0.5)
+        tracker_stub = _TrackerStub(raid)
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(tracker_stub),
+            volundr_factory=factory,
+            git=_FullGitStub(),
+            review_config=config,
+            event_bus=event_bus,
+            reviewer_service=reviewer,
+        )
+
+        decision = await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        # Reviewer session was spawned
+        assert len(volundr.spawn_calls) == 1
+        assert volundr.spawn_calls[0].profile == "reviewer"
+
+        # Decision is deferred (reviewer_pending)
+        assert decision.action == "reviewer_pending"
+
+        # A REVIEWER_SCORE confidence event was recorded (spawn bonus)
+        events = tracker_stub.events.get(raid.tracker_id, [])
+        reviewer_events = [e for e in events if e.event_type == ConfidenceEventType.REVIEWER_SCORE]
+        assert len(reviewer_events) == 1
+
+        # The reviewer session is tracked
+        assert engine.get_reviewer_raid("reviewer-1") == (raid.tracker_id, OWNER_ID)
+
+    @pytest.mark.asyncio
+    async def test_engine_skips_reviewer_when_disabled(self) -> None:
+        """When reviewer_session_enabled=False, no reviewer is spawned."""
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        volundr = StubVolundr()
+        config = _default_config(reviewer_session_enabled=False)
+        factory = StubVolundrFactory(volundr)
+        reviewer = ReviewerSessionService(
+            volundr_factory=factory,
+            review_config=config,
+        )
+
+        raid = _make_raid(confidence=0.5)
+        tracker_stub = _TrackerStub(raid)
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(tracker_stub),
+            volundr_factory=factory,
+            git=_FullGitStub(),
+            review_config=config,
+            event_bus=InMemoryEventBus(),
+            reviewer_service=reviewer,
+        )
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+        assert len(volundr.spawn_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_engine_works_without_reviewer_service(self) -> None:
+        """Engine works fine when reviewer_service is None (backward compat)."""
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        config = _default_config(reviewer_session_enabled=True)
+        volundr = StubVolundr()
+        factory = StubVolundrFactory(volundr)
+
+        raid = _make_raid(confidence=0.5)
+        tracker_stub = _TrackerStub(raid)
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(tracker_stub),
+            volundr_factory=factory,
+            git=_FullGitStub(),
+            review_config=config,
+            event_bus=InMemoryEventBus(),
+            reviewer_service=None,
+        )
+
+        decision = await engine.evaluate(raid.tracker_id, OWNER_ID)
+        assert decision is not None
+        # No reviewer spawned — immediate decision
+        assert decision.action != "reviewer_pending"
+        assert len(volundr.spawn_calls) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: ReviewEngine.handle_reviewer_completion
+# ---------------------------------------------------------------------------
+
+
+class TestHandleReviewerCompletion:
+    """Tests for the review loop: reviewer completion → decision."""
+
+    @pytest.mark.asyncio
+    async def test_completion_with_high_confidence_auto_approves(self) -> None:
+        """Reviewer returns high confidence → auto-approve."""
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        volundr = StubVolundr()
+        config = _default_config(
+            reviewer_session_enabled=True,
+            auto_approve_threshold=0.80,
+            reviewer_confidence_weight=0.60,
+        )
+        factory = StubVolundrFactory(volundr)
+        reviewer = ReviewerSessionService(volundr_factory=factory, review_config=config)
+
+        # Start at 0.7: reviewer delta = 0.60 * (0.95 - 0.7) = 0.15 → 0.85 >= 0.80
+        raid = _make_raid(confidence=0.7)
+        tracker_stub = _TrackerStub(raid)
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(tracker_stub),
+            volundr_factory=factory,
+            git=_FullGitStub(),
+            review_config=config,
+            event_bus=InMemoryEventBus(),
+            reviewer_service=reviewer,
+        )
+
+        # First spawn the reviewer
+        decision = await engine.evaluate(raid.tracker_id, OWNER_ID)
+        assert decision.action == "reviewer_pending"
+
+        # Now simulate reviewer completion with high confidence
+        chronicle = (
+            '{"confidence": 0.95, "approved": true,'
+            ' "summary": "Looks great", "issues": []}'
+        )
+        await engine.handle_reviewer_completion("reviewer-1", chronicle)
+
+        # After completion, the raid should have been auto-approved (MERGED)
+        updated_raid = tracker_stub.raids[raid.tracker_id]
+        assert updated_raid.status == RaidStatus.MERGED
+
+    @pytest.mark.asyncio
+    async def test_completion_with_low_confidence_escalates(self) -> None:
+        """Reviewer returns low confidence → escalate."""
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        volundr = StubVolundr()
+        config = _default_config(
+            reviewer_session_enabled=True,
+            auto_approve_threshold=0.80,
+            reviewer_confidence_weight=0.60,
+        )
+        factory = StubVolundrFactory(volundr)
+        reviewer = ReviewerSessionService(volundr_factory=factory, review_config=config)
+
+        raid = _make_raid(confidence=0.5)
+        tracker_stub = _TrackerStub(raid)
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(tracker_stub),
+            volundr_factory=factory,
+            git=_FullGitStub(),
+            review_config=config,
+            event_bus=InMemoryEventBus(),
+            reviewer_service=reviewer,
+        )
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        chronicle = (
+            '{"confidence": 0.3, "approved": false, "summary": "Bad code", "issues": ["problem"]}'
+        )
+        await engine.handle_reviewer_completion("reviewer-1", chronicle)
+
+        updated_raid = tracker_stub.raids[raid.tracker_id]
+        assert updated_raid.status == RaidStatus.ESCALATED
+
+    @pytest.mark.asyncio
+    async def test_completion_sends_feedback_on_issues(self) -> None:
+        """Reviewer issues are forwarded to the working session."""
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        volundr = StubVolundr()
+        config = _default_config(
+            reviewer_session_enabled=True,
+            auto_approve_threshold=0.80,
+        )
+        factory = StubVolundrFactory(volundr)
+        reviewer = ReviewerSessionService(volundr_factory=factory, review_config=config)
+
+        raid = _make_raid(confidence=0.5)
+        tracker_stub = _TrackerStub(raid)
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(tracker_stub),
+            volundr_factory=factory,
+            git=_FullGitStub(),
+            review_config=config,
+            event_bus=InMemoryEventBus(),
+            reviewer_service=reviewer,
+        )
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        chronicle = (
+            '{"confidence": 0.6, "approved": false,'
+            ' "summary": "Issues found", "issues": ["bad import"]}'
+        )
+        await engine.handle_reviewer_completion("reviewer-1", chronicle)
+
+        # Feedback should have been sent to the working session
+        feedback_msgs = [m for m in volundr.messages if m[0] == "session-1"]
+        assert len(feedback_msgs) == 1
+        assert "bad import" in feedback_msgs[0][1]
+
+    @pytest.mark.asyncio
+    async def test_completion_unparseable_chronicle_is_ignored(self) -> None:
+        """If chronicle can't be parsed, nothing happens."""
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        volundr = StubVolundr()
+        config = _default_config(reviewer_session_enabled=True)
+        factory = StubVolundrFactory(volundr)
+        reviewer = ReviewerSessionService(volundr_factory=factory, review_config=config)
+
+        raid = _make_raid(confidence=0.5)
+        tracker_stub = _TrackerStub(raid)
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(tracker_stub),
+            volundr_factory=factory,
+            git=_FullGitStub(),
+            review_config=config,
+            event_bus=InMemoryEventBus(),
+            reviewer_service=reviewer,
+        )
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        # Unparseable text
+        await engine.handle_reviewer_completion("reviewer-1", "random garbage text")
+
+        # Raid status should remain REVIEW (unchanged)
+        updated_raid = tracker_stub.raids[raid.tracker_id]
+        assert updated_raid.status == RaidStatus.REVIEW
+
+    @pytest.mark.asyncio
+    async def test_get_reviewer_raid_returns_none_for_unknown(self) -> None:
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(_TrackerStub(_make_raid())),
+            volundr_factory=StubVolundrFactory(StubVolundr()),
+            git=_FullGitStub(),
+            review_config=_default_config(),
+            event_bus=InMemoryEventBus(),
+        )
+        assert engine.get_reviewer_raid("unknown-session") is None
+
+    @pytest.mark.asyncio
+    async def test_completion_for_untracked_session_is_ignored(self) -> None:
+        from tyr.adapters.memory_event_bus import InMemoryEventBus
+        from tyr.domain.services.review_engine import ReviewEngine
+
+        engine = ReviewEngine(
+            tracker_factory=_TrackerFactoryStub(_TrackerStub(_make_raid())),
+            volundr_factory=StubVolundrFactory(StubVolundr()),
+            git=_FullGitStub(),
+            review_config=_default_config(),
+            event_bus=InMemoryEventBus(),
+        )
+        # Should not raise
+        await engine.handle_reviewer_completion("no-such-session", "some output")
+
+
+# ---------------------------------------------------------------------------
 # Tests: SpawnRequest profile field
 # ---------------------------------------------------------------------------
 
@@ -847,8 +1072,13 @@ class TestReviewConfigReviewerFields:
         assert cfg.reviewer_model == "claude-opus-4-6"
         assert cfg.reviewer_profile == "reviewer"
         assert cfg.reviewer_confidence_weight == 0.60
-        assert cfg.reviewer_timeout == 300.0
-        assert cfg.reviewer_poll_interval == 10.0
+        assert cfg.reviewer_spawn_bonus == 0.1
+
+    def test_no_polling_config(self) -> None:
+        """Ensure timeout/poll_interval fields do NOT exist."""
+        cfg = ReviewConfig()
+        assert not hasattr(cfg, "reviewer_timeout")
+        assert not hasattr(cfg, "reviewer_poll_interval")
 
     def test_override(self) -> None:
         cfg = ReviewConfig(

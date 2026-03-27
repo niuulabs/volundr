@@ -6,6 +6,11 @@ completion signals, and transitions raids accordingly.
 Uses VolundrAdapterFactory to resolve per-owner authenticated adapters —
 each user's PAT (from their IntegrationConnection) authenticates the SSE
 subscription to their Volundr instance.
+
+When a ReviewEngine is provided, the subscriber also detects reviewer session
+completion. If an idle session is not associated with a RUNNING raid, the
+subscriber checks whether it is a tracked reviewer session and, if so, fetches
+the chronicle summary and delegates to ReviewEngine.handle_reviewer_completion.
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
@@ -20,6 +26,9 @@ from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-exported for consumers
 from tyr.ports.volundr import ActivityEvent, VolundrFactory, VolundrPort
+
+if TYPE_CHECKING:
+    from tyr.domain.services.review_engine import ReviewEngine
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +59,14 @@ class SessionActivitySubscriber:
         dispatcher_repo: DispatcherRepository,
         event_bus: EventBusPort,
         config: WatcherConfig,
+        review_engine: ReviewEngine | None = None,
     ) -> None:
         self._factory = volundr_factory
         self._tracker_factory = tracker_factory
         self._dispatcher_repo = dispatcher_repo
         self._event_bus = event_bus
         self._config = config
+        self._review_engine = review_engine
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._owner_tasks: dict[str, asyncio.Task[None]] = {}
@@ -229,6 +240,8 @@ class SessionActivitySubscriber:
 
         raid, tracker = await self._find_raid_for_session(event.session_id, owner_id)
         if raid is None or tracker is None:
+            # Check if this is a reviewer session completing
+            await self._try_handle_reviewer_completion(event.session_id, volundr)
             return
 
         session = await volundr.get_session(event.session_id)
@@ -407,6 +420,34 @@ class SessionActivitySubscriber:
             raid.tracker_id,
             reason,
         )
+
+    async def _try_handle_reviewer_completion(self, session_id: str, volundr: VolundrPort) -> None:
+        """If the session is a tracked reviewer, fetch its output and delegate."""
+        if self._review_engine is None:
+            return
+
+        mapping = self._review_engine.get_reviewer_raid(session_id)
+        if mapping is None:
+            return
+
+        chronicle_summary = ""
+        try:
+            chronicle_summary = await volundr.get_chronicle_summary(session_id)
+        except Exception:
+            logger.warning(
+                "Failed to fetch chronicle for reviewer session %s",
+                session_id,
+                exc_info=True,
+            )
+
+        try:
+            await self._review_engine.handle_reviewer_completion(session_id, chronicle_summary)
+        except Exception:
+            logger.warning(
+                "Failed to handle reviewer completion for session %s",
+                session_id,
+                exc_info=True,
+            )
 
     async def _emit_state_changed(
         self,
