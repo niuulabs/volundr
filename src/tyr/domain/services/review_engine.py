@@ -504,9 +504,7 @@ class ReviewEngine:
 
     # -- Session feedback --
 
-    async def _send_retry_feedback(
-        self, raid: Raid, owner_id: str, reason: str
-    ) -> None:
+    async def _send_retry_feedback(self, raid: Raid, owner_id: str, reason: str) -> None:
         """Send failure context to the session before retrying."""
         if not raid.session_id:
             return

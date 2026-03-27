@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from tyr.api.raids import (
     create_raids_router,
     resolve_git,
+    resolve_raid_repo,
     resolve_tracker,
     resolve_volundr,
 )
@@ -30,6 +31,7 @@ from tyr.domain.models import (
     SessionMessage,
 )
 from tyr.ports.git import GitPort
+from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 from .test_tracker_api import MockTracker
@@ -654,3 +656,102 @@ class TestRetryRaid:
         resp = client.post(f"/api/v1/tyr/raids/{raid.id}/retry")
         assert resp.status_code == 200
         assert resp.json()["retry_count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Mock SagaRepository for summary tests
+# ---------------------------------------------------------------------------
+
+
+class MockSagaRepository(SagaRepository):
+    """In-memory mock for SagaRepository used in summary tests."""
+
+    def __init__(self, counts: dict[str, int] | None = None) -> None:
+        self._counts = counts or {s.value: 0 for s in RaidStatus}
+
+    async def count_by_status(self) -> dict[str, int]:
+        return dict(self._counts)
+
+    async def save_saga(self, saga, *, conn=None) -> None:
+        pass
+
+    async def save_phase(self, phase, *, conn=None) -> None:
+        pass
+
+    async def save_raid(self, raid, *, conn=None) -> None:
+        pass
+
+    async def list_sagas(self, *, owner_id=None):
+        return []
+
+    async def get_saga(self, saga_id, *, owner_id=None):
+        return None
+
+    async def get_saga_by_slug(self, slug):
+        return None
+
+    async def delete_saga(self, saga_id, *, owner_id=None) -> bool:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# GET /raids/summary
+# ---------------------------------------------------------------------------
+
+
+class TestRaidsSummary:
+    def _make_client(self, counts: dict[str, int] | None = None) -> TestClient:
+        repo = MockSagaRepository(counts)
+        app = FastAPI()
+        app.include_router(create_raids_router())
+        app.dependency_overrides[resolve_raid_repo] = lambda: repo
+        app.state.settings = SimpleNamespace(
+            review=REVIEW_CFG,
+            auth=AuthConfig(allow_anonymous_dev=True),
+        )
+        return TestClient(app)
+
+    def test_returns_all_statuses(self):
+        client = self._make_client()
+        resp = client.get("/api/v1/tyr/raids/summary")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == {"PENDING", "QUEUED", "RUNNING", "REVIEW", "MERGED", "FAILED"}
+
+    def test_returns_correct_counts(self):
+        counts = {
+            "PENDING": 3,
+            "QUEUED": 1,
+            "RUNNING": 2,
+            "REVIEW": 0,
+            "MERGED": 5,
+            "FAILED": 1,
+        }
+        client = self._make_client(counts)
+        resp = client.get("/api/v1/tyr/raids/summary")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["PENDING"] == 3
+        assert data["QUEUED"] == 1
+        assert data["RUNNING"] == 2
+        assert data["REVIEW"] == 0
+        assert data["MERGED"] == 5
+        assert data["FAILED"] == 1
+
+    def test_zero_counts_when_no_raids(self):
+        client = self._make_client()
+        resp = client.get("/api/v1/tyr/raids/summary")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert all(v == 0 for v in data.values())
+
+    def test_unconfigured_repo_returns_503(self):
+        app = FastAPI()
+        app.include_router(create_raids_router())
+        app.state.settings = SimpleNamespace(
+            review=REVIEW_CFG,
+            auth=AuthConfig(allow_anonymous_dev=True),
+        )
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/api/v1/tyr/raids/summary")
+        assert resp.status_code == 503

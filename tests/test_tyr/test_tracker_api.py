@@ -316,6 +316,14 @@ class MockSagaRepo(SagaRepository):
     async def get_saga(self, saga_id, *, owner_id: str | None = None) -> Saga | None:
         return next((s for s in self.sagas if s.id == saga_id), None)
 
+    async def count_by_status(self) -> dict[str, int]:
+        from tyr.domain.models import RaidStatus
+
+        counts = {s.value: 0 for s in RaidStatus}
+        for raid in self.raids:
+            counts[raid.status.value] += 1
+        return counts
+
     async def delete_saga(self, saga_id, *, owner_id=None) -> bool:
         before = len(self.sagas)
         self.sagas = [
