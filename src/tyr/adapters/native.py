@@ -40,6 +40,7 @@ _RAID_STATUS_DISPLAY: dict[RaidStatus, str] = {
     RaidStatus.QUEUED: "Queued",
     RaidStatus.RUNNING: "In Progress",
     RaidStatus.REVIEW: "In Review",
+    RaidStatus.ESCALATED: "Escalated",
     RaidStatus.MERGED: "Done",
     RaidStatus.FAILED: "Failed",
 }

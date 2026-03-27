@@ -365,6 +365,9 @@ jobs:
       - name: Lint tyr chart
         run: helm lint charts/tyr/
 
+      - name: Lint skuld-planner chart
+        run: helm lint charts/skuld-planner/
+
       - name: Lint niuu umbrella chart
         run: |
           helm dependency build charts/niuu

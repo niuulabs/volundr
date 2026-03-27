@@ -943,19 +943,18 @@ class Broker:
         """Build authentication headers for Volundr API calls.
 
         Priority:
-        1. User JWT from WebSocket connection
-        2. VOLUNDR_API_TOKEN env var (PAT injected via K8s secret)
+        1. VOLUNDR_API_TOKEN (long-lived PAT injected by Infisical) — preferred
+           because user JWTs expire after minutes while PATs last for months.
+        2. User JWT from WebSocket connection (fallback for dev/local)
         3. Empty (dev mode — no auth, Volundr backend must accept)
         """
-        if self._user_jwt:
-            return {"Authorization": f"Bearer {self._user_jwt}"}
-
-        # Service token from environment (PAT injected by K8s secret)
         service_token = os.environ.get("VOLUNDR_API_TOKEN", "")
         if service_token:
             return {"Authorization": f"Bearer {service_token}"}
 
-        # No auth — dev mode only (direct to backend, no Envoy)
+        if self._user_jwt:
+            return {"Authorization": f"Bearer {self._user_jwt}"}
+
         logger.debug("No auth token available — requests will be unauthenticated")
         return {}
 

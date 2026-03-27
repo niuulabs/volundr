@@ -23,29 +23,30 @@ const mockDefaults = {
   ],
 };
 
+const mockQueueItem = {
+  saga_id: 's1',
+  saga_name: 'Test Saga',
+  saga_slug: 'test',
+  repos: ['https://github.com/org/repo'],
+  feature_branch: 'feat/test',
+  phase_name: 'Phase 1',
+  issue_id: 'i1',
+  identifier: 'NIU-100',
+  title: 'Test issue',
+  description: '',
+  status: 'Todo',
+  priority: 1,
+  priority_label: 'Urgent',
+  estimate: 3,
+  url: '',
+};
+
 describe('DispatcherView', () => {
   beforeEach(() => {
     vi.mocked(useDispatchQueue).mockReturnValue({
-      queue: [
-        {
-          saga_id: 's1',
-          saga_name: 'Test Saga',
-          saga_slug: 'test',
-          repos: ['https://github.com/org/repo'],
-          feature_branch: 'feat/test',
-          phase_name: 'Phase 1',
-          issue_id: 'i1',
-          identifier: 'NIU-100',
-          title: 'Test issue',
-          description: '',
-          status: 'Todo',
-          priority: 1,
-          priority_label: 'Urgent',
-          estimate: 3,
-          url: '',
-        },
-      ],
+      queue: [mockQueueItem],
       defaults: mockDefaults,
+      clusters: [],
       loading: false,
       error: null,
       dispatching: false,
@@ -64,6 +65,7 @@ describe('DispatcherView', () => {
     vi.mocked(useDispatchQueue).mockReturnValue({
       queue: [],
       defaults: mockDefaults,
+      clusters: [],
       loading: true,
       error: null,
       dispatching: false,
@@ -78,6 +80,7 @@ describe('DispatcherView', () => {
     vi.mocked(useDispatchQueue).mockReturnValue({
       queue: [],
       defaults: mockDefaults,
+      clusters: [],
       loading: false,
       error: 'Something broke',
       dispatching: false,
@@ -92,6 +95,7 @@ describe('DispatcherView', () => {
     vi.mocked(useDispatchQueue).mockReturnValue({
       queue: [],
       defaults: mockDefaults,
+      clusters: [],
       loading: false,
       error: null,
       dispatching: false,
@@ -168,26 +172,9 @@ describe('DispatcherView', () => {
       .fn()
       .mockResolvedValue([{ issue_id: 'i1', session_name: 'niu-100', status: 'spawned' }]);
     vi.mocked(useDispatchQueue).mockReturnValue({
-      queue: [
-        {
-          saga_id: 's1',
-          saga_name: 'Test Saga',
-          saga_slug: 'test',
-          repos: ['https://github.com/org/repo'],
-          feature_branch: 'feat/test',
-          phase_name: 'Phase 1',
-          issue_id: 'i1',
-          identifier: 'NIU-100',
-          title: 'Test issue',
-          description: '',
-          status: 'Todo',
-          priority: 1,
-          priority_label: 'Urgent',
-          estimate: 3,
-          url: '',
-        },
-      ],
+      queue: [mockQueueItem],
       defaults: mockDefaults,
+      clusters: [],
       loading: false,
       error: null,
       dispatching: false,
@@ -207,26 +194,9 @@ describe('DispatcherView', () => {
 
   it('shows dispatching state', () => {
     vi.mocked(useDispatchQueue).mockReturnValue({
-      queue: [
-        {
-          saga_id: 's1',
-          saga_name: 'Test Saga',
-          saga_slug: 'test',
-          repos: ['https://github.com/org/repo'],
-          feature_branch: 'feat/test',
-          phase_name: 'Phase 1',
-          issue_id: 'i1',
-          identifier: 'NIU-100',
-          title: 'Test issue',
-          description: '',
-          status: 'Todo',
-          priority: 1,
-          priority_label: 'Urgent',
-          estimate: 3,
-          url: '',
-        },
-      ],
+      queue: [mockQueueItem],
       defaults: mockDefaults,
+      clusters: [],
       loading: false,
       error: null,
       dispatching: true,
@@ -235,5 +205,78 @@ describe('DispatcherView', () => {
     });
     render(<DispatcherView />);
     expect(screen.getByText('Dispatching...')).toBeInTheDocument();
+  });
+
+  it('shows cluster selector when multiple clusters available', () => {
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [mockQueueItem],
+      defaults: mockDefaults,
+      clusters: [
+        { connection_id: 'c1', name: 'production', url: 'http://prod', enabled: true },
+        { connection_id: 'c2', name: 'staging', url: 'http://staging', enabled: true },
+      ],
+      loading: false,
+      error: null,
+      dispatching: false,
+      refresh: vi.fn(),
+      dispatch: vi.fn(),
+    });
+    render(<DispatcherView />);
+    expect(screen.getByText('Auto (default cluster)')).toBeInTheDocument();
+    expect(screen.getByText('production')).toBeInTheDocument();
+    expect(screen.getByText('staging')).toBeInTheDocument();
+  });
+
+  it('hides cluster selector with single cluster', () => {
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [mockQueueItem],
+      defaults: mockDefaults,
+      clusters: [{ connection_id: 'c1', name: 'production', url: 'http://prod', enabled: true }],
+      loading: false,
+      error: null,
+      dispatching: false,
+      refresh: vi.fn(),
+      dispatch: vi.fn(),
+    });
+    render(<DispatcherView />);
+    expect(screen.queryByText('Auto (default cluster)')).not.toBeInTheDocument();
+  });
+
+  it('passes selected cluster to dispatch', async () => {
+    const mockDispatch = vi
+      .fn()
+      .mockResolvedValue([{ issue_id: 'i1', session_name: 'niu-100', status: 'spawned' }]);
+    vi.mocked(useDispatchQueue).mockReturnValue({
+      queue: [mockQueueItem],
+      defaults: mockDefaults,
+      clusters: [
+        { connection_id: 'c1', name: 'production', url: 'http://prod', enabled: true },
+        { connection_id: 'c2', name: 'staging', url: 'http://staging', enabled: true },
+      ],
+      loading: false,
+      error: null,
+      dispatching: false,
+      refresh: vi.fn(),
+      dispatch: mockDispatch,
+    });
+    render(<DispatcherView />);
+
+    // Select a cluster
+    const clusterSelect = screen.getByDisplayValue('Auto (default cluster)');
+    fireEvent.change(clusterSelect, { target: { value: 'c2' } });
+
+    // Select item and dispatch
+    fireEvent.click(screen.getByText('Select All'));
+    fireEvent.click(screen.getByText('Dispatch 1'));
+
+    const { waitFor } = await import('@testing-library/react');
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.any(Array),
+        'claude-sonnet-4-6',
+        'test prompt',
+        'c2'
+      );
+    });
   });
 });

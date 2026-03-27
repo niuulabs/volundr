@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SettingsPage } from './Settings';
@@ -487,6 +487,135 @@ describe('SettingsPage — Integrations section', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Failed to connect')).toBeDefined();
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* OAuth connect flow                                                  */
+/* ------------------------------------------------------------------ */
+
+const oauthCatalog: CatalogEntry[] = [
+  {
+    slug: 'github-oauth',
+    name: 'GitHub OAuth',
+    description: 'GitHub via OAuth',
+    integration_type: 'source_control',
+    adapter: 'volundr.adapters.outbound.github.GitHubProvider',
+    icon: 'github',
+    credential_schema: {},
+    config_schema: {},
+    mcp_server: null,
+    auth_type: 'oauth2_authorization_code',
+    oauth_scopes: ['repo'],
+  },
+];
+
+describe('SettingsPage — OAuth integration connect', () => {
+  let service: IVolundrService;
+  const originalFetch = globalThis.fetch;
+  const originalOpen = window.open;
+
+  beforeEach(() => {
+    service = createMockService({
+      getIntegrationCatalog: vi.fn().mockResolvedValue(oauthCatalog),
+      getIntegrations: vi.fn().mockResolvedValue([]),
+    });
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    window.open = originalOpen;
+  });
+
+  it('opens OAuth popup on connect', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://example.com/oauth' }), {
+        status: 200,
+      })
+    );
+    window.open = vi.fn().mockReturnValue({ closed: true });
+
+    renderSettings(service);
+    await switchToIntegrationsSection();
+    await waitFor(() => {
+      expect(screen.getByText('GitHub OAuth')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalled();
+    });
+    expect(window.open).toHaveBeenCalled();
+  });
+
+  it('shows error when OAuth fetch returns non-ok', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('', { status: 500 }));
+
+    renderSettings(service);
+    await switchToIntegrationsSection();
+    await waitFor(() => {
+      expect(screen.getByText('GitHub OAuth')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalled();
+    });
+  });
+
+  it('shows error when popup is blocked', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://example.com/oauth' }), {
+        status: 200,
+      })
+    );
+    window.open = vi.fn().mockReturnValue(null);
+
+    renderSettings(service);
+    await switchToIntegrationsSection();
+    await waitFor(() => {
+      expect(screen.getByText('GitHub OAuth')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(window.open).toHaveBeenCalled();
+    });
+  });
+
+  it('handles OAuth fetch throwing an Error', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+
+    renderSettings(service);
+    await switchToIntegrationsSection();
+    await waitFor(() => {
+      expect(screen.getByText('GitHub OAuth')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalled();
+    });
+  });
+
+  it('handles OAuth fetch throwing a non-Error', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue('string fail');
+
+    renderSettings(service);
+    await switchToIntegrationsSection();
+    await waitFor(() => {
+      expect(screen.getByText('GitHub OAuth')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByText('Connect'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalled();
     });
   });
 });

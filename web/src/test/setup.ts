@@ -33,6 +33,11 @@ vi.mock('@/components/EditorPanel/workbenchInit', () => ({
   switchSession: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Polyfill scrollIntoView — jsdom does not implement it
+if (typeof Element.prototype.scrollIntoView === 'undefined') {
+  Element.prototype.scrollIntoView = vi.fn();
+}
+
 // Polyfill ResizeObserver for assistant-ui components that use it
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {

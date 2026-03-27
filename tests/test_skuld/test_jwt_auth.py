@@ -149,11 +149,11 @@ class TestBrokerJwtIntegration:
         headers = test_broker._build_auth_headers()
         assert headers == {"Authorization": f"Bearer {token}"}
 
-    def test_build_auth_headers_fallback_no_token(self, test_broker):
-        # When no JWT and no VOLUNDR_API_TOKEN, returns empty headers (dev mode)
+    def test_build_auth_headers_no_token_returns_empty(self, test_broker, monkeypatch):
+        monkeypatch.delenv("VOLUNDR_API_TOKEN", raising=False)
+        test_broker._user_jwt = None
         headers = test_broker._build_auth_headers()
         assert headers == {}
-        assert "Authorization" not in headers
 
     @pytest.mark.asyncio
     async def test_get_http_client_uses_jwt(self, test_broker):
@@ -224,10 +224,11 @@ class TestBrokerJwtIntegration:
         assert test_broker._user_jwt == existing_token
 
     @pytest.mark.asyncio
-    async def test_get_http_client_fallback_when_no_jwt(self, test_broker):
-        """When no JWT is set and no VOLUNDR_API_TOKEN, client has no auth headers."""
+    async def test_get_http_client_fallback_when_no_jwt(self, test_broker, monkeypatch):
+        """When no JWT or PAT is set, client has no auth headers."""
+        monkeypatch.delenv("VOLUNDR_API_TOKEN", raising=False)
+        test_broker._user_jwt = None
         client = await test_broker._get_http_client()
-        assert client.headers.get("x-auth-user-id") is None
         assert "authorization" not in {k.lower() for k in client.headers.keys()}
 
         # Cleanup

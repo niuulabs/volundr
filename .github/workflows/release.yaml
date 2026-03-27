@@ -293,6 +293,10 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" charts/tyr/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/tyr/Chart.yaml
 
+          # Update skuld-planner chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/skuld-planner/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/skuld-planner/Chart.yaml
+
           # Update niuu umbrella chart
           sed -i "s/^version:.*/version: $VERSION/" charts/niuu/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu/Chart.yaml
@@ -303,6 +307,7 @@ jobs:
       - name: Package Helm charts
         run: |
           helm package charts/skuld -d .helm-packages/
+          helm package charts/skuld-planner -d .helm-packages/
           helm package charts/volundr -d .helm-packages/
           helm package charts/tyr -d .helm-packages/
           helm dependency build charts/niuu
@@ -317,7 +322,8 @@ jobs:
 
       - name: Push Helm charts to OCI registry
         run: |
-          helm push .helm-packages/skuld-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/skuld-0*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/skuld-planner-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/tyr-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/niuu-*.tgz ${{ env.CHART_REPO }}

@@ -10,9 +10,13 @@ import styles from './DashboardView.module.css';
 
 interface ActiveRaid {
   tracker_id: string;
+  identifier: string;
+  title: string;
+  url: string;
   status: RaidStatus;
   session_id: string | null;
   confidence: number;
+  pr_url: string | null;
   last_updated: string;
 }
 
@@ -233,22 +237,51 @@ function ActiveRaidsTable({
     <table className={styles.table}>
       <thead>
         <tr>
-          <th>Tracker ID</th>
+          <th>Ticket</th>
           <th>Status</th>
-          <th>Session</th>
           <th>Confidence</th>
+          <th>PR</th>
           <th>Last Updated</th>
         </tr>
       </thead>
       <tbody>
         {raids.map(raid => (
           <tr key={raid.tracker_id}>
-            <td className={styles.monoCell}>{raid.tracker_id}</td>
+            <td>
+              <div className={styles.raidInfo}>
+                {raid.url ? (
+                  <a
+                    href={raid.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.raidLink}
+                  >
+                    {raid.identifier || raid.tracker_id}
+                  </a>
+                ) : (
+                  <span className={styles.monoCell}>{raid.identifier || raid.tracker_id}</span>
+                )}
+                {raid.title && <span className={styles.raidTitle}>{raid.title}</span>}
+              </div>
+            </td>
             <td>
               <StatusBadge status={raid.status} />
             </td>
-            <td className={styles.monoCell}>{raid.session_id ?? '\u2014'}</td>
             <td className={styles.confidenceCell}>{Math.round(raid.confidence * 100)}%</td>
+            <td>
+              {raid.pr_url ? (
+                <a
+                  href={raid.pr_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.prLink}
+                >
+                  PR
+                </a>
+              ) : (
+                <span className={styles.muted}>{'\u2014'}</span>
+              )}
+            </td>
             <td className={styles.timestampCell}>{formatTimestamp(raid.last_updated)}</td>
           </tr>
         ))}
