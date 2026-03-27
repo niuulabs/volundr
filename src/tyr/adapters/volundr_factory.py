@@ -87,8 +87,9 @@ class VolundrAdapterFactory:
                 )
             except Exception:
                 logger.error(
-                    "Failed to create Volundr adapter for connection %s",
+                    "Failed to create Volundr adapter for connection %s (owner=%s)",
                     conn.id,
+                    owner_id,
                     exc_info=True,
                 )
         return adapters

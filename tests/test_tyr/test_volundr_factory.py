@@ -252,3 +252,30 @@ async def test_primary_for_owner_returns_none_when_empty() -> None:
     )
     result = await factory.primary_for_owner("owner-1")
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Tests — error handling in _resolve_connections
+# ---------------------------------------------------------------------------
+
+
+class _FailingCredentialStore(StubCredentialStore):
+    """Credential store that raises on get_value."""
+
+    async def get_value(self, owner_type: str, owner_id: str, name: str) -> dict[str, str] | None:
+        raise RuntimeError("credential store unavailable")
+
+
+@pytest.mark.asyncio
+async def test_credential_store_error_skips_connection() -> None:
+    """If the credential store raises, the connection should be skipped (not crash)."""
+    conn = _make_connection(enabled=True)
+    factory = VolundrAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=_FailingCredentialStore(),
+    )
+    result = await factory.for_owner("owner-1")
+    # Should fall back to default (error was caught)
+    assert len(result) == 1
+    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
+    assert result[0]._name == "default"
