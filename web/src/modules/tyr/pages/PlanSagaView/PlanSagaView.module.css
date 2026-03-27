@@ -432,10 +432,26 @@
   gap: var(--space-4);
 }
 
-.reviewSagaName {
+.reviewSagaNameInput {
   font-size: var(--text-xl);
   font-weight: 700;
   color: var(--color-text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  width: 100%;
+  font-family: var(--font-sans);
+  transition: border-color var(--transition-fast);
+}
+
+.reviewSagaNameInput:hover {
+  border-color: var(--color-border-subtle);
+}
+
+.reviewSagaNameInput:focus {
+  outline: none;
+  border-color: var(--color-brand);
 }
 
 .reviewPhase {
@@ -447,7 +463,7 @@
 .reviewPhaseName {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-accent-purple);
+  color: var(--color-brand);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -468,22 +484,49 @@
   justify-content: space-between;
 }
 
-.reviewRaidName {
+.reviewRaidNameInput {
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  width: 100%;
+  font-family: var(--font-sans);
+  transition: border-color var(--transition-fast);
 }
 
-.reviewRaidEstimate {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+.reviewRaidNameInput:hover {
+  border-color: var(--color-border-subtle);
 }
 
-.reviewRaidDesc {
+.reviewRaidNameInput:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
+.reviewRaidDescInput {
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
   line-height: 1.5;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  width: 100%;
+  font-family: var(--font-sans);
+  resize: vertical;
+  transition: border-color var(--transition-fast);
+}
+
+.reviewRaidDescInput:hover {
+  border-color: var(--color-border-subtle);
+}
+
+.reviewRaidDescInput:focus {
+  outline: none;
+  border-color: var(--color-brand);
 }
 
 .reviewCriteria {
@@ -510,7 +553,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background-color: var(--color-accent-emerald);
+  background-color: var(--color-brand);
 }
 
 .commitButton {
@@ -518,7 +561,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-bg-primary);
-  background-color: var(--color-accent-emerald);
+  background-color: var(--color-brand);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;

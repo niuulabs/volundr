@@ -345,7 +345,13 @@ export function PlanSagaView() {
               </button>
             </div>
             <div className={styles.reviewBody}>
-              <div className={styles.reviewSagaName}>{detectedStructure.name}</div>
+              <input
+                className={styles.reviewSagaNameInput}
+                value={detectedStructure.name}
+                onChange={e => {
+                  setDetectedStructure(prev => (prev ? { ...prev, name: e.target.value } : prev));
+                }}
+              />
               {detectedStructure.phases.map((phase, pi) => (
                 <div key={pi} className={styles.reviewPhase}>
                   <div className={styles.reviewPhaseName}>
@@ -354,10 +360,36 @@ export function PlanSagaView() {
                   {phase.raids.map((raid, ri) => (
                     <div key={ri} className={styles.reviewRaid}>
                       <div className={styles.reviewRaidHeader}>
-                        <span className={styles.reviewRaidName}>{raid.name}</span>
-                        <span className={styles.reviewRaidEstimate}>{raid.estimate_hours}h</span>
+                        <input
+                          className={styles.reviewRaidNameInput}
+                          value={raid.name}
+                          onChange={e => {
+                            setDetectedStructure(prev => {
+                              if (!prev) return prev;
+                              const phases = [...prev.phases];
+                              const raids = [...phases[pi].raids];
+                              raids[ri] = { ...raids[ri], name: e.target.value };
+                              phases[pi] = { ...phases[pi], raids };
+                              return { ...prev, phases };
+                            });
+                          }}
+                        />
                       </div>
-                      <div className={styles.reviewRaidDesc}>{raid.description}</div>
+                      <textarea
+                        className={styles.reviewRaidDescInput}
+                        value={raid.description}
+                        rows={2}
+                        onChange={e => {
+                          setDetectedStructure(prev => {
+                            if (!prev) return prev;
+                            const phases = [...prev.phases];
+                            const raids = [...phases[pi].raids];
+                            raids[ri] = { ...raids[ri], description: e.target.value };
+                            phases[pi] = { ...phases[pi], raids };
+                            return { ...prev, phases };
+                          });
+                        }}
+                      />
                       {raid.acceptance_criteria.length > 0 && (
                         <ul className={styles.reviewCriteria}>
                           {raid.acceptance_criteria.map((c, ci) => (

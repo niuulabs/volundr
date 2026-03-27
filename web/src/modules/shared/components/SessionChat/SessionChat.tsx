@@ -15,6 +15,7 @@ import type { FileAttachment } from './useFileAttachments';
 import styles from './SessionChat.module.css';
 
 const SCROLL_THRESHOLD = 150;
+const SCROLL_LOCK_MS = 500;
 
 interface SessionChatProps {
   /** WebSocket URL for the chat — e.g. wss://host/session */
@@ -68,6 +69,7 @@ export function SessionChat({
   const isNearBottomRef = useRef(true);
   const userSentRef = useRef(false);
   const prevMessageCountRef = useRef(0);
+  const scrollLockUntilRef = useRef(0);
 
   // Show welcome when only system messages exist (no real user/assistant conversation)
   const hasConversation = useMemo(
@@ -108,7 +110,23 @@ export function SessionChat({
     };
 
     el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
+
+    // Watch for content height changes (code block expand/collapse, image load)
+    // and suppress auto-scroll briefly so the viewport doesn't jump
+    let prevHeight = el.scrollHeight;
+    const resizeObserver = new ResizeObserver(() => {
+      const newHeight = el.scrollHeight;
+      if (newHeight !== prevHeight) {
+        prevHeight = newHeight;
+        scrollLockUntilRef.current = Date.now() + SCROLL_LOCK_MS;
+      }
+    });
+    resizeObserver.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      resizeObserver.disconnect();
+    };
   }, [hasConversation]);
 
   // Auto-scroll only on new messages or user send — never on DOM resize
@@ -126,6 +144,9 @@ export function SessionChat({
 
     // No new messages — don't scroll (prevents scroll on code block expand)
     if (countDelta === 0) return;
+
+    // Scroll lock active (code block expand/collapse just happened)
+    if (Date.now() < scrollLockUntilRef.current) return;
 
     // New messages arrived while near bottom — auto-scroll
     if (isNearBottomRef.current) {
