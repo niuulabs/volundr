@@ -16,12 +16,25 @@ const volundrConn: IntegrationConnection = {
   slug: '',
 };
 
+const volundrConn2: IntegrationConnection = {
+  id: 'v-2',
+  integrationType: 'code_forge',
+  adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
+  credentialName: 'volundr-pat',
+  config: { url: 'http://volundr-staging', name: 'staging' },
+  enabled: true,
+  createdAt: '2026-01-20T10:00:00Z',
+  updatedAt: '2026-01-20T10:00:00Z',
+  slug: '',
+};
+
 function mockService(connections: IntegrationConnection[] = []): ITyrIntegrationService {
   return {
     listIntegrations: vi.fn().mockResolvedValue(connections),
     createIntegration: vi.fn().mockResolvedValue(connections[0] ?? volundrConn),
     deleteIntegration: vi.fn().mockResolvedValue(undefined),
     toggleIntegration: vi.fn().mockResolvedValue(connections[0] ?? volundrConn),
+    testConnection: vi.fn().mockResolvedValue({ success: true, message: 'OK' }),
     getTelegramSetup: vi.fn().mockResolvedValue({
       deeplink: 'https://t.me/TyrBot?start=tok',
       token: 'tok',
@@ -39,7 +52,7 @@ describe('TyrSettings', () => {
     render(<TyrSettings service={mockService()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Volundr')).toBeInTheDocument();
+      expect(screen.getByText('Volundr Clusters')).toBeInTheDocument();
     });
   });
 
@@ -48,6 +61,15 @@ describe('TyrSettings', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Connected')).toBeInTheDocument();
+    });
+  });
+
+  it('shows multiple connections', async () => {
+    render(<TyrSettings service={mockService([volundrConn, volundrConn2])} />);
+
+    await waitFor(() => {
+      const badges = screen.getAllByText('Connected');
+      expect(badges).toHaveLength(2);
     });
   });
 

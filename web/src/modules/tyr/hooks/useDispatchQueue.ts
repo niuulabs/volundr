@@ -32,10 +32,18 @@ export interface DispatchDefaults {
   models: ModelOption[];
 }
 
+export interface ClusterInfo {
+  connection_id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+}
+
 interface DispatchItem {
   saga_id: string;
   issue_id: string;
   repo: string;
+  connection_id?: string;
 }
 
 interface DispatchResult {
@@ -49,6 +57,7 @@ interface DispatchResult {
 interface UseDispatchQueueResult {
   queue: QueueItem[];
   defaults: DispatchDefaults;
+  clusters: ClusterInfo[];
   loading: boolean;
   error: string | null;
   dispatching: boolean;
@@ -56,7 +65,8 @@ interface UseDispatchQueueResult {
   dispatch: (
     items: DispatchItem[],
     model: string,
-    systemPrompt: string
+    systemPrompt: string,
+    connectionId?: string
   ) => Promise<DispatchResult[]>;
 }
 
@@ -67,6 +77,7 @@ export function useDispatchQueue(): UseDispatchQueueResult {
     default_model: 'claude-sonnet-4-6',
     models: [],
   });
+  const [clusters, setClusters] = useState<ClusterInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);
@@ -75,12 +86,14 @@ export function useDispatchQueue(): UseDispatchQueueResult {
     setLoading(true);
     setError(null);
     try {
-      const [queueData, configData] = await Promise.all([
+      const [queueData, configData, clusterData] = await Promise.all([
         api.get<QueueItem[]>('/queue'),
         api.get<DispatchDefaults>('/config'),
+        api.get<ClusterInfo[]>('/clusters'),
       ]);
       setQueue(queueData);
       setDefaults(configData);
+      setClusters(clusterData);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -96,7 +109,8 @@ export function useDispatchQueue(): UseDispatchQueueResult {
     async (
       items: DispatchItem[],
       model: string,
-      systemPrompt: string
+      systemPrompt: string,
+      connectionId?: string
     ): Promise<DispatchResult[]> => {
       setDispatching(true);
       try {
@@ -104,6 +118,7 @@ export function useDispatchQueue(): UseDispatchQueueResult {
           items,
           model,
           system_prompt: systemPrompt,
+          ...(connectionId ? { connection_id: connectionId } : {}),
         });
         // Remove dispatched items from queue locally
         const dispatched = new Set(
@@ -118,5 +133,5 @@ export function useDispatchQueue(): UseDispatchQueueResult {
     []
   );
 
-  return { queue, defaults, loading, error, dispatching, refresh: fetchQueue, dispatch };
+  return { queue, defaults, clusters, loading, error, dispatching, refresh: fetchQueue, dispatch };
 }

@@ -30,7 +30,7 @@ from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
-from tyr.api.dispatch import create_dispatch_router, resolve_volundr
+from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.events import create_events_router, resolve_event_bus
@@ -182,6 +182,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_volundr] = _resolve_volundr_per_user
             app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr_per_user
             app.dependency_overrides[sagas_resolve_volundr] = _resolve_volundr_per_user
+
+            async def _resolve_factory() -> VolundrAdapterFactory:
+                return app.state.volundr_factory
+
+            app.dependency_overrides[resolve_volundr_factory] = _resolve_factory
 
             # Wire Git adapter
             git_adapter = GitHubGitAdapter(settings.git.token)
