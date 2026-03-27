@@ -33,6 +33,7 @@ from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
+from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.health import create_health_router
 from tyr.api.raids import create_raids_router, resolve_git
@@ -242,7 +243,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Wire event bus (dynamic adapter pattern)
             eb_cfg = settings.event_bus
             eb_cls = import_class(eb_cfg.adapter)
-            eb_kwargs = {"max_clients": settings.events.max_sse_clients, **eb_cfg.kwargs}
+            eb_kwargs = {
+                "max_clients": settings.events.max_sse_clients,
+                "log_size": settings.events.activity_log_size,
+                **eb_cfg.kwargs,
+            }
             event_bus: EventBusPort = eb_cls(**eb_kwargs)
             app.state.event_bus = event_bus
             logger.info("Event bus: %s", eb_cfg.adapter.rsplit(".", 1)[-1])
@@ -251,6 +256,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return event_bus
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
+            app.dependency_overrides[dispatcher_resolve_event_bus] = _resolve_event_bus
 
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (

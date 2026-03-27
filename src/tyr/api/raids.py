@@ -200,9 +200,7 @@ def create_raids_router() -> APIRouter:
                             session_id=raid.session_id,
                             confidence=raid.confidence,
                             pr_url=raid.pr_url,
-                            last_updated=raid.updated_at.isoformat()
-                            if raid.updated_at
-                            else "",
+                            last_updated=raid.updated_at.isoformat() if raid.updated_at else "",
                         )
                     )
         return results
