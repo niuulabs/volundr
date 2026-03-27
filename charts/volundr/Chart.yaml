@@ -2,8 +2,8 @@ apiVersion: v2
 name: volundr
 description: "Volundr — self-hosted AI-native development platform"
 type: application
-version: 0.0.0-tyr.172
-appVersion: "0.0.0-tyr.172"
+version: 0.0.0-tyr.173
+appVersion: "0.0.0-tyr.173"
 keywords:
   - claude
   - code
