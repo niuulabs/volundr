@@ -683,7 +683,9 @@ def create_sagas_router() -> APIRouter:
             )
 
             try:
-                tracker_phase_id = await tracker.create_phase(phase)
+                tracker_phase_id = await tracker.create_phase(
+                    phase, project_id=saga.tracker_id
+                )
             except Exception as exc:
                 logger.error(
                     "Tracker create_phase failed for phase=%s", phase_spec.name, exc_info=True

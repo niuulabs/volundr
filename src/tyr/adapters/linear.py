@@ -396,12 +396,13 @@ class LinearTrackerAdapter(TrackerPort):
         self._gql.invalidate_cache("projects")
         return project["id"]
 
-    async def create_phase(self, phase: Phase) -> str:
+    async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
+        parent_id = project_id or phase.tracker_id
         data = await self._gql.query(
             _CREATE_MILESTONE_QUERY,
             {
                 "name": phase.name,
-                "projectId": phase.tracker_id,
+                "projectId": parent_id,
                 "sortOrder": float(phase.number),
             },
         )

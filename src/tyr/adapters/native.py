@@ -79,7 +79,7 @@ class NativeTrackerAdapter(TrackerPort):
         )
         return tracker_id
 
-    async def create_phase(self, phase: Phase) -> str:
+    async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         tracker_id = str(phase.id)
         await self._pool.execute(
             """
