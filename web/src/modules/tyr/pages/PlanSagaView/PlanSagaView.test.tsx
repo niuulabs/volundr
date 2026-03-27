@@ -72,13 +72,14 @@ const mockRepos = [
   },
 ];
 
-const mockGet = vi.fn(() => Promise.resolve({ github: mockRepos }));
+const mockUseRepos = vi.fn(() => ({
+  repos: mockRepos,
+  loading: false,
+  error: null,
+}));
 
-vi.mock('@/modules/shared/api/client', () => ({
-  createApiClient: () => ({
-    get: (...args: unknown[]) => mockGet(...args),
-    post: vi.fn(),
-  }),
+vi.mock('../../hooks/useRepos', () => ({
+  useRepos: () => mockUseRepos(),
 }));
 
 function renderView() {
@@ -93,16 +94,15 @@ function renderView() {
   );
 }
 
-async function waitForRepos() {
-  await waitFor(() => {
-    expect(screen.getByRole('combobox', { name: /repository/i })).toBeInTheDocument();
-  });
+async function selectRepo(user: ReturnType<typeof userEvent.setup>) {
+  const repoInput = screen.getByPlaceholderText(/search and select a repository/i);
+  await user.click(repoInput);
+  await user.click(screen.getByText('niuu/volundr'));
 }
 
 async function spawnSession(user: ReturnType<typeof userEvent.setup>) {
-  await waitForRepos();
   await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-  await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+  await selectRepo(user);
   await user.click(screen.getByRole('button', { name: /start planning session/i }));
   await waitFor(() => {
     expect(screen.getByText('ACTIVE')).toBeInTheDocument();
@@ -113,21 +113,26 @@ describe('PlanSagaView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSkuldMessages.length = 0;
-    mockGet.mockImplementation(() => Promise.resolve({ github: mockRepos }));
+    mockUseRepos.mockReturnValue({ repos: mockRepos, loading: false, error: null });
   });
 
-  it('renders the initial form with repo dropdown', async () => {
+  it('renders the initial form with repo selector', () => {
     renderView();
 
     expect(screen.getByText('Plan Saga')).toBeInTheDocument();
     expect(screen.getByLabelText(/specification/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/repository/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/search and select a repository/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start planning session/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /one-shot decompose/i })).toBeInTheDocument();
+  });
 
-    await waitForRepos();
-    const repoSelect = screen.getByLabelText(/repository/i) as HTMLSelectElement;
-    expect(repoSelect.tagName).toBe('SELECT');
+  it('shows repo options in dropdown when clicking search input', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    const repoInput = screen.getByPlaceholderText(/search and select a repository/i);
+    await user.click(repoInput);
+
     expect(screen.getByText('niuu/volundr')).toBeInTheDocument();
     expect(screen.getByText('niuu/frontend')).toBeInTheDocument();
   });
@@ -147,8 +152,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
 
     const spawnBtn = screen.getByRole('button', { name: /start planning session/i });
     expect(spawnBtn).not.toBeDisabled();
@@ -181,8 +185,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
     await user.click(screen.getByRole('button', { name: /start planning session/i }));
 
     await waitFor(() => {
@@ -197,8 +200,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
     await user.click(screen.getByRole('button', { name: /start planning session/i }));
 
     await waitFor(() => {
@@ -225,8 +227,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
     await user.click(screen.getByRole('button', { name: /start planning session/i }));
 
     await waitFor(() => {
@@ -425,8 +426,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {
@@ -445,8 +445,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {
@@ -461,8 +460,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {
@@ -477,8 +475,7 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await waitForRepos();
-    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await selectRepo(user);
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {
@@ -568,5 +565,21 @@ describe('PlanSagaView', () => {
 
     // No crash, no structure shown
     expect(screen.queryByText(/structure detected/i)).not.toBeInTheDocument();
+  });
+
+  it('shows text input fallback when repos are loading', () => {
+    mockUseRepos.mockReturnValue({ repos: [], loading: true, error: null });
+    renderView();
+
+    const input = screen.getByPlaceholderText(/loading repos/i);
+    expect(input).toBeInTheDocument();
+    expect(input).toBeDisabled();
+  });
+
+  it('shows text input fallback when no repos available', () => {
+    mockUseRepos.mockReturnValue({ repos: [], loading: false, error: null });
+    renderView();
+
+    expect(screen.getByPlaceholderText(/org\/repo/i)).toBeInTheDocument();
   });
 });

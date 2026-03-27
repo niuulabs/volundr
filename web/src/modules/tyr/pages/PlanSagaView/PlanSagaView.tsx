@@ -1,14 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tyrService } from '../../adapters';
-import { createApiClient } from '@/modules/shared/api/client';
 import { SessionChat } from '@/modules/shared/components/SessionChat';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
+import { useRepos } from '../../hooks/useRepos';
+import { RepoSelector } from '../../components/RepoSelector';
 import type { CommitSagaRequest, ExtractedStructure } from '../../ports/tyr.port';
-import type { RepoInfo } from '../../models';
 import styles from './PlanSagaView.module.css';
-
-const niuuApi = createApiClient('/api/v1/niuu');
 
 interface DetectedStructure {
   name: string;
@@ -35,8 +33,7 @@ function slugify(name: string): string {
 export function PlanSagaView() {
   const [spec, setSpec] = useState('');
   const [repo, setRepo] = useState('');
-  const [availableRepos, setAvailableRepos] = useState<RepoInfo[]>([]);
-  const [reposLoading, setReposLoading] = useState(true);
+  const { repos: availableRepos, loading: reposLoading } = useRepos();
   const [chatEndpoint, setChatEndpoint] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [spawning, setSpawning] = useState(false);
@@ -46,30 +43,14 @@ export function PlanSagaView() {
   const lastCheckedMsgId = useRef<string | null>(null);
   const navigate = useNavigate();
 
-  // Fetch available repos on mount
-  useEffect(() => {
-    let cancelled = false;
-    niuuApi
-      .get<Record<string, RepoInfo[]>>('/repos')
-      .then(reposByProvider => {
-        if (cancelled) return;
-        const flat = Object.values(reposByProvider).flat();
-        setAvailableRepos(flat);
-      })
-      .catch(() => {
-        // Repo fetch failed — fall back to text input
-      })
-      .finally(() => {
-        if (!cancelled) setReposLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const skuld = useSkuldChat(chatEndpoint);
 
   // Auto-detect structure via backend validation when assistant messages complete
+  const selectedRepoInfo = availableRepos.find(r => r.url === repo);
+  const repoDisplayName = selectedRepoInfo
+    ? `${selectedRepoInfo.org}/${selectedRepoInfo.name}`
+    : repo;
+
   useEffect(() => {
     if (skuld.messages.length === 0) return;
     const lastMsg = skuld.messages[skuld.messages.length - 1];
@@ -94,7 +75,7 @@ export function PlanSagaView() {
     setSpawning(true);
     setError(null);
     try {
-      const session = await tyrService.spawnPlanSession(spec, repo);
+      const session = await tyrService.spawnPlanSession(spec, repoDisplayName);
       setSessionId(session.session_id);
       setChatEndpoint(session.chat_endpoint);
     } catch (err) {
@@ -112,7 +93,7 @@ export function PlanSagaView() {
       const commitRequest: CommitSagaRequest = {
         name: detectedStructure.name,
         slug: slugify(detectedStructure.name),
-        repos: [repo],
+        repos: [repoDisplayName],
         base_branch: 'main',
         phases: detectedStructure.phases.map(phase => ({
           name: phase.name,
@@ -138,9 +119,9 @@ export function PlanSagaView() {
     setSpawning(true);
     setError(null);
     try {
-      const phases = await tyrService.decompose(spec, repo);
+      const phases = await tyrService.decompose(spec, repoDisplayName);
       if (phases.length > 0) {
-        navigate('/tyr/new', { state: { phases, spec, repo } });
+        navigate('/tyr/new', { state: { phases, spec, repo: repoDisplayName } });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fallback decomposition failed');
@@ -172,23 +153,15 @@ export function PlanSagaView() {
             rows={8}
           />
 
-          <label className={styles.label} htmlFor="plan-repo">
-            Repository
-          </label>
+          <label className={styles.label}>Repository</label>
           {!reposLoading && availableRepos.length > 0 ? (
-            <select
-              id="plan-repo"
-              className={styles.select}
+            <RepoSelector
+              mode="single"
+              repos={availableRepos}
               value={repo}
-              onChange={e => setRepo(e.target.value)}
-            >
-              <option value="">Select a repository...</option>
-              {availableRepos.map(r => (
-                <option key={r.url} value={`${r.org}/${r.name}`}>
-                  {r.org}/{r.name}
-                </option>
-              ))}
-            </select>
+              onSelect={setRepo}
+              showBranch={false}
+            />
           ) : (
             <input
               id="plan-repo"
@@ -228,7 +201,7 @@ export function PlanSagaView() {
             <span className={styles.sessionStatus} data-status="ACTIVE">
               ACTIVE
             </span>
-            <span className={styles.sessionRepo}>{repo}</span>
+            <span className={styles.sessionRepo}>{repoDisplayName}</span>
           </div>
 
           <SessionChat url={chatEndpoint} chatEndpoint={chatEndpoint} />

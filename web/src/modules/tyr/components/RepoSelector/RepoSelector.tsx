@@ -2,16 +2,38 @@ import { useState, useRef, useEffect } from 'react';
 import type { RepoInfo, SelectedRepo } from '../../models';
 import styles from './RepoSelector.module.css';
 
-interface RepoSelectorProps {
+interface BaseProps {
   repos: RepoInfo[];
+  showBranch?: boolean;
+}
+
+interface MultiProps extends BaseProps {
+  mode?: 'multi';
   selected: SelectedRepo[];
   onToggle: (repoId: string) => void;
   onBranchChange: (repoId: string, branch: string) => void;
+  onSelect?: never;
+  value?: never;
 }
 
-export function RepoSelector({ repos, selected, onToggle, onBranchChange }: RepoSelectorProps) {
+interface SingleProps extends BaseProps {
+  mode: 'single';
+  onSelect: (repoUrl: string) => void;
+  value?: string;
+  selected?: never;
+  onToggle?: never;
+  onBranchChange?: never;
+}
+
+type RepoSelectorProps = MultiProps | SingleProps;
+
+export function RepoSelector(props: RepoSelectorProps) {
+  const { repos, showBranch = true } = props;
+  const mode = props.mode ?? 'multi';
+
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [focused, setFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,22 +48,37 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
     }
   }, [open]);
 
-  const selectedIds = selected.map(r => r.repoId);
+  const selectedIds = mode === 'multi' ? props.selected.map(r => r.repoId) : [];
+  const singleValue = mode === 'single' ? (props.value ?? '') : '';
+
+  const selectedRepo =
+    mode === 'single' && singleValue ? repos.find(r => r.url === singleValue) : null;
+
+  const displayValue =
+    mode === 'single' && !focused && selectedRepo
+      ? `${selectedRepo.org}/${selectedRepo.name}`
+      : search;
 
   const available = repos.filter(repo => {
     const repoId = repo.url;
-    if (selectedIds.includes(repoId)) {
+    if (mode === 'multi' && selectedIds.includes(repoId)) {
       return false;
     }
     if (!search) {
       return true;
     }
-    return repoId.toLowerCase().includes(search.toLowerCase());
+    const term = search.toLowerCase();
+    return (
+      repoId.toLowerCase().includes(term) || `${repo.org}/${repo.name}`.toLowerCase().includes(term)
+    );
   });
 
   if (repos.length === 0) {
     return <div className={styles.empty}>No repositories available</div>;
   }
+
+  const placeholder =
+    mode === 'single' ? 'Search and select a repository...' : 'Search and select repositories...';
 
   return (
     <div className={styles.container} ref={containerRef}>
@@ -49,10 +86,22 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
         <input
           type="text"
           className={styles.searchInput}
-          placeholder="Search and select repositories..."
-          value={search}
+          placeholder={placeholder}
+          value={displayValue}
           onChange={e => setSearch(e.target.value)}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setFocused(true);
+            setOpen(true);
+            if (mode === 'single' && selectedRepo) {
+              setSearch('');
+            }
+          }}
+          onBlur={() => {
+            setFocused(false);
+            if (mode === 'single') {
+              setSearch('');
+            }
+          }}
         />
         {open && available.length > 0 && (
           <div className={styles.dropdown}>
@@ -65,15 +114,21 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
                   className={styles.dropdownItem}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => {
-                    onToggle(repoId);
-                    setSearch('');
+                    if (mode === 'single') {
+                      props.onSelect(repoId);
+                      setSearch('');
+                      setOpen(false);
+                    } else {
+                      props.onToggle(repoId);
+                      setSearch('');
+                    }
                   }}
                 >
                   <span className={styles.repoName}>
                     {repo.org}/{repo.name}
                   </span>
                   <span className={styles.providerBadge}>{repo.provider}</span>
-                  <span className={styles.branch}>{repo.default_branch}</span>
+                  {showBranch && <span className={styles.branch}>{repo.default_branch}</span>}
                 </button>
               );
             })}
@@ -86,20 +141,20 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
         )}
       </div>
 
-      {selected.length > 0 && (
+      {mode === 'multi' && props.selected.length > 0 && (
         <div className={styles.selectedList}>
-          {selected.map(sel => {
+          {props.selected.map(sel => {
             const repo = repos.find(r => r.url === sel.repoId);
             const branches = repo?.branches ?? [];
             const displayName = repo ? `${repo.org}/${repo.name}` : sel.repoId;
             return (
               <div key={sel.repoId} className={styles.selectedItem}>
                 <span className={styles.repoName}>{displayName}</span>
-                {branches.length > 0 ? (
+                {showBranch && branches.length > 0 ? (
                   <select
                     className={styles.branchSelect}
                     value={sel.branch}
-                    onChange={e => onBranchChange(sel.repoId, e.target.value)}
+                    onChange={e => props.onBranchChange(sel.repoId, e.target.value)}
                   >
                     {branches.map(b => (
                       <option key={b} value={b}>
@@ -107,13 +162,13 @@ export function RepoSelector({ repos, selected, onToggle, onBranchChange }: Repo
                       </option>
                     ))}
                   </select>
-                ) : (
+                ) : showBranch ? (
                   <span className={styles.branchLabel}>{sel.branch}</span>
-                )}
+                ) : null}
                 <button
                   type="button"
                   className={styles.removeButton}
-                  onClick={() => onToggle(sel.repoId)}
+                  onClick={() => props.onToggle(sel.repoId)}
                   aria-label={`Remove ${sel.repoId}`}
                 >
                   {'\u2715'}

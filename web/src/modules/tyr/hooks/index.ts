@@ -11,3 +11,4 @@ export type {
   TimelineCommit,
 } from './useTyrSessions';
 export { useTrackerBrowser } from './useTrackerBrowser';
+export { useRepos } from './useRepos';
