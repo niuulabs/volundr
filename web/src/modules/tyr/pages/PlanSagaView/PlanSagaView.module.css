@@ -380,3 +380,156 @@
   border: 1px solid color-mix(in srgb, var(--color-accent-red) 30%, transparent);
   border-radius: var(--radius-sm);
 }
+
+/* ── Finalize button ── */
+.finalizeButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-accent-emerald) 30%, transparent);
+  background-color: color-mix(in srgb, var(--color-accent-emerald) 12%, transparent);
+  color: var(--color-accent-emerald);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.finalizeButton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-accent-emerald) 20%, transparent);
+}
+
+.finalizeButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.finalizeIcon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Review modal ── */
+.reviewPanel {
+  width: 600px;
+  max-height: 80vh;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.reviewBody {
+  padding: var(--space-5);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.reviewSagaName {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.reviewPhase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reviewPhaseName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-accent-purple);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.reviewRaid {
+  padding: var(--space-3);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.reviewRaidHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reviewRaidName {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.reviewRaidEstimate {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.reviewRaidDesc {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.reviewCriteria {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0;
+  margin: 0;
+}
+
+.reviewCriteria li {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  padding-left: var(--space-3);
+  position: relative;
+}
+
+.reviewCriteria li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--color-accent-emerald);
+}
+
+.commitButton {
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-bg-primary);
+  background-color: var(--color-accent-emerald);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.commitButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.commitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

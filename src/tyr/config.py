@@ -222,6 +222,24 @@ class GitConfig(BaseModel):
     token: str = Field(default="")
 
 
+class PlannerConfig(BaseModel):
+    """Planning session configuration."""
+
+    finalize_prompt: str = Field(
+        default=(
+            "Please finalize the plan now. Output the saga structure as a JSON code block "
+            'in exactly this format:\n\n```json\n{\n  "name": "Saga Name",\n  "phases": [\n'
+            '    {\n      "name": "Phase 1",\n      "raids": [\n        {\n'
+            '          "name": "Raid name",\n          "description": "What this raid does",\n'
+            '          "acceptance_criteria": ["criterion 1", "criterion 2"],\n'
+            '          "declared_files": ["src/path/to/file.py"],\n'
+            '          "estimate_hours": 2\n        }\n      ]\n    }\n  ]\n}\n```\n\n'
+            "Make sure every raid has clear acceptance criteria and declared files."
+        ),
+        description="Prompt injected when the user clicks Finalize Plan.",
+    )
+
+
 class DispatchConfig(BaseModel):
     """Dispatcher configuration."""
 
@@ -431,6 +449,7 @@ class Settings(BaseSettings):
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
+    planner: PlannerConfig = Field(default_factory=PlannerConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)
     pat: PATConfig = Field(default_factory=PATConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)

@@ -446,6 +446,12 @@ def create_sagas_router() -> APIRouter:
             ],
         )
 
+    @router.get("/plan/config")
+    async def get_plan_config(request: Request) -> dict:
+        """Return planner configuration including the finalize prompt."""
+        settings = request.app.state.settings
+        return {"finalize_prompt": settings.planner.finalize_prompt}
+
     @router.post("/plan", response_model=PlanSessionResponse, status_code=201)
     async def spawn_plan_session(
         body: PlanRequest,

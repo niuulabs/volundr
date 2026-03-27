@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, CheckCircle } from 'lucide-react';
 import { tyrService } from '../../adapters';
 import { SessionChat } from '@/modules/shared/components/SessionChat';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
@@ -56,6 +56,7 @@ export function PlanSagaView() {
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detectedStructure, setDetectedStructure] = useState<DetectedStructure | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const lastCheckedMsgId = useRef<string | null>(null);
   const navigate = useNavigate();
 
@@ -106,6 +107,7 @@ export function PlanSagaView() {
       .then((result: ExtractedStructure) => {
         if (result.found) {
           setDetectedStructure(result.structure as DetectedStructure);
+          setShowReviewModal(true);
         }
       })
       .catch(() => {});
@@ -167,6 +169,20 @@ export function PlanSagaView() {
     }
   }, [detectedStructure, repo, repoDisplayName, navigate]);
 
+  // Fetch finalize prompt from Tyr config
+  const [finalizePrompt, setFinalizePrompt] = useState<string | null>(null);
+  useEffect(() => {
+    createApiClient('/api/v1/tyr/sagas')
+      .get<{ finalize_prompt: string }>('/plan/config')
+      .then(cfg => setFinalizePrompt(cfg.finalize_prompt))
+      .catch(() => {});
+  }, []);
+
+  const handleFinalize = useCallback(() => {
+    if (!skuld.sendMessage || !finalizePrompt) return;
+    skuld.sendMessage(finalizePrompt);
+  }, [skuld, finalizePrompt]);
+
   const selectSession = useCallback(
     (id: string) => {
       setSearchParams({ session: id }, { replace: true });
@@ -225,31 +241,19 @@ export function PlanSagaView() {
                   </span>
                   <span className={styles.chatRepo}>{activeSession.name}</span>
                 </div>
+                <button
+                  type="button"
+                  className={styles.finalizeButton}
+                  onClick={handleFinalize}
+                  disabled={!finalizePrompt}
+                >
+                  <CheckCircle className={styles.finalizeIcon} />
+                  Finalize Plan
+                </button>
               </div>
               <div className={styles.chatBody}>
                 <SessionChat url={chatEndpoint} chatEndpoint={chatEndpoint} />
               </div>
-              {detectedStructure && (
-                <div className={styles.structureBanner}>
-                  <div className={styles.structureInfo}>
-                    <span className={styles.structureLabel}>
-                      Structure detected: {detectedStructure.name}
-                    </span>
-                    <span className={styles.structureDetail}>
-                      {detectedStructure.phases.length} phases,{' '}
-                      {detectedStructure.phases.reduce((n, p) => n + p.raids.length, 0)} raids
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.commitButton}
-                    onClick={handleCommit}
-                    disabled={committing}
-                  >
-                    {committing ? 'Creating...' : 'Create Saga'}
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <div className={styles.emptyChat}>
@@ -320,6 +324,67 @@ export function PlanSagaView() {
                 onClick={handleSpawn}
               >
                 {spawning ? 'Starting...' : 'Start Planning'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review modal — shows when structure is detected */}
+      {showReviewModal && detectedStructure && (
+        <div className={styles.formOverlay}>
+          <div className={styles.reviewPanel}>
+            <div className={styles.formHeader}>
+              <span className={styles.formTitle}>Review Saga Structure</span>
+              <button
+                type="button"
+                className={styles.formClose}
+                onClick={() => setShowReviewModal(false)}
+              >
+                {'\u2715'}
+              </button>
+            </div>
+            <div className={styles.reviewBody}>
+              <div className={styles.reviewSagaName}>{detectedStructure.name}</div>
+              {detectedStructure.phases.map((phase, pi) => (
+                <div key={pi} className={styles.reviewPhase}>
+                  <div className={styles.reviewPhaseName}>
+                    Phase {pi + 1}: {phase.name}
+                  </div>
+                  {phase.raids.map((raid, ri) => (
+                    <div key={ri} className={styles.reviewRaid}>
+                      <div className={styles.reviewRaidHeader}>
+                        <span className={styles.reviewRaidName}>{raid.name}</span>
+                        <span className={styles.reviewRaidEstimate}>{raid.estimate_hours}h</span>
+                      </div>
+                      <div className={styles.reviewRaidDesc}>{raid.description}</div>
+                      {raid.acceptance_criteria.length > 0 && (
+                        <ul className={styles.reviewCriteria}>
+                          {raid.acceptance_criteria.map((c, ci) => (
+                            <li key={ci}>{c}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className={styles.formFooter}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={() => setShowReviewModal(false)}
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                className={styles.commitButton}
+                onClick={handleCommit}
+                disabled={committing}
+              >
+                {committing ? 'Creating...' : 'Create Saga'}
               </button>
             </div>
           </div>
