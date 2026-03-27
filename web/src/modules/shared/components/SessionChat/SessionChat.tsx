@@ -171,7 +171,6 @@ export function SessionChat({
         return;
       }
 
-      const contentBlocks: ContentBlock[] = [];
       const attachmentMeta: AttachmentMeta[] = imageAttachments.map(fa => ({
         name: fa.name,
         type: 'image' as const,
@@ -179,26 +178,46 @@ export function SessionChat({
         contentType: 'image/jpeg',
       }));
 
+      // Pre-allocate to preserve ordering: contentBlocks[i] matches attachmentMeta[i]
+      const contentBlocks: (ContentBlock | null)[] = new Array(imageAttachments.length).fill(null);
       let processedCount = 0;
-      for (const fa of imageAttachments) {
+
+      const checkComplete = () => {
+        processedCount += 1;
+        if (processedCount < imageAttachments.length) return;
+        // Filter out failed reads, keep meta in sync
+        const finalBlocks: ContentBlock[] = [];
+        const finalMeta: AttachmentMeta[] = [];
+        for (let i = 0; i < contentBlocks.length; i++) {
+          const block = contentBlocks[i];
+          if (block) {
+            finalBlocks.push(block);
+            finalMeta.push(attachmentMeta[i]);
+          }
+        }
+        sendMessage(text, finalBlocks, finalMeta);
+      };
+
+      imageAttachments.forEach((fa, index) => {
         const reader = new FileReader();
         reader.onload = () => {
           const base64 = (reader.result as string).split(',')[1];
-          contentBlocks.push({
+          contentBlocks[index] = {
             type: 'image',
             source: {
               type: 'base64',
               media_type: 'image/jpeg',
               data: base64,
             },
-          });
-          processedCount += 1;
-          if (processedCount === imageAttachments.length) {
-            sendMessage(text, contentBlocks, attachmentMeta);
-          }
+          };
+          checkComplete();
+        };
+        reader.onerror = () => {
+          // Skip failed image but still send the message
+          checkComplete();
         };
         reader.readAsDataURL(fa.compressed);
-      }
+      });
     },
     [sendMessage]
   );
