@@ -499,6 +499,7 @@ def create_sagas_router() -> APIRouter:
                     system_prompt=settings.dispatch.default_system_prompt,
                     initial_prompt=planner_prompt,
                     workload_type="planner",
+                    profile="planner",
                     integration_ids=integration_ids,
                 ),
                 auth_token=auth_token,

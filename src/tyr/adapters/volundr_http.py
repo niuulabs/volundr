@@ -59,7 +59,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     "issue_id": request.tracker_issue_id,
                     "issue_url": request.tracker_issue_url,
                     "workload_type": request.workload_type,
-                    "profile": request.profile,
+                    "profile_name": request.profile,
                     "integration_ids": request.integration_ids,
                 },
             )
