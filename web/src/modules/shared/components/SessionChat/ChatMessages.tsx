@@ -118,13 +118,21 @@ interface AssistantMessageProps {
   message: SkuldChatMessage;
   onCopy?: (text: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onBookmark?: (messageId: string, bookmarked: boolean) => void;
+  bookmarked?: boolean;
 }
 
-export function AssistantMessage({ message, onCopy, onRegenerate }: AssistantMessageProps) {
+export function AssistantMessage({
+  message,
+  onCopy,
+  onRegenerate,
+  onBookmark,
+  bookmarked: bookmarkedProp = false,
+}: AssistantMessageProps) {
   const [copied, setCopied] = useState(false);
   const [thumbState, setThumbState] = useState<'up' | 'down' | null>(null);
   const [reasoningOpen, setReasoningOpen] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [bookmarked, setBookmarked] = useState(bookmarkedProp);
 
   const reasoningParts = (message.parts?.filter(p => p.type === 'reasoning') ?? []) as Array<{
     readonly type: 'reasoning';
@@ -160,8 +168,10 @@ export function AssistantMessage({ message, onCopy, onRegenerate }: AssistantMes
   }, []);
 
   const handleBookmark = useCallback(() => {
-    setBookmarked(prev => !prev);
-  }, []);
+    const next = !bookmarked;
+    setBookmarked(next);
+    onBookmark?.(message.id, next);
+  }, [bookmarked, message.id, onBookmark]);
 
   return (
     <div className={styles.assistantWrapper}>

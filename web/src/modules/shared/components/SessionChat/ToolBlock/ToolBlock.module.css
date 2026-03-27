@@ -345,3 +345,16 @@
 .groupBlock[data-tool-category='mcp'] .groupHeader:hover {
   background-color: color-mix(in srgb, var(--color-tool-mcp) 8%, transparent);
 }
+
+.toolBlock[data-tool-category='default'] .toolIcon,
+.groupBlock[data-tool-category='default'] .toolIcon {
+  color: var(--color-tool-default);
+}
+.toolBlock[data-tool-category='default'],
+.groupBlock[data-tool-category='default'] {
+  border-color: color-mix(in srgb, var(--color-tool-default) 20%, var(--color-border-subtle) 80%);
+}
+.toolBlock[data-tool-category='default'] .toolHeader:hover,
+.groupBlock[data-tool-category='default'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-default) 8%, transparent);
+}

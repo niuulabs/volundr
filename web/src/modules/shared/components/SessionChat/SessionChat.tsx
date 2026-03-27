@@ -2,11 +2,16 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon } from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
-import type { PermissionBehavior } from '@/modules/shared/hooks/useSkuldChat';
+import type {
+  PermissionBehavior,
+  ContentBlock,
+  AttachmentMeta,
+} from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
+import type { FileAttachment } from './useFileAttachments';
 import styles from './SessionChat.module.css';
 
 const SCROLL_THRESHOLD = 150;
@@ -150,9 +155,53 @@ export function SessionChat({
   );
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, fileAttachments: FileAttachment[]) => {
       userSentRef.current = true;
-      sendMessage(text);
+
+      if (fileAttachments.length === 0) {
+        sendMessage(text);
+        return;
+      }
+
+      const contentBlocks: ContentBlock[] = [];
+      const attachmentMeta: AttachmentMeta[] = [];
+
+      for (const fa of fileAttachments) {
+        const isImage = fa.file.type.startsWith('image/');
+        attachmentMeta.push({
+          name: fa.name,
+          type: isImage ? 'image' : fa.file.type === 'application/pdf' ? 'document' : 'text',
+          size: fa.compressed?.size ?? fa.file.size,
+          contentType: fa.compressed ? 'image/jpeg' : fa.file.type,
+        });
+
+        // Image content blocks are sent as base64 — read the blob
+        if (isImage && fa.compressed) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            contentBlocks.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/jpeg',
+                data: base64,
+              },
+            });
+            // Send once all images are processed
+            if (contentBlocks.length === fileAttachments.filter(f => f.compressed).length) {
+              sendMessage(text, contentBlocks, attachmentMeta);
+            }
+          };
+          reader.readAsDataURL(fa.compressed);
+        }
+      }
+
+      // If no images need base64 encoding, send immediately with just metadata
+      const hasImages = fileAttachments.some(f => f.compressed);
+      if (!hasImages) {
+        sendMessage(text, contentBlocks, attachmentMeta);
+      }
     },
     [sendMessage]
   );
@@ -343,7 +392,7 @@ export function SessionChat({
           )}
         </div>
       ) : (
-        <SessionEmptyChat sessionName="Volundr" onSuggestionClick={handleSend} />
+        <SessionEmptyChat sessionName="Volundr" onSuggestionClick={text => handleSend(text, [])} />
       )}
 
       <div className={styles.inputArea}>

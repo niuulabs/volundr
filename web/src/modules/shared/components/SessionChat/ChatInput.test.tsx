@@ -203,7 +203,7 @@ describe('ChatInput', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(onSend).toHaveBeenCalledTimes(1);
-      expect(onSend).toHaveBeenCalledWith('hello world');
+      expect(onSend).toHaveBeenCalledWith('hello world', []);
     });
 
     it('does not send on Shift+Enter (allows newline)', () => {
@@ -234,7 +234,7 @@ describe('ChatInput', () => {
       fireEvent.click(screen.getByLabelText('Send message'));
 
       expect(onSend).toHaveBeenCalledTimes(1);
-      expect(onSend).toHaveBeenCalledWith('click send test');
+      expect(onSend).toHaveBeenCalledWith('click send test', []);
     });
 
     it('clears input after sending', () => {
@@ -551,11 +551,11 @@ describe('ChatInput', () => {
       const textarea = screen.getByPlaceholderText('Message...');
       fireEvent.change(textarea, { target: { value: 'first' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
-      expect(onSend).toHaveBeenCalledWith('first');
+      expect(onSend).toHaveBeenCalledWith('first', []);
 
       fireEvent.change(textarea, { target: { value: 'second' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
-      expect(onSend).toHaveBeenCalledWith('second');
+      expect(onSend).toHaveBeenCalledWith('second', []);
 
       expect(onSend).toHaveBeenCalledTimes(2);
     });
@@ -946,7 +946,7 @@ describe('ChatInput', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       // Falls through to normal Enter handling
-      expect(onSend).toHaveBeenCalledWith('hello');
+      expect(onSend).toHaveBeenCalledWith('hello', []);
     });
   });
 
@@ -1109,7 +1109,7 @@ describe('ChatInput', () => {
       fireEvent.change(textarea, { target: { value: 'hello' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(onSend).toHaveBeenCalledWith('hello');
+      expect(onSend).toHaveBeenCalledWith('hello', []);
     });
   });
 
@@ -1147,7 +1147,7 @@ describe('ChatInput', () => {
       fireEvent.change(textarea, { target: { value: 'fix this' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(onSend).toHaveBeenCalledWith('@src/utils.ts @src/index.ts fix this');
+      expect(onSend).toHaveBeenCalledWith('@src/utils.ts @src/index.ts fix this', []);
     });
 
     it('removes mentions after sending', () => {

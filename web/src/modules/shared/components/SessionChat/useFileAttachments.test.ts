@@ -139,12 +139,14 @@ describe('useFileAttachments', () => {
     expect(result.current.isDragging).toBe(false);
   });
 
-  it('handlePaste processes pasted files', async () => {
+  it('handlePaste processes pasted files and calls preventDefault', async () => {
     const { result } = renderHook(() => useFileAttachments());
     const file = new File(['data'], 'pasted.png', { type: 'image/png' });
+    const preventDefault = vi.fn();
 
     await act(async () => {
       await result.current.handlePaste({
+        preventDefault,
         clipboardData: {
           items: [
             {
@@ -158,6 +160,7 @@ describe('useFileAttachments', () => {
 
     expect(result.current.attachments).toHaveLength(1);
     expect(result.current.attachments[0].name).toBe('pasted.png');
+    expect(preventDefault).toHaveBeenCalled();
   });
 
   it('handlePaste ignores non-file items', async () => {

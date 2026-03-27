@@ -89,6 +89,11 @@ function CodeBlockRenderer({ language, code }: CodeBlockRendererProps) {
           Show all {lineCount} lines
         </button>
       )}
+      {isLong && !collapsed && (
+        <button type="button" className={styles.showAllBtn} onClick={() => setCollapsed(true)}>
+          Collapse
+        </button>
+      )}
     </div>
   );
 }

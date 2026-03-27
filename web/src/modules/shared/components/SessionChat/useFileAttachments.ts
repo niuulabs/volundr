@@ -139,6 +139,7 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
       }
 
       if (imageFiles.length > 0) {
+        e.preventDefault();
         await addFiles(imageFiles);
       }
     },

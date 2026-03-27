@@ -149,15 +149,16 @@ describe('MarkdownContent', () => {
 
   it('toggle line numbers button hides line numbers', () => {
     const md = '```js\nconst x = 1;\nconst y = 2;\n```';
-    render(<MarkdownContent content={md} />);
+    const { container } = render(<MarkdownContent content={md} />);
+
+    // Line numbers column should exist before toggle
+    expect(container.querySelector('[class*="lineNumbers"]')).toBeInTheDocument();
 
     const toggleBtn = screen.getByTestId('toggle-line-numbers');
     fireEvent.click(toggleBtn);
 
     // After toggling, line numbers column should be removed
-    // The "1" text from line numbers should not be in a line-number element
-    // (it may still exist as code content, so we check the toggle worked)
-    expect(toggleBtn).toBeInTheDocument();
+    expect(container.querySelector('[class*="lineNumbers"]')).not.toBeInTheDocument();
   });
 
   it('toggle word wrap button activates wrap', () => {
@@ -194,9 +195,23 @@ describe('MarkdownContent', () => {
     const showAllBtn = screen.getByText('Show all 30 lines');
     fireEvent.click(showAllBtn);
 
-    // After expanding, line30 should be visible (in the code text) and button should be gone
+    // After expanding, line30 should be visible and "Collapse" button should appear
     expect(screen.getByText(/line30/)).toBeInTheDocument();
     expect(screen.queryByText('Show all 30 lines')).not.toBeInTheDocument();
+    expect(screen.getByText('Collapse')).toBeInTheDocument();
+  });
+
+  it('re-collapses expanded code block when "Collapse" is clicked', () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `line${i + 1}`).join('\n');
+    const md = '```\n' + lines + '\n```';
+    render(<MarkdownContent content={md} />);
+
+    fireEvent.click(screen.getByText('Show all 30 lines'));
+    expect(screen.getByText(/line30/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Collapse'));
+    expect(screen.queryByText('line30')).not.toBeInTheDocument();
+    expect(screen.getByText('Show all 30 lines')).toBeInTheDocument();
   });
 
   it('does not collapse short code blocks (<= 25 lines)', () => {

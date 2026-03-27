@@ -15,17 +15,11 @@ import { useSlashMenu } from './useSlashMenu';
 import { MentionMenu } from './MentionMenu';
 import { MentionPill } from './MentionPill';
 import { useMentionMenu } from './useMentionMenu';
-import { useFileAttachments } from './useFileAttachments';
+import { useFileAttachments, type FileAttachment } from './useFileAttachments';
 import styles from './ChatInput.module.css';
 
-interface Attachment {
-  file: File;
-  name: string;
-  id: string;
-}
-
 interface ChatInputProps {
-  onSend: (text: string) => void;
+  onSend: (text: string, attachments: FileAttachment[]) => void;
   isLoading: boolean;
   onStop: () => void;
   disabled?: boolean;
@@ -76,7 +70,6 @@ export function ChatInput({
   availableCommands,
 }: ChatInputProps) {
   const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputSnapshotRef = useRef('');
@@ -103,7 +96,7 @@ export function ChatInput({
   const mentionMenu = useMentionMenu(sessionId, sessionHost, chatEndpoint);
   const fileAttachments = useFileAttachments();
 
-  const hasContent = input.trim().length > 0;
+  const hasContent = input.trim().length > 0 || fileAttachments.attachments.length > 0;
 
   const resetTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -133,9 +126,8 @@ export function ChatInput({
     // Prepend mention paths to the message so the backend knows which files are referenced
     const mentionPaths = mentionMenu.mentions.map(m => `@${m.path}`);
     const fullMessage = mentionPaths.length > 0 ? `${mentionPaths.join(' ')} ${trimmed}` : trimmed;
-    onSend(fullMessage);
+    onSend(fullMessage, fileAttachments.attachments);
     setInput('');
-    setAttachments([]);
     fileAttachments.clearAttachments();
     // Clear mentions after send
     for (const m of mentionMenu.mentions) {
@@ -221,23 +213,12 @@ export function ChatInput({
       if (!files) {
         return;
       }
-      const newAttachments: Attachment[] = Array.from(files).map(file => ({
-        file,
-        name: file.name,
-        id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      }));
-      setAttachments(prev => [...prev, ...newAttachments]);
-      // Also process through fileAttachments hook for image compression/previews
       fileAttachments.addFiles(files);
       // Reset the input so the same file can be re-attached
       e.target.value = '';
     },
     [fileAttachments]
   );
-
-  const handleRemoveAttachment = useCallback((id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
-  }, []);
 
   const handleMicToggle = useCallback(() => {
     if (disabled) {
@@ -260,43 +241,31 @@ export function ChatInput({
       onDrop={fileAttachments.handleDrop}
       onPaste={fileAttachments.handlePaste}
     >
-      {(attachments.length > 0 ||
-        mentionMenu.mentions.length > 0 ||
-        fileAttachments.attachments.length > 0) && (
+      {(fileAttachments.attachments.length > 0 || mentionMenu.mentions.length > 0) && (
         <div className={styles.attachments}>
           {mentionMenu.mentions.map(entry => (
             <MentionPill key={entry.path} entry={entry} onRemove={mentionMenu.removeMention} />
           ))}
-          {attachments.map(attachment => {
-            const imagePreview = fileAttachments.attachments.find(
-              fa => fa.name === attachment.name && fa.previewUrl
-            );
-            return (
-              <span key={attachment.id} className={styles.attachmentChip}>
-                {imagePreview?.previewUrl && (
-                  <img
-                    src={imagePreview.previewUrl}
-                    alt={attachment.name}
-                    className={styles.attachmentThumbnail}
-                  />
-                )}
-                <span className={styles.attachmentName}>{attachment.name}</span>
-                <button
-                  type="button"
-                  className={styles.attachmentRemove}
-                  onClick={() => {
-                    handleRemoveAttachment(attachment.id);
-                    if (imagePreview) {
-                      fileAttachments.removeAttachment(imagePreview.id);
-                    }
-                  }}
-                  aria-label={`Remove ${attachment.name}`}
-                >
-                  <X className={styles.attachmentRemoveIcon} />
-                </button>
-              </span>
-            );
-          })}
+          {fileAttachments.attachments.map(attachment => (
+            <span key={attachment.id} className={styles.attachmentChip}>
+              {attachment.previewUrl && (
+                <img
+                  src={attachment.previewUrl}
+                  alt={attachment.name}
+                  className={styles.attachmentThumbnail}
+                />
+              )}
+              <span className={styles.attachmentName}>{attachment.name}</span>
+              <button
+                type="button"
+                className={styles.attachmentRemove}
+                onClick={() => fileAttachments.removeAttachment(attachment.id)}
+                aria-label={`Remove ${attachment.name}`}
+              >
+                <X className={styles.attachmentRemoveIcon} />
+              </button>
+            </span>
+          ))}
         </div>
       )}
 
