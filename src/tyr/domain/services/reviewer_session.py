@@ -13,16 +13,12 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from tyr.config import ReviewConfig
 from tyr.domain.models import PRStatus, Raid
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrSession
 
 logger = logging.getLogger(__name__)
-
-# Path to the system prompt template (relative to project root)
-_PROMPT_PATH = Path(__file__).resolve().parents[4] / "docs" / "prompts" / "review-session.md"
 
 
 @dataclass(frozen=True)
@@ -34,22 +30,6 @@ class ReviewerResult:
     summary: str
     issues: list[str]
     approved: bool
-
-
-def load_reviewer_system_prompt() -> str:
-    """Load the reviewer system prompt from docs/prompts/review-session.md."""
-    if _PROMPT_PATH.exists():
-        return _PROMPT_PATH.read_text(encoding="utf-8")
-    logger.warning("Reviewer system prompt not found at %s, using default", _PROMPT_PATH)
-    return _default_system_prompt()
-
-
-def _default_system_prompt() -> str:
-    return (
-        "You are a code reviewer for the Niuu platform. "
-        "Review the PR diff against project rules, score your confidence (0.0-1.0), "
-        "and provide actionable feedback."
-    )
 
 
 def build_reviewer_initial_prompt(
@@ -249,12 +229,6 @@ class ReviewerSessionService:
     ) -> None:
         self._volundr_factory = volundr_factory
         self._cfg = review_config
-        self._system_prompt: str | None = None
-
-    def _get_system_prompt(self) -> str:
-        if self._system_prompt is None:
-            self._system_prompt = load_reviewer_system_prompt()
-        return self._system_prompt
 
     async def spawn_reviewer(
         self,
@@ -262,6 +236,7 @@ class ReviewerSessionService:
         owner_id: str,
         pr_status: PRStatus | None,
         changed_files: list[str],
+        integration_ids: list[str] | None = None,
     ) -> VolundrSession | None:
         """Spawn a reviewer session for a raid in REVIEW state.
 
@@ -288,10 +263,11 @@ class ReviewerSessionService:
             model=self._cfg.reviewer_model,
             tracker_issue_id=raid.tracker_id,
             tracker_issue_url=raid.pr_url or "",
-            system_prompt=self._get_system_prompt(),
+            system_prompt=self._cfg.reviewer_system_prompt,
             initial_prompt=initial_prompt,
             workload_type="reviewer",
             profile=self._cfg.reviewer_profile,
+            integration_ids=integration_ids or [],
         )
 
         try:

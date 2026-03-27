@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from niuu.ports.integrations import IntegrationRepository
 from tyr.config import ReviewConfig
 from tyr.domain.models import (
     ConfidenceEvent,
@@ -126,6 +127,7 @@ class ReviewEngine:
         review_config: ReviewConfig,
         event_bus: EventBusPort | None = None,
         reviewer_service: ReviewerSessionService | None = None,
+        integration_repo: IntegrationRepository | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -133,6 +135,7 @@ class ReviewEngine:
         self._cfg = review_config
         self._event_bus = event_bus
         self._reviewer = reviewer_service
+        self._integration_repo = integration_repo
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
         # Maps reviewer_session_id → (raid_tracker_id, owner_id)
@@ -508,11 +511,14 @@ class ReviewEngine:
         if self._reviewer is None:
             return False
 
+        integration_ids = await self._resolve_integration_ids(owner_id)
+
         session = await self._reviewer.spawn_reviewer(
             raid=raid,
             owner_id=owner_id,
             pr_status=pr_status,
             changed_files=changed_files,
+            integration_ids=integration_ids,
         )
         if session is None:
             logger.warning("Reviewer session not spawned for raid %s — skipping", tracker_id)
@@ -539,6 +545,19 @@ class ReviewEngine:
         await self._emit_confidence_updated(raid.id, event)
 
         return True
+
+    # -- Integration resolution --
+
+    async def _resolve_integration_ids(self, owner_id: str) -> list[str]:
+        """Resolve integration connection IDs for the owner."""
+        if self._integration_repo is None:
+            return []
+        try:
+            connections = await self._integration_repo.list_connections(owner_id)
+            return [str(c.id) for c in connections]
+        except Exception:
+            logger.warning("Failed to fetch integrations for owner %s", owner_id[:8])
+            return []
 
     # -- Decision handlers --
 

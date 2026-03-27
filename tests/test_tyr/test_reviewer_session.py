@@ -14,7 +14,6 @@ from tyr.domain.services.reviewer_session import (
     ReviewerResult,
     ReviewerSessionService,
     build_reviewer_initial_prompt,
-    load_reviewer_system_prompt,
     parse_reviewer_response,
 )
 from tyr.ports.volundr import ActivityEvent, SpawnRequest, VolundrPort, VolundrSession
@@ -392,18 +391,22 @@ class TestBuildReviewerInitialPrompt:
 
 
 # ---------------------------------------------------------------------------
-# Tests: load_reviewer_system_prompt
+# Tests: reviewer_system_prompt config field
 # ---------------------------------------------------------------------------
 
 
-class TestLoadReviewerSystemPrompt:
-    """Tests for loading the system prompt from disk."""
+class TestReviewerSystemPromptConfig:
+    """Tests for the system prompt embedded in ReviewConfig."""
 
-    def test_loads_from_file(self) -> None:
-        prompt = load_reviewer_system_prompt()
-        # The file exists in docs/prompts/review-session.md
-        assert "code reviewer" in prompt.lower()
-        assert "confidence" in prompt.lower()
+    def test_default_prompt_contains_review_rules(self) -> None:
+        cfg = ReviewConfig()
+        assert "code reviewer" in cfg.reviewer_system_prompt.lower()
+        assert "confidence" in cfg.reviewer_system_prompt.lower()
+        assert "json" in cfg.reviewer_system_prompt.lower()
+
+    def test_prompt_overridable_via_config(self) -> None:
+        cfg = ReviewConfig(reviewer_system_prompt="Custom prompt for this deploy")
+        assert cfg.reviewer_system_prompt == "Custom prompt for this deploy"
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +428,7 @@ class TestSpawnReviewer:
             owner_id=OWNER_ID,
             pr_status=pr,
             changed_files=["src/main.py"],
+            integration_ids=["int-1", "int-2"],
         )
 
         assert session is not None
@@ -437,6 +441,8 @@ class TestSpawnReviewer:
         assert req.profile == "reviewer"
         assert req.workload_type == "reviewer"
         assert req.tracker_issue_id == "NIU-100"
+        assert req.integration_ids == ["int-1", "int-2"]
+        assert "code reviewer" in req.system_prompt.lower()
 
     @pytest.mark.asyncio
     async def test_spawn_with_no_volundr_adapter(self) -> None:
@@ -874,10 +880,7 @@ class TestHandleReviewerCompletion:
         assert decision.action == "reviewer_pending"
 
         # Now simulate reviewer completion with high confidence
-        chronicle = (
-            '{"confidence": 0.95, "approved": true,'
-            ' "summary": "Looks great", "issues": []}'
-        )
+        chronicle = '{"confidence": 0.95, "approved": true, "summary": "Looks great", "issues": []}'
         await engine.handle_reviewer_completion("reviewer-1", chronicle)
 
         # After completion, the raid should have been auto-approved (MERGED)
@@ -1073,6 +1076,7 @@ class TestReviewConfigReviewerFields:
         assert cfg.reviewer_profile == "reviewer"
         assert cfg.reviewer_confidence_weight == 0.60
         assert cfg.reviewer_spawn_bonus == 0.1
+        assert "code reviewer" in cfg.reviewer_system_prompt.lower()
 
     def test_no_polling_config(self) -> None:
         """Ensure timeout/poll_interval fields do NOT exist."""
