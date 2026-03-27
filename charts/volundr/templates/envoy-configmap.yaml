@@ -62,6 +62,9 @@ data:
                                 - {{ . | quote }}
                                 {{- end }}
                               {{- end }}
+                              from_headers:
+                                - name: Authorization
+                                  value_prefix: "Bearer "
                               from_params:
                                 - token
                               remote_jwks:
