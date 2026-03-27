@@ -192,6 +192,20 @@ func TestEnsureContainerStorageDirs_Idempotent(t *testing.T) {
 	}
 }
 
+func TestImageOrDefault_CustomImage(t *testing.T) {
+	got := imageOrDefault("custom:latest", "default:v1")
+	if got != "custom:latest" {
+		t.Errorf("expected custom:latest, got %q", got)
+	}
+}
+
+func TestImageOrDefault_EmptyFallsBack(t *testing.T) {
+	got := imageOrDefault("", "default:v1")
+	if got != "default:v1" {
+		t.Errorf("expected default:v1, got %q", got)
+	}
+}
+
 func TestServiceStateConstants(t *testing.T) {
 	tests := []struct {
 		name     string

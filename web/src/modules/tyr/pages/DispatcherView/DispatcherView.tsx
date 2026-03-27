@@ -5,12 +5,13 @@ import type { QueueItem } from '../../hooks/useDispatchQueue';
 import styles from './DispatcherView.module.css';
 
 export function DispatcherView() {
-  const { queue, defaults, loading, error, dispatching, dispatch } = useDispatchQueue();
+  const { queue, defaults, clusters, loading, error, dispatching, dispatch } = useDispatchQueue();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [promptOverride, setPromptOverride] = useState<string | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<string>('');
   const [lastResults, setLastResults] = useState<
-    { issue_id: string; session_name: string; status: string }[] | null
+    { issue_id: string; session_name: string; status: string; cluster_name: string }[] | null
   >(null);
 
   const toggleItem = (issueId: string) => {
@@ -49,7 +50,8 @@ export function DispatcherView() {
     const results = await dispatch(
       items,
       modelOverride ?? defaults.default_model,
-      promptOverride ?? defaults.default_system_prompt
+      promptOverride ?? defaults.default_system_prompt,
+      selectedCluster || undefined
     );
     setLastResults(results);
     setSelected(new Set());
@@ -72,6 +74,8 @@ export function DispatcherView() {
     bySaga[item.saga_id].items.push(item);
   }
 
+  const enabledClusters = clusters.filter(c => c.enabled);
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -88,6 +92,7 @@ export function DispatcherView() {
             >
               {r.status === 'spawned' ? '\u2713' : '\u2717'} {r.session_name || r.issue_id} —{' '}
               {r.status}
+              {r.cluster_name && <span className={styles.clusterBadge}>{r.cluster_name}</span>}
             </div>
           ))}
           <button
@@ -112,6 +117,20 @@ export function DispatcherView() {
             <span className={styles.selectedCount}>{selected.size} selected</span>
           </div>
           <div className={styles.dispatchControls}>
+            {enabledClusters.length > 1 && (
+              <select
+                className={styles.clusterSelect}
+                value={selectedCluster}
+                onChange={e => setSelectedCluster(e.target.value)}
+              >
+                <option value="">Auto (default cluster)</option>
+                {enabledClusters.map(c => (
+                  <option key={c.connection_id} value={c.connection_id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               className={styles.modelSelect}
               value={modelOverride ?? defaults.default_model}

@@ -164,6 +164,17 @@ vi.mock('@/modules/volundr/components/SessionGroupList', () => ({
   ),
 }));
 
+vi.mock('@/modules/volundr/adapters', () => ({
+  volundrService: {
+    getFeatureModules: vi.fn().mockResolvedValue([]),
+    getUserFeaturePreferences: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock('@/modules/volundr/adapters/api/client', () => ({
+  getAccessToken: vi.fn().mockReturnValue(null),
+}));
+
 import { useVolundr } from '@/modules/volundr/hooks/useVolundr';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 

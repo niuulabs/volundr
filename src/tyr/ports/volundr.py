@@ -24,6 +24,7 @@ class SpawnRequest:
     initial_prompt: str
     base_branch: str = "main"
     workload_type: str = "default"
+    profile: str | None = None
     integration_ids: list[str] = field(default_factory=list)
 
 
@@ -36,6 +37,7 @@ class VolundrSession:
     status: str
     tracker_issue_id: str | None
     chat_endpoint: str | None = None
+    cluster_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,25 @@ class VolundrPort(ABC):
 
 
 class VolundrFactory(Protocol):
-    """Protocol for resolving per-owner Volundr adapters."""
+    """Protocol for resolving per-owner Volundr adapters.
 
-    async def for_owner(self, owner_id: str) -> VolundrPort | None: ...
+    Returns all configured Volundr connections for an owner.
+    The first adapter in the list is the primary (used for dispatch).
+    """
+
+    async def for_owner(self, owner_id: str) -> list[VolundrPort]:
+        """Return all Volundr adapters for *owner_id*.
+
+        Always returns a non-empty list: when no per-user connections
+        exist, the implementation must return a single fallback adapter
+        (unauthenticated, using the global Volundr URL).
+        """
+        ...
+
+    async def primary_for_owner(self, owner_id: str) -> VolundrPort | None:
+        """Return the primary (first) authenticated adapter, or ``None``.
+
+        Unlike ``for_owner``, this does **not** fall back — it returns
+        ``None`` when no per-user CODE_FORGE connections are configured.
+        """
+        ...

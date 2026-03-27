@@ -274,6 +274,10 @@ func TestConfigDir(t *testing.T) {
 	})
 
 	t.Run("falls back to home directory", func(t *testing.T) {
+		// Use a clean temp dir as HOME so neither .niuu nor .volundr exist,
+		// ensuring ConfigDir returns the new default path.
+		tmpHome := t.TempDir()
+		t.Setenv("HOME", tmpHome)
 		t.Setenv(EnvHome, "")
 		t.Setenv(LegacyEnvHome, "")
 
@@ -282,11 +286,7 @@ func TestConfigDir(t *testing.T) {
 			t.Fatalf("ConfigDir() error: %v", err)
 		}
 
-		home, err := os.UserHomeDir()
-		if err != nil {
-			t.Fatalf("UserHomeDir() error: %v", err)
-		}
-		expected := filepath.Join(home, DefaultConfigDir)
+		expected := filepath.Join(tmpHome, DefaultConfigDir)
 		if dir != expected {
 			t.Errorf("ConfigDir() = %q, want %q", dir, expected)
 		}
