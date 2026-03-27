@@ -497,7 +497,7 @@ class TestActivityEventHandling:
 
     @pytest.mark.asyncio
     async def test_idle_with_no_turns_does_not_complete(self) -> None:
-        """Idle with turn_count <= 1 should not trigger completion."""
+        """Idle with turn_count=0 should not trigger completion."""
         sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
         tracker.add_raid(raid)
@@ -505,7 +505,7 @@ class TestActivityEventHandling:
         event = ActivityEvent(
             session_id=raid.session_id or "",
             state="idle",
-            metadata={"turn_count": 1, "duration_seconds": 5},
+            metadata={"turn_count": 0, "duration_seconds": 5},
             owner_id="user-1",
         )
 
