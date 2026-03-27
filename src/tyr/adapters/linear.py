@@ -174,7 +174,7 @@ _ISSUE_FIELDS = """
 """
 
 _LIST_ISSUE_RELATIONS_QUERY = """
-query ListIssueRelations($projectId: ID!, $first: Int!) {
+query ListIssueRelations($projectId: String!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
     first: $first
@@ -195,7 +195,7 @@ query ListIssueRelations($projectId: ID!, $first: Int!) {
 
 _LIST_ISSUES_QUERY = (
     """
-query ListIssues($projectId: ID!, $first: Int!) {
+query ListIssues($projectId: String!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
     first: $first
@@ -213,7 +213,7 @@ query ListIssues($projectId: ID!, $first: Int!) {
 
 _LIST_ISSUES_BY_MILESTONE_QUERY = (
     """
-query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
+query ListIssuesByMilestone($projectId: String!, $milestoneId: String!, $first: Int!) {
   issues(
     filter: {
       project: { id: { eq: $projectId } }
@@ -242,7 +242,7 @@ mutation CreateProject($name: String!, $description: String, $teamIds: [String!]
 """
 
 _CREATE_MILESTONE_QUERY = """
-mutation CreateMilestone($name: String!, $projectId: ID!, $sortOrder: Float!) {
+mutation CreateMilestone($name: String!, $projectId: String!, $sortOrder: Float!) {
   projectMilestoneCreate(input: { name: $name, projectId: $projectId, sortOrder: $sortOrder }) {
     projectMilestone { id }
     success
@@ -254,9 +254,9 @@ _CREATE_ISSUE_QUERY = """
 mutation CreateIssue(
   $title: String!,
   $description: String,
-  $projectId: ID!,
-  $projectMilestoneId: ID,
-  $teamId: ID!,
+  $projectId: String!,
+  $projectMilestoneId: String,
+  $teamId: String!,
   $estimate: Int
 ) {
   issueCreate(input: {
