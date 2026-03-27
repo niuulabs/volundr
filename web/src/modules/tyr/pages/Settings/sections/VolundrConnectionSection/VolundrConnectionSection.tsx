@@ -43,15 +43,14 @@ function ConnectedCluster({
   };
 
   return (
-    <div className={styles.connected}>
-      <div className={styles.statusRow}>
+    <div className={styles.clusterCard}>
+      <div className={styles.clusterCardHeader}>
+        <div className={styles.clusterCardTitle}>{clusterName}</div>
         <span className={styles.statusBadge} data-status="connected">
           Connected
         </span>
-        <span className={styles.detail}>
-          {clusterName} — {connection.config.url || 'Volundr instance'}
-        </span>
       </div>
+      <p className={styles.meta}>{connection.config.url || 'Volundr instance'}</p>
       <p className={styles.meta}>Connected {new Date(connection.createdAt).toLocaleDateString()}</p>
       {testResult && (
         <p className={testResult.success ? styles.testSuccess : styles.error}>
@@ -60,7 +59,7 @@ function ConnectedCluster({
       )}
       <div className={styles.actions}>
         <button className={styles.testBtn} onClick={handleTest} disabled={testing} type="button">
-          {testing ? 'Testing...' : 'Test Connection'}
+          {testing ? 'Testing...' : 'Test'}
         </button>
         <button
           className={styles.disconnectBtn}

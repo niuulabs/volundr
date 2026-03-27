@@ -30,9 +30,6 @@ const SagasView = lazy(() =>
 const SagaDetailView = lazy(() =>
   import('@/modules/tyr/pages/DetailView').then(m => ({ default: m.DetailView }))
 );
-const NewSagaView = lazy(() =>
-  import('@/modules/tyr/pages/NewSagaView').then(m => ({ default: m.NewSagaView }))
-);
 const DispatcherView = lazy(() =>
   import('@/modules/tyr/pages/DispatcherView').then(m => ({ default: m.DispatcherView }))
 );
@@ -71,9 +68,9 @@ function AppContent() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="sagas" element={<SagasView />} />
             <Route path="sagas/:id" element={<SagaDetailView />} />
-            <Route path="new" element={<NewSagaView />} />
+            <Route path="new" element={<PlanSagaView />} />
             <Route path="import" element={<ImportView />} />
-            <Route path="plan" element={<PlanSagaView />} />
+            <Route path="plan" element={<Navigate to="/tyr/new" replace />} />
             <Route path="dispatcher" element={<DispatcherView />} />
             <Route path="sessions" element={<TyrSessionsView />} />
             <Route path="dashboard" element={<DashboardView />} />
