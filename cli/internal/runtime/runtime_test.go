@@ -255,3 +255,17 @@ func TestStackStatus(t *testing.T) {
 		t.Fatalf("expected 2 services, got %d", len(s.Services))
 	}
 }
+
+func TestImageOrDefault_NonEmpty(t *testing.T) {
+	got := imageOrDefault("myimage:latest", "default:latest")
+	if got != "myimage:latest" {
+		t.Errorf("expected 'myimage:latest', got %q", got)
+	}
+}
+
+func TestImageOrDefault_Empty(t *testing.T) {
+	got := imageOrDefault("", "default:latest")
+	if got != "default:latest" {
+		t.Errorf("expected 'default:latest', got %q", got)
+	}
+}
