@@ -157,10 +157,14 @@ export function PlanSagaView() {
           .join('\n\n---\n\n');
       }
 
-      // Generate description from structure
-      const description = detectedStructure.phases
-        .map(p => `**${p.name}**: ${p.raids.map(r => r.name).join(', ')}`)
-        .join('\n\n');
+      // Generate description from structure (Linear max 255 chars)
+      const fullDesc = detectedStructure.phases.map(p => p.name).join(' → ');
+      const raidCount = detectedStructure.phases.reduce((n, p) => n + p.raids.length, 0);
+      const prefix = `${detectedStructure.phases.length} phases, ${raidCount} raids: `;
+      const description =
+        prefix.length + fullDesc.length <= 255
+          ? prefix + fullDesc
+          : (prefix + fullDesc).slice(0, 252) + '...';
 
       const commitRequest: CommitSagaRequest = {
         name: detectedStructure.name,
