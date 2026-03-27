@@ -6,7 +6,7 @@ import styles from './TyrLayout.module.css';
 const navItems = [
   { to: '/tyr/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tyr/sagas', label: 'Sagas', icon: ScrollText },
-  { to: '/tyr/new', label: 'New Saga', icon: PlusCircle },
+  { to: '/tyr/new', label: 'Planning', icon: PlusCircle },
   { to: '/tyr/import', label: 'Import', icon: Download },
   { to: '/tyr/dispatcher', label: 'Dispatcher', icon: Radio },
   { to: '/tyr/sessions', label: 'Sessions', icon: Monitor },
