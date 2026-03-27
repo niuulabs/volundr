@@ -24,6 +24,12 @@
   border-color: var(--color-bg-elevated);
 }
 
+.wrapper[data-drag-over='true'] {
+  border-style: dashed;
+  border-color: var(--color-brand);
+  background-color: color-mix(in srgb, var(--color-brand) 5%, var(--color-bg-secondary) 80%);
+}
+
 /* ── Attachments ─────────────────────────────────────────── */
 
 .attachments {
@@ -78,6 +84,14 @@
 .attachmentRemoveIcon {
   width: 12px;
   height: 12px;
+}
+
+.attachmentThumbnail {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
 }
 
 /* ── Input Area ──────────────────────────────────────────── */

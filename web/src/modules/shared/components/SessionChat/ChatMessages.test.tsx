@@ -388,6 +388,32 @@ describe('AssistantMessage', () => {
     expect(thumbDown).toHaveAttribute('data-active', 'false');
   });
 
+  it('bookmark toggle: click once = active, click again = inactive', () => {
+    const msg = createMessage();
+    render(<AssistantMessage message={msg} />);
+
+    const bookmarkBtn = screen.getByTitle('Bookmark');
+    expect(bookmarkBtn).toHaveAttribute('data-active', 'false');
+
+    fireEvent.click(bookmarkBtn);
+    expect(screen.getByTitle('Remove bookmark')).toHaveAttribute('data-active', 'true');
+
+    fireEvent.click(screen.getByTitle('Remove bookmark'));
+    expect(screen.getByTitle('Bookmark')).toHaveAttribute('data-active', 'false');
+  });
+
+  it('bookmark toggle calls onBookmark callback with messageId and state', () => {
+    const msg = createMessage();
+    const onBookmark = vi.fn();
+    render(<AssistantMessage message={msg} onBookmark={onBookmark} />);
+
+    fireEvent.click(screen.getByTitle('Bookmark'));
+    expect(onBookmark).toHaveBeenCalledWith(msg.id, true);
+
+    fireEvent.click(screen.getByTitle('Remove bookmark'));
+    expect(onBookmark).toHaveBeenCalledWith(msg.id, false);
+  });
+
   it('reasoning section: hidden when no reasoning parts', () => {
     const msg = createMessage({ parts: [{ type: 'text', text: 'Just text' }] });
     render(<AssistantMessage message={msg} />);

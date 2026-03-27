@@ -55,6 +55,22 @@ describe('ToolGroupBlock', () => {
     expect(container.querySelector('svg')).toBeTruthy();
   });
 
+  it('sets data-tool-category attribute based on tool name', () => {
+    const { container } = render(<ToolGroupBlock toolName="Read" blocks={blocks} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveAttribute('data-tool-category', 'file');
+  });
+
+  it('sets terminal category for Bash group', () => {
+    const bashBlocks = [
+      { block: { type: 'tool_use' as const, id: 't1', name: 'Bash', input: { command: 'ls' } } },
+      { block: { type: 'tool_use' as const, id: 't2', name: 'Bash', input: { command: 'pwd' } } },
+    ];
+    const { container } = render(<ToolGroupBlock toolName="Bash" blocks={bashBlocks} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveAttribute('data-tool-category', 'terminal');
+  });
+
   it('handles blocks with results', () => {
     const blocksWithResults: { block: ToolUseBlock; result?: ToolResultBlock }[] = [
       {

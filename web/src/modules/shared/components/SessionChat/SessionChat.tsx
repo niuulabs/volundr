@@ -2,11 +2,16 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon } from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
-import type { PermissionBehavior } from '@/modules/shared/hooks/useSkuldChat';
+import type {
+  PermissionBehavior,
+  ContentBlock,
+  AttachmentMeta,
+} from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
+import type { FileAttachment } from './useFileAttachments';
 import styles from './SessionChat.module.css';
 
 const SCROLL_THRESHOLD = 150;
@@ -150,9 +155,69 @@ export function SessionChat({
   );
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, fileAttachments: FileAttachment[]) => {
       userSentRef.current = true;
-      sendMessage(text);
+
+      // Only image files with compressed blobs can be transmitted as content blocks.
+      // Non-image files are filtered out so metadata stays consistent with actual
+      // content blocks sent over the wire.
+      const imageAttachments = fileAttachments.filter(
+        (fa): fa is FileAttachment & { compressed: Blob } =>
+          fa.file.type.startsWith('image/') && fa.compressed !== null
+      );
+
+      if (imageAttachments.length === 0) {
+        sendMessage(text);
+        return;
+      }
+
+      const attachmentMeta: AttachmentMeta[] = imageAttachments.map(fa => ({
+        name: fa.name,
+        type: 'image' as const,
+        size: fa.compressed.size,
+        contentType: 'image/jpeg',
+      }));
+
+      // Pre-allocate to preserve ordering: contentBlocks[i] matches attachmentMeta[i]
+      const contentBlocks: (ContentBlock | null)[] = new Array(imageAttachments.length).fill(null);
+      let processedCount = 0;
+
+      const checkComplete = () => {
+        processedCount += 1;
+        if (processedCount < imageAttachments.length) return;
+        // Filter out failed reads, keep meta in sync
+        const finalBlocks: ContentBlock[] = [];
+        const finalMeta: AttachmentMeta[] = [];
+        for (let i = 0; i < contentBlocks.length; i++) {
+          const block = contentBlocks[i];
+          if (block) {
+            finalBlocks.push(block);
+            finalMeta.push(attachmentMeta[i]);
+          }
+        }
+        sendMessage(text, finalBlocks, finalMeta);
+      };
+
+      imageAttachments.forEach((fa, index) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          contentBlocks[index] = {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/jpeg',
+              data: base64,
+            },
+          };
+          checkComplete();
+        };
+        reader.onerror = () => {
+          // Skip failed image but still send the message
+          checkComplete();
+        };
+        reader.readAsDataURL(fa.compressed);
+      });
     },
     [sendMessage]
   );
@@ -163,6 +228,15 @@ export function SessionChat({
 
   const handleCopy = useCallback((text: string) => {
     navigator.clipboard?.writeText(text);
+  }, []);
+
+  const handleBookmark = useCallback((id: string, bookmarked: boolean) => {
+    const key = `bookmark:${id}`;
+    if (bookmarked) {
+      localStorage.setItem(key, '1');
+    } else {
+      localStorage.removeItem(key);
+    }
   }, []);
 
   const handleRegenerate = useCallback(
@@ -321,6 +395,8 @@ export function SessionChat({
                   message={msg}
                   onCopy={handleCopy}
                   onRegenerate={handleRegenerate}
+                  onBookmark={handleBookmark}
+                  bookmarked={localStorage.getItem(`bookmark:${msg.id}`) === '1'}
                 />
               );
             })}
@@ -343,7 +419,7 @@ export function SessionChat({
           )}
         </div>
       ) : (
-        <SessionEmptyChat sessionName="Volundr" onSuggestionClick={handleSend} />
+        <SessionEmptyChat sessionName="Volundr" onSuggestionClick={text => handleSend(text, [])} />
       )}
 
       <div className={styles.inputArea}>

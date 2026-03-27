@@ -247,7 +247,7 @@
 .scrollToBottom:hover {
   background-color: var(--color-bg-tertiary);
   color: var(--color-text-primary);
-  border-color: color-mix(in srgb, var(--color-accent-purple) 50%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand) 50%, transparent);
 }
 
 .scrollToBottomIcon {
@@ -263,7 +263,7 @@
   height: 1.25rem;
   padding: 0 var(--space-1);
   border-radius: var(--radius-full);
-  background-color: var(--color-accent-purple);
+  background-color: var(--color-brand);
   color: white;
   font-size: 10px;
   font-weight: 700;
