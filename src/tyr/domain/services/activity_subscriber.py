@@ -190,6 +190,13 @@ class SessionActivitySubscriber:
         self, event: ActivityEvent, volundr: VolundrPort, owner_id: str
     ) -> None:
         """Handle a single activity or session lifecycle event from the SSE stream."""
+        logger.info(
+            "Activity event: session=%s state=%s status=%s meta=%s",
+            event.session_id[:8] if event.session_id else "?",
+            event.state,
+            event.session_status or "-",
+            event.metadata,
+        )
         if event.session_status in self._FAILED_STATUSES:
             await self._on_session_failed(event, volundr, owner_id)
             return
@@ -264,7 +271,7 @@ class SessionActivitySubscriber:
         signals: dict[str, bool] = {}
 
         signals["session_idle"] = True
-        signals["has_turns"] = metadata.get("turn_count", 0) > 1
+        signals["has_turns"] = metadata.get("turn_count", 0) >= 1
 
         signals["pr_exists"] = False
         signals["ci_passed"] = False
@@ -302,6 +309,14 @@ class SessionActivitySubscriber:
             confidence += cfg.confidence_ci_bonus
         if signals["extended_idle"]:
             confidence += cfg.confidence_idle_bonus
+
+        logger.info(
+            "Completion evaluation: session=%s is_complete=%s confidence=%.2f signals=%s",
+            raid.session_id,
+            is_complete,
+            min(confidence, 1.0),
+            signals,
+        )
 
         return CompletionEvaluation(
             is_complete=is_complete,
