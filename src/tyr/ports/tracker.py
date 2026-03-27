@@ -38,7 +38,9 @@ class TrackerPort(ABC):
     async def create_phase(self, phase: Phase, *, project_id: str = "") -> str: ...
 
     @abstractmethod
-    async def create_raid(self, raid: Raid) -> str: ...
+    async def create_raid(
+        self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
+    ) -> str: ...
 
     # -- CRUD: update / close --
 

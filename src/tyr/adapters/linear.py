@@ -412,7 +412,9 @@ class LinearTrackerAdapter(TrackerPort):
         self._gql.invalidate_cache("milestones")
         return milestone["id"]
 
-    async def create_raid(self, raid: Raid) -> str:
+    async def create_raid(
+        self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
+    ) -> str:
         description = raid.description
         if raid.acceptance_criteria:
             criteria = "\n".join(f"- [ ] {c}" for c in raid.acceptance_criteria)
@@ -426,13 +428,16 @@ class LinearTrackerAdapter(TrackerPort):
         # Linear estimate is an integer (story points); round hours to nearest int
         estimate = round(raid.estimate_hours) if raid.estimate_hours else None
 
+        effective_project_id = project_id or raid.tracker_id
+        effective_milestone_id = milestone_id or None
+
         data = await self._gql.query(
             _CREATE_ISSUE_QUERY,
             {
                 "title": raid.name,
                 "description": description,
-                "projectId": raid.tracker_id,
-                "projectMilestoneId": str(raid.phase_id) if raid.phase_id else None,
+                "projectId": effective_project_id,
+                "projectMilestoneId": effective_milestone_id,
                 "teamId": await self._get_team_id(),
                 "estimate": estimate,
             },

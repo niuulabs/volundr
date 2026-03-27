@@ -723,7 +723,11 @@ def create_sagas_router() -> APIRouter:
                 )
 
                 try:
-                    tracker_raid_id = await tracker.create_raid(raid)
+                    tracker_raid_id = await tracker.create_raid(
+                        raid,
+                        project_id=saga.tracker_id,
+                        milestone_id=phase.tracker_id,
+                    )
                 except Exception as exc:
                     logger.error(
                         "Tracker create_raid failed for raid=%s", raid_spec.name, exc_info=True
