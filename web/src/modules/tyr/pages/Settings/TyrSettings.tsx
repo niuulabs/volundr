@@ -12,8 +12,9 @@ export function TyrSettings({ service }: TyrSettingsProps) {
   const { connections, loading, error, createConnection, deleteConnection } =
     useTyrIntegrations(service);
 
-  const volundrConnections =
-    connections.filter(c => c.integrationType === INTEGRATION_TYPES.CODE_FORGE);
+  const volundrConnections = connections.filter(
+    c => c.integrationType === INTEGRATION_TYPES.CODE_FORGE
+  );
 
   if (loading) {
     return (

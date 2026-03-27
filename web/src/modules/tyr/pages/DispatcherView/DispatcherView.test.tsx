@@ -231,9 +231,7 @@ describe('DispatcherView', () => {
     vi.mocked(useDispatchQueue).mockReturnValue({
       queue: [mockQueueItem],
       defaults: mockDefaults,
-      clusters: [
-        { connection_id: 'c1', name: 'production', url: 'http://prod', enabled: true },
-      ],
+      clusters: [{ connection_id: 'c1', name: 'production', url: 'http://prod', enabled: true }],
       loading: false,
       error: null,
       dispatching: false,

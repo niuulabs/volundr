@@ -25,10 +25,7 @@ function ConnectedCluster({
 }) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const { error, disconnecting, handleDisconnect } = useConnectionForm(
-    connection.id,
-    onDisconnect
-  );
+  const { error, disconnecting, handleDisconnect } = useConnectionForm(connection.id, onDisconnect);
 
   const clusterName = connection.config.name || connection.slug || connection.id;
 
@@ -55,21 +52,14 @@ function ConnectedCluster({
           {clusterName} — {connection.config.url || 'Volundr instance'}
         </span>
       </div>
-      <p className={styles.meta}>
-        Connected {new Date(connection.createdAt).toLocaleDateString()}
-      </p>
+      <p className={styles.meta}>Connected {new Date(connection.createdAt).toLocaleDateString()}</p>
       {testResult && (
         <p className={testResult.success ? styles.testSuccess : styles.error}>
           {testResult.message}
         </p>
       )}
       <div className={styles.actions}>
-        <button
-          className={styles.testBtn}
-          onClick={handleTest}
-          disabled={testing}
-          type="button"
-        >
+        <button className={styles.testBtn} onClick={handleTest} disabled={testing} type="button">
           {testing ? 'Testing...' : 'Test Connection'}
         </button>
         <button
@@ -143,11 +133,7 @@ export function VolundrConnectionSection({
         />
       ))}
       {hasConnections && !showForm && (
-        <button
-          className={styles.connectBtn}
-          onClick={() => setShowForm(true)}
-          type="button"
-        >
+        <button className={styles.connectBtn} onClick={() => setShowForm(true)} type="button">
           Add another cluster
         </button>
       )}
