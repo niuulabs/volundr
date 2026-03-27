@@ -41,6 +41,7 @@ _RAID_TO_LINEAR: dict[RaidStatus, str] = {
     RaidStatus.QUEUED: "Todo",
     RaidStatus.RUNNING: "In Progress",
     RaidStatus.REVIEW: "In Review",
+    RaidStatus.ESCALATED: "In Review",
     RaidStatus.MERGED: "Done",
     RaidStatus.FAILED: "Canceled",
 }

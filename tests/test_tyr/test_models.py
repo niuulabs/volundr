@@ -57,11 +57,12 @@ class TestRaidStatus:
         assert RaidStatus.QUEUED == "QUEUED"
         assert RaidStatus.RUNNING == "RUNNING"
         assert RaidStatus.REVIEW == "REVIEW"
+        assert RaidStatus.ESCALATED == "ESCALATED"
         assert RaidStatus.MERGED == "MERGED"
         assert RaidStatus.FAILED == "FAILED"
 
     def test_member_count(self) -> None:
-        assert len(RaidStatus) == 6
+        assert len(RaidStatus) == 7
 
 
 class TestConfidenceEventType:
@@ -113,6 +114,18 @@ class TestRaidTransitions:
 
     def test_review_to_failed(self) -> None:
         validate_transition(RaidStatus.REVIEW, RaidStatus.FAILED)
+
+    def test_review_to_escalated(self) -> None:
+        validate_transition(RaidStatus.REVIEW, RaidStatus.ESCALATED)
+
+    def test_escalated_to_queued(self) -> None:
+        validate_transition(RaidStatus.ESCALATED, RaidStatus.QUEUED)
+
+    def test_escalated_to_merged(self) -> None:
+        validate_transition(RaidStatus.ESCALATED, RaidStatus.MERGED)
+
+    def test_escalated_to_failed(self) -> None:
+        validate_transition(RaidStatus.ESCALATED, RaidStatus.FAILED)
 
     def test_failed_to_queued(self) -> None:
         validate_transition(RaidStatus.FAILED, RaidStatus.QUEUED)

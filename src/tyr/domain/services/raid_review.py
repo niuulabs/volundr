@@ -192,7 +192,10 @@ class RaidReviewService:
             raise RaidNotFoundError(raid_id)
 
         # Determine target status based on current state
-        target = RaidStatus.QUEUED if raid.status == RaidStatus.FAILED else RaidStatus.PENDING
+        if raid.status in {RaidStatus.FAILED, RaidStatus.ESCALATED}:
+            target = RaidStatus.QUEUED
+        else:
+            target = RaidStatus.PENDING
 
         try:
             validate_transition(raid.status, target)

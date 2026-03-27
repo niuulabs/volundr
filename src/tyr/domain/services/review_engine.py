@@ -114,6 +114,7 @@ class ReviewEngine:
         self._cfg = review_config
         self._event_bus = event_bus
         self._task: asyncio.Task[None] | None = None
+        self._processed: set[str] = set()
 
     @property
     def running(self) -> bool:
@@ -167,12 +168,19 @@ class ReviewEngine:
                         owner_id,
                     )
                     continue
+                if tracker_id in self._processed:
+                    logger.debug(
+                        "Skipping — tracker_id=%s already processed",
+                        tracker_id,
+                    )
+                    continue
                 logger.info(
                     "Review engine evaluating raid %s for owner %s",
                     tracker_id,
                     owner_id[:8],
                 )
                 try:
+                    self._processed.add(tracker_id)
                     decision = await self.evaluate(tracker_id, owner_id)
                     logger.info(
                         "Review engine decision for %s: %s (reason=%s)",
@@ -230,7 +238,7 @@ class ReviewEngine:
         if score >= self._cfg.auto_approve_threshold and self._can_auto_approve(pr_status):
             return await self._handle_auto_approve(tracker, tracker_id, owner_id, raid, score)
 
-        return await self._handle_escalation(tracker_id, owner_id, raid, score)
+        return await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
 
     # -- Signal fetchers --
 
@@ -457,15 +465,20 @@ class ReviewEngine:
 
     async def _handle_escalation(
         self,
+        tracker: TrackerPort,
         tracker_id: str,
         owner_id: str,
         raid: Raid,
         score: float,
     ) -> ReviewDecision:
         """Confidence too low or conditions not met — escalate to human review."""
-        await self._emit_state_changed(raid, owner_id=owner_id, action="escalated")
+        validate_transition(raid.status, RaidStatus.ESCALATED)
+        updated = await tracker.update_raid_progress(
+            tracker_id, status=RaidStatus.ESCALATED
+        )
+        await self._emit_state_changed(updated, owner_id=owner_id, action="escalated")
         return ReviewDecision(
-            raid=raid,
+            raid=updated,
             action="escalated",
             reason=(
                 f"Confidence {score:.2f} < {self._cfg.auto_approve_threshold:.2f},"

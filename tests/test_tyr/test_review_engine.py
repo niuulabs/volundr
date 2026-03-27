@@ -781,8 +781,8 @@ class TestEscalation:
         result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "escalated"
-        # Raid stays in REVIEW
-        assert repo.raids[raid.tracker_id].status == RaidStatus.REVIEW
+        # Raid transitions to ESCALATED (no longer REVIEW, preventing re-trigger)
+        assert repo.raids[raid.tracker_id].status == RaidStatus.ESCALATED
 
     @pytest.mark.asyncio
     async def test_no_pr_escalates(self) -> None:

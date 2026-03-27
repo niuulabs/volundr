@@ -32,6 +32,7 @@ class RaidStatus(StrEnum):
     QUEUED = "QUEUED"
     RUNNING = "RUNNING"
     REVIEW = "REVIEW"
+    ESCALATED = "ESCALATED"
     MERGED = "MERGED"
     FAILED = "FAILED"
 
@@ -61,10 +62,12 @@ RAID_TRANSITIONS: dict[RaidStatus, frozenset[RaidStatus]] = {
         {
             RaidStatus.PENDING,
             RaidStatus.QUEUED,
+            RaidStatus.ESCALATED,
             RaidStatus.MERGED,
             RaidStatus.FAILED,
         }
     ),
+    RaidStatus.ESCALATED: frozenset({RaidStatus.QUEUED, RaidStatus.MERGED, RaidStatus.FAILED}),
     RaidStatus.MERGED: frozenset(),
     RaidStatus.FAILED: frozenset({RaidStatus.QUEUED}),
 }
