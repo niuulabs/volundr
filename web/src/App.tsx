@@ -68,7 +68,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/volundr" replace />} />
           <Route path="/volundr" element={<VolundrPage />} />
           <Route path="/tyr" element={<TyrLayout />}>
-            <Route index element={<Navigate to="sagas" replace />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="sagas" element={<SagasView />} />
             <Route path="sagas/:id" element={<SagaDetailView />} />
             <Route path="new" element={<NewSagaView />} />

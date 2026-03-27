@@ -5,11 +5,18 @@
   background-color: var(--color-bg-secondary);
 }
 
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
 .title {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--color-text-primary);
-  margin: 0 0 var(--space-2) 0;
+  margin: 0;
 }
 
 .description {

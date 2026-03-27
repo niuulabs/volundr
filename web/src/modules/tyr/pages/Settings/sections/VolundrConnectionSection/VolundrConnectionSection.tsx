@@ -118,7 +118,14 @@ export function VolundrConnectionSection({
 
   return (
     <div className={styles.section}>
-      <h3 className={styles.title}>Volundr Clusters</h3>
+      <div className={styles.sectionHeader}>
+        <h3 className={styles.title}>Volundr Clusters</h3>
+        {hasConnections && !showForm && (
+          <button className={styles.connectBtn} onClick={() => setShowForm(true)} type="button">
+            Add another cluster
+          </button>
+        )}
+      </div>
       {!hasConnections && (
         <p className={styles.description}>
           Connect your Volundr instances to enable code forge operations.
@@ -132,11 +139,6 @@ export function VolundrConnectionSection({
           service={service}
         />
       ))}
-      {hasConnections && !showForm && (
-        <button className={styles.connectBtn} onClick={() => setShowForm(true)} type="button">
-          Add another cluster
-        </button>
-      )}
       {showAddForm && (
         <div className={styles.form}>
           <label className={styles.label} htmlFor="volundr-name">
