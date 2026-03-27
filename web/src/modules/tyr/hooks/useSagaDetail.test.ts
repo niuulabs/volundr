@@ -76,6 +76,13 @@ describe('useSagaDetail', () => {
     expect(result.current.error).toBe('Network error');
   });
 
+  it('should handle non-Error rejection', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue('string error');
+    const { result } = renderHook(() => useSagaDetail('saga-001'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('string error');
+  });
+
   it('should refresh on call', async () => {
     const { result } = renderHook(() => useSagaDetail('saga-001'));
     await waitFor(() => expect(result.current.loading).toBe(false));

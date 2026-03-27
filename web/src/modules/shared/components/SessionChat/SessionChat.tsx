@@ -88,7 +88,7 @@ export function SessionChat({
   );
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    messagesEndRef.current?.scrollIntoView?.({ behavior });
     setNewMessageCount(0);
   }, []);
 
@@ -119,7 +119,7 @@ export function SessionChat({
 
     if (userSentRef.current || isNearBottomRef.current) {
       userSentRef.current = false;
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
       return;
     }
 

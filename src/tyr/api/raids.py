@@ -28,6 +28,7 @@ from tyr.domain.services.session_message import (
     SessionMessageService,
 )
 from tyr.ports.git import GitPort
+from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
 
@@ -119,6 +120,13 @@ async def resolve_git() -> GitPort:
     )
 
 
+async def resolve_raid_repo() -> SagaRepository:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Raid repository not configured",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -176,6 +184,13 @@ class ActiveRaidResponse(BaseModel):
 def create_raids_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/tyr/raids", tags=["Raids"])
 
+    @router.get("/summary", response_model=dict[str, int])
+    async def get_raids_summary(
+        raid_repo: SagaRepository = Depends(resolve_raid_repo),
+    ) -> dict[str, int]:
+        """Return a count of raids grouped by status."""
+        return await raid_repo.count_by_status()
+
     @router.get("/active", response_model=list[ActiveRaidResponse])
     async def list_active_raids(
         principal: Principal = Depends(extract_principal),
@@ -200,9 +215,7 @@ def create_raids_router() -> APIRouter:
                             session_id=raid.session_id,
                             confidence=raid.confidence,
                             pr_url=raid.pr_url,
-                            last_updated=raid.updated_at.isoformat()
-                            if raid.updated_at
-                            else "",
+                            last_updated=raid.updated_at.isoformat() if raid.updated_at else "",
                         )
                     )
         return results

@@ -200,3 +200,33 @@ class TestDetailedHealthEndpoint:
     def test_response_has_correlation_id(self, client: TestClient) -> None:
         response = client.get("/api/v1/tyr/health/detailed")
         assert "x-correlation-id" in response.headers
+
+    def test_response_schema(self, client: TestClient) -> None:
+        """Response contains all expected fields with correct types."""
+        data = client.get("/api/v1/tyr/health/detailed").json()
+        assert set(data.keys()) == {
+            "status",
+            "database",
+            "event_bus_subscriber_count",
+            "activity_subscriber_running",
+            "notification_service_running",
+            "review_engine_running",
+        }
+        assert data["status"] in {"ok", "degraded"}
+        assert data["database"] in {"ok", "unavailable"}
+        assert isinstance(data["event_bus_subscriber_count"], int)
+        assert isinstance(data["activity_subscriber_running"], bool)
+        assert isinstance(data["notification_service_running"], bool)
+        assert isinstance(data["review_engine_running"], bool)
+
+    def test_event_bus_count_zero_when_absent(self, app, mock_pool) -> None:
+        """event_bus_subscriber_count is 0 when event bus is not on app.state."""
+        with patch("tyr.main.database_pool") as mock_db:
+            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_pool)
+            mock_db.return_value.__aexit__ = AsyncMock(return_value=False)
+            with TestClient(app) as c:
+                c.app.state.pool = mock_pool
+                if hasattr(c.app.state, "event_bus"):
+                    delattr(c.app.state, "event_bus")
+                response = c.get("/api/v1/tyr/health/detailed")
+        assert response.json()["event_bus_subscriber_count"] == 0

@@ -15,7 +15,7 @@ SESSIONS_URL = f"{BASE_URL}/api/v1/volundr/sessions"
 
 @pytest.fixture
 def adapter() -> VolundrHTTPAdapter:
-    return VolundrHTTPAdapter(base_url=BASE_URL, timeout=5.0)
+    return VolundrHTTPAdapter(base_url=BASE_URL, timeout=5.0, name="test-cluster")
 
 
 # -------------------------------------------------------------------
@@ -84,6 +84,7 @@ class TestSpawnSession:
         assert session.name == "my-session"
         assert session.status == "creating"
         assert session.tracker_issue_id == "ALPHA-1"
+        assert session.cluster_name == "test-cluster"
 
     @pytest.mark.asyncio
     @respx.mock
@@ -421,6 +422,14 @@ class TestConstructor:
         adapter = VolundrHTTPAdapter(base_url="http://example.com", api_key="pat-xyz", timeout=15.0)
         assert adapter._api_key == "pat-xyz"
         assert adapter._timeout == 15.0
+
+    def test_default_name_is_empty(self):
+        adapter = VolundrHTTPAdapter(base_url="http://example.com")
+        assert adapter._name == ""
+
+    def test_custom_name(self):
+        adapter = VolundrHTTPAdapter(base_url="http://example.com", name="production")
+        assert adapter._name == "production"
 
 
 # -------------------------------------------------------------------

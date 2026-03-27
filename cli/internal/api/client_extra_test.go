@@ -338,6 +338,94 @@ func TestPing_ConnectionError(t *testing.T) {
 	}
 }
 
+func TestListChronicles_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.ListChronicles()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestGetTimeline_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetTimeline("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestListModels_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.ListModels()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestGetStats_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetStats()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestListSessions_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.ListSessions()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestGetSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestCreateSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.CreateSession(&SessionCreate{Name: "test"})
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestStartSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	err := c.StartSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestStopSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	err := c.StopSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestDeleteSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	err := c.DeleteSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestGetAuthConfig_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetAuthConfig()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
 func TestDecodeResponse_NonJSONContentType(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")

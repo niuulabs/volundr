@@ -30,12 +30,13 @@ from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
-from tyr.api.dispatch import create_dispatch_router, resolve_volundr
+from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
+from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
 from tyr.api.events import create_events_router, resolve_event_bus
 from tyr.api.health import create_health_router
-from tyr.api.raids import create_raids_router, resolve_git
+from tyr.api.raids import create_raids_router, resolve_git, resolve_raid_repo
 from tyr.api.raids import resolve_tracker as resolve_raids_tracker
 from tyr.api.raids import resolve_volundr as resolve_raids_volundr
 from tyr.api.sagas import create_sagas_router, resolve_llm, resolve_saga_repo
@@ -128,7 +129,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.credential_store = credential_store
 
             # Wire adapter factories (used by autonomous dispatcher)
-            app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
+            app.state.volundr_factory = VolundrAdapterFactory(
+                integration_repo, credential_store, fallback_url=settings.volundr.url
+            )
             app.state.tracker_factory = TrackerAdapterFactory(
                 integration_repo, credential_store, pool=pool
             )
@@ -152,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_saga_repo] = _resolve_saga_repo
             app.dependency_overrides[dispatch_resolve_saga_repo] = _resolve_saga_repo
+            app.dependency_overrides[resolve_raid_repo] = _resolve_saga_repo
 
             # Wire notification subscription repository (Telegram webhook auth)
             notification_sub_repo = PostgresNotificationSubscriptionRepository(pool)
@@ -166,16 +170,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
-            # Wire Volundr adapter
-            volundr_adapter = VolundrHTTPAdapter(settings.volundr.url)
-            app.state.volundr = volundr_adapter
+            # Wire Volundr adapter — per-user resolution via factory,
+            # falling back to the global URL when no per-user connection exists.
+            fallback_volundr = VolundrHTTPAdapter(settings.volundr.url, name="default")
+            app.state.volundr = fallback_volundr
 
-            async def _resolve_volundr() -> VolundrPort:
-                return volundr_adapter
+            async def _resolve_volundr_per_user(
+                principal: Principal = Depends(extract_principal),
+            ) -> VolundrPort:
+                adapter = await app.state.volundr_factory.primary_for_owner(principal.user_id)
+                return adapter or fallback_volundr
 
-            app.dependency_overrides[resolve_volundr] = _resolve_volundr
-            app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr
-            app.dependency_overrides[sagas_resolve_volundr] = _resolve_volundr
+            app.dependency_overrides[resolve_volundr] = _resolve_volundr_per_user
+            app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr_per_user
+            app.dependency_overrides[sagas_resolve_volundr] = _resolve_volundr_per_user
+
+            async def _resolve_factory() -> VolundrAdapterFactory:
+                return app.state.volundr_factory
+
+            app.dependency_overrides[resolve_volundr_factory] = _resolve_factory
 
             # Wire Git adapter
             git_adapter = GitHubGitAdapter(settings.git.token)
@@ -231,7 +244,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Wire event bus (dynamic adapter pattern)
             eb_cfg = settings.event_bus
             eb_cls = import_class(eb_cfg.adapter)
-            eb_kwargs = {"max_clients": settings.events.max_sse_clients, **eb_cfg.kwargs}
+            eb_kwargs = {
+                "max_clients": settings.events.max_sse_clients,
+                "log_size": settings.events.activity_log_size,
+                **eb_cfg.kwargs,
+            }
             event_bus: EventBusPort = eb_cls(**eb_kwargs)
             app.state.event_bus = event_bus
             logger.info("Event bus: %s", eb_cfg.adapter.rsplit(".", 1)[-1])
@@ -240,6 +257,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return event_bus
 
             app.dependency_overrides[resolve_event_bus] = _resolve_event_bus
+            app.dependency_overrides[dispatcher_resolve_event_bus] = _resolve_event_bus
 
             # Wire Telegram reply client (shared httpx.AsyncClient)
             from tyr.adapters.inbound.rest_telegram_webhook import (

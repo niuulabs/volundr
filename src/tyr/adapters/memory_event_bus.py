@@ -8,6 +8,7 @@ events are cached and replayed to new subscribers as an initial snapshot.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 
@@ -22,12 +23,15 @@ class InMemoryEventBus(EventBusPort):
 
     One queue per connected SSE client.  ``emit`` fans out to all queues.
     State-type events are cached and replayed to new clients on subscribe.
+    All emitted events are stored in a fixed-size ring buffer accessible
+    via ``get_log``.
     """
 
-    def __init__(self, max_clients: int = 10) -> None:
+    def __init__(self, max_clients: int = 10, log_size: int = 100) -> None:
         self._max_clients = max_clients
         self._queues: list[asyncio.Queue[TyrEvent]] = []
         self._snapshots: dict[str, TyrEvent] = {}
+        self._log: deque[TyrEvent] = deque(maxlen=log_size)
 
     @property
     def client_count(self) -> int:
@@ -56,13 +60,20 @@ class InMemoryEventBus(EventBusPort):
         """Broadcast an event to every connected client queue.
 
         State-type events (``_SNAPSHOT_TYPES``) are also saved so they can be
-        replayed to new subscribers via ``get_snapshot``.
+        replayed to new subscribers via ``get_snapshot``.  All events are
+        appended to the activity ring buffer.
         """
         if event.event in _SNAPSHOT_TYPES:
             self._snapshots[event.event] = event
+        self._log.append(event)
         for q in list(self._queues):
             await q.put(event)
 
     def get_snapshot(self) -> list[TyrEvent]:
         """Return the current state snapshot for delivery to a new subscriber."""
         return list(self._snapshots.values())
+
+    def get_log(self, n: int) -> list[TyrEvent]:
+        """Return the last *n* events from the ring buffer, oldest-first."""
+        events = list(self._log)
+        return events[-n:] if n < len(events) else events

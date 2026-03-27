@@ -10,7 +10,7 @@ from uuid import UUID
 
 import asyncpg
 
-from tyr.domain.models import Phase, Raid, Saga, SagaStatus
+from tyr.domain.models import Phase, Raid, RaidStatus, Saga, SagaStatus
 from tyr.ports.saga_repository import SagaRepository
 
 
@@ -133,6 +133,13 @@ class PostgresSagaRepository(SagaRepository):
         if row is None:
             return None
         return self._row_to_saga(row)
+
+    async def count_by_status(self) -> dict[str, int]:
+        rows = await self._pool.fetch("SELECT status, COUNT(*) AS cnt FROM raids GROUP BY status")
+        counts: dict[str, int] = {s.value: 0 for s in RaidStatus}
+        for row in rows:
+            counts[row["status"]] = row["cnt"]
+        return counts
 
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         if owner_id is not None:
