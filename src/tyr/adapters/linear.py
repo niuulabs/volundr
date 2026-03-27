@@ -625,7 +625,6 @@ class LinearTrackerAdapter(TrackerPort):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
-        depends_on: list[str] | None = None,
     ) -> Raid:
         if self._pool is None:
             raise RuntimeError("pool is required for update_raid_progress")
@@ -634,8 +633,8 @@ class LinearTrackerAdapter(TrackerPort):
             INSERT INTO raid_progress
                 (tracker_id, status, session_id, confidence, pr_url, pr_id,
                  retry_count, reason, owner_id, phase_tracker_id, saga_tracker_id,
-                 chronicle_summary, depends_on)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                 chronicle_summary)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             ON CONFLICT (tracker_id) DO UPDATE SET
                 status            = COALESCE($2, raid_progress.status),
                 session_id        = COALESCE($3, raid_progress.session_id),
@@ -648,7 +647,6 @@ class LinearTrackerAdapter(TrackerPort):
                 phase_tracker_id  = COALESCE($10, raid_progress.phase_tracker_id),
                 saga_tracker_id   = COALESCE($11, raid_progress.saga_tracker_id),
                 chronicle_summary = COALESCE($12, raid_progress.chronicle_summary),
-                depends_on        = COALESCE($13, raid_progress.depends_on),
                 updated_at        = NOW()
             """,
             tracker_id,
@@ -663,7 +661,6 @@ class LinearTrackerAdapter(TrackerPort):
             phase_tracker_id,
             saga_tracker_id,
             chronicle_summary,
-            depends_on,
         )
         if status is not None:
             try:
@@ -1049,7 +1046,6 @@ class LinearTrackerAdapter(TrackerPort):
             else 0,
             created_at=now,
             updated_at=now,
-            depends_on=list(progress.get("depends_on") or []) if progress else [],
         )
 
 

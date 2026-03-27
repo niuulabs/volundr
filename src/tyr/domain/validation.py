@@ -119,11 +119,6 @@ def validate_raid(
         confidence = 0.5
     confidence = max(0.0, min(1.0, float(confidence)))
 
-    depends_on_raw = data.get("depends_on", [])
-    if not isinstance(depends_on_raw, list):
-        depends_on_raw = []
-    depends_on = [d for d in depends_on_raw if isinstance(d, str) and d.strip()]
-
     return RaidSpec(
         name=raid_name,
         description=description,
@@ -131,7 +126,6 @@ def validate_raid(
         declared_files=files,
         estimate_hours=estimate,
         confidence=confidence,
-        depends_on=depends_on,
     )
 
 

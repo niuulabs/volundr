@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import Raid, RaidStatus, Saga, TrackerIssue
+from tyr.domain.models import RaidStatus, Saga, TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
@@ -158,37 +158,6 @@ def _slugify(text: str) -> str:
     slug = text.lower()
     slug = re.sub(r"[^a-z0-9]+", "-", slug)
     return slug.strip("-")[:40]
-
-
-def _check_dependencies(
-    issue: TrackerIssue,
-    saga: Saga,
-    saga_raid_cache: dict[str, list[Raid]],
-) -> list[str]:
-    """Return the list of unmet dependency names for a raid.
-
-    Looks up the raid's depends_on from cached raid progress for the saga,
-    then checks whether each dependency raid name is in MERGED status.
-    Returns an empty list when all dependencies are satisfied.
-    """
-    saga_raids = saga_raid_cache.get(saga.tracker_id, [])
-    if not saga_raids:
-        return []
-
-    # Find the raid matching this issue by title (Linear) or tracker_id
-    target_raid = next(
-        (r for r in saga_raids if r.tracker_id == issue.id or r.name == issue.title),
-        None,
-    )
-    if target_raid is None:
-        return []
-    if not target_raid.depends_on:
-        return []
-
-    # Build name→status lookup for all raids in the saga
-    merged_names = {r.name for r in saga_raids if r.status == RaidStatus.MERGED}
-
-    return [dep for dep in target_raid.depends_on if dep not in merged_names]
 
 
 def _build_prompt(issue: TrackerIssue, repo: str, feature_branch: str) -> str:
@@ -378,20 +347,6 @@ def create_dispatch_router() -> APIRouter:
                     logger.warning("Failed to fetch issues for saga %s", saga.id, exc_info=True)
                     continue
 
-        # Pre-fetch raid progress per saga for dependency checking
-        saga_raid_cache: dict[str, list] = {}
-        for saga in sagas:
-            for adapter in adapters:
-                try:
-                    saga_raids = await adapter.get_raid_progress_for_saga(saga.tracker_id)
-                    saga_raid_cache[saga.tracker_id] = saga_raids
-                    break
-                except Exception:
-                    logger.debug(
-                        "Adapter %s does not support get_raid_progress_for_saga",
-                        type(adapter).__name__,
-                    )
-
         for item in body.items:
             saga = saga_map.get(item.saga_id)
             if saga is None:
@@ -401,24 +356,6 @@ def create_dispatch_router() -> APIRouter:
             issue = issue_cache.get(item.issue_id)
             if issue is None:
                 logger.warning("Issue not found: %s", item.issue_id)
-                continue
-
-            # Check depends_on: skip raids whose dependencies are not yet merged
-            unmet = _check_dependencies(issue, saga, saga_raid_cache)
-            if unmet:
-                logger.info(
-                    "Skipping %s — unmet dependencies: %s",
-                    issue.identifier,
-                    ", ".join(unmet),
-                )
-                results.append(
-                    DispatchResult(
-                        issue_id=item.issue_id,
-                        session_id="",
-                        session_name="",
-                        status="skipped_dependencies",
-                    )
-                )
                 continue
 
             # Resolve target adapter: per-item > per-request > default

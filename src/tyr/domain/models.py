@@ -133,7 +133,6 @@ class Raid:
     retry_count: int
     created_at: datetime
     updated_at: datetime
-    depends_on: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -250,7 +249,6 @@ class RaidSpec:
     declared_files: list[str]
     estimate_hours: float
     confidence: float
-    depends_on: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

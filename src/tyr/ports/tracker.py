@@ -100,7 +100,6 @@ class TrackerPort(ABC):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
-        depends_on: list[str] | None = None,
     ) -> Raid: ...
 
     @abstractmethod

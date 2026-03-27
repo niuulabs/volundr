@@ -133,7 +133,6 @@ class RaidSpecRequest(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)
     declared_files: list[str] = Field(default_factory=list)
     estimate_hours: float = 0.0
-    depends_on: list[str] = Field(default_factory=list)
 
 
 class PhaseSpecRequest(BaseModel):
@@ -719,7 +718,6 @@ def create_sagas_router() -> APIRouter:
                     retry_count=0,
                     created_at=now,
                     updated_at=now,
-                    depends_on=raid_spec.depends_on,
                 )
 
                 try:

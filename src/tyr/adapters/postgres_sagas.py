@@ -51,9 +51,8 @@ class PostgresSagaRepository(SagaRepository):
             INSERT INTO raids
                 (id, phase_id, tracker_id, name, description, acceptance_criteria,
                  declared_files, estimate_hours, status, confidence, session_id,
-                 branch, chronicle_summary, retry_count, created_at, updated_at,
-                 depends_on)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                 branch, chronicle_summary, retry_count, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (id) DO NOTHING
             """,
             raid.id,
@@ -72,7 +71,6 @@ class PostgresSagaRepository(SagaRepository):
             raid.retry_count,
             raid.created_at,
             raid.updated_at,
-            raid.depends_on,
         )
 
     async def save_saga(self, saga: Saga, *, conn: Any | None = None) -> None:

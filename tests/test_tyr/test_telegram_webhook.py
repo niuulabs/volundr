@@ -180,7 +180,6 @@ class StubTracker(TrackerPort):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
-        depends_on: list[str] | None = None,
     ) -> Raid:
         raid = self._tracker_id_map.get(tracker_id)
         if raid is None:
