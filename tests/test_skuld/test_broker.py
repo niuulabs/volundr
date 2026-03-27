@@ -633,8 +633,6 @@ class TestReportUsage:
     @pytest.mark.asyncio
     async def test_get_http_client_uses_volundr_api_token(self, tmp_path, monkeypatch):
         """HTTP client uses VOLUNDR_API_TOKEN env var when set."""
-        import os
-
         monkeypatch.setenv("VOLUNDR_API_TOKEN", "test-pat-token")
         settings = SkuldSettings(
             session={"id": "s1", "workspace_dir": str(tmp_path)},
