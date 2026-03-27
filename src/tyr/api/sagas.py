@@ -133,6 +133,7 @@ class RaidSpecRequest(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)
     declared_files: list[str] = Field(default_factory=list)
     estimate_hours: float = 0.0
+    depends_on: list[str] = Field(default_factory=list)
 
 
 class PhaseSpecRequest(BaseModel):
@@ -648,13 +649,18 @@ def create_sagas_router() -> APIRouter:
             owner_id=principal.user_id,
         )
 
-        # 1. Create saga in tracker (best-effort — logged on failure)
+        # 1. Create saga in tracker — this MUST succeed or we abort
         tracker_type = type(tracker).__name__
         try:
             tracker_saga_id = await tracker.create_saga(saga)
-        except Exception:
-            logger.warning("Tracker create_saga failed for slug=%s", body.slug, exc_info=True)
-            tracker_saga_id = ""
+        except Exception as exc:
+            logger.error(
+                "Tracker create_saga failed for slug=%s", body.slug, exc_info=True
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to create project in tracker: {exc}",
+            )
         saga = replace(saga, tracker_id=tracker_saga_id, tracker_type=tracker_type)
 
         # 2. Build all phases and raids, creating tracker entities along the way
@@ -678,11 +684,14 @@ def create_sagas_router() -> APIRouter:
 
             try:
                 tracker_phase_id = await tracker.create_phase(phase)
-            except Exception:
-                logger.warning(
+            except Exception as exc:
+                logger.error(
                     "Tracker create_phase failed for phase=%s", phase_spec.name, exc_info=True
                 )
-                tracker_phase_id = ""
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Failed to create phase '{phase_spec.name}' in tracker: {exc}",
+                )
             phase = replace(phase, tracker_id=tracker_phase_id)
             phases.append(phase)
 
@@ -713,11 +722,14 @@ def create_sagas_router() -> APIRouter:
 
                 try:
                     tracker_raid_id = await tracker.create_raid(raid)
-                except Exception:
-                    logger.warning(
+                except Exception as exc:
+                    logger.error(
                         "Tracker create_raid failed for raid=%s", raid_spec.name, exc_info=True
                     )
-                    tracker_raid_id = ""
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Failed to create raid '{raid_spec.name}' in tracker: {exc}",
+                    )
                 raid = replace(raid, tracker_id=tracker_raid_id)
                 raids.append(raid)
 
