@@ -321,27 +321,24 @@ def create_sagas_router() -> APIRouter:
                 detail=f"Saga not found: {saga_id}",
             )
 
-        # Fetch project + milestones + issues in a single call
+        # Fetch project + milestones + issues from tracker (if linked)
         project = None
         milestones = []
         issues = []
-        for adapter in adapters:
-            try:
-                if hasattr(adapter, "get_project_full"):
-                    project, milestones, issues = await adapter.get_project_full(saga.tracker_id)
-                else:
-                    project = await adapter.get_project(saga.tracker_id)
-                    milestones = await adapter.list_milestones(saga.tracker_id)
-                    issues = await adapter.list_issues(saga.tracker_id)
-                break
-            except Exception:
-                continue
-
-        if project is None:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Could not fetch project from tracker",
-            )
+        if saga.tracker_id:
+            for adapter in adapters:
+                try:
+                    if hasattr(adapter, "get_project_full"):
+                        project, milestones, issues = await adapter.get_project_full(
+                            saga.tracker_id
+                        )
+                    else:
+                        project = await adapter.get_project(saga.tracker_id)
+                        milestones = await adapter.list_milestones(saga.tracker_id)
+                        issues = await adapter.list_issues(saga.tracker_id)
+                    break
+                except Exception:
+                    continue
 
         # Group issues by milestone
         issues_by_milestone: dict[str | None, list] = {}
@@ -398,13 +395,13 @@ def create_sagas_router() -> APIRouter:
             tracker_id=saga.tracker_id,
             tracker_type=saga.tracker_type,
             slug=saga.slug,
-            name=project.name,
-            description=project.description,
+            name=project.name if project else saga.name,
+            description=project.description if project else "",
             repos=saga.repos,
             feature_branch=saga.feature_branch,
-            status=project.status,
-            progress=project.progress,
-            url=project.url,
+            status=project.status if project else "planned",
+            progress=project.progress if project else 0.0,
+            url=project.url if project else "",
             phases=phase_responses,
         )
 
@@ -711,6 +708,7 @@ def create_sagas_router() -> APIRouter:
                     retry_count=0,
                     created_at=now,
                     updated_at=now,
+                    depends_on=raid_spec.depends_on,
                 )
 
                 try:
