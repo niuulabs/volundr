@@ -270,16 +270,16 @@ func TestStackStatus(t *testing.T) {
 	}
 }
 
-func TestImageOrDefault_NonEmpty(t *testing.T) {
-	got := imageOrDefault("myimage:latest", "default:latest")
-	if got != "myimage:latest" {
-		t.Errorf("expected 'myimage:latest', got %q", got)
+func TestImageOrDefault_UsesImageWhenSet(t *testing.T) {
+	result := imageOrDefault("custom/image:latest", "default/image:latest")
+	if result != "custom/image:latest" {
+		t.Errorf("expected custom/image:latest, got %q", result)
 	}
 }
 
-func TestImageOrDefault_Empty(t *testing.T) {
-	got := imageOrDefault("", "default:latest")
-	if got != "default:latest" {
-		t.Errorf("expected 'default:latest', got %q", got)
+func TestImageOrDefault_UsesDefaultWhenEmpty(t *testing.T) {
+	result := imageOrDefault("", "default/image:latest")
+	if result != "default/image:latest" {
+		t.Errorf("expected default/image:latest, got %q", result)
 	}
 }

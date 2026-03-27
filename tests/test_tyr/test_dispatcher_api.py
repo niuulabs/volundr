@@ -13,12 +13,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.api.dispatcher import (
     create_dispatcher_router,
     resolve_dispatcher_repo,
+    resolve_event_bus,
 )
 from tyr.domain.models import DispatcherState
 from tyr.ports.dispatcher_repository import DispatcherRepository
+from tyr.ports.event_bus import TyrEvent
 
 # -------------------------------------------------------------------
 # In-memory mock
@@ -81,10 +84,16 @@ def mock_repo() -> MockDispatcherRepo:
 
 
 @pytest.fixture
-def client(mock_repo: MockDispatcherRepo) -> TestClient:
+def event_bus() -> InMemoryEventBus:
+    return InMemoryEventBus(max_clients=5, log_size=100)
+
+
+@pytest.fixture
+def client(mock_repo: MockDispatcherRepo, event_bus: InMemoryEventBus) -> TestClient:
     app = FastAPI()
     app.include_router(create_dispatcher_router())
     app.dependency_overrides[resolve_dispatcher_repo] = lambda: mock_repo
+    app.dependency_overrides[resolve_event_bus] = lambda: event_bus
     return TestClient(app)
 
 
@@ -384,3 +393,98 @@ class TestPostgresDispatcherRepository:
         sql_arg = pool.fetchrow.call_args[0][0]
         assert "INSERT INTO dispatcher_state" in sql_arg
         assert state.owner_id == "user-x"
+
+
+# -------------------------------------------------------------------
+# GET /api/v1/tyr/dispatcher/log
+# -------------------------------------------------------------------
+
+
+class TestGetActivityLog:
+    def test_returns_empty_log_when_no_events(self, client: TestClient):
+        resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["events"] == []
+        assert data["total"] == 0
+
+    def test_returns_all_emitted_events(self, client: TestClient, event_bus: InMemoryEventBus):
+        import asyncio
+
+        events = [
+            TyrEvent(event="session.spawned", data={"session_id": "s1"}, owner_id="user-1"),
+            TyrEvent(event="raid.state_changed", data={"raid_id": "r1"}, owner_id="user-1"),
+            TyrEvent(event="session.stopped", data={"session_id": "s1"}, owner_id="user-1"),
+        ]
+        for e in events:
+            asyncio.get_event_loop().run_until_complete(event_bus.emit(e))
+
+        resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 3
+        assert len(data["events"]) == 3
+        assert data["events"][0]["event"] == "session.spawned"
+        assert data["events"][1]["event"] == "raid.state_changed"
+        assert data["events"][2]["event"] == "session.stopped"
+
+    def test_n_param_limits_results(self, client: TestClient, event_bus: InMemoryEventBus):
+        import asyncio
+
+        for i in range(10):
+            asyncio.get_event_loop().run_until_complete(
+                event_bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
+            )
+
+        resp = client.get("/api/v1/tyr/dispatcher/log?n=3", headers=_auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 3
+        assert data["events"][-1]["data"]["i"] == 9  # newest last
+
+    def test_event_fields_present_in_response(
+        self, client: TestClient, event_bus: InMemoryEventBus
+    ):
+        import asyncio
+
+        e = TyrEvent(
+            id="fixed-id",
+            event="dispatcher.log",
+            data={"msg": "dispatched"},
+            owner_id="user-1",
+        )
+        asyncio.get_event_loop().run_until_complete(event_bus.emit(e))
+
+        resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
+        assert resp.status_code == 200
+        entry = resp.json()["events"][0]
+        assert entry["id"] == "fixed-id"
+        assert entry["event"] == "dispatcher.log"
+        assert entry["data"] == {"msg": "dispatched"}
+        assert entry["owner_id"] == "user-1"
+        assert "timestamp" in entry
+
+    def test_returns_401_when_no_auth(self, client: TestClient):
+        resp = client.get("/api/v1/tyr/dispatcher/log")
+        assert resp.status_code == 401
+
+    def test_n_param_validates_minimum(self, client: TestClient):
+        resp = client.get("/api/v1/tyr/dispatcher/log?n=0", headers=_auth_headers())
+        assert resp.status_code == 422
+
+    def test_n_param_validates_maximum(self, client: TestClient):
+        resp = client.get("/api/v1/tyr/dispatcher/log?n=1001", headers=_auth_headers())
+        assert resp.status_code == 422
+
+    def test_n_defaults_to_100(self, client: TestClient, event_bus: InMemoryEventBus):
+        import asyncio
+
+        # Emit 50 events — all should be returned with default n=100
+        for i in range(50):
+            asyncio.get_event_loop().run_until_complete(
+                event_bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
+            )
+
+        resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 50

@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
-from tyr.domain.models import Saga, SagaStatus
+from tyr.domain.models import RaidStatus, Saga, SagaStatus
 
 
 @pytest.fixture
@@ -192,7 +192,7 @@ class TestCountByStatus:
     ):
         mock_pool.fetch.return_value = []
         result = await repo.count_by_status()
-        assert set(result.keys()) == {"PENDING", "QUEUED", "RUNNING", "REVIEW", "ESCALATED", "MERGED", "FAILED"}
+        assert set(result.keys()) == {s.value for s in RaidStatus}
         assert all(v == 0 for v in result.values())
 
     @pytest.mark.asyncio

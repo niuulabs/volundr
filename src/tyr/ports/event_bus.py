@@ -12,6 +12,7 @@ import json
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -25,12 +26,14 @@ class TyrEvent:
         owner_id: Tenant/user who owns the resource that triggered this event.
             Empty string when the owner is unknown or the event is global.
         id: Unique event identifier (auto-generated UUID by default).
+        timestamp: UTC timestamp when the event was created.
     """
 
     event: str
     data: dict[str, Any]
     owner_id: str = ""
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_sse(self) -> str:
         """Serialise as SSE wire format (id / event / data / blank line)."""
@@ -59,6 +62,14 @@ class EventBusPort(ABC):
     @abstractmethod
     def get_snapshot(self) -> list[TyrEvent]:
         """Return the current state snapshot for delivery to a new subscriber."""
+
+    @abstractmethod
+    def get_log(self, n: int) -> list[TyrEvent]:
+        """Return the last *n* events from the activity ring buffer.
+
+        The returned list is ordered oldest-first.  If fewer than *n* events
+        have been emitted the full buffer is returned.
+        """
 
     @property
     @abstractmethod
