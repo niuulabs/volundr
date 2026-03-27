@@ -51,6 +51,36 @@ vi.mock('../../adapters', () => ({
   },
 }));
 
+const mockRepos = [
+  {
+    provider: 'github',
+    org: 'niuu',
+    name: 'volundr',
+    clone_url: 'https://github.com/niuu/volundr.git',
+    url: 'https://github.com/niuu/volundr',
+    default_branch: 'main',
+    branches: ['main', 'dev'],
+  },
+  {
+    provider: 'github',
+    org: 'niuu',
+    name: 'frontend',
+    clone_url: 'https://github.com/niuu/frontend.git',
+    url: 'https://github.com/niuu/frontend',
+    default_branch: 'main',
+    branches: ['main'],
+  },
+];
+
+const mockGet = vi.fn(() => Promise.resolve({ github: mockRepos }));
+
+vi.mock('@/modules/shared/api/client', () => ({
+  createApiClient: () => ({
+    get: (...args: unknown[]) => mockGet(...args),
+    post: vi.fn(),
+  }),
+}));
+
 function renderView() {
   return render(
     <MemoryRouter initialEntries={['/tyr/plan']}>
@@ -63,9 +93,16 @@ function renderView() {
   );
 }
 
+async function waitForRepos() {
+  await waitFor(() => {
+    expect(screen.getByRole('combobox', { name: /repository/i })).toBeInTheDocument();
+  });
+}
+
 async function spawnSession(user: ReturnType<typeof userEvent.setup>) {
+  await waitForRepos();
   await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-  await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+  await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
   await user.click(screen.getByRole('button', { name: /start planning session/i }));
   await waitFor(() => {
     expect(screen.getByText('ACTIVE')).toBeInTheDocument();
@@ -76,9 +113,10 @@ describe('PlanSagaView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSkuldMessages.length = 0;
+    mockGet.mockImplementation(() => Promise.resolve({ github: mockRepos }));
   });
 
-  it('renders the initial form', () => {
+  it('renders the initial form with repo dropdown', async () => {
     renderView();
 
     expect(screen.getByText('Plan Saga')).toBeInTheDocument();
@@ -86,6 +124,12 @@ describe('PlanSagaView', () => {
     expect(screen.getByLabelText(/repository/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start planning session/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /one-shot decompose/i })).toBeInTheDocument();
+
+    await waitForRepos();
+    const repoSelect = screen.getByLabelText(/repository/i) as HTMLSelectElement;
+    expect(repoSelect.tagName).toBe('SELECT');
+    expect(screen.getByText('niuu/volundr')).toBeInTheDocument();
+    expect(screen.getByText('niuu/frontend')).toBeInTheDocument();
   });
 
   it('disables buttons when spec or repo is empty', () => {
@@ -103,7 +147,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
 
     const spawnBtn = screen.getByRole('button', { name: /start planning session/i });
     expect(spawnBtn).not.toBeDisabled();
@@ -136,7 +181,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
     await user.click(screen.getByRole('button', { name: /start planning session/i }));
 
     await waitFor(() => {
@@ -151,7 +197,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
     await user.click(screen.getByRole('button', { name: /start planning session/i }));
 
     await waitFor(() => {
@@ -178,7 +225,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
     await user.click(screen.getByRole('button', { name: /start planning session/i }));
 
     await waitFor(() => {
@@ -377,7 +425,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {
@@ -396,7 +445,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {
@@ -411,7 +461,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {
@@ -426,7 +477,8 @@ describe('PlanSagaView', () => {
     renderView();
 
     await user.type(screen.getByLabelText(/specification/i), 'Build auth');
-    await user.type(screen.getByLabelText(/repository/i), 'niuu/volundr');
+    await waitForRepos();
+    await user.selectOptions(screen.getByLabelText(/repository/i), 'niuu/volundr');
     await user.click(screen.getByRole('button', { name: /one-shot decompose/i }));
 
     await waitFor(() => {

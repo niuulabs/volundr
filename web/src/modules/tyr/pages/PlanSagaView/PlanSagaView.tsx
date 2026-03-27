@@ -1,10 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tyrService } from '../../adapters';
+import { createApiClient } from '@/modules/shared/api/client';
 import { SessionChat } from '@/modules/shared/components/SessionChat';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 import type { CommitSagaRequest, ExtractedStructure } from '../../ports/tyr.port';
+import type { RepoInfo } from '../../models';
 import styles from './PlanSagaView.module.css';
+
+const niuuApi = createApiClient('/api/v1/niuu');
 
 interface DetectedStructure {
   name: string;
@@ -31,6 +35,8 @@ function slugify(name: string): string {
 export function PlanSagaView() {
   const [spec, setSpec] = useState('');
   const [repo, setRepo] = useState('');
+  const [availableRepos, setAvailableRepos] = useState<RepoInfo[]>([]);
+  const [reposLoading, setReposLoading] = useState(true);
   const [chatEndpoint, setChatEndpoint] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [spawning, setSpawning] = useState(false);
@@ -39,6 +45,27 @@ export function PlanSagaView() {
   const [detectedStructure, setDetectedStructure] = useState<DetectedStructure | null>(null);
   const lastCheckedMsgId = useRef<string | null>(null);
   const navigate = useNavigate();
+
+  // Fetch available repos on mount
+  useEffect(() => {
+    let cancelled = false;
+    niuuApi
+      .get<Record<string, RepoInfo[]>>('/repos')
+      .then(reposByProvider => {
+        if (cancelled) return;
+        const flat = Object.values(reposByProvider).flat();
+        setAvailableRepos(flat);
+      })
+      .catch(() => {
+        // Repo fetch failed — fall back to text input
+      })
+      .finally(() => {
+        if (!cancelled) setReposLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const skuld = useSkuldChat(chatEndpoint);
 
@@ -148,14 +175,31 @@ export function PlanSagaView() {
           <label className={styles.label} htmlFor="plan-repo">
             Repository
           </label>
-          <input
-            id="plan-repo"
-            type="text"
-            className={styles.input}
-            value={repo}
-            onChange={e => setRepo(e.target.value)}
-            placeholder="org/repo"
-          />
+          {!reposLoading && availableRepos.length > 0 ? (
+            <select
+              id="plan-repo"
+              className={styles.select}
+              value={repo}
+              onChange={e => setRepo(e.target.value)}
+            >
+              <option value="">Select a repository...</option>
+              {availableRepos.map(r => (
+                <option key={r.url} value={`${r.org}/${r.name}`}>
+                  {r.org}/{r.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="plan-repo"
+              type="text"
+              className={styles.input}
+              value={repo}
+              onChange={e => setRepo(e.target.value)}
+              placeholder={reposLoading ? 'Loading repos...' : 'org/repo'}
+              disabled={reposLoading}
+            />
+          )}
 
           <div className={styles.actions}>
             <button
