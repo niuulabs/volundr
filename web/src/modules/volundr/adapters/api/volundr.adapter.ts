@@ -217,6 +217,7 @@ function transformSession(api: ApiSessionResponse): VolundrSession {
     chatEndpoint: api.chat_endpoint ? rewriteOrigin(api.chat_endpoint) : undefined,
     codeEndpoint: api.code_endpoint ? rewriteOrigin(api.code_endpoint) : undefined,
     taskType: api.task_type ?? undefined,
+    activityState: api.activity_state ?? undefined,
     ownerId: api.owner_id ?? undefined,
     tenantId: api.tenant_id ?? undefined,
     trackerIssue: api.tracker_issue_id
@@ -487,6 +488,7 @@ function transformSSESession(payload: SSESessionPayload): VolundrSession {
     chatEndpoint: payload.chat_endpoint ? rewriteOrigin(payload.chat_endpoint) : undefined,
     codeEndpoint: payload.code_endpoint ? rewriteOrigin(payload.code_endpoint) : undefined,
     taskType: payload.task_type ?? undefined,
+    activityState: payload.activity_state ?? undefined,
     ownerId: payload.owner_id ?? undefined,
     tenantId: payload.tenant_id ?? undefined,
     trackerIssue: payload.tracker_issue_id

@@ -43,6 +43,7 @@ export interface ApiSessionResponse {
   pod_name: string | null;
   error: string | null;
   task_type?: string | null;
+  activity_state?: 'active' | 'idle' | 'tool_executing' | null;
   tracker_issue_id?: string | null;
   issue_tracker_url?: string | null;
   owner_id?: string | null;
@@ -260,6 +261,7 @@ export interface SSESessionPayload {
   tracker_issue_id?: string | null;
   issue_tracker_url?: string | null;
   task_type?: string | null;
+  activity_state?: 'active' | 'idle' | 'tool_executing' | null;
   owner_id?: string | null;
   tenant_id?: string | null;
 }
