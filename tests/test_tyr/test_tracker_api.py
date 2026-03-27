@@ -144,6 +144,9 @@ class MockTracker(TrackerPort):
     async def get_blocked_identifiers(self, project_id: str) -> set[str]:
         return getattr(self, "_blocked", set())
 
+    async def get_raid_progress_for_saga(self, saga_tracker_id: str) -> list[Raid]:
+        return []
+
     async def update_raid_progress(self, tracker_id: str, **kwargs: object) -> Raid:  # noqa: ANN003
         now = datetime.now(UTC)
         return Raid(

@@ -98,7 +98,11 @@ class TrackerPort(ABC):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
+        depends_on: list[str] | None = None,
     ) -> Raid: ...
+
+    @abstractmethod
+    async def get_raid_progress_for_saga(self, saga_tracker_id: str) -> list[Raid]: ...
 
     @abstractmethod
     async def get_raid_by_session(self, session_id: str) -> Raid | None: ...

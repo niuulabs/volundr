@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
@@ -133,6 +133,7 @@ class Raid:
     retry_count: int
     created_at: datetime
     updated_at: datetime
+    depends_on: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -249,6 +250,7 @@ class RaidSpec:
     declared_files: list[str]
     estimate_hours: float
     confidence: float
+    depends_on: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

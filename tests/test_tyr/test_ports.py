@@ -32,6 +32,7 @@ class TestTrackerPort:
             "list_milestones",
             "list_issues",
             "update_raid_progress",
+            "get_raid_progress_for_saga",
             "get_raid_by_session",
             "list_raids_by_status",
             "get_raid_by_id",

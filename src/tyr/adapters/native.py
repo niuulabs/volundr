@@ -105,8 +105,9 @@ class NativeTrackerAdapter(TrackerPort):
                 (id, phase_id, tracker_id, name, description,
                  acceptance_criteria, declared_files, estimate_hours,
                  status, confidence, session_id, branch,
-                 chronicle_summary, retry_count, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                 chronicle_summary, retry_count, created_at, updated_at,
+                 depends_on)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             ON CONFLICT (id) DO NOTHING
             """,
             raid.id,
@@ -125,6 +126,7 @@ class NativeTrackerAdapter(TrackerPort):
             raid.retry_count,
             raid.created_at,
             raid.updated_at,
+            raid.depends_on,
         )
         return tracker_id
 
@@ -248,6 +250,7 @@ class NativeTrackerAdapter(TrackerPort):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
+        depends_on: list[str] | None = None,
     ) -> Raid:
         row = await self._pool.fetchrow(
             """
@@ -260,6 +263,7 @@ class NativeTrackerAdapter(TrackerPort):
                 retry_count      = COALESCE($7, retry_count),
                 reason           = COALESCE($8, reason),
                 chronicle_summary = COALESCE($9, chronicle_summary),
+                depends_on       = COALESCE($10, depends_on),
                 updated_at       = NOW()
             WHERE tracker_id = $1
             RETURNING *
@@ -273,10 +277,24 @@ class NativeTrackerAdapter(TrackerPort):
             retry_count,
             reason,
             chronicle_summary,
+            depends_on,
         )
         if row is None:
             raise LookupError(f"Raid not found: {tracker_id}")
         return self._row_to_raid(row)
+
+    async def get_raid_progress_for_saga(self, saga_tracker_id: str) -> list[Raid]:
+        rows = await self._pool.fetch(
+            """
+            SELECT r.* FROM raids r
+            JOIN phases p ON p.id = r.phase_id
+            JOIN sagas s ON s.id = p.saga_id
+            WHERE s.tracker_id = $1
+            ORDER BY r.created_at
+            """,
+            saga_tracker_id,
+        )
+        return [self._row_to_raid(r) for r in rows]
 
     async def get_raid_by_session(self, session_id: str) -> Raid | None:
         row = await self._pool.fetchrow(
@@ -518,6 +536,7 @@ class NativeTrackerAdapter(TrackerPort):
             retry_count=row.get("retry_count", 0) or 0,
             created_at=row["created_at"] or datetime.now(UTC),
             updated_at=row["updated_at"] or datetime.now(UTC),
+            depends_on=list(row.get("depends_on") or []),
         )
 
     async def _saga_row_to_project(self, row: asyncpg.Record) -> TrackerProject:

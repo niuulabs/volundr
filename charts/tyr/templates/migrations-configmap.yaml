@@ -352,4 +352,19 @@ data:
 
     CREATE INDEX IF NOT EXISTS idx_dispatched_sessions_status ON dispatched_sessions(status);
     CREATE INDEX IF NOT EXISTS idx_dispatched_sessions_owner  ON dispatched_sessions(owner_id);
+
+  000017_raid_depends_on.up.sql: |
+    -- Add depends_on column to raid_progress for inter-raid dependency tracking.
+    -- Values are raid names (not IDs) within the same saga.
+
+    ALTER TABLE raid_progress ADD COLUMN IF NOT EXISTS depends_on TEXT[] DEFAULT '{}';
+
+    -- Also add to the raids table used by NativeAdapter.
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS depends_on TEXT[] DEFAULT '{}';
+
+  000017_raid_depends_on.down.sql: |
+    -- Remove depends_on column from raid_progress and raids.
+
+    ALTER TABLE raid_progress DROP COLUMN IF EXISTS depends_on;
+    ALTER TABLE raids DROP COLUMN IF EXISTS depends_on;
 {{- end }}

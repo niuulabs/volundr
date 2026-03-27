@@ -231,9 +231,12 @@ class PlannerConfig(BaseModel):
             'in exactly this format:\n\n```json\n{\n  "name": "Saga Name",\n  "phases": [\n'
             '    {\n      "name": "Phase 1",\n      "raids": [\n        {\n'
             '          "name": "Raid name",\n          "description": "What this raid does",\n'
-            '          "acceptance_criteria": ["criterion 1", "criterion 2"]\n'
+            '          "acceptance_criteria": ["criterion 1", "criterion 2"],\n'
+            '          "depends_on": ["Other raid name"]\n'
             "        }\n      ]\n    }\n  ]\n}\n```\n\n"
-            "Make sure every raid has a clear name, description, and acceptance criteria."
+            "Make sure every raid has a clear name, description, and acceptance criteria. "
+            "The `depends_on` field is optional — use it when a raid must wait for another "
+            "raid (by name) to be merged before it can start."
         ),
         description="Prompt injected when the user clicks Finalize Plan.",
     )

@@ -180,6 +180,7 @@ class StubTracker(TrackerPort):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
+        depends_on: list[str] | None = None,
     ) -> Raid:
         raid = self._tracker_id_map.get(tracker_id)
         if raid is None:
@@ -211,6 +212,9 @@ class StubTracker(TrackerPort):
         self.raids[raid.id] = updated
         self._tracker_id_map[tracker_id] = updated
         return updated
+
+    async def get_raid_progress_for_saga(self, saga_tracker_id: str) -> list[Raid]:
+        return list(self.raids.values())
 
     async def get_raid_by_session(self, session_id: str) -> Raid | None:
         return None

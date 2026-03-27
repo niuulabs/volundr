@@ -91,6 +91,9 @@ class FakeTracker(TrackerPort):
     async def update_raid_progress(self, tracker_id, **kwargs):  # noqa: ANN001, ANN003
         raise NotImplementedError
 
+    async def get_raid_progress_for_saga(self, saga_tracker_id):  # noqa: ANN001
+        return []
+
     async def get_raid_by_session(self, session_id):  # noqa: ANN001
         return None
 
@@ -178,6 +181,9 @@ class BoomTracker(TrackerPort):
 
     async def update_raid_progress(self, tracker_id, **kwargs):  # noqa: ANN001, ANN003
         raise NotImplementedError
+
+    async def get_raid_progress_for_saga(self, saga_tracker_id):  # noqa: ANN001
+        return []
 
     async def get_raid_by_session(self, session_id):  # noqa: ANN001
         return None

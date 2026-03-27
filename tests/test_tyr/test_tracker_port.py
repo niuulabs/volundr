@@ -43,6 +43,7 @@ class TestTrackerPortAbstract:
             "list_milestones",
             "list_issues",
             "update_raid_progress",
+            "get_raid_progress_for_saga",
             "get_raid_by_session",
             "list_raids_by_status",
             "get_raid_by_id",
@@ -157,6 +158,9 @@ class ConcreteTracker(TrackerPort):
 
     async def update_raid_progress(self, tracker_id: str, **kwargs: object) -> Raid:
         return await self.get_raid(tracker_id)
+
+    async def get_raid_progress_for_saga(self, saga_tracker_id: str) -> list[Raid]:
+        return []
 
     async def get_raid_by_session(self, session_id: str) -> Raid | None:
         return None
