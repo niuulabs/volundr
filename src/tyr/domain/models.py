@@ -48,6 +48,7 @@ class ConfidenceEventType(StrEnum):
     PR_CONFLICT = "pr_conflict"
     PR_MERGEABLE = "pr_mergeable"
     MESSAGE_SENT = "message_sent"
+    REVIEWER_SCORE = "reviewer_score"
 
 
 # ---------------------------------------------------------------------------
