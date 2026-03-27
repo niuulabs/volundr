@@ -81,7 +81,11 @@ class LinearGraphQLClient(GraphQLClientPort):
 
                 if "errors" in body:
                     errors = body["errors"]
-                    msg = errors[0].get("message", str(errors))
+                    first = errors[0]
+                    msg = first.get("message", str(errors))
+                    extensions = first.get("extensions", {})
+                    if extensions:
+                        msg += f" (extensions={extensions})"
                     raise GraphQLError(msg)
 
                 return body.get("data", {})
