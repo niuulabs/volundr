@@ -545,6 +545,27 @@
   position: relative;
 }
 
+.reviewCriterionInput {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-1);
+  width: 100%;
+  font-family: var(--font-sans);
+  transition: border-color var(--transition-fast);
+}
+
+.reviewCriterionInput:hover {
+  border-color: var(--color-border-subtle);
+}
+
+.reviewCriterionInput:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
 .reviewCriteria li::before {
   content: '';
   position: absolute;

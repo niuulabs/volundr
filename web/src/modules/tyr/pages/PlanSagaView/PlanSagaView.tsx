@@ -390,13 +390,28 @@ export function PlanSagaView() {
                           });
                         }}
                       />
-                      {raid.acceptance_criteria.length > 0 && (
-                        <ul className={styles.reviewCriteria}>
-                          {raid.acceptance_criteria.map((c, ci) => (
-                            <li key={ci}>{c}</li>
-                          ))}
-                        </ul>
-                      )}
+                      <ul className={styles.reviewCriteria}>
+                        {raid.acceptance_criteria.map((c, ci) => (
+                          <li key={ci}>
+                            <input
+                              className={styles.reviewCriterionInput}
+                              value={c}
+                              onChange={e => {
+                                setDetectedStructure(prev => {
+                                  if (!prev) return prev;
+                                  const phases = [...prev.phases];
+                                  const raids = [...phases[pi].raids];
+                                  const criteria = [...raids[ri].acceptance_criteria];
+                                  criteria[ci] = e.target.value;
+                                  raids[ri] = { ...raids[ri], acceptance_criteria: criteria };
+                                  phases[pi] = { ...phases[pi], raids };
+                                  return { ...prev, phases };
+                                });
+                              }}
+                            />
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   ))}
                 </div>
