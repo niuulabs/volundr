@@ -62,6 +62,8 @@ data:
                                 - {{ . | quote }}
                                 {{- end }}
                               {{- end }}
+                              from_params:
+                                - token
                               remote_jwks:
                                 http_uri:
                                   uri: {{ .Values.envoy.jwt.jwksUri | quote }}
