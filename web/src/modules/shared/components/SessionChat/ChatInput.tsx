@@ -15,6 +15,7 @@ import { useSlashMenu } from './useSlashMenu';
 import { MentionMenu } from './MentionMenu';
 import { MentionPill } from './MentionPill';
 import { useMentionMenu } from './useMentionMenu';
+import { useFileAttachments } from './useFileAttachments';
 import styles from './ChatInput.module.css';
 
 interface Attachment {
@@ -100,6 +101,7 @@ export function ChatInput({
 
   const slashMenu = useSlashMenu(availableCommands as SlashCommand[] | undefined);
   const mentionMenu = useMentionMenu(sessionId, sessionHost, chatEndpoint);
+  const fileAttachments = useFileAttachments();
 
   const hasContent = input.trim().length > 0;
 
@@ -134,11 +136,12 @@ export function ChatInput({
     onSend(fullMessage);
     setInput('');
     setAttachments([]);
+    fileAttachments.clearAttachments();
     // Clear mentions after send
     for (const m of mentionMenu.mentions) {
       mentionMenu.removeMention(m.path);
     }
-  }, [input, disabled, onSend, mentionMenu]);
+  }, [input, disabled, onSend, mentionMenu, fileAttachments]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -223,9 +226,11 @@ export function ChatInput({
       id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     }));
     setAttachments(prev => [...prev, ...newAttachments]);
+    // Also process through fileAttachments hook for image compression/previews
+    fileAttachments.addFiles(files);
     // Reset the input so the same file can be re-attached
     e.target.value = '';
-  }, []);
+  }, [fileAttachments]);
 
   const handleRemoveAttachment = useCallback((id: string) => {
     setAttachments(prev => prev.filter(a => a.id !== id));
@@ -243,25 +248,50 @@ export function ChatInput({
   }, [disabled, isListening, startListening, stopListening]);
 
   return (
-    <div className={cn(styles.wrapper, className)} data-disabled={disabled}>
-      {(attachments.length > 0 || mentionMenu.mentions.length > 0) && (
+    <div
+      className={cn(styles.wrapper, className)}
+      data-disabled={disabled}
+      data-drag-over={fileAttachments.isDragging}
+      onDragOver={fileAttachments.handleDragOver}
+      onDragLeave={fileAttachments.handleDragLeave}
+      onDrop={fileAttachments.handleDrop}
+      onPaste={fileAttachments.handlePaste}
+    >
+      {(attachments.length > 0 || mentionMenu.mentions.length > 0 || fileAttachments.attachments.length > 0) && (
         <div className={styles.attachments}>
           {mentionMenu.mentions.map(entry => (
             <MentionPill key={entry.path} entry={entry} onRemove={mentionMenu.removeMention} />
           ))}
-          {attachments.map(attachment => (
-            <span key={attachment.id} className={styles.attachmentChip}>
-              <span className={styles.attachmentName}>{attachment.name}</span>
-              <button
-                type="button"
-                className={styles.attachmentRemove}
-                onClick={() => handleRemoveAttachment(attachment.id)}
-                aria-label={`Remove ${attachment.name}`}
-              >
-                <X className={styles.attachmentRemoveIcon} />
-              </button>
-            </span>
-          ))}
+          {attachments.map(attachment => {
+            const imagePreview = fileAttachments.attachments.find(
+              fa => fa.name === attachment.name && fa.previewUrl,
+            );
+            return (
+              <span key={attachment.id} className={styles.attachmentChip}>
+                {imagePreview?.previewUrl && (
+                  <img
+                    src={imagePreview.previewUrl}
+                    alt={attachment.name}
+                    className={styles.attachmentThumbnail}
+                  />
+                )}
+                <span className={styles.attachmentName}>{attachment.name}</span>
+                <button
+                  type="button"
+                  className={styles.attachmentRemove}
+                  onClick={() => {
+                    handleRemoveAttachment(attachment.id);
+                    if (imagePreview) {
+                      fileAttachments.removeAttachment(imagePreview.id);
+                    }
+                  }}
+                  aria-label={`Remove ${attachment.name}`}
+                >
+                  <X className={styles.attachmentRemoveIcon} />
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
 

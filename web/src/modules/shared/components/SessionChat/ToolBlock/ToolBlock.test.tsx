@@ -246,6 +246,42 @@ describe('ToolBlock', () => {
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
+  it('sets data-tool-category attribute based on tool name', () => {
+    const { container } = render(<ToolBlock block={bashBlock} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveAttribute('data-tool-category', 'terminal');
+  });
+
+  it('sets file category for Edit tool', () => {
+    const { container } = render(<ToolBlock block={editBlock} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveAttribute('data-tool-category', 'file');
+  });
+
+  it('sets mcp category for mcp prefixed tools', () => {
+    const mcpBlock: ToolUseBlock = {
+      type: 'tool_use',
+      id: 't-mcp',
+      name: 'mcp__linear-server__get_issue',
+      input: { id: 'LIN-123' },
+    };
+    const { container } = render(<ToolBlock block={mcpBlock} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveAttribute('data-tool-category', 'mcp');
+  });
+
+  it('sets default category for unknown tools', () => {
+    const unknownBlock: ToolUseBlock = {
+      type: 'tool_use',
+      id: 't-unknown',
+      name: 'MyCustomTool',
+      input: {},
+    };
+    const { container } = render(<ToolBlock block={unknownBlock} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveAttribute('data-tool-category', 'default');
+  });
+
   it('shows "Show full output" button for long Bash output and expands on click', () => {
     const longOutput = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n');
     const result: ToolResultBlock = {

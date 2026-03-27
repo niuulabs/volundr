@@ -20,3 +20,34 @@ export function getToolLabel(toolName: string): string {
   }
   return toolName;
 }
+
+export type ToolCategory =
+  | 'terminal'
+  | 'file'
+  | 'search'
+  | 'web'
+  | 'agent'
+  | 'task'
+  | 'mcp'
+  | 'default';
+
+const TOOL_CATEGORY_MAP: Record<string, ToolCategory> = {
+  Bash: 'terminal',
+  Read: 'file',
+  Write: 'file',
+  Edit: 'file',
+  Glob: 'search',
+  Grep: 'search',
+  WebSearch: 'web',
+  WebFetch: 'web',
+  Agent: 'agent',
+  TaskCreate: 'task',
+  TaskUpdate: 'task',
+  TodoWrite: 'task',
+};
+
+export function getToolCategory(toolName: string): ToolCategory {
+  if (TOOL_CATEGORY_MAP[toolName]) return TOOL_CATEGORY_MAP[toolName];
+  if (toolName.startsWith('mcp__')) return 'mcp';
+  return 'default';
+}

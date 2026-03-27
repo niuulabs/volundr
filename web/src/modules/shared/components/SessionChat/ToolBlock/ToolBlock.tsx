@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/utils';
 import { ToolIcon } from './ToolIcon';
-import { getToolLabel } from './toolLabels';
+import { getToolLabel, getToolCategory } from './toolLabels';
 import type { ToolUseBlock, ToolResultBlock } from './groupContentBlocks';
 import styles from './ToolBlock.module.css';
 
@@ -188,7 +188,7 @@ export function ToolBlock({ block, result }: ToolBlockProps) {
   const toggle = useCallback(() => setExpanded(prev => !prev), []);
 
   return (
-    <div className={styles.toolBlock}>
+    <div className={styles.toolBlock} data-tool-category={getToolCategory(block.name)}>
       <button type="button" className={styles.toolHeader} onClick={toggle}>
         <ToolIcon toolName={block.name} className={styles.toolIcon} />
         <span className={styles.toolLabel}>{getToolLabel(block.name)}</span>

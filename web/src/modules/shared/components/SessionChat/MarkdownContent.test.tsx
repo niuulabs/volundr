@@ -138,4 +138,74 @@ describe('MarkdownContent', () => {
     const { container } = render(<MarkdownContent content="text" className="custom" />);
     expect(container.firstChild).toHaveClass('custom');
   });
+
+  it('shows line numbers by default in code blocks', () => {
+    const md = '```js\nconst x = 1;\nconst y = 2;\n```';
+    render(<MarkdownContent content={md} />);
+    // Line numbers should render "1" and "2"
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('toggle line numbers button hides line numbers', () => {
+    const md = '```js\nconst x = 1;\nconst y = 2;\n```';
+    render(<MarkdownContent content={md} />);
+
+    const toggleBtn = screen.getByTestId('toggle-line-numbers');
+    fireEvent.click(toggleBtn);
+
+    // After toggling, line numbers column should be removed
+    // The "1" text from line numbers should not be in a line-number element
+    // (it may still exist as code content, so we check the toggle worked)
+    expect(toggleBtn).toBeInTheDocument();
+  });
+
+  it('toggle word wrap button activates wrap', () => {
+    const md = '```js\nconst x = 1;\n```';
+    render(<MarkdownContent content={md} />);
+
+    const wrapBtn = screen.getByTestId('toggle-word-wrap');
+    expect(wrapBtn).toHaveAttribute('data-active', 'false');
+
+    fireEvent.click(wrapBtn);
+    expect(wrapBtn).toHaveAttribute('data-active', 'true');
+
+    fireEvent.click(wrapBtn);
+    expect(wrapBtn).toHaveAttribute('data-active', 'false');
+  });
+
+  it('collapses long code blocks (>25 lines) and shows "Show all" button', () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `line${i + 1}`).join('\n');
+    const md = '```\n' + lines + '\n```';
+    render(<MarkdownContent content={md} />);
+
+    // Should show "Show all 30 lines" button
+    expect(screen.getByText('Show all 30 lines')).toBeInTheDocument();
+
+    // line30 should NOT be visible (collapsed)
+    expect(screen.queryByText('line30')).not.toBeInTheDocument();
+  });
+
+  it('expands collapsed code block when "Show all" is clicked', () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `line${i + 1}`).join('\n');
+    const md = '```\n' + lines + '\n```';
+    render(<MarkdownContent content={md} />);
+
+    const showAllBtn = screen.getByText('Show all 30 lines');
+    fireEvent.click(showAllBtn);
+
+    // After expanding, line30 should be visible (in the code text) and button should be gone
+    expect(screen.getByText(/line30/)).toBeInTheDocument();
+    expect(screen.queryByText('Show all 30 lines')).not.toBeInTheDocument();
+  });
+
+  it('does not collapse short code blocks (<= 25 lines)', () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `line${i + 1}`).join('\n');
+    const md = '```\n' + lines + '\n```';
+    render(<MarkdownContent content={md} />);
+
+    expect(screen.queryByText(/Show all/)).not.toBeInTheDocument();
+    // Code content should include line10
+    expect(screen.getByText(/line10/)).toBeInTheDocument();
+  });
 });

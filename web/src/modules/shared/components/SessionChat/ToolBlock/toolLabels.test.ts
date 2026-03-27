@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getToolLabel } from './toolLabels';
+import { getToolLabel, getToolCategory } from './toolLabels';
 
 describe('getToolLabel', () => {
   it('returns "Terminal" for Bash', () => {
@@ -56,5 +56,63 @@ describe('getToolLabel', () => {
 
   it('returns tool name as-is for unknown non-mcp tools', () => {
     expect(getToolLabel('CustomTool')).toBe('CustomTool');
+  });
+});
+
+describe('getToolCategory', () => {
+  it('returns "terminal" for Bash', () => {
+    expect(getToolCategory('Bash')).toBe('terminal');
+  });
+
+  it('returns "file" for Read', () => {
+    expect(getToolCategory('Read')).toBe('file');
+  });
+
+  it('returns "file" for Write', () => {
+    expect(getToolCategory('Write')).toBe('file');
+  });
+
+  it('returns "file" for Edit', () => {
+    expect(getToolCategory('Edit')).toBe('file');
+  });
+
+  it('returns "search" for Glob', () => {
+    expect(getToolCategory('Glob')).toBe('search');
+  });
+
+  it('returns "search" for Grep', () => {
+    expect(getToolCategory('Grep')).toBe('search');
+  });
+
+  it('returns "web" for WebSearch', () => {
+    expect(getToolCategory('WebSearch')).toBe('web');
+  });
+
+  it('returns "web" for WebFetch', () => {
+    expect(getToolCategory('WebFetch')).toBe('web');
+  });
+
+  it('returns "agent" for Agent', () => {
+    expect(getToolCategory('Agent')).toBe('agent');
+  });
+
+  it('returns "task" for TaskCreate', () => {
+    expect(getToolCategory('TaskCreate')).toBe('task');
+  });
+
+  it('returns "task" for TaskUpdate', () => {
+    expect(getToolCategory('TaskUpdate')).toBe('task');
+  });
+
+  it('returns "task" for TodoWrite', () => {
+    expect(getToolCategory('TodoWrite')).toBe('task');
+  });
+
+  it('returns "mcp" for mcp__ prefixed tools', () => {
+    expect(getToolCategory('mcp__linear-server__get_issue')).toBe('mcp');
+  });
+
+  it('returns "default" for unknown tools', () => {
+    expect(getToolCategory('CustomTool')).toBe('default');
   });
 });

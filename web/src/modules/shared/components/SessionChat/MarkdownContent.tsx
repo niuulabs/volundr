@@ -1,9 +1,11 @@
 import { useCallback, useState, type ComponentPropsWithoutRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, WrapText } from 'lucide-react';
 import { cn } from '@/utils';
 import styles from './MarkdownContent.module.css';
+
+const COLLAPSE_LINE_THRESHOLD = 25;
 
 /* ------------------------------------------------------------------ */
 /*  Code block with copy button                                        */
@@ -16,6 +18,14 @@ interface CodeBlockRendererProps {
 
 function CodeBlockRenderer({ language, code }: CodeBlockRendererProps) {
   const [copied, setCopied] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [wordWrap, setWordWrap] = useState(false);
+  const [showLineNumbers, setShowLineNumbers] = useState(true);
+
+  const lines = code.split('\n');
+  const lineCount = lines.length;
+  const isLong = lineCount > COLLAPSE_LINE_THRESHOLD;
+  const shouldCollapse = isLong && collapsed;
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code).then(() => {
@@ -24,20 +34,64 @@ function CodeBlockRenderer({ language, code }: CodeBlockRendererProps) {
     });
   }, [code]);
 
+  const displayCode = shouldCollapse
+    ? lines.slice(0, COLLAPSE_LINE_THRESHOLD).join('\n')
+    : code;
+
   return (
     <div className={styles.codeBlock}>
       <div className={styles.codeHeader}>
         <span className={styles.codeLang}>{language || 'text'}</span>
-        <button type="button" className={styles.copyBtn} onClick={handleCopy}>
-          {copied ? <Check className={styles.copyIcon} /> : <Copy className={styles.copyIcon} />}
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
+        <div className={styles.codeHeaderActions}>
+          <button
+            type="button"
+            className={styles.codeHeaderBtn}
+            onClick={() => setShowLineNumbers(prev => !prev)}
+            title={showLineNumbers ? 'Hide line numbers' : 'Show line numbers'}
+            data-testid="toggle-line-numbers"
+          >
+            <span className={styles.codeHeaderBtnLabel}>{showLineNumbers ? '#' : '¶'}</span>
+          </button>
+          <button
+            type="button"
+            className={styles.codeHeaderBtn}
+            onClick={() => setWordWrap(prev => !prev)}
+            title={wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
+            data-active={wordWrap}
+            data-testid="toggle-word-wrap"
+          >
+            <WrapText className={styles.copyIcon} />
+          </button>
+          <button type="button" className={styles.copyBtn} onClick={handleCopy}>
+            {copied ? <Check className={styles.copyIcon} /> : <Copy className={styles.copyIcon} />}
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
       </div>
-      <div className={styles.codeContent}>
+      <div className={cn(styles.codeContent, shouldCollapse && styles.codeCollapsed)} data-wrap={wordWrap}>
         <pre>
-          <code>{code}</code>
+          <code className={showLineNumbers ? styles.codeContentGrid : undefined}>
+            {showLineNumbers && (
+              <span className={styles.lineNumbers} aria-hidden="true">
+                {(shouldCollapse ? lines.slice(0, COLLAPSE_LINE_THRESHOLD) : lines).map((_, i) => (
+                  <span key={i}>{i + 1}</span>
+                ))}
+              </span>
+            )}
+            <span>{displayCode}</span>
+          </code>
         </pre>
+        {shouldCollapse && <div className={styles.codeFade} />}
       </div>
+      {shouldCollapse && (
+        <button
+          type="button"
+          className={styles.showAllBtn}
+          onClick={() => setCollapsed(false)}
+        >
+          Show all {lineCount} lines
+        </button>
+      )}
     </div>
   );
 }

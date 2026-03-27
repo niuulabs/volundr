@@ -238,3 +238,110 @@
 .groupItem:last-child {
   border-bottom: none;
 }
+
+/* ── Tool category color-coding ─────────────────────────── */
+
+.toolBlock[data-tool-category='terminal'] .toolIcon,
+.groupBlock[data-tool-category='terminal'] .toolIcon {
+  color: var(--color-tool-terminal);
+}
+
+.toolBlock[data-tool-category='terminal'],
+.groupBlock[data-tool-category='terminal'] {
+  border-color: color-mix(in srgb, var(--color-tool-terminal) 20%, var(--color-border-subtle));
+}
+
+.toolBlock[data-tool-category='terminal'] .toolHeader:hover,
+.groupBlock[data-tool-category='terminal'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-terminal) 8%, transparent);
+}
+
+.toolBlock[data-tool-category='file'] .toolIcon,
+.groupBlock[data-tool-category='file'] .toolIcon {
+  color: var(--color-tool-file);
+}
+
+.toolBlock[data-tool-category='file'],
+.groupBlock[data-tool-category='file'] {
+  border-color: color-mix(in srgb, var(--color-tool-file) 20%, var(--color-border-subtle));
+}
+
+.toolBlock[data-tool-category='file'] .toolHeader:hover,
+.groupBlock[data-tool-category='file'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-file) 8%, transparent);
+}
+
+.toolBlock[data-tool-category='search'] .toolIcon,
+.groupBlock[data-tool-category='search'] .toolIcon {
+  color: var(--color-tool-search);
+}
+
+.toolBlock[data-tool-category='search'],
+.groupBlock[data-tool-category='search'] {
+  border-color: color-mix(in srgb, var(--color-tool-search) 20%, var(--color-border-subtle));
+}
+
+.toolBlock[data-tool-category='search'] .toolHeader:hover,
+.groupBlock[data-tool-category='search'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-search) 8%, transparent);
+}
+
+.toolBlock[data-tool-category='web'] .toolIcon,
+.groupBlock[data-tool-category='web'] .toolIcon {
+  color: var(--color-tool-web);
+}
+
+.toolBlock[data-tool-category='web'],
+.groupBlock[data-tool-category='web'] {
+  border-color: color-mix(in srgb, var(--color-tool-web) 20%, var(--color-border-subtle));
+}
+
+.toolBlock[data-tool-category='web'] .toolHeader:hover,
+.groupBlock[data-tool-category='web'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-web) 8%, transparent);
+}
+
+.toolBlock[data-tool-category='agent'] .toolIcon,
+.groupBlock[data-tool-category='agent'] .toolIcon {
+  color: var(--color-tool-agent);
+}
+
+.toolBlock[data-tool-category='agent'],
+.groupBlock[data-tool-category='agent'] {
+  border-color: color-mix(in srgb, var(--color-tool-agent) 20%, var(--color-border-subtle));
+}
+
+.toolBlock[data-tool-category='agent'] .toolHeader:hover,
+.groupBlock[data-tool-category='agent'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-agent) 8%, transparent);
+}
+
+.toolBlock[data-tool-category='task'] .toolIcon,
+.groupBlock[data-tool-category='task'] .toolIcon {
+  color: var(--color-tool-task);
+}
+
+.toolBlock[data-tool-category='task'],
+.groupBlock[data-tool-category='task'] {
+  border-color: color-mix(in srgb, var(--color-tool-task) 20%, var(--color-border-subtle));
+}
+
+.toolBlock[data-tool-category='task'] .toolHeader:hover,
+.groupBlock[data-tool-category='task'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-task) 8%, transparent);
+}
+
+.toolBlock[data-tool-category='mcp'] .toolIcon,
+.groupBlock[data-tool-category='mcp'] .toolIcon {
+  color: var(--color-tool-mcp);
+}
+
+.toolBlock[data-tool-category='mcp'],
+.groupBlock[data-tool-category='mcp'] {
+  border-color: color-mix(in srgb, var(--color-tool-mcp) 20%, var(--color-border-subtle));
+}
+
+.toolBlock[data-tool-category='mcp'] .toolHeader:hover,
+.groupBlock[data-tool-category='mcp'] .groupHeader:hover {
+  background-color: color-mix(in srgb, var(--color-tool-mcp) 8%, transparent);
+}

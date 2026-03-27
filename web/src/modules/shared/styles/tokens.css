@@ -29,6 +29,16 @@
   --color-accent-yellow: #eab308;
   --color-accent-blue: #3b82f6;
 
+  /* Tool category colors — overridable per-theme */
+  --color-tool-terminal: var(--color-accent-amber);
+  --color-tool-file: var(--color-accent-indigo);
+  --color-tool-search: var(--color-accent-emerald);
+  --color-tool-web: var(--color-accent-cyan);
+  --color-tool-agent: var(--color-accent-purple);
+  --color-tool-task: var(--color-accent-orange);
+  --color-tool-mcp: var(--color-accent-blue);
+  --color-tool-default: var(--color-brand);
+
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;

@@ -11,6 +11,7 @@ import {
   Loader2,
   Terminal,
   Paperclip,
+  Bookmark,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { MarkdownContent } from './MarkdownContent';
@@ -123,6 +124,7 @@ export function AssistantMessage({ message, onCopy, onRegenerate }: AssistantMes
   const [copied, setCopied] = useState(false);
   const [thumbState, setThumbState] = useState<'up' | 'down' | null>(null);
   const [reasoningOpen, setReasoningOpen] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
 
   const reasoningParts = (message.parts?.filter(p => p.type === 'reasoning') ?? []) as Array<{
     readonly type: 'reasoning';
@@ -155,6 +157,10 @@ export function AssistantMessage({ message, onCopy, onRegenerate }: AssistantMes
 
   const handleThumbDown = useCallback(() => {
     setThumbState(prev => (prev === 'down' ? null : 'down'));
+  }, []);
+
+  const handleBookmark = useCallback(() => {
+    setBookmarked(prev => !prev);
   }, []);
 
   return (
@@ -257,6 +263,18 @@ export function AssistantMessage({ message, onCopy, onRegenerate }: AssistantMes
             title="Not helpful"
           >
             <ThumbsDown className={styles.actionIcon} />
+          </button>
+
+          <div className={styles.actionDivider} />
+
+          <button
+            type="button"
+            className={styles.actionBtn}
+            data-active={bookmarked}
+            onClick={handleBookmark}
+            title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+          >
+            <Bookmark className={styles.actionIcon} />
           </button>
         </div>
       </div>
