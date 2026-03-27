@@ -111,23 +111,31 @@ export function SessionChat({
     return () => el.removeEventListener('scroll', handleScroll);
   }, [hasConversation]);
 
-  // Auto-scroll only when near bottom or user just sent a message
+  // Auto-scroll only on new messages or user send — never on DOM resize
   useEffect(() => {
     const messageCount = visibleMessages.length;
     const countDelta = messageCount - prevMessageCountRef.current;
     prevMessageCountRef.current = messageCount;
 
-    if (userSentRef.current || isNearBottomRef.current) {
+    // User just sent a message — always scroll
+    if (userSentRef.current) {
       userSentRef.current = false;
       messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
       return;
     }
 
-    // User is scrolled up — don't scroll, show count of new messages
-    if (countDelta > 0) {
-      setNewMessageCount(prev => prev + countDelta);
+    // No new messages — don't scroll (prevents scroll on code block expand)
+    if (countDelta === 0) return;
+
+    // New messages arrived while near bottom — auto-scroll
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
+      return;
     }
-  }, [messages, isRunning, visibleMessages.length]);
+
+    // User is scrolled up — show count of new messages
+    setNewMessageCount(prev => prev + countDelta);
+  }, [visibleMessages.length]);
 
   const handlePermissionRespond = useCallback(
     (requestId: string, behavior: PermissionBehavior) => {
