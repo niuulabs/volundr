@@ -7,11 +7,19 @@ import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 import { RepoSelector } from '../../components/RepoSelector';
 import { useRepos } from '../../hooks';
 import type { CommitSagaRequest, ExtractedStructure } from '../../ports/tyr.port';
-import type { VolundrSession } from '@/modules/volundr/models';
 import { createApiClient } from '@/modules/shared/api/client';
 import styles from './PlanSagaView.module.css';
 
 const volundrApi = createApiClient('/api/v1/volundr');
+
+interface PlanSession {
+  id: string;
+  name: string;
+  model: string;
+  status: string;
+  chat_endpoint: string | null;
+  task_type: string | null;
+}
 
 interface DetectedStructure {
   name: string;
@@ -39,7 +47,7 @@ export function PlanSagaView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSessionId = searchParams.get('session');
 
-  const [sessions, setSessions] = useState<VolundrSession[]>([]);
+  const [sessions, setSessions] = useState<PlanSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [spec, setSpec] = useState('');
@@ -57,11 +65,11 @@ export function PlanSagaView() {
   useEffect(() => {
     let cancelled = false;
     volundrApi
-      .get<VolundrSession[]>('/sessions')
+      .get<PlanSession[]>('/sessions')
       .then(all => {
         if (cancelled) return;
         const planners = all.filter(
-          (s: VolundrSession) => s.taskType === 'planner' || s.name?.startsWith('plan-')
+          (s: PlanSession) => s.task_type === 'planner' || s.name?.startsWith('plan-')
         );
         setSessions(planners);
 
@@ -81,7 +89,7 @@ export function PlanSagaView() {
 
   // Resolve chat endpoint for active session
   const activeSession = sessions.find(s => s.id === activeSessionId);
-  const chatEndpoint = activeSession?.chatEndpoint ?? null;
+  const chatEndpoint = activeSession?.chat_endpoint ?? null;
 
   const skuld = useSkuldChat(chatEndpoint);
 
@@ -118,9 +126,9 @@ export function PlanSagaView() {
       setSearchParams({ session: result.session_id }, { replace: true });
 
       // Refresh session list
-      const all = await volundrApi.get<VolundrSession[]>('/sessions');
+      const all = await volundrApi.get<PlanSession[]>('/sessions');
       setSessions(
-        all.filter((s: VolundrSession) => s.taskType === 'planner' || s.name?.startsWith('plan-'))
+        all.filter((s: PlanSession) => s.task_type === 'planner' || s.name?.startsWith('plan-'))
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start planning session');
