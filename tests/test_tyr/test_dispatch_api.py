@@ -13,13 +13,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from niuu.domain.models import IntegrationConnection, IntegrationType
 from tyr.api.dispatch import (
     _build_prompt,
     _is_ready,
+    _resolve_target_adapter,
     _slugify,
     create_dispatch_router,
     resolve_saga_repo,
     resolve_volundr,
+    resolve_volundr_factory,
 )
 from tyr.api.tracker import resolve_trackers
 from tyr.config import AIModelConfig, AuthConfig, Settings
@@ -116,6 +119,23 @@ class MockVolundr(VolundrPort):
     async def subscribe_activity(self):
         return
         yield  # type: ignore[misc]  # pragma: no cover
+
+
+class MockVolundrFactory:
+    """Stub VolundrFactory that returns a configurable list of adapters."""
+
+    def __init__(self, adapters: list[VolundrPort] | None = None) -> None:
+        self._adapters = adapters or []
+
+    async def for_owner(self, owner_id: str) -> list[VolundrPort]:
+        if self._adapters:
+            return self._adapters
+        return [MockVolundr()]
+
+    async def primary_for_owner(self, owner_id: str) -> VolundrPort | None:
+        if self._adapters:
+            return self._adapters[0]
+        return None
 
 
 # -------------------------------------------------------------------
@@ -232,10 +252,16 @@ def saga_repo() -> MockSagaRepo:
 
 
 @pytest.fixture
+def mock_factory() -> MockVolundrFactory:
+    return MockVolundrFactory()
+
+
+@pytest.fixture
 def client(
     mock_tracker: MockTracker,
     mock_volundr: MockVolundr,
     saga_repo: MockSagaRepo,
+    mock_factory: MockVolundrFactory,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(create_dispatch_router())
@@ -243,6 +269,7 @@ def client(
     app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
     app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+    app.dependency_overrides[resolve_volundr_factory] = lambda: mock_factory
     return TestClient(app)
 
 
@@ -425,6 +452,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -446,6 +474,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -465,6 +494,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -483,6 +513,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         resp = client.get(
@@ -519,6 +550,7 @@ class TestGetQueue:
         app.dependency_overrides[resolve_trackers] = lambda: [FailingTracker()]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -645,6 +677,7 @@ class TestApproveDispatch:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -678,6 +711,7 @@ class TestApproveDispatch:
         app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -725,3 +759,188 @@ class TestApproveDispatch:
         assert len(data) == 2
         assert all(d["status"] == "spawned" for d in data)
         assert len(mock_volundr.spawned) == 2
+
+    def test_connection_id_on_request(
+        self,
+        client: TestClient,
+        saga_repo: MockSagaRepo,
+        mock_volundr: MockVolundr,
+    ):
+        """connection_id at request level is accepted and doesn't break dispatch."""
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {"saga_id": saga_id, "issue_id": "i-1", "repo": "org/repo-a"},
+                ],
+                "connection_id": "some-cluster",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["status"] == "spawned"
+
+    def test_connection_id_on_item(
+        self,
+        client: TestClient,
+        saga_repo: MockSagaRepo,
+        mock_volundr: MockVolundr,
+    ):
+        """Per-item connection_id is accepted and doesn't break dispatch."""
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {
+                        "saga_id": saga_id,
+                        "issue_id": "i-1",
+                        "repo": "org/repo-a",
+                        "connection_id": "cluster-a",
+                    },
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["status"] == "spawned"
+
+
+# -------------------------------------------------------------------
+# Unit tests: _resolve_target_adapter
+# -------------------------------------------------------------------
+
+
+class TestResolveTargetAdapter:
+    def test_no_connection_id_returns_fallback(self):
+        fallback = MockVolundr()
+        result = _resolve_target_adapter(None, {}, fallback)
+        assert result is fallback
+
+    def test_empty_connection_id_returns_fallback(self):
+        fallback = MockVolundr()
+        result = _resolve_target_adapter("", {}, fallback)
+        assert result is fallback
+
+    def test_matching_connection_id_returns_adapter(self):
+        fallback = MockVolundr()
+        target = MockVolundr()
+        adapters = {"cluster-a": target}
+        result = _resolve_target_adapter("cluster-a", adapters, fallback)
+        assert result is target
+
+    def test_unknown_connection_id_returns_fallback(self):
+        fallback = MockVolundr()
+        target = MockVolundr()
+        adapters = {"cluster-a": target}
+        result = _resolve_target_adapter("cluster-b", adapters, fallback)
+        assert result is fallback
+
+
+# -------------------------------------------------------------------
+# API endpoint tests: clusters
+# -------------------------------------------------------------------
+
+
+class TestListClusters:
+    def test_returns_empty_when_no_integration_repo(self):
+        app = FastAPI()
+        app.include_router(create_dispatch_router())
+        app.state.settings = _make_settings()
+        app.dependency_overrides[resolve_trackers] = lambda: []
+        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
+        app.dependency_overrides[resolve_volundr] = lambda: MockVolundr()
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        client = TestClient(app)
+
+        resp = client.get("/api/v1/tyr/dispatch/clusters")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_returns_clusters_from_code_forge_connections(self):
+        from tests.test_tyr.conftest import StubIntegrationRepo
+
+        now = datetime.now(UTC)
+        connections = [
+            IntegrationConnection(
+                id="conn-1",
+                owner_id="default",
+                integration_type=IntegrationType.CODE_FORGE,
+                adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
+                credential_name="pat-a",
+                config={"url": "http://cluster-a:8000", "name": "alpha"},
+                enabled=True,
+                created_at=now,
+                updated_at=now,
+            ),
+            IntegrationConnection(
+                id="conn-2",
+                owner_id="default",
+                integration_type=IntegrationType.CODE_FORGE,
+                adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
+                credential_name="pat-b",
+                config={"url": "http://cluster-b:8000", "name": "beta"},
+                enabled=False,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        integration_repo = StubIntegrationRepo(connections=connections)
+
+        app = FastAPI()
+        app.include_router(create_dispatch_router())
+        app.state.settings = _make_settings()
+        app.state.integration_repo = integration_repo
+        app.dependency_overrides[resolve_trackers] = lambda: []
+        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
+        app.dependency_overrides[resolve_volundr] = lambda: MockVolundr()
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        client = TestClient(app)
+
+        resp = client.get("/api/v1/tyr/dispatch/clusters")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+        assert data[0]["connection_id"] == "conn-1"
+        assert data[0]["name"] == "alpha"
+        assert data[0]["url"] == "http://cluster-a:8000"
+        assert data[0]["enabled"] is True
+        assert data[1]["connection_id"] == "conn-2"
+        assert data[1]["name"] == "beta"
+        assert data[1]["enabled"] is False
+
+    def test_cluster_name_falls_back_to_id(self):
+        from tests.test_tyr.conftest import StubIntegrationRepo
+
+        now = datetime.now(UTC)
+        connections = [
+            IntegrationConnection(
+                id="conn-x",
+                owner_id="default",
+                integration_type=IntegrationType.CODE_FORGE,
+                adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
+                credential_name="pat-x",
+                config={"url": "http://cluster-x:8000"},
+                enabled=True,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+        integration_repo = StubIntegrationRepo(connections=connections)
+
+        app = FastAPI()
+        app.include_router(create_dispatch_router())
+        app.state.settings = _make_settings()
+        app.state.integration_repo = integration_repo
+        app.dependency_overrides[resolve_trackers] = lambda: []
+        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
+        app.dependency_overrides[resolve_volundr] = lambda: MockVolundr()
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        client = TestClient(app)
+
+        resp = client.get("/api/v1/tyr/dispatch/clusters")
+        data = resp.json()
+        assert data[0]["name"] == "conn-x"

@@ -102,13 +102,14 @@ def configure_logging(config: LoggingConfig | None = None) -> None:
     else:
         fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-    # Configure root logger
+    # Configure root logger — set level directly to avoid uvicorn overriding
     logging.basicConfig(
         level=level,
         format=fmt,
         stream=sys.stderr,
-        force=True,  # Override any existing configuration
+        force=True,
     )
+    logging.getLogger().setLevel(level)
 
     logging.getLogger(__name__).info(
         "Logging configured: level=%s, format=%s",

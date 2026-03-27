@@ -6,6 +6,11 @@ completion signals, and transitions raids accordingly.
 Uses VolundrAdapterFactory to resolve per-owner authenticated adapters —
 each user's PAT (from their IntegrationConnection) authenticates the SSE
 subscription to their Volundr instance.
+
+When a ReviewEngine is provided, the subscriber also detects reviewer session
+completion. If an idle session is not associated with a RUNNING raid, the
+subscriber checks whether it is a tracked reviewer session and, if so, fetches
+the chronicle summary and delegates to ReviewEngine.handle_reviewer_completion.
 """
 
 from __future__ import annotations
@@ -13,22 +18,19 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING
 
 from tyr.config import WatcherConfig
 from tyr.domain.models import Raid, RaidStatus
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-exported for consumers
-from tyr.ports.volundr import ActivityEvent, VolundrPort
+from tyr.ports.volundr import ActivityEvent, VolundrFactory, VolundrPort
+
+if TYPE_CHECKING:
+    from tyr.domain.services.review_engine import ReviewEngine
 
 logger = logging.getLogger(__name__)
-
-
-class VolundrFactory(Protocol):
-    """Protocol for resolving per-owner Volundr adapters."""
-
-    async def for_owner(self, owner_id: str) -> VolundrPort | None: ...
 
 
 @dataclass(frozen=True)
@@ -57,18 +59,20 @@ class SessionActivitySubscriber:
         dispatcher_repo: DispatcherRepository,
         event_bus: EventBusPort,
         config: WatcherConfig,
+        review_engine: ReviewEngine | None = None,
     ) -> None:
         self._factory = volundr_factory
         self._tracker_factory = tracker_factory
         self._dispatcher_repo = dispatcher_repo
         self._event_bus = event_bus
         self._config = config
+        self._review_engine = review_engine
         self._running = False
         self._task: asyncio.Task[None] | None = None
-        self._owner_tasks: dict[str, asyncio.Task[None]] = {}
+        self._owner_tasks: dict[str, list[asyncio.Task[None]]] = {}
         self._pending_evaluations: dict[str, asyncio.Task[None]] = {}
         # Cache per-owner adapters so we don't re-resolve on every cycle
-        self._owner_adapters: dict[str, VolundrPort] = {}
+        self._owner_adapters: dict[str, list[VolundrPort]] = {}
 
     @property
     def running(self) -> bool:
@@ -93,8 +97,9 @@ class SessionActivitySubscriber:
         for task in self._pending_evaluations.values():
             task.cancel()
         self._pending_evaluations.clear()
-        for task in self._owner_tasks.values():
-            task.cancel()
+        for tasks in self._owner_tasks.values():
+            for task in tasks:
+                task.cancel()
         self._owner_tasks.clear()
         self._owner_adapters.clear()
         if self._task is not None:
@@ -119,44 +124,54 @@ class SessionActivitySubscriber:
                 await asyncio.sleep(self._config.reconnect_delay)
 
     async def _sync_owner_subscriptions(self) -> None:
-        """Discover owners with active dispatchers, ensure each has an SSE sub."""
+        """Discover owners with active dispatchers, ensure each has SSE subs."""
         active_owners = set(await self._dispatcher_repo.list_active_owner_ids())
+        logger.info(
+            "Sync: active_owners=%s, existing_tasks=%s",
+            active_owners,
+            {
+                k: [("running" if not t.done() else "done") for t in v]
+                for k, v in self._owner_tasks.items()
+            },
+        )
 
         if not active_owners:
-            for owner_id, task in list(self._owner_tasks.items()):
-                task.cancel()
+            for owner_id, tasks in list(self._owner_tasks.items()):
+                for task in tasks:
+                    task.cancel()
             self._owner_tasks.clear()
             self._owner_adapters.clear()
             await asyncio.sleep(self._config.reconnect_delay)
             return
 
-        # Start subscriptions for new owners
+        # Start subscriptions for new owners (one task per cluster)
         for owner_id in active_owners:
-            if owner_id not in self._owner_tasks or self._owner_tasks[owner_id].done():
-                task = asyncio.create_task(
-                    self._owner_subscription_loop(owner_id),
-                    name=f"sse-{owner_id[:8]}",
-                )
-                self._owner_tasks[owner_id] = task
+            existing = self._owner_tasks.get(owner_id, [])
+            all_done = not existing or all(t.done() for t in existing)
+            if all_done:
+                adapters = await self._resolve_owner_adapters(owner_id)
+                tasks = []
+                for idx, adapter in enumerate(adapters):
+                    task = asyncio.create_task(
+                        self._adapter_subscription_loop(owner_id, adapter),
+                        name=f"sse-{owner_id[:8]}-{idx}",
+                    )
+                    tasks.append(task)
+                self._owner_tasks[owner_id] = tasks
 
         # Cancel subscriptions for owners with no more active dispatchers
         for owner_id in list(self._owner_tasks):
             if owner_id not in active_owners:
-                self._owner_tasks.pop(owner_id).cancel()
+                for task in self._owner_tasks.pop(owner_id):
+                    task.cancel()
                 self._owner_adapters.pop(owner_id, None)
 
         # Wait before re-syncing
         await asyncio.sleep(self._config.reconnect_delay)
 
-    async def _owner_subscription_loop(self, owner_id: str) -> None:
-        """Maintain an SSE subscription for a single owner."""
+    async def _adapter_subscription_loop(self, owner_id: str, volundr: VolundrPort) -> None:
+        """Maintain an SSE subscription for a single owner-cluster pair."""
         while self._running:
-            volundr = await self._resolve_owner_adapter(owner_id)
-            if volundr is None:
-                logger.warning("No Volundr connection for owner %s, retrying", owner_id[:8])
-                await asyncio.sleep(self._config.reconnect_delay)
-                continue
-
             try:
                 logger.info("SSE subscription started for owner %s", owner_id[:8])
                 async for event in volundr.subscribe_activity():
@@ -170,21 +185,30 @@ class SessionActivitySubscriber:
                     "SSE subscription failed for owner %s, reconnecting",
                     owner_id[:8],
                 )
-                # Clear cached adapter so we re-resolve on reconnect
-                self._owner_adapters.pop(owner_id, None)
+                # One cluster failed — cancel ALL tasks for this owner so the
+                # sync cycle recreates them with fresh adapters.
+                self._cancel_owner_tasks(owner_id)
+                return
 
             if self._running:
                 await asyncio.sleep(self._config.reconnect_delay)
 
-    async def _resolve_owner_adapter(self, owner_id: str) -> VolundrPort | None:
-        """Resolve and cache a per-owner Volundr adapter."""
+    def _cancel_owner_tasks(self, owner_id: str) -> None:
+        """Cancel all SSE tasks for *owner_id* and clear the adapter cache."""
+        self._owner_adapters.pop(owner_id, None)
+        for task in self._owner_tasks.pop(owner_id, []):
+            if not task.done():
+                task.cancel()
+
+    async def _resolve_owner_adapters(self, owner_id: str) -> list[VolundrPort]:
+        """Resolve and cache per-owner Volundr adapters (one per cluster)."""
         if owner_id in self._owner_adapters:
             return self._owner_adapters[owner_id]
 
-        adapter = await self._factory.for_owner(owner_id)
-        if adapter is not None:
-            self._owner_adapters[owner_id] = adapter
-        return adapter
+        adapters = await self._factory.for_owner(owner_id)
+        if adapters:
+            self._owner_adapters[owner_id] = adapters
+        return adapters
 
     _FAILED_STATUSES: frozenset[str] = frozenset({"stopped", "failed"})
 
@@ -192,6 +216,13 @@ class SessionActivitySubscriber:
         self, event: ActivityEvent, volundr: VolundrPort, owner_id: str
     ) -> None:
         """Handle a single activity or session lifecycle event from the SSE stream."""
+        logger.info(
+            "Activity event: session=%s state=%s status=%s meta=%s",
+            event.session_id[:8] if event.session_id else "?",
+            event.state,
+            event.session_status or "-",
+            event.metadata,
+        )
         if event.session_status in self._FAILED_STATUSES:
             await self._on_session_failed(event, volundr, owner_id)
             return
@@ -224,6 +255,8 @@ class SessionActivitySubscriber:
 
         raid, tracker = await self._find_raid_for_session(event.session_id, owner_id)
         if raid is None or tracker is None:
+            # Check if this is a reviewer session completing
+            await self._try_handle_reviewer_completion(event.session_id, volundr)
             return
 
         session = await volundr.get_session(event.session_id)
@@ -266,7 +299,7 @@ class SessionActivitySubscriber:
         signals: dict[str, bool] = {}
 
         signals["session_idle"] = True
-        signals["has_turns"] = metadata.get("turn_count", 0) > 1
+        signals["has_turns"] = metadata.get("turn_count", 0) >= 1
 
         signals["pr_exists"] = False
         signals["ci_passed"] = False
@@ -304,6 +337,14 @@ class SessionActivitySubscriber:
             confidence += cfg.confidence_ci_bonus
         if signals["extended_idle"]:
             confidence += cfg.confidence_idle_bonus
+
+        logger.info(
+            "Completion evaluation: session=%s is_complete=%s confidence=%.2f signals=%s",
+            raid.session_id,
+            is_complete,
+            min(confidence, 1.0),
+            signals,
+        )
 
         return CompletionEvaluation(
             is_complete=is_complete,
@@ -394,6 +435,34 @@ class SessionActivitySubscriber:
             raid.tracker_id,
             reason,
         )
+
+    async def _try_handle_reviewer_completion(self, session_id: str, volundr: VolundrPort) -> None:
+        """If the session is a tracked reviewer, fetch its output and delegate."""
+        if self._review_engine is None:
+            return
+
+        mapping = self._review_engine.get_reviewer_raid(session_id)
+        if mapping is None:
+            return
+
+        chronicle_summary = ""
+        try:
+            chronicle_summary = await volundr.get_chronicle_summary(session_id)
+        except Exception:
+            logger.warning(
+                "Failed to fetch chronicle for reviewer session %s",
+                session_id,
+                exc_info=True,
+            )
+
+        try:
+            await self._review_engine.handle_reviewer_completion(session_id, chronicle_summary)
+        except Exception:
+            logger.warning(
+                "Failed to handle reviewer completion for session %s",
+                session_id,
+                exc_info=True,
+            )
 
     async def _emit_state_changed(
         self,

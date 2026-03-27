@@ -942,20 +942,21 @@ class Broker:
     def _build_auth_headers(self) -> dict[str, str]:
         """Build authentication headers for Volundr API calls.
 
-        Uses the user's JWT when available (preferred), falling back to
-        service identity headers for backward compatibility.
+        Priority:
+        1. VOLUNDR_API_TOKEN (long-lived PAT injected by Infisical) — preferred
+           because user JWTs expire after minutes while PATs last for months.
+        2. User JWT from WebSocket connection (fallback for dev/local)
+        3. Empty (dev mode — no auth, Volundr backend must accept)
         """
+        service_token = os.environ.get("VOLUNDR_API_TOKEN", "")
+        if service_token:
+            return {"Authorization": f"Bearer {service_token}"}
+
         if self._user_jwt:
             return {"Authorization": f"Bearer {self._user_jwt}"}
 
-        # Fallback: service identity (e.g. during shutdown with no JWT)
-        logger.debug("No user JWT available, falling back to service identity headers")
-        return {
-            "x-auth-user-id": self._settings.service_user_id,
-            "x-auth-email": f"{self._settings.service_user_id}@internal",
-            "x-auth-tenant": self._settings.service_tenant_id,
-            "x-auth-roles": "volundr:service",
-        }
+        logger.debug("No auth token available — requests will be unauthenticated")
+        return {}
 
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Lazy-init HTTP client for Volundr API calls.
@@ -1184,12 +1185,22 @@ class Broker:
 
         try:
             client = await self._get_http_client()
-            await client.post(
+            resp = await client.post(
                 f"/api/v1/volundr/sessions/{self.session_id}/activity",
                 json={"state": state, "metadata": metadata},
             )
+            logger.info(
+                "Activity report: state=%s status=%d url=%s",
+                state,
+                resp.status_code,
+                resp.url,
+            )
         except Exception:
-            logger.debug("Failed to report activity state %s", state, exc_info=True)
+            logger.warning(
+                "Failed to report activity state %s",
+                state,
+                exc_info=True,
+            )
 
     async def _generate_summary(self) -> dict:
         """Ask the CLI to generate a session summary.

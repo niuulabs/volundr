@@ -70,10 +70,13 @@ class ProvisioningConfig(BaseModel):
 
 
 class LoggingConfig(BaseModel):
-    """Logging configuration."""
+    """Logging configuration.
 
-    level: str = Field(default="info")
-    format: str = Field(default="text")
+    Reads LOG_LEVEL and LOG_FORMAT environment variables if set.
+    """
+
+    level: str = Field(default_factory=lambda: os.environ.get("LOG_LEVEL", "info"))
+    format: str = Field(default_factory=lambda: os.environ.get("LOG_FORMAT", "text"))
 
 
 class DatabaseConfig(BaseModel):
@@ -734,6 +737,25 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
                 },
             },
             auth_type="api_key",
+        ),
+        IntegrationDefinitionConfig(
+            slug="volundr",
+            name="Volundr API",
+            description="Volundr API connection — PAT for session-to-control-plane auth",
+            integration_type="code_forge",
+            icon="volundr",
+            credential_schema={
+                "required": ["token"],
+                "properties": {
+                    "token": {
+                        "label": "Personal Access Token",
+                        "type": "password",
+                        "description": "PAT for authenticating to the Volundr API",
+                    },
+                },
+            },
+            env_from_credentials={"VOLUNDR_API_TOKEN": "token"},
+            auth_type="pat",
         ),
     ]
 

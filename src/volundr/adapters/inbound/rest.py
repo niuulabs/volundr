@@ -1288,13 +1288,30 @@ def create_router(
                 detail=f"Invalid activity state: {data.state}",
             )
 
+        logger.info(
+            "Activity report: session=%s state=%s metadata=%s",
+            session_id,
+            data.state,
+            data.metadata,
+        )
         try:
-            await service.update_activity(session_id, activity_state, data.metadata)
+            updated = await service.update_activity(
+                session_id, activity_state, data.metadata
+            )
+            logger.info(
+                "Activity updated: session=%s state=%s broadcaster=%s",
+                session_id,
+                updated.activity_state,
+                service._broadcaster is not None,
+            )
         except SessionNotFoundError:
+            logger.warning("Activity report for unknown session: %s", session_id)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session not found: {session_id}",
             )
+        except Exception:
+            logger.exception("Activity update failed for session %s", session_id)
 
     @router.patch(
         "/sessions/{session_id}/archive",

@@ -631,21 +631,16 @@ class TestReportUsage:
         await client.aclose()
 
     @pytest.mark.asyncio
-    async def test_get_http_client_includes_service_auth_headers(self, tmp_path):
-        """HTTP client includes x-auth-* headers for service-to-service auth."""
+    async def test_get_http_client_uses_pat_for_auth(self, tmp_path, monkeypatch):
+        """HTTP client uses VOLUNDR_API_TOKEN (PAT) for Bearer auth."""
+        monkeypatch.setenv("VOLUNDR_API_TOKEN", "test-pat-token")
         settings = SkuldSettings(
             session={"id": "s1", "workspace_dir": str(tmp_path)},
             volundr_api_url="http://volundr-internal.volundr.svc",
-            service_user_id="skuld-broker",
-            service_tenant_id="test-tenant",
         )
         b = Broker(settings=settings)
-        client = await b._get_http_client()
-        assert client.headers["x-auth-user-id"] == "skuld-broker"
-        assert client.headers["x-auth-email"] == "skuld-broker@internal"
-        assert client.headers["x-auth-tenant"] == "test-tenant"
-        assert client.headers["x-auth-roles"] == "volundr:service"
-        await client.aclose()
+        headers = b._build_auth_headers()
+        assert headers["Authorization"] == "Bearer test-pat-token"
 
 
 class TestSessionArtifacts:

@@ -462,6 +462,16 @@ def create_sagas_router() -> APIRouter:
         settings = request.app.state.settings
         model = body.model or settings.dispatch.default_model
 
+        # Fetch user's integration connection IDs for session injection
+        integration_ids: list[str] = []
+        integration_repo = getattr(request.app.state, "integration_repo", None)
+        if integration_repo is not None:
+            try:
+                connections = await integration_repo.list_connections(principal.user_id)
+                integration_ids = [str(c.id) for c in connections]
+            except Exception:
+                logger.warning("Failed to fetch integrations for user %s", principal.user_id)
+
         planner_prompt = (
             "You are a saga planning assistant for the Niuu platform.\n\n"
             "The user will describe a feature specification. Help them decompose it "
@@ -489,6 +499,7 @@ def create_sagas_router() -> APIRouter:
                     system_prompt=settings.dispatch.default_system_prompt,
                     initial_prompt=planner_prompt,
                     workload_type="planner",
+                    integration_ids=integration_ids,
                 ),
                 auth_token=auth_token,
             )

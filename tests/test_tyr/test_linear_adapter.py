@@ -1237,17 +1237,19 @@ class TestGetRaidById:
         assert result is None
 
     async def test_with_pool_found(self):
+        from uuid import UUID as _UUID
+        from uuid import uuid5
+
         adapter, pool = _make_adapter_with_pool()
         adapter._gql._client = AsyncMock()
-        pool.fetchrow.side_effect = [
-            {"tracker_id": "issue-1"},  # raid_progress lookup
-            None,  # _fetch_progress
-        ]
+        pool.fetch.return_value = [{"tracker_id": "issue-1"}]
+        pool.fetchrow.return_value = None  # _fetch_progress
         adapter._gql._client.post.return_value = _mock_response(
             {"data": {"issue": _issue_node(id="issue-1")}}
         )
 
-        result = await adapter.get_raid_by_id(uuid4())
+        raid_id = uuid5(_UUID(int=0), "issue-1")
+        result = await adapter.get_raid_by_id(raid_id)
 
         assert result is not None
         assert result.tracker_id == "issue-1"

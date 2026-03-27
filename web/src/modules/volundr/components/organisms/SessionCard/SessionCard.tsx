@@ -52,7 +52,9 @@ export function SessionCard({
       >
         <span
           className={cn(styles.statusDot, styles[`dot_${session.status}`])}
-          data-activity={session.activityState ?? undefined}
+          data-activity={
+            session.activityState ?? (session.status === 'running' ? 'active' : undefined)
+          }
         />
         <span className={styles.compactName}>{session.name}</span>
         <span className={styles.compactIcons}>

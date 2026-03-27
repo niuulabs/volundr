@@ -13,13 +13,13 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from niuu.domain.models import Principal
+from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.domain.models import RaidStatus, TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
-from tyr.ports.volundr import SpawnRequest, VolundrPort
+from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,10 @@ class DispatchRequest(BaseModel):
     items: list[DispatchItem]
     model: str = Field(default="")
     system_prompt: str = Field(default="")
+    connection_id: str | None = Field(
+        default=None,
+        description="Target a specific Volundr cluster by connection ID",
+    )
 
 
 class DispatchItem(BaseModel):
@@ -76,6 +80,10 @@ class DispatchItem(BaseModel):
     saga_id: str
     issue_id: str
     repo: str
+    connection_id: str | None = Field(
+        default=None,
+        description="Target a specific Volundr cluster for this item (overrides request-level)",
+    )
 
 
 class DispatchResult(BaseModel):
@@ -85,6 +93,16 @@ class DispatchResult(BaseModel):
     session_id: str
     session_name: str
     status: str
+    cluster_name: str = ""
+
+
+class ClusterInfo(BaseModel):
+    """A user's available Volundr cluster."""
+
+    connection_id: str
+    name: str
+    url: str
+    enabled: bool
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +121,13 @@ async def resolve_volundr() -> VolundrPort:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Volundr adapter not configured",
+    )
+
+
+async def resolve_volundr_factory() -> VolundrFactory:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Volundr factory not configured",
     )
 
 
@@ -269,6 +294,7 @@ def create_dispatch_router() -> APIRouter:
         repo: SagaRepository = Depends(resolve_saga_repo),
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
+        volundr_factory: VolundrFactory = Depends(resolve_volundr_factory),
     ) -> list[DispatchResult]:
         """Approve and dispatch selected issues — spawns Volundr sessions."""
         auth_token = extract_bearer_token(request)
@@ -277,6 +303,23 @@ def create_dispatch_router() -> APIRouter:
         settings = request.app.state.settings
         effective_model = body.model or settings.dispatch.default_model
         effective_prompt = body.system_prompt or settings.dispatch.default_system_prompt
+
+        # Fetch user's integration connection IDs for session injection
+        integration_ids: list[str] = []
+        integration_repo = getattr(request.app.state, "integration_repo", None)
+        if integration_repo is not None:
+            try:
+                connections = await integration_repo.list_connections(principal.user_id)
+                integration_ids = [str(c.id) for c in connections]
+            except Exception:
+                logger.warning("Failed to fetch integrations for user %s", principal.user_id)
+
+        # Pre-resolve all Volundr adapters for this owner (used for connection_id targeting)
+        all_adapters = await volundr_factory.for_owner(principal.user_id)
+        adapter_by_name: dict[str, VolundrPort] = {}
+        for a in all_adapters:
+            if hasattr(a, "_name"):
+                adapter_by_name[getattr(a, "_name")] = a
 
         results: list[DispatchResult] = []
 
@@ -315,10 +358,14 @@ def create_dispatch_router() -> APIRouter:
                 logger.warning("Issue not found: %s", item.issue_id)
                 continue
 
+            # Resolve target adapter: per-item > per-request > default
+            target_connection = item.connection_id or body.connection_id
+            target_volundr = _resolve_target_adapter(target_connection, adapter_by_name, volundr)
+
             session_name = issue.identifier.lower()
 
             try:
-                session = await volundr.spawn_session(
+                session = await target_volundr.spawn_session(
                     request=SpawnRequest(
                         name=session_name,
                         repo=item.repo,
@@ -329,6 +376,7 @@ def create_dispatch_router() -> APIRouter:
                         tracker_issue_url=issue.url,
                         system_prompt=effective_prompt,
                         initial_prompt=_build_prompt(issue, item.repo, saga.feature_branch),
+                        integration_ids=integration_ids,
                     ),
                     auth_token=auth_token,
                 )
@@ -354,6 +402,7 @@ def create_dispatch_router() -> APIRouter:
                         session_id=session.id,
                         session_name=session.name,
                         status="spawned",
+                        cluster_name=session.cluster_name,
                     )
                 )
                 logger.info("Dispatched %s → session %s", issue.identifier, session.id)
@@ -370,4 +419,50 @@ def create_dispatch_router() -> APIRouter:
 
         return results
 
+    @router.get("/clusters", response_model=list[ClusterInfo])
+    async def list_clusters(
+        request: Request,
+        principal: Principal = Depends(extract_principal),
+    ) -> list[ClusterInfo]:
+        """List the user's available Volundr clusters from their CODE_FORGE connections."""
+        integration_repo = getattr(request.app.state, "integration_repo", None)
+        if integration_repo is None:
+            return []
+
+        connections = await integration_repo.list_connections(
+            principal.user_id,
+            integration_type=IntegrationType.CODE_FORGE,
+        )
+        clusters: list[ClusterInfo] = []
+        for conn in connections:
+            name = conn.config.get("name", "") or conn.slug or conn.id
+            url = conn.config.get("url", "")
+            clusters.append(
+                ClusterInfo(
+                    connection_id=conn.id,
+                    name=name,
+                    url=url,
+                    enabled=conn.enabled,
+                )
+            )
+        return clusters
+
     return router
+
+
+def _resolve_target_adapter(
+    connection_id: str | None,
+    adapter_by_name: dict[str, VolundrPort],
+    fallback: VolundrPort,
+) -> VolundrPort:
+    """Resolve the target Volundr adapter for a dispatch item.
+
+    Looks up by connection_id (which matches the adapter name derived from
+    the connection's config name / slug / id). Falls back to the default.
+    """
+    if not connection_id:
+        return fallback
+    adapter = adapter_by_name.get(connection_id)
+    if adapter is not None:
+        return adapter
+    return fallback

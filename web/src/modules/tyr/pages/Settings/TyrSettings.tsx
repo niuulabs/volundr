@@ -12,8 +12,9 @@ export function TyrSettings({ service }: TyrSettingsProps) {
   const { connections, loading, error, createConnection, deleteConnection } =
     useTyrIntegrations(service);
 
-  const volundrConnection =
-    connections.find(c => c.integrationType === INTEGRATION_TYPES.CODE_FORGE) ?? null;
+  const volundrConnections = connections.filter(
+    c => c.integrationType === INTEGRATION_TYPES.CODE_FORGE
+  );
 
   if (loading) {
     return (
@@ -31,7 +32,7 @@ export function TyrSettings({ service }: TyrSettingsProps) {
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.sections}>
         <VolundrConnectionSection
-          connection={volundrConnection}
+          connections={volundrConnections}
           onConnect={createConnection}
           onDisconnect={deleteConnection}
           service={service}

@@ -410,12 +410,18 @@ def _make_engine(
     g = git or StubGit()
     e = event_bus or InMemoryEventBus()
     c = config or _default_config()
+    v = volundr or StubVolundr()
+
+    class _StubVolundrFactory:
+        async def for_owner(self, owner_id: str) -> StubVolundr:
+            return v
+
     engine = ReviewEngine(
         tracker_factory=StubTrackerFactory(r),
+        volundr_factory=_StubVolundrFactory(),
         git=g,
         review_config=c,
         event_bus=e,
-        volundr=volundr,
     )
     return engine, r, g, e
 
@@ -775,8 +781,8 @@ class TestEscalation:
         result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "escalated"
-        # Raid stays in REVIEW
-        assert repo.raids[raid.tracker_id].status == RaidStatus.REVIEW
+        # Raid transitions to ESCALATED (no longer REVIEW, preventing re-trigger)
+        assert repo.raids[raid.tracker_id].status == RaidStatus.ESCALATED
 
     @pytest.mark.asyncio
     async def test_no_pr_escalates(self) -> None:

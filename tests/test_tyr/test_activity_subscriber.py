@@ -293,7 +293,10 @@ class StubVolundrFactory:
     def __init__(self, adapter: StubVolundr) -> None:
         self._adapter = adapter
 
-    async def for_owner(self, owner_id: str) -> StubVolundr:
+    async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+        return [self._adapter]
+
+    async def primary_for_owner(self, owner_id: str) -> StubVolundr | None:
         return self._adapter
 
 
@@ -497,7 +500,7 @@ class TestActivityEventHandling:
 
     @pytest.mark.asyncio
     async def test_idle_with_no_turns_does_not_complete(self) -> None:
-        """Idle with turn_count <= 1 should not trigger completion."""
+        """Idle with turn_count=0 should not trigger completion."""
         sub, volundr, tracker, _ = _make_subscriber()
         raid = _make_raid()
         tracker.add_raid(raid)
@@ -505,7 +508,7 @@ class TestActivityEventHandling:
         event = ActivityEvent(
             session_id=raid.session_id or "",
             state="idle",
-            metadata={"turn_count": 1, "duration_seconds": 5},
+            metadata={"turn_count": 0, "duration_seconds": 5},
             owner_id="user-1",
         )
 
@@ -1004,36 +1007,32 @@ class TestChronicleCapture:
 # ---------------------------------------------------------------------------
 
 
-class TestOwnerSubscriptionLoop:
+class TestAdapterSubscriptionLoop:
     @pytest.mark.asyncio
-    async def test_no_volundr_adapter_logs_warning_and_retries(self) -> None:
-        """When the Volundr factory returns None, a warning is logged and the loop retries."""
+    async def test_no_volundr_adapter_resolves_empty_list(self) -> None:
+        """When the Volundr factory returns an empty list, no SSE tasks are created."""
 
-        class NoneVolundrFactory:
-            async def for_owner(self, owner_id: str) -> None:
+        class EmptyVolundrFactory:
+            async def for_owner(self, owner_id: str) -> list:
+                return []
+
+            async def primary_for_owner(self, owner_id: str) -> None:
                 return None
 
         event_bus = InMemoryEventBus()
         tracker_factory = StubTrackerFactory(StubTracker())
         config = _default_config().model_copy(update={"reconnect_delay": 0.01})
         sub = SessionActivitySubscriber(
-            volundr_factory=NoneVolundrFactory(),
+            volundr_factory=EmptyVolundrFactory(),
             tracker_factory=tracker_factory,
             dispatcher_repo=StubDispatcherRepo(),
             event_bus=event_bus,
             config=config,
         )
 
-        # Run the loop briefly — it should log a warning and not crash
-        sub._running = True
-        task = asyncio.create_task(sub._owner_subscription_loop("owner-x"))
-        await asyncio.sleep(0.05)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-        # No assertion needed — absence of exception confirms the warning path runs
+        # Resolve should return empty
+        adapters = await sub._resolve_owner_adapters("owner-x")
+        assert adapters == []
 
     @pytest.mark.asyncio
     async def test_sse_events_dispatched_with_owner_id(self) -> None:
@@ -1054,7 +1053,7 @@ class TestOwnerSubscriptionLoop:
         volundr.activity_events = [event]
 
         sub._running = True
-        task = asyncio.create_task(sub._owner_subscription_loop("user-1"))
+        task = asyncio.create_task(sub._adapter_subscription_loop("user-1", volundr))
         await asyncio.sleep(0.05)
         sub._running = False
         task.cancel()
@@ -1063,3 +1062,364 @@ class TestOwnerSubscriptionLoop:
         except asyncio.CancelledError:
             pass
         # The running state event should have cancelled any pending eval (no crash)
+
+    @pytest.mark.asyncio
+    async def test_multiple_adapters_resolved(self) -> None:
+        """Factory returning multiple adapters should all be cached."""
+        v1 = StubVolundr()
+        v2 = StubVolundr()
+
+        class MultiFactory:
+            async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+                return [v1, v2]
+
+            async def primary_for_owner(self, owner_id: str) -> StubVolundr:
+                return v1
+
+        event_bus = InMemoryEventBus()
+        tracker_factory = StubTrackerFactory(StubTracker())
+        config = _default_config()
+        sub = SessionActivitySubscriber(
+            volundr_factory=MultiFactory(),
+            tracker_factory=tracker_factory,
+            dispatcher_repo=StubDispatcherRepo(),
+            event_bus=event_bus,
+            config=config,
+        )
+
+        adapters = await sub._resolve_owner_adapters("owner-multi")
+        assert len(adapters) == 2
+        assert adapters[0] is v1
+        assert adapters[1] is v2
+        # Cached on second call
+        cached = await sub._resolve_owner_adapters("owner-multi")
+        assert cached is adapters
+
+
+# ---------------------------------------------------------------------------
+# Tests — stop() with active tasks
+# ---------------------------------------------------------------------------
+
+
+class TestStopWithActiveTasks:
+    @pytest.mark.asyncio
+    async def test_stop_cancels_pending_evaluations(self) -> None:
+        """stop() should cancel all pending evaluation tasks."""
+        config = _default_config(completion_check_delay=10.0)
+        sub, volundr, tracker, _ = _make_subscriber(config=config)
+        raid = _make_raid()
+        tracker.add_raid(raid)
+
+        # Schedule an evaluation that won't fire for 10s
+        idle_event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="idle",
+            metadata={"turn_count": 5, "duration_seconds": 60},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(idle_event, volundr, owner_id="user-1")
+        assert len(sub._pending_evaluations) == 1
+
+        await sub.stop()
+        assert len(sub._pending_evaluations) == 0
+        assert sub.running is False
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_owner_tasks(self) -> None:
+        """stop() should cancel all per-owner SSE subscription tasks."""
+        sub, volundr, tracker, _ = _make_subscriber()
+        await sub.start()
+        assert sub.running is True
+
+        # Inject fake owner tasks
+        dummy_task = asyncio.create_task(asyncio.sleep(100))
+        sub._owner_tasks["owner-1"] = [dummy_task]
+        sub._owner_adapters["owner-1"] = [volundr]
+
+        await sub.stop()
+
+        assert len(sub._owner_tasks) == 0
+        assert len(sub._owner_adapters) == 0
+        assert dummy_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_multiple_owner_tasks(self) -> None:
+        """stop() should cancel tasks for multiple owners."""
+        sub, volundr, _, _ = _make_subscriber()
+        await sub.start()
+
+        task_a = asyncio.create_task(asyncio.sleep(100))
+        task_b = asyncio.create_task(asyncio.sleep(100))
+        sub._owner_tasks["owner-a"] = [task_a]
+        sub._owner_tasks["owner-b"] = [task_b]
+
+        await sub.stop()
+
+        assert task_a.cancelled()
+        assert task_b.cancelled()
+        assert len(sub._owner_tasks) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests — sync owner subscriptions
+# ---------------------------------------------------------------------------
+
+
+class TestSyncOwnerSubscriptions:
+    @pytest.mark.asyncio
+    async def test_no_active_owners_clears_tasks(self) -> None:
+        """When no owners are active, all tasks should be cancelled."""
+        sub, volundr, _, _ = _make_subscriber()
+        sub._running = True
+
+        # Pre-populate with a fake task
+        dummy_task = asyncio.create_task(asyncio.sleep(100))
+        sub._owner_tasks["old-owner"] = [dummy_task]
+        sub._owner_adapters["old-owner"] = [volundr]
+
+        await sub._sync_owner_subscriptions()
+
+        assert len(sub._owner_tasks) == 0
+        assert len(sub._owner_adapters) == 0
+        assert dummy_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_active_owner_gets_tasks_created(self) -> None:
+        """Active owners should get SSE subscription tasks."""
+        v1 = StubVolundr()
+        v2 = StubVolundr()
+
+        class MultiFactory:
+            async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+                return [v1, v2]
+
+            async def primary_for_owner(self, owner_id: str) -> StubVolundr:
+                return v1
+
+        class ActiveDispatcherRepo(StubDispatcherRepo):
+            async def list_active_owner_ids(self) -> list[str]:
+                return ["owner-1"]
+
+        config = _default_config(reconnect_delay=0.01)
+        sub = SessionActivitySubscriber(
+            volundr_factory=MultiFactory(),
+            tracker_factory=StubTrackerFactory(StubTracker()),
+            dispatcher_repo=ActiveDispatcherRepo(),
+            event_bus=InMemoryEventBus(),
+            config=config,
+        )
+        sub._running = True
+
+        await sub._sync_owner_subscriptions()
+
+        assert "owner-1" in sub._owner_tasks
+        assert len(sub._owner_tasks["owner-1"]) == 2
+
+        # Cleanup
+        for task in sub._owner_tasks["owner-1"]:
+            task.cancel()
+
+    @pytest.mark.asyncio
+    async def test_inactive_owner_tasks_cancelled(self) -> None:
+        """Tasks for owners no longer active should be cancelled."""
+
+        class DynamicDispatcherRepo(StubDispatcherRepo):
+            def __init__(self) -> None:
+                super().__init__()
+                self.active: list[str] = ["owner-1"]
+
+            async def list_active_owner_ids(self) -> list[str]:
+                return self.active
+
+        repo = DynamicDispatcherRepo()
+        sub, volundr, _, _ = _make_subscriber(dispatcher_repo=repo)
+        sub._running = True
+
+        # Fake existing task for owner-1
+        dummy_task = asyncio.create_task(asyncio.sleep(100))
+        sub._owner_tasks["owner-1"] = [dummy_task]
+        sub._owner_adapters["owner-1"] = [volundr]
+
+        # Now owner-1 is no longer active
+        repo.active = []
+        await sub._sync_owner_subscriptions()
+
+        assert "owner-1" not in sub._owner_tasks
+        assert "owner-1" not in sub._owner_adapters
+        assert dummy_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_running_tasks_not_replaced(self) -> None:
+        """Owner tasks still running should not be replaced."""
+
+        class ActiveDispatcherRepo(StubDispatcherRepo):
+            async def list_active_owner_ids(self) -> list[str]:
+                return ["owner-1"]
+
+        config = _default_config(reconnect_delay=0.01)
+        sub, volundr, _, _ = _make_subscriber(dispatcher_repo=ActiveDispatcherRepo(), config=config)
+        sub._running = True
+
+        # Inject a still-running task
+        running_task = asyncio.create_task(asyncio.sleep(100))
+        sub._owner_tasks["owner-1"] = [running_task]
+
+        await sub._sync_owner_subscriptions()
+
+        # Should keep the same task (not replaced)
+        assert sub._owner_tasks["owner-1"] == [running_task]
+
+        running_task.cancel()
+
+    @pytest.mark.asyncio
+    async def test_done_tasks_get_replaced(self) -> None:
+        """Done tasks for an active owner should be replaced with new ones."""
+
+        class ActiveDispatcherRepo(StubDispatcherRepo):
+            async def list_active_owner_ids(self) -> list[str]:
+                return ["owner-1"]
+
+        config = _default_config(reconnect_delay=0.01)
+        sub, volundr, _, _ = _make_subscriber(dispatcher_repo=ActiveDispatcherRepo(), config=config)
+        sub._running = True
+
+        # Inject a completed task
+        done_task = asyncio.create_task(asyncio.sleep(0))
+        await asyncio.sleep(0.01)  # Let it finish
+        sub._owner_tasks["owner-1"] = [done_task]
+
+        await sub._sync_owner_subscriptions()
+
+        # Tasks should have been replaced
+        new_tasks = sub._owner_tasks["owner-1"]
+        assert len(new_tasks) >= 1
+        assert new_tasks[0] is not done_task
+
+        for task in new_tasks:
+            task.cancel()
+
+
+# ---------------------------------------------------------------------------
+# Tests — SSE error handling and _cancel_owner_tasks
+# ---------------------------------------------------------------------------
+
+
+class TestSSEErrorHandling:
+    @pytest.mark.asyncio
+    async def test_sse_error_cancels_all_owner_tasks(self) -> None:
+        """When one SSE task fails, all tasks for that owner should be cancelled."""
+
+        class FailingVolundr(StubVolundr):
+            async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
+                raise RuntimeError("SSE connection failed")
+                yield  # type: ignore[misc]  # pragma: no cover
+
+        failing = FailingVolundr()
+        healthy = StubVolundr()
+
+        sub, _, _, _ = _make_subscriber()
+        sub._running = True
+
+        # Create tasks for the same owner — one healthy, one failing
+        healthy_task = asyncio.create_task(asyncio.sleep(100))
+        sub._owner_tasks["owner-1"] = [healthy_task]
+        sub._owner_adapters["owner-1"] = [healthy, failing]
+
+        # Run the failing adapter loop — it should cancel sibling tasks
+        await sub._adapter_subscription_loop("owner-1", failing)
+
+        assert "owner-1" not in sub._owner_tasks
+        assert "owner-1" not in sub._owner_adapters
+        # Let event loop process the cancellation
+        await asyncio.sleep(0)
+        assert healthy_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_cancel_owner_tasks_helper(self) -> None:
+        """_cancel_owner_tasks should cancel all tasks and clear caches."""
+        sub, volundr, _, _ = _make_subscriber()
+
+        task_a = asyncio.create_task(asyncio.sleep(100))
+        task_b = asyncio.create_task(asyncio.sleep(100))
+        sub._owner_tasks["owner-1"] = [task_a, task_b]
+        sub._owner_adapters["owner-1"] = [volundr]
+
+        sub._cancel_owner_tasks("owner-1")
+
+        assert "owner-1" not in sub._owner_tasks
+        assert "owner-1" not in sub._owner_adapters
+        # Let event loop process the cancellations
+        await asyncio.sleep(0)
+        assert task_a.cancelled()
+        assert task_b.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_cancel_owner_tasks_noop_for_unknown_owner(self) -> None:
+        """_cancel_owner_tasks should not raise for unknown owner."""
+        sub, _, _, _ = _make_subscriber()
+        sub._cancel_owner_tasks("nonexistent")  # No crash
+
+    @pytest.mark.asyncio
+    async def test_adapter_loop_exits_on_sse_error(self) -> None:
+        """The adapter loop should return (not retry) after SSE error."""
+
+        class FailingVolundr(StubVolundr):
+            call_count: int = 0
+
+            async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
+                self.call_count += 1
+                raise RuntimeError("SSE down")
+                yield  # type: ignore[misc]  # pragma: no cover
+
+        failing = FailingVolundr()
+        sub, _, _, _ = _make_subscriber()
+        sub._running = True
+
+        await sub._adapter_subscription_loop("owner-1", failing)
+
+        # Should have been called exactly once (returns, not retries)
+        assert failing.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests — _resolve_owner_adapters edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestResolveOwnerAdapters:
+    @pytest.mark.asyncio
+    async def test_empty_adapters_not_cached(self) -> None:
+        """Empty adapter list should not be cached."""
+
+        class EmptyFactory:
+            async def for_owner(self, owner_id: str) -> list:
+                return []
+
+            async def primary_for_owner(self, owner_id: str) -> None:
+                return None
+
+        config = _default_config()
+        sub = SessionActivitySubscriber(
+            volundr_factory=EmptyFactory(),
+            tracker_factory=StubTrackerFactory(StubTracker()),
+            dispatcher_repo=StubDispatcherRepo(),
+            event_bus=InMemoryEventBus(),
+            config=config,
+        )
+
+        result = await sub._resolve_owner_adapters("owner-1")
+        assert result == []
+        assert "owner-1" not in sub._owner_adapters
+
+    @pytest.mark.asyncio
+    async def test_non_empty_adapters_are_cached(self) -> None:
+        """Non-empty adapter list should be cached for reuse."""
+        sub, volundr, _, _ = _make_subscriber()
+
+        result = await sub._resolve_owner_adapters("owner-1")
+        assert len(result) == 1
+        assert "owner-1" in sub._owner_adapters
+
+        # Second call returns cached
+        cached = await sub._resolve_owner_adapters("owner-1")
+        assert cached is result

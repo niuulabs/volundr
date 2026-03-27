@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 import asyncpg
 
@@ -41,6 +41,7 @@ _RAID_TO_LINEAR: dict[RaidStatus, str] = {
     RaidStatus.QUEUED: "Todo",
     RaidStatus.RUNNING: "In Progress",
     RaidStatus.REVIEW: "In Review",
+    RaidStatus.ESCALATED: "In Review",
     RaidStatus.MERGED: "Done",
     RaidStatus.FAILED: "Canceled",
 }
@@ -692,13 +693,12 @@ class LinearTrackerAdapter(TrackerPort):
     async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
         if self._pool is None:
             return None
-        row = await self._pool.fetchrow(
-            "SELECT tracker_id FROM raid_progress WHERE raid_id = $1",
-            raid_id,
-        )
-        if row is None:
-            return None
-        return await self.get_raid(row["tracker_id"])
+        # Scan progress table for a tracker_id whose uuid5 matches raid_id
+        rows = await self._pool.fetch("SELECT tracker_id FROM raid_progress")
+        for row in rows:
+            if uuid5(UUID(int=0), row["tracker_id"]) == raid_id:
+                return await self.get_raid(row["tracker_id"])
+        return None
 
     # -- Confidence events --
 
@@ -822,11 +822,13 @@ class LinearTrackerAdapter(TrackerPort):
     async def save_session_message(self, message: SessionMessage) -> None:
         if self._pool is None:
             raise RuntimeError("pool is required for save_session_message")
-        row = await self._pool.fetchrow(
-            "SELECT tracker_id FROM raid_progress WHERE raid_id = $1",
-            message.raid_id,
-        )
-        tracker_id = row["tracker_id"] if row else str(message.raid_id)
+        # Resolve tracker_id from raid UUID
+        tracker_id = str(message.raid_id)
+        rows = await self._pool.fetch("SELECT tracker_id FROM raid_progress")
+        for row in rows:
+            if uuid5(UUID(int=0), row["tracker_id"]) == message.raid_id:
+                tracker_id = row["tracker_id"]
+                break
         await self._pool.execute(
             """
             INSERT INTO raid_session_messages
@@ -998,7 +1000,7 @@ class LinearTrackerAdapter(TrackerPort):
         raid_status = _LINEAR_TO_RAID.get(state_name, RaidStatus.PENDING)
         if progress and progress.get("status"):
             raid_status = RaidStatus(progress["status"])
-        raid_id = progress["raid_id"] if progress else uuid4()
+        raid_id = uuid5(UUID(int=0), node["id"])
         return Raid(
             id=raid_id,
             phase_id=UUID(int=0),
