@@ -21,6 +21,7 @@ export function VolundrConnectionSection({
   service,
 }: VolundrConnectionSectionProps) {
   const [url, setUrl] = useState(DEFAULT_VOLUNDR_URL);
+  const [clusterName, setClusterName] = useState('');
   const [pat, setPat] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -52,7 +53,7 @@ export function VolundrConnectionSection({
         adapter: ADAPTER_PATHS.VOLUNDR_HTTP,
         credentialName: CREDENTIAL_NAMES.VOLUNDR_PAT,
         credentialValue: pat,
-        config: { url: url.trim() },
+        config: { url: url.trim(), name: clusterName.trim() || undefined },
       })
     );
     if (result !== undefined) {
@@ -110,6 +111,17 @@ export function VolundrConnectionSection({
         Connect your Volundr instance to enable code forge operations.
       </p>
       <div className={styles.form}>
+        <label className={styles.label} htmlFor="volundr-name">
+          Cluster Name (optional)
+        </label>
+        <input
+          id="volundr-name"
+          className={styles.input}
+          type="text"
+          value={clusterName}
+          onChange={e => setClusterName(e.target.value)}
+          placeholder="e.g. production, staging"
+        />
         <label className={styles.label} htmlFor="volundr-url">
           Volundr URL
         </label>

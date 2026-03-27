@@ -1,4 +1,4 @@
-"""Tests for VolundrAdapterFactory."""
+"""Tests for VolundrAdapterFactory — multi-cluster support."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 
 from niuu.domain.models import IntegrationConnection, IntegrationType
 from tests.test_tyr.conftest import StubCredentialStore, StubIntegrationRepo
-from tyr.adapters.volundr_factory import VolundrAdapterFactory
+from tyr.adapters.volundr_factory import DEFAULT_VOLUNDR_URL, VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 
 # ---------------------------------------------------------------------------
@@ -20,13 +20,15 @@ _NOW = datetime.now(tz=UTC)
 
 def _make_connection(
     *,
+    conn_id: str = "conn-1",
     enabled: bool = True,
     integration_type: IntegrationType = IntegrationType.CODE_FORGE,
     credential_name: str = "volundr-pat",
     config: dict | None = None,
+    slug: str = "",
 ) -> IntegrationConnection:
     return IntegrationConnection(
-        id="conn-1",
+        id=conn_id,
         owner_id="owner-1",
         integration_type=integration_type,
         adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
@@ -35,26 +37,30 @@ def _make_connection(
         enabled=enabled,
         created_at=_NOW,
         updated_at=_NOW,
+        slug=slug,
     )
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Tests — for_owner (returns list with fallback)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_no_code_forge_connection_returns_none() -> None:
+async def test_no_code_forge_connection_returns_fallback() -> None:
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[]),
         credential_store=StubCredentialStore(),
     )
     result = await factory.for_owner("owner-1")
-    assert result is None
+    assert len(result) == 1
+    assert isinstance(result[0], VolundrHTTPAdapter)
+    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
+    assert result[0]._name == "default"
 
 
 @pytest.mark.asyncio
-async def test_disabled_connection_returns_none() -> None:
+async def test_disabled_connection_returns_fallback() -> None:
     conn = _make_connection(enabled=False)
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[conn]),
@@ -63,7 +69,8 @@ async def test_disabled_connection_returns_none() -> None:
         ),
     )
     result = await factory.for_owner("owner-1")
-    assert result is None
+    assert len(result) == 1
+    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
 
 
 @pytest.mark.asyncio
@@ -76,20 +83,23 @@ async def test_enabled_connection_valid_cred_returns_adapter() -> None:
         ),
     )
     result = await factory.for_owner("owner-1")
-    assert isinstance(result, VolundrHTTPAdapter)
-    assert result._api_key == "tok-123"
-    assert result._base_url == "http://volundr-test:8000"
+    assert len(result) == 1
+    assert isinstance(result[0], VolundrHTTPAdapter)
+    assert result[0]._api_key == "tok-123"
+    assert result[0]._base_url == "http://volundr-test:8000"
 
 
 @pytest.mark.asyncio
-async def test_credential_store_returns_none() -> None:
+async def test_credential_store_returns_none_falls_back() -> None:
     conn = _make_connection(enabled=True)
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[conn]),
         credential_store=StubCredentialStore(values={}),
     )
     result = await factory.for_owner("owner-1")
-    assert result is None
+    # No credential → no user adapter → fallback
+    assert len(result) == 1
+    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
 
 
 @pytest.mark.asyncio
@@ -102,20 +112,143 @@ async def test_uses_default_url_when_not_in_config() -> None:
         ),
     )
     result = await factory.for_owner("owner-1")
-    assert isinstance(result, VolundrHTTPAdapter)
-    assert result._base_url == "http://volundr:8000"
+    assert len(result) == 1
+    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
 
 
 @pytest.mark.asyncio
-async def test_picks_first_enabled_connection() -> None:
-    disabled = _make_connection(enabled=False)
-    enabled = _make_connection(enabled=True, config={"url": "http://second:8000"})
+async def test_multiple_connections_return_multiple_adapters() -> None:
+    conn1 = _make_connection(
+        conn_id="conn-1",
+        config={"url": "http://cluster-a:8000", "name": "alpha"},
+        credential_name="pat-a",
+    )
+    conn2 = _make_connection(
+        conn_id="conn-2",
+        config={"url": "http://cluster-b:8000", "name": "beta"},
+        credential_name="pat-b",
+    )
     factory = VolundrAdapterFactory(
-        integration_repo=StubIntegrationRepo(connections=[disabled, enabled]),
+        integration_repo=StubIntegrationRepo(connections=[conn1, conn2]),
         credential_store=StubCredentialStore(
-            values={"user:owner-1:volundr-pat": {"token": "tok-789"}}
+            values={
+                "user:owner-1:pat-a": {"token": "tok-a"},
+                "user:owner-1:pat-b": {"token": "tok-b"},
+            }
         ),
     )
     result = await factory.for_owner("owner-1")
+    assert len(result) == 2
+    assert result[0]._base_url == "http://cluster-a:8000"
+    assert result[0]._api_key == "tok-a"
+    assert result[0]._name == "alpha"
+    assert result[1]._base_url == "http://cluster-b:8000"
+    assert result[1]._api_key == "tok-b"
+    assert result[1]._name == "beta"
+
+
+@pytest.mark.asyncio
+async def test_skips_connection_with_no_cred() -> None:
+    """One connection has a credential, the other doesn't — only the valid one is returned."""
+    conn1 = _make_connection(
+        conn_id="conn-1",
+        config={"url": "http://cluster-a:8000"},
+        credential_name="pat-a",
+    )
+    conn2 = _make_connection(
+        conn_id="conn-2",
+        config={"url": "http://cluster-b:8000"},
+        credential_name="pat-b",
+    )
+    factory = VolundrAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn1, conn2]),
+        credential_store=StubCredentialStore(
+            values={"user:owner-1:pat-a": {"token": "tok-a"}},
+        ),
+    )
+    result = await factory.for_owner("owner-1")
+    assert len(result) == 1
+    assert result[0]._base_url == "http://cluster-a:8000"
+
+
+@pytest.mark.asyncio
+async def test_custom_fallback_url() -> None:
+    factory = VolundrAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[]),
+        credential_store=StubCredentialStore(),
+        fallback_url="http://my-cluster:9000",
+    )
+    result = await factory.for_owner("owner-1")
+    assert len(result) == 1
+    assert result[0]._base_url == "http://my-cluster:9000"
+
+
+@pytest.mark.asyncio
+async def test_adapter_name_uses_slug_when_no_config_name() -> None:
+    conn = _make_connection(
+        config={"url": "http://volundr:8000"},
+        slug="my-volundr",
+    )
+    factory = VolundrAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=StubCredentialStore(
+            values={"user:owner-1:volundr-pat": {"token": "tok-1"}}
+        ),
+    )
+    result = await factory.for_owner("owner-1")
+    assert result[0]._name == "my-volundr"
+
+
+@pytest.mark.asyncio
+async def test_adapter_name_falls_back_to_conn_id() -> None:
+    conn = _make_connection(config={"url": "http://volundr:8000"})
+    factory = VolundrAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn]),
+        credential_store=StubCredentialStore(
+            values={"user:owner-1:volundr-pat": {"token": "tok-1"}}
+        ),
+    )
+    result = await factory.for_owner("owner-1")
+    assert result[0]._name == "conn-1"
+
+
+# ---------------------------------------------------------------------------
+# Tests — primary_for_owner
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_primary_for_owner_returns_first() -> None:
+    conn1 = _make_connection(
+        conn_id="conn-1",
+        config={"url": "http://primary:8000"},
+        credential_name="pat-a",
+    )
+    conn2 = _make_connection(
+        conn_id="conn-2",
+        config={"url": "http://secondary:8000"},
+        credential_name="pat-b",
+    )
+    factory = VolundrAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[conn1, conn2]),
+        credential_store=StubCredentialStore(
+            values={
+                "user:owner-1:pat-a": {"token": "tok-a"},
+                "user:owner-1:pat-b": {"token": "tok-b"},
+            }
+        ),
+    )
+    result = await factory.primary_for_owner("owner-1")
+    assert result is not None
     assert isinstance(result, VolundrHTTPAdapter)
-    assert result._base_url == "http://second:8000"
+    assert result._base_url == "http://primary:8000"
+
+
+@pytest.mark.asyncio
+async def test_primary_for_owner_returns_none_when_empty() -> None:
+    factory = VolundrAdapterFactory(
+        integration_repo=StubIntegrationRepo(connections=[]),
+        credential_store=StubCredentialStore(),
+    )
+    result = await factory.primary_for_owner("owner-1")
+    assert result is None

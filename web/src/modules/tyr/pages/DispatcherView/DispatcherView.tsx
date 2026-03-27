@@ -10,7 +10,7 @@ export function DispatcherView() {
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [promptOverride, setPromptOverride] = useState<string | null>(null);
   const [lastResults, setLastResults] = useState<
-    { issue_id: string; session_name: string; status: string }[] | null
+    { issue_id: string; session_name: string; status: string; cluster_name: string }[] | null
   >(null);
 
   const toggleItem = (issueId: string) => {
@@ -88,6 +88,9 @@ export function DispatcherView() {
             >
               {r.status === 'spawned' ? '\u2713' : '\u2717'} {r.session_name || r.issue_id} —{' '}
               {r.status}
+              {r.cluster_name && (
+                <span className={styles.clusterBadge}>{r.cluster_name}</span>
+              )}
             </div>
           ))}
           <button

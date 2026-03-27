@@ -43,6 +43,7 @@ interface DispatchResult {
   session_id: string;
   session_name: string;
   status: string;
+  cluster_name: string;
 }
 
 interface UseDispatchQueueResult {
