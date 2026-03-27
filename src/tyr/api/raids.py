@@ -165,6 +165,7 @@ class ActiveRaidResponse(BaseModel):
     tracker_id: str
     identifier: str = ""
     title: str = ""
+    url: str = ""
     status: str
     session_id: str | None = None
     confidence: float = 0.0
@@ -194,6 +195,7 @@ def create_raids_router() -> APIRouter:
                             tracker_id=raid.tracker_id,
                             identifier=getattr(raid, "identifier", raid.tracker_id),
                             title=raid.name,
+                            url=getattr(raid, "url", ""),
                             status=raid.status.value,
                             session_id=raid.session_id,
                             confidence=raid.confidence,
