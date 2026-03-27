@@ -320,6 +320,16 @@ profiles: []
   #     memory: "8Gi"
   #     gpu: "1"
   #   isDefault: false
+  #
+  # - name: reviewer
+  #   description: "Automated PR reviewer session (LLM-powered)"
+  #   workloadType: reviewer
+  #   sessionDefinition: skuld-planner   # lightweight — no IDE, no terminal
+  #   model: "claude-opus-4-6"
+  #   resourceConfig:
+  #     cpu: "250m"
+  #     memory: "1Gi"
+  #   isDefault: false
 
 # Workspace templates (combine a profile with repos and setup)
 templates: []
@@ -995,6 +1005,36 @@ sessionDefinitions:
 
       volundr:
         apiUrl: ""
+
+  # Skuld-Reviewer session definition (lightweight LLM reviewer — no IDE)
+  skuldReviewer:
+    # -- Enable skuld-reviewer session definition
+    enabled: true
+    # -- Labels for agent routing
+    labels:
+      - reviewer
+    # -- Whether this session definition is active
+    active: true
+
+    # Helm chart configuration (uses skuld-planner — lightweight broker)
+    helm:
+      chart: skuld-planner
+      repo: "oci://ghcr.io/niuulabs/charts"
+      repoName: ""
+      version: "0.1.0"
+
+    defaults:
+      session:
+        # -- Default model for reviewer sessions
+        model: "claude-opus-4-6"
+
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "1Gi"
+        limits:
+          cpu: "1"
+          memory: "2Gi"
 
 # Web UI (optional standalone frontend)
 web:

@@ -111,6 +111,30 @@ class ReviewConfig(BaseModel):
         default=-0.05,
         description="Per-retry confidence penalty (multiplied by retry_count).",
     )
+    reviewer_session_enabled: bool = Field(
+        default=True,
+        description="Spawn an LLM-powered reviewer session for raids in REVIEW state.",
+    )
+    reviewer_model: str = Field(
+        default="claude-opus-4-6",
+        description="AI model for reviewer sessions.",
+    )
+    reviewer_profile: str = Field(
+        default="reviewer",
+        description="Volundr profile name for reviewer sessions.",
+    )
+    reviewer_confidence_weight: float = Field(
+        default=0.60,
+        description="Weight applied to the reviewer's confidence score (0.0–1.0).",
+    )
+    reviewer_timeout: float = Field(
+        default=300.0,
+        description="Seconds to wait for the reviewer session to complete.",
+    )
+    reviewer_poll_interval: float = Field(
+        default=10.0,
+        description="Seconds between polls when waiting for reviewer completion.",
+    )
 
 
 class GitConfig(BaseModel):

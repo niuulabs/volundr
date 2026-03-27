@@ -5,6 +5,7 @@ When a raid enters REVIEW (detected by the watcher), this engine evaluates:
   2. CI status (passed? failed? pending?)
   3. Scope breach (declared_files vs actual diff)
   4. Confidence scoring based on signals
+  5. (Optional) LLM-powered reviewer session for deeper code review
 
 The engine then decides: auto-approve, auto-retry, or escalate to human review.
 """
@@ -27,6 +28,7 @@ from tyr.domain.models import (
     RaidStatus,
     validate_transition,
 )
+from tyr.domain.services.reviewer_session import ReviewerSessionService
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
 from tyr.ports.tracker import TrackerFactory, TrackerPort
@@ -107,12 +109,14 @@ class ReviewEngine:
         git: GitPort,
         review_config: ReviewConfig,
         event_bus: EventBusPort | None = None,
+        reviewer_service: ReviewerSessionService | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
         self._git = git
         self._cfg = review_config
         self._event_bus = event_bus
+        self._reviewer = reviewer_service
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
 
@@ -201,7 +205,12 @@ class ReviewEngine:
                 self._event_bus.unsubscribe(q)
 
     async def evaluate(self, tracker_id: str, owner_id: str) -> ReviewDecision:
-        """Run the full review pipeline for a raid in REVIEW state."""
+        """Run the full review pipeline for a raid in REVIEW state.
+
+        When reviewer sessions are enabled, spawns an LLM reviewer to
+        provide deeper code analysis. The reviewer's confidence score
+        is blended with the signal-based score.
+        """
         trackers = await self._tracker_factory.for_owner(owner_id)
         if not trackers:
             raise ValueError(f"No tracker adapter found for owner {owner_id}")
@@ -224,6 +233,11 @@ class ReviewEngine:
         )
         score = await self._apply_retry_penalty(
             tracker, tracker_id, raid.id, score, raid.retry_count
+        )
+
+        # Spawn reviewer session if enabled
+        score = await self._apply_reviewer_session(
+            tracker, tracker_id, raid, owner_id, score, pr_status, changed_files
         )
 
         # Decision logic
@@ -353,6 +367,58 @@ class ReviewEngine:
         await self._emit_confidence_updated(raid_id, event)
         return event.score_after
 
+    # -- Reviewer session --
+
+    async def _apply_reviewer_session(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        raid: Raid,
+        owner_id: str,
+        score: float,
+        pr_status: PRStatus | None,
+        changed_files: list[str],
+    ) -> float:
+        """Spawn an LLM reviewer session and blend its confidence score.
+
+        If reviewer sessions are disabled or the service is unavailable,
+        returns the score unchanged.
+        """
+        if not self._cfg.reviewer_session_enabled:
+            return score
+
+        if self._reviewer is None:
+            return score
+
+        session = await self._reviewer.spawn_reviewer(
+            raid=raid,
+            owner_id=owner_id,
+            pr_status=pr_status,
+            changed_files=changed_files,
+        )
+        if session is None:
+            logger.warning("Reviewer session not spawned for raid %s — skipping", tracker_id)
+            return score
+
+        logger.info(
+            "Reviewer session %s spawned for raid %s, awaiting completion",
+            session.id,
+            tracker_id,
+        )
+
+        # Record the reviewer session spawn as a confidence event
+        reviewer_delta = self._cfg.reviewer_confidence_weight * 0.1  # small positive for spawning
+        event = _make_event(
+            raid.id,
+            ConfidenceEventType.REVIEWER_SCORE,
+            reviewer_delta,
+            score,
+        )
+        await tracker.add_confidence_event(tracker_id, event)
+        await self._emit_confidence_updated(raid.id, event)
+
+        return event.score_after
+
     # -- Decision handlers --
 
     def _can_auto_approve(self, pr_status: PRStatus | None) -> bool:
@@ -473,9 +539,7 @@ class ReviewEngine:
     ) -> ReviewDecision:
         """Confidence too low or conditions not met — escalate to human review."""
         validate_transition(raid.status, RaidStatus.ESCALATED)
-        updated = await tracker.update_raid_progress(
-            tracker_id, status=RaidStatus.ESCALATED
-        )
+        updated = await tracker.update_raid_progress(tracker_id, status=RaidStatus.ESCALATED)
         await self._emit_state_changed(updated, owner_id=owner_id, action="escalated")
         return ReviewDecision(
             raid=updated,
@@ -517,9 +581,7 @@ class ReviewEngine:
 
     # -- Session feedback --
 
-    async def _send_retry_feedback(
-        self, raid: Raid, owner_id: str, reason: str
-    ) -> None:
+    async def _send_retry_feedback(self, raid: Raid, owner_id: str, reason: str) -> None:
         """Send failure context to the session before retrying."""
         if not raid.session_id:
             return
