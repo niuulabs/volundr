@@ -215,22 +215,25 @@ export function ChatInput({
     fileInputRef.current?.click();
   }, [disabled]);
 
-  const handleFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) {
-      return;
-    }
-    const newAttachments: Attachment[] = Array.from(files).map(file => ({
-      file,
-      name: file.name,
-      id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    }));
-    setAttachments(prev => [...prev, ...newAttachments]);
-    // Also process through fileAttachments hook for image compression/previews
-    fileAttachments.addFiles(files);
-    // Reset the input so the same file can be re-attached
-    e.target.value = '';
-  }, [fileAttachments]);
+  const handleFileChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files) {
+        return;
+      }
+      const newAttachments: Attachment[] = Array.from(files).map(file => ({
+        file,
+        name: file.name,
+        id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      }));
+      setAttachments(prev => [...prev, ...newAttachments]);
+      // Also process through fileAttachments hook for image compression/previews
+      fileAttachments.addFiles(files);
+      // Reset the input so the same file can be re-attached
+      e.target.value = '';
+    },
+    [fileAttachments]
+  );
 
   const handleRemoveAttachment = useCallback((id: string) => {
     setAttachments(prev => prev.filter(a => a.id !== id));
@@ -257,14 +260,16 @@ export function ChatInput({
       onDrop={fileAttachments.handleDrop}
       onPaste={fileAttachments.handlePaste}
     >
-      {(attachments.length > 0 || mentionMenu.mentions.length > 0 || fileAttachments.attachments.length > 0) && (
+      {(attachments.length > 0 ||
+        mentionMenu.mentions.length > 0 ||
+        fileAttachments.attachments.length > 0) && (
         <div className={styles.attachments}>
           {mentionMenu.mentions.map(entry => (
             <MentionPill key={entry.path} entry={entry} onRemove={mentionMenu.removeMention} />
           ))}
           {attachments.map(attachment => {
             const imagePreview = fileAttachments.attachments.find(
-              fa => fa.name === attachment.name && fa.previewUrl,
+              fa => fa.name === attachment.name && fa.previewUrl
             );
             return (
               <span key={attachment.id} className={styles.attachmentChip}>

@@ -16,7 +16,7 @@ describe('compressImage', () => {
         width: 800,
         height: 600,
         close: mockClose,
-      }),
+      })
     );
 
     // Mock OffscreenCanvas as a class
@@ -60,7 +60,7 @@ describe('compressImage', () => {
         width: 2560,
         height: 1920,
         close: mockClose,
-      }),
+      })
     );
 
     const smallBlob = new Blob(['x'], { type: 'image/jpeg' });
@@ -83,9 +83,7 @@ describe('compressImage', () => {
     const largeBlob = new Blob([largeBlobData], { type: 'image/jpeg' });
     const smallBlob = new Blob(['small'], { type: 'image/jpeg' });
 
-    mockConvertToBlob
-      .mockResolvedValueOnce(largeBlob)
-      .mockResolvedValueOnce(smallBlob);
+    mockConvertToBlob.mockResolvedValueOnce(largeBlob).mockResolvedValueOnce(smallBlob);
 
     vi.stubGlobal('URL', {
       createObjectURL: vi.fn().mockReturnValue('blob:url'),

@@ -1,4 +1,11 @@
-import { useState, useCallback, useEffect, useRef, type DragEvent, type ClipboardEvent } from 'react';
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type DragEvent,
+  type ClipboardEvent,
+} from 'react';
 import { compressImage } from './compressImage';
 
 export interface FileAttachment {
@@ -113,7 +120,7 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
         await addFiles(files);
       }
     },
-    [addFiles],
+    [addFiles]
   );
 
   const handlePaste = useCallback(
@@ -135,7 +142,7 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
         await addFiles(imageFiles);
       }
     },
-    [addFiles],
+    [addFiles]
   );
 
   return {

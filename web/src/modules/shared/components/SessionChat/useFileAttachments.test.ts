@@ -166,9 +166,7 @@ describe('useFileAttachments', () => {
     await act(async () => {
       await result.current.handlePaste({
         clipboardData: {
-          items: [
-            { kind: 'string', getAsFile: () => null },
-          ],
+          items: [{ kind: 'string', getAsFile: () => null }],
         },
       } as unknown as React.ClipboardEvent);
     });

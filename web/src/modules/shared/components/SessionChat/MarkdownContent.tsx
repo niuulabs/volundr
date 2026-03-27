@@ -34,9 +34,7 @@ function CodeBlockRenderer({ language, code }: CodeBlockRendererProps) {
     });
   }, [code]);
 
-  const displayCode = shouldCollapse
-    ? lines.slice(0, COLLAPSE_LINE_THRESHOLD).join('\n')
-    : code;
+  const displayCode = shouldCollapse ? lines.slice(0, COLLAPSE_LINE_THRESHOLD).join('\n') : code;
 
   return (
     <div className={styles.codeBlock}>
@@ -68,7 +66,10 @@ function CodeBlockRenderer({ language, code }: CodeBlockRendererProps) {
           </button>
         </div>
       </div>
-      <div className={cn(styles.codeContent, shouldCollapse && styles.codeCollapsed)} data-wrap={wordWrap}>
+      <div
+        className={cn(styles.codeContent, shouldCollapse && styles.codeCollapsed)}
+        data-wrap={wordWrap}
+      >
         <pre>
           <code className={showLineNumbers ? styles.codeContentGrid : undefined}>
             {showLineNumbers && (
@@ -84,11 +85,7 @@ function CodeBlockRenderer({ language, code }: CodeBlockRendererProps) {
         {shouldCollapse && <div className={styles.codeFade} />}
       </div>
       {shouldCollapse && (
-        <button
-          type="button"
-          className={styles.showAllBtn}
-          onClick={() => setCollapsed(false)}
-        >
+        <button type="button" className={styles.showAllBtn} onClick={() => setCollapsed(false)}>
           Show all {lineCount} lines
         </button>
       )}

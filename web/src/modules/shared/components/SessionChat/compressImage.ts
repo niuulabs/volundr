@@ -10,9 +10,7 @@ const TARGET_SIZE_BYTES = 300 * 1024; // 300KB
  *
  * Returns the compressed blob and a preview data-URL.
  */
-export async function compressImage(
-  file: File,
-): Promise<{ blob: Blob; previewUrl: string }> {
+export async function compressImage(file: File): Promise<{ blob: Blob; previewUrl: string }> {
   const bitmap = await createImageBitmap(file);
   const { width, height } = bitmap;
 
