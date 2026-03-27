@@ -157,9 +157,15 @@ export function PlanSagaView() {
           .join('\n\n---\n\n');
       }
 
+      // Generate description from structure
+      const description = detectedStructure.phases
+        .map(p => `**${p.name}**: ${p.raids.map(r => r.name).join(', ')}`)
+        .join('\n\n');
+
       const commitRequest: CommitSagaRequest = {
         name: detectedStructure.name,
         slug: slugify(detectedStructure.name),
+        description,
         repos: [commitRepo],
         base_branch: 'main',
         phases: detectedStructure.phases.map(phase => ({

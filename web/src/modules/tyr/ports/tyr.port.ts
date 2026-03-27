@@ -3,6 +3,7 @@ import type { Saga, Phase } from '../models';
 export interface CommitSagaRequest {
   name: string;
   slug: string;
+  description: string;
   repos: string[];
   base_branch: string;
   phases: {

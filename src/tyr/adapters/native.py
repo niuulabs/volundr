@@ -56,7 +56,7 @@ class NativeTrackerAdapter(TrackerPort):
 
     # -- CRUD: create --
 
-    async def create_saga(self, saga: Saga) -> str:
+    async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         tracker_id = str(saga.id)
         await self._pool.execute(
             """

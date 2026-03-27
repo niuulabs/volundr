@@ -385,17 +385,18 @@ class LinearTrackerAdapter(TrackerPort):
 
     # -- CRUD: create --
 
-    async def create_saga(self, saga: Saga) -> str:
+    async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         team_id = await self._get_team_id()
+        project_desc = description or (
+            f"Saga: {saga.slug}\n"
+            f"Repos: {', '.join(saga.repos)}\n"
+            f"Branch: {saga.feature_branch}"
+        )
         data = await self._gql.query(
             _CREATE_PROJECT_QUERY,
             {
                 "name": saga.name,
-                "description": (
-                    f"Saga: {saga.slug}\n"
-                    f"Repos: {', '.join(saga.repos)}\n"
-                    f"Branch: {saga.feature_branch}"
-                ),
+                "description": project_desc,
                 "teamIds": [team_id],
             },
         )

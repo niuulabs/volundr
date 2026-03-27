@@ -171,6 +171,7 @@ class ExtractStructureResponse(BaseModel):
 class CommitRequest(BaseModel):
     name: str
     slug: str
+    description: str = ""
     repos: list[str]
     base_branch: str = "main"
     phases: list[PhaseSpecRequest]
@@ -652,7 +653,9 @@ def create_sagas_router() -> APIRouter:
         # 1. Create saga in tracker — this MUST succeed or we abort
         tracker_type = type(tracker).__name__
         try:
-            tracker_saga_id = await tracker.create_saga(saga)
+            tracker_saga_id = await tracker.create_saga(
+                saga, description=body.description
+            )
         except Exception as exc:
             logger.error(
                 "Tracker create_saga failed for slug=%s", body.slug, exc_info=True
