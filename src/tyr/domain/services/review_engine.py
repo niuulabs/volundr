@@ -175,10 +175,10 @@ class ReviewEngine:
                 try:
                     decision = await self.evaluate(tracker_id, owner_id)
                     logger.info(
-                        "Review engine decision for %s: %s (confidence=%.2f)",
+                        "Review engine decision for %s: %s (reason=%s)",
                         tracker_id,
                         decision.action,
-                        decision.confidence,
+                        decision.reason,
                     )
                 except Exception:
                     logger.warning(
