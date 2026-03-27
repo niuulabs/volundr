@@ -80,7 +80,7 @@
   color: var(--color-text-secondary);
   line-height: 1.625;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 .commandPrefix {
@@ -146,7 +146,7 @@
 .paramValue {
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 /* ── Diff view (Edit/Write) ──────────────────────────────── */

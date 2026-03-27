@@ -94,9 +94,19 @@ export function ChatInput({
 
   const slashMenu = useSlashMenu(availableCommands as SlashCommand[] | undefined);
   const mentionMenu = useMentionMenu(sessionId, sessionHost, chatEndpoint);
-  const fileAttachments = useFileAttachments();
+  const {
+    attachments: fileAttachmentsList,
+    isDragging,
+    addFiles,
+    removeAttachment,
+    clearAttachments: clearFileAttachments,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handlePaste,
+  } = useFileAttachments();
 
-  const hasContent = input.trim().length > 0 || fileAttachments.attachments.length > 0;
+  const hasContent = input.trim().length > 0 || fileAttachmentsList.length > 0;
 
   const resetTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -126,14 +136,14 @@ export function ChatInput({
     // Prepend mention paths to the message so the backend knows which files are referenced
     const mentionPaths = mentionMenu.mentions.map(m => `@${m.path}`);
     const fullMessage = mentionPaths.length > 0 ? `${mentionPaths.join(' ')} ${trimmed}` : trimmed;
-    onSend(fullMessage, fileAttachments.attachments);
+    onSend(fullMessage, fileAttachmentsList);
     setInput('');
-    fileAttachments.clearAttachments();
+    clearFileAttachments();
     // Clear mentions after send
     for (const m of mentionMenu.mentions) {
       mentionMenu.removeMention(m.path);
     }
-  }, [input, disabled, onSend, mentionMenu, fileAttachments]);
+  }, [input, disabled, onSend, mentionMenu, fileAttachmentsList, clearFileAttachments]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -213,11 +223,11 @@ export function ChatInput({
       if (!files) {
         return;
       }
-      fileAttachments.addFiles(files);
+      addFiles(files);
       // Reset the input so the same file can be re-attached
       e.target.value = '';
     },
-    [fileAttachments]
+    [addFiles]
   );
 
   const handleMicToggle = useCallback(() => {
@@ -235,18 +245,18 @@ export function ChatInput({
     <div
       className={cn(styles.wrapper, className)}
       data-disabled={disabled}
-      data-drag-over={fileAttachments.isDragging}
-      onDragOver={fileAttachments.handleDragOver}
-      onDragLeave={fileAttachments.handleDragLeave}
-      onDrop={fileAttachments.handleDrop}
-      onPaste={fileAttachments.handlePaste}
+      data-drag-over={isDragging}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onPaste={handlePaste}
     >
-      {(fileAttachments.attachments.length > 0 || mentionMenu.mentions.length > 0) && (
+      {(fileAttachmentsList.length > 0 || mentionMenu.mentions.length > 0) && (
         <div className={styles.attachments}>
           {mentionMenu.mentions.map(entry => (
             <MentionPill key={entry.path} entry={entry} onRemove={mentionMenu.removeMention} />
           ))}
-          {fileAttachments.attachments.map(attachment => (
+          {fileAttachmentsList.map(attachment => (
             <span key={attachment.id} className={styles.attachmentChip}>
               {attachment.previewUrl && (
                 <img
@@ -259,7 +269,7 @@ export function ChatInput({
               <button
                 type="button"
                 className={styles.attachmentRemove}
-                onClick={() => fileAttachments.removeAttachment(attachment.id)}
+                onClick={() => removeAttachment(attachment.id)}
                 aria-label={`Remove ${attachment.name}`}
               >
                 <X className={styles.attachmentRemoveIcon} />

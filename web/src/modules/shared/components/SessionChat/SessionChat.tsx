@@ -158,49 +158,46 @@ export function SessionChat({
     (text: string, fileAttachments: FileAttachment[]) => {
       userSentRef.current = true;
 
-      if (fileAttachments.length === 0) {
+      // Only image files with compressed blobs can be transmitted as content blocks.
+      // Non-image files are filtered out so metadata stays consistent with actual
+      // content blocks sent over the wire.
+      const imageAttachments = fileAttachments.filter(
+        (fa): fa is FileAttachment & { compressed: Blob } =>
+          fa.file.type.startsWith('image/') && fa.compressed !== null
+      );
+
+      if (imageAttachments.length === 0) {
         sendMessage(text);
         return;
       }
 
       const contentBlocks: ContentBlock[] = [];
-      const attachmentMeta: AttachmentMeta[] = [];
+      const attachmentMeta: AttachmentMeta[] = imageAttachments.map(fa => ({
+        name: fa.name,
+        type: 'image' as const,
+        size: fa.compressed.size,
+        contentType: 'image/jpeg',
+      }));
 
-      for (const fa of fileAttachments) {
-        const isImage = fa.file.type.startsWith('image/');
-        attachmentMeta.push({
-          name: fa.name,
-          type: isImage ? 'image' : fa.file.type === 'application/pdf' ? 'document' : 'text',
-          size: fa.compressed?.size ?? fa.file.size,
-          contentType: fa.compressed ? 'image/jpeg' : fa.file.type,
-        });
-
-        // Image content blocks are sent as base64 — read the blob
-        if (isImage && fa.compressed) {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(',')[1];
-            contentBlocks.push({
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/jpeg',
-                data: base64,
-              },
-            });
-            // Send once all images are processed
-            if (contentBlocks.length === fileAttachments.filter(f => f.compressed).length) {
-              sendMessage(text, contentBlocks, attachmentMeta);
-            }
-          };
-          reader.readAsDataURL(fa.compressed);
-        }
-      }
-
-      // If no images need base64 encoding, send immediately with just metadata
-      const hasImages = fileAttachments.some(f => f.compressed);
-      if (!hasImages) {
-        sendMessage(text, contentBlocks, attachmentMeta);
+      let processedCount = 0;
+      for (const fa of imageAttachments) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          contentBlocks.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/jpeg',
+              data: base64,
+            },
+          });
+          processedCount += 1;
+          if (processedCount === imageAttachments.length) {
+            sendMessage(text, contentBlocks, attachmentMeta);
+          }
+        };
+        reader.readAsDataURL(fa.compressed);
       }
     },
     [sendMessage]
@@ -212,6 +209,15 @@ export function SessionChat({
 
   const handleCopy = useCallback((text: string) => {
     navigator.clipboard?.writeText(text);
+  }, []);
+
+  const handleBookmark = useCallback((id: string, bookmarked: boolean) => {
+    const key = `bookmark:${id}`;
+    if (bookmarked) {
+      localStorage.setItem(key, '1');
+    } else {
+      localStorage.removeItem(key);
+    }
   }, []);
 
   const handleRegenerate = useCallback(
@@ -370,6 +376,8 @@ export function SessionChat({
                   message={msg}
                   onCopy={handleCopy}
                   onRegenerate={handleRegenerate}
+                  onBookmark={handleBookmark}
+                  bookmarked={localStorage.getItem(`bookmark:${msg.id}`) === '1'}
                 />
               );
             })}
