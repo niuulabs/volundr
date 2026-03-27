@@ -174,11 +174,20 @@ class SessionActivitySubscriber:
                     "SSE subscription failed for owner %s, reconnecting",
                     owner_id[:8],
                 )
-                # Clear cached adapters so we re-resolve on next sync cycle
-                self._owner_adapters.pop(owner_id, None)
+                # One cluster failed — cancel ALL tasks for this owner so the
+                # sync cycle recreates them with fresh adapters.
+                self._cancel_owner_tasks(owner_id)
+                return
 
             if self._running:
                 await asyncio.sleep(self._config.reconnect_delay)
+
+    def _cancel_owner_tasks(self, owner_id: str) -> None:
+        """Cancel all SSE tasks for *owner_id* and clear the adapter cache."""
+        self._owner_adapters.pop(owner_id, None)
+        for task in self._owner_tasks.pop(owner_id, []):
+            if not task.done():
+                task.cancel()
 
     async def _resolve_owner_adapters(self, owner_id: str) -> list[VolundrPort]:
         """Resolve and cache per-owner Volundr adapters (one per cluster)."""

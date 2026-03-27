@@ -176,10 +176,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             async def _resolve_volundr_per_user(
                 principal: Principal = Depends(extract_principal),
             ) -> VolundrPort:
-                adapters = await app.state.volundr_factory.for_owner(principal.user_id)
-                if adapters:
-                    return adapters[0]
-                return fallback_volundr
+                adapter = await app.state.volundr_factory.primary_for_owner(principal.user_id)
+                return adapter or fallback_volundr
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr_per_user
             app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr_per_user
