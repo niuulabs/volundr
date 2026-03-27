@@ -53,7 +53,10 @@ export function VolundrConnectionSection({
         adapter: ADAPTER_PATHS.VOLUNDR_HTTP,
         credentialName: CREDENTIAL_NAMES.VOLUNDR_PAT,
         credentialValue: pat,
-        config: { url: url.trim(), name: clusterName.trim() || undefined },
+        config: {
+          url: url.trim(),
+          ...(clusterName.trim() ? { name: clusterName.trim() } : {}),
+        },
       })
     );
     if (result !== undefined) {

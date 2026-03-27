@@ -88,9 +88,7 @@ export function DispatcherView() {
             >
               {r.status === 'spawned' ? '\u2713' : '\u2717'} {r.session_name || r.issue_id} —{' '}
               {r.status}
-              {r.cluster_name && (
-                <span className={styles.clusterBadge}>{r.cluster_name}</span>
-              )}
+              {r.cluster_name && <span className={styles.clusterBadge}>{r.cluster_name}</span>}
             </div>
           ))}
           <button
