@@ -225,7 +225,7 @@
   background-color: color-mix(in srgb, var(--color-bg-secondary) 80%, transparent);
   border: none;
   border-top: 1px solid var(--color-border-subtle);
-  color: var(--color-accent-cyan);
+  color: var(--color-brand);
   font-size: var(--text-xs);
   font-family: var(--font-sans);
   cursor: pointer;
@@ -234,8 +234,8 @@
 }
 
 .showAllBtn:hover {
-  background-color: color-mix(in srgb, var(--color-accent-cyan) 8%, transparent);
-  color: var(--color-accent-cyan);
+  background-color: color-mix(in srgb, var(--color-brand) 8%, transparent);
+  color: var(--color-brand);
 }
 
 /* ── Lists ───────────────────────────────────────────────── */
