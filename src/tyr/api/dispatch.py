@@ -85,6 +85,7 @@ class DispatchResult(BaseModel):
     session_id: str
     session_name: str
     status: str
+    cluster_name: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +366,7 @@ def create_dispatch_router() -> APIRouter:
                         session_id=session.id,
                         session_name=session.name,
                         status="spawned",
+                        cluster_name=session.cluster_name,
                     )
                 )
                 logger.info("Dispatched %s → session %s", issue.identifier, session.id)

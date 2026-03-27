@@ -253,6 +253,18 @@
   font-size: var(--text-sm);
 }
 
+.clusterBadge {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: var(--space-0) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent-cyan);
+  background-color: color-mix(in srgb, var(--color-accent-cyan) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-cyan) 30%, transparent);
+  border-radius: var(--radius-full);
+}
+
 .error {
   padding: var(--space-4);
   color: var(--color-accent-red);

@@ -22,10 +22,12 @@ class VolundrHTTPAdapter(VolundrPort):
         base_url: str,
         api_key: str | None = None,
         timeout: float = 30.0,
+        name: str = "",
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._timeout = timeout
+        self._name = name
 
     def _headers(self, auth_token: str | None = None) -> dict[str, str]:
         token = auth_token or self._api_key
@@ -68,6 +70,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 status=data["status"],
                 tracker_issue_id=data.get("tracker_issue_id"),
                 chat_endpoint=data.get("chat_endpoint"),
+                cluster_name=self._name,
             )
 
     async def get_session(
@@ -91,6 +94,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 status=data["status"],
                 tracker_issue_id=data.get("tracker_issue_id"),
                 chat_endpoint=data.get("chat_endpoint"),
+                cluster_name=self._name,
             )
 
     async def list_sessions(
@@ -110,6 +114,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     name=s["name"],
                     status=s["status"],
                     tracker_issue_id=s.get("tracker_issue_id"),
+                    cluster_name=self._name,
                 )
                 for s in resp.json()
             ]

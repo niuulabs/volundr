@@ -293,7 +293,10 @@ class StubVolundrFactory:
     def __init__(self, adapter: StubVolundr) -> None:
         self._adapter = adapter
 
-    async def for_owner(self, owner_id: str) -> StubVolundr:
+    async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+        return [self._adapter]
+
+    async def primary_for_owner(self, owner_id: str) -> StubVolundr | None:
         return self._adapter
 
 
@@ -1004,36 +1007,32 @@ class TestChronicleCapture:
 # ---------------------------------------------------------------------------
 
 
-class TestOwnerSubscriptionLoop:
+class TestAdapterSubscriptionLoop:
     @pytest.mark.asyncio
-    async def test_no_volundr_adapter_logs_warning_and_retries(self) -> None:
-        """When the Volundr factory returns None, a warning is logged and the loop retries."""
+    async def test_no_volundr_adapter_resolves_empty_list(self) -> None:
+        """When the Volundr factory returns an empty list, no SSE tasks are created."""
 
-        class NoneVolundrFactory:
-            async def for_owner(self, owner_id: str) -> None:
+        class EmptyVolundrFactory:
+            async def for_owner(self, owner_id: str) -> list:
+                return []
+
+            async def primary_for_owner(self, owner_id: str) -> None:
                 return None
 
         event_bus = InMemoryEventBus()
         tracker_factory = StubTrackerFactory(StubTracker())
         config = _default_config().model_copy(update={"reconnect_delay": 0.01})
         sub = SessionActivitySubscriber(
-            volundr_factory=NoneVolundrFactory(),
+            volundr_factory=EmptyVolundrFactory(),
             tracker_factory=tracker_factory,
             dispatcher_repo=StubDispatcherRepo(),
             event_bus=event_bus,
             config=config,
         )
 
-        # Run the loop briefly — it should log a warning and not crash
-        sub._running = True
-        task = asyncio.create_task(sub._owner_subscription_loop("owner-x"))
-        await asyncio.sleep(0.05)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-        # No assertion needed — absence of exception confirms the warning path runs
+        # Resolve should return empty
+        adapters = await sub._resolve_owner_adapters("owner-x")
+        assert adapters == []
 
     @pytest.mark.asyncio
     async def test_sse_events_dispatched_with_owner_id(self) -> None:
@@ -1054,7 +1053,7 @@ class TestOwnerSubscriptionLoop:
         volundr.activity_events = [event]
 
         sub._running = True
-        task = asyncio.create_task(sub._owner_subscription_loop("user-1"))
+        task = asyncio.create_task(sub._adapter_subscription_loop("user-1", volundr))
         await asyncio.sleep(0.05)
         sub._running = False
         task.cancel()
@@ -1063,3 +1062,35 @@ class TestOwnerSubscriptionLoop:
         except asyncio.CancelledError:
             pass
         # The running state event should have cancelled any pending eval (no crash)
+
+    @pytest.mark.asyncio
+    async def test_multiple_adapters_resolved(self) -> None:
+        """Factory returning multiple adapters should all be cached."""
+        v1 = StubVolundr()
+        v2 = StubVolundr()
+
+        class MultiFactory:
+            async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+                return [v1, v2]
+
+            async def primary_for_owner(self, owner_id: str) -> StubVolundr:
+                return v1
+
+        event_bus = InMemoryEventBus()
+        tracker_factory = StubTrackerFactory(StubTracker())
+        config = _default_config()
+        sub = SessionActivitySubscriber(
+            volundr_factory=MultiFactory(),
+            tracker_factory=tracker_factory,
+            dispatcher_repo=StubDispatcherRepo(),
+            event_bus=event_bus,
+            config=config,
+        )
+
+        adapters = await sub._resolve_owner_adapters("owner-multi")
+        assert len(adapters) == 2
+        assert adapters[0] is v1
+        assert adapters[1] is v2
+        # Cached on second call
+        cached = await sub._resolve_owner_adapters("owner-multi")
+        assert cached is adapters

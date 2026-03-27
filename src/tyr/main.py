@@ -128,7 +128,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.credential_store = credential_store
 
             # Wire adapter factories (used by autonomous dispatcher)
-            app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
+            app.state.volundr_factory = VolundrAdapterFactory(
+                integration_repo, credential_store, fallback_url=settings.volundr.url
+            )
             app.state.tracker_factory = TrackerAdapterFactory(
                 integration_repo, credential_store, pool=pool
             )
@@ -166,16 +168,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
-            # Wire Volundr adapter
-            volundr_adapter = VolundrHTTPAdapter(settings.volundr.url)
-            app.state.volundr = volundr_adapter
+            # Wire Volundr adapter — per-user resolution via factory,
+            # falling back to the global URL when no per-user connection exists.
+            fallback_volundr = VolundrHTTPAdapter(settings.volundr.url, name="default")
+            app.state.volundr = fallback_volundr
 
-            async def _resolve_volundr() -> VolundrPort:
-                return volundr_adapter
+            async def _resolve_volundr_per_user(
+                principal: Principal = Depends(extract_principal),
+            ) -> VolundrPort:
+                adapters = await app.state.volundr_factory.for_owner(principal.user_id)
+                if adapters:
+                    return adapters[0]
+                return fallback_volundr
 
-            app.dependency_overrides[resolve_volundr] = _resolve_volundr
-            app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr
-            app.dependency_overrides[sagas_resolve_volundr] = _resolve_volundr
+            app.dependency_overrides[resolve_volundr] = _resolve_volundr_per_user
+            app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr_per_user
+            app.dependency_overrides[sagas_resolve_volundr] = _resolve_volundr_per_user
 
             # Wire Git adapter
             git_adapter = GitHubGitAdapter(settings.git.token)
