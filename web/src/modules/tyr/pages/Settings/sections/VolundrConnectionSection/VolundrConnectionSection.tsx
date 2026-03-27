@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { Plus, Trash2, RefreshCw } from 'lucide-react';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 import type { CreateIntegrationParams, ITyrIntegrationService } from '@/modules/tyr/ports';
 import { INTEGRATION_TYPES, ADAPTER_PATHS, CREDENTIAL_NAMES } from '@/modules/tyr/constants';
 import { useConnectionForm } from '../useConnectionForm';
-import styles from '../ConnectionSection.module.css';
+import styles from './VolundrConnectionSection.module.css';
 
 const DEFAULT_VOLUNDR_URL = import.meta.env.VITE_VOLUNDR_DEFAULT_URL || 'http://volundr';
 
@@ -14,65 +15,12 @@ interface VolundrConnectionSectionProps {
   service: ITyrIntegrationService;
 }
 
-function ConnectedCluster({
-  connection,
-  onDisconnect,
-  service,
-}: {
-  connection: IntegrationConnection;
-  onDisconnect: (id: string) => Promise<void>;
-  service: ITyrIntegrationService;
-}) {
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const { error, disconnecting, handleDisconnect } = useConnectionForm(connection.id, onDisconnect);
-
-  const clusterName = connection.config.name || connection.slug || connection.id;
-
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const result = await service.testConnection(connection.id);
-      setTestResult(result);
-    } catch (e) {
-      setTestResult({ success: false, message: e instanceof Error ? e.message : 'Test failed' });
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <div className={styles.clusterCard}>
-      <div className={styles.clusterCardHeader}>
-        <div className={styles.clusterCardTitle}>{clusterName}</div>
-        <span className={styles.statusBadge} data-status="connected">
-          Connected
-        </span>
-      </div>
-      <p className={styles.meta}>{connection.config.url || 'Volundr instance'}</p>
-      <p className={styles.meta}>Connected {new Date(connection.createdAt).toLocaleDateString()}</p>
-      {testResult && (
-        <p className={testResult.success ? styles.testSuccess : styles.error}>
-          {testResult.message}
-        </p>
-      )}
-      <div className={styles.actions}>
-        <button className={styles.testBtn} onClick={handleTest} disabled={testing} type="button">
-          {testing ? 'Testing...' : 'Test'}
-        </button>
-        <button
-          className={styles.disconnectBtn}
-          onClick={handleDisconnect}
-          disabled={disconnecting}
-          type="button"
-        >
-          {disconnecting ? 'Disconnecting...' : 'Disconnect'}
-        </button>
-      </div>
-      {error && <p className={styles.error}>{error}</p>}
-    </div>
-  );
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export function VolundrConnectionSection({
@@ -92,98 +40,197 @@ export function VolundrConnectionSection({
       setError('PAT is required');
       return;
     }
-    const result = await wrapSubmit(() =>
-      onConnect({
+    await wrapSubmit(async () => {
+      const config: Record<string, string> = { url: url.trim() };
+      if (clusterName.trim()) {
+        config.name = clusterName.trim();
+      }
+      await onConnect({
         integrationType: INTEGRATION_TYPES.CODE_FORGE,
         adapter: ADAPTER_PATHS.VOLUNDR_HTTP,
         credentialName: CREDENTIAL_NAMES.VOLUNDR_PAT,
         credentialValue: pat,
-        config: {
-          url: url.trim(),
-          ...(clusterName.trim() ? { name: clusterName.trim() } : {}),
-        },
-      })
-    );
-    if (result !== undefined) {
+        config,
+      });
       setPat('');
       setClusterName('');
       setUrl(DEFAULT_VOLUNDR_URL);
       setShowForm(false);
+    });
+  };
+
+  return (
+    <>
+      {/* Header toolbar — matches credentials page pattern */}
+      <div className={styles.contentHeader}>
+        <h3 className={styles.sectionTitle}>Volundr Clusters</h3>
+        <button type="button" className={styles.addButton} onClick={() => setShowForm(true)}>
+          <Plus className={styles.addButtonIcon} />
+          Add Cluster
+        </button>
+      </div>
+
+      {/* Empty state */}
+      {connections.length === 0 && !showForm && (
+        <div className={styles.emptyState}>
+          <span className={styles.emptyText}>No clusters connected</span>
+        </div>
+      )}
+
+      {/* Cluster grid — same card pattern as credentials */}
+      {connections.length > 0 && (
+        <div className={styles.grid}>
+          {connections.map(conn => (
+            <ClusterCard
+              key={conn.id}
+              connection={conn}
+              onDisconnect={onDisconnect}
+              service={service}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Add form overlay — matches credential form pattern */}
+      {showForm && (
+        <div className={styles.formOverlay}>
+          <div className={styles.formPanel}>
+            <div className={styles.formHeader}>
+              <span className={styles.formTitle}>Add Volundr Cluster</span>
+              <button type="button" className={styles.formClose} onClick={() => setShowForm(false)}>
+                {'\u2715'}
+              </button>
+            </div>
+            <div className={styles.formBody}>
+              <div className={styles.formField}>
+                <label className={styles.formLabel}>Cluster Name</label>
+                <input
+                  type="text"
+                  className={styles.formInput}
+                  value={clusterName}
+                  onChange={e => setClusterName(e.target.value)}
+                  placeholder="e.g. production, staging"
+                />
+              </div>
+              <div className={styles.formField}>
+                <label className={styles.formLabel}>
+                  Volundr URL <span className={styles.required}>*</span>
+                </label>
+                <input
+                  type="text"
+                  className={styles.formInput}
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  placeholder="https://volundr.example.com"
+                />
+              </div>
+              <div className={styles.formField}>
+                <label className={styles.formLabel}>
+                  Personal Access Token <span className={styles.required}>*</span>
+                </label>
+                <input
+                  type="password"
+                  className={styles.formInput}
+                  value={pat}
+                  onChange={e => setPat(e.target.value)}
+                  placeholder="Paste your PAT"
+                />
+              </div>
+              {error && <div className={styles.formError}>{error}</div>}
+            </div>
+            <div className={styles.formFooter}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={() => setShowForm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.submitButton}
+                disabled={!pat.trim() || submitting}
+                onClick={handleConnect}
+              >
+                {submitting ? 'Connecting...' : 'Connect'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── Cluster Card ── */
+
+function ClusterCard({
+  connection,
+  onDisconnect,
+  service,
+}: {
+  connection: IntegrationConnection;
+  onDisconnect: (id: string) => Promise<void>;
+  service: ITyrIntegrationService;
+}) {
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const { error, disconnecting, handleDisconnect } = useConnectionForm(connection.id, onDisconnect);
+
+  const name = connection.config.name || connection.slug || connection.id;
+  const url = connection.config.url || 'Volundr instance';
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await service.testConnection(connection.id);
+      setTestResult(result);
+    } catch {
+      setTestResult({ success: false, message: 'Connection test failed' });
+    } finally {
+      setTesting(false);
     }
   };
 
-  const hasConnections = connections.length > 0;
-  const showAddForm = showForm || !hasConnections;
-
   return (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.title}>Volundr Clusters</h3>
-        {hasConnections && !showForm && (
-          <button className={styles.connectBtn} onClick={() => setShowForm(true)} type="button">
-            Add another cluster
-          </button>
-        )}
-      </div>
-      {!hasConnections && (
-        <p className={styles.description}>
-          Connect your Volundr instances to enable code forge operations.
-        </p>
-      )}
-      {connections.map(conn => (
-        <ConnectedCluster
-          key={conn.id}
-          connection={conn}
-          onDisconnect={onDisconnect}
-          service={service}
-        />
-      ))}
-      {showAddForm && (
-        <div className={styles.form}>
-          <label className={styles.label} htmlFor="volundr-name">
-            Cluster Name (optional)
-          </label>
-          <input
-            id="volundr-name"
-            className={styles.input}
-            type="text"
-            value={clusterName}
-            onChange={e => setClusterName(e.target.value)}
-            placeholder="e.g. production, staging"
-          />
-          <label className={styles.label} htmlFor="volundr-url">
-            Volundr URL
-          </label>
-          <input
-            id="volundr-url"
-            className={styles.input}
-            type="text"
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            placeholder="http://volundr"
-          />
-          <label className={styles.label} htmlFor="volundr-pat">
-            Personal Access Token
-          </label>
-          <input
-            id="volundr-pat"
-            className={styles.input}
-            type="password"
-            value={pat}
-            onChange={e => setPat(e.target.value)}
-            placeholder="Enter your Volundr PAT"
-          />
-          <button
-            className={styles.connectBtn}
-            onClick={handleConnect}
-            disabled={submitting}
-            type="button"
-          >
-            {submitting ? 'Connecting...' : 'Connect'}
-          </button>
+    <div className={styles.card}>
+      <div className={styles.cardInfo}>
+        <span className={styles.cardName}>{name}</span>
+        <div className={styles.cardMeta}>
+          <span className={styles.statusBadge} data-status="connected">
+            Connected
+          </span>
+          <span>{url}</span>
+          <span>{formatDate(connection.createdAt)}</span>
         </div>
-      )}
-      {error && <p className={styles.error}>{error}</p>}
+        {testResult && (
+          <span className={testResult.success ? styles.testSuccess : styles.testError}>
+            {testResult.message}
+          </span>
+        )}
+        {error && <span className={styles.testError}>{error}</span>}
+      </div>
+      <div className={styles.cardActions}>
+        <button
+          type="button"
+          className={styles.iconButton}
+          onClick={handleTest}
+          disabled={testing}
+          title="Test connection"
+        >
+          <RefreshCw className={styles.iconButtonIcon} data-spinning={testing || undefined} />
+        </button>
+        <button
+          type="button"
+          className={styles.deleteButton}
+          onClick={handleDisconnect}
+          disabled={disconnecting}
+          title="Disconnect"
+        >
+          <Trash2 className={styles.deleteButtonIcon} />
+        </button>
+      </div>
     </div>
   );
 }
