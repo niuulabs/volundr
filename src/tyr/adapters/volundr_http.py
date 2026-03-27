@@ -57,6 +57,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     "issue_id": request.tracker_issue_id,
                     "issue_url": request.tracker_issue_url,
                     "workload_type": request.workload_type,
+                    "integration_ids": request.integration_ids,
                 },
             )
             resp.raise_for_status()

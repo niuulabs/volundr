@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from tyr.domain.models import PRStatus
@@ -24,6 +24,7 @@ class SpawnRequest:
     initial_prompt: str
     base_branch: str = "main"
     workload_type: str = "default"
+    integration_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

@@ -278,6 +278,16 @@ def create_dispatch_router() -> APIRouter:
         effective_model = body.model or settings.dispatch.default_model
         effective_prompt = body.system_prompt or settings.dispatch.default_system_prompt
 
+        # Fetch user's integration connection IDs for session injection
+        integration_ids: list[str] = []
+        integration_repo = getattr(request.app.state, "integration_repo", None)
+        if integration_repo is not None:
+            try:
+                connections = await integration_repo.list_connections(principal.user_id)
+                integration_ids = [str(c.id) for c in connections]
+            except Exception:
+                logger.warning("Failed to fetch integrations for user %s", principal.user_id)
+
         results: list[DispatchResult] = []
 
         # Build a lookup of saga data
@@ -329,6 +339,7 @@ def create_dispatch_router() -> APIRouter:
                         tracker_issue_url=issue.url,
                         system_prompt=effective_prompt,
                         initial_prompt=_build_prompt(issue, item.repo, saga.feature_branch),
+                        integration_ids=integration_ids,
                     ),
                     auth_token=auth_token,
                 )
