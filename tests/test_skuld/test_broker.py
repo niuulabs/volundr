@@ -632,19 +632,18 @@ class TestReportUsage:
 
     @pytest.mark.asyncio
     async def test_get_http_client_includes_service_auth_headers(self, tmp_path):
-        """HTTP client includes x-auth-* headers for service-to-service auth."""
+        """HTTP client uses VOLUNDR_API_TOKEN PAT for service-to-service auth."""
+        from unittest.mock import patch
+
         settings = SkuldSettings(
             session={"id": "s1", "workspace_dir": str(tmp_path)},
             volundr_api_url="http://volundr-internal.volundr.svc",
-            service_user_id="skuld-broker",
-            service_tenant_id="test-tenant",
         )
         b = Broker(settings=settings)
-        client = await b._get_http_client()
-        assert client.headers["x-auth-user-id"] == "skuld-broker"
-        assert client.headers["x-auth-email"] == "skuld-broker@internal"
-        assert client.headers["x-auth-tenant"] == "test-tenant"
-        assert client.headers["x-auth-roles"] == "volundr:service"
+        with patch.dict("os.environ", {"VOLUNDR_API_TOKEN": "test-pat-token"}, clear=False):
+            client = await b._get_http_client()
+        assert client.headers.get("authorization") == "Bearer test-pat-token"
+        assert client.headers.get("x-auth-user-id") is None
         await client.aclose()
 
 
