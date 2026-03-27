@@ -223,6 +223,53 @@
   gap: var(--space-5);
 }
 
+/* ── Scroll to Bottom ────────────────────────────────────── */
+
+.scrollToBottom {
+  position: sticky;
+  bottom: var(--space-3);
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: all var(--transition-fast);
+  z-index: 10;
+}
+
+.scrollToBottom:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--color-accent-purple) 50%, transparent);
+}
+
+.scrollToBottomIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.scrollToBottomBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background-color: var(--color-accent-purple);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Input Area ──────────────────────────────────────────── */
 
 .inputArea {

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
-import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon } from 'lucide-react';
+import { Wifi, WifiOff, BrainCircuitIcon, RotateCcwIcon, ArrowDownIcon } from 'lucide-react';
 import { PermissionStack } from '@/modules/shared/components/PermissionDialog';
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
 import type { PermissionBehavior } from '@/modules/shared/hooks/useSkuldChat';
@@ -8,6 +8,8 @@ import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from '
 import { ChatInput } from './ChatInput';
 import { SessionEmptyChat } from './ChatEmptyStates';
 import styles from './SessionChat.module.css';
+
+const SCROLL_THRESHOLD = 150;
 
 interface SessionChatProps {
   /** WebSocket URL for the chat — e.g. wss://host/session */
@@ -54,15 +56,73 @@ export function SessionChat({
   const [modelInput, setModelInput] = useState('');
   const [showModelInput, setShowModelInput] = useState(false);
   const [showThinkingMenu, setShowThinkingMenu] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+  const userSentRef = useRef(false);
+  const prevMessageCountRef = useRef(0);
 
-  // Auto-scroll to bottom on new messages or streaming updates
+  // Show welcome when only system messages exist (no real user/assistant conversation)
+  const hasConversation = useMemo(
+    () =>
+      messages.some(m => m.role === 'user' || (m.role === 'assistant' && !m.metadata?.messageType)),
+    [messages]
+  );
+
+  // Filter system messages to render inline, separate from main flow
+  const visibleMessages = useMemo(
+    () =>
+      messages.filter(m => {
+        if (m.role === 'system') return false;
+        if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
+        return true;
+      }),
+    [messages]
+  );
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+    setNewMessageCount(0);
+  }, []);
+
+  // Track scroll position with passive listener
   useEffect(() => {
-    if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      isNearBottomRef.current = distanceFromBottom <= SCROLL_THRESHOLD;
+      setShowScrollBtn(distanceFromBottom > SCROLL_THRESHOLD * 2);
+
+      if (isNearBottomRef.current) {
+        setNewMessageCount(0);
+      }
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [hasConversation]);
+
+  // Auto-scroll only when near bottom or user just sent a message
+  useEffect(() => {
+    const messageCount = visibleMessages.length;
+    const countDelta = messageCount - prevMessageCountRef.current;
+    prevMessageCountRef.current = messageCount;
+
+    if (userSentRef.current || isNearBottomRef.current) {
+      userSentRef.current = false;
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
     }
-  }, [messages, isRunning]);
+
+    // User is scrolled up — don't scroll, show count of new messages
+    if (countDelta > 0) {
+      setNewMessageCount(prev => prev + countDelta);
+    }
+  }, [messages, isRunning, visibleMessages.length]);
 
   const handlePermissionRespond = useCallback(
     (requestId: string, behavior: PermissionBehavior) => {
@@ -91,6 +151,7 @@ export function SessionChat({
 
   const handleSend = useCallback(
     (text: string) => {
+      userSentRef.current = true;
       sendMessage(text);
     },
     [sendMessage]
@@ -106,7 +167,6 @@ export function SessionChat({
 
   const handleRegenerate = useCallback(
     (messageId: string) => {
-      // Find the user message that preceded this assistant message
       const idx = messages.findIndex(m => m.id === messageId);
       if (idx < 0) {
         return;
@@ -119,26 +179,6 @@ export function SessionChat({
       }
     },
     [messages, sendMessage]
-  );
-
-  // Show welcome when only system messages exist (no real user/assistant conversation)
-  const hasConversation = useMemo(
-    () =>
-      messages.some(m => m.role === 'user' || (m.role === 'assistant' && !m.metadata?.messageType)),
-    [messages]
-  );
-
-  // Filter system messages to render inline, separate from main flow
-  const visibleMessages = useMemo(
-    () =>
-      messages.filter(m => {
-        if (m.role === 'system') return false;
-        // Hide completed assistant messages with no text content
-        // (intermediate tool-use turns that only had thinking/tool calls)
-        if (m.role === 'assistant' && m.status === 'complete' && !m.content.trim()) return false;
-        return true;
-      }),
-    [messages]
   );
 
   // Report visible message count to parent for sidebar sync
@@ -286,6 +326,21 @@ export function SessionChat({
             })}
             <div ref={messagesEndRef} />
           </div>
+          {showScrollBtn && (
+            <button
+              type="button"
+              className={styles.scrollToBottom}
+              onClick={() => scrollToBottom('smooth')}
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDownIcon className={styles.scrollToBottomIcon} />
+              {newMessageCount > 0 && (
+                <span className={styles.scrollToBottomBadge}>
+                  {newMessageCount > 99 ? '99+' : newMessageCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       ) : (
         <SessionEmptyChat sessionName="Volundr" onSuggestionClick={handleSend} />
