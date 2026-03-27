@@ -35,6 +35,32 @@
   margin: 0;
 }
 
+.addButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: none;
+  background-color: var(--color-brand);
+  color: var(--color-bg-primary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  white-space: nowrap;
+}
+
+.addButton:hover {
+  opacity: 0.9;
+}
+
+.addIcon {
+  width: 14px;
+  height: 14px;
+}
+
 .error {
   font-size: var(--text-sm);
   color: var(--color-accent-red);

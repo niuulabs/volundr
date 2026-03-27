@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Trash2, RefreshCw } from 'lucide-react';
 import type { IntegrationConnection } from '@/modules/shared/models/integration.model';
 import type { CreateIntegrationParams, ITyrIntegrationService } from '@/modules/tyr/ports';
 import { INTEGRATION_TYPES, ADAPTER_PATHS, CREDENTIAL_NAMES } from '@/modules/tyr/constants';
@@ -13,6 +13,8 @@ interface VolundrConnectionSectionProps {
   onConnect: (params: CreateIntegrationParams) => Promise<void>;
   onDisconnect: (id: string) => Promise<void>;
   service: ITyrIntegrationService;
+  showForm: boolean;
+  onShowFormChange: (show: boolean) => void;
 }
 
 function formatDate(iso: string): string {
@@ -28,8 +30,9 @@ export function VolundrConnectionSection({
   onConnect,
   onDisconnect,
   service,
+  showForm,
+  onShowFormChange,
 }: VolundrConnectionSectionProps) {
-  const [showForm, setShowForm] = useState(false);
   const [url, setUrl] = useState(DEFAULT_VOLUNDR_URL);
   const [clusterName, setClusterName] = useState('');
   const [pat, setPat] = useState('');
@@ -55,21 +58,12 @@ export function VolundrConnectionSection({
       setPat('');
       setClusterName('');
       setUrl(DEFAULT_VOLUNDR_URL);
-      setShowForm(false);
+      onShowFormChange(false);
     });
   };
 
   return (
     <>
-      {/* Add button — top right, aligned with parent page heading */}
-      <div className={styles.contentHeader}>
-        <div />
-        <button type="button" className={styles.addButton} onClick={() => setShowForm(true)}>
-          <Plus className={styles.addButtonIcon} />
-          Add Cluster
-        </button>
-      </div>
-
       {/* Empty state */}
       {connections.length === 0 && !showForm && (
         <div className={styles.emptyState}>
@@ -97,7 +91,11 @@ export function VolundrConnectionSection({
           <div className={styles.formPanel}>
             <div className={styles.formHeader}>
               <span className={styles.formTitle}>Add Volundr Cluster</span>
-              <button type="button" className={styles.formClose} onClick={() => setShowForm(false)}>
+              <button
+                type="button"
+                className={styles.formClose}
+                onClick={() => onShowFormChange(false)}
+              >
                 {'\u2715'}
               </button>
             </div>
@@ -142,7 +140,7 @@ export function VolundrConnectionSection({
               <button
                 type="button"
                 className={styles.cancelButton}
-                onClick={() => setShowForm(false)}
+                onClick={() => onShowFormChange(false)}
               >
                 Cancel
               </button>

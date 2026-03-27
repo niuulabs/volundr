@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import type { ITyrIntegrationService } from '@/modules/tyr/ports';
 import { useTyrIntegrations } from '@/modules/tyr/hooks/useTyrIntegrations';
 import { INTEGRATION_TYPES } from '@/modules/tyr/constants';
@@ -11,6 +13,7 @@ interface TyrSettingsProps {
 export function TyrSettings({ service }: TyrSettingsProps) {
   const { connections, loading, error, createConnection, deleteConnection } =
     useTyrIntegrations(service);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const volundrConnections = connections.filter(
     c => c.integrationType === INTEGRATION_TYPES.CODE_FORGE
@@ -34,6 +37,10 @@ export function TyrSettings({ service }: TyrSettingsProps) {
             Connect Tyr to your Volundr instances for session dispatch
           </p>
         </div>
+        <button type="button" className={styles.addButton} onClick={() => setShowAddForm(true)}>
+          <Plus className={styles.addIcon} />
+          Add Cluster
+        </button>
       </div>
       {error && <p className={styles.error}>{error}</p>}
       <VolundrConnectionSection
@@ -41,6 +48,8 @@ export function TyrSettings({ service }: TyrSettingsProps) {
         onConnect={createConnection}
         onDisconnect={deleteConnection}
         service={service}
+        showForm={showAddForm}
+        onShowFormChange={setShowAddForm}
       />
     </div>
   );
