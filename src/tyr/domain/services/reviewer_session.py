@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from tyr.config import ReviewConfig
 from tyr.domain.models import PRStatus, Raid
-from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort, VolundrSession
+from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrSession
 
 logger = logging.getLogger(__name__)
 
@@ -266,14 +266,6 @@ class ReviewerSessionService:
 
         diff_summary = self._get_diff_summary(raid)
 
-        # Resolve shorthand repo (e.g. "org/repo") to full URL via Volundr
-        repo = working_session.repo if working_session else ""
-        if repo and "://" not in repo and "@" not in repo:
-            resolved = await self._resolve_repo_url(volundr, repo)
-            if resolved:
-                logger.info("Resolved repo shorthand %s → %s", repo, resolved)
-                repo = resolved
-
         initial_prompt = build_reviewer_initial_prompt(
             raid=raid,
             pr_status=pr_status,
@@ -283,7 +275,7 @@ class ReviewerSessionService:
 
         request = SpawnRequest(
             name=f"review-{(raid.identifier or raid.tracker_id[:8]).lower()}",
-            repo=repo,
+            repo=working_session.repo if working_session else "",
             branch=working_session.branch if working_session else "",
             base_branch=working_session.base_branch if working_session else "main",
             model=self._cfg.reviewer_model,
@@ -366,21 +358,6 @@ class ReviewerSessionService:
                 raid.session_id,
                 exc_info=True,
             )
-
-    async def _resolve_repo_url(self, volundr: VolundrPort, shorthand: str) -> str | None:
-        """Resolve a bare org/repo shorthand to a full URL via Volundr's repo listing."""
-        try:
-            repos = await volundr.list_repos()
-            parts = shorthand.strip("/").split("/")
-            if len(parts) != 2:
-                return None
-            org, name = parts
-            for repo in repos:
-                if repo.get("org") == org and repo.get("name") == name:
-                    return repo.get("url")
-        except Exception:
-            logger.warning("Failed to resolve repo shorthand %s", shorthand, exc_info=True)
-        return None
 
     def _get_diff_summary(self, raid: Raid) -> str:
         """Get a diff summary from the raid's chronicle summary."""

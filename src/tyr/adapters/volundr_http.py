@@ -41,6 +41,15 @@ class VolundrHTTPAdapter(VolundrPort):
         *,
         auth_token: str | None = None,
     ) -> VolundrSession:
+        repo = request.repo
+        # Resolve bare org/repo shorthands to full URLs so Volundr's
+        # GitContributor can produce an authenticated clone URL.
+        if repo and "://" not in repo and "@" not in repo:
+            resolved = await self._resolve_repo_url(repo, auth_token=auth_token)
+            if resolved:
+                logger.info("Resolved repo shorthand %s → %s", repo, resolved)
+                repo = resolved
+
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(
                 f"{self._base_url}/api/v1/volundr/sessions",
@@ -50,7 +59,7 @@ class VolundrHTTPAdapter(VolundrPort):
                     "model": request.model,
                     "source": {
                         "type": "git",
-                        "repo": request.repo,
+                        "repo": repo,
                         "branch": request.branch,
                         "base_branch": request.base_branch,
                     },
@@ -194,6 +203,21 @@ class VolundrHTTPAdapter(VolundrPort):
             )
             resp.raise_for_status()
             return [c["id"] for c in resp.json() if c.get("enabled", True)]
+
+    async def _resolve_repo_url(self, shorthand: str, *, auth_token: str | None = None) -> str | None:
+        """Resolve a bare org/repo shorthand to a full URL via the repos listing."""
+        try:
+            repos = await self.list_repos(auth_token=auth_token)
+            parts = shorthand.strip("/").split("/")
+            if len(parts) != 2:
+                return None
+            org, name = parts
+            for repo in repos:
+                if repo.get("org") == org and repo.get("name") == name:
+                    return repo.get("url")
+        except Exception:
+            logger.warning("Failed to resolve repo shorthand %s", shorthand, exc_info=True)
+        return None
 
     async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
         """Fetch configured repos from Volundr's shared niuu endpoint."""
