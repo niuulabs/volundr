@@ -213,18 +213,12 @@ class ReviewEngine:
             len(result.issues),
         )
 
-        # If approved with no issues → proceed to decision
+        # If approved with no issues → auto-approve (reviewer verdict is authoritative)
         if result.approved and not result.issues:
             self._reviewer_sessions.pop(session_id, None)
-            pr_status = await self._fetch_pr_status(raid)
-            if score >= self._cfg.auto_approve_threshold and self._can_auto_approve(pr_status):
-                decision = await self._handle_auto_approve(
-                    tracker, tracker_id, owner_id, raid, score
-                )
-            else:
-                decision = await self._handle_escalation(
-                    tracker, tracker_id, owner_id, raid, score
-                )
+            decision = await self._handle_auto_approve(
+                tracker, tracker_id, owner_id, raid, score
+            )
             logger.info(
                 "Post-reviewer decision for %s: %s (reason=%s)",
                 tracker_id, decision.action, decision.reason,
