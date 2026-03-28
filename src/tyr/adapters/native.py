@@ -250,19 +250,23 @@ class NativeTrackerAdapter(TrackerPort):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
+        reviewer_session_id: str | None = None,
+        review_round: int | None = None,
     ) -> Raid:
         row = await self._pool.fetchrow(
             """
             UPDATE raids SET
-                status           = COALESCE($2, status),
-                session_id       = COALESCE($3, session_id),
-                confidence       = COALESCE($4, confidence),
-                pr_url           = COALESCE($5, pr_url),
-                pr_id            = COALESCE($6, pr_id),
-                retry_count      = COALESCE($7, retry_count),
-                reason           = COALESCE($8, reason),
-                chronicle_summary = COALESCE($9, chronicle_summary),
-                updated_at       = NOW()
+                status              = COALESCE($2, status),
+                session_id          = COALESCE($3, session_id),
+                confidence          = COALESCE($4, confidence),
+                pr_url              = COALESCE($5, pr_url),
+                pr_id               = COALESCE($6, pr_id),
+                retry_count         = COALESCE($7, retry_count),
+                reason              = COALESCE($8, reason),
+                chronicle_summary   = COALESCE($9, chronicle_summary),
+                reviewer_session_id = COALESCE($10, reviewer_session_id),
+                review_round        = COALESCE($11, review_round),
+                updated_at          = NOW()
             WHERE tracker_id = $1
             RETURNING *
             """,
@@ -275,6 +279,8 @@ class NativeTrackerAdapter(TrackerPort):
             retry_count,
             reason,
             chronicle_summary,
+            reviewer_session_id,
+            review_round,
         )
         if row is None:
             raise LookupError(f"Raid not found: {tracker_id}")
@@ -533,6 +539,8 @@ class NativeTrackerAdapter(TrackerPort):
             retry_count=row.get("retry_count", 0) or 0,
             created_at=row["created_at"] or datetime.now(UTC),
             updated_at=row["updated_at"] or datetime.now(UTC),
+            reviewer_session_id=row.get("reviewer_session_id"),
+            review_round=row.get("review_round", 0) or 0,
         )
 
     async def _saga_row_to_project(self, row: asyncpg.Record) -> TrackerProject:

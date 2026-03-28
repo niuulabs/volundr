@@ -312,6 +312,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 review_config=settings.review,
                 event_bus=event_bus,
                 reviewer_service=reviewer_service,
+                dispatcher_repo=dispatcher_repo,
             )
             app.state.review_engine = review_engine
             await review_engine.start()

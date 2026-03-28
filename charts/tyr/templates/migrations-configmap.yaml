@@ -367,4 +367,14 @@ data:
 
     ALTER TABLE raid_progress DROP COLUMN IF EXISTS depends_on;
     ALTER TABLE raids DROP COLUMN IF EXISTS depends_on;
+
+  000018_raid_reviewer_session.up.sql: |
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS reviewer_session_id TEXT;
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS review_round INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_raids_reviewer_session ON raids (reviewer_session_id) WHERE reviewer_session_id IS NOT NULL;
+
+  000018_raid_reviewer_session.down.sql: |
+    DROP INDEX IF EXISTS idx_raids_reviewer_session;
+    ALTER TABLE raids DROP COLUMN IF EXISTS review_round;
+    ALTER TABLE raids DROP COLUMN IF EXISTS reviewer_session_id;
 {{- end }}

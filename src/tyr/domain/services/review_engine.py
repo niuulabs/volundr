@@ -41,6 +41,7 @@ from tyr.domain.services.reviewer_session import (
     ReviewerSessionService,
     parse_reviewer_response,
 )
+from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
 from tyr.ports.tracker import TrackerFactory, TrackerPort
@@ -128,6 +129,7 @@ class ReviewEngine:
         event_bus: EventBusPort | None = None,
         reviewer_service: ReviewerSessionService | None = None,
         integration_repo: IntegrationRepository | None = None,
+        dispatcher_repo: DispatcherRepository | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -136,6 +138,7 @@ class ReviewEngine:
         self._event_bus = event_bus
         self._reviewer = reviewer_service
         self._integration_repo = integration_repo
+        self._dispatcher_repo = dispatcher_repo
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
         # Maps reviewer_session_id → (raid_tracker_id, owner_id)
@@ -237,10 +240,43 @@ class ReviewEngine:
         )
 
     async def start(self) -> None:
-        """Subscribe to the event bus and react to raids entering REVIEW."""
+        """Subscribe to the event bus and react to raids entering REVIEW.
+
+        Rebuilds the in-memory reviewer session mapping from the database
+        so that reviewer completions are handled after a restart.
+        """
+        await self._rebuild_reviewer_sessions()
         if self._event_bus is None:
             return
         self._task = asyncio.create_task(self._listen())
+
+    async def _rebuild_reviewer_sessions(self) -> None:
+        """Rebuild _reviewer_sessions from DB.
+
+        Queries all active dispatchers and their trackers to find raids
+        in REVIEW state with a reviewer_session_id.
+        """
+        try:
+            owner_ids = await self._dispatcher_repo.list_active_owner_ids()
+        except Exception:
+            logger.warning("Could not list active owners for reviewer rebuild", exc_info=True)
+            return
+
+        for owner_id in owner_ids:
+            trackers = await self._tracker_factory.for_owner(owner_id)
+            for tracker in trackers:
+                raids = await tracker.list_raids_by_status(RaidStatus.REVIEW)
+                for raid in raids:
+                    if raid.reviewer_session_id:
+                        self._reviewer_sessions[raid.reviewer_session_id] = (
+                            raid.tracker_id,
+                            owner_id,
+                        )
+        if self._reviewer_sessions:
+            logger.info(
+                "Rebuilt %d reviewer session mapping(s) from database",
+                len(self._reviewer_sessions),
+            )
 
     async def stop(self) -> None:
         """Cancel the event listener task."""
@@ -541,7 +577,11 @@ class ReviewEngine:
             logger.warning("Reviewer session not spawned for raid %s — skipping", tracker_id)
             return False
 
-        # Track the reviewer session for completion callback
+        # Persist reviewer session mapping to DB and in-memory cache
+        await tracker.update_raid_progress(
+            tracker_id,
+            reviewer_session_id=session.id,
+        )
         self._reviewer_sessions[session.id] = (tracker_id, owner_id)
 
         logger.info(

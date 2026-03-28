@@ -135,6 +135,8 @@ class Raid:
     updated_at: datetime
     identifier: str = ""
     url: str = ""
+    reviewer_session_id: str | None = None
+    review_round: int = 0
 
 
 @dataclass(frozen=True)
