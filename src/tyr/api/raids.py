@@ -175,6 +175,8 @@ class ActiveRaidResponse(BaseModel):
     url: str = ""
     status: str
     session_id: str | None = None
+    reviewer_session_id: str | None = None
+    review_round: int = 0
     confidence: float = 0.0
     pr_url: str | None = None
     last_updated: str = ""
@@ -212,6 +214,8 @@ def create_raids_router() -> APIRouter:
                             url=raid.url or "",
                             status=raid.status.value,
                             session_id=raid.session_id,
+                            reviewer_session_id=raid.reviewer_session_id,
+                            review_round=raid.review_round,
                             confidence=raid.confidence,
                             pr_url=raid.pr_url,
                             last_updated=raid.updated_at.isoformat() if raid.updated_at else "",
