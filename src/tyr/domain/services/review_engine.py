@@ -156,24 +156,33 @@ class ReviewEngine:
         """
         return self._reviewer_sessions.get(session_id)
 
-    async def handle_reviewer_completion(self, session_id: str, chronicle_summary: str) -> None:
-        """Handle a reviewer session completing (called by ActivitySubscriber).
+    async def handle_reviewer_completion(self, session_id: str, reviewer_output: str) -> None:
+        """Handle a reviewer session idle event (called by ActivitySubscriber).
 
-        Parses the reviewer's structured output from the chronicle summary,
-        applies the confidence score, sends feedback to the working session,
-        and proceeds with the decision logic.
+        The reviewer may go idle multiple times during the review loop
+        (e.g. after sending feedback to the working session). Only act
+        when the output contains a structured JSON assessment — otherwise
+        it's an intermediate idle and we skip.
         """
-        mapping = self._reviewer_sessions.pop(session_id, None)
+        mapping = self._reviewer_sessions.get(session_id)
         if mapping is None:
             logger.warning("Reviewer session %s not tracked — ignoring completion", session_id)
             return
 
         tracker_id, owner_id = mapping
 
+        # Only process if the reviewer produced a JSON assessment
+        result = parse_reviewer_response(reviewer_output)
+        if result is None:
+            logger.info(
+                "Reviewer session %s idle without JSON assessment — intermediate, skipping",
+                session_id,
+            )
+            return
+
         trackers = await self._tracker_factory.for_owner(owner_id)
         if not trackers:
-            logger.warning("No tracker for owner %s — cannot process reviewer result", owner_id[:8])
-            return
+            raise RuntimeError(f"No tracker for owner {owner_id[:8]}")
         tracker = trackers[0]
 
         raid = await tracker.get_raid(tracker_id)
@@ -183,14 +192,7 @@ class ReviewEngine:
                 tracker_id,
                 raid.status,
             )
-            return
-
-        result = parse_reviewer_response(chronicle_summary)
-        if result is None:
-            logger.warning(
-                "Could not parse reviewer output for raid %s — skipping",
-                tracker_id,
-            )
+            self._reviewer_sessions.pop(session_id, None)
             return
 
         score = raid.confidence
@@ -203,40 +205,53 @@ class ReviewEngine:
         score = event.score_after
 
         logger.info(
-            "Reviewer session %s result: confidence=%.2f approved=%s issues=%d",
+            "Reviewer session %s result (round %d): confidence=%.2f approved=%s issues=%d",
             session_id,
+            raid.review_round,
             result.confidence,
             result.approved,
             len(result.issues),
         )
 
-        # Send feedback to the working session if there are issues
-        if self._reviewer and result.issues:
-            await self._reviewer.send_feedback_to_working_session(
-                raid=raid,
-                owner_id=owner_id,
-                result=result,
+        # If approved with no issues → proceed to decision
+        if result.approved and not result.issues:
+            self._reviewer_sessions.pop(session_id, None)
+            pr_status = await self._fetch_pr_status(raid)
+            if score >= self._cfg.auto_approve_threshold and self._can_auto_approve(pr_status):
+                decision = await self._handle_auto_approve(
+                    tracker, tracker_id, owner_id, raid, score
+                )
+            else:
+                decision = await self._handle_escalation(
+                    tracker, tracker_id, owner_id, raid, score
+                )
+            logger.info(
+                "Post-reviewer decision for %s: %s (reason=%s)",
+                tracker_id, decision.action, decision.reason,
             )
+            return
 
-        # Re-evaluate the decision with updated score
-        pr_status = await self._fetch_pr_status(raid)
+        # Issues found — the reviewer is driving the loop directly with
+        # the working session. Tyr just updates the round counter and
+        # waits for the next idle event with a JSON assessment.
+        new_round = raid.review_round + 1
+        await tracker.update_raid_progress(tracker_id, review_round=new_round)
 
-        if pr_status and not pr_status.ci_passed:
-            decision = await self._handle_ci_failure(
-                tracker, tracker_id, owner_id, raid, pr_status, score
+        if new_round >= self._cfg.max_review_rounds:
+            # Max rounds exhausted — escalate
+            self._reviewer_sessions.pop(session_id, None)
+            decision = await self._handle_escalation(
+                tracker, tracker_id, owner_id, raid, score
             )
-        elif pr_status and not pr_status.mergeable:
-            decision = await self._handle_conflict(tracker, tracker_id, owner_id, raid, score)
-        elif score >= self._cfg.auto_approve_threshold and self._can_auto_approve(pr_status):
-            decision = await self._handle_auto_approve(tracker, tracker_id, owner_id, raid, score)
-        else:
-            decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
+            logger.info(
+                "Max review rounds (%d) reached for %s — %s (reason=%s)",
+                self._cfg.max_review_rounds, tracker_id, decision.action, decision.reason,
+            )
+            return
 
         logger.info(
-            "Post-reviewer decision for %s: %s (reason=%s)",
-            tracker_id,
-            decision.action,
-            decision.reason,
+            "Review round %d/%d for %s: %d issues, reviewer driving loop",
+            new_round, self._cfg.max_review_rounds, tracker_id, len(result.issues),
         )
 
     async def start(self) -> None:

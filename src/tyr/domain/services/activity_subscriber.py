@@ -274,6 +274,16 @@ class SessionActivitySubscriber:
             await self._try_handle_reviewer_completion(event.session_id, volundr)
             return
 
+        # Working session idle during REVIEW — the reviewer drives the loop
+        # directly with the working session. Tyr does not re-trigger completion.
+        if raid.status == RaidStatus.REVIEW:
+            logger.info(
+                "Working session %s idle during REVIEW (round %d) — reviewer drives loop",
+                event.session_id[:8],
+                raid.review_round,
+            )
+            return
+
         session = await volundr.get_session(event.session_id)
         if session is None:
             await self._handle_failure(raid, tracker, owner_id, reason="Session not found")

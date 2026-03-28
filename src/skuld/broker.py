@@ -2073,6 +2073,36 @@ async def get_diff_files(
     return {"files": files}
 
 
+class _SendMessageRequest(BaseModel):
+    """Request body for session-to-session messaging."""
+
+    session_id: str
+    content: str
+
+
+@app.post("/api/message")
+async def send_message_to_session(body: _SendMessageRequest) -> dict:
+    """Send a message to another session via Volundr's WS proxy.
+
+    The broker injects its own auth token so the calling session
+    never sees credentials.
+    """
+    if not broker.volundr_api_url:
+        raise HTTPException(503, "Volundr API URL not configured")
+
+    client = await broker._get_http_client()
+    url = f"/api/v1/volundr/sessions/{body.session_id}/messages"
+    try:
+        resp = await client.post(url, json={"content": body.content})
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(e.response.status_code, f"Volundr error: {e.response.text[:500]}")
+    except httpx.RequestError as e:
+        raise HTTPException(502, f"Failed to reach Volundr: {e}")
+
+    return {"status": "sent", "target_session_id": body.session_id}
+
+
 class _TokenRedactFilter(logging.Filter):
     """Redact access_token values from log messages to prevent JWT leaks."""
 

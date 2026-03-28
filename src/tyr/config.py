@@ -131,6 +131,11 @@ class ReviewConfig(BaseModel):
         default=0.1,
         description="Small confidence bonus applied when a reviewer session is spawned.",
     )
+    max_review_rounds: int = Field(
+        default=6,
+        ge=6,
+        description="Maximum review rounds before escalating. Minimum 6.",
+    )
     reviewer_system_prompt: str = Field(
         default=(
             "You are a senior code reviewer for the Niuu platform. Your role is to "

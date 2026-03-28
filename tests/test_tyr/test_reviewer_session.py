@@ -707,6 +707,8 @@ class _TrackerStub:
             retry_count=kwargs.get("retry_count", raid.retry_count),
             created_at=raid.created_at,
             updated_at=datetime.now(UTC),
+            reviewer_session_id=kwargs.get("reviewer_session_id", raid.reviewer_session_id),
+            review_round=kwargs.get("review_round", raid.review_round),
         )
         self.raids[tracker_id] = updated
         return updated
@@ -930,13 +932,15 @@ class TestHandleReviewerCompletion:
 
         await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        chronicle = (
+        output = (
             '{"confidence": 0.3, "approved": false, "summary": "Bad code", "issues": ["problem"]}'
         )
-        await engine.handle_reviewer_completion("reviewer-1", chronicle)
+        await engine.handle_reviewer_completion("reviewer-1", output)
 
         updated_raid = tracker_stub.raids[raid.tracker_id]
-        assert updated_raid.status == RaidStatus.ESCALATED
+        # With issues, the reviewer drives the loop — round incremented, no escalation yet
+        assert updated_raid.review_round == 1
+        assert updated_raid.status == RaidStatus.REVIEW
 
     @pytest.mark.asyncio
     async def test_completion_sends_feedback_on_issues(self) -> None:
@@ -966,16 +970,18 @@ class TestHandleReviewerCompletion:
 
         await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        chronicle = (
+        output = (
             '{"confidence": 0.6, "approved": false,'
             ' "summary": "Issues found", "issues": ["bad import"]}'
         )
-        await engine.handle_reviewer_completion("reviewer-1", chronicle)
+        await engine.handle_reviewer_completion("reviewer-1", output)
 
-        # Feedback should have been sent to the working session
-        feedback_msgs = [m for m in volundr.messages if m[0] == "session-1"]
-        assert len(feedback_msgs) == 1
-        assert "bad import" in feedback_msgs[0][1]
+        # With issues, the reviewer drives the loop — round incremented, not escalated
+        updated_raid = tracker_stub.raids[raid.tracker_id]
+        assert updated_raid.review_round == 1
+        assert updated_raid.status == RaidStatus.REVIEW
+        # Reviewer session mapping is kept alive for the next idle event
+        assert engine.get_reviewer_raid("reviewer-1") is not None
 
     @pytest.mark.asyncio
     async def test_completion_unparseable_chronicle_is_ignored(self) -> None:

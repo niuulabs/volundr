@@ -37,6 +37,8 @@ def build_reviewer_initial_prompt(
     pr_status: PRStatus | None,
     changed_files: list[str],
     diff_summary: str,
+    working_session_id: str = "",
+    max_review_rounds: int = 6,
 ) -> str:
     """Build the initial prompt sent to the reviewer session."""
     lines = [
@@ -92,16 +94,57 @@ def build_reviewer_initial_prompt(
             "2. Check every changed file against ALL project rules",
             "3. Verify the implementation matches the acceptance criteria above",
             "4. Score your confidence from 0.0 to 1.0",
-            "5. Report your findings as JSON in this exact format:",
+        ]
+    )
+
+    if working_session_id:
+        send_cmd = (
+            "curl -s -X POST http://localhost:8081/api/message "
+            '-H "Content-Type: application/json" '
+            "-d '{\"session_id\": \"" + working_session_id + "\", \"content\": \"<FEEDBACK>\"}'"
+        )
+        lines.extend(
+            [
+                "",
+                "## Review Loop",
+                "",
+                "You have direct access to the working session that produced this code.",
+                f"Working Session ID: `{working_session_id}`",
+                f"Max review rounds: {max_review_rounds}",
+                "",
+                "**If you find ANY issues, no matter how small, you MUST NOT approve.**",
+                "",
+                "When you find issues:",
+                "",
+                "1. Send detailed feedback to the working session using Bash:",
+                f"   `{send_cmd}`",
+                "2. In your feedback, tell the session to message you back when done.",
+                "   Include your own session ID so it knows where to reply.",
+                "3. Wait for the working session to respond that it has fixed the issues",
+                "4. Re-read the diff (`git diff`) and re-review",
+                "5. Repeat until zero issues remain or you exhaust all review rounds",
+                f"6. After {max_review_rounds} rounds with unresolved issues, set approved=false",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Final Output",
+            "",
+            "When done (approved or max rounds exhausted), output your final assessment:",
             "",
             "```json",
             "{",
             '  "confidence": <score>,',
-            '  "approved": <true|false>,',
+            '  "approved": <true if zero issues, false otherwise>,',
             '  "summary": "<one-line summary>",',
-            '  "issues": ["<issue 1>", "<issue 2>"]',
+            '  "issues": ["<remaining issue 1>", ...]',
             "}",
             "```",
+            "",
+            "**Critical**: You can ONLY set `approved: true` if the issues array is empty.",
+            "Any issues — even minor nits — mean `approved: false`.",
         ]
     )
 
@@ -271,6 +314,8 @@ class ReviewerSessionService:
             pr_status=pr_status,
             changed_files=changed_files,
             diff_summary=diff_summary,
+            working_session_id=working_session.id if working_session else "",
+            max_review_rounds=self._cfg.max_review_rounds,
         )
 
         request = SpawnRequest(
