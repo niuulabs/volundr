@@ -299,7 +299,7 @@ class SessionActivitySubscriber:
         Accepts any non-terminal raid state — a session may still be
         active even if Tyr moved the raid to QUEUED (retry) or REVIEW.
         """
-        terminal = {RaidStatus.MERGED, RaidStatus.FAILED}
+        terminal = {RaidStatus.MERGED, RaidStatus.FAILED, RaidStatus.ESCALATED}
         trackers = await self._tracker_factory.for_owner(owner_id)
         for tracker in trackers:
             raid = await tracker.get_raid_by_session(session_id)
