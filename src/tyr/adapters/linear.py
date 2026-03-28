@@ -828,13 +828,32 @@ class LinearTrackerAdapter(TrackerPort):
 
     async def get_saga_for_raid(self, tracker_id: str) -> Saga | None:
         if self._pool is None:
-            return None
+            raise RuntimeError("Database pool not configured — cannot look up saga for raid")
         row = await self._pool.fetchrow(
             "SELECT saga_tracker_id FROM raid_progress WHERE tracker_id = $1",
             tracker_id,
         )
         if row is None or not row["saga_tracker_id"]:
             return None
+        # Try local DB first (has repos, feature_branch from saga commit)
+        local = await self._pool.fetchrow(
+            "SELECT * FROM sagas WHERE tracker_id = $1",
+            row["saga_tracker_id"],
+        )
+        if local is not None:
+            return Saga(
+                id=local["id"],
+                tracker_id=local["tracker_id"],
+                tracker_type=local.get("tracker_type", "linear"),
+                slug=local.get("slug", ""),
+                name=local.get("name", ""),
+                repos=list(local.get("repos") or []),
+                feature_branch=local.get("feature_branch", ""),
+                status=SagaStatus(local.get("status", "active")),
+                confidence=float(local.get("confidence", 0)),
+                created_at=local.get("created_at", datetime.now(UTC)),
+            )
+        # Fallback to Linear (won't have repos)
         return await self.get_saga(row["saga_tracker_id"])
 
     async def get_phase_for_raid(self, tracker_id: str) -> Phase | None:
