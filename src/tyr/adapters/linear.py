@@ -89,7 +89,7 @@ query ListProjects($first: Int!) {
 
 _GET_PROJECT_QUERY = (
     """
-query GetProject($id: ID!) {
+query GetProject($id: String!) {
   project(id: $id) {
 """
     + _PROJECT_FIELDS
@@ -117,7 +117,7 @@ query ListMilestones($projectId: ID!) {
 """
 
 _GET_PROJECT_FULL_QUERY = """
-query GetProjectFull($id: ID!, $issueFirst: Int!) {
+query GetProjectFull($id: String!, $issueFirst: Int!) {
   project(id: $id) {
       id
       name
@@ -283,7 +283,7 @@ mutation CreateIssue(
 """
 
 _GET_ISSUE_QUERY = """
-query GetIssue($id: ID!) {
+query GetIssue($id: String!) {
   issue(id: $id) {
     id
     identifier
@@ -302,7 +302,7 @@ query GetIssue($id: ID!) {
 """
 
 _GET_MILESTONE_QUERY = """
-query GetMilestone($id: ID!) {
+query GetMilestone($id: String!) {
   projectMilestone(id: $id) {
     id
     name
@@ -315,7 +315,7 @@ query GetMilestone($id: ID!) {
 """
 
 _UPDATE_ISSUE_STATE_QUERY = """
-mutation UpdateIssueState($issueId: ID!, $stateId: ID!) {
+mutation UpdateIssueState($issueId: String!, $stateId: String!) {
   issueUpdate(id: $issueId, input: { stateId: $stateId }) {
     issue { id state { name } }
     success
@@ -324,7 +324,7 @@ mutation UpdateIssueState($issueId: ID!, $stateId: ID!) {
 """
 
 _ISSUE_TEAM_QUERY = """
-query IssueTeam($id: ID!) {
+query IssueTeam($id: String!) {
   issue(id: $id) {
     team { id }
   }
@@ -332,7 +332,7 @@ query IssueTeam($id: ID!) {
 """
 
 _TEAM_STATES_QUERY = """
-query TeamStates($teamId: ID!) {
+query TeamStates($teamId: String!) {
   team(id: $teamId) {
     states {
       nodes { id name }
