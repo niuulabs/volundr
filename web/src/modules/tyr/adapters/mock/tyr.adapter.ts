@@ -97,6 +97,8 @@ export class MockTyrService implements ITyrService {
             status: 'pending',
             confidence: 0.5,
             session_id: null,
+            reviewer_session_id: null,
+            review_round: 0,
             branch: null,
             chronicle_summary: null,
             retry_count: 0,
