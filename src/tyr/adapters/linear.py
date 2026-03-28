@@ -662,7 +662,7 @@ class LinearTrackerAdapter(TrackerPort):
                 (tracker_id, status, session_id, confidence, pr_url, pr_id,
                  retry_count, reason, owner_id, phase_tracker_id, saga_tracker_id,
                  chronicle_summary, reviewer_session_id, review_round)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 0))
+            VALUES ($1, COALESCE($2, 'PENDING'), $3, $4, $5, $6, COALESCE($7, 0), $8, $9, $10, $11, $12, $13, COALESCE($14, 0))
             ON CONFLICT (tracker_id) DO UPDATE SET
                 status              = COALESCE($2, raid_progress.status),
                 session_id          = COALESCE($3, raid_progress.session_id),
