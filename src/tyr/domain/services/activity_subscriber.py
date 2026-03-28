@@ -240,7 +240,16 @@ class SessionActivitySubscriber:
             self._debounced_evaluation(event, volundr, owner_id),
             name=f"eval-{event.session_id}",
         )
+        task.add_done_callback(self._on_eval_done)
         self._pending_evaluations[event.session_id] = task
+
+    @staticmethod
+    def _on_eval_done(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("Debounced evaluation failed: %s", exc, exc_info=exc)
 
     async def _debounced_evaluation(
         self, event: ActivityEvent, volundr: VolundrPort, owner_id: str
@@ -279,11 +288,16 @@ class SessionActivitySubscriber:
     async def _find_raid_for_session(
         self, session_id: str, owner_id: str
     ) -> tuple[Raid | None, TrackerPort | None]:
-        """Find the raid and tracker for a given session_id."""
+        """Find the raid and tracker for a given session_id.
+
+        Accepts any non-terminal raid state — a session may still be
+        active even if Tyr moved the raid to QUEUED (retry) or REVIEW.
+        """
+        terminal = {RaidStatus.MERGED, RaidStatus.FAILED}
         trackers = await self._tracker_factory.for_owner(owner_id)
         for tracker in trackers:
             raid = await tracker.get_raid_by_session(session_id)
-            if raid and raid.status == RaidStatus.RUNNING:
+            if raid and raid.status not in terminal:
                 return raid, tracker
         return None, None
 

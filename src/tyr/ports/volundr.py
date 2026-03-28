@@ -109,6 +109,11 @@ class VolundrPort(ABC):
         ...
 
     @abstractmethod
+    async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:
+        """Return the IDs of the user's enabled integrations on this Volundr instance."""
+        ...
+
+    @abstractmethod
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream for session_activity events."""
         ...

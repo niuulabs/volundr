@@ -175,6 +175,16 @@ class VolundrHTTPAdapter(VolundrPort):
                 return
             resp.raise_for_status()
 
+    async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:
+        """Fetch the user's enabled integration IDs from this Volundr instance."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{self._base_url}/api/v1/volundr/integrations",
+                headers=self._headers(auth_token),
+            )
+            resp.raise_for_status()
+            return [c["id"] for c in resp.json() if c.get("enabled", True)]
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream and yield activity + session lifecycle events."""
         url = f"{self._base_url}/api/v1/volundr/sessions/stream"
