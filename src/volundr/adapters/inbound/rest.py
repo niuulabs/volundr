@@ -1547,6 +1547,82 @@ def create_router(
                 detail=f"Could not connect to session pod: {e}",
             )
 
+    @router.post(
+        "/sessions/{session_id}/messages",
+        tags=["Sessions"],
+        responses={
+            404: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+    )
+    async def send_session_message(
+        request: Request,
+        session_id: UUID = Path(description="Unique session identifier"),
+        body: dict = ...,
+    ) -> dict:
+        """Send a user message to a running session via its WebSocket."""
+        import ssl
+
+        from websockets.asyncio.client import connect
+
+        content = body.get("content", "")
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="content is required",
+            )
+
+        # Verify the caller owns this session
+        principal = await extract_principal(request)
+        session = await service.get_session(session_id)
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
+
+        if session.owner_id and session.owner_id != principal.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to message this session",
+            )
+
+        if not session.chat_endpoint:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} has no active endpoint",
+            )
+
+        # Build WS URL with access token
+        ws_url = session.chat_endpoint
+        auth = request.headers.get("authorization", "")
+        token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else ""
+        if token:
+            sep = "&" if "?" in ws_url else "?"
+            ws_url = f"{ws_url}{sep}access_token={token}"
+
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        try:
+            async with connect(ws_url, ssl=ssl_ctx, open_timeout=10) as ws:
+                # Drain any pending messages from the server
+                try:
+                    while True:
+                        await asyncio.wait_for(ws.recv(), timeout=1)
+                except (TimeoutError, asyncio.TimeoutError):
+                    pass
+                # Send the user message
+                await ws.send(json.dumps({"type": "user", "content": content}))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to send message to session: {e}",
+            )
+
+        return {"status": "sent", "session_id": str(session_id)}
+
     @router.get(
         "/sessions/{session_id}/conversation",
         tags=["Sessions"],
