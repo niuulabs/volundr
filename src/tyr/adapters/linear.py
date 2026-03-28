@@ -645,6 +645,8 @@ class LinearTrackerAdapter(TrackerPort):
         phase_tracker_id: str | None = None,
         saga_tracker_id: str | None = None,
         chronicle_summary: str | None = None,
+        reviewer_session_id: str | None = None,
+        review_round: int | None = None,
     ) -> Raid:
         if self._pool is None:
             raise RuntimeError("pool is required for update_raid_progress")
@@ -653,21 +655,23 @@ class LinearTrackerAdapter(TrackerPort):
             INSERT INTO raid_progress
                 (tracker_id, status, session_id, confidence, pr_url, pr_id,
                  retry_count, reason, owner_id, phase_tracker_id, saga_tracker_id,
-                 chronicle_summary)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                 chronicle_summary, reviewer_session_id, review_round)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT (tracker_id) DO UPDATE SET
-                status            = COALESCE($2, raid_progress.status),
-                session_id        = COALESCE($3, raid_progress.session_id),
-                confidence        = COALESCE($4, raid_progress.confidence),
-                pr_url            = COALESCE($5, raid_progress.pr_url),
-                pr_id             = COALESCE($6, raid_progress.pr_id),
-                retry_count       = COALESCE($7, raid_progress.retry_count),
-                reason            = COALESCE($8, raid_progress.reason),
-                owner_id          = COALESCE($9, raid_progress.owner_id),
-                phase_tracker_id  = COALESCE($10, raid_progress.phase_tracker_id),
-                saga_tracker_id   = COALESCE($11, raid_progress.saga_tracker_id),
-                chronicle_summary = COALESCE($12, raid_progress.chronicle_summary),
-                updated_at        = NOW()
+                status              = COALESCE($2, raid_progress.status),
+                session_id          = COALESCE($3, raid_progress.session_id),
+                confidence          = COALESCE($4, raid_progress.confidence),
+                pr_url              = COALESCE($5, raid_progress.pr_url),
+                pr_id               = COALESCE($6, raid_progress.pr_id),
+                retry_count         = COALESCE($7, raid_progress.retry_count),
+                reason              = COALESCE($8, raid_progress.reason),
+                owner_id            = COALESCE($9, raid_progress.owner_id),
+                phase_tracker_id    = COALESCE($10, raid_progress.phase_tracker_id),
+                saga_tracker_id     = COALESCE($11, raid_progress.saga_tracker_id),
+                chronicle_summary   = COALESCE($12, raid_progress.chronicle_summary),
+                reviewer_session_id = COALESCE($13, raid_progress.reviewer_session_id),
+                review_round        = COALESCE($14, raid_progress.review_round),
+                updated_at          = NOW()
             """,
             tracker_id,
             status.value if status is not None else None,
@@ -681,6 +685,8 @@ class LinearTrackerAdapter(TrackerPort):
             phase_tracker_id,
             saga_tracker_id,
             chronicle_summary,
+            reviewer_session_id,
+            review_round,
         )
         if status is not None:
             try:
@@ -1068,6 +1074,10 @@ class LinearTrackerAdapter(TrackerPort):
             else 0,
             created_at=now,
             updated_at=now,
+            reviewer_session_id=progress.get("reviewer_session_id") if progress else None,
+            review_round=int(progress["review_round"])
+            if progress and progress.get("review_round")
+            else 0,
         )
 
 
