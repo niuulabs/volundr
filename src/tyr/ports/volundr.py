@@ -122,6 +122,11 @@ class VolundrPort(ABC):
         ...
 
     @abstractmethod
+    async def get_last_assistant_message(self, session_id: str) -> str:
+        """Return the last assistant message from the session's conversation history."""
+        ...
+
+    @abstractmethod
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream for session_activity events."""
         ...

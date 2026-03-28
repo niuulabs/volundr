@@ -1548,6 +1548,51 @@ def create_router(
             )
 
     @router.get(
+        "/sessions/{session_id}/conversation",
+        tags=["Sessions"],
+        responses={
+            404: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+    )
+    async def get_conversation(
+        session_id: UUID = Path(description="Unique session identifier"),
+    ) -> dict:
+        """Proxy conversation history retrieval from a running session pod."""
+        session = await service.get_session(session_id)
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
+
+        if not session.chat_endpoint:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} has no active endpoint",
+            )
+
+        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
+        if base_url.endswith("/session"):
+            base_url = base_url[: -len("/session")]
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{base_url}/api/conversation/history")
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to fetch conversation from session pod: {e.response.status_code}",
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not connect to session pod: {e}",
+            )
+
+    @router.get(
         "/providers",
         response_model=list[ProviderResponse],
         responses={503: {"model": ErrorResponse}},

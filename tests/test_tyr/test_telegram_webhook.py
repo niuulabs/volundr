@@ -338,6 +338,9 @@ class StubVolundr(VolundrPort):
     async def list_repos(self, *, auth_token=None):
         return []
 
+    async def get_last_assistant_message(self, session_id: str) -> str:
+        return '{"confidence": 0.9, "approved": true, "summary": "stub", "issues": []}'
+
     async def subscribe_activity(self):
         return
         yield  # type: ignore[misc]  # pragma: no cover

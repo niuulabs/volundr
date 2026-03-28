@@ -232,6 +232,21 @@ class VolundrHTTPAdapter(VolundrPort):
                 repos.extend(provider_repos)
             return repos
 
+    async def get_last_assistant_message(self, session_id: str) -> str:
+        """Fetch the last assistant message from the session's conversation history."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{self._base_url}/api/v1/volundr/sessions/{session_id}/conversation",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            turns = data.get("turns", [])
+            for turn in reversed(turns):
+                if turn.get("role") == "assistant":
+                    return turn.get("content", "")
+            raise ValueError(f"No assistant message found in conversation for session {session_id}")
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream and yield activity + session lifecycle events."""
         url = f"{self._base_url}/api/v1/volundr/sessions/stream"

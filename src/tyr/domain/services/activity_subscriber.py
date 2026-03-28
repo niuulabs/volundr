@@ -465,18 +465,18 @@ class SessionActivitySubscriber:
         if mapping is None:
             return
 
-        chronicle_summary = ""
         try:
-            chronicle_summary = await volundr.get_chronicle_summary(session_id)
+            reviewer_output = await volundr.get_last_assistant_message(session_id)
         except Exception:
-            logger.warning(
-                "Failed to fetch chronicle for reviewer session %s",
+            logger.error(
+                "Failed to fetch reviewer output for session %s",
                 session_id,
                 exc_info=True,
             )
+            raise
 
         try:
-            await self._review_engine.handle_reviewer_completion(session_id, chronicle_summary)
+            await self._review_engine.handle_reviewer_completion(session_id, reviewer_output)
         except Exception:
             logger.warning(
                 "Failed to handle reviewer completion for session %s",
