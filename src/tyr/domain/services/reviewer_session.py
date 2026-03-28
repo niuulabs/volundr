@@ -242,10 +242,11 @@ class ReviewerSessionService:
 
         Returns the VolundrSession if spawned successfully, None otherwise.
         """
-        volundr = await self._volundr_factory.for_owner(owner_id)
-        if volundr is None:
+        adapters = await self._volundr_factory.for_owner(owner_id)
+        if not adapters:
             logger.warning("No Volundr adapter for owner %s — cannot spawn reviewer", owner_id[:8])
             return None
+        volundr = adapters[0]
 
         diff_summary = self._get_diff_summary(raid)
 
