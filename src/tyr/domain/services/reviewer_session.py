@@ -246,7 +246,18 @@ class ReviewerSessionService:
         if not adapters:
             logger.warning("No Volundr adapter for owner %s — cannot spawn reviewer", owner_id[:8])
             return None
+
+        # Find the Volundr instance hosting the working session
         volundr = adapters[0]
+        if raid.session_id and len(adapters) > 1:
+            for adapter in adapters:
+                try:
+                    session = await adapter.get_session(raid.session_id)
+                    if session is not None:
+                        volundr = adapter
+                        break
+                except Exception:
+                    continue
 
         diff_summary = self._get_diff_summary(raid)
 
