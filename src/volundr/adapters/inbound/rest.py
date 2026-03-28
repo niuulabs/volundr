@@ -1556,6 +1556,7 @@ def create_router(
         },
     )
     async def get_conversation(
+        request: Request,
         session_id: UUID = Path(description="Unique session identifier"),
     ) -> dict:
         """Proxy conversation history retrieval from a running session pod."""
@@ -1576,9 +1577,18 @@ def create_router(
         if base_url.endswith("/session"):
             base_url = base_url[: -len("/session")]
 
+        # Forward the caller's auth to the session pod
+        headers = {}
+        auth = request.headers.get("authorization")
+        if auth:
+            headers["Authorization"] = auth
+
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{base_url}/api/conversation/history")
+                response = await client.get(
+                    f"{base_url}/api/conversation/history",
+                    headers=headers,
+                )
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPStatusError as e:
