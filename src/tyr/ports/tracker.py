@@ -48,6 +48,9 @@ class TrackerPort(ABC):
         """Attach a document to a project. Returns document ID. Optional — noop by default."""
         return ""
 
+    async def add_comment(self, issue_id: str, body: str) -> None:
+        """Add a comment to an issue. Optional — noop by default."""
+
     # -- CRUD: update / close --
 
     @abstractmethod

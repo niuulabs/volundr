@@ -318,6 +318,9 @@ class StubVolundr(VolundrPort):
     async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
         return []
 
+    async def get_conversation(self, session_id: str) -> dict:
+        return {"turns": [{"role": "assistant", "content": '{"confidence": 0.9, "approved": true, "summary": "stub", "issues": []}'}]}
+
     async def get_last_assistant_message(self, session_id: str) -> str:
         return '{"confidence": 0.9, "approved": true, "summary": "stub", "issues": []}'
 
@@ -537,8 +540,8 @@ class TestAutoApprove:
         assert repo.raids[raid.tracker_id].status == RaidStatus.MERGED
 
     @pytest.mark.asyncio
-    async def test_auto_approve_merges_branch(self) -> None:
-        """Auto-approve should merge the raid branch into the feature branch."""
+    async def test_auto_approve_does_not_merge_branch(self) -> None:
+        """Auto-approve should NOT merge the branch — the reviewer session does it."""
         engine, repo, git, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
@@ -550,10 +553,8 @@ class TestAutoApprove:
 
         await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        assert len(git.merged) == 1
-        assert git.merged[0] == ("org/repo", "raid/test-branch", "feat/alpha")
-        assert len(git.deleted) == 1
-        assert git.deleted[0] == ("org/repo", "raid/test-branch")
+        assert len(git.merged) == 0
+        assert len(git.deleted) == 0
 
     @pytest.mark.asyncio
     async def test_auto_approve_emits_events(self) -> None:

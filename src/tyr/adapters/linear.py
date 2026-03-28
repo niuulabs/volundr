@@ -416,6 +416,12 @@ class LinearTrackerAdapter(TrackerPort):
             raise GraphQLError("Failed to create Linear document")
         return doc["id"]
 
+    async def add_comment(self, issue_id: str, body: str) -> None:
+        await self._gql.query(
+            _ADD_COMMENT_QUERY,
+            {"issueId": issue_id, "body": body},
+        )
+
     async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         parent_id = project_id or phase.tracker_id
         data = await self._gql.query(

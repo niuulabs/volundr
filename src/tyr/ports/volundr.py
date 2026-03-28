@@ -127,6 +127,11 @@ class VolundrPort(ABC):
         ...
 
     @abstractmethod
+    async def get_conversation(self, session_id: str) -> dict:
+        """Return the full conversation history for a session."""
+        ...
+
+    @abstractmethod
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream for session_activity events."""
         ...

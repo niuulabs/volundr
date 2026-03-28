@@ -338,6 +338,9 @@ class StubVolundr(VolundrPort):
     async def list_repos(self, *, auth_token=None):
         return []
 
+    async def get_conversation(self, session_id: str) -> dict:
+        return {"turns": [{"role": "assistant", "content": '{"confidence": 0.9, "approved": true, "summary": "stub", "issues": []}'}]}
+
     async def get_last_assistant_message(self, session_id: str) -> str:
         return '{"confidence": 0.9, "approved": true, "summary": "stub", "issues": []}'
 

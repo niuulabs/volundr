@@ -661,7 +661,12 @@ class ReviewEngine:
         raid: Raid,
         score: float,
     ) -> ReviewDecision:
-        """Auto-approve: merge PR, transition REVIEW → MERGED."""
+        """Auto-approve: transition REVIEW → MERGED.
+
+        The reviewer session merges the PR itself via `gh pr merge`.
+        Tyr attaches the review transcript to the Linear issue and
+        stops the reviewer session.
+        """
         event = _make_event(
             raid.id, ConfidenceEventType.AUTO_APPROVED, self._cfg.confidence_delta_approved, score
         )
@@ -670,17 +675,10 @@ class ReviewEngine:
         validate_transition(raid.status, RaidStatus.MERGED)
         updated = await tracker.update_raid_progress(tracker_id, status=RaidStatus.MERGED)
 
-        # Merge PR branch
-        saga = await tracker.get_saga_for_raid(tracker_id)
-        if saga and raid.branch and saga.repos:
-            repo = saga.repos[0]
-            try:
-                await self._git.merge_branch(repo, raid.branch, saga.feature_branch)
-                await self._git.delete_branch(repo, raid.branch)
-            except Exception:
-                logger.warning(
-                    "Failed to merge/delete branch for raid %s", tracker_id, exc_info=True
-                )
+        # Attach review transcript as a comment on the Linear issue
+        if raid.reviewer_session_id:
+            await self._attach_review_transcript(tracker, tracker_id, owner_id, raid)
+            await self._stop_reviewer_session(owner_id, raid.reviewer_session_id)
 
         # Phase gate check
         phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
@@ -693,6 +691,48 @@ class ReviewEngine:
             reason=f"Confidence {event.score_after:.2f} >= {self._cfg.auto_approve_threshold:.2f}",
             phase_gate_unlocked=phase_gate_unlocked,
         )
+
+    async def _attach_review_transcript(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+    ) -> None:
+        """Fetch the reviewer's full conversation and attach as a comment."""
+        try:
+            adapters = await self._volundr_factory.for_owner(owner_id)
+            if not adapters:
+                logger.warning("No Volundr adapter for owner %s — cannot fetch transcript", owner_id[:8])
+                return
+            conversation = await adapters[0].get_conversation(raid.reviewer_session_id)
+            turns = conversation.get("turns", [])
+            lines = ["## Review Transcript", ""]
+            for turn in turns:
+                role = turn.get("role", "unknown").capitalize()
+                content = turn.get("content", "")
+                lines.append(f"**{role}:**")
+                lines.append(content)
+                lines.append("")
+            await tracker.add_comment(tracker_id, "\n".join(lines))
+            logger.info("Attached review transcript (%d turns) to %s", len(turns), tracker_id)
+        except Exception:
+            logger.warning(
+                "Failed to attach review transcript for raid %s", tracker_id, exc_info=True
+            )
+
+    async def _stop_reviewer_session(self, owner_id: str, reviewer_session_id: str) -> None:
+        """Stop the reviewer session after review is complete."""
+        try:
+            adapters = await self._volundr_factory.for_owner(owner_id)
+            if not adapters:
+                return
+            await adapters[0].stop_session(reviewer_session_id)
+            logger.info("Stopped reviewer session %s", reviewer_session_id)
+        except Exception:
+            logger.warning(
+                "Failed to stop reviewer session %s", reviewer_session_id, exc_info=True
+            )
 
     async def _handle_ci_failure(
         self,
