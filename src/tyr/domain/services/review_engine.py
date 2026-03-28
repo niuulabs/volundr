@@ -513,12 +513,22 @@ class ReviewEngine:
 
         integration_ids = await self._resolve_integration_ids(owner_id)
 
+        # Resolve repo from parent saga
+        repo = ""
+        try:
+            saga = await tracker.get_saga_for_raid(raid.tracker_id)
+            if saga and saga.repos:
+                repo = saga.repos[0]
+        except Exception:
+            logger.warning("Failed to resolve repo for raid %s", tracker_id)
+
         session = await self._reviewer.spawn_reviewer(
             raid=raid,
             owner_id=owner_id,
             pr_status=pr_status,
             changed_files=changed_files,
             integration_ids=integration_ids,
+            repo=repo,
         )
         if session is None:
             logger.warning("Reviewer session not spawned for raid %s — skipping", tracker_id)

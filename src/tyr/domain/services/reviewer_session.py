@@ -237,6 +237,7 @@ class ReviewerSessionService:
         pr_status: PRStatus | None,
         changed_files: list[str],
         integration_ids: list[str] | None = None,
+        repo: str = "",
     ) -> VolundrSession | None:
         """Spawn a reviewer session for a raid in REVIEW state.
 
@@ -269,8 +270,8 @@ class ReviewerSessionService:
         )
 
         request = SpawnRequest(
-            name=f"review-{raid.tracker_id}",
-            repo=raid.branch or "",
+            name=f"review-{raid.identifier or raid.tracker_id[:8]}",
+            repo=repo,
             branch=raid.branch or "",
             model=self._cfg.reviewer_model,
             tracker_issue_id=raid.tracker_id,
