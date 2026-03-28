@@ -1611,7 +1611,7 @@ def create_router(
                 try:
                     while True:
                         await asyncio.wait_for(ws.recv(), timeout=1)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     pass
                 # Send the user message
                 await ws.send(json.dumps({"type": "user", "content": content}))

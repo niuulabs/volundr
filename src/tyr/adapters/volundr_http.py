@@ -204,7 +204,9 @@ class VolundrHTTPAdapter(VolundrPort):
             resp.raise_for_status()
             return [c["id"] for c in resp.json() if c.get("enabled", True)]
 
-    async def _resolve_repo_url(self, shorthand: str, *, auth_token: str | None = None) -> str | None:
+    async def _resolve_repo_url(
+        self, shorthand: str, *, auth_token: str | None = None
+    ) -> str | None:
         """Resolve a bare org/repo shorthand to a full URL via the repos listing."""
         try:
             repos = await self.list_repos(auth_token=auth_token)
