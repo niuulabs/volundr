@@ -76,6 +76,12 @@ class LinearGraphQLClient(GraphQLClientPort):
                         continue
                     response.raise_for_status()
 
+                if response.status_code >= 400:
+                    logger.error(
+                        "Linear API error %d: %s",
+                        response.status_code,
+                        response.text[:500],
+                    )
                 response.raise_for_status()
                 body = response.json()
 

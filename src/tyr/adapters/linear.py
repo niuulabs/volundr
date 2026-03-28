@@ -174,7 +174,7 @@ _ISSUE_FIELDS = """
 """
 
 _LIST_ISSUE_RELATIONS_QUERY = """
-query ListIssueRelations($projectId: String!, $first: Int!) {
+query ListIssueRelations($projectId: ID!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
     first: $first
