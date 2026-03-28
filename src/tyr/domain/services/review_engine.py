@@ -513,18 +513,19 @@ class ReviewEngine:
 
         integration_ids = await self._resolve_integration_ids(owner_id)
 
-        # Resolve repo and branch from parent saga
-        repo = ""
-        feature_branch = ""
-        try:
-            saga = await tracker.get_saga_for_raid(raid.tracker_id)
-            if saga and saga.repos:
-                repo = saga.repos[0]
-                feature_branch = saga.feature_branch
-            else:
-                logger.warning("No saga/repos found for raid %s", tracker_id)
-        except Exception:
-            logger.warning("Failed to resolve repo for raid %s", tracker_id, exc_info=True)
+        # Get repo/branch from the working session on Volundr
+        working_session = None
+        if raid.session_id:
+            adapters = await self._volundr_factory.for_owner(owner_id)
+            for adapter in adapters:
+                try:
+                    working_session = await adapter.get_session(raid.session_id)
+                    if working_session is not None:
+                        break
+                except Exception:
+                    continue
+            if working_session is None:
+                raise ValueError(f"Working session {raid.session_id} not found on any Volundr cluster")
 
         session = await self._reviewer.spawn_reviewer(
             raid=raid,
@@ -532,8 +533,7 @@ class ReviewEngine:
             pr_status=pr_status,
             changed_files=changed_files,
             integration_ids=integration_ids,
-            repo=repo,
-            feature_branch=feature_branch,
+            working_session=working_session,
         )
         if session is None:
             logger.warning("Reviewer session not spawned for raid %s — skipping", tracker_id)

@@ -38,6 +38,9 @@ class VolundrSession:
     tracker_issue_id: str | None
     chat_endpoint: str | None = None
     cluster_name: str = ""
+    repo: str = ""
+    branch: str = ""
+    base_branch: str = ""
 
 
 @dataclass(frozen=True)

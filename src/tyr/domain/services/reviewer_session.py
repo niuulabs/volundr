@@ -237,8 +237,7 @@ class ReviewerSessionService:
         pr_status: PRStatus | None,
         changed_files: list[str],
         integration_ids: list[str] | None = None,
-        repo: str = "",
-        feature_branch: str = "",
+        working_session: VolundrSession | None = None,
     ) -> VolundrSession | None:
         """Spawn a reviewer session for a raid in REVIEW state.
 
@@ -272,9 +271,9 @@ class ReviewerSessionService:
 
         request = SpawnRequest(
             name=f"review-{(raid.identifier or raid.tracker_id[:8]).lower()}",
-            repo=repo,
-            branch=feature_branch or raid.branch or "",
-            base_branch=feature_branch,
+            repo=working_session.repo if working_session else "",
+            branch=working_session.branch if working_session else "",
+            base_branch=working_session.base_branch if working_session else "main",
             model=self._cfg.reviewer_model,
             tracker_issue_id=raid.tracker_id,
             tracker_issue_url=raid.pr_url or "",
@@ -287,7 +286,10 @@ class ReviewerSessionService:
 
         logger.info(
             "Spawning reviewer: repo=%s branch=%s model=%s profile=%s integrations=%d",
-            repo, raid.branch, self._cfg.reviewer_model, self._cfg.reviewer_profile,
+            working_session.repo if working_session else "?",
+            working_session.branch if working_session else "?",
+            self._cfg.reviewer_model,
+            self._cfg.reviewer_profile,
             len(integration_ids or []),
         )
         try:

@@ -67,6 +67,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 logger.error("spawn_session %d: %s", resp.status_code, resp.text[:500])
             resp.raise_for_status()
             data = resp.json()
+            source = data.get("source") or {}
             return VolundrSession(
                 id=data["id"],
                 name=data["name"],
@@ -74,6 +75,9 @@ class VolundrHTTPAdapter(VolundrPort):
                 tracker_issue_id=data.get("tracker_issue_id"),
                 chat_endpoint=data.get("chat_endpoint"),
                 cluster_name=self._name,
+                repo=source.get("repo", ""),
+                branch=source.get("branch", ""),
+                base_branch=source.get("base_branch", ""),
             )
 
     async def get_session(
@@ -91,6 +95,7 @@ class VolundrHTTPAdapter(VolundrPort):
                 return None
             resp.raise_for_status()
             data = resp.json()
+            source = data.get("source") or {}
             return VolundrSession(
                 id=data["id"],
                 name=data["name"],
@@ -98,6 +103,9 @@ class VolundrHTTPAdapter(VolundrPort):
                 tracker_issue_id=data.get("tracker_issue_id"),
                 chat_endpoint=data.get("chat_endpoint"),
                 cluster_name=self._name,
+                repo=source.get("repo", ""),
+                branch=source.get("branch", ""),
+                base_branch=source.get("base_branch", ""),
             )
 
     async def list_sessions(
