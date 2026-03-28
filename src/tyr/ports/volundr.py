@@ -117,6 +117,11 @@ class VolundrPort(ABC):
         ...
 
     @abstractmethod
+    async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
+        """Return configured repos from Volundr, each with at least 'org', 'name', 'url'."""
+        ...
+
+    @abstractmethod
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream for session_activity events."""
         ...

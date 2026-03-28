@@ -89,6 +89,9 @@ class StubVolundr(VolundrPort):
     async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:
         return []
 
+    async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
+        return []
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         for event in self.activity_events:
             yield event

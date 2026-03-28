@@ -315,6 +315,9 @@ class StubVolundr(VolundrPort):
     async def list_integration_ids(self, *, auth_token=None) -> list[str]:
         return []
 
+    async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
+        return []
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         return
         yield  # type: ignore[misc]  # pragma: no cover
