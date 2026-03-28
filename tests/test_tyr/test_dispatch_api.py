@@ -123,6 +123,15 @@ class MockVolundr(VolundrPort):
     ) -> list[str]:
         return []
 
+    async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
+        return []
+
+    async def get_conversation(self, session_id: str) -> dict:
+        return {"turns": []}
+
+    async def get_last_assistant_message(self, session_id: str) -> str:
+        return ""
+
     async def subscribe_activity(self):
         return
         yield  # type: ignore[misc]  # pragma: no cover

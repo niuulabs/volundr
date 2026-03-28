@@ -47,6 +47,7 @@ class TestTrackerPort:
             "save_session_message",
             "get_session_messages",
             "attach_document",
+            "add_comment",
         }
         abstract_methods = {
             name
@@ -71,6 +72,9 @@ class TestVolundrPort:
             "send_message",
             "stop_session",
             "list_integration_ids",
+            "list_repos",
+            "get_conversation",
+            "get_last_assistant_message",
             "subscribe_activity",
         }
         abstract_methods = {

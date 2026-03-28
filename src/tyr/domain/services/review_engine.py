@@ -703,7 +703,10 @@ class ReviewEngine:
         try:
             adapters = await self._volundr_factory.for_owner(owner_id)
             if not adapters:
-                logger.warning("No Volundr adapter for owner %s — cannot fetch transcript", owner_id[:8])
+                logger.warning(
+                    "No Volundr adapter for owner %s — cannot fetch transcript",
+                    owner_id[:8],
+                )
                 return
             conversation = await adapters[0].get_conversation(raid.reviewer_session_id)
             turns = conversation.get("turns", [])

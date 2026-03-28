@@ -93,7 +93,8 @@ class StubVolundr(VolundrPort):
         return []
 
     async def get_conversation(self, session_id: str) -> dict:
-        return {"turns": [{"role": "assistant", "content": '{"confidence": 0.9, "approved": true, "summary": "stub", "issues": []}'}]}
+        stub = '{"confidence": 0.9, "approved": true, "issues": []}'
+        return {"turns": [{"role": "assistant", "content": stub}]}
 
     async def get_last_assistant_message(self, session_id: str) -> str:
         return '{"confidence": 0.9, "approved": true, "summary": "stub", "issues": []}'
