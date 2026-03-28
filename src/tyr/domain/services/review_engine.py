@@ -220,10 +220,21 @@ class ReviewEngine:
                 decision = await self._handle_auto_approve(
                     tracker, tracker_id, owner_id, raid, score
                 )
-            else:
+            elif raid.review_round >= self._cfg.max_review_rounds:
                 decision = await self._handle_escalation(
                     tracker, tracker_id, owner_id, raid, score
                 )
+            else:
+                # Low confidence but approved — let the loop continue
+                new_round = raid.review_round + 1
+                await tracker.update_raid_progress(tracker_id, review_round=new_round)
+                self._reviewer_sessions[session_id] = (tracker_id, owner_id)
+                logger.info(
+                    "Reviewer approved but low confidence (%.2f < %.2f) — round %d/%d, continuing",
+                    result.confidence, self._cfg.auto_approve_threshold,
+                    new_round, self._cfg.max_review_rounds,
+                )
+                return
             logger.info(
                 "Post-reviewer decision for %s: %s (reason=%s)",
                 tracker_id, decision.action, decision.reason,
