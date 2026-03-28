@@ -69,6 +69,8 @@ class GitHubProvider(GitProvider, GitWorkflowProvider):
         self._patterns = [
             re.compile(rf"^(?:https?://)?{host_escaped}/([^/]+)/([^/]+?)(?:\.git)?/?$"),
             re.compile(rf"^git@{host_escaped}:([^/]+)/([^/]+?)(?:\.git)?$"),
+            # Bare shorthand: "org/repo" (no host, no protocol)
+            re.compile(r"^([^/:@.]+)/([^/:@.]+?)(?:\.git)?$"),
         ]
 
         logger.debug(
