@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
-from tyr.domain.models import RaidStatus, Saga, TrackerIssue
+from tyr.domain.models import RaidStatus, TrackerIssue
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort

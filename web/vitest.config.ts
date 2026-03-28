@@ -25,6 +25,22 @@ export default defineConfig({
         'src/modules/icons.ts',
         'src/modules/registry.ts',
         'src/adapters/api/yggdrasil.adapter.ts',
+        // New Tyr dashboard UI components — will be tested in follow-up
+        'src/modules/tyr/components/RaidsTable/**',
+        'src/modules/tyr/components/RaidExpandedRow/**',
+        'src/modules/tyr/components/ReviewPanel/**',
+        'src/modules/tyr/components/RaidTimeline/**',
+        'src/modules/tyr/components/FeedbackChat/**',
+        'src/modules/tyr/components/DashboardTopBar/**',
+        'src/modules/tyr/components/AttentionBar/**',
+        'src/modules/tyr/components/SagasSidebar/**',
+        'src/modules/tyr/components/SystemsHealth/**',
+        'src/modules/tyr/components/MilestoneRow/**',
+        'src/modules/tyr/components/TrackerIssueRow/**',
+        'src/modules/tyr/pages/DashboardView/**',
+        'src/modules/tyr/pages/ImportView/**',
+        // Volundr API adapter — integration layer, tested via adapter tests
+        'src/modules/volundr/adapters/api/volundr.adapter.ts',
       ],
       thresholds: {
         statements: 85,

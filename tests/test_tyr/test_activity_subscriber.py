@@ -86,6 +86,9 @@ class StubVolundr(VolundrPort):
     async def stop_session(self, session_id: str, *, auth_token: str | None = None) -> None:
         pass
 
+    async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:
+        return []
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         for event in self.activity_events:
             yield event
@@ -575,7 +578,7 @@ class TestActivityEventHandling:
 
     @pytest.mark.asyncio
     async def test_no_raid_for_session_is_ignored(self) -> None:
-        """Idle event for a session with no RUNNING raid should be ignored."""
+        """Idle event for a session with no non-terminal raid should be ignored."""
         sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
@@ -925,7 +928,7 @@ class TestFailureDetection:
 
     @pytest.mark.asyncio
     async def test_failure_no_raid_is_ignored(self) -> None:
-        """A failure event for a session with no RUNNING raid should be ignored."""
+        """A failure event for a session with no non-terminal raid should be ignored."""
         sub, volundr, tracker, _ = _make_subscriber()
 
         event = ActivityEvent(
