@@ -250,7 +250,11 @@ def create_dispatch_router() -> APIRouter:
                     # Build milestone lookup and dependency filter
                     milestone_names = {m.id: m.name for m in milestones}
                     if hasattr(adapter, "get_blocked_identifiers"):
-                        blocked_identifiers = await adapter.get_blocked_identifiers(saga.tracker_id)
+                        try:
+                            blocked_identifiers = await adapter.get_blocked_identifiers(saga.tracker_id)
+                        except Exception:
+                            logger.warning("Failed to fetch blocked identifiers for saga %s, skipping dependency filter", saga.id)
+                            blocked_identifiers = set()
                     else:
                         blocked_identifiers = set()
 
