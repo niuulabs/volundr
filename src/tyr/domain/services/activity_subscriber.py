@@ -206,8 +206,14 @@ class SessionActivitySubscriber:
             return self._owner_adapters[owner_id]
 
         adapters = await self._factory.for_owner(owner_id)
-        if adapters:
-            self._owner_adapters[owner_id] = adapters
+        if not adapters:
+            logger.error(
+                "No authenticated Volundr adapter for owner %s — "
+                "user must configure a CODE_FORGE integration with a valid PAT",
+                owner_id[:8],
+            )
+            return []
+        self._owner_adapters[owner_id] = adapters
         return adapters
 
     _FAILED_STATUSES: frozenset[str] = frozenset({"stopped", "failed"})

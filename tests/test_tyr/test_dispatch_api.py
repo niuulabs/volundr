@@ -116,6 +116,13 @@ class MockVolundr(VolundrPort):
     async def stop_session(self, session_id, *, auth_token=None):
         pass
 
+    async def list_integration_ids(
+        self,
+        *,
+        auth_token: str | None = None,
+    ) -> list[str]:
+        return []
+
     async def subscribe_activity(self):
         return
         yield  # type: ignore[misc]  # pragma: no cover

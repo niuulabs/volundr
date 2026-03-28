@@ -115,13 +115,13 @@ class StubTracker(TrackerPort):
 
     # -- TrackerPort abstract methods --
 
-    async def create_saga(self, saga: Saga) -> str:
+    async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         return ""
 
-    async def create_phase(self, phase: Phase) -> str:
+    async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         return ""
 
-    async def create_raid(self, raid: Raid) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         return ""
 
     async def update_raid_state(self, raid_id: str, state: RaidStatus) -> None:

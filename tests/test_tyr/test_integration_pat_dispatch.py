@@ -119,16 +119,15 @@ class TestAutonomousDispatchWithPAT:
         assert session.tracker_issue_id == "NIU-234"
 
     @pytest.mark.asyncio
-    async def test_factory_returns_fallback_when_no_connection(self) -> None:
-        """Factory returns fallback adapter when no CODE_FORGE connection exists."""
+    async def test_factory_returns_empty_when_no_connection(self) -> None:
+        """Factory returns empty list when no CODE_FORGE connection exists."""
         factory = VolundrAdapterFactory(
             integration_repo=StubIntegrationRepo(connections=[]),
             credential_store=StubCredentialStore(),
         )
 
         result = await factory.for_owner(OWNER_ID)
-        assert len(result) == 1
-        assert isinstance(result[0], VolundrHTTPAdapter)
+        assert result == []
 
     @pytest.mark.asyncio
     async def test_primary_for_owner_returns_none_when_no_connection(self) -> None:

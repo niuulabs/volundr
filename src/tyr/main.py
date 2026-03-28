@@ -131,7 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Wire adapter factories (used by autonomous dispatcher)
             app.state.volundr_factory = VolundrAdapterFactory(
-                integration_repo, credential_store, fallback_url=settings.volundr.url
+                integration_repo, credential_store
             )
             app.state.tracker_factory = TrackerAdapterFactory(
                 integration_repo, credential_store, pool=pool

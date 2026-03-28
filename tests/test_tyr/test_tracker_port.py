@@ -65,13 +65,13 @@ class TestTrackerPortAbstract:
 class ConcreteTracker(TrackerPort):
     """Minimal concrete implementation to verify the interface contract."""
 
-    async def create_saga(self, saga: Saga) -> str:
+    async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         return "saga-1"
 
-    async def create_phase(self, phase: Phase) -> str:
+    async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         return "phase-1"
 
-    async def create_raid(self, raid: Raid) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         return "raid-1"
 
     async def update_raid_state(self, raid_id: str, state: RaidStatus) -> None:

@@ -1405,10 +1405,10 @@ class TestUpdatePhaseStatus:
 
 
 class TestGetSagaForRaid:
-    async def test_no_pool_returns_none(self):
+    async def test_no_pool_raises(self):
         adapter = _make_adapter()
-        result = await adapter.get_saga_for_raid("t-1")
-        assert result is None
+        with pytest.raises(RuntimeError, match="Database pool not configured"):
+            await adapter.get_saga_for_raid("t-1")
 
     async def test_with_pool_not_found_returns_none(self):
         adapter, pool = _make_adapter_with_pool()

@@ -149,10 +149,10 @@ class TestParseAndValidate:
     def test_custom_estimate_bounds(self) -> None:
         raid = {**VALID_RAID, "estimate_hours": 1.0}
         data = {"name": "S", "phases": [{"name": "P", "raids": [raid]}]}
-        # Default bounds reject 1.0
-        with pytest.raises(ValidationError, match="below minimum"):
-            parse_and_validate(json.dumps(data))
-        # Custom bounds accept 1.0
+        # Lenient validation clamps instead of rejecting
+        result = parse_and_validate(json.dumps(data))
+        assert result.phases[0].raids[0].estimate_hours == 1.0
+        # Custom bounds also accept 1.0
         result = parse_and_validate(
             json.dumps(data), min_estimate_hours=0.5, max_estimate_hours=10.0
         )
@@ -196,28 +196,28 @@ class TestValidateRaid:
 
     def test_empty_declared_files(self) -> None:
         data = {**VALID_RAID, "declared_files": []}
-        with pytest.raises(ValidationError, match="declared_files"):
-            validate_raid(data, "P1", 0)
+        result = validate_raid(data, "P1", 0)
+        assert result.declared_files == []  # lenient: empty list accepted
 
     def test_blank_declared_file(self) -> None:
         data = {**VALID_RAID, "declared_files": ["valid.py", ""]}
-        with pytest.raises(ValidationError, match="declared_files"):
-            validate_raid(data, "P1", 0)
+        result = validate_raid(data, "P1", 0)
+        assert result.declared_files == ["valid.py"]  # blanks filtered out
 
     def test_estimate_not_number(self) -> None:
         data = {**VALID_RAID, "estimate_hours": "three"}
-        with pytest.raises(ValidationError, match="estimate_hours"):
-            validate_raid(data, "P1", 0)
+        result = validate_raid(data, "P1", 0)
+        assert result.estimate_hours == DEFAULT_MIN  # defaults to min
 
     def test_estimate_too_low(self) -> None:
-        data = {**VALID_RAID, "estimate_hours": 1.0}
-        with pytest.raises(ValidationError, match="below minimum"):
-            validate_raid(data, "P1", 0)
+        data = {**VALID_RAID, "estimate_hours": 0.3}
+        result = validate_raid(data, "P1", 0)
+        assert result.estimate_hours == 0.5  # clamped to floor
 
     def test_estimate_too_high(self) -> None:
-        data = {**VALID_RAID, "estimate_hours": 10.0}
-        with pytest.raises(ValidationError, match="exceeds maximum"):
-            validate_raid(data, "P1", 0)
+        data = {**VALID_RAID, "estimate_hours": 50.0}
+        result = validate_raid(data, "P1", 0)
+        assert result.estimate_hours == 40.0  # clamped to ceiling
 
     def test_estimate_at_min_boundary(self) -> None:
         data = {**VALID_RAID, "estimate_hours": DEFAULT_MIN}
@@ -229,25 +229,25 @@ class TestValidateRaid:
         result = validate_raid(data, "P1", 0)
         assert result.estimate_hours == DEFAULT_MAX
 
-    def test_custom_estimate_bounds(self) -> None:
+    def test_custom_estimate_bounds_accepts_value(self) -> None:
         data = {**VALID_RAID, "estimate_hours": 1.0}
         result = validate_raid(data, "P1", 0, min_estimate_hours=0.5, max_estimate_hours=10.0)
         assert result.estimate_hours == 1.0
 
     def test_confidence_not_number(self) -> None:
         data = {**VALID_RAID, "confidence": "high"}
-        with pytest.raises(ValidationError, match="confidence"):
-            validate_raid(data, "P1", 0)
+        result = validate_raid(data, "P1", 0)
+        assert result.confidence == 0.5  # defaults to 0.5
 
     def test_confidence_out_of_range_low(self) -> None:
         data = {**VALID_RAID, "confidence": -0.1}
-        with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
-            validate_raid(data, "P1", 0)
+        result = validate_raid(data, "P1", 0)
+        assert result.confidence == 0.0  # clamped to 0.0
 
     def test_confidence_out_of_range_high(self) -> None:
         data = {**VALID_RAID, "confidence": 1.1}
-        with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
-            validate_raid(data, "P1", 0)
+        result = validate_raid(data, "P1", 0)
+        assert result.confidence == 1.0  # clamped to 1.0
 
     def test_confidence_at_boundaries(self) -> None:
         for val in [0.0, 1.0]:
@@ -262,8 +262,8 @@ class TestValidateRaid:
 
     def test_files_not_list(self) -> None:
         data = {**VALID_RAID, "declared_files": "single.py"}
-        with pytest.raises(ValidationError, match="declared_files"):
-            validate_raid(data, "P1", 0)
+        result = validate_raid(data, "P1", 0)
+        assert result.declared_files == []  # lenient: non-list becomes empty
 
 
 # ---------------------------------------------------------------------------

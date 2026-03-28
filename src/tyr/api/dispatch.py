@@ -251,9 +251,15 @@ def create_dispatch_router() -> APIRouter:
                     milestone_names = {m.id: m.name for m in milestones}
                     if hasattr(adapter, "get_blocked_identifiers"):
                         try:
-                            blocked_identifiers = await adapter.get_blocked_identifiers(saga.tracker_id)
+                            blocked_identifiers = await adapter.get_blocked_identifiers(
+                                saga.tracker_id,
+                            )
                         except Exception:
-                            logger.warning("Failed to fetch blocked identifiers for saga %s, skipping dependency filter", saga.id)
+                            logger.warning(
+                                "Failed to fetch blocked identifiers for saga %s,"
+                                " skipping dependency filter",
+                                saga.id,
+                            )
                             blocked_identifiers = set()
                     else:
                         blocked_identifiers = set()
@@ -312,9 +318,17 @@ def create_dispatch_router() -> APIRouter:
         integration_ids: list[str] = []
         try:
             integration_ids = await volundr.list_integration_ids(auth_token=auth_token)
-            logger.info("Fetched %d Volundr integration IDs: %s", len(integration_ids), integration_ids)
+            logger.info(
+                "Fetched %d Volundr integration IDs: %s",
+                len(integration_ids),
+                integration_ids,
+            )
         except Exception:
-            logger.warning("Failed to fetch Volundr integrations for user %s", principal.user_id, exc_info=True)
+            logger.warning(
+                "Failed to fetch Volundr integrations for user %s",
+                principal.user_id,
+                exc_info=True,
+            )
 
         # Pre-resolve all Volundr adapters for this owner (used for connection_id targeting)
         all_adapters = await volundr_factory.for_owner(principal.user_id)

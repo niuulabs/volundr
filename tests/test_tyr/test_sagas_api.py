@@ -199,8 +199,8 @@ class TestGetSaga:
 
 
 class TestGetSagaErrors:
-    def test_tracker_unavailable(self, saga_repo: MockSagaRepo):
-        """Returns 502 when tracker can't find the project."""
+    def test_tracker_unavailable_returns_degraded_response(self, saga_repo: MockSagaRepo):
+        """Returns 200 with empty tracker data when tracker is unavailable."""
 
         class FailingTracker(MockTracker):
             async def get_project(self, project_id: str) -> TrackerProject:
@@ -219,7 +219,9 @@ class TestGetSagaErrors:
 
         saga_id = str(saga_repo.sagas[0].id)
         resp = client.get(f"/api/v1/tyr/sagas/{saga_id}")
-        assert resp.status_code == 502
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["phases"] == []
 
     def test_list_with_tracker_error(self, saga_repo: MockSagaRepo):
         """List sagas gracefully handles tracker errors."""

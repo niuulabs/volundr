@@ -46,6 +46,7 @@ class TestTrackerPort:
             "get_owner_for_raid",
             "save_session_message",
             "get_session_messages",
+            "attach_document",
         }
         abstract_methods = {
             name
@@ -69,6 +70,7 @@ class TestVolundrPort:
             "get_chronicle_summary",
             "send_message",
             "stop_session",
+            "list_integration_ids",
             "subscribe_activity",
         }
         abstract_methods = {

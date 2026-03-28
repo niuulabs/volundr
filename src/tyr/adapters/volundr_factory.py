@@ -23,39 +23,31 @@ DEFAULT_VOLUNDR_URL = "http://volundr:8000"
 class VolundrAdapterFactory:
     """Resolves VolundrHTTPAdapter instances for a specific owner.
 
-    Returns all enabled CODE_FORGE connections as adapters.  When no
-    per-user connections exist, the global ``fallback_url`` (from config)
-    is returned as a single unauthenticated adapter so that system-level
-    operations (watcher, queue listing) still work.
+    Returns only **authenticated** adapters backed by a stored credential.
+    When no per-user CODE_FORGE connections exist, returns an empty list
+    (or ``None`` for the primary helper).  Callers must handle the missing
+    case explicitly — silent fallback to an unauthenticated adapter is
+    intentionally removed.
     """
 
     def __init__(
         self,
         integration_repo: IntegrationRepository,
         credential_store: CredentialStorePort,
-        fallback_url: str = DEFAULT_VOLUNDR_URL,
     ) -> None:
         self._integration_repo = integration_repo
         self._credential_store = credential_store
-        self._fallback_url = fallback_url
 
     async def for_owner(self, owner_id: str) -> list[VolundrPort]:
-        """Return all configured VolundrHTTPAdapter instances for *owner_id*.
+        """Return all authenticated VolundrHTTPAdapter instances for *owner_id*.
 
-        Falls back to a single unauthenticated adapter using the global
-        ``fallback_url`` when the user has no CODE_FORGE connections.
+        Returns an empty list when the user has no enabled CODE_FORGE
+        connections with valid credentials.
         """
-        adapters = await self._resolve_connections(owner_id)
-        if adapters:
-            return adapters
-        return [VolundrHTTPAdapter(base_url=self._fallback_url, name="default")]
+        return await self._resolve_connections(owner_id)
 
     async def primary_for_owner(self, owner_id: str) -> VolundrPort | None:
-        """Return the first (primary) adapter for *owner_id*, or ``None``.
-
-        Unlike ``for_owner`` this does **not** fall back to the global URL —
-        callers that need an authenticated adapter use this method.
-        """
+        """Return the first (primary) authenticated adapter, or ``None``."""
         adapters = await self._resolve_connections(owner_id)
         if adapters:
             return adapters[0]

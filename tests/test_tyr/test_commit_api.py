@@ -341,13 +341,13 @@ class TestCommitSagaOwnership:
 class TestCommitSagaTrackerFailure:
     """Tracker calls are best-effort — failures are logged, not raised."""
 
-    def test_tracker_create_saga_failure_still_commits(
+    def test_tracker_create_saga_failure_returns_502(
         self,
         saga_repo: MockSagaRepo,
         mock_git: MockGit,
     ) -> None:
         class FailingSagaTracker(MockTracker):
-            async def create_saga(self, saga):  # noqa: ANN001
+            async def create_saga(self, saga, *, description=""):  # noqa: ANN001
                 raise ConnectionError("Tracker down")
 
         app = FastAPI()
@@ -359,20 +359,15 @@ class TestCommitSagaTrackerFailure:
         client = TestClient(app)
 
         resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
-        assert resp.status_code == 201
-        data = resp.json()
-        # tracker_id is empty because the call failed
-        assert data["tracker_id"] == ""
-        # But the saga was still persisted
-        assert len(saga_repo.sagas) == 1
+        assert resp.status_code == 502
 
-    def test_tracker_create_phase_failure_still_commits(
+    def test_tracker_create_phase_failure_returns_502(
         self,
         saga_repo: MockSagaRepo,
         mock_git: MockGit,
     ) -> None:
         class FailingPhaseTracker(MockTracker):
-            async def create_phase(self, phase):  # noqa: ANN001
+            async def create_phase(self, phase, *, project_id=""):  # noqa: ANN001
                 raise ConnectionError("Tracker down")
 
         app = FastAPI()
@@ -384,18 +379,15 @@ class TestCommitSagaTrackerFailure:
         client = TestClient(app)
 
         resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
-        assert resp.status_code == 201
-        # Phases have empty tracker_id but are still persisted
-        assert len(saga_repo.phases) == 2
-        assert saga_repo.phases[0].tracker_id == ""
+        assert resp.status_code == 502
 
-    def test_tracker_create_raid_failure_still_commits(
+    def test_tracker_create_raid_failure_returns_502(
         self,
         saga_repo: MockSagaRepo,
         mock_git: MockGit,
     ) -> None:
         class FailingRaidTracker(MockTracker):
-            async def create_raid(self, raid):  # noqa: ANN001
+            async def create_raid(self, raid, *, project_id="", milestone_id=""):  # noqa: ANN001
                 raise ConnectionError("Tracker down")
 
         app = FastAPI()
@@ -407,10 +399,7 @@ class TestCommitSagaTrackerFailure:
         client = TestClient(app)
 
         resp = client.post("/api/v1/tyr/sagas/commit", json=VALID_COMMIT_BODY)
-        assert resp.status_code == 201
-        # Raids have empty tracker_id but are still persisted
-        assert len(saga_repo.raids) == 3
-        assert saga_repo.raids[0].tracker_id == ""
+        assert resp.status_code == 502
 
 
 class TestCommitSagaGitFailure:

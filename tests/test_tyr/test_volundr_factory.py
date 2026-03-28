@@ -42,25 +42,22 @@ def _make_connection(
 
 
 # ---------------------------------------------------------------------------
-# Tests — for_owner (returns list with fallback)
+# Tests — for_owner (returns only authenticated adapters, no fallback)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_no_code_forge_connection_returns_fallback() -> None:
+async def test_no_code_forge_connection_returns_empty() -> None:
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[]),
         credential_store=StubCredentialStore(),
     )
     result = await factory.for_owner("owner-1")
-    assert len(result) == 1
-    assert isinstance(result[0], VolundrHTTPAdapter)
-    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
-    assert result[0]._name == "default"
+    assert result == []
 
 
 @pytest.mark.asyncio
-async def test_disabled_connection_returns_fallback() -> None:
+async def test_disabled_connection_returns_empty() -> None:
     conn = _make_connection(enabled=False)
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[conn]),
@@ -69,8 +66,7 @@ async def test_disabled_connection_returns_fallback() -> None:
         ),
     )
     result = await factory.for_owner("owner-1")
-    assert len(result) == 1
-    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
+    assert result == []
 
 
 @pytest.mark.asyncio
@@ -90,16 +86,14 @@ async def test_enabled_connection_valid_cred_returns_adapter() -> None:
 
 
 @pytest.mark.asyncio
-async def test_credential_store_returns_none_falls_back() -> None:
+async def test_credential_store_returns_none_returns_empty() -> None:
     conn = _make_connection(enabled=True)
     factory = VolundrAdapterFactory(
         integration_repo=StubIntegrationRepo(connections=[conn]),
         credential_store=StubCredentialStore(values={}),
     )
     result = await factory.for_owner("owner-1")
-    # No credential → no user adapter → fallback
-    assert len(result) == 1
-    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
+    assert result == []
 
 
 @pytest.mark.asyncio
@@ -169,18 +163,6 @@ async def test_skips_connection_with_no_cred() -> None:
     result = await factory.for_owner("owner-1")
     assert len(result) == 1
     assert result[0]._base_url == "http://cluster-a:8000"
-
-
-@pytest.mark.asyncio
-async def test_custom_fallback_url() -> None:
-    factory = VolundrAdapterFactory(
-        integration_repo=StubIntegrationRepo(connections=[]),
-        credential_store=StubCredentialStore(),
-        fallback_url="http://my-cluster:9000",
-    )
-    result = await factory.for_owner("owner-1")
-    assert len(result) == 1
-    assert result[0]._base_url == "http://my-cluster:9000"
 
 
 @pytest.mark.asyncio
@@ -275,7 +257,4 @@ async def test_credential_store_error_skips_connection() -> None:
         credential_store=_FailingCredentialStore(),
     )
     result = await factory.for_owner("owner-1")
-    # Should fall back to default (error was caught)
-    assert len(result) == 1
-    assert result[0]._base_url == DEFAULT_VOLUNDR_URL
-    assert result[0]._name == "default"
+    assert result == []

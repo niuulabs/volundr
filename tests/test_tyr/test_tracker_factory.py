@@ -49,13 +49,13 @@ class FakeTracker(TrackerPort):
     def __init__(self, **kwargs) -> None:  # noqa: ANN003
         self.kwargs = kwargs
 
-    async def create_saga(self, saga):  # noqa: ANN001
+    async def create_saga(self, saga, *, description=""):  # noqa: ANN001
         return "s-1"
 
-    async def create_phase(self, phase):  # noqa: ANN001
+    async def create_phase(self, phase, *, project_id=""):  # noqa: ANN001
         return "p-1"
 
-    async def create_raid(self, raid):  # noqa: ANN001
+    async def create_raid(self, raid, *, project_id="", milestone_id=""):  # noqa: ANN001
         return "r-1"
 
     async def update_raid_state(self, raid_id, state):  # noqa: ANN001
@@ -140,13 +140,13 @@ class BoomTracker(TrackerPort):
     def __init__(self, **kwargs) -> None:  # noqa: ANN003
         raise RuntimeError("unexpected boom")
 
-    async def create_saga(self, saga):  # noqa: ANN001
+    async def create_saga(self, saga, *, description=""):  # noqa: ANN001
         return ""
 
-    async def create_phase(self, phase):  # noqa: ANN001
+    async def create_phase(self, phase, *, project_id=""):  # noqa: ANN001
         return ""
 
-    async def create_raid(self, raid):  # noqa: ANN001
+    async def create_raid(self, raid, *, project_id="", milestone_id=""):  # noqa: ANN001
         return ""
 
     async def update_raid_state(self, raid_id, state):  # noqa: ANN001

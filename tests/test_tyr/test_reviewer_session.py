@@ -75,6 +75,9 @@ class StubVolundr(VolundrPort):
     async def stop_session(self, session_id: str, *, auth_token: str | None = None) -> None:
         pass
 
+    async def list_integration_ids(self, *, auth_token: str | None = None) -> list[str]:
+        return []
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         return
         yield  # type: ignore[misc]  # pragma: no cover
@@ -84,7 +87,12 @@ class StubVolundrFactory:
     def __init__(self, volundr: StubVolundr | None = None) -> None:
         self._volundr = volundr
 
-    async def for_owner(self, owner_id: str) -> StubVolundr | None:
+    async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+        if self._volundr is None:
+            return []
+        return [self._volundr]
+
+    async def primary_for_owner(self, owner_id: str) -> StubVolundr | None:
         return self._volundr
 
 
@@ -436,7 +444,7 @@ class TestSpawnReviewer:
         assert len(volundr.spawn_calls) == 1
 
         req = volundr.spawn_calls[0]
-        assert req.name == "review-NIU-100"
+        assert req.name == "review-niu-100"
         assert req.model == "claude-opus-4-6"
         assert req.profile == "reviewer"
         assert req.workload_type == "reviewer"

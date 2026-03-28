@@ -126,23 +126,20 @@ class VolundrPort(ABC):
 class VolundrFactory(Protocol):
     """Protocol for resolving per-owner Volundr adapters.
 
-    Returns all configured Volundr connections for an owner.
-    The first adapter in the list is the primary (used for dispatch).
+    Returns all configured **authenticated** Volundr connections for an
+    owner.  Never falls back to an unauthenticated adapter — callers must
+    handle the empty-list / ``None`` case explicitly.
     """
 
     async def for_owner(self, owner_id: str) -> list[VolundrPort]:
-        """Return all Volundr adapters for *owner_id*.
+        """Return all authenticated Volundr adapters for *owner_id*.
 
-        Always returns a non-empty list: when no per-user connections
-        exist, the implementation must return a single fallback adapter
-        (unauthenticated, using the global Volundr URL).
+        Returns an empty list when no per-user CODE_FORGE connections are
+        configured.  Callers must treat an empty result as a hard error
+        or skip the operation with an explicit warning.
         """
         ...
 
     async def primary_for_owner(self, owner_id: str) -> VolundrPort | None:
-        """Return the primary (first) authenticated adapter, or ``None``.
-
-        Unlike ``for_owner``, this does **not** fall back — it returns
-        ``None`` when no per-user CODE_FORGE connections are configured.
-        """
+        """Return the primary (first) authenticated adapter, or ``None``."""
         ...

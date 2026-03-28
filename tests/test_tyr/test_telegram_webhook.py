@@ -110,13 +110,13 @@ class StubTracker(TrackerPort):
 
     # -- CRUD: create entities --
 
-    async def create_saga(self, saga: Saga) -> str:
+    async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         return saga.tracker_id
 
-    async def create_phase(self, phase: Phase) -> str:
+    async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         return phase.tracker_id
 
-    async def create_raid(self, raid: Raid) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         self.add_raid(raid)
         return raid.tracker_id
 
@@ -331,6 +331,9 @@ class StubVolundr(VolundrPort):
 
     async def stop_session(self, session_id, *, auth_token=None):
         pass
+
+    async def list_integration_ids(self, *, auth_token=None) -> list[str]:
+        return []
 
     async def subscribe_activity(self):
         return

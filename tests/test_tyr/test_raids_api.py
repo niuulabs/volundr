@@ -68,6 +68,20 @@ class StatefulMockTracker(MockTracker):
         self._all_merged: bool = False
         self.messages: dict[UUID, list[SessionMessage]] = {}
 
+    async def get_raid(self, tracker_id: str) -> Raid:
+        # Look up by UUID string (raid_id) first, then by tracker_id
+        try:
+            uid = UUID(tracker_id)
+            if uid in self.raids:
+                return self.raids[uid]
+        except ValueError:
+            pass
+        for raid in self.raids.values():
+            if raid.tracker_id == tracker_id:
+                return raid
+        from tyr.domain.exceptions import RaidNotFoundError
+        raise RaidNotFoundError(f"Raid not found: {tracker_id}")
+
     async def get_raid_by_id(self, raid_id: UUID) -> Raid | None:
         return self.raids.get(raid_id)
 
@@ -197,6 +211,13 @@ class MockVolundr(VolundrPort):
 
     async def stop_session(self, session_id, *, auth_token=None):
         pass
+
+    async def list_integration_ids(
+        self,
+        *,
+        auth_token: str | None = None,
+    ) -> list[str]:
+        return []
 
     async def subscribe_activity(self):
         return

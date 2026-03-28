@@ -96,13 +96,13 @@ class StubTracker(TrackerPort):
 
     # -- CRUD: create entities --
 
-    async def create_saga(self, saga: Saga) -> str:
+    async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         return saga.tracker_id
 
-    async def create_phase(self, phase: Phase) -> str:
+    async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         return phase.tracker_id
 
-    async def create_raid(self, raid: Raid) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         self.raids[raid.tracker_id] = raid
         return raid.tracker_id
 
@@ -312,6 +312,9 @@ class StubVolundr(VolundrPort):
     async def stop_session(self, session_id, *, auth_token=None):
         pass
 
+    async def list_integration_ids(self, *, auth_token=None) -> list[str]:
+        return []
+
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         return
         yield  # type: ignore[misc]  # pragma: no cover
@@ -416,7 +419,10 @@ def _make_engine(
     v = volundr or StubVolundr()
 
     class _StubVolundrFactory:
-        async def for_owner(self, owner_id: str) -> StubVolundr:
+        async def for_owner(self, owner_id: str) -> list[StubVolundr]:
+            return [v]
+
+        async def primary_for_owner(self, owner_id: str) -> StubVolundr | None:
             return v
 
     engine = ReviewEngine(

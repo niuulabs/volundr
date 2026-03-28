@@ -34,7 +34,6 @@ const mockClusters = [
 
 describe('useDispatchQueue', () => {
   beforeEach(() => {
-    fetchCallCount = 0;
     vi.spyOn(global, 'fetch').mockImplementation(async input => {
       const url = typeof input === 'string' ? input : (input as Request).url;
       if (url.includes('/queue')) {

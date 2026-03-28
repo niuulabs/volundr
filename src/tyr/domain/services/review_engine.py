@@ -525,7 +525,9 @@ class ReviewEngine:
                 except Exception:
                     continue
             if working_session is None:
-                raise ValueError(f"Working session {raid.session_id} not found on any Volundr cluster")
+                raise ValueError(
+                    f"Working session {raid.session_id} not found on any Volundr cluster"
+                )
 
         session = await self._reviewer.spawn_reviewer(
             raid=raid,
@@ -567,8 +569,14 @@ class ReviewEngine:
         """Resolve integration connection IDs from Volundr for the owner."""
         try:
             adapters = await self._volundr_factory.for_owner(owner_id)
-            if adapters:
-                return await adapters[0].list_integration_ids()
+            if not adapters:
+                logger.error(
+                    "No authenticated Volundr adapter for owner %s — "
+                    "cannot resolve integrations; user must configure a CODE_FORGE integration",
+                    owner_id[:8],
+                )
+                return []
+            return await adapters[0].list_integration_ids()
         except Exception:
             logger.warning("Failed to fetch Volundr integrations for owner %s", owner_id[:8])
         return []
@@ -739,12 +747,15 @@ class ReviewEngine:
         """Send failure context to the session before retrying."""
         if not raid.session_id:
             return
-        volundr = await self._volundr_factory.for_owner(owner_id)
-        if volundr is None:
-            logger.warning("No Volundr adapter for owner %s — cannot send feedback", owner_id[:8])
+        adapters = await self._volundr_factory.for_owner(owner_id)
+        if not adapters:
+            logger.warning(
+                "No authenticated Volundr adapter for owner %s — cannot send feedback",
+                owner_id[:8],
+            )
             return
         try:
-            await volundr.send_message(
+            await adapters[0].send_message(
                 raid.session_id,
                 f"Review failed: {reason}. Please fix and push again.",
             )

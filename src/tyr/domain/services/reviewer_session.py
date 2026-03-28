@@ -245,7 +245,11 @@ class ReviewerSessionService:
         """
         adapters = await self._volundr_factory.for_owner(owner_id)
         if not adapters:
-            logger.warning("No Volundr adapter for owner %s — cannot spawn reviewer", owner_id[:8])
+            logger.error(
+                "No authenticated Volundr adapter for owner %s — "
+                "user must configure a CODE_FORGE integration with a valid PAT",
+                owner_id[:8],
+            )
             return None
 
         # Find the Volundr instance hosting the working session
@@ -321,9 +325,15 @@ class ReviewerSessionService:
         if not result.issues:
             return
 
-        volundr = await self._volundr_factory.for_owner(owner_id)
-        if volundr is None:
+        adapters = await self._volundr_factory.for_owner(owner_id)
+        if not adapters:
+            logger.warning(
+                "No authenticated Volundr adapter for owner %s — cannot send feedback",
+                owner_id[:8],
+            )
             return
+
+        volundr = adapters[0]
 
         feedback_lines = [
             f"## Review Feedback (confidence: {result.confidence:.2f})",
