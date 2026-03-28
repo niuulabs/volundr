@@ -11,6 +11,8 @@ export interface ActiveRaid {
   url: string;
   status: RaidStatus;
   session_id: string | null;
+  reviewer_session_id: string | null;
+  review_round: number;
   confidence: number;
   pr_url: string | null;
   last_updated: string;

@@ -10,10 +10,17 @@ interface RaidExpandedRowProps {
   raidId: string;
   status: RaidStatus;
   sessionId: string | null;
+  reviewerSessionId: string | null;
   onAction: () => void;
 }
 
-export function RaidExpandedRow({ raidId, status, sessionId, onAction }: RaidExpandedRowProps) {
+export function RaidExpandedRow({
+  raidId,
+  status,
+  sessionId,
+  reviewerSessionId,
+  onAction,
+}: RaidExpandedRowProps) {
   const { review, loading, error, approve, reject, retry } = useRaidReview(raidId);
   const { messages, loading: msgsLoading, sendMessage } = useRaidMessages(raidId);
   const { timeline } = useSessionTimeline(sessionId);
@@ -46,7 +53,7 @@ export function RaidExpandedRow({ raidId, status, sessionId, onAction }: RaidExp
           review={review}
           messages={messages}
           messagesLoading={msgsLoading}
-          hasActiveSession={false}
+          hasActiveSession={!!(sessionId || reviewerSessionId)}
           onApprove={async () => {
             await approve();
             onAction();

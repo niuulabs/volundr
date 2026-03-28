@@ -99,6 +99,9 @@ function RaidRowGroup({
           ) : (
             <span className={styles.muted}>&mdash;</span>
           )}
+          {raid.reviewer_session_id && (
+            <span className={styles.reviewerTag}> R:{raid.reviewer_session_id.slice(0, 8)}</span>
+          )}
         </td>
         <td className={styles.cPr}>
           {raid.pr_url ? (
@@ -126,6 +129,7 @@ function RaidRowGroup({
               raidId={raid.tracker_id}
               status={raid.status}
               sessionId={raid.session_id}
+              reviewerSessionId={raid.reviewer_session_id}
               onAction={onAction}
             />
           </td>

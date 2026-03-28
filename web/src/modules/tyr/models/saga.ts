@@ -47,6 +47,8 @@ export interface Raid {
   status: RaidStatus;
   confidence: number;
   session_id: string | null;
+  reviewer_session_id: string | null;
+  review_round: number;
   branch: string | null;
   chronicle_summary: string | null;
   retry_count: number;
