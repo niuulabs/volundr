@@ -1047,6 +1047,8 @@ class LinearTrackerAdapter(TrackerPort):
             id=raid_id,
             phase_id=UUID(int=0),
             tracker_id=node["id"],
+            identifier=node.get("identifier", ""),
+            url=node.get("url", ""),
             name=node.get("title", ""),
             description=node.get("description") or "",
             acceptance_criteria=[],

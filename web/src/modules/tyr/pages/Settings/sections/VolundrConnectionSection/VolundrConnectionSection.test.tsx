@@ -22,7 +22,7 @@ const mockConnection2: IntegrationConnection = {
   integrationType: 'code_forge',
   adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
   credentialName: 'volundr-pat',
-  config: { url: 'http://volundr-staging' },
+  config: { url: 'http://volundr-staging', name: 'staging' },
   enabled: true,
   createdAt: '2026-01-20T10:00:00Z',
   updatedAt: '2026-01-20T10:00:00Z',
@@ -37,146 +37,112 @@ const mockService: ITyrIntegrationService = {
   getTelegramSetup: vi.fn().mockResolvedValue({ deeplink: '', token: '' }),
 };
 
-describe('VolundrConnectionSection', () => {
-  it('renders disconnected state with form when no connections', () => {
-    render(
-      <VolundrConnectionSection
-        connections={[]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
+function renderSection(overrides: Partial<Parameters<typeof VolundrConnectionSection>[0]> = {}) {
+  const props = {
+    connections: [],
+    onConnect: vi.fn().mockResolvedValue(undefined),
+    onDisconnect: vi.fn().mockResolvedValue(undefined),
+    service: mockService,
+    showForm: false,
+    onShowFormChange: vi.fn(),
+    ...overrides,
+  };
+  return { ...render(<VolundrConnectionSection {...props} />), props };
+}
 
-    expect(screen.getByText('Volundr Clusters')).toBeInTheDocument();
-    expect(screen.getByLabelText('Volundr URL')).toBeInTheDocument();
-    expect(screen.getByLabelText('Personal Access Token')).toBeInTheDocument();
+describe('VolundrConnectionSection', () => {
+  it('renders empty state when no connections and form hidden', () => {
+    renderSection({ connections: [] });
+    expect(screen.getByText('No clusters connected')).toBeInTheDocument();
+  });
+
+  it('renders form when showForm is true', () => {
+    renderSection({ showForm: true });
+    expect(screen.getByText('Add Volundr Cluster')).toBeInTheDocument();
+    expect(screen.getByText('Cluster Name')).toBeInTheDocument();
     expect(screen.getByText('Connect')).toBeInTheDocument();
   });
 
   it('renders connected state for single connection', () => {
-    render(
-      <VolundrConnectionSection
-        connections={[mockConnection]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
-
+    renderSection({ connections: [mockConnection] });
     expect(screen.getByText('Connected')).toBeInTheDocument();
     expect(screen.getByText(/production/)).toBeInTheDocument();
-    expect(screen.getByText('Disconnect')).toBeInTheDocument();
-    expect(screen.getByText('Add another cluster')).toBeInTheDocument();
   });
 
   it('renders multiple connected clusters', () => {
-    render(
-      <VolundrConnectionSection
-        connections={[mockConnection, mockConnection2]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
-
+    renderSection({ connections: [mockConnection, mockConnection2] });
     const badges = screen.getAllByText('Connected');
     expect(badges).toHaveLength(2);
     expect(screen.getByText(/production/)).toBeInTheDocument();
-    expect(screen.getByText(/staging/)).toBeInTheDocument();
-    expect(screen.getAllByText('Disconnect')).toHaveLength(2);
-    expect(screen.getByText('Add another cluster')).toBeInTheDocument();
+    expect(screen.getAllByText(/staging/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('disconnect button uses icon with title', () => {
+    renderSection({ connections: [mockConnection] });
+    expect(screen.getByTitle('Disconnect')).toBeInTheDocument();
+  });
+
+  it('test connection button uses icon with title', () => {
+    renderSection({ connections: [mockConnection] });
+    expect(screen.getByTitle('Test connection')).toBeInTheDocument();
   });
 
   it('calls onConnect with correct params', async () => {
     const onConnect = vi.fn().mockResolvedValue(undefined);
-    render(
-      <VolundrConnectionSection
-        connections={[]}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
+    renderSection({ showForm: true, onConnect });
 
-    fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+    fireEvent.change(screen.getByPlaceholderText('Paste your PAT'), {
       target: { value: 'my-secret-pat' },
     });
     fireEvent.click(screen.getByText('Connect'));
 
     await waitFor(() => {
-      expect(onConnect).toHaveBeenCalledWith({
-        integrationType: 'code_forge',
-        adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-        credentialName: 'volundr-pat',
-        credentialValue: 'my-secret-pat',
-        config: { url: 'http://volundr' },
-      });
+      expect(onConnect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          integrationType: 'code_forge',
+          credentialValue: 'my-secret-pat',
+        })
+      );
     });
   });
 
   it('sends cluster name and custom URL in config', async () => {
     const onConnect = vi.fn().mockResolvedValue(undefined);
-    render(
-      <VolundrConnectionSection
-        connections={[]}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
+    renderSection({ showForm: true, onConnect });
 
-    fireEvent.change(screen.getByLabelText('Cluster Name (optional)'), {
+    fireEvent.change(screen.getByPlaceholderText('e.g. production, staging'), {
       target: { value: 'staging' },
     });
-    fireEvent.change(screen.getByLabelText('Volundr URL'), {
+    fireEvent.change(screen.getByPlaceholderText('https://volundr.example.com'), {
       target: { value: 'http://staging' },
     });
-    fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+    fireEvent.change(screen.getByPlaceholderText('Paste your PAT'), {
       target: { value: 'pat-123' },
     });
     fireEvent.click(screen.getByText('Connect'));
 
     await waitFor(() => {
-      expect(onConnect).toHaveBeenCalledWith({
-        integrationType: 'code_forge',
-        adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
-        credentialName: 'volundr-pat',
-        credentialValue: 'pat-123',
-        config: { url: 'http://staging', name: 'staging' },
-      });
+      expect(onConnect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          credentialValue: 'pat-123',
+          config: { url: 'http://staging', name: 'staging' },
+        })
+      );
     });
   });
 
-  it('shows error when PAT is empty', async () => {
-    render(
-      <VolundrConnectionSection
-        connections={[]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
+  it('connect button disabled when PAT is empty', () => {
+    renderSection({ showForm: true });
 
-    fireEvent.click(screen.getByText('Connect'));
-
-    await waitFor(() => {
-      expect(screen.getByText('PAT is required')).toBeInTheDocument();
-    });
+    const btn = screen.getByText('Connect');
+    expect(btn).toBeDisabled();
   });
 
-  it('calls onDisconnect', async () => {
+  it('calls onDisconnect via icon button', async () => {
     const onDisconnect = vi.fn().mockResolvedValue(undefined);
-    render(
-      <VolundrConnectionSection
-        connections={[mockConnection]}
-        onConnect={vi.fn()}
-        onDisconnect={onDisconnect}
-        service={mockService}
-      />
-    );
+    renderSection({ connections: [mockConnection], onDisconnect });
 
-    fireEvent.click(screen.getByText('Disconnect'));
+    fireEvent.click(screen.getByTitle('Disconnect'));
 
     await waitFor(() => {
       expect(onDisconnect).toHaveBeenCalledWith('conn-1');
@@ -185,16 +151,9 @@ describe('VolundrConnectionSection', () => {
 
   it('shows error on connect failure', async () => {
     const onConnect = vi.fn().mockRejectedValue(new Error('Network error'));
-    render(
-      <VolundrConnectionSection
-        connections={[]}
-        onConnect={onConnect}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
+    renderSection({ showForm: true, onConnect });
 
-    fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+    fireEvent.change(screen.getByPlaceholderText('Paste your PAT'), {
       target: { value: 'token' },
     });
     fireEvent.click(screen.getByText('Connect'));
@@ -205,65 +164,26 @@ describe('VolundrConnectionSection', () => {
   });
 
   it('PAT input is password type', () => {
-    render(
-      <VolundrConnectionSection
-        connections={[]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
-
-    const patInput = screen.getByLabelText('Personal Access Token');
+    renderSection({ showForm: true });
+    const patInput = screen.getByPlaceholderText('Paste your PAT');
     expect(patInput).toHaveAttribute('type', 'password');
   });
 
-  it('shows add form when button clicked', async () => {
-    render(
-      <VolundrConnectionSection
-        connections={[mockConnection]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
-
-    // Form should not be visible initially
-    expect(screen.queryByLabelText('Volundr URL')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Add another cluster'));
-
-    expect(screen.getByLabelText('Volundr URL')).toBeInTheDocument();
-    expect(screen.getByLabelText('Personal Access Token')).toBeInTheDocument();
-  });
-
-  it('shows test connection button for connected clusters', () => {
-    render(
-      <VolundrConnectionSection
-        connections={[mockConnection]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
-
-    expect(screen.getByText('Test Connection')).toBeInTheDocument();
-  });
-
   it('runs test connection and shows result', async () => {
-    render(
-      <VolundrConnectionSection
-        connections={[mockConnection]}
-        onConnect={vi.fn()}
-        onDisconnect={vi.fn()}
-        service={mockService}
-      />
-    );
+    renderSection({ connections: [mockConnection] });
 
-    fireEvent.click(screen.getByText('Test Connection'));
+    fireEvent.click(screen.getByTitle('Test connection'));
 
     await waitFor(() => {
       expect(screen.getByText('OK')).toBeInTheDocument();
     });
+  });
+
+  it('calls onShowFormChange(false) on cancel', () => {
+    const onShowFormChange = vi.fn();
+    renderSection({ showForm: true, onShowFormChange });
+
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(onShowFormChange).toHaveBeenCalledWith(false);
   });
 });

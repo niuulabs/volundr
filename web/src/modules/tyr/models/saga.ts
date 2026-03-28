@@ -1,6 +1,13 @@
 export type SagaStatus = 'active' | 'complete' | 'failed';
 export type PhaseStatus = 'pending' | 'active' | 'gated' | 'complete';
-export type RaidStatus = 'pending' | 'queued' | 'running' | 'review' | 'merged' | 'failed';
+export type RaidStatus =
+  | 'pending'
+  | 'queued'
+  | 'running'
+  | 'review'
+  | 'escalated'
+  | 'merged'
+  | 'failed';
 export type ConfidenceEventType = 'ci_pass' | 'ci_fail' | 'scope_breach' | 'retry' | 'human_reject';
 
 export interface Saga {

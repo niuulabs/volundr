@@ -11,8 +11,10 @@ describe('TyrLayout', () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Sagas')).toBeInTheDocument();
-    expect(screen.getByText('New Saga')).toBeInTheDocument();
+    expect(screen.getByText('Planning')).toBeInTheDocument();
+    expect(screen.getByText('Import')).toBeInTheDocument();
     expect(screen.getByText('Dispatcher')).toBeInTheDocument();
     expect(screen.getByText('Sessions')).toBeInTheDocument();
   });

@@ -12,6 +12,7 @@ const statusLabels: Record<RaidStatus, string> = {
   queued: 'queued',
   running: '\u25CF running',
   review: '\u29D6 review',
+  escalated: '\u26A0 escalated',
   merged: '\u2713 merged',
   failed: '\u2715 failed',
 };

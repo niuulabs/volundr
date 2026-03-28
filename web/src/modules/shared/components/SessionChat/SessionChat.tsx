@@ -425,7 +425,13 @@ export function SessionChat({
                   onCopy={handleCopy}
                   onRegenerate={handleRegenerate}
                   onBookmark={handleBookmark}
-                  bookmarked={localStorage.getItem(`bookmark:${msg.id}`) === '1'}
+                  bookmarked={(() => {
+                    try {
+                      return localStorage.getItem(`bookmark:${msg.id}`) === '1';
+                    } catch {
+                      return false;
+                    }
+                  })()}
                 />
               );
             })}

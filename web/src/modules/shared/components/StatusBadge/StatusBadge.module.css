@@ -12,24 +12,26 @@
   white-space: nowrap;
 }
 
-/* Status colors - Emerald (healthy, working, active, acting, success, running) */
+/* Status colors - Emerald (healthy, working, active, acting, success, running, merged) */
 .badge[data-status='healthy'],
 .badge[data-status='working'],
 .badge[data-status='active'],
 .badge[data-status='acting'],
 .badge[data-status='success'],
-.badge[data-status='running'] {
+.badge[data-status='running'],
+.badge[data-status='merged'] {
   background-color: color-mix(in srgb, var(--color-accent-emerald) 20%, transparent);
   color: var(--color-accent-emerald);
   border-color: color-mix(in srgb, var(--color-accent-emerald) 30%, transparent);
 }
 
-/* Status colors - Amber (warning, thinking, coordinating, queued, starting) */
+/* Status colors - Amber (warning, thinking, coordinating, queued, starting, review) */
 .badge[data-status='warning'],
 .badge[data-status='thinking'],
 .badge[data-status='coordinating'],
 .badge[data-status='queued'],
-.badge[data-status='starting'] {
+.badge[data-status='starting'],
+.badge[data-status='review'] {
   background-color: color-mix(in srgb, var(--color-brand) 20%, transparent);
   color: var(--color-brand);
   border-color: color-mix(in srgb, var(--color-brand) 30%, transparent);
@@ -51,6 +53,13 @@
   background-color: color-mix(in srgb, var(--color-accent-purple) 20%, transparent);
   color: var(--color-accent-purple);
   border-color: color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
+}
+
+/* Status colors - Orange (escalated) */
+.badge[data-status='escalated'] {
+  background-color: color-mix(in srgb, var(--color-accent-orange) 20%, transparent);
+  color: var(--color-accent-orange);
+  border-color: color-mix(in srgb, var(--color-accent-orange) 30%, transparent);
 }
 
 /* Status colors - Red (critical, error, failed) */

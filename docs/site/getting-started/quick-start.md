@@ -73,10 +73,7 @@ k3d cluster create volundr \
 ### 3. Install Volundr
 
 ```bash
-helm repo add volundr https://charts.volundr.dev
-helm repo update
-
-helm install volundr volundr/volundr \
+helm install volundr oci://ghcr.io/niuulabs/charts/volundr \
   --namespace volundr --create-namespace \
   --set anthropic.apiKey=sk-ant-... \
   --set github.token=ghp_...

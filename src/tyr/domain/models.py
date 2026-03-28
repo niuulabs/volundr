@@ -133,6 +133,8 @@ class Raid:
     retry_count: int
     created_at: datetime
     updated_at: datetime
+    identifier: str = ""
+    url: str = ""
 
 
 @dataclass(frozen=True)

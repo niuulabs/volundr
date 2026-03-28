@@ -9,7 +9,7 @@ const volundrConn: IntegrationConnection = {
   integrationType: 'code_forge',
   adapter: 'tyr.adapters.volundr_http.VolundrHTTPAdapter',
   credentialName: 'volundr-pat',
-  config: { url: 'http://volundr' },
+  config: { url: 'http://volundr', name: 'production' },
   enabled: true,
   createdAt: '2026-01-15T10:00:00Z',
   updatedAt: '2026-01-15T10:00:00Z',
@@ -48,11 +48,27 @@ describe('TyrSettings', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
-  it('renders volundr connection section', async () => {
+  it('renders page heading', async () => {
     render(<TyrSettings service={mockService()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Volundr Clusters')).toBeInTheDocument();
+      expect(screen.getByText('Tyr Connections')).toBeInTheDocument();
+    });
+  });
+
+  it('renders add cluster button', async () => {
+    render(<TyrSettings service={mockService()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Cluster')).toBeInTheDocument();
+    });
+  });
+
+  it('shows empty state when no connections', async () => {
+    render(<TyrSettings service={mockService()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No clusters connected')).toBeInTheDocument();
     });
   });
 
@@ -70,14 +86,6 @@ describe('TyrSettings', () => {
     await waitFor(() => {
       const badges = screen.getAllByText('Connected');
       expect(badges).toHaveLength(2);
-    });
-  });
-
-  it('renders page heading', async () => {
-    render(<TyrSettings service={mockService()} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Tyr Connections')).toBeInTheDocument();
     });
   });
 

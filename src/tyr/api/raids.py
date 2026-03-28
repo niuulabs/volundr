@@ -7,8 +7,6 @@ that are in the REVIEW state.
 from __future__ import annotations
 
 import logging
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
@@ -208,9 +206,9 @@ def create_raids_router() -> APIRouter:
                     results.append(
                         ActiveRaidResponse(
                             tracker_id=raid.tracker_id,
-                            identifier=getattr(raid, "identifier", raid.tracker_id),
+                            identifier=raid.identifier or raid.tracker_id,
                             title=raid.name,
-                            url=getattr(raid, "url", ""),
+                            url=raid.url or "",
                             status=raid.status.value,
                             session_id=raid.session_id,
                             confidence=raid.confidence,
@@ -222,13 +220,14 @@ def create_raids_router() -> APIRouter:
 
     @router.get("/{raid_id}/review", response_model=ReviewResponse)
     async def get_review(
-        raid_id: UUID,
+        raid_id: str,
         tracker: TrackerPort = Depends(resolve_tracker),
         volundr: VolundrPort = Depends(resolve_volundr),
     ) -> ReviewResponse:
         """Get review state for a raid: chronicle summary, CI status, confidence."""
-        raid = await tracker.get_raid_by_id(raid_id)
-        if raid is None:
+        try:
+            raid = await tracker.get_raid(raid_id)
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Raid not found: {raid_id}",
@@ -273,7 +272,7 @@ def create_raids_router() -> APIRouter:
 
     @router.post("/{raid_id}/approve", response_model=RaidResponse)
     async def approve_raid(
-        raid_id: UUID,
+        raid_id: str,
         request: Request,
         principal: Principal = Depends(extract_principal),
         tracker: TrackerPort = Depends(resolve_tracker),
@@ -289,8 +288,9 @@ def create_raids_router() -> APIRouter:
         svc = _build_review_service(request, tracker, principal.user_id)
 
         # Fetch raid for REST-specific pre-steps (CI check, git merge)
-        raid = await tracker.get_raid_by_id(raid_id)
-        if raid is None:
+        try:
+            raid = await tracker.get_raid(raid_id)
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Raid not found: {raid_id}",
@@ -333,7 +333,7 @@ def create_raids_router() -> APIRouter:
 
         # Core review: confidence event, state → MERGED, phase gate check
         try:
-            result = await svc.approve(raid_id)
+            result = await svc.approve(raid.id)
         except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -356,7 +356,7 @@ def create_raids_router() -> APIRouter:
 
     @router.post("/{raid_id}/reject", response_model=RaidResponse)
     async def reject_raid(
-        raid_id: UUID,
+        raid_id: str,
         request: Request,
         body: RejectRequest | None = None,
         principal: Principal = Depends(extract_principal),
@@ -368,7 +368,9 @@ def create_raids_router() -> APIRouter:
 
         # Core review: confidence event, state → FAILED
         try:
-            result = await svc.reject(raid_id, reason=reason)
+            # Look up raid to get internal ID for the service
+            raid_obj = await tracker.get_raid(raid_id)
+            result = await svc.reject(raid_obj.id, reason=reason)
         except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -390,7 +392,7 @@ def create_raids_router() -> APIRouter:
 
     @router.post("/{raid_id}/retry", response_model=RaidResponse)
     async def retry_raid(
-        raid_id: UUID,
+        raid_id: str,
         request: Request,
         principal: Principal = Depends(extract_principal),
         tracker: TrackerPort = Depends(resolve_tracker),
@@ -400,7 +402,8 @@ def create_raids_router() -> APIRouter:
 
         # Core review: confidence event, state → PENDING or QUEUED
         try:
-            result = await svc.retry(raid_id)
+            raid_obj = await tracker.get_raid(raid_id)
+            result = await svc.retry(raid_obj.id)
         except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -422,7 +425,7 @@ def create_raids_router() -> APIRouter:
 
     @router.post("/{raid_id}/message", response_model=SendMessageResponse)
     async def send_message(
-        raid_id: UUID,
+        raid_id: str,
         body: SendMessageRequest,
         request: Request,
         tracker: TrackerPort = Depends(resolve_tracker),
@@ -433,7 +436,8 @@ def create_raids_router() -> APIRouter:
         svc = SessionMessageService(tracker, volundr, event_bus=event_bus)
 
         try:
-            result = await svc.send_message(raid_id, body.content, sender="user")
+            raid_obj = await tracker.get_raid(raid_id)
+            result = await svc.send_message(raid_obj.id, body.content, sender="user")
         except RaidNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -449,6 +453,12 @@ def create_raids_router() -> APIRouter:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Raid has no active session",
             )
+        except Exception as exc:
+            logger.warning("Failed to send message to raid %s: %s", raid_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Session unavailable: {exc}",
+            )
 
         return SendMessageResponse(
             message_id=str(result.message.id),
@@ -461,12 +471,13 @@ def create_raids_router() -> APIRouter:
 
     @router.get("/{raid_id}/messages", response_model=list[SessionMessageResponse])
     async def list_messages(
-        raid_id: UUID,
+        raid_id: str,
         tracker: TrackerPort = Depends(resolve_tracker),
     ) -> list[SessionMessageResponse]:
         """List all messages sent to a raid's session (audit trail)."""
-        raid = await tracker.get_raid_by_id(raid_id)
-        if raid is None:
+        try:
+            raid = await tracker.get_raid(raid_id)
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Raid not found: {raid_id}",

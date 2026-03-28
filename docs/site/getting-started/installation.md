@@ -116,10 +116,7 @@ npm run dev
 For production deployments. This is how Volundr is meant to run.
 
 ```bash
-helm repo add volundr https://charts.volundr.dev
-helm repo update
-
-helm install volundr volundr/volundr \
+helm install volundr oci://ghcr.io/niuulabs/charts/volundr \
   --namespace volundr --create-namespace \
   --values your-values.yaml
 ```

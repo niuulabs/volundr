@@ -1,384 +1,155 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { StatusBadge, StatusDot, LoadingIndicator } from '@/modules/shared';
-import { getAccessToken } from '@/modules/shared/api/client';
-import { createApiClient } from '@/modules/shared/api/client';
-import { cn } from '@/modules/shared/utils/classnames';
+import { useCallback, useMemo, useState } from 'react';
+import { LoadingIndicator } from '@/modules/shared';
+import {
+  useTyrEvents,
+  useActiveRaids,
+  useClusters,
+  useHealthDetailed,
+  useSagas,
+} from '../../hooks';
+import type { SseEvent } from '../../hooks';
 import type { RaidStatus } from '../../models';
+import { DashboardTopBar } from '../../components/DashboardTopBar';
+import { AttentionBar } from '../../components/AttentionBar';
+import { StatsStrip } from '../../components/StatsStrip';
+import { RaidsTable } from '../../components/RaidsTable';
+import { SagasSidebar } from '../../components/SagasSidebar';
+import { SystemsHealth } from '../../components/SystemsHealth';
+import { EventLog } from '../../components/EventLog';
 import styles from './DashboardView.module.css';
 
-/* ── Types ────────────────────────────────────────────── */
-
-interface ActiveRaid {
-  tracker_id: string;
-  identifier: string;
-  title: string;
-  url: string;
-  status: RaidStatus;
-  session_id: string | null;
-  confidence: number;
-  pr_url: string | null;
-  last_updated: string;
-}
-
-interface DetailedHealth {
-  status: string;
-  database: string;
-  event_bus_subscribers: number;
-  activity_subscriber_running: boolean;
-  notification_running: boolean;
-  review_engine_running: boolean;
-}
-
-interface SseEvent {
-  id: string;
-  type: string;
-  data: string;
-  receivedAt: Date;
-}
-
-/* ── API client ───────────────────────────────────────── */
-
-const tyrApi = createApiClient('/api/v1/tyr');
-
-/* ── Helpers ──────────────────────────────────────────── */
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) {
-    return iso;
-  }
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-const MAX_EVENTS = 100;
-
-/* ── Component ────────────────────────────────────────── */
-
 export function DashboardView() {
-  /* -- Active Raids ------------------------------------------------- */
-  const [raids, setRaids] = useState<ActiveRaid[]>([]);
-  const [raidsLoading, setRaidsLoading] = useState(true);
-  const [raidsError, setRaidsError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [clusterFilter, setClusterFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<RaidStatus | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
-  const fetchRaids = useCallback(async () => {
-    try {
-      const data = await tyrApi.get<ActiveRaid[]>('/raids/active');
-      setRaids(data);
-      setRaidsError(null);
-    } catch {
-      // Endpoint may not exist yet — show empty state
-      setRaids([]);
-      setRaidsError(null);
-    } finally {
-      setRaidsLoading(false);
+  const { raids, loading: raidsLoading, refresh: refreshRaids, patchRaid } = useActiveRaids();
+
+  const summary = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of raids) {
+      counts[r.status] = (counts[r.status] || 0) + 1;
     }
-  }, []);
+    return counts;
+  }, [raids]);
+  const { clusters } = useClusters();
+  const { health, loading: healthLoading } = useHealthDetailed();
+  const { sagas } = useSagas();
 
-  useEffect(() => {
-    fetchRaids();
-  }, [fetchRaids]);
+  const handleSseEvent = useCallback(
+    (event: SseEvent) => {
+      try {
+        const data = JSON.parse(event.data);
 
-  /* -- Service Health ----------------------------------------------- */
-  const [health, setHealth] = useState<DetailedHealth | null>(null);
-  const [healthLoading, setHealthLoading] = useState(true);
-  const [healthError, setHealthError] = useState<string | null>(null);
+        if (event.type === 'raid.state_changed' && data.tracker_id) {
+          patchRaid(data.tracker_id, {
+            status: (data.status as string).toLowerCase() as RaidStatus,
+            confidence: data.confidence ?? undefined,
+          });
+          // summary derived from raids — auto-updates
+        }
 
-  const fetchHealth = useCallback(async () => {
-    try {
-      const data = await tyrApi.get<DetailedHealth>('/health/detailed');
-      setHealth(data);
-      setHealthError(null);
-    } catch (err) {
-      setHealthError(err instanceof Error ? err.message : 'Failed to load health');
-    } finally {
-      setHealthLoading(false);
-    }
-  }, []);
+        if (event.type === 'confidence.updated' && data.tracker_id) {
+          patchRaid(data.tracker_id, { confidence: data.confidence });
+        }
 
-  useEffect(() => {
-    fetchHealth();
-    const interval = setInterval(fetchHealth, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchHealth]);
-
-  /* -- SSE Events --------------------------------------------------- */
-  const [events, setEvents] = useState<SseEvent[]>([]);
-  const [sseConnected, setSseConnected] = useState(false);
-  const eventIdCounter = useRef(0);
-
-  useEffect(() => {
-    let es: EventSource | null = null;
-
-    function connect() {
-      const token = getAccessToken();
-      const url = token
-        ? `/api/v1/tyr/events?token=${encodeURIComponent(token)}`
-        : '/api/v1/tyr/events';
-
-      es = new EventSource(url);
-
-      es.onopen = () => setSseConnected(true);
-
-      // Listen for named Tyr events
-      const eventTypes = [
-        'raid.state_changed',
-        'session.state_changed',
-        'confidence.updated',
-        'phase.unlocked',
-        'dispatcher.state',
-      ];
-
-      for (const type of eventTypes) {
-        es.addEventListener(type, (event: MessageEvent) => {
-          const sseEvent: SseEvent = {
-            id: String(eventIdCounter.current++),
-            type,
-            data: event.data,
-            receivedAt: new Date(),
-          };
-          setEvents(prev => [sseEvent, ...prev].slice(0, MAX_EVENTS));
-        });
+        if (event.type === 'phase.unlocked') {
+          refreshRaids();
+          // summary derived from raids — auto-updates
+        }
+      } catch {
+        // non-JSON event data, ignore
       }
+    },
+    [patchRaid, refreshRaids]
+  );
 
-      // Also catch unnamed messages
-      es.onmessage = (event: MessageEvent) => {
-        const sseEvent: SseEvent = {
-          id: String(eventIdCounter.current++),
-          type: 'message',
-          data: event.data,
-          receivedAt: new Date(),
-        };
-        setEvents(prev => [sseEvent, ...prev].slice(0, MAX_EVENTS));
-      };
+  const { events, connected } = useTyrEvents(handleSseEvent);
 
-      es.onerror = () => {
-        setSseConnected(false);
-        es?.close();
-        setTimeout(connect, 5_000);
-      };
+  const filteredRaids = useMemo(() => {
+    const terminal: RaidStatus[] = ['merged', 'failed'];
+    let result = raids;
+    if (statusFilter) {
+      result = result.filter(r => r.status === statusFilter);
+    } else if (!showCompleted) {
+      result = result.filter(r => !terminal.includes(r.status));
     }
+    return result;
+  }, [raids, statusFilter, showCompleted]);
 
-    connect();
+  const handleToggle = (id: string) => {
+    setExpandedId(prev => (prev === id ? null : id));
+  };
 
-    return () => {
-      es?.close();
-    };
-  }, []);
+  const handleAction = () => {
+    refreshRaids();
+    setExpandedId(null);
+  };
 
-  /* -- Render ------------------------------------------------------- */
+  const handleStatusClick = (status: string) => {
+    setStatusFilter(prev => (prev === status ? null : status) as RaidStatus | null);
+  };
 
-  return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h2 className={styles.heading}>Dashboard</h2>
-        <span className={cn(sseConnected ? styles.connected : styles.disconnected)}>
-          {sseConnected ? 'live' : 'disconnected'}
-        </span>
-      </div>
-
-      {/* Active Raids */}
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Active Raids</h3>
-        <ActiveRaidsTable raids={raids} loading={raidsLoading} error={raidsError} />
-      </section>
-
-      {/* Service Health */}
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Service Health</h3>
-        <ServiceHealthPanel health={health} loading={healthLoading} error={healthError} />
-      </section>
-
-      {/* Recent Events */}
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Recent Events</h3>
-        <EventFeed events={events} />
-      </section>
-    </div>
-  );
-}
-
-/* ── Sub-components ───────────────────────────────────── */
-
-function ActiveRaidsTable({
-  raids,
-  loading,
-  error,
-}: {
-  raids: ActiveRaid[];
-  loading: boolean;
-  error: string | null;
-}) {
-  if (loading) {
-    return <LoadingIndicator messages={['Loading raids...']} />;
-  }
-
-  if (error) {
-    return <div className={styles.error}>{error}</div>;
-  }
-
-  if (raids.length === 0) {
-    return <div className={styles.empty}>No active raids</div>;
-  }
-
-  return (
-    <table className={styles.table}>
-      <thead>
-        <tr>
-          <th>Ticket</th>
-          <th>Status</th>
-          <th>Confidence</th>
-          <th>PR</th>
-          <th>Last Updated</th>
-        </tr>
-      </thead>
-      <tbody>
-        {raids.map(raid => (
-          <tr key={raid.tracker_id}>
-            <td>
-              <div className={styles.raidInfo}>
-                {raid.url ? (
-                  <a
-                    href={raid.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.raidLink}
-                  >
-                    {raid.identifier || raid.tracker_id}
-                  </a>
-                ) : (
-                  <span className={styles.monoCell}>{raid.identifier || raid.tracker_id}</span>
-                )}
-                {raid.title && <span className={styles.raidTitle}>{raid.title}</span>}
-              </div>
-            </td>
-            <td>
-              <StatusBadge status={raid.status} />
-            </td>
-            <td className={styles.confidenceCell}>{Math.round(raid.confidence * 100)}%</td>
-            <td>
-              {raid.pr_url ? (
-                <a
-                  href={raid.pr_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.prLink}
-                >
-                  PR
-                </a>
-              ) : (
-                <span className={styles.muted}>{'\u2014'}</span>
-              )}
-            </td>
-            <td className={styles.timestampCell}>{formatTimestamp(raid.last_updated)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function ServiceHealthPanel({
-  health,
-  loading,
-  error,
-}: {
-  health: DetailedHealth | null;
-  loading: boolean;
-  error: string | null;
-}) {
-  if (loading) {
-    return <LoadingIndicator messages={['Checking health...']} />;
-  }
-
-  if (error) {
-    return <div className={styles.error}>{error}</div>;
-  }
-
-  if (!health) {
-    return <div className={styles.empty}>No health data</div>;
-  }
-
-  const items: { label: string; status: string; value?: string }[] = [
-    { label: 'Database', status: health.database === 'ok' ? 'healthy' : 'failed' },
-    {
-      label: 'Event Bus',
-      status: health.event_bus_subscribers > 0 ? 'healthy' : 'idle',
-      value: `${health.event_bus_subscribers} consumer${health.event_bus_subscribers === 1 ? '' : 's'}`,
-    },
-    {
-      label: 'Activity Subscriber',
-      status: health.activity_subscriber_running ? 'running' : 'stopped',
-    },
-    {
-      label: 'Notification',
-      status: health.notification_running ? 'running' : 'stopped',
-    },
-    {
-      label: 'Review Engine',
-      status: health.review_engine_running ? 'running' : 'stopped',
-    },
-  ];
-
-  return (
-    <div className={styles.healthGrid}>
-      {items.map(item => (
-        <div key={item.label} className={styles.healthCard}>
-          <StatusDot status={item.status} pulse={item.status === 'running'} />
-          <span className={styles.healthLabel}>{item.label}</span>
-          {item.value && <span className={styles.healthValue}>{item.value}</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function formatEventData(raw: string): string {
-  try {
-    const data = JSON.parse(raw);
-    const parts: string[] = [];
-    if (data.tracker_id) parts.push(data.tracker_id);
-    if (data.session_id) parts.push(`session=${data.session_id.slice(0, 8)}`);
-    if (data.status) parts.push(data.status);
-    if (data.state) parts.push(data.state);
-    if (data.confidence !== undefined) parts.push(`conf=${data.confidence}`);
-    if (parts.length > 0) return parts.join(' · ');
-    return raw.slice(0, 120);
-  } catch {
-    return raw.slice(0, 120);
-  }
-}
-
-function EventFeed({ events }: { events: SseEvent[] }) {
-  if (events.length === 0) {
+  if (raidsLoading) {
     return (
-      <div className={styles.eventFeed}>
-        <div className={styles.emptyFeed}>Waiting for events...</div>
+      <div className={styles.layout}>
+        <LoadingIndicator messages={['Loading dashboard...']} />
       </div>
     );
   }
 
   return (
-    <div className={styles.eventFeed}>
-      {events.map(event => (
-        <div key={event.id} className={styles.eventItem}>
-          <span className={styles.eventTime}>{formatTime(event.receivedAt)}</span>
-          <span className={styles.eventType}>{event.type}</span>
-          <span className={styles.eventData}>{formatEventData(event.data)}</span>
+    <div className={styles.layout}>
+      <DashboardTopBar
+        sagaCount={sagas.length}
+        raidCount={raids.length}
+        clusterCount={clusters.length}
+        connected={connected}
+        clusters={clusters}
+        selectedCluster={clusterFilter}
+        onClusterChange={setClusterFilter}
+      />
+      <AttentionBar raids={raids} />
+      <StatsStrip
+        summary={summary}
+        activeFilter={statusFilter}
+        onStatusClick={handleStatusClick}
+        showCompleted={showCompleted}
+        onToggleCompleted={() => setShowCompleted(v => !v)}
+      />
+      <div className={styles.body}>
+        <div className={styles.left}>
+          <RaidsTable
+            raids={filteredRaids}
+            expandedId={expandedId}
+            onToggle={handleToggle}
+            onAction={handleAction}
+          />
         </div>
-      ))}
+        <div className={styles.right}>
+          <div className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <span className={styles.panelTitle}>Sagas</span>
+              <span className={styles.panelCount}>{sagas.length}</span>
+            </div>
+            <SagasSidebar sagas={sagas} />
+          </div>
+          <div className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <span className={styles.panelTitle}>Systems</span>
+            </div>
+            <SystemsHealth health={health} loading={healthLoading} />
+          </div>
+          <div className={styles.eventPanel}>
+            <div className={styles.panelHeader}>
+              <span className={styles.panelTitle}>Event Log</span>
+              <span className={styles.panelBadge}>live</span>
+            </div>
+            <EventLog events={events} raids={raids} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
