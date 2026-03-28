@@ -324,6 +324,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 dispatcher_repo=dispatcher_repo,
                 event_bus=event_bus,
                 config=settings.watcher,
+                review_engine=review_engine,
             )
             app.state.subscriber = subscriber
             await subscriber.start()
