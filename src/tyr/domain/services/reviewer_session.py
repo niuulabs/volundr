@@ -114,16 +114,24 @@ def build_reviewer_initial_prompt(
                 "",
                 "**If you find ANY issues, no matter how small, you MUST NOT approve.**",
                 "",
+                "Your session ID can be found from your workspace path:",
+                "   `basename $(dirname $PWD)` (when CWD is the workspace)",
+                "",
                 "When you find issues:",
                 "",
-                "1. Send detailed feedback to the working session using Bash:",
+                "1. Discover your own session ID: `MY_ID=$(basename $(dirname /volundr/sessions/*/workspace))`",
+                "2. Send detailed feedback to the working session using Bash:",
                 f"   `{send_cmd}`",
-                "2. In your feedback, tell the session to message you back when done.",
-                "   Include your own session ID so it knows where to reply.",
-                "3. Wait for the working session to respond that it has fixed the issues",
-                "4. Re-read the diff (`git diff`) and re-review",
-                "5. Repeat until zero issues remain or you exhaust all review rounds",
-                f"6. After {max_review_rounds} rounds with unresolved issues, set approved=false",
+                "3. In your feedback message, include instructions for the working session",
+                "   to notify you when done. Tell it to run:",
+                "   `curl -s -X POST http://localhost:8081/api/message "
+                '-H "Content-Type: application/json" '
+                "-d '{\"session_id\": \"<YOUR_SESSION_ID>\", \"content\": \"Fixed. Re-review.\"}'`",
+                f"   where <YOUR_SESSION_ID> is replaced with `$MY_ID` (your session ID).",
+                "4. Wait for the working session to respond that it has fixed the issues",
+                "5. Re-read the diff (`git diff`) and re-review",
+                "6. Repeat until zero issues remain or you exhaust all review rounds",
+                f"7. After {max_review_rounds} rounds with unresolved issues, set approved=false",
             ]
         )
 

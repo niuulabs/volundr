@@ -274,11 +274,13 @@ class SessionActivitySubscriber:
             await self._try_handle_reviewer_completion(event.session_id, volundr)
             return
 
-        # Working session idle during REVIEW — the reviewer drives the loop
-        # directly with the working session. Tyr does not re-trigger completion.
-        if raid.status == RaidStatus.REVIEW:
+        # Working session idle during an active review loop (round >= 1) —
+        # the reviewer drives the loop directly. Tyr does not re-trigger.
+        # Round 0 means the working session just completed initial work and
+        # should proceed to normal completion → REVIEW transition.
+        if raid.status == RaidStatus.REVIEW and raid.review_round >= 1:
             logger.info(
-                "Working session %s idle during REVIEW (round %d) — reviewer drives loop",
+                "Working session %s idle during review loop (round %d) — reviewer drives",
                 event.session_id[:8],
                 raid.review_round,
             )
