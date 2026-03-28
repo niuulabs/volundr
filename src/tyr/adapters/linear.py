@@ -89,7 +89,7 @@ query ListProjects($first: Int!) {
 
 _GET_PROJECT_QUERY = (
     """
-query GetProject($id: String!) {
+query GetProject($id: ID!) {
   project(id: $id) {
 """
     + _PROJECT_FIELDS
@@ -100,7 +100,7 @@ query GetProject($id: String!) {
 )
 
 _LIST_MILESTONES_QUERY = """
-query ListMilestones($projectId: String!) {
+query ListMilestones($projectId: ID!) {
   project(id: $projectId) {
     projectMilestones {
       nodes {
@@ -117,7 +117,7 @@ query ListMilestones($projectId: String!) {
 """
 
 _GET_PROJECT_FULL_QUERY = """
-query GetProjectFull($id: String!, $issueFirst: Int!) {
+query GetProjectFull($id: ID!, $issueFirst: Int!) {
   project(id: $id) {
       id
       name
@@ -195,7 +195,7 @@ query ListIssueRelations($projectId: ID!, $first: Int!) {
 
 _LIST_ISSUES_QUERY = (
     """
-query ListIssues($projectId: String!, $first: Int!) {
+query ListIssues($projectId: ID!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
     first: $first
@@ -213,7 +213,7 @@ query ListIssues($projectId: String!, $first: Int!) {
 
 _LIST_ISSUES_BY_MILESTONE_QUERY = (
     """
-query ListIssuesByMilestone($projectId: String!, $milestoneId: String!, $first: Int!) {
+query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
   issues(
     filter: {
       project: { id: { eq: $projectId } }
@@ -233,7 +233,7 @@ query ListIssuesByMilestone($projectId: String!, $milestoneId: String!, $first: 
 )
 
 _CREATE_PROJECT_QUERY = """
-mutation CreateProject($name: String!, $description: String, $teamIds: [String!]!) {
+mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
   projectCreate(input: { name: $name, description: $description, teamIds: $teamIds }) {
     project { id }
     success
@@ -242,7 +242,7 @@ mutation CreateProject($name: String!, $description: String, $teamIds: [String!]
 """
 
 _CREATE_MILESTONE_QUERY = """
-mutation CreateMilestone($name: String!, $projectId: String!, $sortOrder: Float!) {
+mutation CreateMilestone($name: String!, $projectId: ID!, $sortOrder: Float!) {
   projectMilestoneCreate(input: { name: $name, projectId: $projectId, sortOrder: $sortOrder }) {
     projectMilestone { id }
     success
@@ -251,7 +251,7 @@ mutation CreateMilestone($name: String!, $projectId: String!, $sortOrder: Float!
 """
 
 _CREATE_DOCUMENT_QUERY = """
-mutation CreateDocument($title: String!, $content: String, $projectId: String) {
+mutation CreateDocument($title: String!, $content: String, $projectId: ID) {
   documentCreate(input: { title: $title, content: $content, projectId: $projectId }) {
     document { id }
     success
@@ -263,9 +263,9 @@ _CREATE_ISSUE_QUERY = """
 mutation CreateIssue(
   $title: String!,
   $description: String,
-  $projectId: String!,
-  $projectMilestoneId: String,
-  $teamId: String!,
+  $projectId: ID!,
+  $projectMilestoneId: ID,
+  $teamId: ID!,
   $estimate: Int
 ) {
   issueCreate(input: {
@@ -283,7 +283,7 @@ mutation CreateIssue(
 """
 
 _GET_ISSUE_QUERY = """
-query GetIssue($id: String!) {
+query GetIssue($id: ID!) {
   issue(id: $id) {
     id
     identifier
@@ -302,7 +302,7 @@ query GetIssue($id: String!) {
 """
 
 _GET_MILESTONE_QUERY = """
-query GetMilestone($id: String!) {
+query GetMilestone($id: ID!) {
   projectMilestone(id: $id) {
     id
     name
@@ -315,7 +315,7 @@ query GetMilestone($id: String!) {
 """
 
 _UPDATE_ISSUE_STATE_QUERY = """
-mutation UpdateIssueState($issueId: String!, $stateId: String!) {
+mutation UpdateIssueState($issueId: ID!, $stateId: ID!) {
   issueUpdate(id: $issueId, input: { stateId: $stateId }) {
     issue { id state { name } }
     success
@@ -324,7 +324,7 @@ mutation UpdateIssueState($issueId: String!, $stateId: String!) {
 """
 
 _ISSUE_TEAM_QUERY = """
-query IssueTeam($id: String!) {
+query IssueTeam($id: ID!) {
   issue(id: $id) {
     team { id }
   }
@@ -332,7 +332,7 @@ query IssueTeam($id: String!) {
 """
 
 _TEAM_STATES_QUERY = """
-query TeamStates($teamId: String!) {
+query TeamStates($teamId: ID!) {
   team(id: $teamId) {
     states {
       nodes { id name }
@@ -342,7 +342,7 @@ query TeamStates($teamId: String!) {
 """
 
 _ADD_COMMENT_QUERY = """
-mutation AddComment($issueId: String!, $body: String!) {
+mutation AddComment($issueId: ID!, $body: String!) {
   commentCreate(input: { issueId: $issueId, body: $body }) {
     success
   }
