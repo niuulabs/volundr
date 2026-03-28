@@ -200,12 +200,14 @@ def _try_parse_text(text: str) -> ReviewerResult | None:
     )
 
 
-def parse_reviewer_response(text: str) -> ReviewerResult | None:
+def parse_reviewer_response(text: str | None) -> ReviewerResult | None:
     """Parse the structured response from a reviewer session.
 
     Tries JSON first, falls back to the text-based format.
     Returns None if the response cannot be parsed.
     """
+    if not text:
+        return None
     result = _try_parse_json(text)
     if result is not None:
         return result
