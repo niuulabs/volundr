@@ -86,18 +86,21 @@ class SessionMessageService:
         if raid.status not in RUNNING_STATUSES:
             raise RaidNotRunningError(raid_id, raid.status.value)
 
-        if not raid.session_id:
+        # In REVIEW state, prefer the reviewer session; otherwise use the working session
+        target_session = raid.reviewer_session_id if raid.status == RaidStatus.REVIEW else None
+        target_session = target_session or raid.session_id
+        if not target_session:
             raise NoActiveSessionError(raid_id)
 
         # Send the message to Volundr
-        await self._volundr.send_message(raid.session_id, content, auth_token=auth_token)
+        await self._volundr.send_message(target_session, content, auth_token=auth_token)
 
         # Persist audit record
         now = datetime.now(UTC)
         msg = SessionMessage(
             id=uuid4(),
             raid_id=raid_id,
-            session_id=raid.session_id,
+            session_id=target_session,
             content=content,
             sender=sender,
             created_at=now,
@@ -140,5 +143,5 @@ class SessionMessageService:
         return MessageResult(
             message=msg,
             raid_id=raid_id,
-            session_id=raid.session_id,
+            session_id=target_session,
         )
