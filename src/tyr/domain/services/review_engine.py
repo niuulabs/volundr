@@ -195,14 +195,13 @@ class ReviewEngine:
             self._reviewer_sessions.pop(session_id, None)
             return
 
-        score = raid.confidence
-
-        # Apply reviewer confidence delta
-        reviewer_delta = self._cfg.reviewer_confidence_weight * (result.confidence - score)
-        event = _make_event(raid.id, ConfidenceEventType.REVIEWER_SCORE, reviewer_delta, score)
+        # Confidence is whatever the reviewer says — no blending
+        score = result.confidence
+        delta = score - raid.confidence
+        event = _make_event(raid.id, ConfidenceEventType.REVIEWER_SCORE, delta, raid.confidence)
         await tracker.add_confidence_event(tracker_id, event)
+        await tracker.update_raid_progress(tracker_id, confidence=score)
         await self._emit_confidence_updated(raid.id, event)
-        score = event.score_after
 
         logger.info(
             "Reviewer session %s result (round %d): confidence=%.2f approved=%s issues=%d",
