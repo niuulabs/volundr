@@ -196,10 +196,10 @@ class VolundrHTTPAdapter(VolundrPort):
             return [c["id"] for c in resp.json() if c.get("enabled", True)]
 
     async def list_repos(self, *, auth_token: str | None = None) -> list[dict]:
-        """Fetch configured repos from this Volundr instance."""
+        """Fetch configured repos from Volundr's shared niuu endpoint."""
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
-                f"{self._base_url}/api/v1/volundr/repos",
+                f"{self._base_url}/api/v1/niuu/repos",
                 headers=self._headers(auth_token),
             )
             resp.raise_for_status()
