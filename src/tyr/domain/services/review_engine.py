@@ -513,14 +513,18 @@ class ReviewEngine:
 
         integration_ids = await self._resolve_integration_ids(owner_id)
 
-        # Resolve repo from parent saga
+        # Resolve repo and branch from parent saga
         repo = ""
+        feature_branch = ""
         try:
             saga = await tracker.get_saga_for_raid(raid.tracker_id)
             if saga and saga.repos:
                 repo = saga.repos[0]
+                feature_branch = saga.feature_branch
+            else:
+                logger.warning("No saga/repos found for raid %s", tracker_id)
         except Exception:
-            logger.warning("Failed to resolve repo for raid %s", tracker_id)
+            logger.warning("Failed to resolve repo for raid %s", tracker_id, exc_info=True)
 
         session = await self._reviewer.spawn_reviewer(
             raid=raid,
@@ -529,6 +533,7 @@ class ReviewEngine:
             changed_files=changed_files,
             integration_ids=integration_ids,
             repo=repo,
+            feature_branch=feature_branch,
         )
         if session is None:
             logger.warning("Reviewer session not spawned for raid %s — skipping", tracker_id)
@@ -559,15 +564,14 @@ class ReviewEngine:
     # -- Integration resolution --
 
     async def _resolve_integration_ids(self, owner_id: str) -> list[str]:
-        """Resolve integration connection IDs for the owner."""
-        if self._integration_repo is None:
-            return []
+        """Resolve integration connection IDs from Volundr for the owner."""
         try:
-            connections = await self._integration_repo.list_connections(owner_id)
-            return [str(c.id) for c in connections]
+            adapters = await self._volundr_factory.for_owner(owner_id)
+            if adapters:
+                return await adapters[0].list_integration_ids()
         except Exception:
-            logger.warning("Failed to fetch integrations for owner %s", owner_id[:8])
-            return []
+            logger.warning("Failed to fetch Volundr integrations for owner %s", owner_id[:8])
+        return []
 
     # -- Decision handlers --
 

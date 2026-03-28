@@ -63,6 +63,8 @@ class VolundrHTTPAdapter(VolundrPort):
                     "integration_ids": request.integration_ids,
                 },
             )
+            if resp.status_code >= 400:
+                logger.error("spawn_session %d: %s", resp.status_code, resp.text[:500])
             resp.raise_for_status()
             data = resp.json()
             return VolundrSession(
