@@ -410,3 +410,58 @@ func TestNewAPIClient_ServerFlagOnly(t *testing.T) {
 		t.Errorf("expected URL %q, got %q", "https://override.example.com", client.BaseURL())
 	}
 }
+
+func TestNewAPIClient_BothFlags(t *testing.T) {
+	setupTestConfig(t, nil)
+
+	oldServer := cfgServer
+	oldToken := cfgToken
+	oldCtx := cfgContext
+	cfgServer = "https://flag.example.com"
+	cfgToken = "flag-token" //nolint:gosec // test fixture
+	cfgContext = ""
+	defer func() {
+		cfgServer = oldServer
+		cfgToken = oldToken
+		cfgContext = oldCtx
+	}()
+
+	client, err := newAPIClient()
+	if err != nil {
+		t.Fatalf("newAPIClient with both flags: %v", err)
+	}
+	if client.BaseURL() != "https://flag.example.com" {
+		t.Errorf("expected URL %q, got %q", "https://flag.example.com", client.BaseURL())
+	}
+}
+
+func TestNewAPIClient_TokenFlagOnly(t *testing.T) {
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["default"] = &remote.Context{
+		Name:   "default",
+		Server: "https://config.example.com",
+		Token:  "config-token",
+	}
+	setupTestConfig(t, cfg)
+
+	oldServer := cfgServer
+	oldToken := cfgToken
+	oldCtx := cfgContext
+	cfgServer = ""
+	cfgToken = "override-token" //nolint:gosec // test fixture
+	cfgContext = ""
+	defer func() {
+		cfgServer = oldServer
+		cfgToken = oldToken
+		cfgContext = oldCtx
+	}()
+
+	client, err := newAPIClient()
+	if err != nil {
+		t.Fatalf("newAPIClient with token flag: %v", err)
+	}
+	// URL comes from config context, token is overridden.
+	if client.BaseURL() != "https://config.example.com" {
+		t.Errorf("expected URL %q, got %q", "https://config.example.com", client.BaseURL())
+	}
+}

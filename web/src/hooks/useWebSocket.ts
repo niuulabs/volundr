@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { getAccessToken } from '@/adapters/api/client';
+import { getAccessToken } from '@/modules/volundr/adapters/api/client';
 
 export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 

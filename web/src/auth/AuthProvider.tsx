@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import type { User } from 'oidc-client-ts';
-import { setTokenProvider } from '@/adapters/api/client';
+import { setTokenProvider } from '@/modules/volundr/adapters/api/client';
 import { loadRuntimeConfig } from '@/config';
 import { getOidcConfig, getUserManager, type OidcConfig } from './oidc';
 import { AuthContext, type AuthContextValue } from './AuthContext';
@@ -54,12 +54,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const enabled = oidcConfig !== null;
 
-  // Keep ref in sync and register token provider for API client
-  useEffect(() => {
+  // Register the token provider synchronously after commit but before
+  // children's useEffect calls via useLayoutEffect.  This ensures the
+  // Bearer token is available when child components fire API requests.
+  useLayoutEffect(() => {
     userRef.current = user;
   }, [user]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) return;
     setTokenProvider(() => userRef.current?.access_token ?? null);
     return () => setTokenProvider(null);

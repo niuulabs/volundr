@@ -1,0 +1,12 @@
+{{- if and .Values.ingress.enabled (eq (default "host" .Values.ingress.mode) "path") -}}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "skuld.fullname" . }}-strip
+  labels:
+    {{- include "skuld.labels" . | nindent 4 }}
+spec:
+  stripPrefix:
+    prefixes:
+      - /s/{{ .Values.session.id }}
+{{- end }}

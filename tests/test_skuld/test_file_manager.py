@@ -5,7 +5,7 @@ import io
 import pytest
 from fastapi.testclient import TestClient
 
-from volundr.skuld.broker import app, broker
+from skuld.broker import app, broker
 
 
 class TestFileDownloadEndpoint:

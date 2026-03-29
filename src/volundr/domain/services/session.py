@@ -10,10 +10,13 @@ from uuid import UUID
 
 from volundr.domain.models import (
     CleanupTarget,
+    EventType,
     GitSource,
     IntegrationConnection,
     Principal,
+    RealtimeEvent,
     Session,
+    SessionActivityState,
     SessionSource,
     SessionSpec,
     SessionStatus,
@@ -298,6 +301,39 @@ class SessionService:
         """Get a session by ID."""
         return await self._repository.get(session_id)
 
+    async def update_activity(
+        self,
+        session_id: UUID,
+        state: SessionActivityState,
+        metadata: dict,
+    ) -> Session:
+        """Update a session's activity state and broadcast an SSE event.
+
+        Raises SessionNotFoundError if the session doesn't exist.
+        """
+        session = await self._repository.get(session_id)
+        if session is None:
+            raise SessionNotFoundError(session_id)
+
+        session.activity_state = state
+        session.activity_metadata = metadata
+        updated = await self._repository.update(session)
+
+        if self._broadcaster is not None:
+            await self._broadcaster.publish(
+                RealtimeEvent(
+                    type=EventType.SESSION_ACTIVITY,
+                    data={
+                        "session_id": str(session_id),
+                        "state": state.value,
+                        "metadata": metadata,
+                        "owner_id": session.owner_id or "",
+                    },
+                    timestamp=updated.updated_at,
+                )
+            )
+        return updated
+
     async def list_sessions(
         self,
         status: SessionStatus | None = None,
@@ -490,6 +526,8 @@ class SessionService:
         credential_names: list[str] | None = None,
         integration_ids: list[str] | None = None,
         resource_config: dict | None = None,
+        system_prompt: str = "",
+        initial_prompt: str = "",
     ) -> Session:
         """Start a session's pods via the contributor pipeline."""
         session = await self._repository.get(session_id)
@@ -517,6 +555,8 @@ class SessionService:
                 credential_names=credential_names,
                 integration_ids=integration_ids,
                 resource_config=resource_config,
+                system_prompt=system_prompt,
+                initial_prompt=initial_prompt,
             )
 
             provisioning = (
@@ -554,6 +594,8 @@ class SessionService:
         credential_names: list[str] | None = None,
         integration_ids: list[str] | None = None,
         resource_config: dict | None = None,
+        system_prompt: str = "",
+        initial_prompt: str = "",
     ):
         """Run the contributor pipeline and start pods with merged spec."""
         # Auto-include all enabled integrations when none are specified.
@@ -581,6 +623,8 @@ class SessionService:
             integration_ids=tuple(c.id for c in resolved_connections),
             integration_connections=tuple(resolved_connections),
             resource_config=resource_config or {},
+            system_prompt=system_prompt,
+            initial_prompt=initial_prompt,
         )
 
         contributions: list[SessionContribution] = []

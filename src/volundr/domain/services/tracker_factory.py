@@ -36,13 +36,13 @@ class TrackerFactory:
         """
         cred = await self._credential_store.get_value(
             "user",
-            connection.user_id,
+            connection.owner_id,
             connection.credential_name,
         )
         if cred is None:
             raise ValueError(
                 f"Credential '{connection.credential_name}' not found "
-                f"for user '{connection.user_id}'"
+                f"for user '{connection.owner_id}'"
             )
 
         cls = _import_class(connection.adapter)
@@ -51,6 +51,6 @@ class TrackerFactory:
         logger.info(
             "Created tracker adapter: %s (user=%s)",
             connection.adapter.rsplit(".", 1)[-1],
-            connection.user_id,
+            connection.owner_id,
         )
         return instance

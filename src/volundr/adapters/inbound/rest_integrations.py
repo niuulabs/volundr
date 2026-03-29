@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
+from niuu.adapters.inbound.rest_integration_models import IntegrationResponse
 from volundr.adapters.inbound.auth import extract_principal
 from volundr.domain.models import (
     IntegrationConnection,
@@ -86,49 +87,6 @@ class IntegrationUpdateRequest(BaseModel):
         description="New enabled status (null to keep current)",
         examples=[True],
     )
-
-
-class IntegrationResponse(BaseModel):
-    """Response model for an integration connection."""
-
-    id: str = Field(description="Unique connection identifier", examples=["a1b2c3d4"])
-    integration_type: str = Field(description="Integration category", examples=["issue_tracker"])
-    adapter: str = Field(
-        description="Fully-qualified adapter class path",
-        examples=["volundr.adapters.trackers.linear.LinearAdapter"],
-    )
-    credential_name: str = Field(description="Stored credential name", examples=["linear-api-key"])
-    config: dict[str, str] = Field(
-        description="Adapter-specific configuration",
-        examples=[{"team_id": "TEAM-1"}],
-    )
-    enabled: bool = Field(description="Whether the integration is active", examples=[True])
-    created_at: str = Field(
-        description="ISO 8601 creation timestamp", examples=["2025-01-15T10:30:00Z"]
-    )
-    updated_at: str = Field(
-        description="ISO 8601 last update timestamp", examples=["2025-01-15T10:30:00Z"]
-    )
-    slug: str = Field(
-        default="",
-        description="Catalog entry slug",
-        examples=["linear"],
-    )
-
-    @classmethod
-    def from_connection(cls, conn: IntegrationConnection) -> IntegrationResponse:
-        """Create response from domain model."""
-        return cls(
-            id=conn.id,
-            integration_type=conn.integration_type,
-            adapter=conn.adapter,
-            credential_name=conn.credential_name,
-            config=conn.config,
-            enabled=conn.enabled,
-            created_at=conn.created_at.isoformat(),
-            updated_at=conn.updated_at.isoformat(),
-            slug=conn.slug,
-        )
 
 
 class MCPServerSpecResponse(BaseModel):
@@ -284,7 +242,7 @@ def create_integrations_router(
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id=str(uuid4()),
-            user_id=principal.user_id,
+            owner_id=principal.user_id,
             integration_type=IntegrationType(data.integration_type),
             adapter=data.adapter,
             credential_name=data.credential_name,
@@ -314,7 +272,7 @@ def create_integrations_router(
     ) -> IntegrationResponse:
         """Update an integration connection."""
         existing = await integration_repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
@@ -323,7 +281,7 @@ def create_integrations_router(
         now = datetime.now(UTC)
         updated = IntegrationConnection(
             id=existing.id,
-            user_id=existing.user_id,
+            owner_id=existing.owner_id,
             integration_type=existing.integration_type,
             adapter=existing.adapter,
             credential_name=(
@@ -350,7 +308,7 @@ def create_integrations_router(
     ) -> None:
         """Delete an integration connection."""
         existing = await integration_repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",
@@ -367,7 +325,7 @@ def create_integrations_router(
     ) -> IntegrationTestResult:
         """Test an integration connection by instantiating the adapter."""
         existing = await integration_repo.get_connection(connection_id)
-        if existing is None or existing.user_id != principal.user_id:
+        if existing is None or existing.owner_id != principal.user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Integration not found: {connection_id}",

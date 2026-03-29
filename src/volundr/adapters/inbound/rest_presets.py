@@ -107,7 +107,7 @@ class PresetCreate(BaseModel):
                 "description": "High-resource preset for complex tasks",
                 "cli_tool": "claude",
                 "workload_type": "session",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "resource_config": {"cpu": "4", "memory": "8Gi"},
                 "is_default": False,
             },

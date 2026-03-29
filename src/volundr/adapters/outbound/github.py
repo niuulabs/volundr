@@ -69,6 +69,8 @@ class GitHubProvider(GitProvider, GitWorkflowProvider):
         self._patterns = [
             re.compile(rf"^(?:https?://)?{host_escaped}/([^/]+)/([^/]+?)(?:\.git)?/?$"),
             re.compile(rf"^git@{host_escaped}:([^/]+)/([^/]+?)(?:\.git)?$"),
+            # Bare shorthand: "org/repo" (no host, no protocol)
+            re.compile(r"^([^/:@.]+)/([^/:@.]+?)(?:\.git)?$"),
         ]
 
         logger.debug(
@@ -90,6 +92,11 @@ class GitHubProvider(GitProvider, GitWorkflowProvider):
     def name(self) -> str:
         """Return provider name."""
         return self._name
+
+    @property
+    def base_url(self) -> str:
+        """Return the base URL for this provider instance."""
+        return self._base_url
 
     @property
     def orgs(self) -> tuple[str, ...]:

@@ -16,13 +16,13 @@ vi.mock('./oidc', () => ({
 }));
 
 // Mock the client token provider
-vi.mock('@/adapters/api/client', () => ({
+vi.mock('@/modules/volundr/adapters/api/client', () => ({
   setTokenProvider: vi.fn(),
 }));
 
 import { loadRuntimeConfig } from '@/config';
 import { getOidcConfig, getUserManager } from './oidc';
-import { setTokenProvider } from '@/adapters/api/client';
+import { setTokenProvider } from '@/modules/volundr/adapters/api/client';
 
 const mockConfig = {
   authority: 'https://keycloak.example.com/realms/test',

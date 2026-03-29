@@ -2,7 +2,13 @@
 
 import pytest
 
-from volundr.skuld.config import SkuldSessionConfig, SkuldSettings
+from skuld.config import SkuldSessionConfig, SkuldSettings
+
+
+@pytest.fixture(autouse=True)
+def _no_yaml_config(monkeypatch):
+    """Disable YAML config file loading so real files on disk don't interfere."""
+    monkeypatch.setitem(SkuldSettings.model_config, "yaml_file", [])
 
 
 class TestSkuldSessionConfig:
@@ -12,7 +18,7 @@ class TestSkuldSessionConfig:
         config = SkuldSessionConfig()
         assert config.id == "unknown"
         assert config.name == "unknown"
-        assert config.model == "claude-sonnet-4-20250514"
+        assert config.model == "claude-sonnet-4-6"
         assert config.workspace_dir is None
 
     def test_explicit_values(self):
@@ -54,7 +60,7 @@ class TestSkuldSettings:
         assert s.volundr_api_url == ""
         assert s.session.id == "unknown"
         assert s.session.name == "unknown"
-        assert s.session.model == "claude-sonnet-4-20250514"
+        assert s.session.model == "claude-sonnet-4-6"
         assert s.persistence_mount_path == "/volundr/sessions"
 
     def test_workspace_path_computed(self, monkeypatch):
@@ -152,8 +158,7 @@ class TestSkuldSettings:
         ]:
             monkeypatch.delenv(var, raising=False)
 
-        # Patch model_config directly — yaml_file is baked at class definition
-        # time, so monkeypatching CONFIG_PATHS has no effect.
+        # Point to the test YAML file (overrides the autouse fixture)
         monkeypatch.setitem(SkuldSettings.model_config, "yaml_file", [config_file])
 
         s = SkuldSettings()
@@ -194,3 +199,37 @@ class TestSkuldSettings:
         monkeypatch.setenv("SKULD__AGENT_TEAMS", "true")
         s = SkuldSettings()
         assert s.agent_teams is True
+
+    def test_session_prompt_defaults_empty(self):
+        config = SkuldSessionConfig()
+        assert config.system_prompt == ""
+        assert config.initial_prompt == ""
+
+    def test_session_prompt_explicit(self):
+        config = SkuldSessionConfig(
+            system_prompt="You are an agent.",
+            initial_prompt="Fix the bug.",
+        )
+        assert config.system_prompt == "You are an agent."
+        assert config.initial_prompt == "Fix the bug."
+
+    def test_legacy_env_system_prompt(self, monkeypatch):
+        monkeypatch.delenv("SKULD__SESSION__SYSTEM_PROMPT", raising=False)
+        monkeypatch.setenv("SESSION_SYSTEM_PROMPT", "legacy system prompt")
+
+        s = SkuldSettings()
+        assert s.session.system_prompt == "legacy system prompt"
+
+    def test_legacy_env_initial_prompt(self, monkeypatch):
+        monkeypatch.delenv("SKULD__SESSION__INITIAL_PROMPT", raising=False)
+        monkeypatch.setenv("SESSION_INITIAL_PROMPT", "legacy initial prompt")
+
+        s = SkuldSettings()
+        assert s.session.initial_prompt == "legacy initial prompt"
+
+    def test_prefixed_env_prompt_takes_precedence(self, monkeypatch):
+        monkeypatch.setenv("SKULD__SESSION__SYSTEM_PROMPT", "prefixed")
+        monkeypatch.setenv("SESSION_SYSTEM_PROMPT", "legacy")
+
+        s = SkuldSettings()
+        assert s.session.system_prompt == "prefixed"

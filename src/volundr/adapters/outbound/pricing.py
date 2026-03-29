@@ -1,44 +1,17 @@
-"""Hardcoded pricing provider adapter."""
+"""Config-driven pricing provider — models come from Helm values."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from volundr.domain.models import Model, ModelProvider, ModelTier
 from volundr.domain.ports import PricingProvider
 
-# Pricing per million tokens in USD
-PRICING: dict[str, float] = {
-    "claude-opus-4-20250514": 15.00,
-    "claude-sonnet-4-20250514": 3.00,
-    "claude-3-5-haiku-20241022": 0.25,
-}
+if TYPE_CHECKING:
+    from volundr.config import AIModelConfig
 
-# All available models with metadata
-MODELS: list[Model] = [
-    Model(
-        id="claude-opus-4-20250514",
-        name="Claude Opus 4",
-        description="Most capable model for complex tasks",
-        provider=ModelProvider.CLOUD,
-        tier=ModelTier.FRONTIER,
-        color="#7C3AED",
-        cost_per_million_tokens=15.00,
-    ),
-    Model(
-        id="claude-sonnet-4-20250514",
-        name="Claude Sonnet 4",
-        description="Fast, intelligent model for everyday tasks",
-        provider=ModelProvider.CLOUD,
-        tier=ModelTier.BALANCED,
-        color="#2563EB",
-        cost_per_million_tokens=3.00,
-    ),
-    Model(
-        id="claude-3-5-haiku-20241022",
-        name="Claude 3.5 Haiku",
-        description="Fastest model for simple tasks",
-        provider=ModelProvider.CLOUD,
-        tier=ModelTier.EXECUTION,
-        color="#10B981",
-        cost_per_million_tokens=0.25,
-    ),
+# Local models (not managed via Helm config)
+_LOCAL_MODELS: list[Model] = [
     Model(
         id="llama3.2:latest",
         name="Llama 3.2",
@@ -73,12 +46,29 @@ MODELS: list[Model] = [
 
 
 class HardcodedPricingProvider(PricingProvider):
-    """Pricing provider with hardcoded model data."""
+    """Pricing provider that reads cloud models from config."""
+
+    def __init__(self, model_configs: list[AIModelConfig] | None = None) -> None:
+        self._cloud_models: list[Model] = []
+        self._pricing: dict[str, float] = {}
+
+        if model_configs:
+            for cfg in model_configs:
+                self._pricing[cfg.id] = cfg.cost_per_million_tokens
+                self._cloud_models.append(
+                    Model(
+                        id=cfg.id,
+                        name=cfg.name,
+                        description="",
+                        provider=ModelProvider.CLOUD,
+                        tier=ModelTier.BALANCED,
+                        color="#2563EB",
+                        cost_per_million_tokens=cfg.cost_per_million_tokens,
+                    )
+                )
 
     def get_price(self, model_id: str) -> float | None:
-        """Get the price per million tokens for a model."""
-        return PRICING.get(model_id)
+        return self._pricing.get(model_id)
 
     def list_models(self) -> list[Model]:
-        """List all available models with pricing and metadata."""
-        return MODELS.copy()
+        return self._cloud_models + _LOCAL_MODELS

@@ -75,7 +75,7 @@ class EventIngestRequest(BaseModel):
         default=None,
         max_length=100,
         description="LLM model identifier (token_usage events)",
-        examples=["claude-sonnet-4-20250514"],
+        examples=["claude-sonnet-4-6"],
     )
 
 
@@ -130,7 +130,7 @@ class SessionEventResponse(BaseModel):
     model: str | None = Field(
         default=None,
         description="LLM model identifier",
-        examples=["claude-sonnet-4-20250514"],
+        examples=["claude-sonnet-4-6"],
     )
 
     @classmethod

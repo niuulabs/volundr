@@ -1,5 +1,17 @@
 # Volundr Helm Chart Values
 # Self-hosted Claude Code session manager
+#
+# ── Umbrella Chart Integration ────────────────────────────────────
+# When deployed as a subchart of the niuu umbrella chart, the following
+# global values are propagated automatically:
+#
+#   global.image.registry    - Container registry for all images (API + web)
+#   global.image.tag         - Image tag override for all images
+#   global.imagePullSecrets  - Pull secrets shared across all subcharts
+#   global.domain            - Base domain (used for ingress/gateway hostnames)
+#
+# The chart works identically in standalone and subchart mode.
+# All resource names use the fullname helper which adapts to the release name.
 
 # Global values (can be set by parent chart)
 global:
@@ -7,23 +19,40 @@ global:
   imagePullSecrets: []
   # - ghcr-pull-secret
   image:
-    # -- Global image registry override
+    # -- Global image registry override (applies to both API and web images)
     registry: ""
     # -- Global image repository override
     repository: ""
     # -- Global image tag override
     tag: ""
+  # -- Global base domain (used for ingress hosts and gateway hostname)
+  domain: ""
 
 # -- Override the name of the chart
 nameOverride: ""
 # -- Override the full name of the chart
 fullnameOverride: ""
+# -- Base domain for auto-generated hostnames (overridden by global.domain)
+domain: ""
 
 # -- Number of replicas (ignored if autoscaling is enabled)
 replicaCount: 1
 
 # -- Number of old ReplicaSets to retain
 revisionHistoryLimit: 10
+
+# Available AI models — used by the wizard, profiles, and pricing
+# Override via global.models from the niuu umbrella chart
+aiModels:
+  - id: "claude-opus-4-6"
+    name: "Opus 4.6"
+    costPerMillionTokens: 15.00
+  - id: "claude-sonnet-4-6"
+    name: "Sonnet 4.6"
+    costPerMillionTokens: 3.00
+  - id: "claude-haiku-4-5-20251001"
+    name: "Haiku 4.5"
+    costPerMillionTokens: 1.00
 
 # Image configuration
 image:
@@ -113,6 +142,10 @@ ingress:
       paths:
         - path: /api/v1/volundr
           pathType: Prefix
+        - path: /api/v1/users
+          pathType: Prefix
+        - path: /api/v1/niuu
+          pathType: Prefix
   # -- Ingress TLS configuration
   tls: []
   #   - secretName: volundr-tls
@@ -154,8 +187,8 @@ database:
   maxPoolSize: 20
   # -- Create a secret for database credentials
   createSecret: false
-  # -- Use an existing secret for database credentials
-  existingSecret: "volundr-db"
+  # -- Use an existing secret for database credentials (defaults to {fullname}-db)
+  existingSecret: ""
   # -- Key in secret containing the username
   userKey: username
   # -- Key in secret containing the password
@@ -204,7 +237,7 @@ database:
 #       code_path: "/"
 #       session_defaults:              # values passed to the skuld Helm chart
 #         session:
-#           model: "claude-sonnet-4-20250514"
+#           model: "claude-sonnet-4-6"
 #         image:
 #           repository: "ghcr.io/niuulabs/skuld"
 #           tag: "latest"
@@ -257,7 +290,7 @@ profiles: []
   #   description: "Standard Claude Code session"
   #   workloadType: session
   #   sessionDefinition: skuld-claude   # which session definition to use
-  #   model: "claude-sonnet-4-20250514"
+  #   model: "claude-sonnet-4-6"
   #   resourceConfig:
   #     cpu: "500m"
   #     memory: "1Gi"
@@ -281,11 +314,21 @@ profiles: []
   #   description: "GPU-accelerated data science"
   #   workloadType: session
   #   sessionDefinition: skuld-claude
-  #   model: "claude-sonnet-4-20250514"
+  #   model: "claude-sonnet-4-6"
   #   resourceConfig:
   #     cpu: "2"
   #     memory: "8Gi"
   #     gpu: "1"
+  #   isDefault: false
+  #
+  # - name: reviewer
+  #   description: "Automated PR reviewer session (LLM-powered)"
+  #   workloadType: reviewer
+  #   sessionDefinition: skuld-planner   # lightweight — no IDE, no terminal
+  #   model: "claude-opus-4-6"
+  #   resourceConfig:
+  #     cpu: "250m"
+  #     memory: "1Gi"
   #   isDefault: false
 
 # Workspace templates (combine a profile with repos and setup)
@@ -548,7 +591,7 @@ authorization:
 #
 # ── Infisical ──────────────────────────────────────────────────
 #   credentialStore:
-#     adapter: "volundr.adapters.outbound.infisical_credential_store.InfisicalCredentialStore"
+#     adapter: "niuu.adapters.infisical_credential_store.InfisicalCredentialStore"
 #     kwargs:
 #       site_url: "https://app.infisical.com"
 #       client_id: ""
@@ -557,7 +600,7 @@ authorization:
 #
 credentialStore:
   # -- Fully-qualified class path for the CredentialStorePort adapter
-  adapter: "volundr.adapters.outbound.memory_credential_store.MemoryCredentialStore"
+  adapter: "niuu.adapters.memory_credential_store.MemoryCredentialStore"
   # -- All kwargs forwarded to the adapter constructor
   kwargs: {}
   # -- Secret kwargs from K8s Secrets, merged into kwargs at runtime
@@ -630,6 +673,9 @@ sessionContributors:
   - adapter: "volundr.adapters.outbound.contributors.template.TemplateContributor"
     kwargs: {}
     secretKwargs: []
+  - adapter: "volundr.adapters.outbound.contributors.prompt.PromptContributor"
+    kwargs: {}
+    secretKwargs: []
   - adapter: "volundr.adapters.outbound.contributors.git.GitContributor"
     kwargs: {}
     secretKwargs: []
@@ -667,13 +713,13 @@ sessionContributors:
 sessionGateway:
   # -- Enable the shared Gateway resource
   enabled: false
-  # -- Gateway resource name
-  name: "volundr-gateway"
+  # -- Gateway resource name (defaults to {fullname}-gateway)
+  name: ""
   # -- GatewayClass to use (Envoy Gateway default: "eg")
   gatewayClassName: "eg"
-  # -- Hostname for the HTTPS listener (wildcard for session routing)
+  # -- Hostname for the HTTPS listener (defaults to sessions.{domain})
   # external-dns creates a DNS record for this hostname automatically
-  hostname: "sessions.valhalla.asgard.niuu.world"
+  hostname: ""
   # -- cert-manager ClusterIssuer name for TLS certificate provisioning
   certIssuer: "letsencrypt-prod"
   # -- TLS secret name (defaults to "{name}-tls" if not set)
@@ -695,6 +741,13 @@ authDiscovery:
   cliClientId: "volundr-cli"
   # -- OIDC scopes
   scopes: "openid profile email"
+
+# Auth secrets (PAT signing key, etc.)
+auth:
+  # -- Create a K8s Secret for auth-related keys (disable if using an existing secret)
+  createSecret: true
+  # -- Symmetric signing key for PAT JWTs (overridden in production via values/sealed-secrets)
+  patSigningKey: ""
 
 # OAuth integration configuration
 oauth:
@@ -764,7 +817,7 @@ sessionDefinitions:
     defaults:
       session:
         # -- Default Claude model
-        model: "claude-sonnet-4-20250514"
+        model: "claude-sonnet-4-6"
 
       broker:
         # -- AI CLI backend: "claude" (Claude Code)
@@ -953,6 +1006,36 @@ sessionDefinitions:
       volundr:
         apiUrl: ""
 
+  # Skuld-Reviewer session definition (lightweight LLM reviewer — no IDE)
+  skuldReviewer:
+    # -- Enable skuld-reviewer session definition
+    enabled: true
+    # -- Labels for agent routing
+    labels:
+      - reviewer
+    # -- Whether this session definition is active
+    active: true
+
+    # Helm chart configuration (uses skuld-planner — lightweight broker)
+    helm:
+      chart: skuld-planner
+      repo: "oci://ghcr.io/niuulabs/charts"
+      repoName: ""
+      version: "0.1.0"
+
+    defaults:
+      session:
+        # -- Default model for reviewer sessions
+        model: "claude-opus-4-6"
+
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "1Gi"
+        limits:
+          cpu: "1"
+          memory: "2Gi"
+
 # Web UI (optional standalone frontend)
 web:
   # -- Enable the Volundr web UI component
@@ -1129,6 +1212,12 @@ podDisruptionBudget:
   maxUnavailable: ""
   # -- Unhealthy pod eviction policy
   unhealthyPodEvictionPolicy: ""
+
+# Kyverno policies
+kyverno:
+  pvcIsolation:
+    # -- Deploy the PVC isolation ClusterPolicy (requires Kyverno >= 1.9)
+    enabled: false
 
 # Network Policy
 networkPolicy:

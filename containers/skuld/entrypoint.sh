@@ -71,4 +71,4 @@ fi
 rm -f /home/.infisical-workdir/identity-access-token
 
 echo "=== Starting Broker Service (port 8081) ==="
-exec python -m volundr.skuld
+exec python -m skuld

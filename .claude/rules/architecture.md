@@ -42,3 +42,11 @@ No Redis. No external state store. Just nng for communication and files for pers
 - **IDP-agnostic** — code must not be coupled to a specific identity provider (Keycloak, Entra ID, Okta, etc.). Use the identity adapter pattern to abstract the IDP
 - All authentication goes through Envoy + the configured IDP in production
 - Service-to-service auth uses standard OIDC flows (e.g. `client_credentials` grant), not internal bypasses or custom tokens
+
+### Exception: Personal Access Tokens (PATs)
+
+PATs are an intentional exception to the "no custom tokens" rule. Tyr's autonomous
+dispatcher must call Volundr as a specific user without an active browser session.
+PATs are long-lived JWTs signed with the same symmetric key that Envoy validates,
+so they integrate with the existing infrastructure without requiring IDP changes.
+The shared PAT code lives in `src/niuu/` (service, port, adapter, model).

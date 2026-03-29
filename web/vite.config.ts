@@ -108,6 +108,10 @@ export default defineConfig(({ mode }) => {
     port: 5174,
     host: true,
     proxy: {
+      '/api/v1/tyr': {
+        target: env.VITE_TYR_API_TARGET || 'http://localhost:8081',
+        changeOrigin: true,
+      },
       '/api': {
         target: env.VITE_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,

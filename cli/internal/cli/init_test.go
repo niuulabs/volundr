@@ -95,6 +95,60 @@ func TestInstallInstructions(t *testing.T) {
 	}
 }
 
+func TestMaskKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"empty", "", "****"},
+		{"short", "abc", "****"},
+		{"exactly 4", "abcd", "****"},
+		{"5 chars", "abcde", "****bcde"},
+		{"long key", "sk-ant-api03-abcdefghijklmnop", "****mnop"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := maskKey(tt.input)
+			if got != tt.expected {
+				t.Errorf("maskKey(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDefaultStr(t *testing.T) {
+	if got := defaultStr("hello", "fallback"); got != "hello" {
+		t.Errorf("defaultStr(\"hello\", \"fallback\") = %q, want \"hello\"", got)
+	}
+	if got := defaultStr("", "fallback"); got != "fallback" {
+		t.Errorf("defaultStr(\"\", \"fallback\") = %q, want \"fallback\"", got)
+	}
+}
+
+func TestListenHostLabel(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"127.0.0.1", "localhost"},
+		{"localhost", "localhost"},
+		{"", "localhost"},
+		{"0.0.0.0", "all"},
+		{"192.168.1.100", "192.168.1.100"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := listenHostLabel(tt.input)
+			if got != tt.expected {
+				t.Errorf("listenHostLabel(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestMachinePassphrase(t *testing.T) {
 	passphrase := machinePassphrase()
 	if passphrase == "" {

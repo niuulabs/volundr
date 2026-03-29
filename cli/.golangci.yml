@@ -55,5 +55,10 @@ linters:
         - name: unexported-return
         - name: var-naming
   exclusions:
+    rules:
+      - linters: [noctx]
+        path: _test\.go
+      - linters: [gosec]
+        path: _test\.go
     paths:
       - internal/web/dist

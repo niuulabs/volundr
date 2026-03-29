@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -34,20 +35,16 @@ const (
 	DefaultDBName = "volundr"
 )
 
-// DockerConfig holds Docker runtime settings.
-type DockerConfig struct {
-	APIImage   string `yaml:"api_image"`
-	SkuldImage string `yaml:"skuld_image"`
-	RehImage   string `yaml:"reh_image"`
-	TtydImage  string `yaml:"ttyd_image"`
-	Network    string `yaml:"network"`
-}
-
 // K3sConfig holds k3s/k3d runtime settings.
 type K3sConfig struct {
-	Kubeconfig string `yaml:"kubeconfig"` // default: auto-detect
-	Namespace  string `yaml:"namespace"`  // default: volundr
-	Provider   string `yaml:"provider"`   // "auto", "k3d", "native" (default: auto)
+	Kubeconfig string `yaml:"kubeconfig"`            // default: auto-detect
+	Namespace  string `yaml:"namespace"`             // default: volundr
+	Provider   string `yaml:"provider"`              // "auto", "k3d", "native" (default: auto)
+	APIImage   string `yaml:"api_image,omitempty"`   // default: ghcr.io/niuulabs/volundr:latest
+	SkuldImage string `yaml:"skuld_image,omitempty"` // default: ghcr.io/niuulabs/skuld:latest
+	RehImage   string `yaml:"reh_image,omitempty"`   // default: ghcr.io/niuulabs/vscode-reh:latest
+	TtydImage  string `yaml:"ttyd_image,omitempty"`  // default: ghcr.io/niuulabs/devrunner:latest
+	Network    string `yaml:"network,omitempty"`     // default: volundr-net
 }
 
 // GitHubInstanceConfig holds settings for a single GitHub instance.
@@ -79,17 +76,58 @@ type LocalMountsConfig struct {
 	DefaultReadOnly bool     `yaml:"default_read_only"`
 }
 
+// VolundrConfig holds Volundr stack mode and forge settings.
+type VolundrConfig struct {
+	Mode  string        `yaml:"mode"`
+	Web   bool          `yaml:"web"`
+	Forge ForgeSettings `yaml:"forge"`
+}
+
+// ForgeSettings holds forge (mini mode) settings within the main config.
+type ForgeSettings struct {
+	Listen            string             `yaml:"listen"`
+	Workspace         string             `yaml:"workspace"`
+	ClaudeBinary      string             `yaml:"claude_binary,omitempty"`
+	MaxConcurrent     int                `yaml:"max_concurrent"`
+	SDKPortStart      int                `yaml:"sdk_port_start,omitempty"`
+	Auth              ForgeAuthSettings  `yaml:"auth"`
+	StopTimeout       time.Duration      `yaml:"stop_timeout"`
+	ShutdownTimeout   time.Duration      `yaml:"shutdown_timeout"`
+	ReadHeaderTimeout time.Duration      `yaml:"read_header_timeout"`
+	Xcode             ForgeXcodeSettings `yaml:"xcode,omitempty"`
+}
+
+// ForgeAuthSettings holds forge authentication settings.
+type ForgeAuthSettings struct {
+	Mode   string            `yaml:"mode"`
+	Tokens []ForgeTokenEntry `yaml:"tokens,omitempty"`
+}
+
+// ForgeTokenEntry is a named personal access token.
+type ForgeTokenEntry struct {
+	Name  string `yaml:"name"`
+	Token string `yaml:"token"`
+}
+
+// ForgeXcodeSettings holds Xcode toolchain settings for forge.
+type ForgeXcodeSettings struct {
+	DefaultVersion string   `yaml:"default_version,omitempty"`
+	SearchPaths    []string `yaml:"search_paths,omitempty"`
+}
+
 // Config represents the full volundr configuration.
 type Config struct {
-	Runtime     string            `yaml:"runtime"`
+	Volundr     VolundrConfig     `yaml:"volundr"`
 	Listen      ListenConfig      `yaml:"listen"`
 	TLS         TLSConfig         `yaml:"tls"`
 	Database    DatabaseConfig    `yaml:"database"`
 	Anthropic   AnthropicConfig   `yaml:"anthropic"`
 	Git         GitConfig         `yaml:"git,omitempty"`
-	Docker      DockerConfig      `yaml:"docker,omitempty"`
 	K3s         K3sConfig         `yaml:"k3s,omitempty"`
 	LocalMounts LocalMountsConfig `yaml:"local_mounts,omitempty"`
+
+	// Runtime is deprecated: use Volundr.Mode instead.
+	Runtime string `yaml:"runtime,omitempty"`
 }
 
 // ListenConfig holds the listener settings.
@@ -173,7 +211,26 @@ func DefaultConfig() (*Config, error) {
 	}
 
 	return &Config{
-		Runtime: "local",
+		Volundr: VolundrConfig{
+			Mode: "mini",
+			Web:  true,
+			Forge: ForgeSettings{
+				Listen:            "127.0.0.1:8080",
+				Workspace:         filepath.Join(dir, "sessions"),
+				ClaudeBinary:      "claude",
+				MaxConcurrent:     4,
+				SDKPortStart:      9100,
+				StopTimeout:       10 * time.Second,
+				ShutdownTimeout:   10 * time.Second,
+				ReadHeaderTimeout: 10 * time.Second,
+				Auth: ForgeAuthSettings{
+					Mode: "none",
+				},
+				Xcode: ForgeXcodeSettings{
+					SearchPaths: []string{"/Applications"},
+				},
+			},
+		},
 		Listen: ListenConfig{
 			Host: DefaultListenHost,
 			Port: DefaultListenPort,
@@ -190,17 +247,15 @@ func DefaultConfig() (*Config, error) {
 			Name:     DefaultDBName,
 		},
 		Anthropic: AnthropicConfig{},
-		Docker: DockerConfig{
+		K3s: K3sConfig{
+			Kubeconfig: "",
+			Namespace:  "volundr",
+			Provider:   "auto",
 			APIImage:   "ghcr.io/niuulabs/volundr:latest",
 			SkuldImage: "ghcr.io/niuulabs/skuld:latest",
 			RehImage:   "ghcr.io/niuulabs/vscode-reh:latest",
 			TtydImage:  "ghcr.io/niuulabs/devrunner:latest",
 			Network:    "volundr-net",
-		},
-		K3s: K3sConfig{
-			Kubeconfig: "",
-			Namespace:  "volundr",
-			Provider:   "auto",
 		},
 	}, nil
 }
@@ -226,7 +281,25 @@ func LoadFrom(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config file %s: %w", path, err)
 	}
 
+	cfg.migrate()
 	return &cfg, nil
+}
+
+// migrate normalizes deprecated config fields to the current structure.
+func (c *Config) migrate() {
+	if c.Volundr.Mode != "" {
+		return
+	}
+	if c.Runtime == "" {
+		return
+	}
+	// Map legacy runtime values to volundr.mode.
+	switch c.Runtime {
+	case "local":
+		c.Volundr.Mode = "mini"
+	default:
+		c.Volundr.Mode = c.Runtime
+	}
 }
 
 // Save writes the config to the default location.
@@ -275,24 +348,27 @@ func Exists() (bool, error) {
 
 // Validate checks the config for correctness.
 func (c *Config) Validate() error {
-	if c.Runtime != "local" && c.Runtime != "docker" && c.Runtime != "k3s" {
-		return fmt.Errorf("invalid runtime %q: must be local, docker, or k3s", c.Runtime)
+	if c.Volundr.Mode != "mini" && c.Volundr.Mode != "k3s" {
+		return fmt.Errorf("invalid mode %q: must be mini or k3s", c.Volundr.Mode)
 	}
 
-	if c.Listen.Port < 1 || c.Listen.Port > 65535 {
-		return fmt.Errorf("invalid listen port %d: must be 1-65535", c.Listen.Port)
+	if c.Volundr.Mode == "k3s" {
+		if c.Listen.Port < 1 || c.Listen.Port > 65535 {
+			return fmt.Errorf("invalid listen port %d: must be 1-65535", c.Listen.Port)
+		}
+		if c.Database.Mode != "embedded" && c.Database.Mode != "external" {
+			return fmt.Errorf("invalid database mode %q: must be embedded or external", c.Database.Mode)
+		}
+		if c.Database.Mode == "external" && c.Database.Host == "" {
+			return fmt.Errorf("database host is required when mode is external")
+		}
+		if c.Database.Port < 1 || c.Database.Port > 65535 {
+			return fmt.Errorf("invalid database port %d: must be 1-65535", c.Database.Port)
+		}
 	}
 
-	if c.Database.Mode != "embedded" && c.Database.Mode != "external" {
-		return fmt.Errorf("invalid database mode %q: must be embedded or external", c.Database.Mode)
-	}
-
-	if c.Database.Mode == "external" && c.Database.Host == "" {
-		return fmt.Errorf("database host is required when mode is external")
-	}
-
-	if c.Database.Port < 1 || c.Database.Port > 65535 {
-		return fmt.Errorf("invalid database port %d: must be 1-65535", c.Database.Port)
+	if c.Volundr.Mode == "mini" && c.Volundr.Forge.MaxConcurrent < 1 {
+		return fmt.Errorf("forge max_concurrent must be >= 1")
 	}
 
 	return nil

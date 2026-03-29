@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from volundr.skuld.transport import (
+from skuld.transport import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
@@ -133,7 +133,7 @@ class TestSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -169,7 +169,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -195,7 +195,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -218,7 +218,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -235,7 +235,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -260,7 +260,7 @@ class TestSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -289,7 +289,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -318,7 +318,7 @@ class TestSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -343,7 +343,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -381,7 +381,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_start_spawns_process(self, transport):
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -408,7 +408,7 @@ class TestSdkWebSocketTransport:
         transport._cli_session_id = "resume-me"
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -433,7 +433,7 @@ class TestSdkWebSocketTransport:
         )
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -452,7 +452,7 @@ class TestSdkWebSocketTransport:
     async def test_start_omits_model_flag_when_empty(self, transport):
         """When model is empty, --model should not appear in CLI args."""
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -682,7 +682,7 @@ class TestSdkWebSocketTransport:
             skip_permissions=False,
         )
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -705,7 +705,7 @@ class TestSdkWebSocketTransport:
             skip_permissions=True,
         )
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -741,7 +741,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_send_control_response_noop_on_base_class(self):
         """Base CLITransport.send_control_response is a no-op."""
-        from volundr.skuld.transport import SubprocessTransport
+        from skuld.transport import SubprocessTransport
 
         t = SubprocessTransport("/tmp")
         # Should not raise
@@ -814,7 +814,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_send_control_noop_on_base_class(self):
         """Base CLITransport.send_control is a no-op."""
-        from volundr.skuld.transport import SubprocessTransport
+        from skuld.transport import SubprocessTransport
 
         t = SubprocessTransport("/tmp")
         # Should not raise
@@ -848,7 +848,7 @@ class TestSdkWebSocketTransport:
             agent_teams=True,
         )
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -871,7 +871,7 @@ class TestSdkWebSocketTransport:
             agent_teams=False,
         )
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -923,6 +923,107 @@ class TestSdkWebSocketTransport:
         await transport._handle_cli_message(hook_msg)
 
         callback.assert_called_once_with(hook_msg)
+
+    # --- System prompt and initial prompt ---
+
+    def test_init_prompt_defaults_empty(self, transport):
+        assert transport._system_prompt == ""
+        assert transport._initial_prompt == ""
+
+    def test_init_stores_prompts(self, tmp_path):
+        t = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            system_prompt="You are an agent.",
+            initial_prompt="Fix the bug.",
+        )
+        assert t._system_prompt == "You are an agent."
+        assert t._initial_prompt == "Fix the bug."
+
+    @pytest.mark.asyncio
+    async def test_spawn_with_system_prompt(self, tmp_path):
+        t = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            system_prompt="You are an agent.",
+        )
+        with patch(
+            "skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await t.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--append-system-prompt" in call_args
+            idx = call_args.index("--append-system-prompt")
+            assert call_args[idx + 1] == "You are an agent."
+
+    @pytest.mark.asyncio
+    async def test_spawn_without_system_prompt_omits_flag(self, transport):
+        with patch(
+            "skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "--append-system-prompt" not in call_args
+
+    @pytest.mark.asyncio
+    async def test_spawn_with_initial_prompt_queues_pending_message(self, tmp_path):
+        t = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="s1",
+            initial_prompt="Break down ticket TK-123.",
+        )
+        with patch(
+            "skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await t.start()
+
+            # Initial prompt is queued as a pending message, not passed via -p
+            call_args = mock_exec.call_args[0]
+            assert "-p" not in call_args
+            assert len(t._pending_messages) == 1
+            msg = t._pending_messages[0]
+            assert msg["type"] == "user"
+            assert msg["message"]["content"] == "Break down ticket TK-123."
+
+    @pytest.mark.asyncio
+    async def test_spawn_without_initial_prompt_no_pending(self, transport):
+        with patch(
+            "skuld.transport.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_process = MagicMock()
+            mock_process.stdout = None
+            mock_process.stderr = None
+            mock_exec.return_value = mock_process
+
+            await transport.start()
+
+            call_args = mock_exec.call_args[0]
+            assert "-p" not in call_args
+            assert len(transport._pending_messages) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1012,7 +1113,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1051,7 +1152,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1081,7 +1182,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1119,7 +1220,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1159,7 +1260,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1188,7 +1289,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1214,7 +1315,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1237,7 +1338,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1285,7 +1386,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "volundr.skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transport.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process

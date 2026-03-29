@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from volundr.skuld.chronicle_watcher import (
+from skuld.chronicle_watcher import (
     ChronicleWatcher,
     _load_state,
     _save_state,

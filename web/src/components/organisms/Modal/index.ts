@@ -1,2 +1,2 @@
-export { Modal } from './Modal';
-export type { ModalProps } from './Modal';
+export { Modal } from '@/modules/shared/components/Modal';
+export type { ModalProps } from '@/modules/shared/components/Modal';

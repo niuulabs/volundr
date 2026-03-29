@@ -39,7 +39,7 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally via npm (same method as skuld pod)
-RUN npm install -g @anthropic-ai/claude-code@2.1.76
+RUN npm install -g @anthropic-ai/claude-code@2.1.81
 
 # Install OpenAI Codex CLI
 RUN npm install -g @openai/codex@0.114.0

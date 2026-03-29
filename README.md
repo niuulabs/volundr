@@ -139,7 +139,6 @@ See the [deployment guide](https://niuulabs.github.io/volundr/deployment/) for H
 
 ```bash
 uv sync --extra rabbitmq   # RabbitMQ event sink
-uv sync --extra litellm    # LiteLLM model routing
 uv sync --extra k8s        # Kubernetes client
 uv sync --extra otel       # OpenTelemetry export
 ```

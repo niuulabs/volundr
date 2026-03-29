@@ -1,0 +1,1 @@
+export { StatsStrip } from './StatsStrip';

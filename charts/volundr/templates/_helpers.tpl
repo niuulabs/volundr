@@ -189,15 +189,52 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Web component image
+Web component image (global overrides local)
 */}}
 {{- define "volundr.web.image" -}}
 {{- $registryName := .Values.web.image.registry -}}
 {{- $repositoryName := .Values.web.image.repository -}}
 {{- $tag := .Values.web.image.tag | default .Chart.AppVersion -}}
+{{- if and .Values.global .Values.global.image -}}
+  {{- if .Values.global.image.registry -}}
+    {{- $registryName = .Values.global.image.registry -}}
+  {{- end -}}
+  {{- if .Values.global.image.tag -}}
+    {{- $tag = .Values.global.image.tag -}}
+  {{- end -}}
+{{- end -}}
 {{- if $registryName }}
 {{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
 {{- else }}
 {{- printf "%s:%s" $repositoryName $tag -}}
 {{- end }}
+{{- end }}
+
+{{/*
+Return the domain (global overrides local)
+*/}}
+{{- define "volundr.domain" -}}
+{{- if and .Values.global .Values.global.domain -}}
+  {{- .Values.global.domain -}}
+{{- else -}}
+  {{- .Values.domain | default "example.com" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Return the session gateway name (defaults to fullname-gateway)
+*/}}
+{{- define "volundr.sessionGateway.name" -}}
+{{- .Values.sessionGateway.name | default (printf "%s-gateway" (include "volundr.fullname" .)) -}}
+{{- end }}
+
+{{/*
+Return the session gateway hostname (defaults to sessions.{domain})
+*/}}
+{{- define "volundr.sessionGateway.hostname" -}}
+{{- if .Values.sessionGateway.hostname -}}
+  {{- .Values.sessionGateway.hostname -}}
+{{- else -}}
+  {{- printf "sessions.%s" (include "volundr.domain" .) -}}
+{{- end -}}
 {{- end }}

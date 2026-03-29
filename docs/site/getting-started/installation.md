@@ -65,7 +65,6 @@ Install only what you need:
 
 ```bash
 uv sync --extra rabbitmq   # RabbitMQ event sink (aio-pika)
-uv sync --extra litellm    # LiteLLM model routing
 uv sync --extra k8s        # Kubernetes client (kubernetes-asyncio)
 uv sync --extra otel       # OpenTelemetry export (traces + metrics)
 ```
@@ -117,10 +116,7 @@ npm run dev
 For production deployments. This is how Volundr is meant to run.
 
 ```bash
-helm repo add volundr https://charts.volundr.dev
-helm repo update
-
-helm install volundr volundr/volundr \
+helm install volundr oci://ghcr.io/niuulabs/charts/volundr \
   --namespace volundr --create-namespace \
   --values your-values.yaml
 ```

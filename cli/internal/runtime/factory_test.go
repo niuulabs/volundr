@@ -4,13 +4,6 @@ import (
 	"testing"
 )
 
-func TestNewRuntime_Docker(t *testing.T) {
-	rt := NewRuntime("docker")
-	if _, ok := rt.(*DockerRuntime); !ok {
-		t.Errorf("expected *DockerRuntime, got %T", rt)
-	}
-}
-
 func TestNewRuntime_Local(t *testing.T) {
 	rt := NewRuntime("local")
 	if _, ok := rt.(*LocalRuntime); !ok {

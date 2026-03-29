@@ -1,0 +1,53 @@
+Skuld session deployed: {{ include "skuld.fullname" . }}
+
+Session ID: {{ .Values.session.id }}
+Model:      {{ .Values.session.model }}
+Workspace:  {{ include "skuld.workspacePath" . }}
+
+Endpoints:
+{{- if .Values.ingress.enabled }}
+{{- $scheme := "http" }}
+{{- $wsScheme := "ws" }}
+{{- if .Values.ingress.tls.enabled }}
+{{- $scheme = "https" }}
+{{- $wsScheme = "wss" }}
+{{- end }}
+  WebSocket: {{ $wsScheme }}://{{ .Values.ingress.host }}{{ .Values.ingress.paths.session }}
+  Health:    {{ $scheme }}://{{ .Values.ingress.host }}{{ .Values.ingress.paths.session }}/health
+{{- else }}
+  kubectl port-forward svc/{{ include "skuld.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
+
+Prerequisites:
+{{- $prereqNum := 1 }}
+{{- range .Values.envSecrets }}
+  {{ $prereqNum }}. Secret "{{ .secretName }}" with key "{{ .secretKey }}" (injected as {{ .envVar }})
+{{- $prereqNum = add $prereqNum 1 }}
+{{- end }}
+  {{ $prereqNum }}. PVC "{{ .Values.persistence.existingClaim }}" for session workspace storage
+{{- if .Values.ingress.tls.enabled }}
+  {{ add $prereqNum 1 }}. cert-manager with a ClusterIssuer (default: letsencrypt-prod)
+{{- end }}
+{{- range .Values.envSecrets }}
+
+Create the {{ .envVar }} secret:
+
+  kubectl create secret generic {{ .secretName }} \
+    --namespace {{ $.Release.Namespace }} \
+    --from-literal={{ .secretKey }}='<your-api-key>'
+{{- end }}
+
+Create the PVC:
+
+  kubectl apply -f - <<EOF
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: {{ .Values.persistence.existingClaim }}
+    namespace: {{ .Release.Namespace }}
+  spec:
+    accessModes: [ReadWriteOnce]
+    resources:
+      requests:
+        storage: 5Gi
+  EOF
