@@ -1,12 +1,17 @@
 package runtime
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/proxy"
 )
 
 func TestBuildGitConfig_Disabled(t *testing.T) {
@@ -236,6 +241,90 @@ func TestServiceStatusJSON(t *testing.T) {
 	}
 	if s.Error != "test error" {
 		t.Errorf("expected error 'test error', got %q", s.Error)
+	}
+}
+
+func TestConfigureWeb_Enabled(t *testing.T) {
+	rtr, err := proxy.NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 8080},
+		TLS:    config.TLSConfig{Mode: "off"},
+	}
+
+	configureWeb(rtr, cfg)
+
+	if !rtr.WebEnabled() {
+		t.Error("expected web to be enabled")
+	}
+
+	handler := rtr.Handler()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/config.json", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal /config.json: %v", err)
+	}
+	wantURL := "http://127.0.0.1:8080"
+	if got := result["apiBaseUrl"]; got != wantURL {
+		t.Errorf("apiBaseUrl = %q, want %q", got, wantURL)
+	}
+}
+
+func TestConfigureWeb_EnabledTLS(t *testing.T) {
+	rtr, err := proxy.NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "0.0.0.0", Port: 443},
+		TLS:    config.TLSConfig{Mode: "auto"},
+	}
+
+	configureWeb(rtr, cfg)
+
+	if !rtr.WebEnabled() {
+		t.Error("expected web to be enabled")
+	}
+
+	handler := rtr.Handler()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/config.json", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal /config.json: %v", err)
+	}
+	wantURL := "https://0.0.0.0:443"
+	if got := result["apiBaseUrl"]; got != wantURL {
+		t.Errorf("apiBaseUrl = %q, want %q", got, wantURL)
+	}
+}
+
+func TestConfigureWeb_Disabled(t *testing.T) {
+	rtr, err := proxy.NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	f := false
+	cfg := &config.Config{
+		Web:    &f,
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 8080},
+		TLS:    config.TLSConfig{Mode: "off"},
+	}
+
+	configureWeb(rtr, cfg)
+
+	if rtr.WebEnabled() {
+		t.Error("expected web to be disabled")
 	}
 }
 

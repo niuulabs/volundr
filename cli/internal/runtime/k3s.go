@@ -304,6 +304,7 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	// Rewrite Docker-internal endpoint hostnames in API responses so
 	// the browser gets URLs it can resolve (using the request Host header).
 	rtr.AddRewriteHost(fmt.Sprintf("k3d-%s-serverlb", k3sClusterName))
+	configureWeb(rtr, cfg)
 	r.proxyRtr = rtr
 
 	listenAddr := fmt.Sprintf("%s:%d", cfg.Listen.Host, cfg.Listen.Port)

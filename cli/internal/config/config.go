@@ -80,6 +80,7 @@ type Config struct {
 	Runtime     string            `yaml:"runtime"`
 	Listen      ListenConfig      `yaml:"listen"`
 	TLS         TLSConfig         `yaml:"tls"`
+	Web         *bool             `yaml:"web,omitempty"`
 	Database    DatabaseConfig    `yaml:"database"`
 	Anthropic   AnthropicConfig   `yaml:"anthropic"`
 	Git         GitConfig         `yaml:"git,omitempty"`
@@ -160,6 +161,7 @@ func DefaultConfig() (*Config, error) {
 		TLS: TLSConfig{
 			Mode: "off",
 		},
+		Web: boolPtr(true),
 		Database: DatabaseConfig{
 			Mode:     "embedded",
 			DataDir:  filepath.Join(dir, "data", "pg"),
@@ -292,6 +294,17 @@ func (c *Config) DSN() string {
 		c.Database.Name,
 	)
 }
+
+// WebEnabled returns true if the embedded web UI should be served.
+// Defaults to true when not explicitly configured.
+func (c *Config) WebEnabled() bool {
+	if c.Web == nil {
+		return true
+	}
+	return *c.Web
+}
+
+func boolPtr(v bool) *bool { return &v }
 
 func generatePassword() (string, error) {
 	b := make([]byte, 16)

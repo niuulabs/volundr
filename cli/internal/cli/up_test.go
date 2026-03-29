@@ -52,6 +52,43 @@ database:
 	}
 }
 
+func TestRunUp_NoWebFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Write a minimal valid config.
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+	cfgContent := `runtime: local
+listen:
+  host: 127.0.0.1
+  port: 18081
+tls:
+  mode: "off"
+database:
+  mode: embedded
+  port: 15433
+  user: volundr
+  password: test
+  name: volundr
+  data_dir: /tmp/test-pg
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	oldNoWebFlag := noWebFlag
+	oldRuntimeFlag := runtimeFlag
+	noWebFlag = true
+	runtimeFlag = "local"
+	defer func() {
+		noWebFlag = oldNoWebFlag
+		runtimeFlag = oldRuntimeFlag
+	}()
+
+	// Will fail on missing dependencies but exercises the --no-web path.
+	_ = runUp(nil, nil)
+}
+
 func TestRunUp_RuntimeFlagOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)

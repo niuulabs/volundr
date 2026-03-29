@@ -481,6 +481,77 @@ func TestSaveToReadOnlyDir(t *testing.T) {
 	}
 }
 
+func TestWebEnabled(t *testing.T) {
+	t.Run("nil defaults to true", func(t *testing.T) {
+		cfg := &Config{}
+		if !cfg.WebEnabled() {
+			t.Error("expected WebEnabled() to return true when Web is nil")
+		}
+	})
+
+	t.Run("explicit true", func(t *testing.T) {
+		v := true
+		cfg := &Config{Web: &v}
+		if !cfg.WebEnabled() {
+			t.Error("expected WebEnabled() to return true")
+		}
+	})
+
+	t.Run("explicit false", func(t *testing.T) {
+		v := false
+		cfg := &Config{Web: &v}
+		if cfg.WebEnabled() {
+			t.Error("expected WebEnabled() to return false")
+		}
+	})
+
+	t.Run("default config has web enabled", func(t *testing.T) {
+		cfg, err := DefaultConfig()
+		if err != nil {
+			t.Fatalf("DefaultConfig() error: %v", err)
+		}
+		if !cfg.WebEnabled() {
+			t.Error("expected default config to have web enabled")
+		}
+	})
+}
+
+func TestWebEnabledRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("explicit false survives save/load", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "web-false.yaml")
+		cfg, _ := DefaultConfig()
+		v := false
+		cfg.Web = &v
+		if err := cfg.SaveTo(path); err != nil {
+			t.Fatalf("SaveTo() error: %v", err)
+		}
+		loaded, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("LoadFrom() error: %v", err)
+		}
+		if loaded.WebEnabled() {
+			t.Error("expected loaded config to have web disabled")
+		}
+	})
+
+	t.Run("missing web field defaults to enabled", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "no-web.yaml")
+		yaml := "runtime: local\nlisten:\n  host: 127.0.0.1\n  port: 8080\ndatabase:\n  mode: embedded\n  port: 5433\n  user: volundr\n  password: test\n  name: volundr\n"
+		if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		loaded, err := LoadFrom(path)
+		if err != nil {
+			t.Fatalf("LoadFrom() error: %v", err)
+		}
+		if !loaded.WebEnabled() {
+			t.Error("expected config without web field to default to enabled")
+		}
+	})
+}
+
 func TestSaveToCreatesDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	nested := filepath.Join(tmpDir, "a", "b", "c", "config.yaml")

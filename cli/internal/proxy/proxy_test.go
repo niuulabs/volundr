@@ -539,6 +539,78 @@ func TestHandlerWithoutSessionBackend(t *testing.T) {
 	}
 }
 
+func TestDisableWeb(t *testing.T) {
+	r, _ := NewRouter("http://localhost:8081")
+	r.DisableWeb()
+
+	if r.webEnabled {
+		t.Error("expected webEnabled to be false after DisableWeb")
+	}
+}
+
+func TestHandlerWebDisabledNoSPA(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"path":%q}`, r.URL.Path) //nolint:gosec // test handler
+	}))
+	defer backend.Close()
+
+	r, _ := NewRouter(backend.URL)
+	r.DisableWeb()
+	handler := r.Handler()
+
+	// Root path should return 404 (no SPA handler mounted).
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 when web is disabled, got %d", w.Code)
+	}
+
+	// API routes should still work.
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/sessions", nil)
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected API route to return 200, got %d", w2.Code)
+	}
+}
+
+func TestHandlerWebDisabledNoConfigJSON(t *testing.T) {
+	r, _ := NewRouter("http://localhost:8081")
+	r.DisableWeb()
+	handler := r.Handler()
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/config.json", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// /config.json should not return application/json when web is disabled.
+	ct := w.Header().Get("Content-Type")
+	if ct == "application/json" {
+		t.Error("expected /config.json to not be served when web is disabled")
+	}
+}
+
+func TestHandlerWebEnabledByDefault(t *testing.T) {
+	r, _ := NewRouter("http://localhost:8081")
+
+	if !r.webEnabled {
+		t.Error("expected webEnabled to be true by default")
+	}
+
+	handler := r.Handler()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 with web enabled, got %d", w.Code)
+	}
+}
+
 func TestHandlerNoRewriteHostsDoesNotModifyResponse(t *testing.T) {
 	internalHost := "docker-internal:8080"
 

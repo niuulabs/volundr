@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/proxy"
+	"github.com/niuulabs/volundr/cli/internal/web"
 )
 
 // ServiceState represents the state of a managed service.
@@ -124,6 +126,23 @@ func ensureContainerStorageDirs(cfgDir string) error {
 	}
 
 	return nil
+}
+
+// configureWeb sets up the web UI on the proxy router based on cfg.
+// When web is disabled, it tells the router to skip mounting the SPA handler.
+// Otherwise, it sets the runtime config so /config.json returns the correct apiBaseUrl.
+func configureWeb(rtr *proxy.Router, cfg *config.Config) {
+	if !cfg.WebEnabled() {
+		rtr.DisableWeb()
+		return
+	}
+
+	scheme := "http"
+	if cfg.TLS.Mode != "off" {
+		scheme = "https"
+	}
+	apiBaseURL := fmt.Sprintf("%s://%s:%d", scheme, cfg.Listen.Host, cfg.Listen.Port)
+	rtr.SetWebConfig(&web.RuntimeConfig{APIBaseURL: apiBaseURL})
 }
 
 // Runtime manages the Volundr stack lifecycle.
