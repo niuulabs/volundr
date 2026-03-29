@@ -100,7 +100,7 @@ query GetProject($id: String!) {
 )
 
 _LIST_MILESTONES_QUERY = """
-query ListMilestones($projectId: String!) {
+query ListMilestones($projectId: ID!) {
   project(id: $projectId) {
     projectMilestones {
       nodes {
@@ -174,7 +174,7 @@ _ISSUE_FIELDS = """
 """
 
 _LIST_ISSUE_RELATIONS_QUERY = """
-query ListIssueRelations($projectId: String!, $first: Int!) {
+query ListIssueRelations($projectId: ID!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
     first: $first
@@ -195,7 +195,7 @@ query ListIssueRelations($projectId: String!, $first: Int!) {
 
 _LIST_ISSUES_QUERY = (
     """
-query ListIssues($projectId: String!, $first: Int!) {
+query ListIssues($projectId: ID!, $first: Int!) {
   issues(
     filter: { project: { id: { eq: $projectId } } }
     first: $first
@@ -213,7 +213,7 @@ query ListIssues($projectId: String!, $first: Int!) {
 
 _LIST_ISSUES_BY_MILESTONE_QUERY = (
     """
-query ListIssuesByMilestone($projectId: String!, $milestoneId: String!, $first: Int!) {
+query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
   issues(
     filter: {
       project: { id: { eq: $projectId } }
@@ -251,7 +251,7 @@ mutation CreateMilestone($name: String!, $projectId: String!, $sortOrder: Float!
 """
 
 _CREATE_DOCUMENT_QUERY = """
-mutation CreateDocument($title: String!, $content: String, $projectId: ID) {
+mutation CreateDocument($title: String!, $content: String, $projectId: String) {
   documentCreate(input: { title: $title, content: $content, projectId: $projectId }) {
     document { id }
     success
@@ -273,7 +273,7 @@ mutation CreateIssue(
   $title: String!,
   $description: String,
   $projectId: String!,
-  $projectMilestoneId: ID,
+  $projectMilestoneId: String,
   $teamId: String!,
   $estimate: Int
 ) {
@@ -341,7 +341,7 @@ query IssueTeam($id: String!) {
 """
 
 _TEAM_STATES_QUERY = """
-query TeamStates($teamId: String!) {
+query TeamStates($teamId: ID!) {
   team(id: $teamId) {
     states {
       nodes { id name }
