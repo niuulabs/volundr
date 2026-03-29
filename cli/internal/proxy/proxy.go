@@ -30,6 +30,7 @@ type Router struct {
 	apiURL         *url.URL
 	sessionBackend *url.URL
 	webConfig      *web.RuntimeConfig
+	webEnabled     bool
 	sessions       map[string]*SessionRoute
 	mu             sync.RWMutex
 	// rewriteHosts lists Docker-internal hostnames that should be replaced
@@ -45,14 +46,26 @@ func NewRouter(apiURL string) (*Router, error) {
 	}
 
 	return &Router{
-		apiURL:   u,
-		sessions: make(map[string]*SessionRoute),
+		apiURL:     u,
+		webEnabled: true,
+		sessions:   make(map[string]*SessionRoute),
 	}, nil
 }
 
 // SetWebConfig sets the runtime config served to the frontend via /config.json.
 func (r *Router) SetWebConfig(cfg *web.RuntimeConfig) {
 	r.webConfig = cfg
+}
+
+// DisableWeb prevents the embedded web UI from being mounted.
+// When disabled, only API and session proxy routes are served.
+func (r *Router) DisableWeb() {
+	r.webEnabled = false
+}
+
+// WebEnabled reports whether the embedded web UI will be mounted.
+func (r *Router) WebEnabled() bool {
+	return r.webEnabled
 }
 
 // AddSession registers a session route.
@@ -146,8 +159,10 @@ func (r *Router) Handler() http.Handler {
 	mux.Handle("/health", apiProxy)
 
 	// Embedded web UI with /config.json and SPA fallback.
-	webHandler := web.Handler(r.webConfig)
-	mux.Handle("/", webHandler)
+	if r.webEnabled {
+		webHandler := web.Handler(r.webConfig)
+		mux.Handle("/", webHandler)
+	}
 
 	return web.WithCrossOriginIsolation(mux)
 }

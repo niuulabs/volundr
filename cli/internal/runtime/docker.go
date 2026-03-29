@@ -226,6 +226,7 @@ func (r *DockerRuntime) Up(ctx context.Context, cfg *config.Config) error {
 		fmt.Println("failed")
 		return fmt.Errorf("create proxy: %w", err)
 	}
+	configureWeb(rtr, cfg)
 	r.proxyRtr = rtr
 
 	listenAddr := fmt.Sprintf("%s:%d", cfg.Listen.Host, cfg.Listen.Port)

@@ -13,7 +13,10 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
-var runtimeFlag string
+var (
+	runtimeFlag string
+	noWebFlag   bool
+)
 
 var upCmd = &cobra.Command{
 	Use:   "up",
@@ -24,6 +27,7 @@ var upCmd = &cobra.Command{
 
 func init() {
 	upCmd.Flags().StringVar(&runtimeFlag, "runtime", "", "Override runtime (local, docker, k3s)")
+	upCmd.Flags().BoolVar(&noWebFlag, "no-web", false, "Disable the embedded web UI")
 }
 
 func runUp(_ *cobra.Command, _ []string) error {
@@ -34,6 +38,11 @@ func runUp(_ *cobra.Command, _ []string) error {
 
 	if runtimeFlag != "" {
 		cfg.Runtime = runtimeFlag
+	}
+
+	if noWebFlag {
+		f := false
+		cfg.Web = &f
 	}
 
 	if err := cfg.Validate(); err != nil {

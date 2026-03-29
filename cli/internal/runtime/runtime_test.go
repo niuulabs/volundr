@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/proxy"
 )
 
 func TestBuildGitConfig_Disabled(t *testing.T) {
@@ -236,6 +237,62 @@ func TestServiceStatusJSON(t *testing.T) {
 	}
 	if s.Error != "test error" {
 		t.Errorf("expected error 'test error', got %q", s.Error)
+	}
+}
+
+func TestConfigureWeb_Enabled(t *testing.T) {
+	rtr, err := proxy.NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 8080},
+		TLS:    config.TLSConfig{Mode: "off"},
+	}
+
+	configureWeb(rtr, cfg)
+
+	if !rtr.WebEnabled() {
+		t.Error("expected web to be enabled")
+	}
+}
+
+func TestConfigureWeb_EnabledTLS(t *testing.T) {
+	rtr, err := proxy.NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "0.0.0.0", Port: 443},
+		TLS:    config.TLSConfig{Mode: "auto"},
+	}
+
+	configureWeb(rtr, cfg)
+
+	if !rtr.WebEnabled() {
+		t.Error("expected web to be enabled")
+	}
+}
+
+func TestConfigureWeb_Disabled(t *testing.T) {
+	rtr, err := proxy.NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	f := false
+	cfg := &config.Config{
+		Web:    &f,
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 8080},
+		TLS:    config.TLSConfig{Mode: "off"},
+	}
+
+	configureWeb(rtr, cfg)
+
+	if rtr.WebEnabled() {
+		t.Error("expected web to be disabled")
 	}
 }
 
