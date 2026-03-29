@@ -698,7 +698,7 @@ class ReviewEngine:
         owner_id: str,
         raid: Raid,
     ) -> None:
-        """Fetch the reviewer's full conversation and attach as a comment."""
+        """Fetch the reviewer's full conversation and attach as a document."""
         try:
             adapters = await self._volundr_factory.for_owner(owner_id)
             if not adapters:
@@ -709,15 +709,23 @@ class ReviewEngine:
                 return
             conversation = await adapters[0].get_conversation(raid.reviewer_session_id)
             turns = conversation.get("turns", [])
-            lines = ["## Review Transcript", ""]
+            lines = ["# Review Transcript", ""]
             for turn in turns:
                 role = turn.get("role", "unknown").capitalize()
                 content = turn.get("content", "")
-                lines.append(f"**{role}:**")
+                lines.append(f"### {role}")
                 lines.append(content)
                 lines.append("")
-            await tracker.add_comment(tracker_id, "\n".join(lines))
-            logger.info("Attached review transcript (%d turns) to %s", len(turns), tracker_id)
+                lines.append("---")
+                lines.append("")
+            title = f"Review Transcript — {raid.name}"
+            await tracker.attach_issue_document(
+                tracker_id, title, "\n".join(lines)
+            )
+            logger.info(
+                "Attached review transcript (%d turns) to %s",
+                len(turns), tracker_id,
+            )
         except Exception:
             logger.warning(
                 "Failed to attach review transcript for raid %s", tracker_id, exc_info=True

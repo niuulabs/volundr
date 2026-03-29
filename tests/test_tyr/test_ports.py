@@ -48,6 +48,7 @@ class TestTrackerPort:
             "get_session_messages",
             "attach_document",
             "add_comment",
+            "attach_issue_document",
         }
         abstract_methods = {
             name

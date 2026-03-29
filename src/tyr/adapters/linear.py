@@ -259,6 +259,15 @@ mutation CreateDocument($title: String!, $content: String, $projectId: ID) {
 }
 """
 
+_CREATE_ISSUE_DOCUMENT_QUERY = """
+mutation CreateIssueDocument($title: String!, $content: String, $issueId: ID!) {
+  documentCreate(input: { title: $title, content: $content, issueId: $issueId }) {
+    document { id }
+    success
+  }
+}
+"""
+
 _CREATE_ISSUE_QUERY = """
 mutation CreateIssue(
   $title: String!,
@@ -421,6 +430,19 @@ class LinearTrackerAdapter(TrackerPort):
             _ADD_COMMENT_QUERY,
             {"issueId": issue_id, "body": body},
         )
+
+    async def attach_issue_document(
+        self, issue_id: str, title: str, content: str
+    ) -> str:
+        """Attach a document to an issue (shows as a resource)."""
+        data = await self._gql.query(
+            _CREATE_ISSUE_DOCUMENT_QUERY,
+            {"title": title, "content": content, "issueId": issue_id},
+        )
+        doc = data.get("documentCreate", {}).get("document")
+        if doc is None:
+            raise GraphQLError("Failed to create issue document")
+        return doc["id"]
 
     async def create_phase(self, phase: Phase, *, project_id: str = "") -> str:
         parent_id = project_id or phase.tracker_id
