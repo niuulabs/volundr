@@ -564,11 +564,8 @@ func TestHandlerWebDisabledNoSPA(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code == http.StatusOK {
-		ct := w.Header().Get("Content-Type")
-		if strings.Contains(ct, "text/html") {
-			t.Error("expected no HTML response when web is disabled, but got HTML")
-		}
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 when web is disabled, got %d", w.Code)
 	}
 
 	// API routes should still work.

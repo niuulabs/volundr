@@ -1,6 +1,10 @@
 package runtime
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -256,6 +260,20 @@ func TestConfigureWeb_Enabled(t *testing.T) {
 	if !rtr.WebEnabled() {
 		t.Error("expected web to be enabled")
 	}
+
+	handler := rtr.Handler()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/config.json", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal /config.json: %v", err)
+	}
+	wantURL := "http://127.0.0.1:8080"
+	if got := result["apiBaseUrl"]; got != wantURL {
+		t.Errorf("apiBaseUrl = %q, want %q", got, wantURL)
+	}
 }
 
 func TestConfigureWeb_EnabledTLS(t *testing.T) {
@@ -273,6 +291,20 @@ func TestConfigureWeb_EnabledTLS(t *testing.T) {
 
 	if !rtr.WebEnabled() {
 		t.Error("expected web to be enabled")
+	}
+
+	handler := rtr.Handler()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/config.json", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal /config.json: %v", err)
+	}
+	wantURL := "https://0.0.0.0:443"
+	if got := result["apiBaseUrl"]; got != wantURL {
+		t.Errorf("apiBaseUrl = %q, want %q", got, wantURL)
 	}
 }
 
