@@ -233,7 +233,7 @@ query ListIssuesByMilestone($projectId: ID!, $milestoneId: ID!, $first: Int!) {
 )
 
 _CREATE_PROJECT_QUERY = """
-mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
+mutation CreateProject($name: String!, $description: String, $teamIds: [String!]!) {
   projectCreate(input: { name: $name, description: $description, teamIds: $teamIds }) {
     project { id }
     success
@@ -242,7 +242,7 @@ mutation CreateProject($name: String!, $description: String, $teamIds: [ID!]!) {
 """
 
 _CREATE_MILESTONE_QUERY = """
-mutation CreateMilestone($name: String!, $projectId: ID!, $sortOrder: Float!) {
+mutation CreateMilestone($name: String!, $projectId: String!, $sortOrder: Float!) {
   projectMilestoneCreate(input: { name: $name, projectId: $projectId, sortOrder: $sortOrder }) {
     projectMilestone { id }
     success
@@ -251,7 +251,7 @@ mutation CreateMilestone($name: String!, $projectId: ID!, $sortOrder: Float!) {
 """
 
 _CREATE_DOCUMENT_QUERY = """
-mutation CreateDocument($title: String!, $content: String, $projectId: ID) {
+mutation CreateDocument($title: String!, $content: String, $projectId: String) {
   documentCreate(input: { title: $title, content: $content, projectId: $projectId }) {
     document { id }
     success
@@ -260,7 +260,7 @@ mutation CreateDocument($title: String!, $content: String, $projectId: ID) {
 """
 
 _CREATE_ISSUE_DOCUMENT_QUERY = """
-mutation CreateIssueDocument($title: String!, $content: String, $issueId: ID!) {
+mutation CreateIssueDocument($title: String!, $content: String, $issueId: String!) {
   documentCreate(input: { title: $title, content: $content, issueId: $issueId }) {
     document { id }
     success
@@ -272,9 +272,9 @@ _CREATE_ISSUE_QUERY = """
 mutation CreateIssue(
   $title: String!,
   $description: String,
-  $projectId: ID!,
-  $projectMilestoneId: ID,
-  $teamId: ID!,
+  $projectId: String!,
+  $projectMilestoneId: String,
+  $teamId: String!,
   $estimate: Int
 ) {
   issueCreate(input: {
@@ -341,7 +341,7 @@ query IssueTeam($id: String!) {
 """
 
 _TEAM_STATES_QUERY = """
-query TeamStates($teamId: String!) {
+query TeamStates($teamId: ID!) {
   team(id: $teamId) {
     states {
       nodes { id name }
@@ -351,7 +351,7 @@ query TeamStates($teamId: String!) {
 """
 
 _ADD_COMMENT_QUERY = """
-mutation AddComment($issueId: ID!, $body: String!) {
+mutation AddComment($issueId: String!, $body: String!) {
   commentCreate(input: { issueId: $issueId, body: $body }) {
     success
   }

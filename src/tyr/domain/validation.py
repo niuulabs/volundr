@@ -129,7 +129,7 @@ def validate_raid(
     )
 
 
-_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
+_JSON_BLOCK_RE = re.compile(r"```(?:json)?[ \t]*\n([^`]*(?:`(?!``)[^`]*)*)```")
 
 
 def try_extract_structure(text: str) -> SagaStructure | None:
