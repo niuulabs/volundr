@@ -93,7 +93,8 @@ def parse_command(text: str) -> ParsedCommand | None:
     # Strip bot mention suffix (e.g. /status@TyrBot)
     parts = text.split(None, 1)
     command_part = parts[0]
-    command_name = re.sub(r"@\S+$", "", command_part).lstrip("/").lower()
+    # Strip bot mention suffix (e.g. /status@TyrBot) — split on @ to avoid regex DoS
+    command_name = command_part.split("@")[0].lstrip("/").lower()
 
     rest = parts[1] if len(parts) > 1 else ""
     args = rest.split() if rest else []
