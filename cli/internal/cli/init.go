@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/preflight"
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
@@ -338,6 +339,14 @@ func runInit(_ *cobra.Command, _ []string) error {
 		fmt.Println("  credentials.enc    ... done")
 	}
 
+	// Run mini-mode preflight checks (warnings only — don't block init).
+	if cfg.Volundr.Mode == "mini" {
+		fmt.Println()
+		fmt.Println("Preflight checks:")
+		results := runInitPreflightChecks(cfg)
+		fmt.Print(preflight.FormatResults(results))
+	}
+
 	// Run runtime-specific init (k3s only — mini mode needs no runtime setup).
 	if cfg.Volundr.Mode == "k3s" {
 		rt := runtime.NewRuntime("k3s")
@@ -351,6 +360,17 @@ func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Println("Run 'niuu volundr up' to start.")
 
 	return nil
+}
+
+// runInitPreflightChecks runs non-blocking checks after the init wizard and
+// returns the results for display.
+func runInitPreflightChecks(cfg *config.Config) []preflight.Result {
+	return []preflight.Result{
+		preflight.CheckBinary(claudeBinaryName(cfg), "--version"),
+		preflight.CheckAPIKeySet(cfg.Anthropic.APIKey),
+		preflight.CheckBinary("git", "--version"),
+		preflight.CheckDirWritable(expandHome(cfg.Volundr.Forge.Workspace)),
+	}
 }
 
 // isEnvVarName returns true if the string looks like an environment variable name
@@ -384,6 +404,21 @@ func installInstructions(tool string) string {
 // installInstructionsForOS returns install instructions for a tool on the given OS/arch.
 func installInstructionsForOS(tool, goos, goarch string) string {
 	switch tool {
+	case "claude":
+		return "  npm install -g @anthropic-ai/claude-code\n\n" +
+			"  Or specify a custom path in ~/.niuu/config.yaml:\n" +
+			"    volundr:\n" +
+			"      forge:\n" +
+			"        claude_binary: /path/to/claude"
+	case "git":
+		switch goos {
+		case "darwin":
+			return "  xcode-select --install\n  or: brew install git"
+		case "linux":
+			return "  sudo apt install git\n  or: sudo dnf install git"
+		default:
+			return "  https://git-scm.com/downloads"
+		}
 	case "kubectl":
 		switch goos {
 		case "darwin":
