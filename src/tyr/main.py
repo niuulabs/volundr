@@ -60,12 +60,17 @@ logger = logging.getLogger(__name__)
 
 
 def _configure_logging(settings: Settings) -> None:
-    """Configure structured logging based on settings."""
+    """Configure structured logging based on settings.
+
+    Uses force=True so this works even when uvicorn has already
+    configured the root logger (basicConfig is a no-op otherwise).
+    """
     logging.basicConfig(
         level=getattr(logging, settings.logging.level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s [%(correlation_id)s] %(message)s"
+        format="%(asctime)s %(levelname)s %(name)s %(message)s"
         if settings.logging.format == "text"
         else "%(message)s",
+        force=True,
     )
     # Silence noisy loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
