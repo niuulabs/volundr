@@ -24,6 +24,7 @@ Start all services — PostgreSQL (if embedded), API server, and reverse proxy. 
 | Flag | Description |
 |------|-------------|
 | `--runtime <runtime>` | Override the configured runtime |
+| `--no-web` | Disable the embedded web UI |
 
 ### `volundr down`
 
