@@ -43,6 +43,25 @@ func TestRunStatus_JSON_NoPIDFile(t *testing.T) {
 	}
 }
 
+func TestRunStatus_WithStateFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(config.EnvHome, tmpDir)
+
+	// Write a state file with services that have PID and port values.
+	stateContent := `{"runtime":"mini","services":[{"name":"forge","state":"running","pid":12345,"port":8080},{"name":"postgres","state":"running","pid":0,"port":0,"error":""}]}`
+	if err := os.WriteFile(tmpDir+"/state.json", []byte(stateContent), 0o600); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	oldJSON := jsonOutput
+	jsonOutput = false
+	defer func() { jsonOutput = oldJSON }()
+
+	if err := runStatus(nil, nil); err != nil {
+		t.Fatalf("runStatus: %v", err)
+	}
+}
+
 func TestRunStatus_WithPIDFile_DeadProcess(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
