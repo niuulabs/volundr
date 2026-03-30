@@ -35,6 +35,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/volundr/sessions/{id}/messages", h.sendMessage)
 	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/pr", h.getPRStatus)
 	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/chronicle", h.getChronicle)
+	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/logs", h.getSessionLogs)
 	mux.HandleFunc("GET /api/v1/volundr/stats", h.getStats)
 	mux.HandleFunc("GET /api/v1/volundr/me", h.getMe)
 	mux.HandleFunc("GET /health", h.health)
@@ -296,6 +297,10 @@ func (h *Handler) listModels(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	httputil.WriteJSON(w, http.StatusOK, models)
+}
+
+func (h *Handler) getSessionLogs(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, []any{})
 }
 
 // --- Per-session broker routes (skuld-mini) ---
