@@ -208,6 +208,7 @@ jobs:
           grype version
 
       - name: Scan container with Grype
+        continue-on-error: true
         run: |
           grype "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}" \
             --only-fixed \

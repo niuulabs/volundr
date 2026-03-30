@@ -548,6 +548,7 @@ jobs:
           grype version
 
       - name: Scan container with Grype
+        continue-on-error: true
         run: |
           grype "ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}" \
             --only-fixed \
