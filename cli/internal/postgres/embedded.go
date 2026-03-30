@@ -174,7 +174,7 @@ func (e *EmbeddedPostgres) RunMigrationsFS(ctx context.Context, migrationFS fs.F
 		}
 	}()
 
-	return runMigrationsWithTableFS(ctx, db, migrationFS, "schema_migrations")
+	return RunMigrationsWithFSTable(ctx, db, migrationFS, "schema_migrations")
 }
 
 // RunTyrMigrations applies Tyr-specific migrations from the given directory.
@@ -208,17 +208,21 @@ func (e *EmbeddedPostgres) RunTyrMigrationsFS(ctx context.Context, migrationFS f
 		}
 	}()
 
-	return runMigrationsWithTableFS(ctx, db, migrationFS, "tyr_schema_migrations")
+	return RunMigrationsWithFSTable(ctx, db, migrationFS, "tyr_schema_migrations")
 }
 
-// runMigrationsWithFS applies all pending up migrations from an fs.FS.
+// defaultMigrationsTable is the default table name for tracking applied migrations.
+const defaultMigrationsTable = "schema_migrations"
+
+// runMigrationsWithFS applies all pending up migrations from an fs.FS
+// using the default schema_migrations table.
 func runMigrationsWithFS(ctx context.Context, db *sql.DB, migrationFS fs.FS) (int, error) {
-	return runMigrationsWithTableFS(ctx, db, migrationFS, "schema_migrations")
+	return RunMigrationsWithFSTable(ctx, db, migrationFS, defaultMigrationsTable)
 }
 
-// runMigrationsWithTableFS applies all pending up migrations from an fs.FS
-// using the specified tracking table name.
-func runMigrationsWithTableFS(ctx context.Context, db *sql.DB, migrationFS fs.FS, table string) (int, error) {
+// RunMigrationsWithFSTable applies all pending up migrations from an fs.FS,
+// using the specified table name for tracking applied migrations.
+func RunMigrationsWithFSTable(ctx context.Context, db *sql.DB, migrationFS fs.FS, table string) (int, error) {
 	if err := db.PingContext(ctx); err != nil {
 		return 0, fmt.Errorf("ping database: %w", err)
 	}

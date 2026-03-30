@@ -78,11 +78,17 @@ type LocalMountsConfig struct {
 	DefaultReadOnly bool     `yaml:"default_read_only"`
 }
 
+// TyrSettings holds tyr-mini settings within the main config.
+type TyrSettings struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 // VolundrConfig holds Volundr stack mode and forge settings.
 type VolundrConfig struct {
 	Mode  string        `yaml:"mode"`
 	Web   bool          `yaml:"web"`
 	Forge ForgeSettings `yaml:"forge"`
+	Tyr   TyrSettings   `yaml:"tyr"`
 }
 
 // ForgeSettings holds forge (mini mode) settings within the main config.

@@ -409,25 +409,27 @@ def create_dispatch_router() -> APIRouter:
                     auth_token=auth_token,
                 )
                 # Record raid progress and set tracker issue to In Progress
+                logger.info(
+                    "Dispatch: updating %d tracker adapters for issue %s",
+                    len(adapters), issue.id,
+                )
                 for adapter in adapters:
-                    try:
-                        await adapter.update_raid_progress(
-                            issue.id,
-                            status=RaidStatus.RUNNING,
-                            session_id=session.id,
-                            owner_id=principal.user_id,
-                            phase_tracker_id=issue.milestone_id,
-                            saga_tracker_id=saga.tracker_id,
-                        )
-                    except Exception:
-                        logger.warning(
-                            "Failed to update raid progress for %s", issue.id, exc_info=True
-                        )
+                    adapter_name = type(adapter).__name__
+                    await adapter.update_raid_progress(
+                        issue.id,
+                        status=RaidStatus.RUNNING,
+                        session_id=session.id,
+                        owner_id=principal.user_id,
+                        phase_tracker_id=issue.milestone_id,
+                        saga_tracker_id=saga.tracker_id,
+                    )
+                    logger.info("Dispatch: %s.update_raid_progress OK for %s", adapter_name, issue.id)
                     try:
                         await adapter.update_raid_state(issue.id, RaidStatus.RUNNING)
+                        logger.info("Dispatch: %s.update_raid_state OK for %s → In Progress", adapter_name, issue.id)
                     except Exception:
-                        logger.warning(
-                            "Failed to set tracker issue %s to In Progress", issue.id, exc_info=True
+                        logger.error(
+                            "FAILED: %s.update_raid_state for %s", adapter_name, issue.id, exc_info=True
                         )
 
                 results.append(
