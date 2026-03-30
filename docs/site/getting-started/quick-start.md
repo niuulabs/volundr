@@ -16,15 +16,15 @@ Grab the latest binary from [GitHub Releases](https://github.com/niuulabs/volund
 # macOS / Linux
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m); [ "$ARCH" = "x86_64" ] && ARCH="amd64"; [ "$ARCH" = "aarch64" ] && ARCH="arm64"
-curl -fsSL "https://github.com/niuulabs/volundr/releases/latest/download/volundr-${OS}-${ARCH}" -o volundr
-chmod +x volundr
-sudo mv volundr /usr/local/bin/
+curl -fsSL "https://github.com/niuulabs/volundr/releases/latest/download/niuu-${OS}-${ARCH}" -o niuu
+chmod +x niuu
+sudo mv niuu /usr/local/bin/
 ```
 
 ### 2. Initialize
 
 ```bash
-volundr init
+niuu volundr init
 ```
 
 The wizard asks a few questions:
@@ -41,7 +41,7 @@ The wizard asks a few questions:
 ### 3. Start everything
 
 ```bash
-volundr up
+niuu volundr up
 ```
 
 This starts PostgreSQL (if embedded), the Python API server, and a reverse proxy. Open [http://localhost:8080](http://localhost:8080) when it's ready.

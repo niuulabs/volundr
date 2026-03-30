@@ -36,7 +36,7 @@ Two ways to create a session:
 
 **Web UI** — Use the launch wizard. Pick a template or configure manually. Set the session name, model, repository, branch, credentials, and integrations.
 
-**CLI** — Run `volundr sessions create`. Same options available as flags.
+**CLI** — Run `niuu volundr sessions create`. Same options available as flags.
 
 You can start from a template (pre-configured blueprint) or set everything yourself: model, resource limits, repos, MCP servers, environment variables.
 
@@ -64,7 +64,7 @@ Everything happens in the same workspace. The agent edits files, you see the cha
 
 ## Stopping a session
 
-Stop a session with `volundr sessions stop <id>` or click Stop in the web UI.
+Stop a session with `niuu volundr sessions stop <id>` or click Stop in the web UI.
 
 When a session stops:
 
