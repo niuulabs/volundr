@@ -26,7 +26,9 @@ The fastest path. Download a pre-built binary, answer a few questions, and you'r
 ```bash
 # Download from GitHub releases
 # https://github.com/niuulabs/volundr/releases
-curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/volundr-$(uname -s)-$(uname -m) -o volundr
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m); [ "$ARCH" = "x86_64" ] && ARCH="amd64"; [ "$ARCH" = "aarch64" ] && ARCH="arm64"
+curl -fsSL "https://github.com/niuulabs/volundr/releases/latest/download/volundr-${OS}-${ARCH}" -o volundr
 chmod +x volundr
 sudo mv volundr /usr/local/bin/
 

@@ -45,11 +45,13 @@ extra_css:
 nav:
   - Home: index.md
   - Getting Started:
+      - Local Quickstart: getting-started/local-quickstart.md
       - Quick Start: getting-started/quick-start.md
       - Installation: getting-started/installation.md
       - Your First Session: getting-started/first-session.md
       - Configuration: getting-started/configuration.md
       - Running: getting-started/running.md
+      - Troubleshooting: getting-started/troubleshooting.md
   - User Guide:
       - Sessions: user-guide/sessions.md
       - Templates & Profiles: user-guide/templates.md

@@ -12,7 +12,7 @@ Interactive setup wizard. Walks you through:
 
 - Runtime selection (local, docker, k3s)
 - Anthropic API key
-- Database mode (embedded SQLite or external PostgreSQL)
+- Database mode (embedded PostgreSQL or external PostgreSQL)
 - GitHub/GitLab configuration
 
 Creates `~/.volundr/config.yaml` and stores credentials encrypted.
@@ -24,6 +24,7 @@ Start all services — PostgreSQL (if embedded), API server, and reverse proxy. 
 | Flag | Description |
 |------|-------------|
 | `--runtime <runtime>` | Override the configured runtime |
+| `--no-web` | Disable the embedded web UI |
 
 ### `volundr down`
 

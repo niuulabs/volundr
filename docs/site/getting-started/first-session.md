@@ -112,19 +112,22 @@ A chronicle is created automatically, same as the web UI.
 
 ## What happens under the hood
 
-When you launch a session, Volundr creates a Kubernetes pod with three main containers:
+When you launch a session, Volundr provisions an isolated workspace with three core components:
 
-| Container | Role |
+| Component | Role |
 |-----------|------|
 | **Skuld broker** | Manages the LLM conversation and tool execution |
 | **Code Server** | VS Code in the browser |
 | **Terminal** | Shell access to the workspace |
 
-All three containers share a workspace volume (PVC) where your repo is cloned.
+All three components share a workspace directory where your repo is cloned.
 
-Chat messages go directly from your browser to the Skuld broker inside the pod -- they don't route through the Volundr API server. This keeps latency low and means the API server doesn't need to handle streaming LLM responses.
+Chat messages go directly from your browser to the Skuld broker — they don't route through the Volundr API server. This keeps latency low and means the API server doesn't need to handle streaming LLM responses.
 
 The Volundr API handles lifecycle operations only: creating, starting, stopping, and deleting sessions.
+
+??? note "If using K8s mode (k3s or production)"
+    In Kubernetes modes, each session runs as a pod with the three components above as separate containers. They share a persistent volume claim (PVC) for the workspace. The pod is scheduled by Kubernetes and managed by the Volundr pod manager adapter.
 
 ---
 

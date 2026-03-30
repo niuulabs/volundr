@@ -2,14 +2,38 @@
 
 Volundr loads configuration from YAML with environment variable overrides.
 
-## Config file locations
+## Local mode (CLI)
+
+If you used `volundr init`, your config lives at `~/.volundr/config.yaml`. The wizard sets up everything you need. You can edit it directly or use:
+
+```bash
+volundr config get database.host
+volundr config set database.host localhost
+```
+
+The most common settings to change for local development:
+
+| Setting | Where | What it does |
+|---------|-------|-------------|
+| Anthropic API key | `volundr init` wizard | Powers the AI agent |
+| GitHub token | `volundr init` wizard | Repo access |
+| Database mode | `volundr init` wizard | `embedded` (default) bundles PostgreSQL |
+| Runtime | `volundr init` wizard | `local`, `docker`, or `k3s` |
+
+For most local users, the defaults from `volundr init` are sufficient. The full reference below is primarily for server deployments and advanced configuration.
+
+---
+
+## Server / advanced configuration
+
+### Config file locations
 
 Files are checked in order — first found wins:
 
 1. `./config.yaml`
 2. `/etc/volundr/config.yaml`
 
-## Environment variable overrides
+### Environment variable overrides
 
 Use double underscores for nesting. Environment variables take precedence over YAML.
 
@@ -20,7 +44,7 @@ GIT__GITHUB__TOKEN=ghp_xxxx
 EVENT_PIPELINE__RABBITMQ__ENABLED=true
 ```
 
-## Priority order
+### Priority order
 
 1. Constructor arguments (for testing)
 2. Environment variables
