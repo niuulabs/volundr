@@ -39,34 +39,32 @@ data:
       dispatch_prompt_template: {{ .Values.dispatch.dispatchPromptTemplate | quote }}
       {{- end }}
 
-    {{- if or .Values.planner .Values.review }}
-    {{- with .Values.planner }}
+    {{- if and .Values.planner (or .Values.planner.plannerSystemPrompt .Values.planner.finalizePrompt) }}
     planner:
-      {{- if .plannerSystemPrompt }}
-      planner_system_prompt: {{ .plannerSystemPrompt | quote }}
+      {{- if .Values.planner.plannerSystemPrompt }}
+      planner_system_prompt: {{ .Values.planner.plannerSystemPrompt | quote }}
       {{- end }}
-      {{- if .finalizePrompt }}
-      finalize_prompt: {{ .finalizePrompt | quote }}
+      {{- if .Values.planner.finalizePrompt }}
+      finalize_prompt: {{ .Values.planner.finalizePrompt | quote }}
       {{- end }}
-    {{- end }}
     {{- end }}
 
-    {{- with .Values.review }}
+    {{- if and .Values.review (or .Values.review.reviewerSystemPrompt .Values.review.reviewerInitialPromptTemplate .Values.review.reviewerModel .Values.review.maxReviewRounds .Values.review.autoApproveThreshold) }}
     review:
-      {{- if .reviewerSystemPrompt }}
-      reviewer_system_prompt: {{ .reviewerSystemPrompt | quote }}
+      {{- if .Values.review.reviewerSystemPrompt }}
+      reviewer_system_prompt: {{ .Values.review.reviewerSystemPrompt | quote }}
       {{- end }}
-      {{- if .reviewerInitialPromptTemplate }}
-      reviewer_initial_prompt_template: {{ .reviewerInitialPromptTemplate | quote }}
+      {{- if .Values.review.reviewerInitialPromptTemplate }}
+      reviewer_initial_prompt_template: {{ .Values.review.reviewerInitialPromptTemplate | quote }}
       {{- end }}
-      {{- if .reviewerModel }}
-      reviewer_model: {{ .reviewerModel | quote }}
+      {{- if .Values.review.reviewerModel }}
+      reviewer_model: {{ .Values.review.reviewerModel | quote }}
       {{- end }}
-      {{- if .maxReviewRounds }}
-      max_review_rounds: {{ .maxReviewRounds }}
+      {{- if .Values.review.maxReviewRounds }}
+      max_review_rounds: {{ .Values.review.maxReviewRounds }}
       {{- end }}
-      {{- if .autoApproveThreshold }}
-      auto_approve_threshold: {{ .autoApproveThreshold }}
+      {{- if .Values.review.autoApproveThreshold }}
+      auto_approve_threshold: {{ .Values.review.autoApproveThreshold }}
       {{- end }}
     {{- end }}
     ai_models:
