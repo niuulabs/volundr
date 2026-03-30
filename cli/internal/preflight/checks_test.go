@@ -205,8 +205,8 @@ func TestBinaryRemediation_Claude(t *testing.T) {
 	if !strings.Contains(msg, "npm install -g @anthropic-ai/claude-code") {
 		t.Errorf("expected npm install instruction, got: %s", msg)
 	}
-	if !strings.Contains(msg, "claude_binary") {
-		t.Errorf("expected config path hint, got: %s", msg)
+	if !strings.Contains(msg, "Claude Code CLI is required") {
+		t.Errorf("expected description of requirement, got: %s", msg)
 	}
 }
 

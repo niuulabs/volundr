@@ -146,12 +146,7 @@ func BinaryRemediation(name string) string {
 		return `Error: claude binary not found in PATH
 
 The Claude Code CLI is required to run coding sessions.
-Install it with: npm install -g @anthropic-ai/claude-code
-
-Or specify a custom path in ~/.volundr/config.yaml:
-  volundr:
-    forge:
-      claude_binary: /path/to/claude`
+Install it with: npm install -g @anthropic-ai/claude-code`
 	case "git":
 		return `Error: git binary not found in PATH
 
@@ -185,6 +180,5 @@ Another process is using this port. Either:
   1. Stop the process using port %d
   2. Change the port in ~/.volundr/config.yaml:
        listen:
-         port: <new-port>
-  3. Use a different port: volundr up --port <new-port>`, port, host, port)
+         port: <new-port>`, port, host, port)
 }
