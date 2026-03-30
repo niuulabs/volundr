@@ -17,7 +17,6 @@ Use double underscores for nesting. Environment variables take precedence over Y
 DATABASE__HOST=postgres.local
 DATABASE__PORT=5432
 GIT__GITHUB__TOKEN=ghp_xxxx
-EVENT_PIPELINE__RABBITMQ__ENABLED=true
 ```
 
 ## Priority order
@@ -27,7 +26,9 @@ EVENT_PIPELINE__RABBITMQ__ENABLED=true
 3. YAML config file
 4. `/run/secrets` files
 
-## Full reference
+## Essential configuration
+
+These are the settings most local-mode users need.
 
 ### `database`
 
@@ -49,15 +50,6 @@ PostgreSQL connection settings.
 |-----|---------|-------------|
 | `level` | `info` | Log level (debug, info, warning, error) |
 | `format` | `text` | Log format (`text` or `json`) |
-
-### `pod_manager`
-
-Dynamic adapter for session pod orchestration.
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `adapter` | `volundr.adapters.outbound.pod_manager.PodManager` | Fully-qualified class path |
-| `kwargs` | `{}` | Extra kwargs passed to the adapter constructor |
 
 ### `git`
 
@@ -111,6 +103,52 @@ Same structure as `git.github`, with `base_url` defaulting to `https://gitlab.co
 | `summary_max_tokens` | `2000` | Max tokens for summary generation |
 | `retention_days` | `null` | Days to keep chronicles (null = forever) |
 
+### `linear`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `false` | Enable Linear integration |
+| `api_key` | `null` | Linear API key |
+
+### `provisioning`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `timeout_seconds` | `300.0` | Max time to wait for infrastructure readiness |
+| `initial_delay_seconds` | `5.0` | Delay before starting readiness polls |
+
+---
+
+## Local mode vs Kubernetes
+
+| Feature | Local (mini) | k3s | Production K8s |
+|---------|:---:|:---:|:---:|
+| Embedded PostgreSQL | Yes | No | No |
+| Multi-user | No | Yes | Yes |
+| OIDC authentication | No | Optional | Yes |
+| Persistent volumes | Local disk | Yes | Yes |
+| Resource limits per session | No | Yes | Yes |
+| Secret management (Vault, Infisical) | No | Optional | Yes |
+| Event pipeline (RabbitMQ, OTel) | Optional | Optional | Yes |
+| Gateway routing | No | Yes | Yes |
+
+---
+
+## Advanced configuration (Kubernetes only)
+
+The following settings are relevant for k3s and production Kubernetes deployments. Local-mode users can skip this section.
+
+For full details, see the [Configuration Reference](../configuration/overview.md).
+
+### `pod_manager`
+
+Dynamic adapter for session pod orchestration.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `adapter` | `volundr.adapters.outbound.pod_manager.PodManager` | Fully-qualified class path |
+| `kwargs` | `{}` | Extra kwargs passed to the adapter constructor |
+
 ### `identity`
 
 Dynamic adapter for authentication.
@@ -148,15 +186,6 @@ identity:
 | `adapter` | `...AllowAllAuthorizationAdapter` | Fully-qualified class path |
 | `kwargs` | `{}` | Extra kwargs for the adapter |
 
-For Cerbos:
-
-```yaml
-authorization:
-  adapter: "volundr.adapters.outbound.cerbos.CerbosAuthorizationAdapter"
-  kwargs:
-    url: "http://cerbos:3593"
-```
-
 ### `credential_store`
 
 | Key | Default | Description |
@@ -173,34 +202,12 @@ Available adapters: `MemoryCredentialStore`, `VaultCredentialStore`, `InfisicalC
 | `adapter` | `...InMemorySecretInjectionAdapter` | Fully-qualified class path |
 | `kwargs` | `{}` | Extra kwargs for the adapter |
 
-For Infisical CSI:
-
-```yaml
-secret_injection:
-  adapter: "volundr.adapters.outbound.infisical_secret_injection.InfisicalCSISecretInjectionAdapter"
-  kwargs:
-    infisical_url: "https://infisical.example.com"
-    client_id: "..."
-    client_secret: "..."
-    namespace: "volundr-sessions"
-```
-
 ### `storage`
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `adapter` | `...InMemoryStorageAdapter` | Fully-qualified class path |
 | `kwargs` | `{}` | Extra kwargs for the adapter |
-
-For Kubernetes PVC management:
-
-```yaml
-storage:
-  adapter: "volundr.adapters.outbound.k8s_storage_adapter.K8sStorageAdapter"
-  kwargs:
-    namespace: "volundr-sessions"
-    home_storage_class: "volundr-home"
-```
 
 ### `gateway`
 
@@ -209,63 +216,11 @@ storage:
 | `adapter` | `...InMemoryGatewayAdapter` | Fully-qualified class path |
 | `kwargs` | `{}` | Extra kwargs for the adapter |
 
-For Kubernetes Gateway API routing:
-
-```yaml
-gateway:
-  adapter: "volundr.adapters.outbound.k8s_gateway.K8sGatewayAdapter"
-  kwargs:
-    namespace: "volundr-sessions"
-    gateway_name: "volundr-gateway"
-    gateway_namespace: "volundr-system"
-    gateway_domain: "sessions.example.com"
-    issuer_url: "https://idp.example.com"
-    audience: "volundr"
-```
-
 ### `event_pipeline`
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `postgres_buffer_size` | `1` | Buffer size for PostgreSQL event sink |
-
-#### `event_pipeline.rabbitmq`
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enabled` | `false` | Enable RabbitMQ sink |
-| `url` | `amqp://guest:guest@localhost:5672/` | AMQP connection URL |
-| `exchange_name` | `volundr.events` | Exchange name |
-| `exchange_type` | `topic` | Exchange type |
-
-Requires the `rabbitmq` extra: `uv sync --extra rabbitmq`.
-
-#### `event_pipeline.otel`
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enabled` | `false` | Enable OpenTelemetry sink |
-| `endpoint` | `http://localhost:4317` | OTLP collector endpoint |
-| `protocol` | `grpc` | Export protocol |
-| `service_name` | `volundr` | OTel service name |
-| `provider_name` | `anthropic` | GenAI provider name |
-| `insecure` | `true` | Use insecure connection |
-
-Requires the `otel` extra: `uv sync --extra otel`. Follows OTel GenAI semantic conventions (v1.39+).
-
-### `linear`
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enabled` | `false` | Enable Linear integration |
-| `api_key` | `null` | Linear API key |
-
-### `provisioning`
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `timeout_seconds` | `300.0` | Max time to wait for infrastructure readiness |
-| `initial_delay_seconds` | `5.0` | Delay before starting readiness polls |
 
 ### `session_contributors`
 

@@ -50,6 +50,23 @@ docker run -p 8080:8080 \
   volundr:latest
 ```
 
+## CLI local mode
+
+If you installed the `niuu` CLI binary, the simplest way to run everything:
+
+```bash
+# Start all services (PostgreSQL, API server, reverse proxy)
+niuu volundr up
+
+# Check service status
+niuu volundr status
+
+# Stop all services
+niuu volundr down
+```
+
+See [CLI Reference](../user-guide/cli.md) for the full command list.
+
 ## Health check
 
 ```
