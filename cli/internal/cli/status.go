@@ -17,6 +17,11 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
+// statusHTTPTimeout is the timeout for HTTP requests to the local Forge API
+// during status checks. Kept short so the CLI feels responsive when the
+// server is unreachable.
+const statusHTTPTimeout = 2 * time.Second
+
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show status of Volundr services",
@@ -213,12 +218,15 @@ func buildDetailedStatus(mode string, cfg *config.Config, stack *runtime.StackSt
 			}
 		}
 
-		// Collect pod entries (anything that's not a host service).
-		hostServices := map[string]bool{
+		// Collect pod entries (anything that's not a host service or already shown as Tyr).
+		excludeServices := map[string]bool{
 			"proxy": true, "api": true, "postgres": true, "k3s-cluster": true,
 		}
+		if tyrSvc != nil {
+			excludeServices[tyrSvc.Name] = true
+		}
 		for _, svc := range stack.Services {
-			if hostServices[svc.Name] {
+			if excludeServices[svc.Name] {
 				continue
 			}
 			ds.Pods = append(ds.Pods, PodInfo{
@@ -241,7 +249,7 @@ func buildDetailedStatus(mode string, cfg *config.Config, stack *runtime.StackSt
 // fetchMiniSessions queries the running forge server for session data.
 func fetchMiniSessions(ds *DetailedStatus, cfg *config.Config) {
 	addr := fmt.Sprintf("http://%s:%d", cfg.Listen.Host, cfg.Listen.Port)
-	client := &http.Client{Timeout: 2 * time.Second}
+	client := &http.Client{Timeout: statusHTTPTimeout}
 
 	// Fetch stats.
 	statsResp, err := client.Get(addr + "/api/v1/volundr/stats") //nolint:noctx // short-lived status check
@@ -415,15 +423,7 @@ func inferServerState(services []runtime.ServiceStatus) string {
 			return string(svc.State)
 		}
 		if svc.Name == "proxy" || svc.Name == "api" {
-			if svc.State == runtime.StateRunning {
-				return "running"
-			}
-		}
-	}
-	// If we have services but none matched specifically, check if any are running.
-	for _, svc := range services {
-		if svc.State == runtime.StateRunning {
-			return "running"
+			return string(svc.State)
 		}
 	}
 	return "stopped"

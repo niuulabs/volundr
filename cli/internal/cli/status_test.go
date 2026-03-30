@@ -2,10 +2,12 @@ package cli
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -210,7 +212,7 @@ func TestRunStatus_WithStateFile_Running(t *testing.T) {
 
 	// Write PID file with our own PID (guaranteed to be alive).
 	pidFile := filepath.Join(tmpDir, "volundr.pid")
-	if err := os.WriteFile(pidFile, []byte(itoa(os.Getpid())), 0o600); err != nil {
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write pid file: %v", err)
 	}
 
@@ -267,7 +269,7 @@ func TestRunStatus_WithStateFile_TextOutput(t *testing.T) {
 	writeTestConfigSimple(t, tmpDir, "mini")
 
 	pidFile := filepath.Join(tmpDir, "volundr.pid")
-	if err := os.WriteFile(pidFile, []byte(itoa(os.Getpid())), 0o600); err != nil {
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write pid file: %v", err)
 	}
 
@@ -313,18 +315,18 @@ func TestRunStatus_MiniWithSessions(t *testing.T) {
 	defer srv.Close()
 
 	// Parse the server address to get host and port for config.
-	srvAddr := srv.Listener.Addr().String()
+	host, portStr, _ := net.SplitHostPort(srv.Listener.Addr().String())
 
 	// Write config pointing to our mock server.
 	cfgData := `volundr:
   mode: mini
   web: true
   forge:
-    listen: "` + srvAddr + `"
+    listen: "` + host + `:` + portStr + `"
     max_concurrent: 4
 listen:
-  host: "` + srvAddr[:len(srvAddr)-findPortOffset(srvAddr)] + `"
-  port: ` + srvAddr[len(srvAddr)-findPortOffset(srvAddr)+1:] + `
+  host: "` + host + `"
+  port: ` + portStr + `
 database:
   mode: embedded
   port: 5433
@@ -337,7 +339,7 @@ database:
 	}
 
 	// Write PID + state to indicate running.
-	if err := os.WriteFile(filepath.Join(tmpDir, "volundr.pid"), []byte(itoa(os.Getpid())), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "volundr.pid"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write pid: %v", err)
 	}
 	stateData := `[{"name": "proxy", "state": "running", "port": 8080}]`
@@ -502,13 +504,15 @@ func TestBuildDetailedStatus_K3sWithPods(t *testing.T) {
 	if ds.Cluster.Status != "running" {
 		t.Errorf("expected cluster running, got %s", ds.Cluster.Status)
 	}
-	if len(ds.Pods) != 2 {
-		t.Errorf("expected 2 pods, got %d", len(ds.Pods))
-	}
-
-	// Tyr should be detected from tyr-prefixed pod.
+	// Tyr should be detected from tyr-prefixed pod and excluded from pods list.
 	if ds.Tyr == nil {
 		t.Fatal("expected tyr info from tyr-prefixed pod")
+	}
+	if len(ds.Pods) != 1 {
+		t.Errorf("expected 1 pod (tyr excluded), got %d", len(ds.Pods))
+	}
+	if len(ds.Pods) > 0 && ds.Pods[0].Name != "session-a1b2c3-skuld" {
+		t.Errorf("expected session pod, got %s", ds.Pods[0].Name)
 	}
 }
 
@@ -576,11 +580,27 @@ func TestInferServerState(t *testing.T) {
 			expected: "running",
 		},
 		{
+			name: "proxy stopped but postgres running",
+			services: []runtime.ServiceStatus{
+				{Name: "proxy", State: runtime.StateStopped, Port: 8080},
+				{Name: "postgres", State: runtime.StateRunning, Port: 5433},
+			},
+			expected: "stopped",
+		},
+		{
+			name: "proxy in error state",
+			services: []runtime.ServiceStatus{
+				{Name: "proxy", State: runtime.StateError, Port: 8080},
+				{Name: "postgres", State: runtime.StateRunning, Port: 5433},
+			},
+			expected: "error",
+		},
+		{
 			name: "only postgres running",
 			services: []runtime.ServiceStatus{
 				{Name: "postgres", State: runtime.StateRunning, Port: 5433},
 			},
-			expected: "running",
+			expected: "stopped",
 		},
 	}
 
@@ -793,11 +813,11 @@ func TestFetchMiniSessions_WithMockServer(t *testing.T) {
 	defer srv.Close()
 
 	// Parse host/port from server.
-	addr := srv.Listener.Addr().String()
-	parts := splitHostPort(addr)
+	host, portStr, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	port, _ := strconv.Atoi(portStr)
 
 	cfg := &config.Config{
-		Listen: config.ListenConfig{Host: parts[0], Port: mustAtoi(parts[1])},
+		Listen: config.ListenConfig{Host: host, Port: port},
 		Volundr: config.VolundrConfig{
 			Forge: config.ForgeSettings{MaxConcurrent: 4},
 		},
@@ -845,11 +865,11 @@ func TestFetchMiniSessions_StatsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	addr := srv.Listener.Addr().String()
-	parts := splitHostPort(addr)
+	host, portStr, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	port, _ := strconv.Atoi(portStr)
 
 	cfg := &config.Config{
-		Listen: config.ListenConfig{Host: parts[0], Port: mustAtoi(parts[1])},
+		Listen: config.ListenConfig{Host: host, Port: port},
 		Volundr: config.VolundrConfig{
 			Forge: config.ForgeSettings{MaxConcurrent: 4},
 		},
@@ -881,11 +901,11 @@ func TestFetchMiniSessions_SessionsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	addr := srv.Listener.Addr().String()
-	parts := splitHostPort(addr)
+	host, portStr, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	port, _ := strconv.Atoi(portStr)
 
 	cfg := &config.Config{
-		Listen: config.ListenConfig{Host: parts[0], Port: mustAtoi(parts[1])},
+		Listen: config.ListenConfig{Host: host, Port: port},
 		Volundr: config.VolundrConfig{
 			Forge: config.ForgeSettings{MaxConcurrent: 4},
 		},
@@ -904,37 +924,4 @@ func TestFetchMiniSessions_SessionsError(t *testing.T) {
 	if len(ds.Sessions.List) != 0 {
 		t.Errorf("expected 0 sessions in list, got %d", len(ds.Sessions.List))
 	}
-}
-
-// Helper functions for tests.
-
-func itoa(n int) string {
-	return json.Number(json.Number(func() string {
-		b, _ := json.Marshal(n)
-		return string(b)
-	}()).String()).String()
-}
-
-func splitHostPort(addr string) []string {
-	// Simple split for test addresses like "127.0.0.1:12345".
-	idx := len(addr) - 1
-	for idx >= 0 && addr[idx] != ':' {
-		idx--
-	}
-	return []string{addr[:idx], addr[idx+1:]}
-}
-
-func mustAtoi(s string) int {
-	n, _ := json.Number(s).Int64()
-	return int(n)
-}
-
-// findPortOffset returns the number of characters from the end to the colon.
-func findPortOffset(addr string) int {
-	for i := len(addr) - 1; i >= 0; i-- {
-		if addr[i] == ':' {
-			return len(addr) - i
-		}
-	}
-	return 0
 }
