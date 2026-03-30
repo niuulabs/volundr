@@ -41,7 +41,7 @@ func TestRunDown_MiniMode_HTTPShutdown(t *testing.T) {
 	})
 	srv := &http.Server{Handler: mux}
 	go func() { _ = srv.Serve(ln) }()
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	// Write a mini mode config pointing to our mock server.
 	cfgContent := "volundr:\n  mode: mini\n  forge:\n    listen: \"" + addr + "\"\n    max_concurrent: 1\n    auth:\n      mode: none\n"
@@ -174,7 +174,7 @@ func TestDownMini_NonOKResponse(t *testing.T) {
 	})
 	srv := &http.Server{Handler: mux}
 	go func() { _ = srv.Serve(ln) }()
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	cfgContent := "volundr:\n  mode: mini\n  forge:\n    listen: \"" + addr + "\"\n    max_concurrent: 1\n    auth:\n      mode: none\n"
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
@@ -229,7 +229,7 @@ func TestDownMini_ShutdownResponseBody(t *testing.T) {
 	})
 	srv := &http.Server{Handler: mux}
 	go func() { _ = srv.Serve(ln) }()
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	cfgContent := "volundr:\n  mode: mini\n  forge:\n    listen: \"" + addr + "\"\n    max_concurrent: 1\n    auth:\n      mode: none\n"
 	cfgPath := filepath.Join(tmpDir, "config.yaml")

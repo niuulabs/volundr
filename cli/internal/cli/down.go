@@ -15,11 +15,9 @@ import (
 )
 
 const (
-	// shutdownRequestTimeout is how long to wait for the forge shutdown
-	// HTTP request to complete.
+	// Timeout for the forge shutdown HTTP request.
 	shutdownRequestTimeout = 5 * time.Second
-	// shutdownSettleDelay is a short pause after requesting shutdown to
-	// let the server finish stopping sessions.
+	// Pause after requesting shutdown to let the server finish stopping sessions.
 	shutdownSettleDelay = 2 * time.Second
 )
 
@@ -65,7 +63,7 @@ func downMini(cfg *config.Config) error {
 		fmt.Println("Forge server not reachable, trying PID-based shutdown...")
 		return fallbackPIDShutdown()
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("Unexpected response %d, trying PID-based shutdown...\n", resp.StatusCode)
