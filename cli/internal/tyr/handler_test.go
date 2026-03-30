@@ -486,9 +486,11 @@ func TestHandler_CreateConfidenceEvent(t *testing.T) {
 		nil, nil, nil, nil, 0, now, now)
 	mock.ExpectQuery("SELECT .* FROM raids WHERE id").WithArgs("r1").WillReturnRows(raidRows)
 
+	mock.ExpectBegin()
 	evRows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow("ev-1", now)
 	mock.ExpectQuery("INSERT INTO confidence_events").WillReturnRows(evRows)
 	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	body := `{"event_type":"ci_pass","delta":0.1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/raids/r1/confidence", bytes.NewBufferString(body))

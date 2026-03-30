@@ -5,7 +5,7 @@ import (
 	"io/fs"
 )
 
-//go:embed migrations/*.up.sql
+//go:embed migrations/*.sql
 var embeddedTyrMigrations embed.FS
 
 // MigrationsFS returns the embedded tyr migration files.

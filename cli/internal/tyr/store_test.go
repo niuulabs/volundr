@@ -575,12 +575,12 @@ func TestStore_CreateConfidenceEvent(t *testing.T) {
 		nil, nil, nil, nil, 0, now, now)
 	mock.ExpectQuery("SELECT .* FROM raids WHERE id").WithArgs("r1").WillReturnRows(raidRows)
 
-	// Insert confidence event
+	// Transaction for confidence event
+	mock.ExpectBegin()
 	evRows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow("ev-1", now)
 	mock.ExpectQuery("INSERT INTO confidence_events").WillReturnRows(evRows)
-
-	// Update raid confidence
 	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	event, err := store.CreateConfidenceEvent(ctx, "r1", ConfidenceEventCIPass, 0.1)
 	if err != nil {
@@ -606,9 +606,11 @@ func TestStore_CreateConfidenceEvent_Clamped(t *testing.T) {
 		nil, nil, nil, nil, 0, now, now)
 	mock.ExpectQuery("SELECT .* FROM raids WHERE id").WithArgs("r1").WillReturnRows(raidRows)
 
+	mock.ExpectBegin()
 	evRows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow("ev-1", now)
 	mock.ExpectQuery("INSERT INTO confidence_events").WillReturnRows(evRows)
 	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	event, err := store.CreateConfidenceEvent(ctx, "r1", ConfidenceEventCIPass, 0.2)
 	if err != nil {
@@ -633,9 +635,11 @@ func TestStore_CreateConfidenceEvent_ClampedToZero(t *testing.T) {
 		nil, nil, nil, nil, 0, now, now)
 	mock.ExpectQuery("SELECT .* FROM raids WHERE id").WithArgs("r1").WillReturnRows(raidRows)
 
+	mock.ExpectBegin()
 	evRows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow("ev-1", now)
 	mock.ExpectQuery("INSERT INTO confidence_events").WillReturnRows(evRows)
 	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	event, err := store.CreateConfidenceEvent(ctx, "r1", ConfidenceEventCIFail, -0.5)
 	if err != nil {

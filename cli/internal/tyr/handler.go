@@ -200,7 +200,13 @@ func (h *Handler) updateSaga(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 
-	var update Saga
+	var update struct {
+		Name       string     `json:"name"`
+		Status     SagaStatus `json:"status"`
+		Repos      []string   `json:"repos"`
+		BaseBranch string     `json:"base_branch"`
+		Confidence *float64   `json:"confidence"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
@@ -218,8 +224,8 @@ func (h *Handler) updateSaga(w http.ResponseWriter, r *http.Request, id string) 
 	if update.BaseBranch != "" {
 		existing.BaseBranch = update.BaseBranch
 	}
-	if update.Confidence != 0 {
-		existing.Confidence = update.Confidence
+	if update.Confidence != nil {
+		existing.Confidence = *update.Confidence
 	}
 
 	if err := h.store.UpdateSaga(r.Context(), existing); err != nil {
@@ -378,7 +384,11 @@ func (h *Handler) updatePhaseHandler(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 
-	var update Phase
+	var update struct {
+		Name       string      `json:"name"`
+		Status     PhaseStatus `json:"status"`
+		Confidence *float64    `json:"confidence"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
@@ -390,8 +400,8 @@ func (h *Handler) updatePhaseHandler(w http.ResponseWriter, r *http.Request, id 
 	if update.Status != "" {
 		existing.Status = update.Status
 	}
-	if update.Confidence != 0 {
-		existing.Confidence = update.Confidence
+	if update.Confidence != nil {
+		existing.Confidence = *update.Confidence
 	}
 
 	if err := h.store.UpdatePhase(r.Context(), existing); err != nil {

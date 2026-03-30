@@ -307,13 +307,13 @@ func (s *Store) UpdateRaid(ctx context.Context, raid *Raid) error {
 		UPDATE raids SET name = $1, status = $2, confidence = $3, session_id = $4,
 			branch = $5, chronicle_summary = $6, pr_url = $7, pr_id = $8,
 			reason = $9, retry_count = $10, description = $11, acceptance_criteria = $12,
-			updated_at = $13
-		WHERE id = $14
+			declared_files = $13, estimate_hours = $14, updated_at = $15
+		WHERE id = $16
 	`,
 		raid.Name, raid.Status, raid.Confidence, raid.SessionID,
 		raid.Branch, raid.ChronicleSummary, raid.PRUrl, raid.PRID,
 		raid.Reason, raid.RetryCount, raid.Description, pq.Array(raid.AcceptanceCriteria),
-		raid.UpdatedAt, raid.ID,
+		pq.Array(raid.DeclaredFiles), raid.EstimateHours, raid.UpdatedAt, raid.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update raid %s: %w", raid.ID, err)
@@ -350,6 +350,7 @@ func (s *Store) UpdateRaidStatus(ctx context.Context, id string, newStatus RaidS
 // --- Confidence Events ---
 
 // CreateConfidenceEvent records a confidence change and updates the raid score.
+// Both the event insert and raid confidence update are wrapped in a transaction.
 func (s *Store) CreateConfidenceEvent(ctx context.Context, raidID string, eventType ConfidenceEventType, delta float64) (*ConfidenceEvent, error) {
 	raid, err := s.GetRaid(ctx, raidID)
 	if err != nil {
@@ -367,20 +368,31 @@ func (s *Store) CreateConfidenceEvent(ctx context.Context, raidID string, eventT
 		scoreAfter = 1
 	}
 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+
 	ev := &ConfidenceEvent{}
-	err = s.db.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		INSERT INTO confidence_events (raid_id, event_type, delta, score_after)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at
 	`, raidID, eventType, delta, scoreAfter).Scan(&ev.ID, &ev.CreatedAt)
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, fmt.Errorf("insert confidence event: %w", err)
 	}
 
 	// Update raid confidence.
-	_, err = s.db.ExecContext(ctx, `UPDATE raids SET confidence = $1, updated_at = NOW() WHERE id = $2`, scoreAfter, raidID)
+	_, err = tx.ExecContext(ctx, `UPDATE raids SET confidence = $1, updated_at = NOW() WHERE id = $2`, scoreAfter, raidID)
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, fmt.Errorf("update raid confidence: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit confidence event: %w", err)
 	}
 
 	ev.RaidID = raidID
