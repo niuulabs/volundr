@@ -2645,7 +2645,7 @@ func TestK3sRuntime_Down_WithPostgresStopFail(t *testing.T) {
 	}
 }
 
-// --- Tyr integration tests ---
+// Tyr integration tests.
 
 func TestRenderK3sComposeTemplate_WithTyr(t *testing.T) {
 	data := k3sComposeData{

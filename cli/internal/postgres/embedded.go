@@ -305,7 +305,7 @@ func runMigrationsWithDB(ctx context.Context, db *sql.DB, migrationsDir string) 
 
 // runMigrationsWithTableDB applies all pending up migrations using the provided
 // database connection and the specified tracking table name.
-func runMigrationsWithTableDB(ctx context.Context, db *sql.DB, migrationsDir string, table string) (int, error) {
+func runMigrationsWithTableDB(ctx context.Context, db *sql.DB, migrationsDir, table string) (int, error) {
 	if err := db.PingContext(ctx); err != nil {
 		return 0, fmt.Errorf("ping database: %w", err)
 	}
