@@ -17,6 +17,7 @@ type Config struct {
 	Auth      AuthConfig      `yaml:"auth"`
 	Git       GitConfig       `yaml:"git"`
 	Anthropic AnthropicConfig `yaml:"anthropic"`
+	Web       bool            `yaml:"web"`
 }
 
 // ListenConfig holds the listener settings.
@@ -81,6 +82,7 @@ func DefaultForgeConfig() *Config {
 	volundrDir := filepath.Join(home, ".niuu")
 
 	cfg := &Config{
+		Web: true,
 		Listen: ListenConfig{
 			Host:              "127.0.0.1",
 			Port:              8080,

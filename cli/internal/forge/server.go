@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/niuulabs/volundr/cli/internal/web"
 )
 
 // Server is the main forge server that ties together the store, runner,
@@ -59,6 +61,11 @@ func (s *Server) Run(ctx context.Context) error {
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
 
+	if s.cfg.Web {
+		webCfg := &web.RuntimeConfig{APIBaseURL: fmt.Sprintf("http://%s", addr)}
+		mux.Handle("/", web.Handler(webCfg))
+	}
+
 	s.srv = &http.Server{
 		Addr:              addr,
 		Handler:           s.auth.Wrap(mux),
@@ -86,6 +93,7 @@ func (s *Server) Run(ctx context.Context) error {
 	log.Printf("  workspaces: %s", s.cfg.Forge.WorkspacesDir)
 	log.Printf("  max concurrent sessions: %d", s.cfg.Forge.MaxConcurrent)
 	log.Printf("  auth mode: %s", s.cfg.Auth.Mode)
+	log.Printf("  web ui: %v", s.cfg.Web)
 
 	if s.cfg.Listen.Host == "0.0.0.0" && s.cfg.Auth.Mode == "none" {
 		log.Println("WARNING: listening on all interfaces with auth=none — any network client can create sessions")
