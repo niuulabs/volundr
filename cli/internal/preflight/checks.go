@@ -6,6 +6,7 @@
 package preflight
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -23,7 +24,7 @@ type Result struct {
 }
 
 // CheckBinary verifies that a binary is on PATH and optionally captures its
-// version output. versionArgs are passed to the binary to retrieve a version
+// version output. Version args are passed to the binary to retrieve a version
 // string (e.g. "--version").
 func CheckBinary(name string, versionArgs ...string) Result {
 	r := Result{Name: name + " binary"}
@@ -38,7 +39,7 @@ func CheckBinary(name string, versionArgs ...string) Result {
 	r.Detail = path
 
 	if len(versionArgs) > 0 {
-		cmd := exec.Command(path, versionArgs...) //nolint:gosec // args are hardcoded caller literals
+		cmd := exec.CommandContext(context.Background(), path, versionArgs...) //nolint:gosec // args are hardcoded caller literals
 		out, err := cmd.Output()
 		if err == nil {
 			version := strings.TrimSpace(string(out))
@@ -58,7 +59,8 @@ func CheckPortAvailable(host string, port int) Result {
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	r := Result{Name: fmt.Sprintf("port %d", port)}
 
-	ln, err := net.Listen("tcp", addr)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		r.Message = fmt.Sprintf("port %d on %s is already in use", port, host)
 		return r
@@ -75,7 +77,7 @@ func CheckPortAvailable(host string, port int) Result {
 func CheckDirWritable(dir string) Result {
 	r := Result{Name: "workspace directory"}
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		r.Message = fmt.Sprintf("cannot create directory %s: %v", dir, err)
 		return r
 	}

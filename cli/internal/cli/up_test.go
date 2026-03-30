@@ -127,7 +127,7 @@ func TestRunUpPreflightChecks_PortInUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to bind port: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	addr := ln.Addr().(*net.TCPAddr)
 
 	cfg, err := config.DefaultConfig()
