@@ -25,7 +25,7 @@ from tyr.api.dispatch import (
     resolve_volundr_factory,
 )
 from tyr.api.tracker import resolve_trackers
-from tyr.config import AIModelConfig, AuthConfig, Settings
+from tyr.config import AIModelConfig, AuthConfig, ContractConfig, Settings
 from tyr.config import DispatchConfig as DispatchCfg
 from tyr.domain.models import (
     Saga,
@@ -162,6 +162,7 @@ class MockVolundrFactory:
 def _make_settings(**overrides) -> Settings:
     """Build a Settings with dispatch defaults and anonymous dev enabled."""
     overrides.setdefault("auth", AuthConfig(allow_anonymous_dev=True))
+    overrides.setdefault("contract", ContractConfig(contract_enabled=False))
     return Settings(
         dispatch=DispatchCfg(
             default_system_prompt="Be helpful.",
@@ -262,7 +263,7 @@ def saga_repo() -> MockSagaRepo:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=datetime.now(UTC),
-        base_branch="dev",
+            base_branch="dev",
         )
     )
     return repo
@@ -432,6 +433,67 @@ class TestBuildPrompt:
         assert "Implement OAuth" in prompt
         assert "niu-42" in prompt  # raid_branch is lowercased identifier
         assert "feat/saga" in prompt
+
+    def test_wait_for_contract_prepends_wait_prompt(self):
+        issue = TrackerIssue(
+            id="1",
+            identifier="X-1",
+            title="Task",
+            description="Do stuff",
+            status="Todo",
+        )
+        wait = "Stand by for contract."
+        prompt = _build_prompt(
+            issue,
+            "org/repo",
+            "feat/alpha",
+            wait_for_contract=True,
+            wait_prompt=wait,
+        )
+        assert prompt.startswith(wait)
+        assert "\n\n---\n\n" in prompt
+        # Original content still present after the separator
+        assert "X-1" in prompt
+        assert "Task" in prompt
+
+    def test_wait_for_contract_false_no_prepend(self):
+        issue = TrackerIssue(
+            id="1",
+            identifier="X-1",
+            title="Task",
+            description="Do stuff",
+            status="Todo",
+        )
+        prompt = _build_prompt(
+            issue,
+            "org/repo",
+            "feat/alpha",
+            wait_for_contract=False,
+            wait_prompt="should not appear",
+        )
+        assert "should not appear" not in prompt
+
+    def test_wait_for_contract_with_template(self):
+        issue = TrackerIssue(
+            id="1",
+            identifier="NIU-10",
+            title="Auth",
+            description="OAuth flow",
+            status="Todo",
+        )
+        template = "Task: {identifier}\n{description}"
+        wait = "Contract pending."
+        prompt = _build_prompt(
+            issue,
+            "org/repo",
+            "feat/saga",
+            template=template,
+            wait_for_contract=True,
+            wait_prompt=wait,
+        )
+        assert prompt.startswith("Contract pending.\n\n---\n\n")
+        assert "NIU-10" in prompt
+        assert "OAuth flow" in prompt
 
 
 # -------------------------------------------------------------------
@@ -843,6 +905,223 @@ class TestApproveDispatch:
         data = resp.json()
         assert len(data) == 1
         assert data[0]["status"] == "spawned"
+
+
+# -------------------------------------------------------------------
+# Contract dispatch tests
+# -------------------------------------------------------------------
+
+
+class TestContractDispatch:
+    """Tests for dual-spawn contract negotiation at dispatch time."""
+
+    def _make_contract_client(
+        self,
+        mock_tracker: MockTracker,
+        mock_volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+        *,
+        contract_enabled: bool = True,
+    ) -> TestClient:
+        app = FastAPI()
+        app.include_router(create_dispatch_router())
+        app.state.settings = _make_settings(
+            contract=ContractConfig(contract_enabled=contract_enabled),
+        )
+        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
+        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+        app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
+        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        return app, TestClient(app)
+
+    def test_contract_enabled_spawns_two_sessions(
+        self,
+        mock_tracker: MockTracker,
+        mock_volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+    ):
+        """contract_enabled=True spawns working + planner sessions."""
+        _, client = self._make_contract_client(
+            mock_tracker,
+            mock_volundr,
+            saga_repo,
+            contract_enabled=True,
+        )
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {"saga_id": saga_id, "issue_id": "i-1", "repo": "org/repo-a"},
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["status"] == "spawned"
+
+        # Two sessions: working + planner
+        assert len(mock_volundr.spawned) == 2
+
+        working_req = mock_volundr.spawned[0]
+        planner_req = mock_volundr.spawned[1]
+
+        # Working session has wait prompt prepended
+        assert "Stand by" in working_req.initial_prompt
+        assert "---" in working_req.initial_prompt
+        assert working_req.workload_type == "default"
+
+        # Planner session uses contract config
+        assert planner_req.workload_type == "contract"
+        assert planner_req.profile == "planner"
+        assert planner_req.name == "contract-alpha-1"
+        assert "Sprint Contract" in planner_req.initial_prompt
+
+    def test_contract_disabled_spawns_one_session(
+        self,
+        mock_tracker: MockTracker,
+        mock_volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+    ):
+        """contract_enabled=False uses existing QUEUED→RUNNING path."""
+        _, client = self._make_contract_client(
+            mock_tracker,
+            mock_volundr,
+            saga_repo,
+            contract_enabled=False,
+        )
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {"saga_id": saga_id, "issue_id": "i-1", "repo": "org/repo-a"},
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["status"] == "spawned"
+
+        # Only one session (working), no planner
+        assert len(mock_volundr.spawned) == 1
+        req = mock_volundr.spawned[0]
+        assert "Stand by" not in req.initial_prompt
+        assert req.workload_type == "default"
+
+    def test_contract_enabled_working_session_id_in_planner_prompt(
+        self,
+        mock_tracker: MockTracker,
+        mock_volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+    ):
+        """Planner initial prompt contains the working session ID."""
+        _, client = self._make_contract_client(
+            mock_tracker,
+            mock_volundr,
+            saga_repo,
+            contract_enabled=True,
+        )
+        saga_id = str(saga_repo.sagas[0].id)
+        client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {"saga_id": saga_id, "issue_id": "i-1", "repo": "org/repo-a"},
+                ],
+            },
+        )
+        planner_req = mock_volundr.spawned[1]
+        # The working session id is "ses-1" (first spawn)
+        assert "ses-1" in planner_req.initial_prompt
+
+    def test_contract_enabled_planner_uses_contract_model(
+        self,
+        mock_tracker: MockTracker,
+        mock_volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+    ):
+        """Planner session uses the contract model, not the dispatch model."""
+        _, client = self._make_contract_client(
+            mock_tracker,
+            mock_volundr,
+            saga_repo,
+            contract_enabled=True,
+        )
+        saga_id = str(saga_repo.sagas[0].id)
+        client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {"saga_id": saga_id, "issue_id": "i-1", "repo": "org/repo-a"},
+                ],
+                "model": "claude-opus-4-6",
+            },
+        )
+        working_req = mock_volundr.spawned[0]
+        planner_req = mock_volundr.spawned[1]
+
+        # Working session uses the request model
+        assert working_req.model == "claude-opus-4-6"
+        # Planner uses contract config model (default: claude-sonnet-4-6)
+        assert planner_req.model == "claude-sonnet-4-6"
+
+    def test_contract_enabled_result_returns_working_session_id(
+        self,
+        mock_tracker: MockTracker,
+        mock_volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+    ):
+        """DispatchResult returns the working session, not the planner."""
+        _, client = self._make_contract_client(
+            mock_tracker,
+            mock_volundr,
+            saga_repo,
+            contract_enabled=True,
+        )
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {"saga_id": saga_id, "issue_id": "i-1", "repo": "org/repo-a"},
+                ],
+            },
+        )
+        data = resp.json()
+        # The result should have the working session id (ses-1), not planner (ses-2)
+        assert data[0]["session_id"] == "ses-1"
+
+    def test_contract_enabled_multiple_items(
+        self,
+        mock_tracker: MockTracker,
+        mock_volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+    ):
+        """Multiple items with contract_enabled spawns two sessions per item."""
+        _, client = self._make_contract_client(
+            mock_tracker,
+            mock_volundr,
+            saga_repo,
+            contract_enabled=True,
+        )
+        saga_id = str(saga_repo.sagas[0].id)
+        resp = client.post(
+            "/api/v1/tyr/dispatch/approve",
+            json={
+                "items": [
+                    {"saga_id": saga_id, "issue_id": "i-1", "repo": "org/repo-a"},
+                    {"saga_id": saga_id, "issue_id": "i-3", "repo": "org/repo-b"},
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+        # 4 total: 2 working + 2 planner
+        assert len(mock_volundr.spawned) == 4
 
 
 # -------------------------------------------------------------------

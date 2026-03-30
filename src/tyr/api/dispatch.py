@@ -17,6 +17,7 @@ from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.domain.models import RaidStatus, TrackerIssue
+from tyr.domain.services.contract_engine import build_contract_initial_prompt
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
@@ -165,16 +166,21 @@ def _build_prompt(
     repo: str,
     feature_branch: str,
     template: str = "",
+    *,
+    wait_for_contract: bool = False,
+    wait_prompt: str = "",
 ) -> str:
     """Build the initial prompt for a session from a tracker issue.
 
     Uses the configurable template if provided, otherwise falls back to
-    a minimal default.
+    a minimal default.  When *wait_for_contract* is True the
+    *wait_prompt* is prepended so the working session pauses until the
+    contract planner delivers a CONTRACT_AGREED message.
     """
     raid_branch = issue.identifier.lower()
 
     if template:
-        return template.format(
+        body = template.format(
             identifier=issue.identifier,
             title=issue.title,
             description=issue.description or "",
@@ -182,21 +188,26 @@ def _build_prompt(
             feature_branch=feature_branch,
             raid_branch=raid_branch,
         )
+    else:
+        # Minimal fallback when no template is configured.
+        parts = [
+            f"# Task: {issue.identifier} — {issue.title}",
+            "",
+            issue.description or "",
+            "",
+            f"Repository: {repo}",
+            f"Feature branch: {feature_branch}",
+            f"Create a working branch: `{raid_branch}`",
+            "",
+            "Implement the task, write tests, create a PR against"
+            f" `{feature_branch}`, and ensure CI passes.",
+        ]
+        body = "\n".join(parts)
 
-    # Minimal fallback when no template is configured.
-    parts = [
-        f"# Task: {issue.identifier} — {issue.title}",
-        "",
-        issue.description or "",
-        "",
-        f"Repository: {repo}",
-        f"Feature branch: {feature_branch}",
-        f"Create a working branch: `{raid_branch}`",
-        "",
-        "Implement the task, write tests, create a PR against"
-        f" `{feature_branch}`, and ensure CI passes.",
-    ]
-    return "\n".join(parts)
+    if wait_for_contract and wait_prompt:
+        return wait_prompt + "\n\n---\n\n" + body
+
+    return body
 
 
 # ---------------------------------------------------------------------------
@@ -388,8 +399,10 @@ def create_dispatch_router() -> APIRouter:
             target_volundr = _resolve_target_adapter(target_connection, adapter_by_name, volundr)
 
             session_name = issue.identifier.lower()
+            contract_enabled = settings.contract.contract_enabled
 
             try:
+                # Spawn the working session — with wait prompt when contracting
                 session = await target_volundr.spawn_session(
                     request=SpawnRequest(
                         name=session_name,
@@ -401,33 +414,74 @@ def create_dispatch_router() -> APIRouter:
                         tracker_issue_url=issue.url,
                         system_prompt=effective_prompt,
                         initial_prompt=_build_prompt(
-                            issue, item.repo, saga.feature_branch,
+                            issue,
+                            item.repo,
+                            saga.feature_branch,
                             template=settings.dispatch.dispatch_prompt_template,
+                            wait_for_contract=contract_enabled,
+                            wait_prompt=settings.contract.working_session_wait_prompt,
                         ),
                         integration_ids=integration_ids,
                     ),
                     auth_token=auth_token,
                 )
-                # Record raid progress and set tracker issue to In Progress
+
+                if contract_enabled:
+                    # Dual-spawn: transition QUEUED → CONTRACTING and spawn planner
+                    target_status = RaidStatus.CONTRACTING
+
+                    # Spawn planner session
+                    planner_session = await target_volundr.spawn_session(
+                        request=SpawnRequest(
+                            name=f"contract-{session_name}",
+                            repo=item.repo,
+                            branch=saga.feature_branch,
+                            base_branch=saga.base_branch,
+                            model=settings.contract.contract_model,
+                            tracker_issue_id=issue.identifier,
+                            tracker_issue_url=issue.url,
+                            system_prompt=settings.contract.contract_system_prompt,
+                            initial_prompt=build_contract_initial_prompt(
+                                raid_tracker_id=issue.identifier,
+                                raid_name=issue.title,
+                                raid_description=issue.description or "",
+                                acceptance_criteria=[],
+                                declared_files=[],
+                                working_session_id=session.id,
+                                max_rounds=settings.contract.contract_max_rounds,
+                                template=settings.contract.contract_initial_prompt_template,
+                            ),
+                            workload_type="contract",
+                            profile=settings.contract.contract_profile,
+                            integration_ids=integration_ids,
+                        ),
+                        auth_token=auth_token,
+                    )
+                else:
+                    target_status = RaidStatus.RUNNING
+                    planner_session = None
+
+                # Record raid progress and set tracker issue status
                 for adapter in adapters:
                     try:
                         await adapter.update_raid_progress(
                             issue.id,
-                            status=RaidStatus.RUNNING,
+                            status=target_status,
                             session_id=session.id,
                             owner_id=principal.user_id,
                             phase_tracker_id=issue.milestone_id,
                             saga_tracker_id=saga.tracker_id,
+                            planner_session_id=(planner_session.id if planner_session else None),
                         )
                     except Exception:
                         logger.warning(
                             "Failed to update raid progress for %s", issue.id, exc_info=True
                         )
                     try:
-                        await adapter.update_raid_state(issue.id, RaidStatus.RUNNING)
+                        await adapter.update_raid_state(issue.id, target_status)
                     except Exception:
                         logger.warning(
-                            "Failed to set tracker issue %s to In Progress", issue.id, exc_info=True
+                            "Failed to set tracker issue %s status", issue.id, exc_info=True
                         )
 
                 results.append(
@@ -439,7 +493,12 @@ def create_dispatch_router() -> APIRouter:
                         cluster_name=session.cluster_name,
                     )
                 )
-                logger.info("Dispatched %s → session %s", issue.identifier, session.id)
+                logger.info(
+                    "Dispatched %s → session %s%s",
+                    issue.identifier,
+                    session.id,
+                    f" (contract planner: {planner_session.id})" if planner_session else "",
+                )
             except Exception:
                 logger.error("Failed to spawn session for %s", issue.identifier, exc_info=True)
                 results.append(
