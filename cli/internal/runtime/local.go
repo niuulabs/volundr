@@ -353,6 +353,46 @@ func StatusFromStateFile() (*StackStatus, error) {
 	return status, nil
 }
 
+// defaultMaxSessions is the default max concurrent sessions for local mode.
+const defaultMaxSessions = 4
+
+// RichStatus returns detailed status including session info for local runtime.
+func (r *LocalRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*RichStatus, error) {
+	cfgDir, err := config.ConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("get config dir: %w", err)
+	}
+
+	rs := &RichStatus{
+		Mode: "local",
+	}
+
+	// Check if server is running via PID file.
+	pid, running := checkPIDFile(cfgDir)
+	if !running {
+		rs.Server = ComponentStatus{Status: "stopped"}
+		rs.Database = ComponentStatus{Status: "stopped"}
+		rs.Sessions = SessionSummary{Max: defaultMaxSessions}
+		return rs, nil
+	}
+
+	listenAddr := fmt.Sprintf("%s:%d", cfg.Listen.Host, cfg.Listen.Port)
+	rs.Server = ComponentStatus{
+		Status:  "running",
+		Address: listenAddr,
+		PID:     pid,
+	}
+	rs.WebUI = fmt.Sprintf("http://%s", listenAddr)
+
+	// Database status.
+	rs.Database = databaseStatus(cfg)
+
+	// Fetch sessions from the API.
+	rs.Sessions = buildSessionSummary(ctx, listenAddr)
+
+	return rs, nil
+}
+
 func (r *LocalRuntime) startAPI(ctx context.Context, cfg *config.Config, port int) error {
 	cfgDir, err := config.ConfigDir()
 	if err != nil {

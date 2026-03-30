@@ -94,6 +94,36 @@ func WriteStateFile(services []ServiceStatus) error {
 	return os.WriteFile(stateFilePath, data, 0o600)
 }
 
+// checkPIDFile reads the PID file from the given config directory and
+// verifies the process is alive. Returns (pid, true) if running, (0, false)
+// if stopped or the PID file is missing/stale.
+func checkPIDFile(cfgDir string) (int, bool) {
+	pidPath := filepath.Join(cfgDir, PIDFile)
+	data, err := os.ReadFile(pidPath) //nolint:gosec // path derived from trusted config directory
+	if err != nil {
+		return 0, false
+	}
+
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		_ = os.Remove(pidPath)
+		return 0, false
+	}
+
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		_ = os.Remove(pidPath)
+		return 0, false
+	}
+
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		_ = os.Remove(pidPath)
+		return 0, false
+	}
+
+	return pid, true
+}
+
 // RemoveStateFile removes the state file.
 func RemoveStateFile() error {
 	cfgDir, err := config.ConfigDir()
