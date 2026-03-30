@@ -248,6 +248,7 @@ class TestCommitSagaIdempotency:
                 status=SagaStatus.ACTIVE,
                 confidence=0.5,
                 created_at=datetime.now(UTC),
+                base_branch="dev",
                 owner_id="default",
             )
         )
@@ -323,11 +324,10 @@ class TestCommitSagaCustomBaseBranch:
         _, _, base = mock_git.branches_created[0]
         assert base == "develop"
 
-    def test_default_base_branch_is_main(self, client: TestClient) -> None:
+    def test_missing_base_branch_returns_422(self, client: TestClient) -> None:
         body = {k: v for k, v in VALID_COMMIT_BODY.items() if k != "base_branch"}
         resp = client.post("/api/v1/tyr/sagas/commit", json=body)
-        assert resp.status_code == 201
-        assert resp.json()["base_branch"] == "main"
+        assert resp.status_code == 422
 
 
 class TestCommitSagaOwnership:

@@ -262,6 +262,7 @@ def saga_repo() -> MockSagaRepo:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=datetime.now(UTC),
+        base_branch="dev",
         )
     )
     return repo

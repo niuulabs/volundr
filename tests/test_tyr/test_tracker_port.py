@@ -93,6 +93,7 @@ class ConcreteTracker(TrackerPort):
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
+        base_branch="dev",
         )
 
     async def get_phase(self, tracker_id: str) -> Phase:
@@ -221,6 +222,7 @@ class TestConcreteTracker:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
+        base_branch="dev",
         )
         result = await tracker.create_saga(saga)
         assert result == "saga-1"

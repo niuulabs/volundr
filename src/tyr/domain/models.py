@@ -98,7 +98,7 @@ class Saga:
     status: SagaStatus
     confidence: float
     created_at: datetime
-    base_branch: str = "main"
+    base_branch: str
     owner_id: str = ""
 
 

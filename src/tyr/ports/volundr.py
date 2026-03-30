@@ -22,7 +22,7 @@ class SpawnRequest:
     tracker_issue_url: str
     system_prompt: str
     initial_prompt: str
-    base_branch: str = "main"
+    base_branch: str
     workload_type: str = "default"
     profile: str | None = None
     integration_ids: list[str] = field(default_factory=list)

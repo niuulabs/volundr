@@ -60,6 +60,7 @@ def _spawn_request() -> SpawnRequest:
         tracker_issue_url="https://linear.app/niuu/issue/NIU-234",
         system_prompt="You are a senior software engineer.",
         initial_prompt="Implement the feature.",
+        base_branch="dev",
     )
 
 

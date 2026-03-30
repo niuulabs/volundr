@@ -77,6 +77,7 @@ class TestSpawnSession:
             tracker_issue_url="https://linear.app/i-1",
             system_prompt="Be helpful.",
             initial_prompt="Do the thing.",
+            base_branch="dev",
         )
         session = await adapter.spawn_session(req)
 
@@ -109,6 +110,7 @@ class TestSpawnSession:
             tracker_issue_url="https://example.com/X-1",
             system_prompt="prompt",
             initial_prompt="go",
+            base_branch="dev",
         )
         await adapter.spawn_session(req)
 
@@ -149,6 +151,7 @@ class TestSpawnSession:
             tracker_issue_url="",
             system_prompt="",
             initial_prompt="",
+            base_branch="dev",
         )
         await adapter.spawn_session(req, auth_token="my-token")
 
@@ -169,6 +172,7 @@ class TestSpawnSession:
             tracker_issue_url="",
             system_prompt="",
             initial_prompt="",
+            base_branch="dev",
         )
         with pytest.raises(httpx.HTTPStatusError):
             await adapter.spawn_session(req)

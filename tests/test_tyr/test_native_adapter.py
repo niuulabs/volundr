@@ -57,6 +57,7 @@ def _make_saga(
         status=SagaStatus.ACTIVE,
         confidence=0.8,
         created_at=NOW,
+    base_branch="dev",
     )
 
 
@@ -115,6 +116,7 @@ def _saga_record(saga: Saga, tracker_id: str) -> dict:
         "status": saga.status.value,
         "confidence": saga.confidence,
         "created_at": saga.created_at,
+        "base_branch": saga.base_branch,
     }
 
 

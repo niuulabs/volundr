@@ -145,6 +145,7 @@ class PlanRequest(BaseModel):
 
     spec: str = Field(min_length=1)
     repo: str = Field(min_length=1)
+    base_branch: str = Field(description="Base branch for the planning session")
     model: str = Field(default="")
 
 
@@ -173,7 +174,7 @@ class CommitRequest(BaseModel):
     slug: str
     description: str = ""
     repos: list[str]
-    base_branch: str = "main"
+    base_branch: str
     phases: list[PhaseSpecRequest]
     transcript: str | None = None
 
@@ -495,7 +496,8 @@ def create_sagas_router() -> APIRouter:
                 SpawnRequest(
                     name=f"plan-{principal.user_id[:8]}",
                     repo=body.repo,
-                    branch="main",
+                    branch=body.base_branch,
+                    base_branch=body.base_branch,
                     model=model,
                     tracker_issue_id="",
                     tracker_issue_url="",

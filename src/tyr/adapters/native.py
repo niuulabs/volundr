@@ -504,6 +504,7 @@ class NativeTrackerAdapter(TrackerPort):
             status=SagaStatus(row.get("status", "ACTIVE") or "ACTIVE"),
             confidence=row["confidence"] or 0.0,
             created_at=row["created_at"] or datetime.now(UTC),
+            base_branch=row["base_branch"],
         )
 
     @staticmethod

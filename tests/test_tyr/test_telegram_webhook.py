@@ -413,6 +413,7 @@ def _make_saga(owner_id: str = OWNER_ID) -> Saga:
         status=SagaStatus.ACTIVE,
         confidence=0.0,
         created_at=datetime.now(UTC),
+        base_branch="dev",
         owner_id=owner_id,
     )
 

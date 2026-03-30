@@ -290,6 +290,7 @@ class TestCreateSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
+        base_branch="dev",
         )
 
         result = await adapter.create_saga(saga)
@@ -314,6 +315,7 @@ class TestCreateSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
+        base_branch="dev",
         )
 
         with pytest.raises(GraphQLError, match="Failed to create Linear project"):

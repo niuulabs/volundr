@@ -39,6 +39,7 @@ def saga() -> Saga:
         status=SagaStatus.ACTIVE,
         confidence=0.0,
         created_at=datetime.now(UTC),
+        base_branch="dev",
     )
 
 
@@ -76,6 +77,7 @@ class TestListSagas:
                 "status": "ACTIVE",
                 "confidence": 0.0,
                 "created_at": saga.created_at,
+                "base_branch": "dev",
             }
         ]
         result = await repo.list_sagas()
@@ -98,6 +100,7 @@ class TestListSagas:
                 "status": "ACTIVE",
                 "confidence": 0.0,
                 "created_at": saga.created_at,
+                "base_branch": "dev",
             }
         ]
         result = await repo.list_sagas(owner_id="user-1")
@@ -135,6 +138,7 @@ class TestGetSaga:
             "status": "ACTIVE",
             "confidence": 0.0,
             "created_at": saga.created_at,
+            "base_branch": "dev",
         }
         result = await repo.get_saga(saga.id)
         assert result is not None
@@ -155,6 +159,7 @@ class TestGetSaga:
             "status": "ACTIVE",
             "confidence": 0.0,
             "created_at": saga.created_at,
+            "base_branch": "dev",
         }
         result = await repo.get_saga(saga.id, owner_id="user-1")
         assert result is not None

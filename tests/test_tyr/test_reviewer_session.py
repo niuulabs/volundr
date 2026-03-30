@@ -1067,6 +1067,7 @@ class TestSpawnRequestProfile:
             tracker_issue_url="https://example.com",
             system_prompt="prompt",
             initial_prompt="go",
+            base_branch="dev",
         )
         assert req.profile is None
 
@@ -1080,6 +1081,7 @@ class TestSpawnRequestProfile:
             tracker_issue_url="https://example.com",
             system_prompt="prompt",
             initial_prompt="go",
+            base_branch="dev",
             profile="reviewer",
         )
         assert req.profile == "reviewer"

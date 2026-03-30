@@ -343,7 +343,7 @@ class ReviewerSessionService:
             name=f"review-{(raid.identifier or raid.tracker_id[:8]).lower()}",
             repo=working_session.repo if working_session else "",
             branch=working_session.name if working_session else "",
-            base_branch=working_session.branch if working_session else "main",
+            base_branch=working_session.base_branch if working_session else "",
             model=self._cfg.reviewer_model,
             tracker_issue_id=raid.identifier or raid.tracker_id,
             tracker_issue_url=raid.url or raid.pr_url or "",

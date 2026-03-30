@@ -72,6 +72,7 @@ class MockTracker(TrackerPort):
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
+        base_branch="dev",
         )
 
     async def get_phase(self, tracker_id: str) -> Phase:
@@ -418,6 +419,7 @@ class TestImportProject:
             json={
                 "project_id": "proj-1",
                 "repos": ["org/repo"],
+                "base_branch": "dev",
             },
         )
         assert resp.status_code == 200
@@ -436,6 +438,7 @@ class TestImportProject:
             json={
                 "project_id": "nonexistent",
                 "repos": ["org/repo"],
+                "base_branch": "dev",
             },
         )
         assert resp.status_code == 404

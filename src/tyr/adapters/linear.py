@@ -1057,6 +1057,7 @@ class LinearTrackerAdapter(TrackerPort):
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
+            base_branch="",
         )
 
     @staticmethod

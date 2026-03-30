@@ -166,7 +166,7 @@ class PostgresSagaRepository(SagaRepository):
             name=row["name"],
             repos=list(row["repos"]),
             feature_branch=row.get("feature_branch") or f"feat/{slug}",
-            base_branch=row.get("base_branch") or "main",
+            base_branch=row["base_branch"],
             status=SagaStatus(row.get("status", "ACTIVE") or "ACTIVE"),
             confidence=row["confidence"] or 0.0,
             created_at=row["created_at"] or datetime.now(UTC),
