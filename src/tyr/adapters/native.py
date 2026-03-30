@@ -98,9 +98,7 @@ class NativeTrackerAdapter(TrackerPort):
         )
         return tracker_id
 
-    async def create_raid(
-        self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
-    ) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         tracker_id = str(raid.id)
         await self._pool.execute(
             """
@@ -253,6 +251,7 @@ class NativeTrackerAdapter(TrackerPort):
         chronicle_summary: str | None = None,
         reviewer_session_id: str | None = None,
         review_round: int | None = None,
+        planner_session_id: str | None = None,
     ) -> Raid:
         row = await self._pool.fetchrow(
             """
@@ -267,6 +266,7 @@ class NativeTrackerAdapter(TrackerPort):
                 chronicle_summary   = COALESCE($9, chronicle_summary),
                 reviewer_session_id = COALESCE($10, reviewer_session_id),
                 review_round        = COALESCE($11, review_round),
+                planner_session_id  = COALESCE($12, planner_session_id),
                 updated_at          = NOW()
             WHERE tracker_id = $1
             RETURNING *
@@ -282,6 +282,7 @@ class NativeTrackerAdapter(TrackerPort):
             chronicle_summary,
             reviewer_session_id,
             review_round,
+            planner_session_id,
         )
         if row is None:
             raise LookupError(f"Raid not found: {tracker_id}")
@@ -543,6 +544,7 @@ class NativeTrackerAdapter(TrackerPort):
             updated_at=row["updated_at"] or datetime.now(UTC),
             reviewer_session_id=row.get("reviewer_session_id"),
             review_round=row.get("review_round", 0) or 0,
+            planner_session_id=row.get("planner_session_id"),
         )
 
     async def _saga_row_to_project(self, row: asyncpg.Record) -> TrackerProject:

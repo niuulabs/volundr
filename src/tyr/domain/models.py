@@ -143,6 +143,7 @@ class Raid:
     url: str = ""
     reviewer_session_id: str | None = None
     review_round: int = 0
+    planner_session_id: str | None = None
 
 
 @dataclass(frozen=True)
