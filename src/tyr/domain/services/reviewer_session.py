@@ -106,6 +106,43 @@ def _build_review_loop_section(
     )
 
 
+def _build_runtime_qa_section(launch_command: str | None) -> str:
+    if not launch_command:
+        return ""
+    return (
+        "## Runtime QA\n"
+        "\n"
+        "Start the application before reviewing code:\n"
+        "\n"
+        "```bash\n"
+        f"{launch_command} &\n"
+        "APP_PID=$!\n"
+        "until curl -sf http://localhost:8000/health 2>/dev/null; do sleep 1; done\n"
+        'echo "App ready"\n'
+        "```\n"
+        "\n"
+        "For **each acceptance criterion**, make at least one verifiable assertion:\n"
+        "\n"
+        "* `curl -sf http://localhost:8000/...` for API endpoints\n"
+        "* `pytest -x -q` if a test suite exists\n"
+        "* Check database state where relevant\n"
+        "\n"
+        "Score **deductions** (mandatory — do not skip):\n"
+        "\n"
+        "* App won't start → confidence −0.4, approved=false\n"
+        "* Test suite red (any failure) → confidence −0.3, approved=false\n"
+        "* Criterion not exercised → confidence −0.1 per criterion\n"
+        "* HTTP 4xx/5xx on criterion exercise → confidence −0.2 per criterion\n"
+        "\n"
+        "Kill the app before finishing:\n"
+        "\n"
+        "```bash\n"
+        "kill $APP_PID 2>/dev/null || true\n"
+        "```\n"
+        "\n"
+    )
+
+
 def build_reviewer_initial_prompt(
     raid: Raid,
     pr_status: PRStatus | None,
@@ -131,6 +168,7 @@ def build_reviewer_initial_prompt(
         "changed_files_section": _build_changed_files_section(changed_files),
         "diff_summary_section": _build_diff_summary_section(diff_summary),
         "review_loop_section": _build_review_loop_section(working_session_id, max_review_rounds),
+        "runtime_qa_section": _build_runtime_qa_section(launch_command),
     }
 
     if template:
@@ -147,6 +185,7 @@ def build_reviewer_initial_prompt(
         f"{sections['changed_files_section']}"
         f"{sections['diff_summary_section']}"
         f"{sections['review_loop_section']}"
+        f"{sections['runtime_qa_section']}"
         "Review the PR and output your assessment as JSON."
     )
 
