@@ -255,6 +255,14 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 			}
 			data, _ := json.Marshal(event)
 			_, _ = fmt.Fprintf(w, "event: session_activity\ndata: %s\n\n", data)
+
+			// Also emit session_updated so the UI picks up status transitions
+			// (starting → running, running → stopped, etc.).
+			if sess := h.runner.GetSession(event.SessionID); sess != nil {
+				sessData, _ := json.Marshal(sess.ToResponse())
+				_, _ = fmt.Fprintf(w, "event: session_updated\ndata: %s\n\n", sessData)
+			}
+
 			flusher.Flush()
 		}
 	}
