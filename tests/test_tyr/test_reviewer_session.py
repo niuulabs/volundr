@@ -415,9 +415,9 @@ class TestBuildReviewerInitialPrompt:
 class TestReviewerSystemPromptConfig:
     """Tests for the system prompt in ReviewConfig."""
 
-    def test_default_prompt_is_empty(self) -> None:
+    def test_default_prompt_has_content(self) -> None:
         cfg = ReviewConfig()
-        assert cfg.reviewer_system_prompt == ""
+        assert "code reviewer" in cfg.reviewer_system_prompt.lower()
 
     def test_prompt_overridable_via_config(self) -> None:
         cfg = ReviewConfig(reviewer_system_prompt="Custom prompt for this deploy")
@@ -461,8 +461,7 @@ class TestSpawnReviewer:
         assert req.workload_type == "reviewer"
         assert req.tracker_issue_id == "NIU-100"
         assert req.integration_ids == ["int-1", "int-2"]
-        # System prompt comes from config (empty default, set via tyr.yaml)
-        assert isinstance(req.system_prompt, str)
+        assert "code reviewer" in req.system_prompt.lower()
 
     @pytest.mark.asyncio
     async def test_spawn_with_no_volundr_adapter(self) -> None:
@@ -1104,7 +1103,7 @@ class TestReviewConfigReviewerFields:
         assert cfg.reviewer_profile == "reviewer"
         assert cfg.reviewer_confidence_weight == 0.60
         assert cfg.reviewer_spawn_bonus == 0.1
-        assert cfg.reviewer_system_prompt == ""  # set via tyr.yaml, not code defaults
+        assert "code reviewer" in cfg.reviewer_system_prompt.lower()
 
     def test_no_polling_config(self) -> None:
         """Ensure timeout/poll_interval fields do NOT exist."""

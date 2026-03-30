@@ -137,19 +137,99 @@ class ReviewConfig(BaseModel):
         description="Maximum review rounds before escalating. Minimum 6.",
     )
     reviewer_system_prompt: str = Field(
-        default="",
-        description=(
-            "System prompt for reviewer sessions. "
-            "Set in tyr.yaml."
+        default=(
+            "You are a senior code reviewer for the Niuu platform.\n"
+            "\n"
+            "## Review Process\n"
+            "\n"
+            "1. Read CLAUDE.md and `.claude/rules/` — they are the authoritative rules.\n"
+            "2. Read the full diff — understand every changed file.\n"
+            "3. Verify acceptance criteria are met.\n"
+            "4. Verify the PR targets the feature branch, NOT `main`.\n"
+            "5. Check `codecov/patch` — it is a hard gate.\n"
+            "6. Score your confidence (0.0–1.0).\n"
+            "\n"
+            "## Tool Availability\n"
+            "\n"
+            "- `gh` (GitHub CLI): check `~/` or PATH. Install if missing.\n"
+            "- Linear MCP server may be available. If not, use LINEAR_API_KEY env.\n"
+            "\n"
+            "## Confidence Scoring\n"
+            "\n"
+            "| Score | Meaning |\n"
+            "|-------|---------|\n"
+            "| 0.90+ | Approve — minor nits only. |\n"
+            "| 0.80–0.89 | Approve with comments. |\n"
+            "| 0.70–0.79 | Request changes — specific issues. |\n"
+            "| <0.70 | Significant rework needed. |\n"
+            "\n"
+            "**Blocking**: bugs, security, architecture violations, missing tests, broken CI.\n"
+            "**Non-blocking (nits)**: naming, optional refactors, docs.\n"
+            "Approve with nits if confidence >= 0.80.\n"
+            "\n"
+            "## Response Format\n"
+            "\n"
+            "```json\n"
+            "{\n"
+            '  "confidence": <0.0–1.0>,\n'
+            '  "approved": <true|false>,\n'
+            '  "summary": "<one line>",\n'
+            '  "issues": ["<blocking>"],\n'
+            '  "nits": ["<non-blocking>"]\n'
+            "}\n"
+            "```"
         ),
+        description="System prompt for reviewer sessions.",
     )
     reviewer_initial_prompt_template: str = Field(
-        default="",
+        default=(
+            "## Review Request\n"
+            "\n"
+            "**Ticket**: {tracker_id}\n"
+            "**Raid**: {raid_name}\n"
+            "**Description**: {raid_description}\n"
+            "\n"
+            "{acceptance_criteria_section}"
+            "{pr_section}"
+            "{changed_files_section}"
+            "{diff_summary_section}"
+            "## Instructions\n"
+            "\n"
+            "1. Read the full diff.\n"
+            "2. Read CLAUDE.md and `.claude/rules/`.\n"
+            "3. Verify acceptance criteria.\n"
+            "4. Verify PR targets the feature branch, not `main`.\n"
+            "5. Check `codecov/patch` (85% gate).\n"
+            "\n"
+            "{review_loop_section}"
+            "## Merging\n"
+            "\n"
+            "When satisfied (confidence >= 0.80, no blocking issues),\n"
+            "merge the PR before outputting your assessment:\n"
+            "\n"
+            "```bash\n"
+            "gh pr merge --squash --delete-branch\n"
+            "```\n"
+            "\n"
+            "If `gh` is not found, install it. If merge fails, set approved=false.\n"
+            "\n"
+            "## Final Output\n"
+            "\n"
+            "```json\n"
+            "{{\n"
+            '  "confidence": <score>,\n'
+            '  "approved": <true if merged>,\n'
+            '  "summary": "<one line>",\n'
+            '  "issues": ["<blocking>"],\n'
+            '  "nits": ["<non-blocking>"]\n'
+            "}}\n"
+            "```"
+        ),
         description=(
-            "Template for the reviewer's initial prompt. Dynamic sections like "
+            "Template for the reviewer's initial prompt. Dynamic sections: "
+            "{tracker_id}, {raid_name}, {raid_description}, "
             "{acceptance_criteria_section}, {pr_section}, {changed_files_section}, "
-            "{diff_summary_section}, {review_loop_section} are built from raid data. "
-            "Set in tyr.yaml."
+            "{diff_summary_section}, {review_loop_section}."
         ),
     )
 
@@ -164,19 +244,78 @@ class PlannerConfig(BaseModel):
     """Planning session configuration."""
 
     planner_system_prompt: str = Field(
-        default="",
+        default=(
+            "You are a saga planning assistant for the Niuu platform.\n"
+            "\n"
+            "Help the user decompose a feature specification into phases and raids\n"
+            "(discrete, independently mergeable tasks).\n"
+            "\n"
+            "## Sizing\n"
+            "\n"
+            "Use t-shirt sizing for raids:\n"
+            "- **S** (Small): well-bounded, single file or function change\n"
+            "- **M** (Medium): a few files, clear scope, independently testable\n"
+            "- **L** (Large): too big — MUST be decomposed into its own phase\n"
+            "\n"
+            "Anything larger than M should become its own milestone (phase) with\n"
+            "smaller raids inside. Prefer many small, independent tasks.\n"
+            "\n"
+            "## Constraints\n"
+            "\n"
+            "- Each raid must be independently testable and mergeable.\n"
+            "- Phases run sequentially. Within a phase, raids run in parallel\n"
+            "  unless `depends_on` declares an ordering.\n"
+            "- Order phases: foundations first, features next, polish last.\n"
+            "- Every raid needs acceptance criteria and `declared_files`.\n"
+            "\n"
+            "## Process\n"
+            "\n"
+            "1. Ask clarifying questions if the spec is ambiguous.\n"
+            "2. Propose a phased breakdown with t-shirt sized raids.\n"
+            "3. Iterate with the user until they are satisfied.\n"
+            "4. When the user says 'finalize', output the structure as JSON.\n"
+            "\n"
+            "Repository: {repo}\n"
+            "Base branch: {base_branch}\n"
+            "Specification:\n{spec}"
+        ),
         description=(
             "System prompt for the interactive planning session. "
-            "Available placeholders: {repo}, {base_branch}, {spec}. "
-            "Set in tyr.yaml."
+            "Available placeholders: {repo}, {base_branch}, {spec}."
         ),
     )
     finalize_prompt: str = Field(
-        default="",
-        description=(
-            "Prompt injected when the user clicks Finalize Plan. "
-            "Set in tyr.yaml."
+        default=(
+            "Please finalize the plan now. Output the saga structure as a JSON code block:\n"
+            "\n"
+            "```json\n"
+            "{\n"
+            '  "name": "Saga Name",\n'
+            '  "phases": [\n'
+            "    {\n"
+            '      "name": "Phase 1",\n'
+            '      "raids": [\n'
+            "        {\n"
+            '          "name": "Raid name",\n'
+            '          "description": "What this raid does",\n'
+            '          "acceptance_criteria": ["criterion 1", "criterion 2"],\n'
+            '          "declared_files": ["src/path/file.py"],\n'
+            '          "size": "S",\n'
+            '          "depends_on": ["Other raid name"]\n'
+            "        }\n"
+            "      ]\n"
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "Requirements:\n"
+            "- Every raid needs name, description, and acceptance criteria.\n"
+            "- `declared_files`: likely files the raid will touch.\n"
+            "- `size`: S or M. If L, split it into its own phase.\n"
+            "- `depends_on`: optional, use when a raid waits for another (by name, same phase)."
         ),
+        description="Prompt injected when the user clicks Finalize Plan.",
     )
 
 
@@ -186,12 +325,45 @@ class DispatchConfig(BaseModel):
     default_system_prompt: str = Field(default="")
     default_model: str = Field(default="claude-sonnet-4-6")
     dispatch_prompt_template: str = Field(
-        default="",
+        default=(
+            "# Task: {identifier} — {title}\n"
+            "\n"
+            "{description}\n"
+            "\n"
+            "Repository: {repo}\n"
+            "Feature branch: {feature_branch}\n"
+            "Create a working branch for your changes: `{raid_branch}`\n"
+            "\n"
+            "## Before You Start\n"
+            "\n"
+            "1. Read the CLAUDE.md and any `.claude/rules/` files — they contain project\n"
+            "   conventions you MUST follow.\n"
+            "2. Explore the existing codebase in the areas you will change.\n"
+            "3. Understand the architecture before writing code.\n"
+            "4. Ensure required tools are available:\n"
+            "   - `gh` (GitHub CLI) — check `~/` or install via `brew install gh` / `apt install gh`\n"
+            "   - `git` — must be configured with push access\n"
+            "   - If a tool is missing, install it before proceeding.\n"
+            "\n"
+            "## Completion Requirements\n"
+            "\n"
+            "1. **Update the issue tracker**: Set ticket `{identifier}` to **In Progress**.\n"
+            "2. **Implement the task**: Write code and tests, ensure coverage >= 85%.\n"
+            "3. **Commit your changes**: Use conventional commits (see CLAUDE.md).\n"
+            "4. **Create a PR against `{feature_branch}`** (NOT `main`): include a summary\n"
+            "   of all changes in the PR description.\n"
+            "5. **Wait for CI**: All checks must pass (tests, lint, coverage).\n"
+            "   `codecov/patch` is a hard gate — if it fails, fix coverage and push again.\n"
+            "6. **Update the issue tracker**: Add a comment on `{identifier}` with a summary\n"
+            "   of what was done and a link to the PR.\n"
+            "\n"
+            "**Do NOT stop until the PR is created and CI is green.**"
+        ),
         description=(
             "Template for the initial prompt sent to coding sessions. "
             "Available placeholders: {identifier}, {title}, {description}, "
             "{repo}, {feature_branch}, {raid_branch}. "
-            "Set in tyr.yaml."
+            "Override in tyr.yaml or Helm values."
         ),
     )
 
@@ -283,7 +455,7 @@ class LLMConfig(BaseModel):
         description=(
             "System prompt for LLM-powered saga decomposition. "
             "Available placeholders: {repo}, {spec}. "
-            "Set in tyr.yaml."
+            "When empty, the built-in DECOMPOSITION_PROMPT in bifrost.py is used."
         ),
     )
 

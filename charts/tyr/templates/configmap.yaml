@@ -35,6 +35,40 @@ data:
     dispatch:
       default_system_prompt: {{ .Values.dispatch.defaultSystemPrompt | quote }}
       default_model: {{ .Values.dispatch.defaultModel | quote }}
+      {{- if .Values.dispatch.dispatchPromptTemplate }}
+      dispatch_prompt_template: {{ .Values.dispatch.dispatchPromptTemplate | quote }}
+      {{- end }}
+
+    {{- if or .Values.planner .Values.review }}
+    {{- with .Values.planner }}
+    planner:
+      {{- if .plannerSystemPrompt }}
+      planner_system_prompt: {{ .plannerSystemPrompt | quote }}
+      {{- end }}
+      {{- if .finalizePrompt }}
+      finalize_prompt: {{ .finalizePrompt | quote }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+
+    {{- with .Values.review }}
+    review:
+      {{- if .reviewerSystemPrompt }}
+      reviewer_system_prompt: {{ .reviewerSystemPrompt | quote }}
+      {{- end }}
+      {{- if .reviewerInitialPromptTemplate }}
+      reviewer_initial_prompt_template: {{ .reviewerInitialPromptTemplate | quote }}
+      {{- end }}
+      {{- if .reviewerModel }}
+      reviewer_model: {{ .reviewerModel | quote }}
+      {{- end }}
+      {{- if .maxReviewRounds }}
+      max_review_rounds: {{ .maxReviewRounds }}
+      {{- end }}
+      {{- if .autoApproveThreshold }}
+      auto_approve_threshold: {{ .autoApproveThreshold }}
+      {{- end }}
+    {{- end }}
     ai_models:
       {{- $models := .Values.aiModels }}
       {{- if and .Values.global .Values.global.aiModels }}

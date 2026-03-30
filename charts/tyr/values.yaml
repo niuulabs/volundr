@@ -102,6 +102,32 @@ dispatch:
     - Zero warnings in pytest.
   # -- Default LLM model for dispatched sessions
   defaultModel: "claude-sonnet-4-6"
+  # -- Template for the initial prompt sent to coding sessions.
+  # Available placeholders: {identifier}, {title}, {description},
+  # {repo}, {feature_branch}, {raid_branch}.
+  # Leave empty to use the built-in default from config.py.
+  dispatchPromptTemplate: ""
+
+# Planner configuration
+planner:
+  # -- System prompt for interactive planning sessions.
+  # Placeholders: {repo}, {base_branch}, {spec}. Leave empty for built-in default.
+  plannerSystemPrompt: ""
+  # -- Prompt injected when the user clicks "Finalize Plan". Leave empty for built-in default.
+  finalizePrompt: ""
+
+# Review configuration
+review:
+  # -- System prompt for reviewer sessions. Leave empty for built-in default.
+  reviewerSystemPrompt: ""
+  # -- Template for the reviewer's initial prompt. Leave empty for built-in default.
+  reviewerInitialPromptTemplate: ""
+  # -- AI model for reviewer sessions
+  reviewerModel: "claude-opus-4-6"
+  # -- Maximum review rounds before escalating
+  maxReviewRounds: 6
+  # -- Confidence threshold for auto-merge
+  autoApproveThreshold: 0.80
 
 # Available AI models — overridden by global.models from the niuu umbrella chart
 aiModels:
