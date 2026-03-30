@@ -2460,6 +2460,115 @@ func TestK3sRuntime_Up_EmbeddedDB(t *testing.T) {
 	cancel()
 }
 
+// Tyr integration tests for Up().
+
+func TestK3sRuntime_Up_EmbeddedDB_WithTyr(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".niuu")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	kubeconfigPath := filepath.Join(volundrDir, k3sHostKubeconfigFile)
+	if err := os.WriteFile(kubeconfigPath, []byte("apiVersion: v1\nkind: Config\nclusters:\n- cluster:\n    server: https://127.0.0.1:6443\n  name: k3d-volundr\n"), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+
+	withMockExec(t, `MOCK_RESPONSE=volundr`)
+	withMockPostgres(t, &fakePostgres{migrationsN: 2, tyrMigrationsN: 1})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0},
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Host:     "localhost",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+			DataDir:  filepath.Join(volundrDir, "data", "pg"),
+		},
+		K3s: config.K3sConfig{
+			Provider:   "k3d",
+			TyrEnabled: true,
+			TyrImage:   "ghcr.io/niuulabs/tyr:test",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := r.Up(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Up with Tyr: %v", err)
+	}
+
+	// Verify PID file was written.
+	if _, err := os.Stat(filepath.Join(volundrDir, PIDFile)); err != nil {
+		t.Error("expected PID file to be written")
+	}
+
+	// Verify state file includes Tyr service.
+	stateData, err := os.ReadFile(filepath.Join(volundrDir, StateFile))
+	if err != nil {
+		t.Fatalf("read state file: %v", err)
+	}
+	if !strings.Contains(string(stateData), `"tyr"`) {
+		t.Error("expected state file to contain tyr service")
+	}
+
+	cancel()
+}
+
+func TestK3sRuntime_Up_EmbeddedDB_TyrMigrationFail(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".niuu")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	// Create a tyr migrations dir so runTyrMigrationsAuto finds it.
+	tyrMigDir := filepath.Join(tmpDir, "migrations", "tyr")
+	if err := os.MkdirAll(tyrMigDir, 0o700); err != nil {
+		t.Fatalf("create tyr migrations dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	withMockExec(t)
+	withMockPostgres(t, &fakePostgres{
+		migrationsN:      2,
+		tyrMigrationsErr: fmt.Errorf("tyr migration failed"),
+	})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+		},
+		K3s: config.K3sConfig{
+			TyrEnabled: true,
+		},
+	}
+
+	err := r.Up(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when tyr migrations fail")
+	}
+	if !strings.Contains(err.Error(), "run tyr migrations") {
+		t.Errorf("expected 'run tyr migrations' error, got: %v", err)
+	}
+}
+
 func TestK3sRuntime_Up_EmbeddedDB_StartFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
@@ -2933,6 +3042,80 @@ func TestFindTyrMigrationsDir_NotFound(t *testing.T) {
 	dir := findTyrMigrationsDir()
 	if dir != "" {
 		t.Errorf("expected empty string for missing dir, got %q", dir)
+	}
+}
+
+func TestK3sRuntime_Logs_Tyr(t *testing.T) {
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	reader, err := r.Logs(context.Background(), "tyr", false)
+	if err != nil {
+		t.Fatalf("Logs(tyr): %v", err)
+	}
+	_ = reader.Close()
+}
+
+func TestK3sRuntime_Logs_TyrFollow(t *testing.T) {
+	withMockExec(t)
+
+	r := NewK3sRuntime()
+	reader, err := r.Logs(context.Background(), "tyr", true)
+	if err != nil {
+		t.Fatalf("Logs(tyr, follow): %v", err)
+	}
+	_ = reader.Close()
+}
+
+func TestRunTyrMigrationsAuto_WithFSDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create migrations/tyr directory.
+	tyrMigDir := filepath.Join(tmpDir, "migrations", "tyr")
+	if err := os.MkdirAll(tyrMigDir, 0o700); err != nil {
+		t.Fatalf("create tyr migrations dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	fp := &fakePostgres{tyrMigrationsN: 3}
+	applied, source, err := runTyrMigrationsAuto(context.Background(), fp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if applied != 3 {
+		t.Errorf("expected 3 applied, got %d", applied)
+	}
+	if source == "" {
+		t.Error("expected non-empty source for filesystem migrations")
+	}
+}
+
+func TestRunTyrMigrationsAuto_WithFSDir_Error(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tyrMigDir := filepath.Join(tmpDir, "migrations", "tyr")
+	if err := os.MkdirAll(tyrMigDir, 0o700); err != nil {
+		t.Fatalf("create tyr migrations dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	fp := &fakePostgres{tyrMigrationsErr: fmt.Errorf("tyr migration error")}
+	_, _, err := runTyrMigrationsAuto(context.Background(), fp)
+	if err == nil {
+		t.Fatal("expected error from tyr migrations")
+	}
+	if !strings.Contains(err.Error(), "tyr migration error") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
