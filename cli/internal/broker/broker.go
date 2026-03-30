@@ -183,8 +183,8 @@ func (b *Broker) handleBrowserMessage(msg map[string]any) {
 		if s, ok := content.(string); ok {
 			contentStr = s
 		} else {
-			b, _ := json.Marshal(content)
-			contentStr = string(b)
+			raw, _ := json.Marshal(content)
+			contentStr = string(raw)
 		}
 		b.appendTurn("user", contentStr, nil, nil)
 
@@ -289,6 +289,12 @@ func (b *Broker) OnCLIEvent(data map[string]any) {
 		model := b.pendingModel
 		if parts == nil {
 			parts = []any{}
+		}
+		// Fallback: if no streaming text was accumulated, use the result field.
+		if content == "" {
+			if r, ok := data["result"].(string); ok {
+				content = r
+			}
 		}
 		if content != "" {
 			parts = append(parts, map[string]any{"type": "text", "text": content})
