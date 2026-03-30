@@ -329,6 +329,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 dispatcher_repo=dispatcher_repo,
             )
             app.state.contract_engine = contract_engine
+            await contract_engine.start()
 
             # Wire event-driven session completion subscriber
             # Uses VolundrAdapterFactory for per-owner authenticated SSE subscriptions
@@ -348,6 +349,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
 
             # Lifecycle cleanup
+            await contract_engine.stop()
             await review_engine.stop()
             await notification_service.stop()
             await telegram_reply_client.close()
