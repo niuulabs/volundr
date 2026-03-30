@@ -174,6 +174,8 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 		forgeCfg.Forge.Xcode.DefaultVersion = fs.Xcode.DefaultVersion
 	}
 
+	forgeCfg.Web = cfg.Volundr.Web
+
 	forgeCfg.Auth.Mode = fs.Auth.Mode
 	forgeCfg.Auth.Tokens = make([]forge.PATEntry, len(fs.Auth.Tokens))
 	for i, t := range fs.Auth.Tokens {
