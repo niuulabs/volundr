@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/preflight"
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
@@ -245,6 +246,11 @@ func runInit(_ *cobra.Command, _ []string) error {
 		fmt.Println("  credentials.enc    ... done")
 	}
 
+	// Run preflight checks (warnings only, do not block).
+	if cfg.Runtime == "local" {
+		runInitPreflight(cfg, apiKey)
+	}
+
 	// Run runtime-specific init.
 	rt := runtime.NewRuntime(cfg.Runtime)
 	ctx := context.Background()
@@ -312,6 +318,32 @@ func installInstructionsForOS(tool, goos, goarch string) string {
 		}
 	default:
 		return ""
+	}
+}
+
+// runInitPreflight runs preflight checks after the init wizard and prints warnings.
+// These are advisory only — they never block init from completing.
+func runInitPreflight(cfg *config.Config, apiKey string) {
+	fmt.Println("\nPreflight checks:")
+
+	// Check claude binary.
+	claudeResult := preflight.CheckBinary("claude", "--version")
+	fmt.Println(preflight.FormatResult(claudeResult))
+
+	// Check API key.
+	credsPath, _ := config.CredentialsPath()
+	apiKeyResult := preflight.CheckAPIKey(apiKey, credsPath)
+	fmt.Println(preflight.FormatResult(apiKeyResult))
+
+	// Check git binary.
+	gitResult := preflight.CheckBinary("git", "--version")
+	fmt.Println(preflight.FormatResult(gitResult))
+
+	// Check workspace directory writable.
+	cfgDir, err := config.ConfigDir()
+	if err == nil {
+		dirResult := preflight.CheckDirWritable(cfgDir)
+		fmt.Println(preflight.FormatResult(dirResult))
 	}
 }
 
