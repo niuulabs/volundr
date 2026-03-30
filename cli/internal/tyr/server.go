@@ -56,6 +56,13 @@ func NewServer(ctx context.Context, cfg ServerConfig, migrationFS fs.FS) (*Serve
 	}, nil
 }
 
+// NewServerFromHandler creates a Server from an existing Handler. This is
+// useful in tests where constructing a full Server (with DB connection and
+// migrations) is unnecessary.
+func NewServerFromHandler(h *Handler) *Server {
+	return &Server{handler: h}
+}
+
 // RegisterRoutes mounts tyr-mini routes onto an existing HTTP mux.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	s.handler.RegisterRoutes(mux)

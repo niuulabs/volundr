@@ -332,6 +332,9 @@ func TestK3sRuntime_RichStatus_Stopped(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 
+	// Mock exec so docker inspect fails (simulates no running container).
+	withMockExecFail(t)
+
 	volundrDir := filepath.Join(tmpDir, ".volundr")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)

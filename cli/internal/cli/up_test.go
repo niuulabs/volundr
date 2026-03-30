@@ -56,9 +56,10 @@ func TestRunUp_NoWebFlag(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv(config.EnvHome, tmpDir)
 
-	// Write a minimal valid config.
+	// Write a minimal valid config with web explicitly enabled.
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	cfgContent := `runtime: local
+web: true
 listen:
   host: 127.0.0.1
   port: 18081
@@ -76,6 +77,24 @@ database:
 		t.Fatalf("write config: %v", err)
 	}
 
+	// Verify the flag actually modifies config before runtime starts.
+	// Load config manually and check web is enabled by default.
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !cfg.WebEnabled() {
+		t.Fatal("expected web enabled in config before --no-web flag")
+	}
+
+	// Apply the same logic as runUp does when --no-web is set.
+	f := false
+	cfg.Web = &f
+	if cfg.WebEnabled() {
+		t.Fatal("expected web disabled after setting Web=false")
+	}
+
+	// Also exercise the full runUp path (will fail on missing deps, that's ok).
 	oldNoWebFlag := noWebFlag
 	oldRuntimeFlag := runtimeFlag
 	noWebFlag = true
@@ -85,7 +104,6 @@ database:
 		runtimeFlag = oldRuntimeFlag
 	}()
 
-	// Will fail on missing dependencies but exercises the --no-web path.
 	_ = runUp(nil, nil)
 }
 
