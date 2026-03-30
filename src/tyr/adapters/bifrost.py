@@ -93,6 +93,7 @@ class BifrostAdapter(LLMPort):
         max_retries: int = 2,
         min_estimate_hours: float = 2.0,
         max_estimate_hours: float = 8.0,
+        decomposition_system_prompt: str = "",
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -100,6 +101,7 @@ class BifrostAdapter(LLMPort):
         self._max_retries = max_retries
         self._min_estimate_hours = min_estimate_hours
         self._max_estimate_hours = max_estimate_hours
+        self._decomposition_prompt = decomposition_system_prompt or DECOMPOSITION_PROMPT
         self._client = httpx.AsyncClient(timeout=timeout)
 
     def _headers(self) -> dict[str, str]:
@@ -112,7 +114,7 @@ class BifrostAdapter(LLMPort):
         return headers
 
     async def decompose_spec(self, spec: str, repo: str, *, model: str) -> SagaStructure:
-        prompt = DECOMPOSITION_PROMPT.format(spec=spec, repo=repo)
+        prompt = self._decomposition_prompt.format(spec=spec, repo=repo)
         last_error: Exception | None = None
 
         for attempt in range(1, self._max_retries + 1):

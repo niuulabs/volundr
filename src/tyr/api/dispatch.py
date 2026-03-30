@@ -160,32 +160,41 @@ def _slugify(text: str) -> str:
     return slug.strip("-")[:40]
 
 
-def _build_prompt(issue: TrackerIssue, repo: str, feature_branch: str) -> str:
-    """Build the initial prompt for a session from a tracker issue."""
+def _build_prompt(
+    issue: TrackerIssue,
+    repo: str,
+    feature_branch: str,
+    template: str = "",
+) -> str:
+    """Build the initial prompt for a session from a tracker issue.
+
+    Uses the configurable template if provided, otherwise falls back to
+    a minimal default.
+    """
+    raid_branch = issue.identifier.lower()
+
+    if template:
+        return template.format(
+            identifier=issue.identifier,
+            title=issue.title,
+            description=issue.description or "",
+            repo=repo,
+            feature_branch=feature_branch,
+            raid_branch=raid_branch,
+        )
+
+    # Minimal fallback when no template is configured.
     parts = [
         f"# Task: {issue.identifier} — {issue.title}",
         "",
         issue.description or "",
         "",
         f"Repository: {repo}",
-        f"Base branch: {feature_branch}",
-        f"Create a branch for your work: `{issue.identifier.lower()}`",
+        f"Feature branch: {feature_branch}",
+        f"Create a working branch: `{raid_branch}`",
         "",
-        "## Completion Requirements",
-        "",
-        "1. **Update Linear ticket**: Use the Linear MCP server to set the ticket"
-        f" `{issue.identifier}` status to **In Progress** immediately.",
-        "2. **Implement the task**: Write code, tests, and ensure coverage >= 85%.",
-        "3. **Commit your changes**: Use conventional commits.",
-        f"4. **Create a PR against `{feature_branch}`** (NOT `main`):"
-        " include a summary of all changes in the PR description.",
-        "5. **Wait for CI**: Ensure all CI checks pass (tests, lint, coverage)."
-        " If CI fails, fix the issues and push again.",
-        "6. **Update Linear ticket**: Use the Linear MCP server to add a comment"
-        f" on `{issue.identifier}` with a summary of what was done and a link"
-        " to the PR.",
-        "",
-        "**Do NOT stop until the PR is created and CI is green.**",
+        "Implement the task, write tests, create a PR against"
+        f" `{feature_branch}`, and ensure CI passes.",
     ]
     return "\n".join(parts)
 
@@ -391,7 +400,10 @@ def create_dispatch_router() -> APIRouter:
                         tracker_issue_id=issue.identifier,
                         tracker_issue_url=issue.url,
                         system_prompt=effective_prompt,
-                        initial_prompt=_build_prompt(issue, item.repo, saga.feature_branch),
+                        initial_prompt=_build_prompt(
+                            issue, item.repo, saga.feature_branch,
+                            template=settings.dispatch.dispatch_prompt_template,
+                        ),
                         integration_ids=integration_ids,
                     ),
                     auth_token=auth_token,

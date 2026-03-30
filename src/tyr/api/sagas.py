@@ -476,20 +476,20 @@ def create_sagas_router() -> APIRouter:
         except Exception:
             logger.warning("Failed to fetch Volundr integrations for user %s", principal.user_id)
 
-        planner_prompt = (
-            "You are a saga planning assistant for the Niuu platform.\n\n"
-            "The user will describe a feature specification. Help them decompose it "
-            "into phases and raids (discrete tasks).\n\n"
-            "When the user is satisfied, output the final structure as a JSON code "
-            "block with this schema:\n"
-            "```json\n"
-            '{"name": "Saga Name", "phases": [{"name": "Phase 1", "raids": '
-            '[{"name": "...", "description": "...", "acceptance_criteria": [...], '
-            '"declared_files": [...], "estimate_hours": N}]}]}\n'
-            "```\n\n"
-            f"Repository: {body.repo}\n"
-            f"Specification:\n{body.spec}"
-        )
+        planner_template = settings.planner.planner_system_prompt
+        if planner_template:
+            planner_prompt = planner_template.format(
+                repo=body.repo,
+                base_branch=body.base_branch,
+                spec=body.spec,
+            )
+        else:
+            planner_prompt = (
+                f"Help decompose this specification into phases and raids.\n\n"
+                f"Repository: {body.repo}\n"
+                f"Base branch: {body.base_branch}\n"
+                f"Specification:\n{body.spec}"
+            )
 
         try:
             session = await volundr.spawn_session(

@@ -362,7 +362,6 @@ class TestBuildReviewerInitialPrompt:
         assert "Test raid" in prompt
         assert "tests pass" in prompt
         assert "src/main.py" in prompt
-        assert "confidence" in prompt.lower()
         assert "json" in prompt.lower()
 
     def test_prompt_without_pr(self) -> None:
@@ -414,17 +413,19 @@ class TestBuildReviewerInitialPrompt:
 
 
 class TestReviewerSystemPromptConfig:
-    """Tests for the system prompt embedded in ReviewConfig."""
+    """Tests for the system prompt in ReviewConfig."""
 
-    def test_default_prompt_contains_review_rules(self) -> None:
+    def test_default_prompt_is_empty(self) -> None:
         cfg = ReviewConfig()
-        assert "code reviewer" in cfg.reviewer_system_prompt.lower()
-        assert "confidence" in cfg.reviewer_system_prompt.lower()
-        assert "json" in cfg.reviewer_system_prompt.lower()
+        assert cfg.reviewer_system_prompt == ""
 
     def test_prompt_overridable_via_config(self) -> None:
         cfg = ReviewConfig(reviewer_system_prompt="Custom prompt for this deploy")
         assert cfg.reviewer_system_prompt == "Custom prompt for this deploy"
+
+    def test_initial_prompt_template_overridable(self) -> None:
+        cfg = ReviewConfig(reviewer_initial_prompt_template="Review: {tracker_id}")
+        assert cfg.reviewer_initial_prompt_template == "Review: {tracker_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +461,8 @@ class TestSpawnReviewer:
         assert req.workload_type == "reviewer"
         assert req.tracker_issue_id == "NIU-100"
         assert req.integration_ids == ["int-1", "int-2"]
-        assert "code reviewer" in req.system_prompt.lower()
+        # System prompt comes from config (empty default, set via tyr.yaml)
+        assert isinstance(req.system_prompt, str)
 
     @pytest.mark.asyncio
     async def test_spawn_with_no_volundr_adapter(self) -> None:
@@ -1102,7 +1104,7 @@ class TestReviewConfigReviewerFields:
         assert cfg.reviewer_profile == "reviewer"
         assert cfg.reviewer_confidence_weight == 0.60
         assert cfg.reviewer_spawn_bonus == 0.1
-        assert "code reviewer" in cfg.reviewer_system_prompt.lower()
+        assert cfg.reviewer_system_prompt == ""  # set via tyr.yaml, not code defaults
 
     def test_no_polling_config(self) -> None:
         """Ensure timeout/poll_interval fields do NOT exist."""

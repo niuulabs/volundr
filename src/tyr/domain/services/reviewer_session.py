@@ -32,6 +32,79 @@ class ReviewerResult:
     approved: bool
 
 
+def _build_acceptance_criteria_section(raid: Raid) -> str:
+    if not raid.acceptance_criteria:
+        return ""
+    lines = ["**Acceptance Criteria**:"]
+    for criterion in raid.acceptance_criteria:
+        lines.append(f"- {criterion}")
+    return "\n".join(lines) + "\n\n"
+
+
+def _build_pr_section(pr_status: PRStatus | None) -> str:
+    if not pr_status:
+        return ""
+    return (
+        f"**PR**: {pr_status.url}\n"
+        f"**PR State**: {pr_status.state}\n"
+        f"**CI Passed**: {pr_status.ci_passed}\n"
+        f"**Mergeable**: {pr_status.mergeable}\n\n"
+    )
+
+
+def _build_changed_files_section(changed_files: list[str]) -> str:
+    if not changed_files:
+        return ""
+    lines = [f"**Changed Files** ({len(changed_files)}):"]
+    for f in changed_files:
+        lines.append(f"- `{f}`")
+    return "\n".join(lines) + "\n\n"
+
+
+def _build_diff_summary_section(diff_summary: str) -> str:
+    if not diff_summary:
+        return ""
+    return f"**Diff Summary**:\n{diff_summary}\n\n"
+
+
+def _build_review_loop_section(
+    working_session_id: str,
+    max_review_rounds: int,
+) -> str:
+    if not working_session_id:
+        return ""
+    return (
+        "## Review Loop\n"
+        "\n"
+        "You have direct access to the working session that produced this code.\n"
+        f"Working Session ID: `{working_session_id}`\n"
+        f"Max review rounds: {max_review_rounds}\n"
+        "\n"
+        "When you find blocking issues:\n"
+        "\n"
+        "1. Discover your own session ID:\n"
+        "   `MY_ID=$(basename $(dirname /volundr/sessions/*/workspace))`\n"
+        "2. Send detailed feedback to the working session:\n"
+        f"   `curl -s -X POST http://localhost:8081/api/message "
+        f'-H "Content-Type: application/json" '
+        f"-d '{{\"session_id\": \"{working_session_id}\", \"content\": \"<FEEDBACK>\"}}'`\n"
+        "3. In your feedback, tell the working session to:\n"
+        "   a. Fix the issues\n"
+        "   b. `git add` and `git commit` the fixes\n"
+        "   c. `git push` to update the PR\n"
+        "   d. Notify you when done by running:\n"
+        "      `curl -s -X POST http://localhost:8081/api/message "
+        "-H \"Content-Type: application/json\" "
+        "-d '{\"session_id\": \"<YOUR_SESSION_ID>\", \"content\": \"Fixed. Please pull and re-review.\"}'`\n"
+        "      where <YOUR_SESSION_ID> is `$MY_ID`\n"
+        "4. When the working session responds, run `git pull` to get the latest changes\n"
+        "5. Re-read the diff and re-review\n"
+        "6. Repeat until no blocking issues remain or you exhaust all review rounds\n"
+        f"7. After {max_review_rounds} rounds with unresolved blocking issues, set approved=false\n"
+        "\n"
+    )
+
+
 def build_reviewer_initial_prompt(
     raid: Raid,
     pr_status: PRStatus | None,
@@ -39,137 +112,42 @@ def build_reviewer_initial_prompt(
     diff_summary: str,
     working_session_id: str = "",
     max_review_rounds: int = 6,
+    template: str = "",
 ) -> str:
-    """Build the initial prompt sent to the reviewer session."""
-    lines = [
-        "## Review Request",
-        "",
-        f"**Ticket**: {raid.tracker_id}",
-        f"**Raid**: {raid.name}",
-        f"**Description**: {raid.description}",
-    ]
+    """Build the initial prompt sent to the reviewer session.
 
-    if raid.acceptance_criteria:
-        lines.append("")
-        lines.append("**Acceptance Criteria**:")
-        for criterion in raid.acceptance_criteria:
-            lines.append(f"- {criterion}")
+    If a template is provided (from config), it is used with dynamic sections
+    injected via placeholders. Otherwise a minimal fallback is used.
+    """
+    sections = {
+        "tracker_id": raid.tracker_id,
+        "raid_name": raid.name,
+        "raid_description": raid.description,
+        "acceptance_criteria_section": _build_acceptance_criteria_section(raid),
+        "pr_section": _build_pr_section(pr_status),
+        "changed_files_section": _build_changed_files_section(changed_files),
+        "diff_summary_section": _build_diff_summary_section(diff_summary),
+        "review_loop_section": _build_review_loop_section(
+            working_session_id, max_review_rounds
+        ),
+    }
 
-    if pr_status:
-        lines.extend(
-            [
-                "",
-                f"**PR**: {pr_status.url}",
-                f"**PR State**: {pr_status.state}",
-                f"**CI Passed**: {pr_status.ci_passed}",
-                f"**Mergeable**: {pr_status.mergeable}",
-            ]
-        )
+    if template:
+        return template.format(**sections)
 
-    if changed_files:
-        lines.extend(
-            [
-                "",
-                f"**Changed Files** ({len(changed_files)}):",
-            ]
-        )
-        for f in changed_files:
-            lines.append(f"- `{f}`")
-
-    if diff_summary:
-        lines.extend(
-            [
-                "",
-                "**Diff Summary**:",
-                diff_summary,
-            ]
-        )
-
-    lines.extend(
-        [
-            "",
-            "## Instructions",
-            "",
-            "1. Read the full diff for this PR",
-            "2. Check every changed file against ALL project rules",
-            "3. Verify the implementation matches the acceptance criteria above",
-            "4. Score your confidence from 0.0 to 1.0",
-        ]
+    # Minimal fallback when no template is configured.
+    return (
+        f"## Review Request\n\n"
+        f"**Ticket**: {raid.tracker_id}\n"
+        f"**Raid**: {raid.name}\n"
+        f"**Description**: {raid.description}\n\n"
+        f"{sections['acceptance_criteria_section']}"
+        f"{sections['pr_section']}"
+        f"{sections['changed_files_section']}"
+        f"{sections['diff_summary_section']}"
+        f"{sections['review_loop_section']}"
+        "Review the PR and output your assessment as JSON."
     )
-
-    if working_session_id:
-        send_cmd = (
-            "curl -s -X POST http://localhost:8081/api/message "
-            '-H "Content-Type: application/json" '
-            "-d '{\"session_id\": \"" + working_session_id + "\", \"content\": \"<FEEDBACK>\"}'"
-        )
-        lines.extend(
-            [
-                "",
-                "## Review Loop",
-                "",
-                "You have direct access to the working session that produced this code.",
-                f"Working Session ID: `{working_session_id}`",
-                f"Max review rounds: {max_review_rounds}",
-                "",
-                "**If you find ANY issues, no matter how small, you MUST NOT approve.**",
-                "",
-                "Your session ID can be found from your workspace path:",
-                "   `basename $(dirname $PWD)` (when CWD is the workspace)",
-                "",
-                "When you find issues:",
-                "",
-                "1. Discover your own session ID:",
-                "   `MY_ID=$(basename $(dirname /volundr/sessions/*/workspace))`",
-                "2. Send detailed feedback to the working session using Bash:",
-                f"   `{send_cmd}`",
-                "3. In your feedback message, include instructions for the working session",
-                "   to notify you when done. Tell it to run:",
-                "   `curl -s -X POST http://localhost:8081/api/message "
-                '-H "Content-Type: application/json" '
-                "-d '{\"session_id\": \"<YOUR_SESSION_ID>\", \"content\": \"Fixed. Re-review.\"}'`",
-                "   where <YOUR_SESSION_ID> is replaced with `$MY_ID` (your session ID).",
-                "4. Wait for the working session to respond that it has fixed the issues",
-                "5. Re-read the diff (`git diff`) and re-review",
-                "6. Repeat until zero issues remain or you exhaust all review rounds",
-                f"7. After {max_review_rounds} rounds with unresolved issues, set approved=false",
-            ]
-        )
-
-    lines.extend(
-        [
-            "",
-            "## Merging",
-            "",
-            "When you are satisfied with zero remaining issues and high confidence,",
-            "**merge the PR yourself** before outputting your final assessment:",
-            "",
-            "```bash",
-            "gh pr merge --squash --delete-branch",
-            "```",
-            "",
-            "If the merge fails (conflicts, CI failure), do NOT approve — report the",
-            "failure in your issues array.",
-            "",
-            "## Final Output",
-            "",
-            "After merging (or after max rounds exhausted), output your final assessment:",
-            "",
-            "```json",
-            "{",
-            '  "confidence": <score>,',
-            '  "approved": <true if merged successfully, false otherwise>,',
-            '  "summary": "<one-line summary>",',
-            '  "issues": ["<remaining issue 1>", ...]',
-            "}",
-            "```",
-            "",
-            "**Critical**: You can ONLY set `approved: true` if the issues array is empty",
-            "AND the PR has been merged. Any issues — even minor nits — mean `approved: false`.",
-        ]
-    )
-
-    return "\n".join(lines)
 
 
 def _try_parse_json(text: str) -> ReviewerResult | None:
@@ -337,6 +315,7 @@ class ReviewerSessionService:
             diff_summary=diff_summary,
             working_session_id=working_session.id if working_session else "",
             max_review_rounds=self._cfg.max_review_rounds,
+            template=self._cfg.reviewer_initial_prompt_template,
         )
 
         request = SpawnRequest(

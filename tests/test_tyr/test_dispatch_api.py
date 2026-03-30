@@ -401,7 +401,7 @@ class TestBuildPrompt:
         assert "X-2" in prompt
         assert "No desc" in prompt
 
-    def test_contains_completion_requirements(self):
+    def test_fallback_contains_essentials(self):
         issue = TrackerIssue(
             id="1",
             identifier="X-3",
@@ -410,9 +410,25 @@ class TestBuildPrompt:
             status="Todo",
         )
         prompt = _build_prompt(issue, "org/repo", "feat/test")
-        assert "Completion Requirements" in prompt
-        assert "In Progress" in prompt
-        assert "conventional commits" in prompt
+        assert "feat/test" in prompt
+        assert "x-3" in prompt
+        assert "org/repo" in prompt
+
+    def test_template_renders_placeholders(self):
+        issue = TrackerIssue(
+            id="1",
+            identifier="NIU-42",
+            title="Add auth",
+            description="Implement OAuth",
+            status="Todo",
+        )
+        template = "Task: {identifier} — {title}\n{description}\nBranch: {raid_branch}\nPR target: {feature_branch}"
+        prompt = _build_prompt(issue, "org/repo", "feat/saga", template=template)
+        assert "NIU-42" in prompt
+        assert "Add auth" in prompt
+        assert "Implement OAuth" in prompt
+        assert "niu-42" in prompt  # raid_branch is lowercased identifier
+        assert "feat/saga" in prompt
 
 
 # -------------------------------------------------------------------
