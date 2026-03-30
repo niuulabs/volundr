@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -61,12 +62,30 @@ logger = logging.getLogger(__name__)
 
 def _configure_logging(settings: Settings) -> None:
     """Configure structured logging based on settings."""
+    level_name = settings.logging.level.upper()
+    log_format = settings.logging.format.lower()
+    level = getattr(logging, level_name, logging.INFO)
+
+    if log_format == "json":
+        fmt = (
+            '{"time":"%(asctime)s","level":"%(levelname)s",'
+            '"logger":"%(name)s","message":"%(message)s"}'
+        )
+    else:
+        fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
     logging.basicConfig(
-        level=getattr(logging, settings.logging.level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s [%(correlation_id)s] %(message)s"
-        if settings.logging.format == "text"
-        else "%(message)s",
+        level=level,
+        format=fmt,
+        stream=sys.stderr,
+        force=True,
     )
+    logging.getLogger().setLevel(level)
+
+    logging.getLogger(__name__).info(
+        "Logging configured: level=%s, format=%s", level_name, log_format,
+    )
+
     # Silence noisy loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
