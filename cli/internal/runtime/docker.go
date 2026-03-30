@@ -367,6 +367,48 @@ func (r *DockerRuntime) Status(ctx context.Context) (*StackStatus, error) {
 	return status, nil
 }
 
+// RichStatus returns detailed status including session info for docker runtime.
+func (r *DockerRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*RichStatus, error) {
+	rs := &RichStatus{
+		Mode: "docker",
+	}
+
+	// Inspect the API container.
+	out, err := execCommandContext(ctx,
+		"docker", "inspect",
+		"--format", "{{.State.Status}}",
+		dockerProject+"-api-1",
+	).CombinedOutput()
+
+	if err != nil {
+		rs.Server = ComponentStatus{
+			Status: "stopped",
+			Detail: fmt.Sprintf("Docker container %s-api-1", dockerProject),
+		}
+		rs.Database = ComponentStatus{Status: "stopped"}
+		rs.Sessions = SessionSummary{Max: effectiveMaxSessions(cfg.Sessions.MaxSessions)}
+		return rs, nil
+	}
+
+	containerState := strings.TrimSpace(string(out))
+	listenAddr := fmt.Sprintf("%s:%d", cfg.Listen.Host, cfg.Listen.Port)
+
+	rs.Server = ComponentStatus{
+		Status:  string(mapContainerState(containerState)),
+		Address: listenAddr,
+		Detail:  fmt.Sprintf("Docker container %s-api-1", dockerProject),
+	}
+	rs.WebUI = fmt.Sprintf("http://%s", listenAddr)
+
+	// Database status.
+	rs.Database = databaseStatus(cfg)
+
+	// Fetch sessions from the API.
+	rs.Sessions = buildSessionSummary(ctx, listenAddr, cfg.Sessions.MaxSessions)
+
+	return rs, nil
+}
+
 // Logs streams logs for a Docker service.
 func (r *DockerRuntime) Logs(ctx context.Context, service string, follow bool) (io.ReadCloser, error) {
 	args := []string{"logs"}

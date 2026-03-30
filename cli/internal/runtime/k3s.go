@@ -435,6 +435,131 @@ func (r *K3sRuntime) Status(_ context.Context) (*StackStatus, error) {
 	return status, nil
 }
 
+// RichStatus returns detailed status including pod info for k3s runtime.
+func (r *K3sRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*RichStatus, error) {
+	rs := &RichStatus{
+		Mode: "k3s",
+	}
+
+	// Check API container status.
+	out, err := execCommandContext(ctx,
+		"docker", "inspect",
+		"--format", "{{.State.Status}}",
+		k3sContainerName,
+	).CombinedOutput()
+
+	if err != nil {
+		rs.Server = ComponentStatus{
+			Status: "stopped",
+			Detail: fmt.Sprintf("Docker container %s", k3sContainerName),
+		}
+		rs.Database = ComponentStatus{Status: "stopped"}
+		rs.Sessions = SessionSummary{Max: effectiveMaxSessions(cfg.Sessions.MaxSessions)}
+		return rs, nil
+	}
+
+	containerState := strings.TrimSpace(string(out))
+	listenAddr := fmt.Sprintf("%s:%d", cfg.Listen.Host, cfg.Listen.Port)
+
+	rs.Server = ComponentStatus{
+		Status:  string(mapContainerState(containerState)),
+		Address: listenAddr,
+		Detail:  fmt.Sprintf("Docker container %s", k3sContainerName),
+	}
+	rs.Proxy = fmt.Sprintf("http://%s", listenAddr)
+
+	// Cluster status.
+	clusterStatus := "stopped"
+	clusterOut, clusterErr := execCommandContext(ctx,
+		"k3d", "cluster", "list", "-o", "json",
+	).CombinedOutput()
+	if clusterErr == nil {
+		var clusters []struct {
+			Name           string `json:"name"`
+			ServersRunning int    `json:"serversRunning"`
+		}
+		if json.Unmarshal(clusterOut, &clusters) == nil {
+			for _, c := range clusters {
+				if c.Name == k3sClusterName {
+					if c.ServersRunning > 0 {
+						clusterStatus = "running"
+					}
+					break
+				}
+			}
+		}
+	}
+	rs.Cluster = &ClusterStatus{
+		Name:   "k3d-" + k3sClusterName,
+		Status: clusterStatus,
+	}
+
+	// Database status.
+	rs.Database = databaseStatus(cfg)
+
+	// Fetch pod details.
+	rs.Pods = r.queryPodDetails(ctx, cfg)
+
+	// Fetch sessions from the API.
+	rs.Sessions = buildSessionSummary(ctx, listenAddr, cfg.Sessions.MaxSessions)
+
+	return rs, nil
+}
+
+// queryPodDetails queries Kubernetes for pod details including readiness.
+func (r *K3sRuntime) queryPodDetails(ctx context.Context, cfg *config.Config) []PodStatus {
+	namespace := resolveNamespace(cfg)
+
+	out, err := execCommandContext(ctx, //nolint:gosec // arguments from trusted internal config
+		"kubectl", "get", "pods",
+		"--namespace", namespace,
+		"--kubeconfig", hostKubeconfigPath(),
+		"-o", "json",
+	).CombinedOutput()
+	if err != nil {
+		return nil
+	}
+
+	var podList struct {
+		Items []struct {
+			Metadata struct {
+				Name              string `json:"name"`
+				CreationTimestamp string `json:"creationTimestamp"`
+			} `json:"metadata"`
+			Status struct {
+				Phase             string `json:"phase"`
+				ContainerStatuses []struct {
+					Ready bool `json:"ready"`
+				} `json:"containerStatuses"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(out, &podList); err != nil {
+		return nil
+	}
+
+	pods := make([]PodStatus, 0, len(podList.Items))
+	for _, pod := range podList.Items {
+		ready := 0
+		total := len(pod.Status.ContainerStatuses)
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.Ready {
+				ready++
+			}
+		}
+
+		pods = append(pods, PodStatus{
+			Name:   pod.Metadata.Name,
+			Ready:  fmt.Sprintf("%d/%d", ready, total),
+			Status: pod.Status.Phase,
+			Age:    pod.Metadata.CreationTimestamp,
+		})
+	}
+
+	return pods
+}
+
 // Logs streams logs for a service.
 func (r *K3sRuntime) Logs(_ context.Context, service string, follow bool) (io.ReadCloser, error) {
 	// For host services (api, postgres), use log files.

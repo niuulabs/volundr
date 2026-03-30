@@ -159,6 +159,9 @@ type Runtime interface {
 	// Status returns the state of each service.
 	Status(ctx context.Context) (*StackStatus, error)
 
+	// RichStatus returns detailed status including session info.
+	RichStatus(ctx context.Context, cfg *config.Config) (*RichStatus, error)
+
 	// Logs streams logs for a service.
 	Logs(ctx context.Context, service string, follow bool) (io.ReadCloser, error)
 }
