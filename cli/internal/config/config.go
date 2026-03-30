@@ -83,6 +83,11 @@ type SessionsConfig struct {
 	MaxSessions int `yaml:"max_sessions"`
 }
 
+// TyrConfig holds tyr-mini settings.
+type TyrConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 // Config represents the full volundr configuration.
 type Config struct {
 	Runtime     string            `yaml:"runtime"`
@@ -92,6 +97,7 @@ type Config struct {
 	Database    DatabaseConfig    `yaml:"database"`
 	Anthropic   AnthropicConfig   `yaml:"anthropic"`
 	Sessions    SessionsConfig    `yaml:"sessions,omitempty"`
+	Tyr         TyrConfig         `yaml:"tyr,omitempty"`
 	Git         GitConfig         `yaml:"git,omitempty"`
 	Docker      DockerConfig      `yaml:"docker,omitempty"`
 	K3s         K3sConfig         `yaml:"k3s,omitempty"`
@@ -314,6 +320,11 @@ func (c *Config) WebEnabled() bool {
 		return true
 	}
 	return *c.Web
+}
+
+// TyrEnabled returns true if tyr-mini should be started.
+func (c *Config) TyrEnabled() bool {
+	return c.Tyr.Enabled
 }
 
 func boolPtr(v bool) *bool { return &v }

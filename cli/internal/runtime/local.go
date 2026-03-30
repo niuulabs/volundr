@@ -16,6 +16,7 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/config"
 	"github.com/niuulabs/volundr/cli/internal/migrations"
 	"github.com/niuulabs/volundr/cli/internal/proxy"
+	"github.com/niuulabs/volundr/cli/internal/tyr"
 )
 
 const (
@@ -30,6 +31,7 @@ type LocalRuntime struct {
 	pg       postgresProvider
 	apiCmd   *exec.Cmd
 	proxyRtr *proxy.Router
+	tyrSrv   *tyr.Server
 }
 
 // NewLocalRuntime creates a new LocalRuntime.
@@ -103,6 +105,18 @@ func (r *LocalRuntime) Up(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
+	// Start tyr-mini if enabled.
+	if cfg.TyrEnabled() {
+		fmt.Print("  Tyr (mini)    ... ")
+		tyrSrv, tyrErr := startTyrMini(ctx, cfg)
+		if tyrErr != nil {
+			fmt.Println("failed")
+			return fmt.Errorf("start tyr-mini: %w", tyrErr)
+		}
+		r.tyrSrv = tyrSrv
+		fmt.Println("started")
+	}
+
 	// Start the Python API.
 	fmt.Print("  Volundr API   ... ")
 	apiPort := cfg.Listen.Port + 1 // API on internal port, proxy on listen port
@@ -120,6 +134,12 @@ func (r *LocalRuntime) Up(ctx context.Context, cfg *config.Config) error {
 		fmt.Println("failed")
 		return fmt.Errorf("create proxy: %w", err)
 	}
+
+	// Mount tyr-mini routes on the proxy mux if enabled.
+	if r.tyrSrv != nil {
+		rtr.RegisterTyrRoutes(r.tyrSrv)
+	}
+
 	configureWeb(rtr, cfg)
 	r.proxyRtr = rtr
 
@@ -160,6 +180,13 @@ func (r *LocalRuntime) Down(_ context.Context) error {
 		case <-done:
 		case <-time.After(5 * time.Second):
 			_ = r.apiCmd.Process.Kill()
+		}
+	}
+
+	// Stop tyr-mini.
+	if r.tyrSrv != nil {
+		if err := r.tyrSrv.Close(); err != nil {
+			errs = append(errs, fmt.Sprintf("stop tyr-mini: %v", err))
 		}
 	}
 
@@ -461,6 +488,13 @@ func (r *LocalRuntime) writeStateFile(cfg *config.Config) error {
 		})
 	}
 
+	if r.tyrSrv != nil {
+		services = append(services, ServiceStatus{
+			Name:  "tyr-mini",
+			State: StateRunning,
+		})
+	}
+
 	return WriteStateFile(services)
 }
 
@@ -484,6 +518,16 @@ func findMigrationsDir() string {
 	}
 
 	return ""
+}
+
+// startTyrMini creates and initialises the tyr-mini server.
+func startTyrMini(ctx context.Context, cfg *config.Config) (*tyr.Server, error) {
+	apiPort := cfg.Listen.Port + 1
+	tyrCfg := tyr.ServerConfig{
+		ForgeBaseURL: fmt.Sprintf("http://127.0.0.1:%d", apiPort),
+		DSN:          cfg.DSN(),
+	}
+	return tyr.NewServer(ctx, tyrCfg, tyr.MigrationsFS())
 }
 
 // runMigrationsAuto runs migrations using embedded SQL files if available,
