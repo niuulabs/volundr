@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
@@ -115,6 +118,133 @@ func TestBuildForgeConfig(t *testing.T) {
 	}
 	if forgeCfg.Anthropic.APIKey != "sk-test" {
 		t.Errorf("expected anthropic key 'sk-test', got %q", forgeCfg.Anthropic.APIKey)
+	}
+}
+
+func TestRunUpPreflightChecks_PortInUse(t *testing.T) {
+	// Bind a port to simulate "in use".
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to bind port: %v", err)
+	}
+	defer ln.Close()
+	addr := ln.Addr().(*net.TCPAddr)
+
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+	}
+	cfg.Volundr.Forge.Listen = fmt.Sprintf("127.0.0.1:%d", addr.Port)
+	cfg.Volundr.Forge.ClaudeBinary = "go" // use "go" as a stand-in binary
+	cfg.Volundr.Forge.Workspace = t.TempDir()
+
+	upErr := runUpPreflightChecks(cfg)
+	if upErr == nil {
+		t.Fatal("expected error for port in use")
+	}
+	if !strings.Contains(upErr.Error(), "already in use") {
+		t.Errorf("expected 'already in use' error, got: %v", upErr)
+	}
+}
+
+func TestRunUpPreflightChecks_MissingClaude(t *testing.T) {
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+	}
+	cfg.Volundr.Forge.ClaudeBinary = "nonexistent-claude-binary-xyz"
+
+	upErr := runUpPreflightChecks(cfg)
+	if upErr == nil {
+		t.Fatal("expected error for missing claude binary")
+	}
+	if !strings.Contains(upErr.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", upErr)
+	}
+	if !strings.Contains(upErr.Error(), "npm install") {
+		t.Errorf("expected remediation in error, got: %v", upErr)
+	}
+}
+
+func TestRunUpPreflightChecks_AllPass(t *testing.T) {
+	// Find a free port.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find free port: %v", err)
+	}
+	addr := ln.Addr().(*net.TCPAddr)
+	_ = ln.Close()
+
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+	}
+	cfg.Volundr.Forge.Listen = fmt.Sprintf("127.0.0.1:%d", addr.Port)
+	cfg.Volundr.Forge.ClaudeBinary = "go" // use "go" as stand-in
+	cfg.Volundr.Forge.Workspace = t.TempDir()
+	cfg.Anthropic.APIKey = "sk-test"
+
+	upErr := runUpPreflightChecks(cfg)
+	if upErr != nil {
+		t.Errorf("expected no error, got: %v", upErr)
+	}
+}
+
+func TestRunUpPreflightChecks_APIKeyWarning(t *testing.T) {
+	// Find a free port.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find free port: %v", err)
+	}
+	addr := ln.Addr().(*net.TCPAddr)
+	_ = ln.Close()
+
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+	}
+	cfg.Volundr.Forge.Listen = fmt.Sprintf("127.0.0.1:%d", addr.Port)
+	cfg.Volundr.Forge.ClaudeBinary = "go"
+	cfg.Volundr.Forge.Workspace = t.TempDir()
+	cfg.Anthropic.APIKey = "" // no API key
+
+	// Should not error (warning only) but also not panic.
+	upErr := runUpPreflightChecks(cfg)
+	if upErr != nil {
+		t.Errorf("expected no hard error for missing API key, got: %v", upErr)
+	}
+}
+
+func TestRunUpPreflightChecks_WorkspaceNotWritable(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("cannot test non-writable dir as root")
+	}
+
+	dir := t.TempDir()
+	readOnly := filepath.Join(dir, "readonly")
+	if err := os.Mkdir(readOnly, 0o555); err != nil {
+		t.Fatalf("create readonly dir: %v", err)
+	}
+
+	// Find a free port.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find free port: %v", err)
+	}
+	addr := ln.Addr().(*net.TCPAddr)
+	_ = ln.Close()
+
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+	}
+	cfg.Volundr.Forge.Listen = fmt.Sprintf("127.0.0.1:%d", addr.Port)
+	cfg.Volundr.Forge.ClaudeBinary = "go"
+	cfg.Volundr.Forge.Workspace = filepath.Join(readOnly, "sub")
+
+	upErr := runUpPreflightChecks(cfg)
+	if upErr == nil {
+		t.Fatal("expected error for non-writable workspace")
 	}
 }
 
