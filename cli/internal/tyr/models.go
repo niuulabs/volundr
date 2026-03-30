@@ -307,3 +307,4 @@ type RaidResponse struct {
 	ChronicleSummary *string `json:"chronicle_summary"`
 	Reason           *string `json:"reason"`
 }
+# Coverage: 85.6%
