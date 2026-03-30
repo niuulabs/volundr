@@ -677,9 +677,10 @@ class ReviewEngine:
         # Close the tracker issue (sets it to Done in Linear/Jira)
         try:
             await tracker.close_raid(tracker_id)
+            logger.info("Closed tracker issue %s (Done)", tracker_id)
         except Exception:
-            logger.warning(
-                "Failed to close tracker issue %s after merge", tracker_id, exc_info=True
+            logger.error(
+                "FAILED to close tracker issue %s after merge", tracker_id, exc_info=True
             )
 
         # Attach review transcript as a comment on the Linear issue
