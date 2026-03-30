@@ -400,4 +400,12 @@ data:
   000020_raid_contract_fields.down.sql: |
     ALTER TABLE raid_progress DROP COLUMN IF EXISTS declared_files;
     ALTER TABLE raid_progress DROP COLUMN IF EXISTS acceptance_criteria;
+
+  000021_raid_launch_command.up.sql: |
+    ALTER TABLE raids ADD COLUMN IF NOT EXISTS launch_command TEXT;
+    ALTER TABLE raid_progress ADD COLUMN IF NOT EXISTS launch_command TEXT;
+
+  000021_raid_launch_command.down.sql: |
+    ALTER TABLE raids DROP COLUMN IF EXISTS launch_command;
+    ALTER TABLE raid_progress DROP COLUMN IF EXISTS launch_command;
 {{- end }}

@@ -87,16 +87,16 @@ def _build_review_loop_section(
         "2. Send detailed feedback to the working session:\n"
         f"   `curl -s -X POST http://localhost:8081/api/message "
         f'-H "Content-Type: application/json" '
-        f"-d '{{\"session_id\": \"{working_session_id}\", \"content\": \"<FEEDBACK>\"}}'`\n"
+        f'-d \'{{"session_id": "{working_session_id}", "content": "<FEEDBACK>"}}\'`\n'
         "3. In your feedback, tell the working session to:\n"
         "   a. Fix the issues\n"
         "   b. `git add` and `git commit` the fixes\n"
         "   c. `git push` to update the PR\n"
         "   d. Notify you when done by running:\n"
         "      `curl -s -X POST http://localhost:8081/api/message "
-        "-H \"Content-Type: application/json\" "
-        "-d '{\"session_id\": \"<YOUR_SESSION_ID>\", "
-        "\"content\": \"Fixed. Please pull and re-review.\"}'`\n"
+        '-H "Content-Type: application/json" '
+        '-d \'{"session_id": "<YOUR_SESSION_ID>", '
+        '"content": "Fixed. Please pull and re-review."}\'`\n'
         "      where <YOUR_SESSION_ID> is `$MY_ID`\n"
         "4. When the working session responds, run `git pull` to get the latest changes\n"
         "5. Re-read the diff and re-review\n"
@@ -114,6 +114,7 @@ def build_reviewer_initial_prompt(
     working_session_id: str = "",
     max_review_rounds: int = 6,
     template: str = "",
+    launch_command: str | None = None,
 ) -> str:
     """Build the initial prompt sent to the reviewer session.
 
@@ -124,13 +125,12 @@ def build_reviewer_initial_prompt(
         "tracker_id": raid.tracker_id,
         "raid_name": raid.name,
         "raid_description": raid.description,
+        "launch_command": launch_command or "",
         "acceptance_criteria_section": _build_acceptance_criteria_section(raid),
         "pr_section": _build_pr_section(pr_status),
         "changed_files_section": _build_changed_files_section(changed_files),
         "diff_summary_section": _build_diff_summary_section(diff_summary),
-        "review_loop_section": _build_review_loop_section(
-            working_session_id, max_review_rounds
-        ),
+        "review_loop_section": _build_review_loop_section(working_session_id, max_review_rounds),
     }
 
     if template:
@@ -322,6 +322,7 @@ class ReviewerSessionService:
             working_session_id=working_session.id if working_session else "",
             max_review_rounds=self._cfg.max_review_rounds,
             template=self._cfg.reviewer_initial_prompt_template,
+            launch_command=raid.launch_command,
         )
 
         request = SpawnRequest(
@@ -395,11 +396,13 @@ class ReviewerSessionService:
         ]
         for finding in result.findings:
             feedback_lines.append(f"- {finding}")
-        feedback_lines.extend([
-            "",
-            "After fixing, `git add`, `git commit`, and `git push` your changes,",
-            "then notify the reviewer that the fixes are ready for re-review.",
-        ])
+        feedback_lines.extend(
+            [
+                "",
+                "After fixing, `git add`, `git commit`, and `git push` your changes,",
+                "then notify the reviewer that the fixes are ready for re-review.",
+            ]
+        )
 
         try:
             await volundr.send_message(raid.session_id, "\n".join(feedback_lines))

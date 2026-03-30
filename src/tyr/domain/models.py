@@ -144,6 +144,7 @@ class Raid:
     reviewer_session_id: str | None = None
     review_round: int = 0
     planner_session_id: str | None = None
+    launch_command: str | None = None
 
 
 @dataclass(frozen=True)
@@ -245,6 +246,7 @@ class TrackerIssue:
     estimate: float | None = None
     url: str = ""
     milestone_id: str | None = None
+    launch_command: str | None = None
 
 
 # ---------------------------------------------------------------------------
