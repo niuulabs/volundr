@@ -30,8 +30,8 @@ func NewPATAuth(cfg *AuthConfig) *PATAuth {
 // Wrap returns an http.Handler that enforces PAT authentication.
 func (a *PATAuth) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip auth for health check.
-		if r.URL.Path == "/health" {
+		// Skip auth for health check and admin endpoints (localhost-only).
+		if r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/admin/") {
 			next.ServeHTTP(w, r)
 			return
 		}

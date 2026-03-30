@@ -177,6 +177,41 @@ func startTestServer(t *testing.T, cfg *Config) (string, context.CancelFunc) {
 	return baseURL, cancel
 }
 
+func TestServer_AdminShutdownEndpoint(t *testing.T) {
+	cfg := DefaultForgeConfig()
+	cfg.Forge.WorkspacesDir = t.TempDir()
+
+	baseURL, cancel := startTestServer(t, cfg)
+	defer cancel()
+
+	// Call the shutdown endpoint.
+	url := baseURL + "/admin/shutdown"
+	resp, err := http.Post(url, "application/json", http.NoBody) //nolint:noctx // test request
+	if err != nil {
+		t.Fatalf("POST /admin/shutdown: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestServer_Addr(t *testing.T) {
+	cfg := DefaultForgeConfig()
+	cfg.Forge.WorkspacesDir = t.TempDir()
+
+	srv, err := NewServer(cfg)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	expected := "127.0.0.1:8080"
+	if got := srv.Addr(); got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
 func TestServer_WebEnabled_ServesConfigJSON(t *testing.T) {
 	cfg := DefaultForgeConfig()
 	cfg.Forge.WorkspacesDir = t.TempDir()

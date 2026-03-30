@@ -220,3 +220,22 @@ func TestPATAuth_HealthBypassesAuth(t *testing.T) {
 		t.Errorf("expected 200 for /health without token, got %d", rec.Code)
 	}
 }
+
+func TestPATAuth_AdminShutdownBypassesAuth(t *testing.T) {
+	auth := NewPATAuth(&AuthConfig{
+		Mode:   "pat",
+		Tokens: []PATEntry{{Name: "tyr", Token: "secret"}},
+	})
+
+	handler := auth.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/shutdown", http.NoBody)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for /admin/shutdown without token, got %d", rec.Code)
+	}
+}
