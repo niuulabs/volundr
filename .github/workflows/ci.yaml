@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, feat/volundr-the-coding-forge]
 
 permissions: read-all
 
@@ -27,6 +27,11 @@ jobs:
       container-names: ${{ steps.override.outputs.names }}
       has_containers: ${{ steps.override.outputs.any }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       # TODO: restore path-based filtering after pipelines are validated
@@ -98,6 +103,11 @@ jobs:
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install uv
@@ -124,6 +134,11 @@ jobs:
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install uv
@@ -164,6 +179,11 @@ jobs:
       run:
         working-directory: web
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Node.js
@@ -194,6 +214,11 @@ jobs:
       run:
         working-directory: web
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Node.js
@@ -228,6 +253,11 @@ jobs:
       run:
         working-directory: cli
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
@@ -251,6 +281,11 @@ jobs:
       run:
         working-directory: cli
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
@@ -285,6 +320,11 @@ jobs:
     if: needs.changes.outputs.go == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
@@ -313,6 +353,11 @@ jobs:
     if: needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Helm
@@ -342,6 +387,11 @@ jobs:
         platform: [amd64, arm64]
         container: ${{ fromJson(needs.changes.outputs.container-names) }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Docker Buildx
@@ -380,6 +430,11 @@ jobs:
       matrix:
         container: ${{ fromJson(needs.changes.outputs.container-names) }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - name: Log in to Container Registry
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         with:
@@ -415,6 +470,11 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Helm
@@ -453,7 +513,7 @@ jobs:
           helm push .helm-packages/volundr-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
   # ---------------------------------------------------------------------------
-  # Security — container vulnerability scanning
+  # Security — container vulnerability scanning (Grype)
   # ---------------------------------------------------------------------------
   scan-containers:
     name: "Scan: ${{ matrix.container }}"
@@ -467,6 +527,11 @@ jobs:
       matrix:
         container: ${{ fromJson(needs.changes.outputs.container-names) }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Log in to Container Registry
@@ -476,20 +541,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Scan container with Trivy
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
-        with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}
-          format: sarif
-          output: trivy-${{ matrix.container }}.sarif
-          severity: CRITICAL,HIGH
+      - name: Install Grype
+        run: |
+          GRYPE_VERSION="0.87.0"
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}"
+          grype version
 
-      - name: Upload Trivy results
+      - name: Scan container with Grype
+        run: |
+          grype "ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}" \
+            --only-fixed \
+            --fail-on critical \
+            -o sarif > "grype-${{ matrix.container }}.sarif"
+
+      - name: Upload Grype results
         uses: github/codeql-action/upload-sarif@c6f931105cb2c34c8f901cc885ba1e2e259cf745 # v4
-        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.container)) != ''
+        if: always()
         with:
-          sarif_file: trivy-${{ matrix.container }}.sarif
-          category: trivy-${{ matrix.container }}
+          sarif_file: grype-${{ matrix.container }}.sarif
+          category: grype-${{ matrix.container }}
 
   # ---------------------------------------------------------------------------
   # Security (always runs)
@@ -498,6 +568,11 @@ jobs:
     name: Dependency Review
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Dependency review

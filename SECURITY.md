@@ -18,7 +18,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 
 ## Security Measures
 
-- All container images are scanned with [Trivy](https://trivy.dev/) on every release
+- All container images are scanned with [Grype](https://github.com/anchore/grype) on every release
 - Dependencies are monitored with [Dependabot](https://github.com/dependabot)
 - Secrets are scanned with [TruffleHog](https://trufflesecurity.com/trufflehog)
 - CLI binaries include [build provenance attestations](https://github.com/actions/attest-build-provenance)
