@@ -188,6 +188,7 @@ class StubTracker(TrackerPort):
         planner_session_id: str | None = None,
         acceptance_criteria: list[str] | None = None,
         declared_files: list[str] | None = None,
+        launch_command: str | None = None,
     ) -> Raid:
         entry = self.progress.setdefault(tracker_id, {})
         if status is not None:
@@ -223,6 +224,9 @@ class StubTracker(TrackerPort):
                     retry_count=raid.retry_count,
                     created_at=raid.created_at,
                     updated_at=datetime.now(UTC),
+                    launch_command=launch_command
+                    if launch_command is not None
+                    else raid.launch_command,
                 )
                 if raid.session_id:
                     self.raids_by_session[raid.session_id] = updated
