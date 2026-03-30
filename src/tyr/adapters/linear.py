@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 _RAID_TO_LINEAR: dict[RaidStatus, str] = {
     RaidStatus.PENDING: "Todo",
     RaidStatus.QUEUED: "Todo",
+    RaidStatus.CONTRACTING: "In Progress",
     RaidStatus.RUNNING: "In Progress",
     RaidStatus.REVIEW: "In Review",
     RaidStatus.ESCALATED: "In Review",
