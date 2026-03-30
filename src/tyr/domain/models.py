@@ -277,6 +277,27 @@ class SagaStructure:
 
 
 # ---------------------------------------------------------------------------
+# Reviewer outcome log (append-only audit)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReviewerOutcome:
+    """A single reviewer decision record for calibration analytics."""
+
+    id: UUID
+    raid_id: UUID
+    owner_id: str
+    reviewer_decision: str  # auto_approved | retried | escalated
+    reviewer_confidence: float
+    reviewer_issues_count: int = 0
+    actual_outcome: str | None = None  # merged | reverted | abandoned | None = pending
+    decision_at: datetime | None = None
+    resolved_at: datetime | None = None
+    notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Personal access tokens — re-exported from shared niuu module
 # ---------------------------------------------------------------------------
 

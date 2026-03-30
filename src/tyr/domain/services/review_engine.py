@@ -35,6 +35,7 @@ from tyr.domain.models import (
     PRStatus,
     Raid,
     RaidStatus,
+    ReviewerOutcome,
     validate_transition,
 )
 from tyr.domain.services.reviewer_session import (
@@ -44,6 +45,7 @@ from tyr.domain.services.reviewer_session import (
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
+from tyr.ports.reviewer_outcome_repository import ReviewerOutcomeRepository
 from tyr.ports.tracker import TrackerFactory, TrackerPort
 from tyr.ports.volundr import VolundrFactory
 
@@ -130,6 +132,7 @@ class ReviewEngine:
         reviewer_service: ReviewerSessionService | None = None,
         integration_repo: IntegrationRepository | None = None,
         dispatcher_repo: DispatcherRepository | None = None,
+        outcome_repo: ReviewerOutcomeRepository | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -139,6 +142,7 @@ class ReviewEngine:
         self._reviewer = reviewer_service
         self._integration_repo = integration_repo
         self._dispatcher_repo = dispatcher_repo
+        self._outcome_repo = outcome_repo
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
         # Maps reviewer_session_id → (raid_tracker_id, owner_id)
@@ -220,9 +224,7 @@ class ReviewEngine:
                     tracker, tracker_id, owner_id, raid, score
                 )
             elif raid.review_round >= self._cfg.max_review_rounds:
-                decision = await self._handle_escalation(
-                    tracker, tracker_id, owner_id, raid, score
-                )
+                decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
             else:
                 # Low confidence but approved — let the loop continue
                 new_round = raid.review_round + 1
@@ -230,13 +232,17 @@ class ReviewEngine:
                 self._reviewer_sessions[session_id] = (tracker_id, owner_id)
                 logger.info(
                     "Reviewer approved but low confidence (%.2f < %.2f) — round %d/%d, continuing",
-                    result.confidence, self._cfg.auto_approve_threshold,
-                    new_round, self._cfg.max_review_rounds,
+                    result.confidence,
+                    self._cfg.auto_approve_threshold,
+                    new_round,
+                    self._cfg.max_review_rounds,
                 )
                 return
             logger.info(
                 "Post-reviewer decision for %s: %s (reason=%s)",
-                tracker_id, decision.action, decision.reason,
+                tracker_id,
+                decision.action,
+                decision.reason,
             )
             return
 
@@ -249,18 +255,22 @@ class ReviewEngine:
         if new_round >= self._cfg.max_review_rounds:
             # Max rounds exhausted — escalate
             self._reviewer_sessions.pop(session_id, None)
-            decision = await self._handle_escalation(
-                tracker, tracker_id, owner_id, raid, score
-            )
+            decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
             logger.info(
                 "Max review rounds (%d) reached for %s — %s (reason=%s)",
-                self._cfg.max_review_rounds, tracker_id, decision.action, decision.reason,
+                self._cfg.max_review_rounds,
+                tracker_id,
+                decision.action,
+                decision.reason,
             )
             return
 
         logger.info(
             "Review round %d/%d for %s: %d issues, reviewer driving loop",
-            new_round, self._cfg.max_review_rounds, tracker_id, len(result.findings),
+            new_round,
+            self._cfg.max_review_rounds,
+            tracker_id,
+            len(result.findings),
         )
 
     async def start(self) -> None:
@@ -691,6 +701,7 @@ class ReviewEngine:
         phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
 
         await self._emit_state_changed(updated, owner_id=owner_id, action="auto_approved")
+        await self._record_outcome(raid, owner_id, "auto_approved", score)
 
         return ReviewDecision(
             raid=updated,
@@ -727,12 +738,11 @@ class ReviewEngine:
                 lines.append("---")
                 lines.append("")
             title = f"Review Transcript — {raid.name}"
-            await tracker.attach_issue_document(
-                tracker_id, title, "\n".join(lines)
-            )
+            await tracker.attach_issue_document(tracker_id, title, "\n".join(lines))
             logger.info(
                 "Attached review transcript (%d turns) to %s",
-                len(turns), tracker_id,
+                len(turns),
+                tracker_id,
             )
         except Exception:
             logger.warning(
@@ -748,9 +758,7 @@ class ReviewEngine:
             await adapters[0].stop_session(reviewer_session_id)
             logger.info("Stopped reviewer session %s", reviewer_session_id)
         except Exception:
-            logger.warning(
-                "Failed to stop reviewer session %s", reviewer_session_id, exc_info=True
-            )
+            logger.warning("Failed to stop reviewer session %s", reviewer_session_id, exc_info=True)
 
     async def _handle_ci_failure(
         self,
@@ -826,6 +834,7 @@ class ReviewEngine:
         validate_transition(raid.status, RaidStatus.ESCALATED)
         updated = await tracker.update_raid_progress(tracker_id, status=RaidStatus.ESCALATED)
         await self._emit_state_changed(updated, owner_id=owner_id, action="escalated")
+        await self._record_outcome(raid, owner_id, "escalated", score)
         return ReviewDecision(
             raid=updated,
             action="escalated",
@@ -862,6 +871,7 @@ class ReviewEngine:
         )
 
         await self._emit_state_changed(updated, owner_id=owner_id, action="retried")
+        await self._record_outcome(raid, owner_id, "retried", raid.confidence)
         return ReviewDecision(raid=updated, action="retried", reason=reason)
 
     # -- Session feedback --
@@ -970,3 +980,28 @@ class ReviewEngine:
                 },
             )
         )
+
+    async def _record_outcome(
+        self,
+        raid: Raid,
+        owner_id: str,
+        decision: str,
+        confidence: float,
+        issues_count: int = 0,
+    ) -> None:
+        """Fire-and-log: persist a reviewer outcome record if the repo is wired."""
+        if self._outcome_repo is None:
+            return
+        try:
+            outcome = ReviewerOutcome(
+                id=uuid4(),
+                raid_id=raid.id,
+                owner_id=owner_id,
+                reviewer_decision=decision,
+                reviewer_confidence=confidence,
+                reviewer_issues_count=issues_count,
+                decision_at=datetime.now(UTC),
+            )
+            await self._outcome_repo.record(outcome)
+        except Exception:
+            logger.warning("Failed to record reviewer outcome for raid %s", raid.id, exc_info=True)
