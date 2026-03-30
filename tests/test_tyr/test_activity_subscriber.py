@@ -1516,6 +1516,44 @@ class TestContractCompletionRouting:
         assert len(contract_engine.completions) == 0
 
     @pytest.mark.asyncio
+    async def test_contract_fetch_error_raises(self) -> None:
+        """Error fetching contract output should propagate (re-raised)."""
+        contract_engine = StubContractEngine()
+        planner_session = "planner-err-1"
+        contract_engine.register(planner_session, "tracker-1", "user-1")
+
+        class FailingVolundr(StubVolundr):
+            async def get_last_assistant_message(self, session_id: str) -> str:
+                raise RuntimeError("fetch failed")
+
+        failing_volundr = FailingVolundr()
+        sub, _, tracker, _ = _make_subscriber()
+        sub._contract_engine = contract_engine
+
+        with pytest.raises(RuntimeError, match="fetch failed"):
+            await sub._try_handle_contract_completion(planner_session, failing_volundr)
+
+        assert len(contract_engine.completions) == 0
+
+    @pytest.mark.asyncio
+    async def test_contract_handle_error_is_swallowed(self) -> None:
+        """Error in handle_contract_completion should be logged, not raised."""
+
+        class FailingContractEngine(StubContractEngine):
+            async def handle_contract_completion(self, session_id: str, output: str) -> None:
+                raise RuntimeError("handle failed")
+
+        contract_engine = FailingContractEngine()
+        planner_session = "planner-err-2"
+        contract_engine.register(planner_session, "tracker-1", "user-1")
+
+        sub, volundr, tracker, _ = _make_subscriber()
+        sub._contract_engine = contract_engine
+
+        # Should not raise
+        await sub._try_handle_contract_completion(planner_session, volundr)
+
+    @pytest.mark.asyncio
     async def test_no_contract_engine_does_not_crash(self) -> None:
         """When contract_engine is None, idle events for unknown sessions do not crash."""
         sub, volundr, tracker, _ = _make_subscriber()
