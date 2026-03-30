@@ -220,3 +220,45 @@ func TestPATAuth_HealthBypassesAuth(t *testing.T) {
 		t.Errorf("expected 200 for /health without token, got %d", rec.Code)
 	}
 }
+
+func TestPATAuth_AdminShutdownBypassesAuth(t *testing.T) {
+	auth := NewPATAuth(&AuthConfig{
+		Mode:   "pat",
+		Tokens: []PATEntry{{Name: "tyr", Token: "secret"}},
+	})
+
+	handler := auth.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Admin endpoints must come from localhost.
+	req := httptest.NewRequest(http.MethodPost, "/admin/shutdown", http.NoBody)
+	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for /admin/shutdown from localhost, got %d", rec.Code)
+	}
+}
+
+func TestPATAuth_AdminShutdownBlocksRemote(t *testing.T) {
+	auth := NewPATAuth(&AuthConfig{
+		Mode:   "pat",
+		Tokens: []PATEntry{{Name: "tyr", Token: "secret"}},
+	})
+
+	handler := auth.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Non-localhost should be rejected.
+	req := httptest.NewRequest(http.MethodPost, "/admin/shutdown", http.NoBody)
+	req.RemoteAddr = "10.0.0.5:54321"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for /admin/shutdown from remote, got %d", rec.Code)
+	}
+}

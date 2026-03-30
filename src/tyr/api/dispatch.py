@@ -423,9 +423,15 @@ def create_dispatch_router() -> APIRouter:
                         phase_tracker_id=issue.milestone_id,
                         saga_tracker_id=saga.tracker_id,
                     )
-                    logger.info("Dispatch: %s.update_raid_progress OK for %s", adapter_name, issue.id)
+                    logger.info(
+                        "Dispatch: %s.update_raid_progress OK for %s",
+                        adapter_name, issue.id,
+                    )
                     await adapter.update_raid_state(issue.id, RaidStatus.RUNNING)
-                    logger.info("Dispatch: %s.update_raid_state OK for %s → In Progress", adapter_name, issue.id)
+                    logger.info(
+                        "Dispatch: %s.update_raid_state OK for %s → In Progress",
+                        adapter_name, issue.id,
+                    )
 
                 results.append(
                     DispatchResult(

@@ -8,6 +8,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/niuulabs/volundr/cli/internal/tyr"
+	"github.com/niuulabs/volundr/cli/internal/web"
 )
 
 // Server is the main forge server that ties together the store, runner,
@@ -19,6 +22,8 @@ type Server struct {
 	bus    EventEmitter
 	auth   *PATAuth
 	srv    *http.Server
+	tyrSrv *tyr.Server
+	cancel context.CancelFunc // triggers graceful shutdown when called
 }
 
 // NewServer creates a new forge server from the given config.
@@ -53,7 +58,27 @@ func (s *Server) Run(ctx context.Context) error {
 	handler := NewHandler(s.runner)
 	handler.RegisterRoutes(mux)
 
+	// Admin shutdown endpoint — localhost-only, no auth.
+	mux.HandleFunc("POST /admin/shutdown", s.handleShutdown)
+
+	// Mount tyr-mini routes if enabled.
+	if s.cfg.Tyr.Enabled {
+		if err := s.initTyr(ctx, mux); err != nil {
+			return fmt.Errorf("init tyr-mini: %w", err)
+		}
+		defer func() {
+			if s.tyrSrv != nil {
+				_ = s.tyrSrv.Close()
+			}
+		}()
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
+
+	if s.cfg.Web {
+		webCfg := &web.RuntimeConfig{APIBaseURL: fmt.Sprintf("http://%s", addr)}
+		mux.Handle("/", web.Handler(webCfg))
+	}
 
 	s.srv = &http.Server{
 		Addr:              addr,
@@ -61,7 +86,10 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadHeaderTimeout: s.cfg.Listen.ReadHeaderTimeout,
 	}
 
-	// Graceful shutdown on signals.
+	// Graceful shutdown on signals or cancel.
+	ctx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
+
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -70,8 +98,8 @@ func (s *Server) Run(ctx context.Context) error {
 		log.Println("shutting down...")
 		s.runner.StopAll()
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.Listen.ShutdownTimeout)
-		defer cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.cfg.Listen.ShutdownTimeout)
+		defer shutdownCancel()
 		_ = s.srv.Shutdown(shutdownCtx)
 	}()
 
@@ -79,6 +107,8 @@ func (s *Server) Run(ctx context.Context) error {
 	log.Printf("  workspaces: %s", s.cfg.Forge.WorkspacesDir)
 	log.Printf("  max concurrent sessions: %d", s.cfg.Forge.MaxConcurrent)
 	log.Printf("  auth mode: %s", s.cfg.Auth.Mode)
+	log.Printf("  web ui: %v", s.cfg.Web)
+	log.Printf("  tyr-mini: %v", s.cfg.Tyr.Enabled)
 
 	if s.cfg.Listen.Host == "0.0.0.0" && s.cfg.Auth.Mode == "none" {
 		log.Println("WARNING: listening on all interfaces with auth=none — any network client can create sessions")
@@ -107,4 +137,56 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// handleShutdown handles POST /admin/shutdown. It initiates graceful
+// shutdown: stops all sessions, then shuts down the HTTP server.
+func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
+	log.Println("shutdown requested via /admin/shutdown")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"shutting_down"}` + "\n"))
+
+	// Trigger shutdown asynchronously so the response can be sent.
+	go s.cancel()
+}
+
+// initTyr initializes the tyr-mini server, runs migrations, and mounts routes.
+func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
+	addr := fmt.Sprintf("http://%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
+	tyrCfg := &tyr.Config{
+		Enabled:     true,
+		DatabaseDSN: s.cfg.Tyr.DatabaseDSN,
+		ForgeURL:    addr,
+	}
+
+	tyrSrv, err := tyr.NewServer(tyrCfg)
+	if err != nil {
+		return fmt.Errorf("create tyr-mini server: %w", err)
+	}
+
+	applied, err := tyrSrv.RunMigrations(ctx)
+	if err != nil {
+		_ = tyrSrv.Close()
+		return fmt.Errorf("run tyr migrations: %w", err)
+	}
+	if applied > 0 {
+		log.Printf("tyr-mini: applied %d migrations", applied)
+	}
+
+	tyrSrv.RegisterRoutes(mux)
+	s.tyrSrv = tyrSrv
+
+	log.Println("tyr-mini: routes registered on /api/v1/tyr/*")
+	return nil
+}
+
+// Addr returns the configured listen address as "host:port".
+func (s *Server) Addr() string {
+	return fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
+}
+
+// TyrServer returns the tyr-mini server instance, if running.
+func (s *Server) TyrServer() *tyr.Server {
+	return s.tyrSrv
 }

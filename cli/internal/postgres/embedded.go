@@ -177,20 +177,30 @@ func (e *EmbeddedPostgres) RunMigrationsFS(ctx context.Context, migrationFS fs.F
 	return runMigrationsWithFS(ctx, db, migrationFS)
 }
 
-// runMigrationsWithFS applies all pending up migrations from an fs.FS.
+// defaultMigrationsTable is the default table name for tracking applied migrations.
+const defaultMigrationsTable = "schema_migrations"
+
+// runMigrationsWithFS applies all pending up migrations from an fs.FS
+// using the default schema_migrations table.
 func runMigrationsWithFS(ctx context.Context, db *sql.DB, migrationFS fs.FS) (int, error) {
+	return RunMigrationsWithFSTable(ctx, db, migrationFS, defaultMigrationsTable)
+}
+
+// RunMigrationsWithFSTable applies all pending up migrations from an fs.FS,
+// using the specified table name for tracking applied migrations.
+func RunMigrationsWithFSTable(ctx context.Context, db *sql.DB, migrationFS fs.FS, table string) (int, error) {
 	if err := db.PingContext(ctx); err != nil {
 		return 0, fmt.Errorf("ping database: %w", err)
 	}
 
-	_, err := db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
+	_, err := db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ DEFAULT NOW()
 		)
-	`)
+	`, table))
 	if err != nil {
-		return 0, fmt.Errorf("create schema_migrations table: %w", err)
+		return 0, fmt.Errorf("create %s table: %w", table, err)
 	}
 
 	entries, err := fs.ReadDir(migrationFS, ".")
@@ -212,7 +222,7 @@ func runMigrationsWithFS(ctx context.Context, db *sql.DB, migrationFS fs.FS) (in
 
 		var exists bool
 		err := db.QueryRowContext(ctx,
-			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)",
+			fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE version = $1)", table),
 			version,
 		).Scan(&exists)
 		if err != nil {
@@ -238,7 +248,7 @@ func runMigrationsWithFS(ctx context.Context, db *sql.DB, migrationFS fs.FS) (in
 		}
 
 		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO schema_migrations (version) VALUES ($1)",
+			fmt.Sprintf("INSERT INTO %s (version) VALUES ($1)", table),
 			version,
 		); err != nil {
 			_ = tx.Rollback()

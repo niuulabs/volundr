@@ -4,8 +4,11 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
+
+	"github.com/niuulabs/volundr/cli/internal/httputil"
 )
 
 // PATAuth is middleware that validates Bearer tokens against a configured
@@ -36,6 +39,19 @@ func (a *PATAuth) Wrap(next http.Handler) http.Handler {
 			return
 		}
 
+		// Admin endpoints are restricted to localhost only.
+		if strings.HasPrefix(r.URL.Path, "/admin/") {
+			host, _, _ := net.SplitHostPort(r.RemoteAddr)
+			if host != "127.0.0.1" && host != "::1" {
+				httputil.WriteJSON(w, http.StatusForbidden, map[string]string{
+					"detail": "admin endpoints restricted to localhost",
+				})
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		if a.mode == "none" {
 			next.ServeHTTP(w, r)
 			return
@@ -43,13 +59,13 @@ func (a *PATAuth) Wrap(next http.Handler) http.Handler {
 
 		token := extractBearerToken(r)
 		if token == "" {
-			writeError(w, http.StatusUnauthorized, "missing Authorization header")
+			httputil.WriteError(w, http.StatusUnauthorized, "missing Authorization header")
 			return
 		}
 
 		name, ok := a.validate(token)
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "invalid token")
+			httputil.WriteError(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
 
