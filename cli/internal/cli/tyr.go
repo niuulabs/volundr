@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"text/tabwriter"
@@ -225,8 +226,7 @@ func tyrGet(url string) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var body []byte
-	body, err = readAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -235,23 +235,6 @@ func tyrGet(url string) ([]byte, error) {
 		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
 	}
 	return body, nil
-}
-
-func readAll(r interface{ Read([]byte) (int, error) }) ([]byte, error) {
-	var buf []byte
-	tmp := make([]byte, 4096)
-	for {
-		n, err := r.Read(tmp)
-		if n > 0 {
-			buf = append(buf, tmp[:n]...)
-		}
-		if err != nil {
-			if err.Error() == "EOF" {
-				return buf, nil
-			}
-			return buf, err
-		}
-	}
 }
 
 func truncate(s string, maxLen int) string {

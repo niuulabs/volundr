@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,29 +28,6 @@ func TestTruncate(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("truncate(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
 		}
-	}
-}
-
-func TestReadAll(t *testing.T) {
-	data := "hello world test data"
-	r := bytes.NewReader([]byte(data))
-	got, err := readAll(r)
-	if err != nil {
-		t.Fatalf("readAll error: %v", err)
-	}
-	if string(got) != data {
-		t.Errorf("readAll = %q, want %q", string(got), data)
-	}
-}
-
-func TestReadAll_Empty(t *testing.T) {
-	r := bytes.NewReader(nil)
-	got, err := readAll(r)
-	if err != nil {
-		t.Fatalf("readAll error: %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("expected empty result, got %d bytes", len(got))
 	}
 }
 
@@ -90,22 +65,6 @@ func TestTyrGet_ConnectionError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for connection failure")
 	}
-}
-
-func TestReadAll_ErrorReader(t *testing.T) {
-	r := &errorReader{err: io.ErrUnexpectedEOF}
-	_, err := readAll(r)
-	if err == nil {
-		t.Fatal("expected error from readAll")
-	}
-}
-
-type errorReader struct {
-	err error
-}
-
-func (r *errorReader) Read(_ []byte) (int, error) {
-	return 0, r.err
 }
 
 func TestTyrCmd_HasSubcommands(t *testing.T) {

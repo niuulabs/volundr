@@ -3,11 +3,13 @@ package tyr
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/niuulabs/volundr/cli/internal/httputil"
 )
 
 // defaultInitialConfidence is the starting confidence score for new raids.
@@ -60,20 +62,20 @@ func (h *Handler) listSagas(w http.ResponseWriter, r *http.Request) {
 	ownerID := extractOwner(r)
 	sagas, err := h.store.ListSagas(r.Context(), ownerID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "list sagas: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "list sagas: %v", err)
+		return
+	}
+
+	counts, err := h.store.CountPhasesAndRaidsBySaga(r.Context(), ownerID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "count phases/raids: %v", err)
 		return
 	}
 
 	items := make([]SagaListItem, 0, len(sagas))
 	for i := range sagas {
 		s := &sagas[i]
-		phases, _ := h.store.ListPhases(r.Context(), s.ID)
-		raidCount := 0
-		for j := range phases {
-			raids, _ := h.store.ListRaids(r.Context(), phases[j].ID)
-			raidCount += len(raids)
-		}
-
+		c := counts[s.ID]
 		items = append(items, SagaListItem{
 			ID:             s.ID,
 			TrackerID:      s.TrackerID,
@@ -83,12 +85,12 @@ func (h *Handler) listSagas(w http.ResponseWriter, r *http.Request) {
 			Repos:          s.Repos,
 			FeatureBranch:  slugToFeatureBranch(s.Slug),
 			Status:         string(s.Status),
-			MilestoneCount: len(phases),
-			IssueCount:     raidCount,
+			MilestoneCount: c.PhaseCount,
+			IssueCount:     c.RaidCount,
 		})
 	}
 
-	writeJSON(w, http.StatusOK, items)
+	httputil.WriteJSON(w, http.StatusOK, items)
 }
 
 func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
@@ -97,24 +99,28 @@ func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
 
 	saga, err := h.store.GetSaga(r.Context(), sagaID, ownerID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "get saga: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "get saga: %v", err)
 		return
 	}
 	if saga == nil {
-		writeError(w, http.StatusNotFound, "saga not found: %s", sagaID)
+		httputil.WriteError(w, http.StatusNotFound, "saga not found: %s", sagaID)
 		return
 	}
 
 	phases, err := h.store.ListPhases(r.Context(), saga.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "list phases: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "list phases: %v", err)
 		return
 	}
 
 	phaseResponses := make([]PhaseDetailResponse, 0, len(phases))
 	for pi := range phases {
 		p := &phases[pi]
-		raids, _ := h.store.ListRaids(r.Context(), p.ID)
+		raids, err := h.store.ListRaids(r.Context(), p.ID)
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, "list raids: %v", err)
+			return
+		}
 		raidResponses := make([]RaidDetailResponse, 0, len(raids))
 		for ri := range raids {
 			rd := &raids[ri]
@@ -159,29 +165,29 @@ func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
 		Phases:        phaseResponses,
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	httputil.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) commitSaga(w http.ResponseWriter, r *http.Request) {
 	var req CommitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: %v", err)
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request body: %v", err)
 		return
 	}
 
 	if req.Name == "" || req.Slug == "" {
-		writeError(w, http.StatusBadRequest, "name and slug are required")
+		httputil.WriteError(w, http.StatusBadRequest, "name and slug are required")
 		return
 	}
 	if len(req.Phases) == 0 {
-		writeError(w, http.StatusUnprocessableEntity, "at least one phase is required")
+		httputil.WriteError(w, http.StatusUnprocessableEntity, "at least one phase is required")
 		return
 	}
 
 	// Check for duplicate slug.
 	existing, _ := h.store.GetSagaBySlug(r.Context(), req.Slug)
 	if existing != nil {
-		writeError(w, http.StatusConflict, "saga with slug %q already exists", req.Slug)
+		httputil.WriteError(w, http.StatusConflict, "saga with slug %q already exists", req.Slug)
 		return
 	}
 
@@ -276,11 +282,11 @@ func (h *Handler) commitSaga(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.CreateSaga(r.Context(), &saga, phases, raids); err != nil {
-		writeError(w, http.StatusInternalServerError, "create saga: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "create saga: %v", err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, CommittedSagaResponse{
+	httputil.WriteJSON(w, http.StatusCreated, CommittedSagaResponse{
 		ID:            sagaID,
 		TrackerID:     sagaID,
 		TrackerType:   "native",
@@ -301,11 +307,11 @@ func (h *Handler) deleteSaga(w http.ResponseWriter, r *http.Request) {
 
 	deleted, err := h.store.DeleteSaga(r.Context(), sagaID, ownerID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "delete saga: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "delete saga: %v", err)
 		return
 	}
 	if !deleted {
-		writeError(w, http.StatusNotFound, "saga not found: %s", sagaID)
+		httputil.WriteError(w, http.StatusNotFound, "saga not found: %s", sagaID)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -316,16 +322,16 @@ func (h *Handler) deleteSaga(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) raidsSummary(w http.ResponseWriter, r *http.Request) {
 	counts, err := h.store.CountByStatus(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "count raids: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "count raids: %v", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, counts)
+	httputil.WriteJSON(w, http.StatusOK, counts)
 }
 
 func (h *Handler) raidsActive(w http.ResponseWriter, r *http.Request) {
 	raids, err := h.store.ListActiveRaids(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "list active raids: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "list active raids: %v", err)
 		return
 	}
 
@@ -346,7 +352,7 @@ func (h *Handler) raidsActive(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, results)
+	httputil.WriteJSON(w, http.StatusOK, results)
 }
 
 func (h *Handler) approveRaid(w http.ResponseWriter, r *http.Request) {
@@ -355,23 +361,23 @@ func (h *Handler) approveRaid(w http.ResponseWriter, r *http.Request) {
 
 	raid, err := h.store.GetRaid(ctx, raidID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "get raid: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "get raid: %v", err)
 		return
 	}
 	if raid == nil {
-		writeError(w, http.StatusNotFound, "raid not found: %s", raidID)
+		httputil.WriteError(w, http.StatusNotFound, "raid not found: %s", raidID)
 		return
 	}
 
 	if err := h.store.UpdateRaidStatus(ctx, raidID, RaidStatusMerged, nil); err != nil {
-		writeError(w, http.StatusConflict, "approve raid: %v", err)
+		httputil.WriteError(w, http.StatusConflict, "approve raid: %v", err)
 		return
 	}
 
 	_ = h.store.AddConfidenceEvent(ctx, raidID, "human_approved", 0.1)
 
 	raid, _ = h.store.GetRaid(ctx, raidID)
-	writeJSON(w, http.StatusOK, raidToResponse(raid))
+	httputil.WriteJSON(w, http.StatusOK, raidToResponse(raid))
 }
 
 func (h *Handler) rejectRaid(w http.ResponseWriter, r *http.Request) {
@@ -383,24 +389,24 @@ func (h *Handler) rejectRaid(w http.ResponseWriter, r *http.Request) {
 
 	raid, err := h.store.GetRaid(ctx, raidID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "get raid: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "get raid: %v", err)
 		return
 	}
 	if raid == nil {
-		writeError(w, http.StatusNotFound, "raid not found: %s", raidID)
+		httputil.WriteError(w, http.StatusNotFound, "raid not found: %s", raidID)
 		return
 	}
 
 	reason := nilIfEmpty(body.Reason)
 	if err := h.store.UpdateRaidStatus(ctx, raidID, RaidStatusFailed, reason); err != nil {
-		writeError(w, http.StatusConflict, "reject raid: %v", err)
+		httputil.WriteError(w, http.StatusConflict, "reject raid: %v", err)
 		return
 	}
 
 	_ = h.store.AddConfidenceEvent(ctx, raidID, "human_reject", -0.2)
 
 	raid, _ = h.store.GetRaid(ctx, raidID)
-	writeJSON(w, http.StatusOK, raidToResponse(raid))
+	httputil.WriteJSON(w, http.StatusOK, raidToResponse(raid))
 }
 
 func (h *Handler) retryRaid(w http.ResponseWriter, r *http.Request) {
@@ -409,34 +415,29 @@ func (h *Handler) retryRaid(w http.ResponseWriter, r *http.Request) {
 
 	raid, err := h.store.GetRaid(ctx, raidID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "get raid: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "get raid: %v", err)
 		return
 	}
 	if raid == nil {
-		writeError(w, http.StatusNotFound, "raid not found: %s", raidID)
+		httputil.WriteError(w, http.StatusNotFound, "raid not found: %s", raidID)
 		return
 	}
 
 	if err := h.store.UpdateRaidStatus(ctx, raidID, RaidStatusQueued, nil); err != nil {
-		writeError(w, http.StatusConflict, "retry raid: %v", err)
+		httputil.WriteError(w, http.StatusConflict, "retry raid: %v", err)
 		return
 	}
 
 	_ = h.store.AddConfidenceEvent(ctx, raidID, "retry", -0.1)
 
 	raid, _ = h.store.GetRaid(ctx, raidID)
-	writeJSON(w, http.StatusOK, raidToResponse(raid))
+	httputil.WriteJSON(w, http.StatusOK, raidToResponse(raid))
 }
 
 // Dispatch handlers.
 
 func (h *Handler) dispatchQueue(w http.ResponseWriter, r *http.Request) {
 	ownerID := extractOwner(r)
-	sagas, err := h.store.ListSagas(r.Context(), ownerID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "list sagas: %v", err)
-		return
-	}
 
 	type queueItem struct {
 		SagaID        string   `json:"saga_id"`
@@ -452,45 +453,36 @@ func (h *Handler) dispatchQueue(w http.ResponseWriter, r *http.Request) {
 		Status        string   `json:"status"`
 	}
 
-	var queue []queueItem
-	for si := range sagas {
-		saga := &sagas[si]
-		phases, _ := h.store.ListPhases(r.Context(), saga.ID)
-		for pi := range phases {
-			phase := &phases[pi]
-			raids, _ := h.store.ListRaids(r.Context(), phase.ID)
-			for ri := range raids {
-				rd := &raids[ri]
-				if rd.Status != RaidStatusPending {
-					continue
-				}
-				queue = append(queue, queueItem{
-					SagaID:        saga.ID,
-					SagaName:      saga.Name,
-					SagaSlug:      saga.Slug,
-					Repos:         saga.Repos,
-					FeatureBranch: slugToFeatureBranch(saga.Slug),
-					PhaseName:     phase.Name,
-					IssueID:       rd.TrackerID,
-					Identifier:    rd.TrackerID,
-					Title:         rd.Name,
-					Description:   rd.Description,
-					Status:        string(rd.Status),
-				})
-			}
-		}
+	items, err := h.store.ListDispatchQueue(r.Context(), ownerID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "list dispatch queue: %v", err)
+		return
 	}
 
-	if queue == nil {
-		queue = []queueItem{}
+	queue := make([]queueItem, 0, len(items))
+	for i := range items {
+		item := &items[i]
+		queue = append(queue, queueItem{
+			SagaID:        item.SagaID,
+			SagaName:      item.SagaName,
+			SagaSlug:      item.SagaSlug,
+			Repos:         item.Repos,
+			FeatureBranch: item.FeatureBranch,
+			PhaseName:     item.PhaseName,
+			IssueID:       item.RaidTrackerID,
+			Identifier:    item.RaidTrackerID,
+			Title:         item.RaidName,
+			Description:   item.RaidDesc,
+			Status:        item.RaidStatus,
+		})
 	}
-	writeJSON(w, http.StatusOK, queue)
+	httputil.WriteJSON(w, http.StatusOK, queue)
 }
 
 func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 	var req DispatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: %v", err)
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request body: %v", err)
 		return
 	}
 
@@ -547,11 +539,11 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 	if results == nil {
 		results = []DispatchResult{}
 	}
-	writeJSON(w, http.StatusOK, results)
+	httputil.WriteJSON(w, http.StatusOK, results)
 }
 
 func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"default_system_prompt": "",
 		"default_model":         "claude-sonnet-4-6",
 		"models":                []map[string]string{},
@@ -561,7 +553,7 @@ func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
 // Not-implemented stub.
 
 func (h *Handler) notImplemented(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{
+	httputil.WriteJSON(w, http.StatusNotImplemented, map[string]string{
 		"detail": "this endpoint requires full Tyr (not available in mini mode)",
 	})
 }
@@ -569,9 +561,17 @@ func (h *Handler) notImplemented(w http.ResponseWriter, _ *http.Request) {
 // Helpers.
 
 func (h *Handler) findRaidByTrackerID(ctx context.Context, sagaID, trackerID string) *Raid {
-	phases, _ := h.store.ListPhases(ctx, sagaID)
+	phases, err := h.store.ListPhases(ctx, sagaID)
+	if err != nil {
+		log.Printf("tyr-mini: list phases for saga %s: %v", sagaID, err)
+		return nil
+	}
 	for _, phase := range phases {
-		raids, _ := h.store.ListRaids(ctx, phase.ID)
+		raids, err := h.store.ListRaids(ctx, phase.ID)
+		if err != nil {
+			log.Printf("tyr-mini: list raids for phase %s: %v", phase.ID, err)
+			continue
+		}
 		for i := range raids {
 			if raids[i].TrackerID == trackerID || raids[i].ID == trackerID {
 				return &raids[i]
@@ -600,17 +600,6 @@ func extractOwner(r *http.Request) string {
 		return "local"
 	}
 	return ownerID
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	writeJSON(w, status, map[string]string{"detail": msg})
 }
 
 func nilIfEmpty(s string) *string {

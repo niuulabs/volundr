@@ -58,6 +58,11 @@ func TestListSagas_Empty(t *testing.T) {
 		WithArgs("test-user").
 		WillReturnRows(rows)
 
+	// CountPhasesAndRaidsBySaga — no results for empty saga list.
+	mock.ExpectQuery("SELECT s.id, COUNT").
+		WithArgs("test-user").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "phase_count", "raid_count"}))
+
 	w := doRequest(h.listSagas, "GET", "/api/v1/tyr/sagas", nil)
 
 	if w.Code != http.StatusOK {
@@ -83,17 +88,12 @@ func TestListSagas_WithResults(t *testing.T) {
 		WithArgs("test-user").
 		WillReturnRows(sagaRows)
 
-	phaseRows := sqlmock.NewRows([]string{"id", "saga_id", "tracker_id", "number", "name", "status", "confidence"}).
-		AddRow("phase-1", "saga-1", "phase-1", 1, "Phase 1", "ACTIVE", 0.75)
-	mock.ExpectQuery("SELECT .+ FROM phases").
-		WithArgs("saga-1").
-		WillReturnRows(phaseRows)
-
-	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("raid-1", "phase-1", "raid-1", "Raid 1", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
-	mock.ExpectQuery("SELECT .+ FROM raids").
-		WithArgs("phase-1").
-		WillReturnRows(raidRows)
+	// CountPhasesAndRaidsBySaga — single JOIN query replacing N+1.
+	countRows := sqlmock.NewRows([]string{"id", "phase_count", "raid_count"}).
+		AddRow("saga-1", 1, 1)
+	mock.ExpectQuery("SELECT s.id, COUNT").
+		WithArgs("test-user").
+		WillReturnRows(countRows)
 
 	w := doRequest(h.listSagas, "GET", "/api/v1/tyr/sagas", nil)
 
@@ -250,9 +250,9 @@ func TestDeleteSaga_NotFound(t *testing.T) {
 	h, mock := setupHandler(t)
 
 	mock.ExpectBegin()
+	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM raids").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM phases").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM sagas").
 		WithArgs("nonexistent", "test-user").
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -404,9 +404,10 @@ func TestDispatchConfig(t *testing.T) {
 func TestDispatchQueue_Empty(t *testing.T) {
 	h, mock := setupHandler(t)
 
-	mock.ExpectQuery("SELECT .+ FROM sagas").
-		WithArgs("test-user").
-		WillReturnRows(sqlmock.NewRows(nil))
+	// ListDispatchQueue — single JOIN query.
+	mock.ExpectQuery("SELECT s.id, s.name, s.slug").
+		WithArgs("test-user", string(RaidStatusPending)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "slug", "repos", "feature_branch", "phase_name", "tracker_id", "raid_name", "description", "status"}))
 
 	w := doRequest(h.dispatchQueue, "GET", "/api/v1/tyr/dispatch/queue", nil)
 
@@ -566,9 +567,9 @@ func TestDeleteSaga_Success(t *testing.T) {
 	h, mock := setupHandler(t)
 
 	mock.ExpectBegin()
+	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM raids").WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("DELETE FROM phases").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM sagas").
 		WithArgs("saga-1", "test-user").
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -733,27 +734,12 @@ func TestRetryRaid_Success(t *testing.T) {
 func TestDispatchQueue_WithPendingRaids(t *testing.T) {
 	h, mock := setupHandler(t)
 
-	now := time.Now()
-	// ListSagas
-	sagaRows := sqlmock.NewRows([]string{"id", "tracker_id", "tracker_type", "slug", "name", "repos", "status", "confidence", "owner_id", "base_branch", "created_at"}).
-		AddRow("saga-1", "t-1", "native", "test", "Test Saga", pq.Array([]string{"repo1"}), "ACTIVE", 0.75, "test-user", "main", now)
-	mock.ExpectQuery("SELECT .+ FROM sagas").
-		WithArgs("test-user").
-		WillReturnRows(sagaRows)
-
-	// ListPhases
-	phaseRows := sqlmock.NewRows([]string{"id", "saga_id", "tracker_id", "number", "name", "status", "confidence"}).
-		AddRow("p-1", "saga-1", "p-1", 1, "Phase 1", "ACTIVE", 0.75)
-	mock.ExpectQuery("SELECT .+ FROM phases").
-		WithArgs("saga-1").
-		WillReturnRows(phaseRows)
-
-	// ListRaids (with a PENDING raid)
-	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("r-1", "p-1", "NIU-100", "Pending Raid", "do stuff", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
-	mock.ExpectQuery("SELECT .+ FROM raids").
-		WithArgs("p-1").
-		WillReturnRows(raidRows)
+	// ListDispatchQueue — single JOIN query returning pending raids.
+	queueRows := sqlmock.NewRows([]string{"id", "name", "slug", "repos", "feature_branch", "phase_name", "tracker_id", "raid_name", "description", "status"}).
+		AddRow("saga-1", "Test Saga", "test", pq.Array([]string{"repo1"}), "feat/test", "Phase 1", "NIU-100", "Pending Raid", "do stuff", "PENDING")
+	mock.ExpectQuery("SELECT s.id, s.name, s.slug").
+		WithArgs("test-user", string(RaidStatusPending)).
+		WillReturnRows(queueRows)
 
 	w := doRequest(h.dispatchQueue, "GET", "/api/v1/tyr/dispatch/queue", nil)
 

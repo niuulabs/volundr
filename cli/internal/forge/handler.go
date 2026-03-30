@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/niuulabs/volundr/cli/internal/httputil"
 )
 
 // Handler holds the HTTP handlers for the Volundr-compatible REST API.
@@ -39,12 +41,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	var req CreateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: %v", err)
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request body: %v", err)
 		return
 	}
 
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
+		httputil.WriteError(w, http.StatusBadRequest, "name is required")
 		return
 	}
 
@@ -55,11 +57,11 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 
 	sess, err := h.runner.CreateAndStart(r.Context(), &req, ownerID)
 	if err != nil {
-		writeError(w, http.StatusConflict, "%v", err)
+		httputil.WriteError(w, http.StatusConflict, "%v", err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, sess.ToResponse())
+	httputil.WriteJSON(w, http.StatusCreated, sess.ToResponse())
 }
 
 func (h *Handler) listSessions(w http.ResponseWriter, _ *http.Request) {
@@ -68,29 +70,29 @@ func (h *Handler) listSessions(w http.ResponseWriter, _ *http.Request) {
 	for i, sess := range sessions {
 		responses[i] = sess.ToResponse()
 	}
-	writeJSON(w, http.StatusOK, responses)
+	httputil.WriteJSON(w, http.StatusOK, responses)
 }
 
 func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	sess := h.runner.GetSession(id)
 	if sess == nil {
-		writeError(w, http.StatusNotFound, "session %s not found", id)
+		httputil.WriteError(w, http.StatusNotFound, "session %s not found", id)
 		return
 	}
-	writeJSON(w, http.StatusOK, sess.ToResponse())
+	httputil.WriteJSON(w, http.StatusOK, sess.ToResponse())
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	sess := h.runner.GetSession(id)
 	if sess == nil {
-		writeError(w, http.StatusNotFound, "session %s not found", id)
+		httputil.WriteError(w, http.StatusNotFound, "session %s not found", id)
 		return
 	}
 
 	if sess.Status == StatusRunning {
-		writeJSON(w, http.StatusOK, sess.ToResponse())
+		httputil.WriteJSON(w, http.StatusOK, sess.ToResponse())
 		return
 	}
 
@@ -111,17 +113,17 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request) {
 
 	newSess, err := h.runner.CreateAndStart(r.Context(), &req, ownerID)
 	if err != nil {
-		writeError(w, http.StatusConflict, "%v", err)
+		httputil.WriteError(w, http.StatusConflict, "%v", err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, newSess.ToResponse())
+	httputil.WriteJSON(w, http.StatusOK, newSess.ToResponse())
 }
 
 func (h *Handler) stopSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := h.runner.Stop(id); err != nil {
-		writeError(w, http.StatusNotFound, "%v", err)
+		httputil.WriteError(w, http.StatusNotFound, "%v", err)
 		return
 	}
 
@@ -130,13 +132,13 @@ func (h *Handler) stopSession(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	writeJSON(w, http.StatusOK, sess.ToResponse())
+	httputil.WriteJSON(w, http.StatusOK, sess.ToResponse())
 }
 
 func (h *Handler) deleteSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := h.runner.Delete(id); err != nil {
-		writeError(w, http.StatusNotFound, "%v", err)
+		httputil.WriteError(w, http.StatusNotFound, "%v", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -146,7 +148,7 @@ func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req SendMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: %v", err)
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request body: %v", err)
 		return
 	}
 
@@ -158,7 +160,7 @@ func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrSessionNotRunning):
 			status = http.StatusConflict
 		}
-		writeError(w, status, "%v", err)
+		httputil.WriteError(w, status, "%v", err)
 		return
 	}
 
@@ -169,26 +171,26 @@ func (h *Handler) getPRStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	pr, err := h.runner.GetPRStatus(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "%v", err)
+		httputil.WriteError(w, http.StatusNotFound, "%v", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, pr)
+	httputil.WriteJSON(w, http.StatusOK, pr)
 }
 
 func (h *Handler) getChronicle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	summary, err := h.runner.GetChronicle(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "%v", err)
+		httputil.WriteError(w, http.StatusNotFound, "%v", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, ChronicleResponse{Summary: summary})
+	httputil.WriteJSON(w, http.StatusOK, ChronicleResponse{Summary: summary})
 }
 
 func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "streaming not supported")
+		httputil.WriteError(w, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
 
@@ -232,7 +234,7 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getStats(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, h.runner.GetStats())
+	httputil.WriteJSON(w, http.StatusOK, h.runner.GetStats())
 }
 
 func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +242,7 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 	if ownerID == "" {
 		ownerID = "local"
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"user_id":      ownerID,
 		"email":        ownerID + "@forge.local",
 		"display_name": ownerID,
@@ -250,18 +252,5 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-// WriteJSON and writeError are shared HTTP response helpers.
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	writeJSON(w, status, map[string]string{"detail": msg})
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

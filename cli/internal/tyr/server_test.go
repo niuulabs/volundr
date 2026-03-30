@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+
+	"github.com/niuulabs/volundr/cli/internal/postgres"
 )
 
 func TestNewServer_MissingDSN(t *testing.T) {
@@ -225,7 +227,7 @@ func TestRunMigrationsFS_Success(t *testing.T) {
 		t.Fatalf("sub fs: %v", err2)
 	}
 
-	applied, err := runMigrationsFS(context.Background(), db, subFS)
+	applied, err := postgres.RunMigrationsWithFSTable(context.Background(), db, subFS, "tyr_schema_migrations")
 	if err != nil {
 		t.Fatalf("runMigrationsFS error: %v", err)
 	}
@@ -267,7 +269,7 @@ func TestRunMigrationsFS_ApplyNew(t *testing.T) {
 	}
 
 	subFS, _ := fs.Sub(sqlFS, "sql")
-	applied, err := runMigrationsFS(context.Background(), db, subFS)
+	applied, err := postgres.RunMigrationsWithFSTable(context.Background(), db, subFS, "tyr_schema_migrations")
 	if err != nil {
 		t.Fatalf("runMigrationsFS error: %v", err)
 	}

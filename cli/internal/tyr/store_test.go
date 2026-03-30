@@ -153,9 +153,9 @@ func TestStoreDeleteSaga_Success(t *testing.T) {
 	ctx := context.Background()
 
 	mock.ExpectBegin()
+	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM raids").WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("DELETE FROM phases").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM sagas").
 		WithArgs("saga-1", "owner-1").
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -175,9 +175,9 @@ func TestStoreDeleteSaga_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	mock.ExpectBegin()
+	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM raids").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM phases").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("DELETE FROM confidence_events").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM sagas").
 		WithArgs("missing", "owner-1").
 		WillReturnResult(sqlmock.NewResult(0, 0))

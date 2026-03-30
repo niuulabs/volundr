@@ -153,6 +153,15 @@ func (s *Store) DeleteSaga(ctx context.Context, sagaID, ownerID string) (bool, e
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Delete confidence events first (references raids which reference phases).
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM confidence_events WHERE raid_id IN (
+			SELECT r.id FROM raids r JOIN phases p ON r.phase_id = p.id WHERE p.saga_id = $1
+		)`, sagaID)
+	if err != nil {
+		return false, fmt.Errorf("delete confidence events: %w", err)
+	}
+
 	// Delete raids for all phases of this saga.
 	_, err = tx.ExecContext(ctx, `
 		DELETE FROM raids WHERE phase_id IN (SELECT id FROM phases WHERE saga_id = $1)`, sagaID)
@@ -165,12 +174,6 @@ func (s *Store) DeleteSaga(ctx context.Context, sagaID, ownerID string) (bool, e
 	if err != nil {
 		return false, fmt.Errorf("delete phases: %w", err)
 	}
-
-	// Delete confidence events for raids in this saga.
-	_, _ = tx.ExecContext(ctx, `
-		DELETE FROM confidence_events WHERE raid_id IN (
-			SELECT r.id FROM raids r JOIN phases p ON r.phase_id = p.id WHERE p.saga_id = $1
-		)`, sagaID)
 
 	result, err := tx.ExecContext(ctx, `DELETE FROM sagas WHERE id = $1 AND owner_id = $2`, sagaID, ownerID)
 	if err != nil {
@@ -401,6 +404,82 @@ func (s *Store) AddConfidenceEvent(ctx context.Context, raidID, eventType string
 	}
 
 	return tx.Commit()
+}
+
+// SagaCounts holds phase and raid counts for a saga.
+type SagaCounts struct {
+	SagaID     string
+	PhaseCount int
+	RaidCount  int
+}
+
+// CountPhasesAndRaidsBySaga returns phase/raid counts for all sagas owned by ownerID in a single query.
+func (s *Store) CountPhasesAndRaidsBySaga(ctx context.Context, ownerID string) (map[string]SagaCounts, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.id, COUNT(DISTINCT p.id) AS phase_count, COUNT(DISTINCT r.id) AS raid_count
+		FROM sagas s
+		LEFT JOIN phases p ON p.saga_id = s.id
+		LEFT JOIN raids r ON r.phase_id = p.id
+		WHERE s.owner_id = $1
+		GROUP BY s.id`, ownerID)
+	if err != nil {
+		return nil, fmt.Errorf("count phases and raids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[string]SagaCounts)
+	for rows.Next() {
+		var c SagaCounts
+		if err := rows.Scan(&c.SagaID, &c.PhaseCount, &c.RaidCount); err != nil {
+			return nil, fmt.Errorf("scan counts: %w", err)
+		}
+		result[c.SagaID] = c
+	}
+	return result, rows.Err()
+}
+
+// DispatchQueueItem holds the joined data for the dispatch queue.
+type DispatchQueueItem struct {
+	SagaID        string
+	SagaName      string
+	SagaSlug      string
+	Repos         []string
+	FeatureBranch string
+	PhaseName     string
+	RaidTrackerID string
+	RaidName      string
+	RaidDesc      string
+	RaidStatus    string
+}
+
+// ListDispatchQueue returns all PENDING raids joined with their saga/phase in a single query.
+func (s *Store) ListDispatchQueue(ctx context.Context, ownerID string) ([]DispatchQueueItem, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.id, s.name, s.slug, s.repos, 'feat/' || LOWER(s.slug),
+			p.name, r.tracker_id, r.name, COALESCE(r.description, ''), r.status
+		FROM raids r
+		JOIN phases p ON r.phase_id = p.id
+		JOIN sagas s ON p.saga_id = s.id
+		WHERE s.owner_id = $1 AND r.status = $2
+		ORDER BY s.created_at, p.number, r.created_at`,
+		ownerID, string(RaidStatusPending))
+	if err != nil {
+		return nil, fmt.Errorf("query dispatch queue: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []DispatchQueueItem
+	for rows.Next() {
+		var item DispatchQueueItem
+		if err := rows.Scan(&item.SagaID, &item.SagaName, &item.SagaSlug,
+			pq.Array(&item.Repos), &item.FeatureBranch,
+			&item.PhaseName, &item.RaidTrackerID, &item.RaidName,
+			&item.RaidDesc, &item.RaidStatus); err != nil {
+			return nil, fmt.Errorf("scan dispatch queue item: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 // Helpers.
