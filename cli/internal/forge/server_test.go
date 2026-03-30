@@ -189,7 +189,7 @@ func TestServer_WebEnabled_ServesConfigJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /config.json: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -224,7 +224,7 @@ func TestServer_WebEnabled_SPAFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /sessions/some-id: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected SPA fallback 200, got %d", resp.StatusCode)
@@ -244,7 +244,7 @@ func TestServer_WebEnabled_APIRoutesPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /health: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 for /health, got %d", resp.StatusCode)
@@ -254,7 +254,7 @@ func TestServer_WebEnabled_APIRoutesPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /api/v1/volundr/sessions: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	if resp2.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 for /api/v1/volundr/sessions, got %d", resp2.StatusCode)
@@ -274,7 +274,7 @@ func TestServer_WebDisabled_NoSPA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /config.json: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("expected 404 for /config.json when web disabled, got %d", resp.StatusCode)
@@ -285,7 +285,7 @@ func TestServer_WebDisabled_NoSPA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /health: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	if resp2.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 for /health when web disabled, got %d", resp2.StatusCode)
