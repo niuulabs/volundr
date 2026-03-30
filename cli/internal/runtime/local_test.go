@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/tyr"
 )
 
 func TestNewLocalRuntime(t *testing.T) {
@@ -275,6 +276,51 @@ func TestLocalRuntime_WriteStateFile(t *testing.T) {
 		if !found {
 			t.Errorf("expected service %q in state file", name)
 		}
+	}
+}
+
+func TestLocalRuntime_WriteStateFile_WithTyr(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	r := NewLocalRuntime()
+	r.tyrSrv = &tyr.Server{}
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Port: 8080},
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+			Port: 5433,
+		},
+	}
+
+	if err := r.writeStateFile(cfg); err != nil {
+		t.Fatalf("writeStateFile: %v", err)
+	}
+
+	stateFilePath := filepath.Join(volundrDir, StateFile)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path
+	if err != nil {
+		t.Fatalf("read state file: %v", err)
+	}
+
+	var services []ServiceStatus
+	if err := json.Unmarshal(data, &services); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	found := false
+	for _, svc := range services {
+		if svc.Name == "tyr-mini" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected tyr-mini service in state file when tyrSrv is set")
 	}
 }
 
@@ -1285,6 +1331,25 @@ func TestLocalRuntime_Down_WithPostgres(t *testing.T) {
 	err := r.Down(context.Background())
 	if err != nil {
 		t.Fatalf("Down: %v", err)
+	}
+}
+
+func TestLocalRuntime_Down_WithTyr(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".volundr")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	r := NewLocalRuntime()
+	// Set tyrSrv with nil db — Close() returns nil.
+	r.tyrSrv = &tyr.Server{}
+
+	err := r.Down(context.Background())
+	if err != nil {
+		t.Fatalf("Down with tyr: %v", err)
 	}
 }
 

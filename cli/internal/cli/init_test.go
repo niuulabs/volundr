@@ -112,3 +112,15 @@ func TestMachinePassphrase(t *testing.T) {
 		t.Errorf("expected passphrase to start with 'volundr-', got %q", passphrase)
 	}
 }
+
+func TestMachinePassphrase_NoHome(t *testing.T) {
+	// When HOME is invalid, machinePassphrase should still return a value.
+	t.Setenv("HOME", "")
+	passphrase := machinePassphrase()
+	if passphrase == "" {
+		t.Error("expected non-empty passphrase even with no HOME")
+	}
+	if !strings.HasPrefix(passphrase, "volundr-") {
+		t.Errorf("expected prefix 'volundr-', got %q", passphrase)
+	}
+}

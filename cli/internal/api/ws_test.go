@@ -458,3 +458,12 @@ func TestWSClient_ReadLoop_InvalidJSON(t *testing.T) {
 		t.Errorf("expected type %q for invalid JSON, got %q", "raw", events[0].Type)
 	}
 }
+
+func TestDebugLogWS(t *testing.T) {
+	// debugLogWS writes to /tmp — just verify it doesn't panic.
+	debugLogWS([]byte("test frame data"))
+}
+
+func TestDebugLogWS_EmptyData(t *testing.T) {
+	debugLogWS(nil)
+}

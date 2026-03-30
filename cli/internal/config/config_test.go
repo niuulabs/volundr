@@ -552,6 +552,45 @@ func TestWebEnabledRoundTrip(t *testing.T) {
 	})
 }
 
+func TestK3sConfig_TyrImage(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := &Config{
+		Runtime: "k3s",
+		Listen:  ListenConfig{Host: "127.0.0.1", Port: 8080},
+		Database: DatabaseConfig{
+			Mode:     "embedded",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+		},
+		K3s: K3sConfig{
+			Namespace: "volundr",
+			Provider:  "k3d",
+			TyrImage:  "ghcr.io/niuulabs/tyr:v1.0.0",
+		},
+		Tyr: TyrConfig{Enabled: true},
+	}
+
+	if err := cfg.SaveTo(path); err != nil {
+		t.Fatalf("SaveTo() error: %v", err)
+	}
+
+	loaded, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom() error: %v", err)
+	}
+
+	if loaded.K3s.TyrImage != "ghcr.io/niuulabs/tyr:v1.0.0" {
+		t.Errorf("expected tyr_image ghcr.io/niuulabs/tyr:v1.0.0, got %s", loaded.K3s.TyrImage)
+	}
+	if !loaded.TyrEnabled() {
+		t.Error("expected tyr to be enabled")
+	}
+}
+
 func TestSaveToCreatesDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	nested := filepath.Join(tmpDir, "a", "b", "c", "config.yaml")

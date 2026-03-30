@@ -39,6 +39,8 @@ type Router struct {
 	rewriteHosts []string
 	// tyrServer holds the tyr-mini server for route registration.
 	tyrServer *tyr.Server
+	// tyrBackend holds the URL for proxying to a Tyr Docker container.
+	tyrBackend *url.URL
 }
 
 // NewRouter creates a new Router with the given API backend URL.
@@ -99,6 +101,17 @@ func (r *Router) SetSessionBackend(backendURL string) error {
 // RegisterTyrRoutes stores the tyr-mini server for route mounting.
 func (r *Router) RegisterTyrRoutes(srv *tyr.Server) {
 	r.tyrServer = srv
+}
+
+// SetTyrBackend sets the URL for proxying Tyr API requests (/api/v1/tyr/).
+// Used in k3s mode where Tyr runs as a separate Docker container.
+func (r *Router) SetTyrBackend(backendURL string) error {
+	u, err := url.Parse(backendURL)
+	if err != nil {
+		return fmt.Errorf("parse tyr backend URL %q: %w", backendURL, err)
+	}
+	r.tyrBackend = u
+	return nil
 }
 
 // AddRewriteHost registers a Docker-internal hostname that should be
@@ -165,6 +178,12 @@ func (r *Router) Handler() http.Handler {
 	// Tyr-mini routes (served directly, not proxied).
 	if r.tyrServer != nil {
 		r.tyrServer.RegisterRoutes(mux)
+	}
+
+	// Tyr Docker container proxy (k3s mode).
+	if r.tyrBackend != nil {
+		tyrProxy := httputil.NewSingleHostReverseProxy(r.tyrBackend)
+		mux.Handle("/api/v1/tyr/", tyrProxy)
 	}
 
 	// API routes -> Python API.
