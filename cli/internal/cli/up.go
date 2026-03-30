@@ -111,16 +111,12 @@ func runMiniMode(cfg *config.Config) error {
 // runUpPreflightChecks validates mini-mode prerequisites before starting.
 // Returns an error for hard failures; prints warnings for soft issues.
 func runUpPreflightChecks(cfg *config.Config) error {
-	claudeBin := "claude"
-	if cfg.Volundr.Forge.ClaudeBinary != "" {
-		claudeBin = cfg.Volundr.Forge.ClaudeBinary
-	}
+	claudeBin := claudeBinaryName(cfg)
 
 	// Hard failure: claude binary must be available.
 	cr := preflight.CheckBinary(claudeBin)
 	if !cr.OK {
-		return fmt.Errorf("%s\n\nThe Claude Code CLI is required to run coding sessions.\nInstall it with: npm install -g @anthropic-ai/claude-code\n\nOr specify a custom path in ~/.niuu/config.yaml:\n  volundr:\n    forge:\n      claude_binary: /path/to/claude",
-			cr.Message)
+		return fmt.Errorf("%s\n\n%s", cr.Message, installInstructions("claude"))
 	}
 
 	// Hard failure: listen port must be available.
@@ -241,6 +237,14 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 	forgeCfg.Anthropic.APIKey = cfg.Anthropic.APIKey
 
 	return forgeCfg, nil
+}
+
+// claudeBinaryName returns the configured claude binary name, defaulting to "claude".
+func claudeBinaryName(cfg *config.Config) string {
+	if cfg.Volundr.Forge.ClaudeBinary != "" {
+		return cfg.Volundr.Forge.ClaudeBinary
+	}
+	return "claude"
 }
 
 // expandHome replaces a leading ~/ with the user's home directory.

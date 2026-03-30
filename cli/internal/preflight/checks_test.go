@@ -169,28 +169,6 @@ func TestFormatResults_Empty(t *testing.T) {
 	}
 }
 
-func TestHasFailures(t *testing.T) {
-	allPass := []Result{
-		{OK: true},
-		{OK: true},
-	}
-	if HasFailures(allPass) {
-		t.Error("expected no failures")
-	}
-
-	oneFail := []Result{
-		{OK: true},
-		{OK: false},
-	}
-	if !HasFailures(oneFail) {
-		t.Error("expected failures")
-	}
-
-	if HasFailures(nil) {
-		t.Error("expected no failures for nil slice")
-	}
-}
-
 func TestCheckBinary_NameInResult(t *testing.T) {
 	r := CheckBinary("volundr-no-such-binary-xyz")
 	if r.Name != "volundr-no-such-binary-xyz binary" {

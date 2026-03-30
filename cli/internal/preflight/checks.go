@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Result captures the outcome of a single preflight check.
@@ -39,7 +40,10 @@ func CheckBinary(name string, versionArgs ...string) Result {
 	r.Detail = path
 
 	if len(versionArgs) > 0 {
-		cmd := exec.CommandContext(context.Background(), path, versionArgs...) //nolint:gosec // args are hardcoded caller literals
+		const versionTimeout = 5 * time.Second
+		ctx, cancel := context.WithTimeout(context.Background(), versionTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, path, versionArgs...) //nolint:gosec // args are hardcoded caller literals
 		out, err := cmd.Output()
 		if err == nil {
 			version := strings.TrimSpace(string(out))
@@ -120,14 +124,4 @@ func FormatResults(results []Result) string {
 		fmt.Fprintf(&b, "  ✗ %s: %s\n", r.Name, r.Message)
 	}
 	return b.String()
-}
-
-// HasFailures returns true if any result is not OK.
-func HasFailures(results []Result) bool {
-	for _, r := range results {
-		if !r.OK {
-			return true
-		}
-	}
-	return false
 }

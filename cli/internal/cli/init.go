@@ -365,13 +365,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 // runInitPreflightChecks runs non-blocking checks after the init wizard and
 // returns the results for display.
 func runInitPreflightChecks(cfg *config.Config) []preflight.Result {
-	claudeBin := "claude"
-	if cfg.Volundr.Forge.ClaudeBinary != "" {
-		claudeBin = cfg.Volundr.Forge.ClaudeBinary
-	}
-
 	return []preflight.Result{
-		preflight.CheckBinary(claudeBin, "--version"),
+		preflight.CheckBinary(claudeBinaryName(cfg), "--version"),
 		preflight.CheckAPIKeySet(cfg.Anthropic.APIKey),
 		preflight.CheckBinary("git", "--version"),
 		preflight.CheckDirWritable(expandHome(cfg.Volundr.Forge.Workspace)),
