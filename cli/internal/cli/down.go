@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -108,7 +109,7 @@ func cleanupStateFiles() {
 	}
 
 	for _, name := range []string{"forge-state.json", runtime.PIDFile} {
-		path := cfgDir + "/" + name
+		path := filepath.Join(cfgDir, name)
 		if _, statErr := os.Stat(path); statErr == nil {
 			_ = os.Remove(path)
 		}
