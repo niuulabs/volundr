@@ -12,7 +12,7 @@ Interactive setup wizard. Walks you through:
 
 - Runtime selection (local, docker, k3s)
 - Anthropic API key
-- Database mode (embedded SQLite or external PostgreSQL)
+- Database mode (embedded PostgreSQL or external PostgreSQL)
 - GitHub/GitLab configuration
 
 Creates `~/.volundr/config.yaml` and stores credentials encrypted.
