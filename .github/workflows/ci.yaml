@@ -28,11 +28,16 @@ jobs:
       container-names: ${{ steps.override.outputs.names }}
       has_containers: ${{ steps.override.outputs.any }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       # TODO: restore path-based filtering after pipelines are validated
       # - name: Detect path changes
-      #   uses: dorny/paths-filter@v3
+      #   uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
       #   id: filter
       #   with:
       #     filters: |
@@ -99,12 +104,17 @@ jobs:
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "latest"
+          version: "0.11.2"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -125,12 +135,17 @@ jobs:
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "latest"
+          version: "0.11.2"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -147,11 +162,15 @@ jobs:
             --cov-fail-under=85
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5
-        with:
-          files: coverage.xml
-          flags: backend-volundr
-          token: ${{ secrets.CODECOV_TOKEN }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          CODECOV_VERSION="v0.8.0"
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
+          cd /tmp && sha256sum -c codecov.SHA256SUM
+          chmod +x /tmp/codecov
+          /tmp/codecov -f coverage.xml -F backend-volundr -t "${CODECOV_TOKEN}"
 
   python-test-tyr:
     name: "Python: Test Tyr"
@@ -159,12 +178,17 @@ jobs:
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "latest"
+          version: "0.11.2"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -182,11 +206,15 @@ jobs:
             --cov-fail-under=85
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5
-        with:
-          files: coverage.xml
-          flags: backend-tyr
-          token: ${{ secrets.CODECOV_TOKEN }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          CODECOV_VERSION="v0.8.0"
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
+          cd /tmp && sha256sum -c codecov.SHA256SUM
+          chmod +x /tmp/codecov
+          /tmp/codecov -f coverage.xml -F backend-tyr -t "${CODECOV_TOKEN}"
 
   # ---------------------------------------------------------------------------
   # Web
@@ -200,6 +228,11 @@ jobs:
       run:
         working-directory: web
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Node.js
@@ -230,6 +263,11 @@ jobs:
       run:
         working-directory: web
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Node.js
@@ -246,11 +284,15 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5
-        with:
-          files: web/coverage/lcov.info
-          flags: web
-          token: ${{ secrets.CODECOV_TOKEN }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          CODECOV_VERSION="v0.8.0"
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
+          cd /tmp && sha256sum -c codecov.SHA256SUM
+          chmod +x /tmp/codecov
+          /tmp/codecov -f web/coverage/lcov.info -F web -t "${CODECOV_TOKEN}"
 
   # ---------------------------------------------------------------------------
   # Go CLI
@@ -264,6 +306,11 @@ jobs:
       run:
         working-directory: cli
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
@@ -272,11 +319,15 @@ jobs:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
 
+      - name: Install golangci-lint
+        run: |
+          GOLANGCI_VERSION="2.11.4"
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/2691aacde61559ce53cfda05513ee7c70677ea31/install.sh | sh -s -- -b /usr/local/bin "v${GOLANGCI_VERSION}"
+          golangci-lint version
+
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
-        with:
-          version: latest
-          working-directory: cli
+        working-directory: cli
+        run: golangci-lint run
 
   go-test:
     name: "Go: Test"
@@ -287,6 +338,11 @@ jobs:
       run:
         working-directory: cli
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
@@ -309,11 +365,15 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5
-        with:
-          files: cli/coverage.out
-          flags: cli
-          token: ${{ secrets.CODECOV_TOKEN }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          CODECOV_VERSION="v0.8.0"
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
+          cd /tmp && sha256sum -c codecov.SHA256SUM
+          chmod +x /tmp/codecov
+          /tmp/codecov -f cli/coverage.out -F cli -t "${CODECOV_TOKEN}"
 
   go-build:
     name: "Go: Build"
@@ -321,6 +381,11 @@ jobs:
     if: needs.changes.outputs.go == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
@@ -349,12 +414,21 @@ jobs:
     if: needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up Helm
-        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
-        with:
-          version: v3.14.0
+      - name: Install Helm
+        run: |
+          HELM_VERSION="3.14.0"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
 
       - name: Lint skuld chart
         run: helm lint charts/skuld/
@@ -389,6 +463,11 @@ jobs:
         platform: [amd64, arm64]
         container: ${{ fromJson(needs.changes.outputs.container-names) }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Docker Buildx
@@ -427,6 +506,11 @@ jobs:
       matrix:
         container: ${{ fromJson(needs.changes.outputs.container-names) }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - name: Log in to Container Registry
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         with:
@@ -462,12 +546,21 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up Helm
-        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
-        with:
-          version: v3.14.0
+      - name: Install Helm
+        run: |
+          HELM_VERSION="3.14.0"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
 
       - name: Update chart versions
         run: |
@@ -508,7 +601,7 @@ jobs:
           helm push .helm-packages/niuu-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
   # ---------------------------------------------------------------------------
-  # Security — container vulnerability scanning
+  # Security — container vulnerability scanning (Grype)
   # ---------------------------------------------------------------------------
   scan-containers:
     name: "Scan: ${{ matrix.container }}"
@@ -522,6 +615,11 @@ jobs:
       matrix:
         container: ${{ fromJson(needs.changes.outputs.container-names) }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Log in to Container Registry
@@ -531,20 +629,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Scan container with Trivy
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
-        with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}
-          format: sarif
-          output: trivy-${{ matrix.container }}.sarif
-          severity: CRITICAL,HIGH
+      - name: Install Grype
+        run: |
+          GRYPE_VERSION="0.87.0"
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/247f5d72abf2131aa37f3164a98495c121b29029/install.sh | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}"
+          grype version
 
-      - name: Upload Trivy results
+      - name: Scan container with Grype
+        run: |
+          grype "ghcr.io/${{ github.repository_owner }}/${{ matrix.container }}:pr-${{ github.event.number }}" \
+            --only-fixed \
+            --fail-on critical \
+            -o sarif > "grype-${{ matrix.container }}.sarif"
+
+      - name: Upload Grype results
         uses: github/codeql-action/upload-sarif@38697555549f1db7851b81482ff19f1fa5c4fedc # v4
-        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.container)) != ''
+        if: always()
         with:
-          sarif_file: trivy-${{ matrix.container }}.sarif
-          category: trivy-${{ matrix.container }}
+          sarif_file: grype-${{ matrix.container }}.sarif
+          category: grype-${{ matrix.container }}
 
   # ---------------------------------------------------------------------------
   # Security (always runs)
@@ -553,6 +656,11 @@ jobs:
     name: Dependency Review
     runs-on: ubuntu-latest
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Dependency review

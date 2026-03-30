@@ -333,7 +333,7 @@ mutation UpdateIssueState($issueId: String!, $stateId: String!) {
 """
 
 _ISSUE_TEAM_QUERY = """
-query IssueTeam($id: String!) {
+query IssueTeam($id: ID!) {
   issue(id: $id) {
     team { id }
   }
@@ -503,20 +503,24 @@ class LinearTrackerAdapter(TrackerPort):
         if linear_state_name is None:
             raise ValueError(f"No Linear state mapping for {state}")
 
+        logger.info("Setting Linear issue %s to '%s'", raid_id, linear_state_name)
         state_id = await self._resolve_state_id(raid_id, linear_state_name)
         await self._gql.query(
             _UPDATE_ISSUE_STATE_QUERY,
             {"issueId": raid_id, "stateId": state_id},
         )
         self._gql.invalidate_cache("issues")
+        logger.info("Linear issue %s set to '%s'", raid_id, linear_state_name)
 
     async def close_raid(self, raid_id: str) -> None:
+        logger.info("Closing Linear issue %s (setting to Done)", raid_id)
         state_id = await self._resolve_state_id(raid_id, "Done")
         await self._gql.query(
             _UPDATE_ISSUE_STATE_QUERY,
             {"issueId": raid_id, "stateId": state_id},
         )
         self._gql.invalidate_cache("issues")
+        logger.info("Linear issue %s closed (Done)", raid_id)
 
     # -- Read: domain entities --
 
