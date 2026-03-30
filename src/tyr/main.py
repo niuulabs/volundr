@@ -26,6 +26,7 @@ from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
 from tyr.adapters.postgres_notification_subscriptions import (
     PostgresNotificationSubscriptionRepository,
 )
+from tyr.adapters.postgres_reviewer_outcomes import PostgresReviewerOutcomeRepository
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
@@ -308,6 +309,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 volundr_factory=app.state.volundr_factory,
                 review_config=settings.review,
             )
+            outcome_repo = PostgresReviewerOutcomeRepository(pool)
             review_engine = ReviewEngine(
                 tracker_factory=app.state.tracker_factory,
                 volundr_factory=app.state.volundr_factory,
@@ -316,6 +318,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event_bus=event_bus,
                 reviewer_service=reviewer_service,
                 dispatcher_repo=dispatcher_repo,
+                outcome_repo=outcome_repo,
             )
             app.state.review_engine = review_engine
             await review_engine.start()
