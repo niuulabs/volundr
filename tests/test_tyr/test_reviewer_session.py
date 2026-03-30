@@ -430,6 +430,80 @@ class TestBuildReviewerInitialPrompt:
         )
         assert prompt == ""
 
+    def test_runtime_qa_section_present_when_launch_command_set(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+            launch_command="uvicorn app:main --port 8000",
+        )
+        assert "## Runtime QA" in prompt
+        assert "uvicorn app:main --port 8000" in prompt
+        assert "APP_PID=$!" in prompt
+        assert "confidence −0.4" in prompt
+        assert "kill $APP_PID" in prompt
+
+    def test_runtime_qa_section_absent_when_launch_command_none(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+            launch_command=None,
+        )
+        assert "## Runtime QA" not in prompt
+
+    def test_runtime_qa_section_absent_when_launch_command_omitted(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+        )
+        assert "## Runtime QA" not in prompt
+
+    def test_runtime_qa_section_includes_deduction_table(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+            launch_command="make serve",
+        )
+        assert "App won't start" in prompt
+        assert "Test suite red" in prompt
+        assert "Criterion not exercised" in prompt
+        assert "HTTP 4xx/5xx" in prompt
+
+    def test_runtime_qa_available_in_template(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+            template="QA:{runtime_qa_section}",
+            launch_command="npm start",
+        )
+        assert "## Runtime QA" in prompt
+        assert "npm start" in prompt
+
+    def test_runtime_qa_template_empty_when_no_launch_command(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+            template="QA:{runtime_qa_section}",
+        )
+        assert prompt == "QA:"
+
 
 # ---------------------------------------------------------------------------
 # Tests: reviewer_system_prompt config field
