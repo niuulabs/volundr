@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/niuulabs/volundr/cli/internal/tyr"
 	"github.com/niuulabs/volundr/cli/internal/web"
 )
 
@@ -21,6 +22,7 @@ type Server struct {
 	bus    EventEmitter
 	auth   *PATAuth
 	srv    *http.Server
+	tyrSrv *tyr.Server
 	cancel context.CancelFunc // triggers graceful shutdown when called
 }
 
@@ -59,6 +61,18 @@ func (s *Server) Run(ctx context.Context) error {
 	// Admin shutdown endpoint — localhost-only, no auth.
 	mux.HandleFunc("POST /admin/shutdown", s.handleShutdown)
 
+	// Mount tyr-mini routes if enabled.
+	if s.cfg.Tyr.Enabled {
+		if err := s.initTyr(ctx, mux); err != nil {
+			return fmt.Errorf("init tyr-mini: %w", err)
+		}
+		defer func() {
+			if s.tyrSrv != nil {
+				_ = s.tyrSrv.Close()
+			}
+		}()
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
 
 	if s.cfg.Web {
@@ -94,6 +108,7 @@ func (s *Server) Run(ctx context.Context) error {
 	log.Printf("  max concurrent sessions: %d", s.cfg.Forge.MaxConcurrent)
 	log.Printf("  auth mode: %s", s.cfg.Auth.Mode)
 	log.Printf("  web ui: %v", s.cfg.Web)
+	log.Printf("  tyr-mini: %v", s.cfg.Tyr.Enabled)
 
 	if s.cfg.Listen.Host == "0.0.0.0" && s.cfg.Auth.Mode == "none" {
 		log.Println("WARNING: listening on all interfaces with auth=none — any network client can create sessions")
@@ -136,7 +151,42 @@ func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
 	go s.cancel()
 }
 
+// initTyr initializes the tyr-mini server, runs migrations, and mounts routes.
+func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
+	addr := fmt.Sprintf("http://%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
+	tyrCfg := &tyr.Config{
+		Enabled:     true,
+		DatabaseDSN: s.cfg.Tyr.DatabaseDSN,
+		ForgeURL:    addr,
+	}
+
+	tyrSrv, err := tyr.NewServer(tyrCfg)
+	if err != nil {
+		return fmt.Errorf("create tyr-mini server: %w", err)
+	}
+
+	applied, err := tyrSrv.RunMigrations(ctx)
+	if err != nil {
+		tyrSrv.Close()
+		return fmt.Errorf("run tyr migrations: %w", err)
+	}
+	if applied > 0 {
+		log.Printf("tyr-mini: applied %d migrations", applied)
+	}
+
+	tyrSrv.RegisterRoutes(mux)
+	s.tyrSrv = tyrSrv
+
+	log.Println("tyr-mini: routes registered on /api/v1/tyr/*")
+	return nil
+}
+
 // Addr returns the configured listen address as "host:port".
 func (s *Server) Addr() string {
 	return fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
+}
+
+// TyrServer returns the tyr-mini server instance, if running.
+func (s *Server) TyrServer() *tyr.Server {
+	return s.tyrSrv
 }

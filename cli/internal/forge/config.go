@@ -10,6 +10,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// TyrConfig holds tyr-mini configuration within Forge.
+type TyrConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	DatabaseDSN string `yaml:"database_dsn"`
+}
+
 // Config holds the forge server configuration.
 type Config struct {
 	Listen    ListenConfig    `yaml:"listen"`
@@ -18,6 +24,7 @@ type Config struct {
 	Git       GitConfig       `yaml:"git"`
 	Anthropic AnthropicConfig `yaml:"anthropic"`
 	Web       bool            `yaml:"web"`
+	Tyr       TyrConfig       `yaml:"tyr"`
 }
 
 // ListenConfig holds the listener settings.
