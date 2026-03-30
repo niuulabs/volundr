@@ -19,6 +19,7 @@ type Server struct {
 	bus    EventEmitter
 	auth   *PATAuth
 	srv    *http.Server
+	cancel context.CancelFunc // triggers graceful shutdown when called
 }
 
 // NewServer creates a new forge server from the given config.
@@ -53,6 +54,9 @@ func (s *Server) Run(ctx context.Context) error {
 	handler := NewHandler(s.runner)
 	handler.RegisterRoutes(mux)
 
+	// Admin shutdown endpoint — localhost-only, no auth.
+	mux.HandleFunc("POST /admin/shutdown", s.handleShutdown)
+
 	addr := fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
 
 	s.srv = &http.Server{
@@ -61,7 +65,10 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadHeaderTimeout: s.cfg.Listen.ReadHeaderTimeout,
 	}
 
-	// Graceful shutdown on signals.
+	// Graceful shutdown on signals or cancel.
+	ctx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
+
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -70,8 +77,8 @@ func (s *Server) Run(ctx context.Context) error {
 		log.Println("shutting down...")
 		s.runner.StopAll()
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.Listen.ShutdownTimeout)
-		defer cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.cfg.Listen.ShutdownTimeout)
+		defer shutdownCancel()
 		_ = s.srv.Shutdown(shutdownCtx)
 	}()
 
@@ -107,4 +114,21 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// handleShutdown handles POST /admin/shutdown. It initiates graceful
+// shutdown: stops all sessions, then shuts down the HTTP server.
+func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
+	log.Println("shutdown requested via /admin/shutdown")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"shutting_down"}` + "\n"))
+
+	// Trigger shutdown asynchronously so the response can be sent.
+	go s.cancel()
+}
+
+// Addr returns the configured listen address as "host:port".
+func (s *Server) Addr() string {
+	return fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
 }
