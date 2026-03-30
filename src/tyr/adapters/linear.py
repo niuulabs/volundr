@@ -333,7 +333,7 @@ mutation UpdateIssueState($issueId: String!, $stateId: String!) {
 """
 
 _ISSUE_TEAM_QUERY = """
-query IssueTeam($id: String!) {
+query IssueTeam($id: ID!) {
   issue(id: $id) {
     team { id }
   }
