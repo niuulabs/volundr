@@ -121,7 +121,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return printJSON(detailed)
 	}
 
-	printDetailedStatus(detailed)
+	printDetailedStatus(&detailed)
 	return nil
 }
 
@@ -143,7 +143,7 @@ func runStatusFallback() error {
 		return printJSON(detailed)
 	}
 
-	printDetailedStatus(detailed)
+	printDetailedStatus(&detailed)
 	return nil
 }
 
@@ -272,17 +272,19 @@ func fetchMiniSessions(ds *DetailedStatus, cfg *config.Config) {
 		return
 	}
 
-	var sessions []struct {
-		ID        string `json:"id"`
-		Name      string `json:"name"`
-		Status    string `json:"status"`
-		Model     string `json:"model"`
-		Source    *struct {
+	type sessionEntry struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+		Model  string `json:"model"`
+		Source *struct {
 			Repo string `json:"repo"`
 		} `json:"source"`
 		Repo      string `json:"repo"`
 		CreatedAt string `json:"created_at"`
 	}
+
+	var sessions []sessionEntry
 	if json.NewDecoder(sessResp.Body).Decode(&sessions) != nil {
 		return
 	}
@@ -314,7 +316,7 @@ func fetchMiniSessions(ds *DetailedStatus, cfg *config.Config) {
 }
 
 // printDetailedStatus renders the rich status to stdout.
-func printDetailedStatus(ds DetailedStatus) {
+func printDetailedStatus(ds *DetailedStatus) {
 	modeName := ds.Mode
 	if modeName == "" {
 		modeName = "local"
@@ -469,4 +471,3 @@ func formatAge(d time.Duration) string {
 	}
 	return strconv.Itoa(int(d.Hours()/24)) + "d"
 }
-

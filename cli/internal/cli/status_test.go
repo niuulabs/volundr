@@ -13,39 +13,6 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
-// writeTestConfig writes a minimal config file to the given directory.
-func writeTestConfig(t *testing.T, dir, mode string, maxConcurrent int) {
-	t.Helper()
-	cfg := `volundr:
-  mode: ` + mode + `
-  web: true
-  forge:
-    listen: "127.0.0.1:8080"
-    max_concurrent: ` + json.Number(json.Number(
-		func() string {
-			if maxConcurrent == 0 {
-				return "4"
-			}
-			b, _ := json.Marshal(maxConcurrent)
-			return string(b)
-		}(),
-	)).String() + `
-listen:
-  host: "127.0.0.1"
-  port: 8080
-database:
-  mode: embedded
-  port: 5433
-  user: volundr
-  password: testpass
-  name: volundr
-`
-	err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600)
-	if err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-}
-
 // writeTestConfigSimple writes a simple config yaml to the dir.
 func writeTestConfigSimple(t *testing.T, dir, mode string) {
 	t.Helper()
@@ -715,7 +682,7 @@ func TestPrintDetailedStatus_Stopped(t *testing.T) {
 	}
 
 	// Should not panic.
-	printDetailedStatus(ds)
+	printDetailedStatus(&ds)
 }
 
 func TestPrintDetailedStatus_Running(t *testing.T) {
@@ -749,7 +716,7 @@ func TestPrintDetailedStatus_Running(t *testing.T) {
 	}
 
 	// Should not panic.
-	printDetailedStatus(ds)
+	printDetailedStatus(&ds)
 }
 
 func TestPrintDetailedStatus_K3sWithPods(t *testing.T) {
@@ -775,7 +742,7 @@ func TestPrintDetailedStatus_K3sWithPods(t *testing.T) {
 	}
 
 	// Should not panic.
-	printDetailedStatus(ds)
+	printDetailedStatus(&ds)
 }
 
 func TestPrintDetailedStatus_EmptyMode(t *testing.T) {
@@ -785,7 +752,7 @@ func TestPrintDetailedStatus_EmptyMode(t *testing.T) {
 	}
 
 	// Should default to "local" in display.
-	printDetailedStatus(ds)
+	printDetailedStatus(&ds)
 }
 
 func TestFetchMiniSessions_ServerDown(t *testing.T) {
