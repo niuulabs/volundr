@@ -7,6 +7,14 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/config"
 )
 
+// effectiveMaxSessions returns the configured max or the default when unset.
+func effectiveMaxSessions(max int) int {
+	if max > 0 {
+		return max
+	}
+	return config.DefaultMaxSessions
+}
+
 // RichStatus holds the full status of the Volundr stack, including
 // server info, session details, and component status.
 type RichStatus struct {
@@ -49,7 +57,7 @@ func databaseStatus(cfg *config.Config) ComponentStatus {
 }
 
 // buildSessionSummary fetches sessions from the API and returns a summary.
-func buildSessionSummary(ctx context.Context, listenAddr string) SessionSummary {
+func buildSessionSummary(ctx context.Context, listenAddr string, maxSessions int) SessionSummary {
 	baseURL := fmt.Sprintf("http://%s", listenAddr)
 	sessions, _ := fetchSessions(ctx, baseURL)
 	if sessions == nil {
@@ -57,7 +65,7 @@ func buildSessionSummary(ctx context.Context, listenAddr string) SessionSummary 
 	}
 	return SessionSummary{
 		Active: countActiveSessions(sessions),
-		Max:    defaultMaxSessions,
+		Max:    effectiveMaxSessions(maxSessions),
 		List:   sessions,
 	}
 }

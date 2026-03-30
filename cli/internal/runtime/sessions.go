@@ -27,7 +27,6 @@ type apiSessionSource struct {
 	Repo string `json:"repo,omitempty"`
 }
 
-
 // fetchSessions queries the Volundr API for the current session list.
 // Returns nil (not an error) if the API is unreachable — the caller
 // should display "unavailable" rather than failing.

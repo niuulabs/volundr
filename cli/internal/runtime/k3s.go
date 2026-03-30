@@ -453,7 +453,7 @@ func (r *K3sRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*RichS
 			Detail: fmt.Sprintf("Docker container %s", k3sContainerName),
 		}
 		rs.Database = ComponentStatus{Status: "stopped"}
-		rs.Sessions = SessionSummary{Max: defaultMaxSessions}
+		rs.Sessions = SessionSummary{Max: effectiveMaxSessions(cfg.Sessions.MaxSessions)}
 		return rs, nil
 	}
 
@@ -497,19 +497,19 @@ func (r *K3sRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*RichS
 	rs.Database = databaseStatus(cfg)
 
 	// Fetch pod details.
-	rs.Pods = r.queryPodDetails(cfg)
+	rs.Pods = r.queryPodDetails(ctx, cfg)
 
 	// Fetch sessions from the API.
-	rs.Sessions = buildSessionSummary(ctx, listenAddr)
+	rs.Sessions = buildSessionSummary(ctx, listenAddr, cfg.Sessions.MaxSessions)
 
 	return rs, nil
 }
 
 // queryPodDetails queries Kubernetes for pod details including readiness.
-func (r *K3sRuntime) queryPodDetails(cfg *config.Config) []PodStatus {
+func (r *K3sRuntime) queryPodDetails(ctx context.Context, cfg *config.Config) []PodStatus {
 	namespace := resolveNamespace(cfg)
 
-	out, err := execCommandContext(context.Background(), //nolint:gosec // arguments from trusted internal config
+	out, err := execCommandContext(ctx, //nolint:gosec // arguments from trusted internal config
 		"kubectl", "get", "pods",
 		"--namespace", namespace,
 		"--kubeconfig", hostKubeconfigPath(),

@@ -76,10 +76,11 @@ docker:
 	// since docker isn't available, but that's expected — the error is collected).
 	// This tests that config is loaded and the docker runtime is dispatched.
 	err := runDown(nil, nil)
-	// Docker compose errors are expected in test env without docker.
-	// The function may or may not error depending on whether docker CLI exists.
-	// We just verify it doesn't panic and goes through the config-based path.
-	_ = err
+	// Docker compose may or may not error depending on whether docker CLI exists.
+	// We verify it doesn't panic and goes through the config-based path.
+	if err != nil {
+		t.Logf("expected error in test env (no docker): %v", err)
+	}
 }
 
 func TestRunDown_WithConfig_K3sRuntime(t *testing.T) {
@@ -108,7 +109,10 @@ k3s:
 
 	// K3s runtime Down() calls kubectl/docker (will fail in test env).
 	err := runDown(nil, nil)
-	_ = err
+	// We verify it doesn't panic and goes through the config-based path.
+	if err != nil {
+		t.Logf("expected error in test env (no k3s): %v", err)
+	}
 }
 
 func TestRunDown_NoConfig_FallbackToDownFromPID(t *testing.T) {

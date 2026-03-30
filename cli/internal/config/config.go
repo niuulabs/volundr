@@ -75,6 +75,14 @@ type LocalMountsConfig struct {
 	DefaultReadOnly bool     `yaml:"default_read_only"`
 }
 
+// DefaultMaxSessions is the default maximum number of concurrent sessions.
+const DefaultMaxSessions = 4
+
+// SessionsConfig holds session-related settings.
+type SessionsConfig struct {
+	MaxSessions int `yaml:"max_sessions"`
+}
+
 // Config represents the full volundr configuration.
 type Config struct {
 	Runtime     string            `yaml:"runtime"`
@@ -82,6 +90,7 @@ type Config struct {
 	TLS         TLSConfig         `yaml:"tls"`
 	Database    DatabaseConfig    `yaml:"database"`
 	Anthropic   AnthropicConfig   `yaml:"anthropic"`
+	Sessions    SessionsConfig    `yaml:"sessions,omitempty"`
 	Git         GitConfig         `yaml:"git,omitempty"`
 	Docker      DockerConfig      `yaml:"docker,omitempty"`
 	K3s         K3sConfig         `yaml:"k3s,omitempty"`
@@ -169,6 +178,9 @@ func DefaultConfig() (*Config, error) {
 			Name:     DefaultDBName,
 		},
 		Anthropic: AnthropicConfig{},
+		Sessions: SessionsConfig{
+			MaxSessions: DefaultMaxSessions,
+		},
 		Docker: DockerConfig{
 			APIImage:   "ghcr.io/niuulabs/volundr:latest",
 			SkuldImage: "ghcr.io/niuulabs/skuld:latest",

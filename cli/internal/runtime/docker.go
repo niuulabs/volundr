@@ -385,7 +385,7 @@ func (r *DockerRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*Ri
 			Detail: fmt.Sprintf("Docker container %s-api-1", dockerProject),
 		}
 		rs.Database = ComponentStatus{Status: "stopped"}
-		rs.Sessions = SessionSummary{Max: defaultMaxSessions}
+		rs.Sessions = SessionSummary{Max: effectiveMaxSessions(cfg.Sessions.MaxSessions)}
 		return rs, nil
 	}
 
@@ -403,7 +403,7 @@ func (r *DockerRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*Ri
 	rs.Database = databaseStatus(cfg)
 
 	// Fetch sessions from the API.
-	rs.Sessions = buildSessionSummary(ctx, listenAddr)
+	rs.Sessions = buildSessionSummary(ctx, listenAddr, cfg.Sessions.MaxSessions)
 
 	return rs, nil
 }

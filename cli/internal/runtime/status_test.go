@@ -115,8 +115,8 @@ func TestLocalRuntime_RichStatus_NoPIDFile(t *testing.T) {
 		t.Errorf("expected database status 'stopped', got %q", rs.Database.Status)
 	}
 
-	if rs.Sessions.Max != defaultMaxSessions {
-		t.Errorf("expected max sessions %d, got %d", defaultMaxSessions, rs.Sessions.Max)
+	if rs.Sessions.Max != config.DefaultMaxSessions {
+		t.Errorf("expected max sessions %d, got %d", config.DefaultMaxSessions, rs.Sessions.Max)
 	}
 
 	if rs.Sessions.Active != 0 {
@@ -323,8 +323,8 @@ func TestDockerRuntime_RichStatus_Stopped(t *testing.T) {
 		t.Errorf("expected server status 'stopped', got %q", rs.Server.Status)
 	}
 
-	if rs.Sessions.Max != defaultMaxSessions {
-		t.Errorf("expected max sessions %d, got %d", defaultMaxSessions, rs.Sessions.Max)
+	if rs.Sessions.Max != config.DefaultMaxSessions {
+		t.Errorf("expected max sessions %d, got %d", config.DefaultMaxSessions, rs.Sessions.Max)
 	}
 }
 
@@ -366,8 +366,8 @@ func TestK3sRuntime_RichStatus_Stopped(t *testing.T) {
 		t.Errorf("expected server status 'stopped', got %q", rs.Server.Status)
 	}
 
-	if rs.Sessions.Max != defaultMaxSessions {
-		t.Errorf("expected max sessions %d, got %d", defaultMaxSessions, rs.Sessions.Max)
+	if rs.Sessions.Max != config.DefaultMaxSessions {
+		t.Errorf("expected max sessions %d, got %d", config.DefaultMaxSessions, rs.Sessions.Max)
 	}
 }
 
@@ -490,12 +490,12 @@ func TestDatabaseStatus_External(t *testing.T) {
 }
 
 func TestBuildSessionSummary_Unreachable(t *testing.T) {
-	summary := buildSessionSummary(context.Background(), "127.0.0.1:1")
+	summary := buildSessionSummary(context.Background(), "127.0.0.1:1", config.DefaultMaxSessions)
 	if summary.Active != 0 {
 		t.Errorf("expected 0 active, got %d", summary.Active)
 	}
-	if summary.Max != defaultMaxSessions {
-		t.Errorf("expected max %d, got %d", defaultMaxSessions, summary.Max)
+	if summary.Max != config.DefaultMaxSessions {
+		t.Errorf("expected max %d, got %d", config.DefaultMaxSessions, summary.Max)
 	}
 	if len(summary.List) != 0 {
 		t.Errorf("expected empty list, got %d", len(summary.List))
@@ -513,7 +513,7 @@ func TestBuildSessionSummary_WithServer(t *testing.T) {
 	defer server.Close()
 
 	addr := server.Listener.Addr().String()
-	summary := buildSessionSummary(context.Background(), addr)
+	summary := buildSessionSummary(context.Background(), addr, config.DefaultMaxSessions)
 	if summary.Active != 1 {
 		t.Errorf("expected 1 active, got %d", summary.Active)
 	}

@@ -353,9 +353,6 @@ func StatusFromStateFile() (*StackStatus, error) {
 	return status, nil
 }
 
-// defaultMaxSessions is the default max concurrent sessions for local mode.
-const defaultMaxSessions = 4
-
 // RichStatus returns detailed status including session info for local runtime.
 func (r *LocalRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*RichStatus, error) {
 	cfgDir, err := config.ConfigDir()
@@ -372,7 +369,7 @@ func (r *LocalRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*Ric
 	if !running {
 		rs.Server = ComponentStatus{Status: "stopped"}
 		rs.Database = ComponentStatus{Status: "stopped"}
-		rs.Sessions = SessionSummary{Max: defaultMaxSessions}
+		rs.Sessions = SessionSummary{Max: effectiveMaxSessions(cfg.Sessions.MaxSessions)}
 		return rs, nil
 	}
 
@@ -388,7 +385,7 @@ func (r *LocalRuntime) RichStatus(ctx context.Context, cfg *config.Config) (*Ric
 	rs.Database = databaseStatus(cfg)
 
 	// Fetch sessions from the API.
-	rs.Sessions = buildSessionSummary(ctx, listenAddr)
+	rs.Sessions = buildSessionSummary(ctx, listenAddr, cfg.Sessions.MaxSessions)
 
 	return rs, nil
 }
