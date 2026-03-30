@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"strings"
 	"testing"
 
@@ -241,6 +242,70 @@ func TestRunInitPreflightChecks_CustomClaudeBinary(t *testing.T) {
 	// First check should fail (custom binary not found).
 	if results[0].OK {
 		t.Error("expected custom claude binary check to fail")
+	}
+}
+
+func TestPromptTyrConfig_EnableDefault(t *testing.T) {
+	// Empty input (just Enter) should keep TyrEnabled = true.
+	reader := bufio.NewReader(strings.NewReader("\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = true
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if !cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to remain true on empty input")
+	}
+	if cfg.K3s.TyrImage != "ghcr.io/niuulabs/tyr:latest" {
+		t.Errorf("expected image unchanged, got %q", cfg.K3s.TyrImage)
+	}
+}
+
+func TestPromptTyrConfig_Disable(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("n\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = true
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to be false after 'n' input")
+	}
+}
+
+func TestPromptTyrConfig_EnableWithCustomImage(t *testing.T) {
+	// "yes" to enable, then custom image.
+	reader := bufio.NewReader(strings.NewReader("yes\ncustom-tyr:v2\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = false
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if !cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to be true after 'yes' input")
+	}
+	if cfg.K3s.TyrImage != "custom-tyr:v2" {
+		t.Errorf("expected custom image 'custom-tyr:v2', got %q", cfg.K3s.TyrImage)
+	}
+}
+
+func TestPromptTyrConfig_EnableKeepDefaultImage(t *testing.T) {
+	// "y" to enable, empty image (keep default).
+	reader := bufio.NewReader(strings.NewReader("y\n\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = false
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if !cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to be true after 'y' input")
+	}
+	if cfg.K3s.TyrImage != "ghcr.io/niuulabs/tyr:latest" {
+		t.Errorf("expected default image, got %q", cfg.K3s.TyrImage)
 	}
 }
 

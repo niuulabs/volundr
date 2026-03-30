@@ -1295,6 +1295,44 @@ func TestRunMigrations_OpenDatabaseError(t *testing.T) {
 	}
 }
 
+func TestRunTyrMigrations_OpenDatabaseError(t *testing.T) {
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Port:     15433,
+			User:     "test",
+			Password: "test",
+			Name:     "testdb",
+		},
+	}
+
+	pg := New(cfg)
+	// RunTyrMigrations will fail at PingContext because no real DB is running.
+	_, err := pg.RunTyrMigrations(context.Background(), t.TempDir())
+	if err == nil {
+		t.Fatal("expected error when no database is running")
+	}
+}
+
+func TestRunTyrMigrationsFS_OpenDatabaseError(t *testing.T) {
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Port:     15433,
+			User:     "test",
+			Password: "test",
+			Name:     "testdb",
+		},
+	}
+
+	pg := New(cfg)
+	// RunTyrMigrationsFS will fail at PingContext because no real DB is running.
+	_, err := pg.RunTyrMigrationsFS(context.Background(), os.DirFS(t.TempDir()))
+	if err == nil {
+		t.Fatal("expected error when no database is running")
+	}
+}
+
 // contains is a helper to check substring presence.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchSubstring(s, substr)

@@ -465,3 +465,42 @@ func runMigrationsAuto(ctx context.Context, pg postgresProvider) (applied int, s
 	applied, err = pg.RunMigrations(ctx, dir)
 	return applied, dir, err
 }
+
+// runTyrMigrationsAuto runs Tyr-specific migrations using embedded SQL files
+// if available, falling back to the filesystem. Returns (applied, source, error).
+func runTyrMigrationsAuto(ctx context.Context, pg postgresProvider) (applied int, source string, err error) {
+	// Try embedded Tyr migrations first.
+	if mfs := migrations.TyrFS(); mfs != nil {
+		applied, err := pg.RunTyrMigrationsFS(ctx, mfs)
+		return applied, "embedded", err
+	}
+
+	// Fall back to filesystem.
+	dir := findTyrMigrationsDir()
+	if dir == "" {
+		return 0, "", nil
+	}
+	applied, err = pg.RunTyrMigrations(ctx, dir)
+	return applied, dir, err
+}
+
+// findTyrMigrationsDir looks for the Tyr migrations directory relative to the binary.
+func findTyrMigrationsDir() string {
+	candidates := []string{
+		"migrations/tyr",
+		"../migrations/tyr",
+		"../../migrations/tyr",
+	}
+
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && info.IsDir() {
+			abs, err := filepath.Abs(c)
+			if err != nil {
+				continue
+			}
+			return abs
+		}
+	}
+
+	return ""
+}

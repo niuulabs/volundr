@@ -600,3 +600,87 @@ func TestSaveToCreatesDirectory(t *testing.T) {
 		t.Errorf("expected file to exist at %s", nested)
 	}
 }
+
+func TestDefaultConfig_TyrDefaults(t *testing.T) {
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig() error: %v", err)
+	}
+
+	if cfg.K3s.TyrImage != "ghcr.io/niuulabs/tyr:latest" {
+		t.Errorf("expected tyr_image 'ghcr.io/niuulabs/tyr:latest', got %q", cfg.K3s.TyrImage)
+	}
+	if !cfg.K3s.TyrEnabled {
+		t.Error("expected tyr_enabled to be true by default")
+	}
+}
+
+func TestK3sConfig_TyrFieldsRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := &Config{
+		Volundr: VolundrConfig{Mode: "k3s"},
+		Listen:  ListenConfig{Host: "127.0.0.1", Port: 8080},
+		Database: DatabaseConfig{
+			Mode:     "embedded",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+		},
+		K3s: K3sConfig{
+			TyrImage:   "ghcr.io/niuulabs/tyr:v2.0",
+			TyrEnabled: true,
+		},
+	}
+
+	if err := cfg.SaveTo(path); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	loaded, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+
+	if loaded.K3s.TyrImage != "ghcr.io/niuulabs/tyr:v2.0" {
+		t.Errorf("expected tyr_image 'ghcr.io/niuulabs/tyr:v2.0', got %q", loaded.K3s.TyrImage)
+	}
+	if !loaded.K3s.TyrEnabled {
+		t.Error("expected tyr_enabled to persist as true")
+	}
+}
+
+func TestK3sConfig_TyrDisabledRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := &Config{
+		Volundr: VolundrConfig{Mode: "k3s"},
+		Listen:  ListenConfig{Host: "127.0.0.1", Port: 8080},
+		Database: DatabaseConfig{
+			Mode:     "embedded",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+		},
+		K3s: K3sConfig{
+			TyrEnabled: false,
+		},
+	}
+
+	if err := cfg.SaveTo(path); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	loaded, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+
+	if loaded.K3s.TyrEnabled {
+		t.Error("expected tyr_enabled to persist as false")
+	}
+}

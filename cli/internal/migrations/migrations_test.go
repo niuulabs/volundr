@@ -8,3 +8,10 @@ func TestFS_WithoutEmbedTag(t *testing.T) {
 		t.Errorf("FS() = %v, want nil (no embed_migrations tag)", got)
 	}
 }
+
+func TestTyrFS_WithoutEmbedTag(t *testing.T) {
+	// Without the embed_migrations build tag, TyrFS() returns nil.
+	if got := TyrFS(); got != nil {
+		t.Errorf("TyrFS() = %v, want nil (no embed_migrations tag)", got)
+	}
+}
