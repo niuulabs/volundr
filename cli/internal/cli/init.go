@@ -104,29 +104,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	// Prompt for Tyr (saga coordinator) in k3s mode.
 	if cfg.Volundr.Mode == "k3s" {
-		tyrDefault := "Y"
-		if !cfg.K3s.TyrEnabled {
-			tyrDefault = "N"
-		}
-		fmt.Printf("Enable Tyr (saga coordinator)? [Y/n] (%s): ", tyrDefault)
-		tyrAnswer, _ := reader.ReadString('\n')
-		tyrAnswer = strings.TrimSpace(strings.ToLower(tyrAnswer))
-		switch tyrAnswer {
-		case "n", "no":
-			cfg.K3s.TyrEnabled = false
-		case "y", "yes", "":
-			cfg.K3s.TyrEnabled = true
-		}
-
-		if cfg.K3s.TyrEnabled {
-			fmt.Printf("Tyr image (%s): ", cfg.K3s.TyrImage)
-			tyrImage, _ := reader.ReadString('\n')
-			tyrImage = strings.TrimSpace(tyrImage)
-			if tyrImage != "" {
-				cfg.K3s.TyrImage = tyrImage
-			}
-		}
-		fmt.Println()
+		promptTyrConfig(reader, cfg)
 	}
 
 	// Prompt for listen host.
@@ -513,6 +491,34 @@ func machinePassphrase() string {
 		homeDir = "/tmp"
 	}
 	return fmt.Sprintf("niuu-%s-%s", hostname, homeDir)
+}
+
+// promptTyrConfig prompts the user to enable/disable Tyr and optionally
+// set a custom Tyr image. It modifies cfg in place.
+func promptTyrConfig(reader *bufio.Reader, cfg *config.Config) {
+	tyrDefault := "Y"
+	if !cfg.K3s.TyrEnabled {
+		tyrDefault = "N"
+	}
+	fmt.Printf("Enable Tyr (saga coordinator)? [Y/n] (%s): ", tyrDefault)
+	tyrAnswer, _ := reader.ReadString('\n')
+	tyrAnswer = strings.TrimSpace(strings.ToLower(tyrAnswer))
+	switch tyrAnswer {
+	case "n", "no":
+		cfg.K3s.TyrEnabled = false
+	case "y", "yes", "":
+		cfg.K3s.TyrEnabled = true
+	}
+
+	if cfg.K3s.TyrEnabled {
+		fmt.Printf("Tyr image (%s): ", cfg.K3s.TyrImage)
+		tyrImage, _ := reader.ReadString('\n')
+		tyrImage = strings.TrimSpace(tyrImage)
+		if tyrImage != "" {
+			cfg.K3s.TyrImage = tyrImage
+		}
+	}
+	fmt.Println()
 }
 
 // legacyMachinePassphrase returns the old "volundr-" prefixed passphrase

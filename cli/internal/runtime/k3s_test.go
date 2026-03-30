@@ -2523,6 +2523,65 @@ func TestK3sRuntime_Up_EmbeddedDB_WithTyr(t *testing.T) {
 	cancel()
 }
 
+func TestK3sRuntime_Up_EmbeddedDB_WithTyrMigrationsApplied(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".niuu")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	kubeconfigPath := filepath.Join(volundrDir, k3sHostKubeconfigFile)
+	if err := os.WriteFile(kubeconfigPath, []byte("apiVersion: v1\nkind: Config\nclusters:\n- cluster:\n    server: https://127.0.0.1:6443\n  name: k3d-volundr\n"), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+
+	// Create migrations/tyr directory so runTyrMigrationsAuto finds it.
+	tyrMigDir := filepath.Join(tmpDir, "migrations", "tyr")
+	if err := os.MkdirAll(tyrMigDir, 0o700); err != nil {
+		t.Fatalf("create tyr migrations dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	withMockExec(t, `MOCK_RESPONSE=volundr`)
+	withMockPostgres(t, &fakePostgres{migrationsN: 2, tyrMigrationsN: 3})
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Host: "127.0.0.1", Port: 0},
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Host:     "localhost",
+			Port:     5433,
+			User:     "volundr",
+			Password: "test",
+			Name:     "volundr",
+			DataDir:  filepath.Join(volundrDir, "data", "pg"),
+		},
+		K3s: config.K3sConfig{
+			Provider:   "k3d",
+			TyrEnabled: true,
+			TyrImage:   "ghcr.io/niuulabs/tyr:latest",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := r.Up(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Up with Tyr migrations applied: %v", err)
+	}
+
+	cancel()
+}
+
 func TestK3sRuntime_Up_EmbeddedDB_TyrMigrationFail(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
