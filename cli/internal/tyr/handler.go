@@ -67,11 +67,12 @@ func (h *Handler) listSagas(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := make([]SagaListItem, 0, len(sagas))
-	for _, s := range sagas {
+	for i := range sagas {
+		s := &sagas[i]
 		phases, _ := h.store.ListPhases(r.Context(), s.ID)
 		raidCount := 0
-		for _, p := range phases {
-			raids, _ := h.store.ListRaids(r.Context(), p.ID)
+		for j := range phases {
+			raids, _ := h.store.ListRaids(r.Context(), phases[j].ID)
 			raidCount += len(raids)
 		}
 
@@ -113,10 +114,12 @@ func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
 	}
 
 	phaseResponses := make([]PhaseDetailResponse, 0, len(phases))
-	for _, p := range phases {
+	for pi := range phases {
+		p := &phases[pi]
 		raids, _ := h.store.ListRaids(r.Context(), p.ID)
 		raidResponses := make([]RaidDetailResponse, 0, len(raids))
-		for _, rd := range raids {
+		for ri := range raids {
+			rd := &raids[ri]
 			raidResponses = append(raidResponses, RaidDetailResponse{
 				ID:                 rd.ID,
 				TrackerID:          rd.TrackerID,
@@ -331,7 +334,8 @@ func (h *Handler) raidsActive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := make([]ActiveRaidResponse, 0, len(raids))
-	for _, rd := range raids {
+	for i := range raids {
+		rd := &raids[i]
 		results = append(results, ActiveRaidResponse{
 			TrackerID:         rd.TrackerID,
 			Identifier:        rd.TrackerID,
@@ -455,11 +459,14 @@ func (h *Handler) dispatchQueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var queue []queueItem
-	for _, saga := range sagas {
+	for si := range sagas {
+		saga := &sagas[si]
 		phases, _ := h.store.ListPhases(r.Context(), saga.ID)
-		for _, phase := range phases {
+		for pi := range phases {
+			phase := &phases[pi]
 			raids, _ := h.store.ListRaids(r.Context(), phase.ID)
-			for _, rd := range raids {
+			for ri := range raids {
+				rd := &raids[ri]
 				if rd.Status != RaidStatusPending {
 					continue
 				}

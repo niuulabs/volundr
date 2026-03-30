@@ -43,7 +43,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 

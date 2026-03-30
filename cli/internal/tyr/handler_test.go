@@ -24,7 +24,7 @@ func setupHandler(t *testing.T) (*Handler, sqlmock.Sqlmock) {
 	if err != nil {
 		t.Fatalf("create sqlmock: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
@@ -908,7 +908,7 @@ func TestDispatchApprove_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher(forgeServer.URL)

@@ -167,7 +167,7 @@ func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
 
 	applied, err := tyrSrv.RunMigrations(ctx)
 	if err != nil {
-		tyrSrv.Close()
+		_ = tyrSrv.Close()
 		return fmt.Errorf("run tyr migrations: %w", err)
 	}
 	if applied > 0 {

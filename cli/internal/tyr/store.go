@@ -91,7 +91,7 @@ func (s *Store) ListSagas(ctx context.Context, ownerID string) ([]Saga, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query sagas: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sagas []Saga
 	for rows.Next() {
@@ -198,7 +198,7 @@ func (s *Store) ListPhases(ctx context.Context, sagaID string) ([]Phase, error) 
 	if err != nil {
 		return nil, fmt.Errorf("query phases: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var phases []Phase
 	for rows.Next() {
@@ -228,7 +228,7 @@ func (s *Store) ListRaids(ctx context.Context, phaseID string) ([]Raid, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query raids: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanRaids(rows)
 }
@@ -311,7 +311,7 @@ func (s *Store) CountByStatus(ctx context.Context) (map[string]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("count by status: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	counts := make(map[string]int)
 	for rows.Next() {
@@ -339,7 +339,7 @@ func (s *Store) ListActiveRaids(ctx context.Context) ([]Raid, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query active raids: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanRaids(rows)
 }

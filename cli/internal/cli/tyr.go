@@ -110,9 +110,9 @@ func runTyrSagasList(_ *cobra.Command, _ []string) error {
 	}
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tSLUG\tSTATUS\tRAIDS\tBRANCH")
+	_, _ = fmt.Fprintln(tw, "NAME\tSLUG\tSTATUS\tRAIDS\tBRANCH")
 	for _, s := range sagas {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n",
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n",
 			s.Name, s.Slug, s.Status, s.IssueCount, s.FeatureBranch)
 	}
 	return tw.Flush()
@@ -145,9 +145,9 @@ func runTyrRaidsSummary(_ *cobra.Command, _ []string) error {
 	}
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "STATUS\tCOUNT")
+	_, _ = fmt.Fprintln(tw, "STATUS\tCOUNT")
 	for status, count := range counts {
-		fmt.Fprintf(tw, "%s\t%d\n", status, count)
+		_, _ = fmt.Fprintf(tw, "%s\t%d\n", status, count)
 	}
 	return tw.Flush()
 }
@@ -186,13 +186,13 @@ func runTyrRaidsActive(_ *cobra.Command, _ []string) error {
 	}
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tTITLE\tSTATUS\tCONFIDENCE\tSESSION")
+	_, _ = fmt.Fprintln(tw, "ID\tTITLE\tSTATUS\tCONFIDENCE\tSESSION")
 	for _, r := range raids {
 		session := "-"
 		if r.SessionID != nil {
 			session = (*r.SessionID)[:8]
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%.0f%%\t%s\n",
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%.0f%%\t%s\n",
 			truncate(r.TrackerID, 12), truncate(r.Title, 30),
 			r.Status, r.Confidence*100, session)
 	}
@@ -220,7 +220,7 @@ func tyrGet(url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("request failed (is 'niuu volundr up' running?): %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var body []byte
 	body, err = readAll(resp.Body)
@@ -251,9 +251,9 @@ func readAll(r interface{ Read([]byte) (int, error) }) ([]byte, error) {
 	}
 }
 
-func truncate(s string, max int) string {
-	if len(s) <= max {
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
 		return s
 	}
-	return s[:max-3] + "..."
+	return s[:maxLen-3] + "..."
 }

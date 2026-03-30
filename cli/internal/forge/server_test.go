@@ -212,6 +212,20 @@ func TestServer_Addr(t *testing.T) {
 	}
 }
 
+func TestServer_TyrServer_NilByDefault(t *testing.T) {
+	cfg := DefaultForgeConfig()
+	cfg.Forge.WorkspacesDir = t.TempDir()
+
+	srv, err := NewServer(cfg)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	if srv.TyrServer() != nil {
+		t.Error("expected nil tyr server when not initialized")
+	}
+}
+
 func TestServer_WebEnabled_ServesConfigJSON(t *testing.T) {
 	cfg := DefaultForgeConfig()
 	cfg.Forge.WorkspacesDir = t.TempDir()
