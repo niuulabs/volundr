@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/niuulabs/volundr/cli/internal/broker"
 )
 
 // mockRunner implements SessionRunner for handler tests.
@@ -113,6 +115,8 @@ func (m *mockRunner) SubscribeActivity() (id string, ch <-chan ActivityEvent) {
 }
 
 func (m *mockRunner) UnsubscribeActivity(_ string) {}
+
+func (m *mockRunner) GetBroker(_ string) *broker.Broker { return nil }
 
 // newTestHandler creates a Handler backed by a mockRunner.
 func newTestHandler(t *testing.T) (*Handler, *mockRunner) {
@@ -660,7 +664,7 @@ func TestHandler_StopSession_DeletedDuringStop(t *testing.T) {
 	mock.sessions["s1"] = &Session{ID: "s1", Status: StatusRunning}
 
 	// Override Stop to also delete the session.
-	h := NewHandler(&deletingStopRunner{mockRunner: *mock})
+	h := NewHandler(&deletingStopRunner{mockRunner: *mock}, DefaultForgeConfig())
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -689,7 +693,7 @@ func TestHandler_CreateSession_RunnerError(t *testing.T) {
 	mock := newMockRunner()
 	mock.sessions["existing"] = &Session{ID: "existing", Status: StatusRunning}
 
-	h := NewHandler(&maxConcurrentRunner{mockRunner: *mock})
+	h := NewHandler(&maxConcurrentRunner{mockRunner: *mock}, DefaultForgeConfig())
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)

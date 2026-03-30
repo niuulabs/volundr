@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/niuulabs/volundr/cli/internal/broker"
 )
 
 // Runner manages session lifecycles: workspace creation, git clone,
@@ -25,6 +27,7 @@ type Runner struct {
 	mu         sync.Mutex
 	processes  map[string]*exec.Cmd     // session ID -> Claude Code process
 	transports map[string]*SDKTransport // session ID -> SDK WebSocket transport
+	brokers    map[string]*broker.Broker // session ID -> browser broker
 	nextPort   int                      // next SDK port to allocate
 }
 
@@ -39,6 +42,7 @@ func NewRunner(cfg *Config, store SessionStore, bus EventEmitter) *Runner {
 		bus:        bus,
 		processes:  make(map[string]*exec.Cmd),
 		transports: make(map[string]*SDKTransport),
+		brokers:    make(map[string]*broker.Broker),
 		nextPort:   cfg.Forge.SDKPortStart,
 	}
 }
@@ -118,8 +122,13 @@ func (r *Runner) Stop(id string) error {
 	delete(r.processes, id)
 	transport := r.transports[id]
 	delete(r.transports, id)
+	b := r.brokers[id]
+	delete(r.brokers, id)
 	r.mu.Unlock()
 
+	if b != nil {
+		b.Stop()
+	}
 	if transport != nil {
 		transport.Stop()
 	}
@@ -209,6 +218,13 @@ func (r *Runner) ListSessions() []*Session {
 // GetSession returns a session by ID, or nil if not found.
 func (r *Runner) GetSession(id string) *Session {
 	return r.store.Get(id)
+}
+
+// GetBroker returns the broker for a session, or nil if not found.
+func (r *Runner) GetBroker(id string) *broker.Broker {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.brokers[id]
 }
 
 // GetStats returns aggregate session statistics.
@@ -378,6 +394,20 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 	if err := transport.Start(); err != nil {
 		return fmt.Errorf("start sdk transport: %w", err)
 	}
+
+	// Create browser broker for this session.
+	b := broker.NewBroker(sess.ID, transport)
+	transport.SetOnCLIEvent(b.OnCLIEvent)
+
+	r.mu.Lock()
+	r.brokers[sess.ID] = b
+	r.mu.Unlock()
+
+	// Set ChatEndpoint so the web UI knows where to connect.
+	sess.ChatEndpoint = fmt.Sprintf("ws://%s:%d/s/%s/session",
+		r.cfg.Listen.Host, r.cfg.Listen.Port, sess.ID)
+	sess.UpdatedAt = time.Now().UTC()
+	r.store.Put(sess)
 
 	args := []string{
 		"--sdk-url", transport.SDKURL(),

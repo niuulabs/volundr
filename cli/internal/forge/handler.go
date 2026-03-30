@@ -49,6 +49,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/volundr/mcp-servers", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/secrets", emptyJSON)
 	mux.HandleFunc("GET /api/v1/niuu/repos", emptyJSON)
+
+	// Per-session broker routes (skuld-mini).
+	mux.HandleFunc("GET /s/{session_id}/session", h.brokerWebSocket)
+	mux.HandleFunc("GET /s/{session_id}/api/conversation/history", h.brokerConversationHistory)
+	mux.HandleFunc("POST /s/{session_id}/api/message", h.brokerInjectMessage)
+	mux.HandleFunc("GET /s/{session_id}/health", h.brokerHealth)
 }
 
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
@@ -283,6 +289,60 @@ func (h *Handler) listModels(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	httputil.WriteJSON(w, http.StatusOK, models)
+}
+
+// --- Per-session broker routes (skuld-mini) ---
+
+func (h *Handler) brokerWebSocket(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteError(w, http.StatusNotFound, "session not found or not running")
+		return
+	}
+	b.HandleBrowserWS(w, r)
+}
+
+func (h *Handler) brokerConversationHistory(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{"turns": []any{}, "is_active": false})
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, b.ConversationHistory())
+}
+
+func (h *Handler) brokerInjectMessage(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteError(w, http.StatusNotFound, "session not found or not running")
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
+		httputil.WriteError(w, http.StatusBadRequest, "content is required")
+		return
+	}
+
+	if err := b.InjectMessage(req.Content); err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+}
+
+func (h *Handler) brokerHealth(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"status":     "healthy",
+		"session_id": r.PathValue("session_id"),
+	})
 }
 
 // featureFlags returns feature toggles for the web UI based on configuration.

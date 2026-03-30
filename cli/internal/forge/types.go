@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/niuulabs/volundr/cli/internal/broker"
 )
 
 // Sentinel errors for typed error handling in handlers.
@@ -53,6 +55,7 @@ type SessionRunner interface {
 
 	ListSessions() []*Session
 	GetSession(id string) *Session
+	GetBroker(id string) *broker.Broker
 	GetStats() StatsResponse
 	GetPRStatus(id string) (PRStatusResponse, error)
 	GetChronicle(id string) (string, error)
