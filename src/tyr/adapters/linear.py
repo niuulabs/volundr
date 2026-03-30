@@ -341,7 +341,7 @@ query IssueTeam($id: String!) {
 """
 
 _TEAM_STATES_QUERY = """
-query TeamStates($teamId: ID!) {
+query TeamStates($teamId: String!) {
   team(id: $teamId) {
     states {
       nodes { id name }
