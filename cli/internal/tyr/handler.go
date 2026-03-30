@@ -55,7 +55,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // ---------------------------------------------------------------------------
-// Saga handlers
+// Saga handlers.
 // ---------------------------------------------------------------------------
 
 func (h *Handler) listSagas(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +314,7 @@ func (h *Handler) deleteSaga(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
-// Raid handlers
+// Raid handlers.
 // ---------------------------------------------------------------------------
 
 func (h *Handler) raidsSummary(w http.ResponseWriter, r *http.Request) {
@@ -559,8 +559,8 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"default_system_prompt": "",
-		"default_model":        "claude-sonnet-4-6",
-		"models":               []map[string]string{},
+		"default_model":         "claude-sonnet-4-6",
+		"models":                []map[string]string{},
 	})
 }
 

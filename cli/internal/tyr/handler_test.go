@@ -130,7 +130,7 @@ func TestGetSaga_NotFound(t *testing.T) {
 		WithArgs("nonexistent", "test-user").
 		WillReturnRows(sqlmock.NewRows(nil))
 
-	req := httptest.NewRequest("GET", "/api/v1/tyr/sagas/nonexistent", nil)
+	req := httptest.NewRequest("GET", "/api/v1/tyr/sagas/nonexistent", http.NoBody)
 	req.Header.Set("X-Auth-User-Id", "test-user")
 	req.SetPathValue("id", "nonexistent")
 	w := httptest.NewRecorder()
@@ -262,7 +262,7 @@ func TestDeleteSaga_NotFound(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
-	req := httptest.NewRequest("DELETE", "/api/v1/tyr/sagas/nonexistent", nil)
+	req := httptest.NewRequest("DELETE", "/api/v1/tyr/sagas/nonexistent", http.NoBody)
 	req.Header.Set("X-Auth-User-Id", "test-user")
 	req.SetPathValue("id", "nonexistent")
 	w := httptest.NewRecorder()
@@ -343,7 +343,7 @@ func TestApproveRaid_NotFound(t *testing.T) {
 		WithArgs("nonexistent").
 		WillReturnRows(sqlmock.NewRows(nil))
 
-	req := httptest.NewRequest("POST", "/api/v1/tyr/raids/nonexistent/approve", nil)
+	req := httptest.NewRequest("POST", "/api/v1/tyr/raids/nonexistent/approve", http.NoBody)
 	req.SetPathValue("id", "nonexistent")
 	w := httptest.NewRecorder()
 	h.approveRaid(w, req)
@@ -360,7 +360,7 @@ func TestRejectRaid_NotFound(t *testing.T) {
 		WithArgs("nonexistent").
 		WillReturnRows(sqlmock.NewRows(nil))
 
-	req := httptest.NewRequest("POST", "/api/v1/tyr/raids/nonexistent/reject", bytes.NewReader([]byte(`{"reason":"bad"}`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/raids/nonexistent/reject", bytes.NewReader([]byte(`{"reason":"bad"}`)))
 	req.Header.Set("Content-Type", "application/json")
 	req.SetPathValue("id", "nonexistent")
 	w := httptest.NewRecorder()
@@ -670,7 +670,7 @@ func TestRejectRaid_Success(t *testing.T) {
 			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "FAILED", 0.6, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 
 	body := bytes.NewReader([]byte(`{"reason":"tests failed"}`))
-	req := httptest.NewRequest("POST", "/api/v1/tyr/raids/raid-1/reject", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/raids/raid-1/reject", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.SetPathValue("id", "raid-1")
 	w := httptest.NewRecorder()
@@ -786,7 +786,7 @@ func TestDispatchQueue_WithPendingRaids(t *testing.T) {
 func TestDispatchApprove_InvalidBody(t *testing.T) {
 	h, _ := setupHandler(t)
 
-	req := httptest.NewRequest("POST", "/api/v1/tyr/dispatch/approve", bytes.NewReader([]byte("invalid json")))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/dispatch/approve", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Auth-User-Id", "test-user")
 	w := httptest.NewRecorder()

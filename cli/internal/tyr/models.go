@@ -15,6 +15,7 @@ import (
 // SagaStatus represents the lifecycle state of a saga.
 type SagaStatus string
 
+// Saga status constants.
 const (
 	SagaStatusActive   SagaStatus = "ACTIVE"
 	SagaStatusComplete SagaStatus = "COMPLETE"
@@ -24,6 +25,7 @@ const (
 // PhaseStatus represents the lifecycle state of a phase.
 type PhaseStatus string
 
+// Phase status constants.
 const (
 	PhaseStatusPending  PhaseStatus = "PENDING"
 	PhaseStatusActive   PhaseStatus = "ACTIVE"
@@ -34,6 +36,7 @@ const (
 // RaidStatus represents the lifecycle state of a raid.
 type RaidStatus string
 
+// Raid status constants.
 const (
 	RaidStatusPending   RaidStatus = "PENDING"
 	RaidStatusQueued    RaidStatus = "QUEUED"
@@ -101,27 +104,27 @@ type Phase struct {
 
 // Raid represents a single unit of work within a phase.
 type Raid struct {
-	ID                  string     `json:"id"`
-	PhaseID             string     `json:"phase_id"`
-	TrackerID           string     `json:"tracker_id"`
-	Name                string     `json:"name"`
-	Description         string     `json:"description"`
-	AcceptanceCriteria  []string   `json:"acceptance_criteria"`
-	DeclaredFiles       []string   `json:"declared_files"`
-	EstimateHours       *float64   `json:"estimate_hours"`
-	Status              RaidStatus `json:"status"`
-	Confidence          float64    `json:"confidence"`
-	SessionID           *string    `json:"session_id"`
-	Branch              *string    `json:"branch"`
-	ChronicleSummary    *string    `json:"chronicle_summary"`
-	PRUrl               *string    `json:"pr_url"`
-	PRID                *string    `json:"pr_id"`
-	Reason              *string    `json:"reason"`
-	RetryCount          int        `json:"retry_count"`
-	ReviewerSessionID   *string    `json:"reviewer_session_id"`
-	ReviewRound         int        `json:"review_round"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	ID                 string     `json:"id"`
+	PhaseID            string     `json:"phase_id"`
+	TrackerID          string     `json:"tracker_id"`
+	Name               string     `json:"name"`
+	Description        string     `json:"description"`
+	AcceptanceCriteria []string   `json:"acceptance_criteria"`
+	DeclaredFiles      []string   `json:"declared_files"`
+	EstimateHours      *float64   `json:"estimate_hours"`
+	Status             RaidStatus `json:"status"`
+	Confidence         float64    `json:"confidence"`
+	SessionID          *string    `json:"session_id"`
+	Branch             *string    `json:"branch"`
+	ChronicleSummary   *string    `json:"chronicle_summary"`
+	PRUrl              *string    `json:"pr_url"`
+	PRID               *string    `json:"pr_id"`
+	Reason             *string    `json:"reason"`
+	RetryCount         int        `json:"retry_count"`
+	ReviewerSessionID  *string    `json:"reviewer_session_id"`
+	ReviewRound        int        `json:"review_round"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 // ConfidenceEvent records a change in a raid's confidence score.
@@ -140,31 +143,31 @@ type ConfidenceEvent struct {
 
 // SagaListItem is returned by GET /api/v1/tyr/sagas.
 type SagaListItem struct {
-	ID            string   `json:"id"`
-	TrackerID     string   `json:"tracker_id"`
-	TrackerType   string   `json:"tracker_type"`
-	Slug          string   `json:"slug"`
-	Name          string   `json:"name"`
-	Repos         []string `json:"repos"`
-	FeatureBranch string   `json:"feature_branch"`
-	Status        string   `json:"status"`
-	Progress      float64  `json:"progress"`
-	MilestoneCount int     `json:"milestone_count"`
-	IssueCount    int      `json:"issue_count"`
+	ID             string   `json:"id"`
+	TrackerID      string   `json:"tracker_id"`
+	TrackerType    string   `json:"tracker_type"`
+	Slug           string   `json:"slug"`
+	Name           string   `json:"name"`
+	Repos          []string `json:"repos"`
+	FeatureBranch  string   `json:"feature_branch"`
+	Status         string   `json:"status"`
+	Progress       float64  `json:"progress"`
+	MilestoneCount int      `json:"milestone_count"`
+	IssueCount     int      `json:"issue_count"`
 }
 
 // SagaDetailResponse is returned by GET /api/v1/tyr/sagas/{id}.
 type SagaDetailResponse struct {
-	ID            string              `json:"id"`
-	TrackerID     string              `json:"tracker_id"`
-	TrackerType   string              `json:"tracker_type"`
-	Slug          string              `json:"slug"`
-	Name          string              `json:"name"`
-	Repos         []string            `json:"repos"`
-	FeatureBranch string              `json:"feature_branch"`
-	BaseBranch    string              `json:"base_branch"`
-	Status        string              `json:"status"`
-	Confidence    float64             `json:"confidence"`
+	ID            string                `json:"id"`
+	TrackerID     string                `json:"tracker_id"`
+	TrackerType   string                `json:"tracker_type"`
+	Slug          string                `json:"slug"`
+	Name          string                `json:"name"`
+	Repos         []string              `json:"repos"`
+	FeatureBranch string                `json:"feature_branch"`
+	BaseBranch    string                `json:"base_branch"`
+	Status        string                `json:"status"`
+	Confidence    float64               `json:"confidence"`
 	Phases        []PhaseDetailResponse `json:"phases"`
 }
 

@@ -48,7 +48,7 @@ func TestSpawnSession_Success(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(forgeSessionResponse{
+		_ = json.NewEncoder(w).Encode(ForgeSessionResponse{
 			ID:   "session-123",
 			Name: req.Name,
 		})
@@ -112,7 +112,7 @@ func TestSpawnSession_EmptyRepos(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(forgeSessionResponse{ID: "s-1", Name: "test"})
+		_ = json.NewEncoder(w).Encode(ForgeSessionResponse{ID: "s-1", Name: "test"})
 	}))
 	defer server.Close()
 
@@ -186,7 +186,7 @@ func TestSpawnSession_FallbackBranch(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		receivedName = req.Name
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(forgeSessionResponse{ID: "s-1", Name: req.Name})
+		_ = json.NewEncoder(w).Encode(ForgeSessionResponse{ID: "s-1", Name: req.Name})
 	}))
 	defer server.Close()
 

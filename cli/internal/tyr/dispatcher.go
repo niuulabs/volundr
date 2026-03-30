@@ -30,13 +30,13 @@ func NewDispatcher(forgeURL string) *Dispatcher {
 
 // forgeCreateSessionRequest matches Forge's CreateSessionRequest.
 type forgeCreateSessionRequest struct {
-	Name          string             `json:"name"`
-	Model         string             `json:"model,omitempty"`
+	Name          string              `json:"name"`
+	Model         string              `json:"model,omitempty"`
 	Source        *forgeSessionSource `json:"source,omitempty"`
-	SystemPrompt  string             `json:"system_prompt,omitempty"`
-	InitialPrompt string             `json:"initial_prompt,omitempty"`
-	IssueID       string             `json:"issue_id,omitempty"`
-	IssueURL      string             `json:"issue_url,omitempty"`
+	SystemPrompt  string              `json:"system_prompt,omitempty"`
+	InitialPrompt string              `json:"initial_prompt,omitempty"`
+	IssueID       string              `json:"issue_id,omitempty"`
+	IssueURL      string              `json:"issue_url,omitempty"`
 }
 
 type forgeSessionSource struct {
@@ -46,14 +46,14 @@ type forgeSessionSource struct {
 	BaseBranch string `json:"base_branch,omitempty"`
 }
 
-// forgeSessionResponse is the subset of Forge's SessionResponse we need.
-type forgeSessionResponse struct {
+// ForgeSessionResponse is the subset of Forge's SessionResponse we need.
+type ForgeSessionResponse struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
 // SpawnSession calls Forge's POST /api/v1/volundr/sessions to create a session for a raid.
-func (d *Dispatcher) SpawnSession(ctx context.Context, raid *Raid, saga *Saga, model string) (*forgeSessionResponse, error) {
+func (d *Dispatcher) SpawnSession(ctx context.Context, raid *Raid, saga *Saga, model string) (*ForgeSessionResponse, error) {
 	raidBranch := strings.ToLower(raid.TrackerID)
 	if raidBranch == "" {
 		raidBranch = raid.ID[:8]
@@ -108,7 +108,7 @@ func (d *Dispatcher) SpawnSession(ctx context.Context, raid *Raid, saga *Saga, m
 		return nil, fmt.Errorf("forge returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var session forgeSessionResponse
+	var session ForgeSessionResponse
 	if err := json.Unmarshal(respBody, &session); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}

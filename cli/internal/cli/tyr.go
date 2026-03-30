@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -200,7 +201,7 @@ func runTyrRaidsActive(_ *cobra.Command, _ []string) error {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers.
 // ---------------------------------------------------------------------------
 
 func tyrBaseURL() (string, error) {
@@ -216,7 +217,11 @@ func tyrBaseURL() (string, error) {
 
 func tyrGet(url string) ([]byte, error) {
 	client := &http.Client{Timeout: tyrHTTPTimeout}
-	resp, err := client.Get(url) //nolint:gosec // URL from local config
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	resp, err := client.Do(req) //nolint:gosec // URL from local config
 	if err != nil {
 		return nil, fmt.Errorf("request failed (is 'niuu volundr up' running?): %w", err)
 	}

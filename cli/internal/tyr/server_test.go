@@ -48,7 +48,7 @@ func TestRegisterRoutes_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
@@ -126,7 +126,7 @@ func TestServerStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	srv := &Server{store: store}
@@ -140,7 +140,7 @@ func TestServerRegisterRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
@@ -167,7 +167,7 @@ func TestServerRunMigrations_SubFSError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS tyr_schema_migrations").
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -194,7 +194,7 @@ func TestRunMigrationsFS_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create tyr_schema_migrations table
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS tyr_schema_migrations").
@@ -240,7 +240,7 @@ func TestRunMigrationsFS_ApplyNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create tyr_schema_migrations table
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS tyr_schema_migrations").
@@ -274,11 +274,6 @@ func TestRunMigrationsFS_ApplyNew(t *testing.T) {
 	if applied != migrationCount {
 		t.Errorf("expected %d applied, got %d", migrationCount, applied)
 	}
-}
-
-// newSqlmock wraps sqlmock.New for the server test file.
-func newSqlmock() (*sql.DB, sqlmock.Sqlmock, error) {
-	return sqlmock.New()
 }
 
 func sqlmockNew() (*sql.DB, sqlmock.Sqlmock, error) {
