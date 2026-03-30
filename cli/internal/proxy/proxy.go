@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/niuulabs/volundr/cli/internal/tyr"
 	"github.com/niuulabs/volundr/cli/internal/web"
 )
 
@@ -36,6 +37,8 @@ type Router struct {
 	// rewriteHosts lists Docker-internal hostnames that should be replaced
 	// with the browser-facing host (derived from the request's Host header).
 	rewriteHosts []string
+	// tyrServer holds the tyr-mini server for route registration.
+	tyrServer *tyr.Server
 }
 
 // NewRouter creates a new Router with the given API backend URL.
@@ -91,6 +94,11 @@ func (r *Router) SetSessionBackend(backendURL string) error {
 	}
 	r.sessionBackend = u
 	return nil
+}
+
+// RegisterTyrRoutes stores the tyr-mini server for route mounting.
+func (r *Router) RegisterTyrRoutes(srv *tyr.Server) {
+	r.tyrServer = srv
 }
 
 // AddRewriteHost registers a Docker-internal hostname that should be
@@ -152,6 +160,11 @@ func (r *Router) Handler() http.Handler {
 	if r.sessionBackend != nil {
 		sessionProxy := httputil.NewSingleHostReverseProxy(r.sessionBackend)
 		mux.Handle("/s/", sessionProxy)
+	}
+
+	// Tyr-mini routes (served directly, not proxied).
+	if r.tyrServer != nil {
+		r.tyrServer.RegisterRoutes(mux)
 	}
 
 	// API routes -> Python API.
