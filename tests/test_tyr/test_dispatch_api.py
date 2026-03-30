@@ -422,7 +422,10 @@ class TestBuildPrompt:
             description="Implement OAuth",
             status="Todo",
         )
-        template = "Task: {identifier} — {title}\n{description}\nBranch: {raid_branch}\nPR target: {feature_branch}"
+        template = (
+            "Task: {identifier} — {title}\n{description}\n"
+            "Branch: {raid_branch}\nPR target: {feature_branch}"
+        )
         prompt = _build_prompt(issue, "org/repo", "feat/saga", template=template)
         assert "NIU-42" in prompt
         assert "Add auth" in prompt
