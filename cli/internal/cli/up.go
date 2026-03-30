@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/preflight"
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
@@ -56,6 +57,13 @@ func runUp(_ *cobra.Command, _ []string) error {
 		cfg.Anthropic.APIKey = creds.AnthropicAPIKey
 	}
 
+	// Run preflight validation for local runtime.
+	if cfg.Runtime == "local" {
+		if err := runUpPreflight(cfg); err != nil {
+			return err
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -89,5 +97,40 @@ func runUp(_ *cobra.Command, _ []string) error {
 	}
 
 	fmt.Println("Stopped.")
+	return nil
+}
+
+// runUpPreflight validates prerequisites before starting the server.
+// Hard failures (port, claude binary) return errors; soft issues (API key) print warnings.
+func runUpPreflight(cfg *config.Config) error {
+	// Hard failure: claude binary must be available.
+	claudeResult := preflight.CheckBinary("claude")
+	if !claudeResult.OK {
+		return fmt.Errorf("%s\n\n%s", claudeResult.Message, preflight.BinaryRemediation("claude"))
+	}
+
+	// Hard failure: configured port must be available.
+	portResult := preflight.CheckPortAvailable(cfg.Listen.Host, cfg.Listen.Port)
+	if !portResult.OK {
+		return fmt.Errorf("%s\n\n%s", portResult.Message, preflight.PortRemediation(cfg.Listen.Host, cfg.Listen.Port))
+	}
+
+	// Hard failure: workspace directory must be writable.
+	cfgDir, err := config.ConfigDir()
+	if err != nil {
+		return fmt.Errorf("get config dir: %w", err)
+	}
+	dirResult := preflight.CheckDirWritable(cfgDir)
+	if !dirResult.OK {
+		return fmt.Errorf("%s", dirResult.Message)
+	}
+
+	// Soft warning: API key.
+	credsPath, _ := config.CredentialsPath()
+	apiKeyResult := preflight.CheckAPIKey(cfg.Anthropic.APIKey, credsPath)
+	if !apiKeyResult.OK {
+		fmt.Printf("\n%s\n", preflight.APIKeyRemediation())
+	}
+
 	return nil
 }
