@@ -321,7 +321,7 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          GOLANGCI_VERSION="2.1.6"
+          GOLANGCI_VERSION="2.11.4"
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/2691aacde61559ce53cfda05513ee7c70677ea31/install.sh | sh -s -- -b /usr/local/bin "v${GOLANGCI_VERSION}"
           golangci-lint version
 
