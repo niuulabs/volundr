@@ -392,4 +392,12 @@ data:
     DROP INDEX IF EXISTS idx_raids_planner_session;
     ALTER TABLE raids DROP COLUMN IF EXISTS planner_session_id;
     ALTER TABLE raid_progress DROP COLUMN IF EXISTS planner_session_id;
+
+  000020_raid_contract_fields.up.sql: |
+    ALTER TABLE raid_progress ADD COLUMN IF NOT EXISTS acceptance_criteria TEXT[] NOT NULL DEFAULT '{}';
+    ALTER TABLE raid_progress ADD COLUMN IF NOT EXISTS declared_files TEXT[] NOT NULL DEFAULT '{}';
+
+  000020_raid_contract_fields.down.sql: |
+    ALTER TABLE raid_progress DROP COLUMN IF EXISTS declared_files;
+    ALTER TABLE raid_progress DROP COLUMN IF EXISTS acceptance_criteria;
 {{- end }}

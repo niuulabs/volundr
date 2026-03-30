@@ -114,6 +114,8 @@ class TrackerPort(ABC):
         reviewer_session_id: str | None = None,
         review_round: int | None = None,
         planner_session_id: str | None = None,
+        acceptance_criteria: list[str] | None = None,
+        declared_files: list[str] | None = None,
     ) -> Raid: ...
 
     @abstractmethod

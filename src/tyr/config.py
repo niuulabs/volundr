@@ -277,6 +277,112 @@ class ReviewConfig(BaseModel):
     )
 
 
+class ContractConfig(BaseModel):
+    """Contract engine configuration for planner-driven sprint contracts."""
+
+    contract_enabled: bool = Field(
+        default=True,
+        description="Enable planner-driven sprint contract negotiation before coding begins.",
+    )
+    contract_model: str = Field(
+        default="claude-sonnet-4-6",
+        description="AI model for contract planner sessions.",
+    )
+    contract_max_rounds: int = Field(
+        default=3,
+        description="Maximum negotiation rounds before escalating.",
+    )
+    contract_profile: str = Field(
+        default="planner",
+        description="Volundr profile for contract planner sessions (reuses skuld-planner).",
+    )
+    working_session_wait_prompt: str = Field(
+        default=(
+            "Your sprint contract is being prepared. Stand by — you will receive "
+            "a CONTRACT_AGREED message with your acceptance criteria and declared "
+            "files before you begin coding. Do not start any implementation yet."
+        ),
+        description="Message sent to the working session while the contract is being negotiated.",
+    )
+    contract_system_prompt: str = Field(
+        default=(
+            "You are a sprint contract negotiator for the Niuu platform.\n"
+            "\n"
+            "Your job is to review the raid specification and negotiate a clear,\n"
+            "testable contract with the working session before coding begins.\n"
+            "\n"
+            "## Process\n"
+            "\n"
+            "1. Read the raid description and any existing acceptance criteria.\n"
+            "2. Propose a contract: a list of testable acceptance criteria and\n"
+            "   the set of files the raid is expected to touch.\n"
+            "3. If the specification is ambiguous, ask clarifying questions.\n"
+            "4. Once agreed, output the final contract.\n"
+            "\n"
+            "## Output Format\n"
+            "\n"
+            "When the contract is agreed, output exactly:\n"
+            "\n"
+            "CONTRACT_AGREED\n"
+            "```json\n"
+            "{\n"
+            '  "acceptance_criteria": ["testable imperative criterion", ...],\n'
+            '  "declared_files": ["relative/path/to/file.py", ...]\n'
+            "}\n"
+            "```\n"
+            "\n"
+            "If the contract cannot be agreed after the maximum rounds,\n"
+            "output exactly:\n"
+            "\n"
+            "CONTRACT_FAILED\n"
+            "```json\n"
+            '{"reason": "explanation of why agreement could not be reached"}\n'
+            "```"
+        ),
+        description="System prompt for contract planner sessions.",
+    )
+    contract_initial_prompt_template: str = Field(
+        default=(
+            "## Sprint Contract Negotiation\n"
+            "\n"
+            "**Ticket**: {tracker_id}\n"
+            "**Raid**: {raid_name}\n"
+            "**Description**: {raid_description}\n"
+            "\n"
+            "{acceptance_criteria_section}"
+            "{declared_files_section}"
+            "## Instructions\n"
+            "\n"
+            "1. Read the raid specification above.\n"
+            "2. Propose a contract with testable acceptance criteria and declared files.\n"
+            "3. The working session (ID: `{working_session_id}`) is waiting.\n"
+            "4. You have {max_rounds} rounds to reach agreement.\n"
+            "5. When agreed, send the contract to the working session:\n"
+            "   `curl -s -X POST http://localhost:8081/api/message "
+            '-H "Content-Type: application/json" '
+            '-d \'{{"session_id": "{working_session_id}", '
+            '"content": "CONTRACT_AGREED\\n```json\\n<contract>\\n```"}}\'`\n'
+            "6. Then output your CONTRACT_AGREED block.\n"
+            "\n"
+            "## Output\n"
+            "\n"
+            "CONTRACT_AGREED\n"
+            "```json\n"
+            "{{\n"
+            '  "acceptance_criteria": ["criterion 1", ...],\n'
+            '  "declared_files": ["path/to/file.py", ...]\n'
+            "}}\n"
+            "```"
+        ),
+        description=(
+            "Template for the contract planner's initial prompt. "
+            "Placeholders: {tracker_id}, {raid_name}, {raid_description}, "
+            "{acceptance_criteria_section}, {declared_files_section}, "
+            "{working_session_id}, {max_rounds}."
+        ),
+    )
+
+
 class GitConfig(BaseModel):
     """Git provider configuration."""
 
@@ -620,6 +726,7 @@ class Settings(BaseSettings):
     )
     git: GitConfig = Field(default_factory=GitConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
+    contract: ContractConfig = Field(default_factory=ContractConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)
     planner: PlannerConfig = Field(default_factory=PlannerConfig)
