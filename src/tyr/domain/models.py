@@ -30,6 +30,7 @@ class PhaseStatus(StrEnum):
 class RaidStatus(StrEnum):
     PENDING = "PENDING"
     QUEUED = "QUEUED"
+    CONTRACTING = "CONTRACTING"
     RUNNING = "RUNNING"
     REVIEW = "REVIEW"
     ESCALATED = "ESCALATED"
@@ -49,6 +50,8 @@ class ConfidenceEventType(StrEnum):
     PR_MERGEABLE = "pr_mergeable"
     MESSAGE_SENT = "message_sent"
     REVIEWER_SCORE = "reviewer_score"
+    CONTRACT_AGREED = "contract_agreed"
+    CONTRACT_FAILED = "contract_failed"
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +60,10 @@ class ConfidenceEventType(StrEnum):
 
 RAID_TRANSITIONS: dict[RaidStatus, frozenset[RaidStatus]] = {
     RaidStatus.PENDING: frozenset({RaidStatus.QUEUED}),
-    RaidStatus.QUEUED: frozenset({RaidStatus.RUNNING, RaidStatus.FAILED}),
+    RaidStatus.QUEUED: frozenset({RaidStatus.CONTRACTING, RaidStatus.RUNNING, RaidStatus.FAILED}),
+    RaidStatus.CONTRACTING: frozenset(
+        {RaidStatus.RUNNING, RaidStatus.ESCALATED, RaidStatus.FAILED}
+    ),
     RaidStatus.RUNNING: frozenset({RaidStatus.REVIEW, RaidStatus.MERGED, RaidStatus.FAILED}),
     RaidStatus.REVIEW: frozenset(
         {

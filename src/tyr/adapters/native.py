@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 _RAID_STATUS_DISPLAY: dict[RaidStatus, str] = {
     RaidStatus.PENDING: "Pending",
     RaidStatus.QUEUED: "Queued",
+    RaidStatus.CONTRACTING: "Contracting",
     RaidStatus.RUNNING: "In Progress",
     RaidStatus.REVIEW: "In Review",
     RaidStatus.ESCALATED: "Escalated",
