@@ -1,11 +1,16 @@
 package forge
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os/exec"
+	"strings"
+	"time"
 
+	"github.com/niuulabs/volundr/cli/internal/broker"
 	"github.com/niuulabs/volundr/cli/internal/httputil"
 )
 
@@ -36,6 +41,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/pr", h.getPRStatus)
 	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/chronicle", h.getChronicle)
 	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/logs", h.getSessionLogs)
+	mux.HandleFunc("GET /api/v1/volundr/chronicles/{session_id}/timeline", h.getChronicleTimeline)
 	mux.HandleFunc("GET /api/v1/volundr/stats", h.getStats)
 	mux.HandleFunc("GET /api/v1/volundr/me", h.getMe)
 	mux.HandleFunc("GET /health", h.health)
@@ -305,6 +311,165 @@ func (h *Handler) listModels(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	httputil.WriteJSON(w, http.StatusOK, models)
+}
+
+func (h *Handler) getChronicleTimeline(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("session_id")
+	sess := h.runner.GetSession(sessionID)
+	if sess == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{
+			"events": []any{}, "files": []any{}, "commits": []any{}, "token_burn": []int{},
+		})
+		return
+	}
+
+	brk := h.runner.GetBroker(sessionID)
+	history := brk.ConversationHistory()
+	turns, _ := history["turns"].([]broker.ConversationTurn)
+
+	sessionStart := sess.CreatedAt
+	var events []map[string]any
+	var tokenBurn []int
+	totalTokens := 0
+
+	// Session start event.
+	events = append(events, map[string]any{
+		"t": 0, "type": "session", "label": "Session started",
+	})
+
+	// Build events from conversation turns.
+	for _, turn := range turns {
+		t, err := time.Parse(time.RFC3339, turn.CreatedAt)
+		if err != nil {
+			continue
+		}
+		elapsed := int(t.Sub(sessionStart).Seconds())
+		if elapsed < 0 {
+			elapsed = 0
+		}
+
+		if turn.Role == "user" {
+			events = append(events, map[string]any{
+				"t": elapsed, "type": "message", "label": truncate(turn.Content, 80),
+			})
+		} else if turn.Role == "assistant" {
+			tokens := 0
+			if usage, ok := turn.Metadata["usage"].(map[string]any); ok {
+				for _, modelUsage := range usage {
+					if mu, ok := modelUsage.(map[string]any); ok {
+						if out, ok := mu["outputTokens"].(float64); ok {
+							tokens += int(out)
+						}
+						if in, ok := mu["inputTokens"].(float64); ok {
+							tokens += int(in)
+						}
+					}
+				}
+			}
+			totalTokens += tokens
+			ev := map[string]any{
+				"t": elapsed, "type": "message", "label": truncate(turn.Content, 80),
+			}
+			if tokens > 0 {
+				ev["tokens"] = tokens
+			}
+			events = append(events, ev)
+		}
+	}
+
+	// Token burn: single bucket with total.
+	if totalTokens > 0 {
+		tokenBurn = append(tokenBurn, totalTokens)
+	}
+
+	// Git commits from workspace.
+	var commits []map[string]string
+	var files []map[string]any
+	if sess.WorkspaceDir != "" {
+		commits, files, events = appendGitData(sess.WorkspaceDir, sessionStart, events)
+	}
+
+	if commits == nil {
+		commits = []map[string]string{}
+	}
+	if files == nil {
+		files = []map[string]any{}
+	}
+	if tokenBurn == nil {
+		tokenBurn = []int{}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"events":     events,
+		"files":      files,
+		"commits":    commits,
+		"token_burn": tokenBurn,
+	})
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+func appendGitData(workspaceDir string, sessionStart time.Time, events []map[string]any) ([]map[string]string, []map[string]any, []map[string]any) {
+	var commits []map[string]string
+	var files []map[string]any
+
+	// Get commits since session start.
+	sinceArg := fmt.Sprintf("--since=%s", sessionStart.Format(time.RFC3339))
+	cmd := exec.CommandContext(context.Background(), "git", "log", sinceArg, "--pretty=format:%h|%s|%H", "--reverse") //nolint:gosec // format string is fixed
+	cmd.Dir = workspaceDir
+	out, err := cmd.Output()
+	if err == nil && len(out) > 0 {
+		for _, line := range strings.Split(string(out), "\n") {
+			parts := strings.SplitN(line, "|", 3)
+			if len(parts) < 2 {
+				continue
+			}
+			commits = append(commits, map[string]string{
+				"hash": parts[0],
+				"msg":  parts[1],
+				"time": time.Now().Format("15:04"),
+			})
+			events = append(events, map[string]any{
+				"t": 0, "type": "git", "label": parts[1], "hash": parts[0],
+			})
+		}
+	}
+
+	// Get changed files.
+	cmd = exec.CommandContext(context.Background(), "git", "diff", "--stat", "--name-status", "HEAD~1") //nolint:gosec // fixed args
+	cmd.Dir = workspaceDir
+	out, err = cmd.Output()
+	if err == nil && len(out) > 0 {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				continue
+			}
+			status := "mod"
+			switch parts[0] {
+			case "A":
+				status = "new"
+			case "D":
+				status = "del"
+			case "M":
+				status = "mod"
+			}
+			files = append(files, map[string]any{
+				"path": parts[1], "status": status, "ins": 0, "del": 0,
+			})
+		}
+	}
+
+	return commits, files, events
 }
 
 func (h *Handler) getSessionLogs(w http.ResponseWriter, _ *http.Request) {
