@@ -398,9 +398,7 @@ class LinearTrackerAdapter(TrackerPort):
     async def create_saga(self, saga: Saga, *, description: str = "") -> str:
         team_id = await self._get_team_id()
         project_desc = description or (
-            f"Saga: {saga.slug}\n"
-            f"Repos: {', '.join(saga.repos)}\n"
-            f"Branch: {saga.feature_branch}"
+            f"Saga: {saga.slug}\nRepos: {', '.join(saga.repos)}\nBranch: {saga.feature_branch}"
         )
         data = await self._gql.query(
             _CREATE_PROJECT_QUERY,
@@ -432,9 +430,7 @@ class LinearTrackerAdapter(TrackerPort):
             {"issueId": issue_id, "body": body},
         )
 
-    async def attach_issue_document(
-        self, issue_id: str, title: str, content: str
-    ) -> str:
+    async def attach_issue_document(self, issue_id: str, title: str, content: str) -> str:
         """Attach a document to an issue (shows as a resource)."""
         data = await self._gql.query(
             _CREATE_ISSUE_DOCUMENT_QUERY,
@@ -461,9 +457,7 @@ class LinearTrackerAdapter(TrackerPort):
         self._gql.invalidate_cache("milestones")
         return milestone["id"]
 
-    async def create_raid(
-        self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
-    ) -> str:
+    async def create_raid(self, raid: Raid, *, project_id: str = "", milestone_id: str = "") -> str:
         description = raid.description
         if raid.acceptance_criteria:
             criteria = "\n".join(f"- [ ] {c}" for c in raid.acceptance_criteria)
@@ -676,6 +670,7 @@ class LinearTrackerAdapter(TrackerPort):
         chronicle_summary: str | None = None,
         reviewer_session_id: str | None = None,
         review_round: int | None = None,
+        planner_session_id: str | None = None,
     ) -> Raid:
         if self._pool is None:
             raise RuntimeError("pool is required for update_raid_progress")
@@ -684,10 +679,11 @@ class LinearTrackerAdapter(TrackerPort):
             INSERT INTO raid_progress
                 (tracker_id, status, session_id, confidence, pr_url, pr_id,
                  retry_count, reason, owner_id, phase_tracker_id, saga_tracker_id,
-                 chronicle_summary, reviewer_session_id, review_round)
+                 chronicle_summary, reviewer_session_id, review_round,
+                 planner_session_id)
             VALUES ($1, COALESCE($2, 'PENDING'), $3, $4, $5, $6,
                     COALESCE($7, 0), $8, $9, $10, $11, $12, $13,
-                    COALESCE($14, 0))
+                    COALESCE($14, 0), $15)
             ON CONFLICT (tracker_id) DO UPDATE SET
                 status              = COALESCE($2, raid_progress.status),
                 session_id          = COALESCE($3, raid_progress.session_id),
@@ -702,6 +698,7 @@ class LinearTrackerAdapter(TrackerPort):
                 chronicle_summary   = COALESCE($12, raid_progress.chronicle_summary),
                 reviewer_session_id = COALESCE($13, raid_progress.reviewer_session_id),
                 review_round        = COALESCE($14, raid_progress.review_round),
+                planner_session_id  = COALESCE($15, raid_progress.planner_session_id),
                 updated_at          = NOW()
             """,
             tracker_id,
@@ -718,6 +715,7 @@ class LinearTrackerAdapter(TrackerPort):
             chronicle_summary,
             reviewer_session_id,
             review_round,
+            planner_session_id,
         )
         if status is not None:
             try:
@@ -1110,6 +1108,7 @@ class LinearTrackerAdapter(TrackerPort):
             review_round=int(progress["review_round"])
             if progress and progress.get("review_round")
             else 0,
+            planner_session_id=progress.get("planner_session_id") if progress else None,
         )
 
 

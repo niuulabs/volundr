@@ -42,18 +42,14 @@ class TrackerPort(ABC):
         self, raid: Raid, *, project_id: str = "", milestone_id: str = ""
     ) -> str: ...
 
-    async def attach_document(
-        self, project_id: str, title: str, content: str
-    ) -> str:
+    async def attach_document(self, project_id: str, title: str, content: str) -> str:
         """Attach a document to a project. Returns document ID. Optional — noop by default."""
         return ""
 
     async def add_comment(self, issue_id: str, body: str) -> None:
         """Add a comment to an issue. Optional — noop by default."""
 
-    async def attach_issue_document(
-        self, issue_id: str, title: str, content: str
-    ) -> str:
+    async def attach_issue_document(self, issue_id: str, title: str, content: str) -> str:
         """Attach a document to an issue. Returns document ID. Optional — noop by default."""
         return ""
 
@@ -117,6 +113,7 @@ class TrackerPort(ABC):
         chronicle_summary: str | None = None,
         reviewer_session_id: str | None = None,
         review_round: int | None = None,
+        planner_session_id: str | None = None,
     ) -> Raid: ...
 
     @abstractmethod
