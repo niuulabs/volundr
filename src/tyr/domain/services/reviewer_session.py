@@ -28,7 +28,7 @@ class ReviewerResult:
     session_id: str
     confidence: float
     summary: str
-    issues: list[str]
+    findings: list[str]
     approved: bool
 
 
@@ -176,8 +176,13 @@ def _try_parse_json(text: str) -> ReviewerResult | None:
 
     approved = bool(data.get("approved", False))
     summary = str(data.get("summary", ""))
-    raw_issues = data.get("issues", [])
-    issues = [str(i) for i in raw_issues] if isinstance(raw_issues, list) else []
+
+    # Accept "findings" (new format) or "issues" (legacy) or both merged
+    findings: list[str] = []
+    for key in ("findings", "issues", "nits", "improvements"):
+        raw = data.get(key, [])
+        if isinstance(raw, list):
+            findings.extend(str(i) for i in raw)
 
     if not summary and confidence == 0.0:
         return None
@@ -186,18 +191,18 @@ def _try_parse_json(text: str) -> ReviewerResult | None:
         session_id="",
         confidence=confidence,
         summary=summary,
-        issues=issues,
+        findings=findings,
         approved=approved,
     )
 
 
 def _try_parse_text(text: str) -> ReviewerResult | None:
-    """Parse the text-based CONFIDENCE:/APPROVED:/SUMMARY:/ISSUES: format."""
+    """Parse the text-based CONFIDENCE:/APPROVED:/SUMMARY:/FINDINGS: format."""
     confidence = 0.0
     approved = False
     summary = ""
-    issues: list[str] = []
-    in_issues = False
+    findings: list[str] = []
+    in_findings = False
 
     for line in text.splitlines():
         stripped = line.strip()
@@ -208,26 +213,26 @@ def _try_parse_text(text: str) -> ReviewerResult | None:
                 confidence = max(0.0, min(1.0, confidence))
             except (ValueError, IndexError):
                 pass
-            in_issues = False
+            in_findings = False
             continue
 
         if stripped.upper().startswith("APPROVED:"):
             val = stripped.split(":", 1)[1].strip().lower()
             approved = val in ("yes", "true", "1")
-            in_issues = False
+            in_findings = False
             continue
 
         if stripped.upper().startswith("SUMMARY:"):
             summary = stripped.split(":", 1)[1].strip()
-            in_issues = False
+            in_findings = False
             continue
 
-        if stripped.upper().startswith("ISSUES:"):
-            in_issues = True
+        if stripped.upper().startswith(("FINDINGS:", "ISSUES:")):
+            in_findings = True
             continue
 
-        if in_issues and stripped.startswith("- "):
-            issues.append(stripped[2:].strip())
+        if in_findings and stripped.startswith("- "):
+            findings.append(stripped[2:].strip())
             continue
 
     if not summary and confidence == 0.0:
@@ -237,7 +242,7 @@ def _try_parse_text(text: str) -> ReviewerResult | None:
         session_id="",
         confidence=confidence,
         summary=summary,
-        issues=issues,
+        findings=findings,
         approved=approved,
     )
 
@@ -367,7 +372,7 @@ class ReviewerSessionService:
         if not raid.session_id:
             return
 
-        if not result.issues:
+        if not result.findings:
             return
 
         adapters = await self._volundr_factory.for_owner(owner_id)
@@ -385,17 +390,22 @@ class ReviewerSessionService:
             "",
             f"**Summary**: {result.summary}",
             "",
-            "**Issues to address**:",
+            "**Findings to address** (all must be fixed before merge):",
         ]
-        for issue in result.issues:
-            feedback_lines.append(f"- {issue}")
+        for finding in result.findings:
+            feedback_lines.append(f"- {finding}")
+        feedback_lines.extend([
+            "",
+            "After fixing, `git add`, `git commit`, and `git push` your changes,",
+            "then notify the reviewer that the fixes are ready for re-review.",
+        ])
 
         try:
             await volundr.send_message(raid.session_id, "\n".join(feedback_lines))
             logger.info(
-                "Sent reviewer feedback to session %s (%d issues)",
+                "Sent reviewer feedback to session %s (%d findings)",
                 raid.session_id,
-                len(result.issues),
+                len(result.findings),
             )
         except Exception:
             logger.warning(

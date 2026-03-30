@@ -199,8 +199,8 @@ ISSUES:
         assert result.confidence == 0.85
         assert result.approved is True
         assert result.summary == "Clean implementation following all project rules"
-        assert len(result.issues) == 2
-        assert "missing docstring" in result.issues[0]
+        assert len(result.findings) == 2
+        assert "missing docstring" in result.findings[0]
 
     def test_parse_rejection_response(self) -> None:
         text = """
@@ -215,7 +215,7 @@ ISSUES:
         assert result is not None
         assert result.confidence == 0.45
         assert result.approved is False
-        assert len(result.issues) == 2
+        assert len(result.findings) == 2
 
     def test_parse_no_issues(self) -> None:
         text = """
@@ -227,7 +227,7 @@ SUMMARY: Perfect implementation
         assert result is not None
         assert result.confidence == 0.95
         assert result.approved is True
-        assert result.issues == []
+        assert result.findings == []
 
     def test_parse_empty_text(self) -> None:
         result = parse_reviewer_response("")
@@ -294,7 +294,7 @@ class TestParseReviewerResponseJSON:
         assert result.confidence == 0.85
         assert result.approved is True
         assert result.summary == "Clean code"
-        assert result.issues == ["nit"]
+        assert result.findings == ["nit"]
 
     def test_parse_json_in_code_fence(self) -> None:
         text = """```json
@@ -304,14 +304,14 @@ class TestParseReviewerResponseJSON:
         assert result is not None
         assert result.confidence == 0.92
         assert result.approved is True
-        assert result.issues == []
+        assert result.findings == []
 
     def test_parse_json_no_issues(self) -> None:
         text = '{"confidence": 0.95, "approved": true, "summary": "Perfect"}'
         result = parse_reviewer_response(text)
         assert result is not None
         assert result.confidence == 0.95
-        assert result.issues == []
+        assert result.findings == []
 
     def test_parse_json_clamped_confidence(self) -> None:
         text = '{"confidence": 1.5, "approved": true, "summary": "test"}'
@@ -324,7 +324,7 @@ class TestParseReviewerResponseJSON:
         result = parse_reviewer_response(text)
         assert result is not None
         assert result.approved is False
-        assert len(result.issues) == 2
+        assert len(result.findings) == 2
 
     def test_json_preferred_over_text(self) -> None:
         """When text contains valid JSON, JSON parser wins."""
@@ -540,7 +540,7 @@ class TestSendFeedback:
             session_id="reviewer-1",
             confidence=0.65,
             summary="Architecture violation found",
-            issues=["tyr imports from volundr", "missing tests"],
+            findings=["tyr imports from volundr", "missing tests"],
             approved=False,
         )
 
@@ -565,7 +565,7 @@ class TestSendFeedback:
             session_id="reviewer-1",
             confidence=0.95,
             summary="Looks great",
-            issues=[],
+            findings=[],
             approved=True,
         )
 
@@ -585,7 +585,7 @@ class TestSendFeedback:
             session_id="reviewer-1",
             confidence=0.5,
             summary="Issues",
-            issues=["problem"],
+            findings=["problem"],
             approved=False,
         )
 
@@ -607,7 +607,7 @@ class TestSendFeedback:
             session_id="reviewer-1",
             confidence=0.5,
             summary="Issues",
-            issues=["problem"],
+            findings=["problem"],
             approved=False,
         )
 
@@ -630,7 +630,7 @@ class TestSendFeedback:
             session_id="reviewer-1",
             confidence=0.5,
             summary="Issues",
-            issues=["problem"],
+            findings=["problem"],
             approved=False,
         )
 

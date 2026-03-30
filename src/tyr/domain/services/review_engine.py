@@ -209,11 +209,11 @@ class ReviewEngine:
             raid.review_round,
             result.confidence,
             result.approved,
-            len(result.issues),
+            len(result.findings),
         )
 
         # If approved with no issues → check reviewer's own confidence
-        if result.approved and not result.issues:
+        if result.approved and not result.findings:
             self._reviewer_sessions.pop(session_id, None)
             if result.confidence >= self._cfg.auto_approve_threshold:
                 decision = await self._handle_auto_approve(
@@ -260,7 +260,7 @@ class ReviewEngine:
 
         logger.info(
             "Review round %d/%d for %s: %d issues, reviewer driving loop",
-            new_round, self._cfg.max_review_rounds, tracker_id, len(result.issues),
+            new_round, self._cfg.max_review_rounds, tracker_id, len(result.findings),
         )
 
     async def start(self) -> None:

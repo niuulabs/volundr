@@ -182,37 +182,41 @@ class ReviewConfig(BaseModel):
             "- Look for edge cases, error handling gaps, and security issues.\n"
             "- Verify conventional commit messages.\n"
             "\n"
-            "## Suggest Improvements\n"
+            "## Every Finding Must Be Addressed\n"
             "\n"
-            "For each issue, suggest a specific improvement — don't just say what's wrong,\n"
+            "Every finding — bugs, quality issues, reuse opportunities, efficiency\n"
+            "improvements — is blocking. If you find it worth mentioning, the working\n"
+            "session must fix it before the PR can merge.\n"
+            "\n"
+            "For each finding, suggest a specific fix — don't just say what's wrong,\n"
             "say how to fix it. Reference file names and line numbers.\n"
             "\n"
             "## Confidence Scoring\n"
             "\n"
             "| Score | Meaning |\n"
             "|-------|---------|\n"
-            "| 0.90+ | Approve — minor nits only. |\n"
-            "| 0.80–0.89 | Approve with non-blocking suggestions. |\n"
-            "| 0.70–0.79 | Request changes — specific fixable issues. |\n"
-            "| <0.70 | Significant rework needed. |\n"
+            "| 1.0 | No findings — clean code, ready to merge. |\n"
+            "| 0.80–0.99 | Minor findings — fixable in one round. |\n"
+            "| 0.50–0.79 | Significant findings — needs rework. |\n"
+            "| <0.50 | Fundamental issues — architecture or design problems. |\n"
             "\n"
-            "**Blocking**: correctness bugs, security issues, architecture violations,\n"
-            "missing tests for new code, broken CI, code duplication of existing utilities.\n"
-            "**Non-blocking (nits)**: naming, optional refactors, docs, style.\n"
-            "Approve with nits if confidence >= 0.80.\n"
+            "Only approve (`approved: true`) when `findings` is empty.\n"
             "\n"
             "## Response Format\n"
             "\n"
             "```json\n"
             "{\n"
             '  "confidence": <0.0–1.0>,\n'
-            '  "approved": <true|false>,\n'
+            '  "approved": <true only if findings is empty and PR is merged>,\n'
             '  "summary": "<one-line summary of the review>",\n'
-            '  "issues": ["file:line — description of blocking issue and suggested fix"],\n'
-            '  "nits": ["file:line — non-blocking suggestion"],\n'
-            '  "improvements": ["file:line — code improvement suggestion with rationale"]\n'
+            '  "findings": [\n'
+            '    "file:line — [category] description and suggested fix"\n'
+            "  ]\n"
             "}\n"
-            "```"
+            "```\n"
+            "\n"
+            "Categories: `[bug]`, `[security]`, `[architecture]`, `[reuse]`,\n"
+            "`[quality]`, `[efficiency]`, `[test]`, `[style]`."
         ),
         description="System prompt for reviewer sessions.",
     )
@@ -242,7 +246,7 @@ class ReviewConfig(BaseModel):
             "{review_loop_section}"
             "## Merging\n"
             "\n"
-            "When satisfied (confidence >= 0.80, no blocking issues),\n"
+            "When satisfied (no findings remaining),\n"
             "merge the PR before outputting your assessment:\n"
             "\n"
             "```bash\n"
@@ -257,11 +261,9 @@ class ReviewConfig(BaseModel):
             "```json\n"
             "{{\n"
             '  "confidence": <score>,\n'
-            '  "approved": <true if merged>,\n'
+            '  "approved": <true only if findings is empty and PR merged>,\n'
             '  "summary": "<one line>",\n'
-            '  "issues": ["file:line — blocking issue and fix"],\n'
-            '  "nits": ["file:line — non-blocking suggestion"],\n'
-            '  "improvements": ["file:line — code improvement with rationale"]\n'
+            '  "findings": ["file:line — [category] description and fix"]\n'
             "}}\n"
             "```"
         ),
