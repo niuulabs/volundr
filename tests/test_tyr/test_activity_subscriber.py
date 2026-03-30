@@ -1445,3 +1445,171 @@ class TestResolveOwnerAdapters:
         # Second call returns cached
         cached = await sub._resolve_owner_adapters("owner-1")
         assert cached is result
+
+
+# ---------------------------------------------------------------------------
+# Tests — Contract completion routing
+# ---------------------------------------------------------------------------
+
+
+class StubContractEngine:
+    """Minimal stub mirroring ContractEngine for subscriber tests."""
+
+    def __init__(self) -> None:
+        self._sessions: dict[str, tuple[str, str]] = {}
+        self.completions: list[tuple[str, str]] = []
+
+    def register(self, session_id: str, tracker_id: str, owner_id: str) -> None:
+        self._sessions[session_id] = (tracker_id, owner_id)
+
+    def get_contract_raid(self, session_id: str) -> tuple[str, str] | None:
+        return self._sessions.get(session_id)
+
+    async def handle_contract_completion(self, session_id: str, planner_output: str) -> None:
+        self.completions.append((session_id, planner_output))
+
+
+class TestContractCompletionRouting:
+    @pytest.mark.asyncio
+    async def test_planner_idle_triggers_contract_completion(self) -> None:
+        """Idle event for a tracked contract planner session calls handle_contract_completion."""
+        contract_engine = StubContractEngine()
+        planner_session = "planner-session-1"
+        contract_engine.register(planner_session, "tracker-1", "user-1")
+
+        sub, volundr, tracker, _ = _make_subscriber()
+        sub._contract_engine = contract_engine
+
+        volundr.sessions[planner_session] = _make_volundr_session(
+            session_id=planner_session,
+        )
+
+        event = ActivityEvent(
+            session_id=planner_session,
+            state="idle",
+            metadata={"turn_count": 3, "duration_seconds": 10},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
+        await asyncio.sleep(0.1)
+
+        assert len(contract_engine.completions) == 1
+        assert contract_engine.completions[0][0] == planner_session
+
+    @pytest.mark.asyncio
+    async def test_untracked_session_does_not_trigger_contract_completion(self) -> None:
+        """Idle event for a session not tracked by contract engine is ignored."""
+        contract_engine = StubContractEngine()
+
+        sub, volundr, tracker, _ = _make_subscriber()
+        sub._contract_engine = contract_engine
+
+        event = ActivityEvent(
+            session_id="unknown-session",
+            state="idle",
+            metadata={"turn_count": 3, "duration_seconds": 10},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
+        await asyncio.sleep(0.1)
+
+        assert len(contract_engine.completions) == 0
+
+    @pytest.mark.asyncio
+    async def test_contract_fetch_error_raises(self) -> None:
+        """Error fetching contract output should propagate (re-raised)."""
+        contract_engine = StubContractEngine()
+        planner_session = "planner-err-1"
+        contract_engine.register(planner_session, "tracker-1", "user-1")
+
+        class FailingVolundr(StubVolundr):
+            async def get_last_assistant_message(self, session_id: str) -> str:
+                raise RuntimeError("fetch failed")
+
+        failing_volundr = FailingVolundr()
+        sub, _, tracker, _ = _make_subscriber()
+        sub._contract_engine = contract_engine
+
+        with pytest.raises(RuntimeError, match="fetch failed"):
+            await sub._try_handle_contract_completion(planner_session, failing_volundr)
+
+        assert len(contract_engine.completions) == 0
+
+    @pytest.mark.asyncio
+    async def test_contract_handle_error_is_swallowed(self) -> None:
+        """Error in handle_contract_completion should be logged, not raised."""
+
+        class FailingContractEngine(StubContractEngine):
+            async def handle_contract_completion(self, session_id: str, output: str) -> None:
+                raise RuntimeError("handle failed")
+
+        contract_engine = FailingContractEngine()
+        planner_session = "planner-err-2"
+        contract_engine.register(planner_session, "tracker-1", "user-1")
+
+        sub, volundr, tracker, _ = _make_subscriber()
+        sub._contract_engine = contract_engine
+
+        # Should not raise
+        await sub._try_handle_contract_completion(planner_session, volundr)
+
+    @pytest.mark.asyncio
+    async def test_no_contract_engine_does_not_crash(self) -> None:
+        """When contract_engine is None, idle events for unknown sessions do not crash."""
+        sub, volundr, tracker, _ = _make_subscriber()
+        assert sub._contract_engine is None
+
+        event = ActivityEvent(
+            session_id="orphan-session",
+            state="idle",
+            metadata={"turn_count": 3, "duration_seconds": 10},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
+        await asyncio.sleep(0.1)
+        # No crash
+
+
+# ---------------------------------------------------------------------------
+# Tests — CONTRACTING guard
+# ---------------------------------------------------------------------------
+
+
+class TestContractingGuard:
+    @pytest.mark.asyncio
+    async def test_working_session_idle_during_contracting_not_evaluated(self) -> None:
+        """Working session idle in CONTRACTING state should return early — no completion."""
+        sub, volundr, tracker, _ = _make_subscriber()
+        raid = _make_raid(status=RaidStatus.CONTRACTING)
+        tracker.add_raid(raid)
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="idle",
+            metadata={"turn_count": 5, "duration_seconds": 60},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
+        await asyncio.sleep(0.1)
+
+        # Status should remain CONTRACTING — no transition to REVIEW
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.CONTRACTING
+
+    @pytest.mark.asyncio
+    async def test_running_session_still_evaluates_normally(self) -> None:
+        """Working session idle in RUNNING state should still evaluate for completion."""
+        sub, volundr, tracker, _ = _make_subscriber()
+        raid = _make_raid(status=RaidStatus.RUNNING)
+        tracker.add_raid(raid)
+
+        event = ActivityEvent(
+            session_id=raid.session_id or "",
+            state="idle",
+            metadata={"turn_count": 5, "duration_seconds": 60},
+            owner_id="user-1",
+        )
+        await sub._on_activity_event(event, volundr, owner_id="user-1")
+        await asyncio.sleep(0.1)
+
+        # Should transition to REVIEW as normal
+        assert tracker.progress[raid.tracker_id]["status"] == RaidStatus.REVIEW
