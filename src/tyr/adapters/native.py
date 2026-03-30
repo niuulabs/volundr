@@ -252,6 +252,8 @@ class NativeTrackerAdapter(TrackerPort):
         reviewer_session_id: str | None = None,
         review_round: int | None = None,
         planner_session_id: str | None = None,
+        acceptance_criteria: list[str] | None = None,
+        declared_files: list[str] | None = None,
     ) -> Raid:
         row = await self._pool.fetchrow(
             """
@@ -267,6 +269,8 @@ class NativeTrackerAdapter(TrackerPort):
                 reviewer_session_id = COALESCE($10, reviewer_session_id),
                 review_round        = COALESCE($11, review_round),
                 planner_session_id  = COALESCE($12, planner_session_id),
+                acceptance_criteria = COALESCE($13, acceptance_criteria),
+                declared_files      = COALESCE($14, declared_files),
                 updated_at          = NOW()
             WHERE tracker_id = $1
             RETURNING *
@@ -283,6 +287,8 @@ class NativeTrackerAdapter(TrackerPort):
             reviewer_session_id,
             review_round,
             planner_session_id,
+            acceptance_criteria,
+            declared_files,
         )
         if row is None:
             raise LookupError(f"Raid not found: {tracker_id}")

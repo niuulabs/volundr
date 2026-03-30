@@ -671,6 +671,8 @@ class LinearTrackerAdapter(TrackerPort):
         reviewer_session_id: str | None = None,
         review_round: int | None = None,
         planner_session_id: str | None = None,
+        acceptance_criteria: list[str] | None = None,
+        declared_files: list[str] | None = None,
     ) -> Raid:
         if self._pool is None:
             raise RuntimeError("pool is required for update_raid_progress")
@@ -680,10 +682,10 @@ class LinearTrackerAdapter(TrackerPort):
                 (tracker_id, status, session_id, confidence, pr_url, pr_id,
                  retry_count, reason, owner_id, phase_tracker_id, saga_tracker_id,
                  chronicle_summary, reviewer_session_id, review_round,
-                 planner_session_id)
+                 planner_session_id, acceptance_criteria, declared_files)
             VALUES ($1, COALESCE($2, 'PENDING'), $3, $4, $5, $6,
                     COALESCE($7, 0), $8, $9, $10, $11, $12, $13,
-                    COALESCE($14, 0), $15)
+                    COALESCE($14, 0), $15, COALESCE($16, '{}'), COALESCE($17, '{}'))
             ON CONFLICT (tracker_id) DO UPDATE SET
                 status              = COALESCE($2, raid_progress.status),
                 session_id          = COALESCE($3, raid_progress.session_id),
@@ -699,6 +701,8 @@ class LinearTrackerAdapter(TrackerPort):
                 reviewer_session_id = COALESCE($13, raid_progress.reviewer_session_id),
                 review_round        = COALESCE($14, raid_progress.review_round),
                 planner_session_id  = COALESCE($15, raid_progress.planner_session_id),
+                acceptance_criteria = COALESCE($16, raid_progress.acceptance_criteria),
+                declared_files      = COALESCE($17, raid_progress.declared_files),
                 updated_at          = NOW()
             """,
             tracker_id,
@@ -716,6 +720,8 @@ class LinearTrackerAdapter(TrackerPort):
             reviewer_session_id,
             review_round,
             planner_session_id,
+            acceptance_criteria,
+            declared_files,
         )
         if status is not None:
             try:
@@ -1087,8 +1093,12 @@ class LinearTrackerAdapter(TrackerPort):
             url=node.get("url", ""),
             name=node.get("title", ""),
             description=node.get("description") or "",
-            acceptance_criteria=[],
-            declared_files=[],
+            acceptance_criteria=list(progress.get("acceptance_criteria") or [])
+            if progress
+            else [],
+            declared_files=list(progress.get("declared_files") or [])
+            if progress
+            else [],
             estimate_hours=None,
             status=raid_status,
             confidence=float(progress["confidence"])
