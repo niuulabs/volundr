@@ -116,6 +116,7 @@ class TrackerPort(ABC):
         planner_session_id: str | None = None,
         acceptance_criteria: list[str] | None = None,
         declared_files: list[str] | None = None,
+        launch_command: str | None = None,
     ) -> Raid: ...
 
     @abstractmethod

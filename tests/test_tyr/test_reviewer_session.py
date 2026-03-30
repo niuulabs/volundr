@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -406,6 +407,29 @@ class TestBuildReviewerInitialPrompt:
         )
         assert "Refactored auth module" in prompt
 
+    def test_launch_command_in_template_sections(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+            template="{launch_command}",
+            launch_command="uvicorn app:main --port 8000",
+        )
+        assert prompt == "uvicorn app:main --port 8000"
+
+    def test_launch_command_defaults_to_empty(self) -> None:
+        raid = _make_raid()
+        prompt = build_reviewer_initial_prompt(
+            raid=raid,
+            pr_status=None,
+            changed_files=[],
+            diff_summary="",
+            template="{launch_command}",
+        )
+        assert prompt == ""
+
 
 # ---------------------------------------------------------------------------
 # Tests: reviewer_system_prompt config field
@@ -509,6 +533,22 @@ class TestSpawnReviewer:
 
         assert len(volundr.spawn_calls) == 1
         assert "Implemented auth flow" in volundr.spawn_calls[0].initial_prompt
+
+    @pytest.mark.asyncio
+    async def test_spawn_passes_launch_command(self) -> None:
+        service, volundr = _make_service(
+            config=_default_config(reviewer_initial_prompt_template="cmd:{launch_command}"),
+        )
+        raid = replace(_make_raid(), launch_command="make serve")
+
+        session = await service.spawn_reviewer(
+            raid=raid,
+            owner_id=OWNER_ID,
+            pr_status=None,
+            changed_files=[],
+        )
+        assert session is not None
+        assert "make serve" in volundr.spawn_calls[0].initial_prompt
 
     @pytest.mark.asyncio
     async def test_spawn_with_no_chronicle(self) -> None:

@@ -14,6 +14,7 @@ from tyr.adapters.linear import (
     _LINEAR_TO_RAID,
     _RAID_TO_LINEAR,
     LinearTrackerAdapter,
+    _parse_launch_command,
     _parse_progress,
 )
 from tyr.domain.models import (
@@ -290,7 +291,7 @@ class TestCreateSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
-        base_branch="dev",
+            base_branch="dev",
         )
 
         result = await adapter.create_saga(saga)
@@ -315,7 +316,7 @@ class TestCreateSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
-        base_branch="dev",
+            base_branch="dev",
         )
 
         with pytest.raises(GraphQLError, match="Failed to create Linear project"):
@@ -1685,3 +1686,111 @@ class TestIssueToRaid:
         }
         raid = LinearTrackerAdapter._issue_to_raid(node, progress=progress)
         assert raid.status == RaidStatus.RUNNING
+
+
+# ---------------------------------------------------------------------------
+# _parse_launch_command
+# ---------------------------------------------------------------------------
+
+
+class TestParseLaunchCommand:
+    def test_with_launch_block(self):
+        description = (
+            "Some description\n\n"
+            "```launch\n"
+            "uvicorn src.myapp.main:app --port 8000\n"
+            "```\n\n"
+            "More text."
+        )
+        assert _parse_launch_command(description) == "uvicorn src.myapp.main:app --port 8000"
+
+    def test_without_launch_block(self):
+        description = "Just a normal description with no launch block."
+        assert _parse_launch_command(description) is None
+
+    def test_empty_description(self):
+        assert _parse_launch_command("") is None
+
+    def test_empty_launch_block(self):
+        description = "```launch\n\n```"
+        assert _parse_launch_command(description) is None
+
+    def test_multiline_launch_command(self):
+        description = "```launch\ncd /app && \\\nuvicorn main:app --port 8000\n```"
+        result = _parse_launch_command(description)
+        assert result == "cd /app && \\\nuvicorn main:app --port 8000"
+
+    def test_launch_block_with_surrounding_content(self):
+        description = (
+            "# Issue Title\n\n"
+            "Description here.\n\n"
+            "```launch\n"
+            "npm run dev\n"
+            "```\n\n"
+            "```python\n"
+            "print('not this')\n"
+            "```"
+        )
+        assert _parse_launch_command(description) == "npm run dev"
+
+
+# ---------------------------------------------------------------------------
+# _node_to_tracker_issue: launch_command parsing
+# ---------------------------------------------------------------------------
+
+
+class TestNodeToTrackerIssueLaunchCommand:
+    def test_issue_with_launch_block(self):
+        node = _issue_node(description="Desc\n\n```launch\nuvicorn app:main --port 8000\n```")
+        issue = LinearTrackerAdapter._node_to_tracker_issue(node)
+        assert issue.launch_command == "uvicorn app:main --port 8000"
+
+    def test_issue_without_launch_block(self):
+        node = _issue_node(description="A plain description")
+        issue = LinearTrackerAdapter._node_to_tracker_issue(node)
+        assert issue.launch_command is None
+
+    def test_issue_with_no_description(self):
+        node = _issue_node(description=None)
+        issue = LinearTrackerAdapter._node_to_tracker_issue(node)
+        assert issue.launch_command is None
+
+
+# ---------------------------------------------------------------------------
+# _issue_to_raid: launch_command from progress
+# ---------------------------------------------------------------------------
+
+
+class TestIssueToRaidLaunchCommand:
+    def test_launch_command_from_progress(self):
+        node = _issue_node()
+        progress = {
+            "status": "RUNNING",
+            "launch_command": "make serve",
+            "confidence": None,
+            "session_id": None,
+            "pr_url": None,
+            "pr_id": None,
+            "retry_count": None,
+        }
+        raid = LinearTrackerAdapter._issue_to_raid(node, progress=progress)
+        assert raid.launch_command == "make serve"
+
+    def test_launch_command_null_in_progress(self):
+        node = _issue_node()
+        progress = {
+            "status": "RUNNING",
+            "launch_command": None,
+            "confidence": None,
+            "session_id": None,
+            "pr_url": None,
+            "pr_id": None,
+            "retry_count": None,
+        }
+        raid = LinearTrackerAdapter._issue_to_raid(node, progress=progress)
+        assert raid.launch_command is None
+
+    def test_launch_command_no_progress(self):
+        node = _issue_node()
+        raid = LinearTrackerAdapter._issue_to_raid(node, progress=None)
+        assert raid.launch_command is None

@@ -7,6 +7,7 @@ Maps: Project=Saga, Milestone=Phase, Issue=Raid.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from uuid import UUID, uuid4, uuid5
 
@@ -673,6 +674,7 @@ class LinearTrackerAdapter(TrackerPort):
         planner_session_id: str | None = None,
         acceptance_criteria: list[str] | None = None,
         declared_files: list[str] | None = None,
+        launch_command: str | None = None,
     ) -> Raid:
         if self._pool is None:
             raise RuntimeError("pool is required for update_raid_progress")
@@ -682,10 +684,12 @@ class LinearTrackerAdapter(TrackerPort):
                 (tracker_id, status, session_id, confidence, pr_url, pr_id,
                  retry_count, reason, owner_id, phase_tracker_id, saga_tracker_id,
                  chronicle_summary, reviewer_session_id, review_round,
-                 planner_session_id, acceptance_criteria, declared_files)
+                 planner_session_id, acceptance_criteria, declared_files,
+                 launch_command)
             VALUES ($1, COALESCE($2, 'PENDING'), $3, $4, $5, $6,
                     COALESCE($7, 0), $8, $9, $10, $11, $12, $13,
-                    COALESCE($14, 0), $15, COALESCE($16, '{}'), COALESCE($17, '{}'))
+                    COALESCE($14, 0), $15, COALESCE($16, '{}'), COALESCE($17, '{}'),
+                    $18)
             ON CONFLICT (tracker_id) DO UPDATE SET
                 status              = COALESCE($2, raid_progress.status),
                 session_id          = COALESCE($3, raid_progress.session_id),
@@ -703,6 +707,7 @@ class LinearTrackerAdapter(TrackerPort):
                 planner_session_id  = COALESCE($15, raid_progress.planner_session_id),
                 acceptance_criteria = COALESCE($16, raid_progress.acceptance_criteria),
                 declared_files      = COALESCE($17, raid_progress.declared_files),
+                launch_command      = COALESCE($18, raid_progress.launch_command),
                 updated_at          = NOW()
             """,
             tracker_id,
@@ -722,6 +727,7 @@ class LinearTrackerAdapter(TrackerPort):
             planner_session_id,
             acceptance_criteria,
             declared_files,
+            launch_command,
         )
         if status is not None:
             try:
@@ -1032,11 +1038,12 @@ class LinearTrackerAdapter(TrackerPort):
     @staticmethod
     def _node_to_tracker_issue(node: dict) -> TrackerIssue:
         state = node.get("state") or {}
+        description = node.get("description") or ""
         return TrackerIssue(
             id=node["id"],
             identifier=node.get("identifier", ""),
             title=node.get("title", ""),
-            description=node.get("description") or "",
+            description=description,
             status=state.get("name", "Unknown"),
             status_type=state.get("type", ""),
             assignee=(node.get("assignee") or {}).get("name"),
@@ -1046,6 +1053,7 @@ class LinearTrackerAdapter(TrackerPort):
             estimate=node.get("estimate"),
             url=node.get("url", ""),
             milestone_id=(node.get("projectMilestone") or {}).get("id"),
+            launch_command=_parse_launch_command(description),
         )
 
     @staticmethod
@@ -1093,12 +1101,8 @@ class LinearTrackerAdapter(TrackerPort):
             url=node.get("url", ""),
             name=node.get("title", ""),
             description=node.get("description") or "",
-            acceptance_criteria=list(progress.get("acceptance_criteria") or [])
-            if progress
-            else [],
-            declared_files=list(progress.get("declared_files") or [])
-            if progress
-            else [],
+            acceptance_criteria=list(progress.get("acceptance_criteria") or []) if progress else [],
+            declared_files=list(progress.get("declared_files") or []) if progress else [],
             estimate_hours=None,
             status=raid_status,
             confidence=float(progress["confidence"])
@@ -1119,7 +1123,20 @@ class LinearTrackerAdapter(TrackerPort):
             if progress and progress.get("review_round")
             else 0,
             planner_session_id=progress.get("planner_session_id") if progress else None,
+            launch_command=progress.get("launch_command") if progress else None,
         )
+
+
+_LAUNCH_BLOCK_RE = re.compile(r"```launch\s*\n(.*?)```", re.DOTALL)
+
+
+def _parse_launch_command(description: str) -> str | None:
+    """Extract the launch command from a ```launch fenced block in the description."""
+    match = _LAUNCH_BLOCK_RE.search(description)
+    if not match:
+        return None
+    command = match.group(1).strip()
+    return command or None
 
 
 def _parse_progress(value: object) -> float:

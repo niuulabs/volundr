@@ -118,6 +118,7 @@ class StubTracker(TrackerPort):
         planner_session_id: str | None = None,
         acceptance_criteria: list[str] | None = None,
         declared_files: list[str] | None = None,
+        launch_command: str | None = None,
     ) -> Raid:
         raid = self.raids.get(tracker_id)
         if raid is None:
@@ -152,6 +153,7 @@ class StubTracker(TrackerPort):
             planner_session_id=planner_session_id
             if planner_session_id is not None
             else raid.planner_session_id,
+            launch_command=launch_command if launch_command is not None else raid.launch_command,
         )
         self.raids[tracker_id] = updated
         return updated

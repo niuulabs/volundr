@@ -472,6 +472,7 @@ def create_dispatch_router() -> APIRouter:
                             phase_tracker_id=issue.milestone_id,
                             saga_tracker_id=saga.tracker_id,
                             planner_session_id=(planner_session.id if planner_session else None),
+                            launch_command=issue.launch_command,
                         )
                     except Exception:
                         logger.warning(

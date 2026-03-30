@@ -254,6 +254,7 @@ class NativeTrackerAdapter(TrackerPort):
         planner_session_id: str | None = None,
         acceptance_criteria: list[str] | None = None,
         declared_files: list[str] | None = None,
+        launch_command: str | None = None,
     ) -> Raid:
         row = await self._pool.fetchrow(
             """
@@ -271,6 +272,7 @@ class NativeTrackerAdapter(TrackerPort):
                 planner_session_id  = COALESCE($12, planner_session_id),
                 acceptance_criteria = COALESCE($13, acceptance_criteria),
                 declared_files      = COALESCE($14, declared_files),
+                launch_command      = COALESCE($15, launch_command),
                 updated_at          = NOW()
             WHERE tracker_id = $1
             RETURNING *
@@ -289,6 +291,7 @@ class NativeTrackerAdapter(TrackerPort):
             planner_session_id,
             acceptance_criteria,
             declared_files,
+            launch_command,
         )
         if row is None:
             raise LookupError(f"Raid not found: {tracker_id}")
@@ -551,6 +554,7 @@ class NativeTrackerAdapter(TrackerPort):
             reviewer_session_id=row.get("reviewer_session_id"),
             review_round=row.get("review_round", 0) or 0,
             planner_session_id=row.get("planner_session_id"),
+            launch_command=row.get("launch_command"),
         )
 
     async def _saga_row_to_project(self, row: asyncpg.Record) -> TrackerProject:
