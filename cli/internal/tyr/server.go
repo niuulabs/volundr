@@ -74,6 +74,23 @@ func (s *Server) Store() *Store {
 	return s.store
 }
 
+// RunMigrations opens a database connection, applies tyr migrations, and
+// closes the connection. This is used by k3s mode to run migrations before
+// starting the Tyr Docker container.
+func RunMigrations(ctx context.Context, dsn string, migrationFS fs.FS) (int, error) {
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return 0, fmt.Errorf("open tyr database: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(ctx); err != nil {
+		return 0, fmt.Errorf("ping tyr database: %w", err)
+	}
+
+	return runTyrMigrations(ctx, db, migrationFS)
+}
+
 // runTyrMigrations applies tyr-specific migrations using the same pattern as
 // the main embedded postgres migration runner.
 func runTyrMigrations(ctx context.Context, db *sql.DB, migrationFS fs.FS) (int, error) {

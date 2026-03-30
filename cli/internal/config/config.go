@@ -44,6 +44,7 @@ type K3sConfig struct {
 	Kubeconfig string `yaml:"kubeconfig"` // default: auto-detect
 	Namespace  string `yaml:"namespace"`  // default: volundr
 	Provider   string `yaml:"provider"`   // "auto", "k3d", "native" (default: auto)
+	TyrImage   string `yaml:"tyr_image"`  // default: ghcr.io/niuulabs/tyr:latest
 }
 
 // GitHubInstanceConfig holds settings for a single GitHub instance.

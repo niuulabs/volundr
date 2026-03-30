@@ -216,14 +216,24 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Prompt for tyr-mini.
+	// Prompt for tyr.
 	fmt.Println()
 	fmt.Print("Enable Tyr (saga/raid coordinator)? [Y/n]: ")
 	tyrAnswer, _ := reader.ReadString('\n')
 	tyrAnswer = strings.TrimSpace(strings.ToLower(tyrAnswer))
 	cfg.Tyr.Enabled = tyrAnswer != "n" && tyrAnswer != "no"
 	if cfg.Tyr.Enabled {
-		fmt.Println("  Tyr (mini) will start with 'volundr up'")
+		if cfg.Runtime == "k3s" {
+			fmt.Println("  Tyr will run as a Docker container with 'volundr up'")
+			fmt.Printf("  Tyr image [ghcr.io/niuulabs/tyr:latest]: ")
+			tyrImage, _ := reader.ReadString('\n')
+			tyrImage = strings.TrimSpace(tyrImage)
+			if tyrImage != "" {
+				cfg.K3s.TyrImage = tyrImage
+			}
+		} else {
+			fmt.Println("  Tyr (mini) will start with 'volundr up'")
+		}
 	}
 
 	// Validate.

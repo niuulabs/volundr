@@ -534,6 +534,77 @@ func TestHandler_CreateRaid_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestHandler_Phases_GetWithSagaID(t *testing.T) {
+	_, mock, mux := setupTestHandler(t)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "saga_id", "tracker_id", "number", "name", "status", "confidence",
+	}).AddRow("p1", "saga-1", "t1", 1, "Phase 1", "GATED", 0.0)
+	mock.ExpectQuery("SELECT .* FROM phases WHERE saga_id").WithArgs("saga-1").WillReturnRows(rows)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/phases?saga_id=saga-1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_Raids_GetWithPhaseID(t *testing.T) {
+	_, mock, mux := setupTestHandler(t)
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria",
+		"declared_files", "estimate_hours", "status", "confidence", "session_id", "branch",
+		"chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "created_at", "updated_at",
+	}).AddRow("r1", "p1", "t1", "Raid 1", "desc", pq.Array([]string{"ac1"}),
+		pq.Array([]string{}), 2.0, "PENDING", 0.0, nil, nil, nil, nil, nil, nil, 0, now, now)
+	mock.ExpectQuery("SELECT .* FROM raids WHERE phase_id").WithArgs("p1").WillReturnRows(rows)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/raids?phase_id=p1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_UpdateSaga_ConfidenceAndBaseBranch(t *testing.T) {
+	_, mock, mux := setupTestHandler(t)
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"id", "tracker_id", "tracker_type", "slug", "name", "repos", "status", "confidence",
+		"owner_id", "base_branch", "created_at",
+	}).AddRow("saga-1", "t1", "linear", "saga-1", "Saga 1", pq.Array([]string{"repo1"}), "PLANNING", 0.0,
+		"owner1", "main", now)
+	mock.ExpectQuery("SELECT .* FROM sagas WHERE id").WithArgs("saga-1").WillReturnRows(rows)
+	mock.ExpectExec("UPDATE sagas SET").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	body := `{"confidence":0.85,"base_branch":"develop"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/tyr/sagas/saga-1", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var saga Saga
+	if err := json.NewDecoder(w.Body).Decode(&saga); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if saga.Confidence != 0.85 {
+		t.Errorf("expected confidence 0.85, got %f", saga.Confidence)
+	}
+	if saga.BaseBranch != "develop" {
+		t.Errorf("expected base_branch 'develop', got %q", saga.BaseBranch)
+	}
+}
+
 func TestHandler_SagaSubPhase_Update(t *testing.T) {
 	_, mock, mux := setupTestHandler(t)
 

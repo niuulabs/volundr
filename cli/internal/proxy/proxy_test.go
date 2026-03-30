@@ -61,6 +61,33 @@ func TestAddRemoveSession(t *testing.T) {
 	}
 }
 
+func TestWebEnabled(t *testing.T) {
+	r, _ := NewRouter("http://localhost:8081")
+
+	if !r.WebEnabled() {
+		t.Error("expected web to be enabled by default")
+	}
+
+	r.DisableWeb()
+	if r.WebEnabled() {
+		t.Error("expected web to be disabled after DisableWeb")
+	}
+}
+
+func TestRegisterTyrRoutes(t *testing.T) {
+	r, _ := NewRouter("http://localhost:8081")
+
+	if r.tyrServer != nil {
+		t.Error("expected tyrServer to be nil initially")
+	}
+
+	// RegisterTyrRoutes with nil should still work (no-op handled in Handler).
+	r.RegisterTyrRoutes(nil)
+	if r.tyrServer != nil {
+		t.Error("expected tyrServer to be nil after registering nil")
+	}
+}
+
 func TestHandlerRootPage(t *testing.T) {
 	r, _ := NewRouter("http://localhost:8081")
 	handler := r.Handler()
@@ -635,5 +662,87 @@ func TestHandlerNoRewriteHostsDoesNotModifyResponse(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, internalHost) {
 		t.Errorf("without rewrite hosts, response should be unchanged, got %q", body)
+	}
+}
+
+func TestSetTyrBackend(t *testing.T) {
+	r, err := NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	if err := r.SetTyrBackend("http://127.0.0.1:18081"); err != nil {
+		t.Fatalf("SetTyrBackend() error: %v", err)
+	}
+
+	if r.tyrBackend == nil {
+		t.Fatal("expected tyrBackend to be set")
+	}
+	if r.tyrBackend.Host != "127.0.0.1:18081" {
+		t.Errorf("expected host 127.0.0.1:18081, got %s", r.tyrBackend.Host)
+	}
+}
+
+func TestSetTyrBackend_InvalidURL(t *testing.T) {
+	r, err := NewRouter("http://localhost:8081")
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+
+	err = r.SetTyrBackend("://invalid")
+	if err == nil {
+		t.Error("expected error for invalid URL")
+	}
+}
+
+func TestTyrBackend_Routing(t *testing.T) {
+	// Create a mock Tyr backend.
+	tyrBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"source":"tyr","path":"%s"}`, r.URL.Path)
+	}))
+	defer tyrBackend.Close()
+
+	// Create a mock API backend.
+	apiBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"source":"api","path":"%s"}`, r.URL.Path)
+	}))
+	defer apiBackend.Close()
+
+	r, err := NewRouter(apiBackend.URL)
+	if err != nil {
+		t.Fatalf("NewRouter() error: %v", err)
+	}
+	if err := r.SetTyrBackend(tyrBackend.URL); err != nil {
+		t.Fatalf("SetTyrBackend() error: %v", err)
+	}
+
+	handler := r.Handler()
+
+	// Request to /api/v1/tyr/ should go to Tyr backend.
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/tyr/sagas", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var tyrResp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &tyrResp); err != nil {
+		t.Fatalf("unmarshal tyr response: %v", err)
+	}
+	if tyrResp["source"] != "tyr" {
+		t.Errorf("expected tyr backend, got source=%s", tyrResp["source"])
+	}
+
+	// Request to /api/v1/sessions should go to API backend.
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/sessions", nil)
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+
+	var apiResp map[string]string
+	if err := json.Unmarshal(w2.Body.Bytes(), &apiResp); err != nil {
+		t.Fatalf("unmarshal api response: %v", err)
+	}
+	if apiResp["source"] != "api" {
+		t.Errorf("expected api backend, got source=%s", apiResp["source"])
 	}
 }
