@@ -142,9 +142,10 @@ class RaidReviewService:
         # Close the tracker issue (sets it to Done in Linear/Jira)
         try:
             await self._tracker.close_raid(raid.tracker_id)
+            logger.info("Closed tracker issue %s (Done)", raid.tracker_id)
         except Exception:
-            logger.warning(
-                "Failed to close tracker issue %s after approval", raid.tracker_id, exc_info=True
+            logger.error(
+                "FAILED to close tracker issue %s after approval", raid.tracker_id, exc_info=True
             )
 
         # Phase gate check
