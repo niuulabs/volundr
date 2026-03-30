@@ -28,6 +28,7 @@ from tyr.ports.tracker import TrackerFactory, TrackerPort  # noqa: F401 — re-e
 from tyr.ports.volundr import ActivityEvent, VolundrFactory, VolundrPort
 
 if TYPE_CHECKING:
+    from tyr.domain.services.contract_engine import ContractEngine
     from tyr.domain.services.review_engine import ReviewEngine
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ class SessionActivitySubscriber:
         event_bus: EventBusPort,
         config: WatcherConfig,
         review_engine: ReviewEngine | None = None,
+        contract_engine: ContractEngine | None = None,
     ) -> None:
         self._factory = volundr_factory
         self._tracker_factory = tracker_factory
@@ -67,6 +69,7 @@ class SessionActivitySubscriber:
         self._event_bus = event_bus
         self._config = config
         self._review_engine = review_engine
+        self._contract_engine = contract_engine
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._owner_tasks: dict[str, list[asyncio.Task[None]]] = {}
@@ -270,8 +273,9 @@ class SessionActivitySubscriber:
 
         raid, tracker = await self._find_raid_for_session(event.session_id, owner_id)
         if raid is None or tracker is None:
-            # Check if this is a reviewer session completing
+            # Check if this is a reviewer or contract planner session completing
             await self._try_handle_reviewer_completion(event.session_id, volundr)
+            await self._try_handle_contract_completion(event.session_id, volundr)
             return
 
         # Working session idle during an active review loop (round >= 1) —
@@ -283,6 +287,13 @@ class SessionActivitySubscriber:
                 "Working session %s idle during review loop (round %d) — reviewer drives",
                 event.session_id[:8],
                 raid.review_round,
+            )
+            return
+
+        if raid.status == RaidStatus.CONTRACTING:
+            logger.info(
+                "Working session %s idle during CONTRACTING — waiting for contract",
+                event.session_id[:8],
             )
             return
 
@@ -500,6 +511,33 @@ class SessionActivitySubscriber:
         except Exception:
             logger.warning(
                 "Failed to handle reviewer completion for session %s",
+                session_id,
+                exc_info=True,
+            )
+
+    async def _try_handle_contract_completion(self, session_id: str, volundr: VolundrPort) -> None:
+        """If the session is a tracked contract planner, fetch its output and delegate."""
+        if self._contract_engine is None:
+            return
+
+        if self._contract_engine.get_contract_raid(session_id) is None:
+            return
+
+        try:
+            output = await volundr.get_last_assistant_message(session_id)
+        except Exception:
+            logger.error(
+                "Failed to fetch contract output for session %s",
+                session_id,
+                exc_info=True,
+            )
+            raise
+
+        try:
+            await self._contract_engine.handle_contract_completion(session_id, output)
+        except Exception:
+            logger.warning(
+                "Failed to handle contract completion for session %s",
                 session_id,
                 exc_info=True,
             )

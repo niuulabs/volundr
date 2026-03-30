@@ -45,6 +45,7 @@ from tyr.api.sagas import resolve_volundr as sagas_resolve_volundr
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
+from tyr.domain.services.contract_engine import ContractEngine
 from tyr.domain.services.notification import NotificationService
 from tyr.domain.services.review_engine import ReviewEngine
 from tyr.domain.services.reviewer_session import ReviewerSessionService
@@ -130,9 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.credential_store = credential_store
 
             # Wire adapter factories (used by autonomous dispatcher)
-            app.state.volundr_factory = VolundrAdapterFactory(
-                integration_repo, credential_store
-            )
+            app.state.volundr_factory = VolundrAdapterFactory(integration_repo, credential_store)
             app.state.tracker_factory = TrackerAdapterFactory(
                 integration_repo, credential_store, pool=pool
             )
@@ -321,6 +320,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.review_engine = review_engine
             await review_engine.start()
 
+            # Wire contract engine (planner-driven sprint contracts)
+            contract_engine = ContractEngine(
+                tracker_factory=app.state.tracker_factory,
+                volundr_factory=app.state.volundr_factory,
+                contract_config=settings.contract,
+                event_bus=event_bus,
+                dispatcher_repo=dispatcher_repo,
+            )
+            app.state.contract_engine = contract_engine
+
             # Wire event-driven session completion subscriber
             # Uses VolundrAdapterFactory for per-owner authenticated SSE subscriptions
             subscriber = SessionActivitySubscriber(
@@ -330,6 +339,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event_bus=event_bus,
                 config=settings.watcher,
                 review_engine=review_engine,
+                contract_engine=contract_engine,
             )
             app.state.subscriber = subscriber
             await subscriber.start()
