@@ -54,9 +54,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/tyr/sagas/plan/config", h.notImplemented)
 }
 
-// ---------------------------------------------------------------------------
 // Saga handlers.
-// ---------------------------------------------------------------------------
 
 func (h *Handler) listSagas(w http.ResponseWriter, r *http.Request) {
 	ownerID := extractOwner(r)
@@ -313,9 +311,7 @@ func (h *Handler) deleteSaga(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------------------------------------------------------------------------
 // Raid handlers.
-// ---------------------------------------------------------------------------
 
 func (h *Handler) raidsSummary(w http.ResponseWriter, r *http.Request) {
 	counts, err := h.store.CountByStatus(r.Context())
@@ -432,9 +428,7 @@ func (h *Handler) retryRaid(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, raidToResponse(raid))
 }
 
-// ---------------------------------------------------------------------------
-// Dispatch handlers
-// ---------------------------------------------------------------------------
+// Dispatch handlers.
 
 func (h *Handler) dispatchQueue(w http.ResponseWriter, r *http.Request) {
 	ownerID := extractOwner(r)
@@ -564,9 +558,7 @@ func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Not-implemented stub
-// ---------------------------------------------------------------------------
+// Not-implemented stub.
 
 func (h *Handler) notImplemented(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusNotImplemented, map[string]string{
@@ -574,9 +566,7 @@ func (h *Handler) notImplemented(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// Helpers.
 
 func (h *Handler) findRaidByTrackerID(ctx context.Context, sagaID, trackerID string) *Raid {
 	phases, _ := h.store.ListPhases(ctx, sagaID)

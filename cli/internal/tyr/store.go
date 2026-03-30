@@ -26,9 +26,7 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
-// ---------------------------------------------------------------------------
-// Saga operations
-// ---------------------------------------------------------------------------
+// Saga operations.
 
 // CreateSaga persists a new saga with its phases and raids in a single transaction.
 func (s *Store) CreateSaga(ctx context.Context, saga *Saga, phases []Phase, raids []Raid) error {
@@ -186,9 +184,7 @@ func (s *Store) DeleteSaga(ctx context.Context, sagaID, ownerID string) (bool, e
 	return rows > 0, nil
 }
 
-// ---------------------------------------------------------------------------
-// Phase operations
-// ---------------------------------------------------------------------------
+// Phase operations.
 
 // ListPhases returns all phases for a saga, ordered by number.
 func (s *Store) ListPhases(ctx context.Context, sagaID string) ([]Phase, error) {
@@ -211,9 +207,7 @@ func (s *Store) ListPhases(ctx context.Context, sagaID string) ([]Phase, error) 
 	return phases, rows.Err()
 }
 
-// ---------------------------------------------------------------------------
-// Raid operations
-// ---------------------------------------------------------------------------
+// Raid operations.
 
 // ListRaids returns all raids for a phase.
 func (s *Store) ListRaids(ctx context.Context, phaseID string) ([]Raid, error) {
@@ -367,9 +361,7 @@ func (s *Store) GetSagaForRaid(ctx context.Context, raidID string) (*Saga, error
 	return &saga, nil
 }
 
-// ---------------------------------------------------------------------------
-// Confidence events
-// ---------------------------------------------------------------------------
+// Confidence events.
 
 // AddConfidenceEvent records a confidence change and updates the raid score.
 func (s *Store) AddConfidenceEvent(ctx context.Context, raidID, eventType string, delta float64) error {
@@ -411,9 +403,7 @@ func (s *Store) AddConfidenceEvent(ctx context.Context, raidID, eventType string
 	return tx.Commit()
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// Helpers.
 
 func scanRaids(rows *sql.Rows) ([]Raid, error) {
 	var raids []Raid

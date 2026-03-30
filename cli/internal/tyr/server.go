@@ -87,9 +87,7 @@ func (s *Server) Store() *Store {
 	return s.store
 }
 
-// ---------------------------------------------------------------------------
-// Migration runner (adapted from postgres package for embedded FS)
-// ---------------------------------------------------------------------------
+// Migration runner (adapted from postgres package for embedded FS).
 
 func runMigrationsFS(ctx context.Context, db *sql.DB, migrationFS fs.FS) (int, error) {
 	// Use a separate migrations table to avoid collisions with Forge's schema_migrations.

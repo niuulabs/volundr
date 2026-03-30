@@ -200,9 +200,7 @@ func runTyrRaidsActive(_ *cobra.Command, _ []string) error {
 	return tw.Flush()
 }
 
-// ---------------------------------------------------------------------------
 // Helpers.
-// ---------------------------------------------------------------------------
 
 func tyrBaseURL() (string, error) {
 	cfg, err := config.Load()

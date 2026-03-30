@@ -15,7 +15,7 @@ func setupStore(t *testing.T) (*Store, sqlmock.Sqlmock) {
 	if err != nil {
 		t.Fatalf("create sqlmock: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return NewStore(db), mock
 }
 
@@ -24,7 +24,7 @@ func TestNewStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	if store == nil {

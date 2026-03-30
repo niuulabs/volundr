@@ -8,9 +8,7 @@ import (
 	"time"
 )
 
-// ---------------------------------------------------------------------------
 // Status enums — match full Tyr's Python StrEnum values exactly.
-// ---------------------------------------------------------------------------
 
 // SagaStatus represents the lifecycle state of a saga.
 type SagaStatus string
@@ -71,9 +69,7 @@ func ValidateTransition(current, target RaidStatus) error {
 	return nil
 }
 
-// ---------------------------------------------------------------------------
 // Domain entities — match full Tyr's database schema.
-// ---------------------------------------------------------------------------
 
 // Saga represents a tracked project decomposition.
 type Saga struct {
@@ -137,9 +133,7 @@ type ConfidenceEvent struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// ---------------------------------------------------------------------------
-// API request/response types
-// ---------------------------------------------------------------------------
+// API request/response types.
 
 // SagaListItem is returned by GET /api/v1/tyr/sagas.
 type SagaListItem struct {
