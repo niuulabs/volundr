@@ -89,7 +89,7 @@ query ListProjects($first: Int!) {
 
 _GET_PROJECT_QUERY = (
     """
-query GetProject($id: String!) {
+query GetProject($id: ID!) {
   project(id: $id) {
 """
     + _PROJECT_FIELDS
@@ -117,7 +117,7 @@ query ListMilestones($projectId: ID!) {
 """
 
 _GET_PROJECT_FULL_QUERY = """
-query GetProjectFull($id: String!, $issueFirst: Int!) {
+query GetProjectFull($id: ID!, $issueFirst: Int!) {
   project(id: $id) {
       id
       name
@@ -292,7 +292,7 @@ mutation CreateIssue(
 """
 
 _GET_ISSUE_QUERY = """
-query GetIssue($id: String!) {
+query GetIssue($id: ID!) {
   issue(id: $id) {
     id
     identifier
@@ -311,7 +311,7 @@ query GetIssue($id: String!) {
 """
 
 _GET_MILESTONE_QUERY = """
-query GetMilestone($id: String!) {
+query GetMilestone($id: ID!) {
   projectMilestone(id: $id) {
     id
     name
@@ -333,7 +333,7 @@ mutation UpdateIssueState($issueId: String!, $stateId: String!) {
 """
 
 _ISSUE_TEAM_QUERY = """
-query IssueTeam($id: String!) {
+query IssueTeam($id: ID!) {
   issue(id: $id) {
     team { id }
   }
