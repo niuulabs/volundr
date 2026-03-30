@@ -204,11 +204,10 @@ jobs:
       - name: Install Grype
         run: |
           GRYPE_VERSION="0.87.0"
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}"
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/247f5d72abf2131aa37f3164a98495c121b29029/install.sh | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}"
           grype version
 
       - name: Scan container with Grype
-        continue-on-error: true
         run: |
           grype "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}" \
             --only-fixed \
