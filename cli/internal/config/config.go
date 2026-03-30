@@ -41,6 +41,8 @@ type K3sConfig struct {
 	Namespace  string `yaml:"namespace"`             // default: volundr
 	Provider   string `yaml:"provider"`              // "auto", "k3d", "native" (default: auto)
 	APIImage   string `yaml:"api_image,omitempty"`   // default: ghcr.io/niuulabs/volundr:latest
+	TyrImage   string `yaml:"tyr_image,omitempty"`   // default: ghcr.io/niuulabs/tyr:latest
+	TyrEnabled bool   `yaml:"tyr_enabled"`           // default: true
 	SkuldImage string `yaml:"skuld_image,omitempty"` // default: ghcr.io/niuulabs/skuld:latest
 	RehImage   string `yaml:"reh_image,omitempty"`   // default: ghcr.io/niuulabs/vscode-reh:latest
 	TtydImage  string `yaml:"ttyd_image,omitempty"`  // default: ghcr.io/niuulabs/devrunner:latest
@@ -252,6 +254,8 @@ func DefaultConfig() (*Config, error) {
 			Namespace:  "volundr",
 			Provider:   "auto",
 			APIImage:   "ghcr.io/niuulabs/volundr:latest",
+			TyrImage:   "ghcr.io/niuulabs/tyr:latest",
+			TyrEnabled: true,
 			SkuldImage: "ghcr.io/niuulabs/skuld:latest",
 			RehImage:   "ghcr.io/niuulabs/vscode-reh:latest",
 			TtydImage:  "ghcr.io/niuulabs/devrunner:latest",

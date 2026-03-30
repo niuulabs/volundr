@@ -25,6 +25,12 @@ type SessionRoute struct {
 	Terminal  string // e.g., "localhost:8083"
 }
 
+// backendRoute maps a URL path prefix to a backend URL.
+type backendRoute struct {
+	pathPrefix string
+	backend    *url.URL
+}
+
 // Router manages reverse proxy routing.
 type Router struct {
 	apiURL         *url.URL
@@ -35,6 +41,8 @@ type Router struct {
 	// rewriteHosts lists Docker-internal hostnames that should be replaced
 	// with the browser-facing host (derived from the request's Host header).
 	rewriteHosts []string
+	// extraBackends holds additional path-prefix -> backend routes.
+	extraBackends []backendRoute
 }
 
 // NewRouter creates a new Router with the given API backend URL.
@@ -84,6 +92,20 @@ func (r *Router) SetSessionBackend(backendURL string) error {
 // dynamically replaced with the browser-facing host from the request.
 func (r *Router) AddRewriteHost(internalHost string) {
 	r.rewriteHosts = append(r.rewriteHosts, internalHost)
+}
+
+// AddBackend registers an additional path prefix to proxy to a backend URL.
+// Requests matching the prefix are forwarded to the given backend.
+func (r *Router) AddBackend(pathPrefix, backendURL string) error {
+	u, err := url.Parse(backendURL)
+	if err != nil {
+		return fmt.Errorf("parse backend URL %q: %w", backendURL, err)
+	}
+	r.extraBackends = append(r.extraBackends, backendRoute{
+		pathPrefix: pathPrefix,
+		backend:    u,
+	})
+	return nil
 }
 
 // rewriteBody replaces internal hostnames with the external host.
@@ -139,6 +161,13 @@ func (r *Router) Handler() http.Handler {
 	if r.sessionBackend != nil {
 		sessionProxy := httputil.NewSingleHostReverseProxy(r.sessionBackend)
 		mux.Handle("/s/", sessionProxy)
+	}
+
+	// Extra backends (e.g., Tyr) — registered before /api/ so more
+	// specific prefixes like /api/v1/tyr/ take priority.
+	for _, eb := range r.extraBackends {
+		proxy := httputil.NewSingleHostReverseProxy(eb.backend)
+		mux.Handle(eb.pathPrefix, proxy)
 	}
 
 	// API routes -> Python API.

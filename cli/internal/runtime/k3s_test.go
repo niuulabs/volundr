@@ -2644,3 +2644,336 @@ func TestK3sRuntime_Down_WithPostgresStopFail(t *testing.T) {
 		t.Errorf("expected 'stop postgres' error, got: %v", err)
 	}
 }
+
+// --- Tyr integration tests ---
+
+func TestRenderK3sComposeTemplate_WithTyr(t *testing.T) {
+	data := k3sComposeData{
+		APIImage:         "ghcr.io/niuulabs/volundr:latest",
+		ContainerName:    "volundr-k3s-api",
+		APIPort:          18080,
+		DBHost:           "host.docker.internal",
+		DBPort:           5433,
+		DBUser:           "volundr",
+		DBPassword:       "secret",
+		DBName:           "volundr",
+		AnthropicAPIKey:  "sk-test",
+		ConfigPath:       "/home/user/.volundr/k3s-config.yaml",
+		KubeconfigPath:   "/home/user/.volundr/k3d-kubeconfig.yaml",
+		StorageDir:       "/home/user/.volundr",
+		ClusterName:      "volundr",
+		TyrEnabled:       true,
+		TyrImage:         "ghcr.io/niuulabs/tyr:latest",
+		TyrContainerName: "volundr-k3s-tyr",
+		TyrPort:          18081,
+	}
+
+	var buf bytes.Buffer
+	if err := k3sComposeTemplate.Execute(&buf, data); err != nil {
+		t.Fatalf("render k3s compose template: %v", err)
+	}
+
+	result := buf.String()
+
+	checks := []string{
+		`image: ghcr.io/niuulabs/tyr:latest`,
+		`container_name: volundr-k3s-tyr`,
+		`"127.0.0.1:18081:8081"`,
+		`VOLUNDR__URL: "http://volundr-k3s-api:8080"`,
+		`AUTH__ALLOW_ANONYMOUS_DEV: "true"`,
+		`EVENT_BUS__ADAPTER: "volundr.adapters.outbound.events.InMemoryEventSinkAdapter"`,
+		`depends_on:`,
+	}
+
+	for _, check := range checks {
+		if !strings.Contains(result, check) {
+			t.Errorf("expected k3s compose output to contain %q, got:\n%s", check, result)
+		}
+	}
+}
+
+func TestRenderK3sComposeTemplate_TyrDisabled(t *testing.T) {
+	data := k3sComposeData{
+		APIImage:         "ghcr.io/niuulabs/volundr:latest",
+		ContainerName:    "volundr-k3s-api",
+		APIPort:          18080,
+		DBHost:           "host.docker.internal",
+		DBPort:           5433,
+		DBUser:           "volundr",
+		DBPassword:       "secret",
+		DBName:           "volundr",
+		ConfigPath:       "/home/user/.volundr/k3s-config.yaml",
+		KubeconfigPath:   "/home/user/.volundr/k3d-kubeconfig.yaml",
+		StorageDir:       "/home/user/.volundr",
+		ClusterName:      "volundr",
+		TyrEnabled:       false,
+		TyrImage:         "ghcr.io/niuulabs/tyr:latest",
+		TyrContainerName: "volundr-k3s-tyr",
+		TyrPort:          18081,
+	}
+
+	var buf bytes.Buffer
+	if err := k3sComposeTemplate.Execute(&buf, data); err != nil {
+		t.Fatalf("render k3s compose template: %v", err)
+	}
+
+	result := buf.String()
+
+	if strings.Contains(result, "volundr-k3s-tyr") {
+		t.Error("expected no tyr container when TyrEnabled is false")
+	}
+	if strings.Contains(result, "ghcr.io/niuulabs/tyr") {
+		t.Error("expected no tyr image when TyrEnabled is false")
+	}
+}
+
+func TestRenderK3sComposeTemplate_TyrWithExtraHosts(t *testing.T) {
+	data := k3sComposeData{
+		APIImage:         "ghcr.io/niuulabs/volundr:latest",
+		ContainerName:    "volundr-k3s-api",
+		APIPort:          18080,
+		DBHost:           "host.docker.internal",
+		DBPort:           5433,
+		DBUser:           "volundr",
+		DBPassword:       "secret",
+		DBName:           "volundr",
+		ConfigPath:       "/home/user/.volundr/k3s-config.yaml",
+		KubeconfigPath:   "/home/user/.volundr/k3d-kubeconfig.yaml",
+		StorageDir:       "/home/user/.volundr",
+		ClusterName:      "volundr",
+		TyrEnabled:       true,
+		TyrImage:         "ghcr.io/niuulabs/tyr:latest",
+		TyrContainerName: "volundr-k3s-tyr",
+		TyrPort:          18081,
+		ExtraHosts:       []string{"host.docker.internal:host-gateway"},
+	}
+
+	var buf bytes.Buffer
+	if err := k3sComposeTemplate.Execute(&buf, data); err != nil {
+		t.Fatalf("render k3s compose template: %v", err)
+	}
+
+	result := buf.String()
+
+	// Both API and Tyr should have extra_hosts.
+	apiIdx := strings.Index(result, "container_name: volundr-k3s-api")
+	tyrIdx := strings.Index(result, "container_name: volundr-k3s-tyr")
+	if apiIdx < 0 || tyrIdx < 0 {
+		t.Fatalf("expected both containers in output, got:\n%s", result)
+	}
+
+	// Count extra_hosts occurrences — should be 2 (one per service).
+	count := strings.Count(result, "extra_hosts:")
+	if count != 2 {
+		t.Errorf("expected 2 extra_hosts blocks, got %d in:\n%s", count, result)
+	}
+}
+
+func TestK3sWriteStateFile_WithTyr(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".niuu")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Port: 8080},
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+			Port: 5433,
+		},
+		K3s: config.K3sConfig{
+			TyrEnabled: true,
+		},
+	}
+
+	if err := r.writeStateFile(cfg); err != nil {
+		t.Fatalf("writeStateFile: %v", err)
+	}
+
+	stateFilePath := filepath.Join(volundrDir, StateFile)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path
+	if err != nil {
+		t.Fatalf("read state file: %v", err)
+	}
+
+	var services []ServiceStatus
+	if err := json.Unmarshal(data, &services); err != nil {
+		t.Fatalf("parse state file: %v", err)
+	}
+
+	expectedNames := map[string]bool{
+		"proxy":       false,
+		"api":         false,
+		"tyr":         false,
+		"postgres":    false,
+		"k3s-cluster": false,
+	}
+
+	for _, svc := range services {
+		if _, ok := expectedNames[svc.Name]; ok {
+			expectedNames[svc.Name] = true
+		}
+	}
+
+	for name, found := range expectedNames {
+		if !found {
+			t.Errorf("expected service %q in state file", name)
+		}
+	}
+
+	// Verify Tyr port.
+	for _, svc := range services {
+		if svc.Name == "tyr" {
+			if svc.Port != k3sTyrInternalPort {
+				t.Errorf("expected tyr port %d, got %d", k3sTyrInternalPort, svc.Port)
+			}
+		}
+	}
+}
+
+func TestK3sWriteStateFile_TyrDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	volundrDir := filepath.Join(tmpDir, ".niuu")
+	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+
+	r := NewK3sRuntime()
+	cfg := &config.Config{
+		Listen: config.ListenConfig{Port: 8080},
+		Database: config.DatabaseConfig{
+			Mode: "embedded",
+			Port: 5433,
+		},
+		K3s: config.K3sConfig{
+			TyrEnabled: false,
+		},
+	}
+
+	if err := r.writeStateFile(cfg); err != nil {
+		t.Fatalf("writeStateFile: %v", err)
+	}
+
+	stateFilePath := filepath.Join(volundrDir, StateFile)
+	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path
+	if err != nil {
+		t.Fatalf("read state file: %v", err)
+	}
+
+	var services []ServiceStatus
+	if err := json.Unmarshal(data, &services); err != nil {
+		t.Fatalf("parse state file: %v", err)
+	}
+
+	for _, svc := range services {
+		if svc.Name == "tyr" {
+			t.Error("expected no tyr service when TyrEnabled is false")
+		}
+	}
+}
+
+func TestK3sTyrInternalPort(t *testing.T) {
+	if k3sTyrInternalPort != 18081 {
+		t.Errorf("expected tyr internal port 18081, got %d", k3sTyrInternalPort)
+	}
+}
+
+func TestK3sTyrContainerName(t *testing.T) {
+	if k3sTyrContainerName != "volundr-k3s-tyr" {
+		t.Errorf("expected tyr container name 'volundr-k3s-tyr', got %q", k3sTyrContainerName)
+	}
+}
+
+func TestFindTyrMigrationsDir(t *testing.T) {
+	// Create a temporary directory with a migrations/tyr structure.
+	tmpDir := t.TempDir()
+	tyrDir := filepath.Join(tmpDir, "migrations", "tyr")
+	if err := os.MkdirAll(tyrDir, 0o755); err != nil {
+		t.Fatalf("create tyr migrations dir: %v", err)
+	}
+
+	// Write a dummy migration.
+	if err := os.WriteFile(filepath.Join(tyrDir, "000001_test.up.sql"), []byte("SELECT 1;"), 0o644); err != nil {
+		t.Fatalf("write test migration: %v", err)
+	}
+
+	// Change working directory to the temp dir.
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	dir := findTyrMigrationsDir()
+	if dir == "" {
+		t.Fatal("expected to find tyr migrations dir")
+	}
+
+	expected := filepath.Join(tmpDir, "migrations", "tyr")
+	if dir != expected {
+		t.Errorf("expected %q, got %q", expected, dir)
+	}
+}
+
+func TestFindTyrMigrationsDir_NotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	dir := findTyrMigrationsDir()
+	if dir != "" {
+		t.Errorf("expected empty string for missing dir, got %q", dir)
+	}
+}
+
+func TestRunTyrMigrationsAuto_NoMigrations(t *testing.T) {
+	// With no embedded FS and no filesystem directory, should return 0, "", nil.
+	tmpDir := t.TempDir()
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	fp := &fakePostgres{}
+	applied, source, err := runTyrMigrationsAuto(context.Background(), fp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if applied != 0 || source != "" {
+		t.Errorf("expected 0 applied and empty source, got %d applied and %q source", applied, source)
+	}
+}
+
+func TestK3sComposeData_TyrFields(t *testing.T) {
+	data := k3sComposeData{
+		TyrEnabled:       true,
+		TyrImage:         "ghcr.io/niuulabs/tyr:v1.0",
+		TyrContainerName: "my-tyr",
+		TyrPort:          19000,
+	}
+
+	if !data.TyrEnabled {
+		t.Error("expected TyrEnabled to be true")
+	}
+	if data.TyrImage != "ghcr.io/niuulabs/tyr:v1.0" {
+		t.Errorf("expected tyr image 'ghcr.io/niuulabs/tyr:v1.0', got %q", data.TyrImage)
+	}
+	if data.TyrContainerName != "my-tyr" {
+		t.Errorf("expected tyr container name 'my-tyr', got %q", data.TyrContainerName)
+	}
+	if data.TyrPort != 19000 {
+		t.Errorf("expected tyr port 19000, got %d", data.TyrPort)
+	}
+}

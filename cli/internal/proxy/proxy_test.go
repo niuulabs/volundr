@@ -565,3 +565,90 @@ func TestHandlerNoRewriteHostsDoesNotModifyResponse(t *testing.T) {
 		t.Errorf("without rewrite hosts, response should be unchanged, got %q", body)
 	}
 }
+
+func TestAddBackend(t *testing.T) {
+	r, err := NewRouter("http://localhost:8080")
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	if err := r.AddBackend("/api/v1/tyr/", "http://localhost:18081"); err != nil {
+		t.Fatalf("AddBackend: %v", err)
+	}
+
+	if len(r.extraBackends) != 1 {
+		t.Fatalf("expected 1 extra backend, got %d", len(r.extraBackends))
+	}
+
+	if r.extraBackends[0].pathPrefix != "/api/v1/tyr/" {
+		t.Errorf("expected path prefix '/api/v1/tyr/', got %q", r.extraBackends[0].pathPrefix)
+	}
+
+	if r.extraBackends[0].backend.String() != "http://localhost:18081" {
+		t.Errorf("expected backend URL 'http://localhost:18081', got %q", r.extraBackends[0].backend.String())
+	}
+}
+
+func TestAddBackendInvalidURL(t *testing.T) {
+	r, _ := NewRouter("http://localhost:8080")
+	err := r.AddBackend("/api/v1/tyr/", "://invalid")
+	if err == nil {
+		t.Error("expected error for invalid backend URL")
+	}
+}
+
+func TestAddBackendRouting(t *testing.T) {
+	// Create a fake Tyr backend.
+	tyrBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"service":"tyr"}`)
+	}))
+	defer tyrBackend.Close()
+
+	// Create a fake API backend.
+	apiBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"service":"api"}`)
+	}))
+	defer apiBackend.Close()
+
+	r, err := NewRouter(apiBackend.URL)
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	if err := r.AddBackend("/api/v1/tyr/", tyrBackend.URL); err != nil {
+		t.Fatalf("AddBackend: %v", err)
+	}
+
+	handler := r.Handler()
+
+	// Request to /api/v1/tyr/ should go to Tyr.
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/tyr/health", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if !strings.Contains(w.Body.String(), "tyr") {
+		t.Errorf("expected tyr response, got %q", w.Body.String())
+	}
+
+	// Request to /api/other should go to API.
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/other", nil)
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+
+	if !strings.Contains(w2.Body.String(), "api") {
+		t.Errorf("expected api response, got %q", w2.Body.String())
+	}
+}
+
+func TestAddMultipleBackends(t *testing.T) {
+	r, _ := NewRouter("http://localhost:8080")
+
+	_ = r.AddBackend("/api/v1/tyr/", "http://localhost:18081")
+	_ = r.AddBackend("/api/v1/custom/", "http://localhost:18082")
+
+	if len(r.extraBackends) != 2 {
+		t.Fatalf("expected 2 extra backends, got %d", len(r.extraBackends))
+	}
+}
