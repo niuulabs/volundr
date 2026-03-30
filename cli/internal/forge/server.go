@@ -55,7 +55,7 @@ func NewServer(cfg *Config) (*Server, error) {
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
-	handler := NewHandler(s.runner)
+	handler := NewHandler(s.runner, s.cfg)
 	handler.RegisterRoutes(mux)
 
 	// Admin shutdown endpoint — localhost-only, no auth.
@@ -72,6 +72,14 @@ func (s *Server) Run(ctx context.Context) error {
 			}
 		}()
 	}
+
+	// Catch-all for unimplemented API paths — return JSON 404 instead of
+	// falling through to the SPA handler which would return HTML.
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"not found"}` + "\n"))
+	})
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
 

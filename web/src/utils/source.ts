@@ -16,6 +16,9 @@ export function getSourceLabel(source: SessionSource): string {
   if (isGitSource(source)) {
     return source.repo || 'No repository';
   }
+  if (source.local_path) {
+    return source.local_path;
+  }
   const count = source.paths.length;
   return `${count} local mount${count !== 1 ? 's' : ''}`;
 }

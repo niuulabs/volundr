@@ -66,9 +66,10 @@ type SessionRunner interface {
 // SessionSource describes where the session code comes from.
 type SessionSource struct {
 	Type       string `json:"type"`
-	Repo       string `json:"repo"`
-	Branch     string `json:"branch"`
+	Repo       string `json:"repo,omitempty"`
+	Branch     string `json:"branch,omitempty"`
 	BaseBranch string `json:"base_branch,omitempty"`
+	LocalPath  string `json:"local_path,omitempty"`
 }
 
 // CreateSessionRequest matches the body Tyr sends to POST /api/v1/volundr/sessions.

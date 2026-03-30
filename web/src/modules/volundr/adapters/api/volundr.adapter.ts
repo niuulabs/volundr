@@ -570,13 +570,15 @@ export class ApiVolundrService implements IVolundrService {
       const response = await api.get<{
         local_mounts_enabled: boolean;
         file_manager_enabled: boolean;
+        mini_mode: boolean;
       }>('/feature-flags');
       return {
         localMountsEnabled: response.local_mounts_enabled,
         fileManagerEnabled: response.file_manager_enabled ?? true,
+        miniMode: response.mini_mode ?? false,
       };
     } catch {
-      return { localMountsEnabled: false, fileManagerEnabled: true };
+      return { localMountsEnabled: false, fileManagerEnabled: true, miniMode: false };
     }
   }
 

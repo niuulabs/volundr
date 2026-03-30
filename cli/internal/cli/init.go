@@ -337,6 +337,20 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Enable local mounts for mini mode (sessions run directly on the host).
+	if cfg.Volundr.Mode == "mini" {
+		cfg.LocalMounts.Enabled = true
+	}
+
+	// Ensure default AI models are configured.
+	if len(cfg.AIModels) == 0 {
+		cfg.AIModels = []config.AIModelEntry{
+			{ID: "claude-opus-4-6", Name: "Opus 4.6"},
+			{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"},
+			{ID: "claude-haiku-4-5-20251001", Name: "Haiku 4.5"},
+		}
+	}
+
 	// Validate.
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)

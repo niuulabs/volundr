@@ -12,12 +12,14 @@ import (
 // Handler holds the HTTP handlers for the Volundr-compatible REST API.
 type Handler struct {
 	runner SessionRunner
+	cfg    *Config
 }
 
 // NewHandler creates a new API handler.
-func NewHandler(runner SessionRunner) *Handler {
+func NewHandler(runner SessionRunner, cfg *Config) *Handler {
 	return &Handler{
 		runner: runner,
+		cfg:    cfg,
 	}
 }
 
@@ -36,6 +38,17 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/volundr/stats", h.getStats)
 	mux.HandleFunc("GET /api/v1/volundr/me", h.getMe)
 	mux.HandleFunc("GET /health", h.health)
+
+	// Mini-mode endpoints — the full Volundr API serves these via
+	// the Python backend but Forge implements the subset the web UI
+	// needs to boot and launch sessions from local folders.
+	mux.HandleFunc("GET /api/v1/volundr/models", h.listModels)
+	mux.HandleFunc("GET /api/v1/volundr/feature-flags", h.featureFlags)
+	mux.HandleFunc("GET /api/v1/volundr/templates", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/presets", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/mcp-servers", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/secrets", emptyJSON)
+	mux.HandleFunc("GET /api/v1/niuu/repos", emptyJSON)
 }
 
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
@@ -253,4 +266,30 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// emptyJSON returns an empty JSON array. Used for endpoints the web UI
+// expects but Forge doesn't need to populate in mini mode.
+func emptyJSON(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, []any{})
+}
+
+// listModels returns the available AI models from configuration.
+func (h *Handler) listModels(w http.ResponseWriter, _ *http.Request) {
+	models := h.cfg.AIModels
+	if len(models) == 0 {
+		models = []AIModelEntry{
+			{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"},
+		}
+	}
+	httputil.WriteJSON(w, http.StatusOK, models)
+}
+
+// featureFlags returns feature toggles for the web UI based on configuration.
+func (h *Handler) featureFlags(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"local_mounts_enabled": h.cfg.LocalMounts,
+		"file_manager_enabled": true,
+		"mini_mode":            true,
+	})
 }

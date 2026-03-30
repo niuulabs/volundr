@@ -23,8 +23,16 @@ type Config struct {
 	Auth      AuthConfig      `yaml:"auth"`
 	Git       GitConfig       `yaml:"git"`
 	Anthropic AnthropicConfig `yaml:"anthropic"`
-	Web       bool            `yaml:"web"`
-	Tyr       TyrConfig       `yaml:"tyr"`
+	Web         bool            `yaml:"web"`
+	Tyr         TyrConfig       `yaml:"tyr"`
+	LocalMounts bool            `yaml:"local_mounts"`
+	AIModels    []AIModelEntry  `yaml:"ai_models,omitempty"`
+}
+
+// AIModelEntry describes an available AI model.
+type AIModelEntry struct {
+	ID   string `json:"id"   yaml:"id"`
+	Name string `json:"name" yaml:"name"`
 }
 
 // ListenConfig holds the listener settings.

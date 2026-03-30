@@ -78,6 +78,12 @@ type LocalMountsConfig struct {
 	DefaultReadOnly bool     `yaml:"default_read_only"`
 }
 
+// AIModelEntry describes an available AI model.
+type AIModelEntry struct {
+	ID   string `yaml:"id"`
+	Name string `yaml:"name"`
+}
+
 // TyrSettings holds tyr-mini settings within the main config.
 type TyrSettings struct {
 	Enabled bool `yaml:"enabled"`
@@ -133,6 +139,7 @@ type Config struct {
 	Git         GitConfig         `yaml:"git,omitempty"`
 	K3s         K3sConfig         `yaml:"k3s,omitempty"`
 	LocalMounts LocalMountsConfig `yaml:"local_mounts,omitempty"`
+	AIModels    []AIModelEntry    `yaml:"ai_models,omitempty"`
 
 	// Runtime is deprecated: use Volundr.Mode instead.
 	Runtime string `yaml:"runtime,omitempty"`
@@ -255,6 +262,14 @@ func DefaultConfig() (*Config, error) {
 			Name:     DefaultDBName,
 		},
 		Anthropic: AnthropicConfig{},
+		LocalMounts: LocalMountsConfig{
+			Enabled: true,
+		},
+		AIModels: []AIModelEntry{
+			{ID: "claude-opus-4-6", Name: "Opus 4.6"},
+			{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"},
+			{ID: "claude-haiku-4-5-20251001", Name: "Haiku 4.5"},
+		},
 		K3s: K3sConfig{
 			Kubeconfig: "",
 			Namespace:  "volundr",

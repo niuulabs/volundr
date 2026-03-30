@@ -135,18 +135,27 @@ export function LaunchWizard(props: LaunchWizardProps) {
   const [step, setStep] = useState(1);
   const [state, setState] = useState<WizardState | null>(null);
   const [localMountsEnabled, setLocalMountsEnabled] = useState(false);
+  const [miniMode, setMiniMode] = useState(false);
 
   useEffect(() => {
-    service.getFeatures().then(f => setLocalMountsEnabled(f.localMountsEnabled));
+    service.getFeatures().then(f => {
+      setLocalMountsEnabled(f.localMountsEnabled);
+      setMiniMode(f.miniMode);
+    });
   }, [service]);
 
   const handleTemplateSelect = useCallback(
     (template: VolundrTemplate | null) => {
       const chosen = template ?? BLANK_TEMPLATE;
-      setState(buildInitialState(chosen, repos));
+      const initial = buildInitialState(chosen, repos);
+      // Default to local_mount when local mounts are enabled and no repos are configured.
+      if (localMountsEnabled && repos.length === 0) {
+        initial.sourceType = 'local_mount';
+      }
+      setState(initial);
       setStep(2);
     },
-    [repos]
+    [repos, localMountsEnabled]
   );
 
   const updateState = useCallback((updates: Partial<WizardState>) => {
@@ -173,7 +182,11 @@ export function LaunchWizard(props: LaunchWizardProps) {
 
     const source: SessionSource =
       state.sourceType === 'local_mount'
-        ? { type: 'local_mount', paths: state.mountPaths.filter(p => p.host_path && p.mount_path) }
+        ? {
+            type: 'local_mount',
+            local_path: state.mountPaths[0]?.host_path ?? '',
+            paths: state.mountPaths.filter(p => p.host_path && p.mount_path),
+          }
         : { type: 'git', repo: state.repo, branch: state.branch };
 
     // Build resource config, filtering out empty values
@@ -201,9 +214,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
 
   const hasValidSource =
     state !== null &&
-    (state.sourceType === 'git'
-      ? state.repo !== ''
-      : state.mountPaths.some(p => p.host_path && p.mount_path));
+    (state.sourceType === 'git' ? state.repo !== '' : state.mountPaths.some(p => p.host_path));
 
   const canProceedToStep3 =
     state !== null &&
@@ -232,6 +243,7 @@ export function LaunchWizard(props: LaunchWizardProps) {
             service={service}
             searchTrackerIssues={searchTrackerIssues}
             localMountsEnabled={localMountsEnabled}
+            miniMode={miniMode}
             onChange={updateState}
             onSavePreset={onSavePreset}
           />

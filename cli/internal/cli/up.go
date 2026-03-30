@@ -256,6 +256,12 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 		forgeCfg.Tyr.DatabaseDSN = cfg.DSN()
 	}
 
+	// Local mounts and AI models.
+	forgeCfg.LocalMounts = cfg.LocalMounts.Enabled
+	for _, m := range cfg.AIModels {
+		forgeCfg.AIModels = append(forgeCfg.AIModels, forge.AIModelEntry{ID: m.ID, Name: m.Name})
+	}
+
 	return forgeCfg, nil
 }
 

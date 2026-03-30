@@ -118,7 +118,7 @@ func (m *mockRunner) UnsubscribeActivity(_ string) {}
 func newTestHandler(t *testing.T) (*Handler, *mockRunner) {
 	t.Helper()
 	mock := newMockRunner()
-	h := NewHandler(mock)
+	h := NewHandler(mock, DefaultForgeConfig())
 	return h, mock
 }
 

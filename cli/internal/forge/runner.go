@@ -74,17 +74,30 @@ func (r *Runner) CreateAndStart(ctx context.Context, req *CreateSessionRequest, 
 		LastActive:    now,
 	}
 
-	// Create workspace directory.
-	wsDir := filepath.Join(r.cfg.Forge.WorkspacesDir, sess.ID)
-	if err := os.MkdirAll(wsDir, 0o750); err != nil { //nolint:gosec // path from trusted config
-		return nil, fmt.Errorf("create workspace dir: %w", err)
+	// Set workspace directory.
+	if req.Source != nil && req.Source.Type == "local_mount" && req.Source.LocalPath != "" {
+		// Local mount: use the existing directory directly.
+		info, err := os.Stat(req.Source.LocalPath)
+		if err != nil {
+			return nil, fmt.Errorf("local path %q: %w", req.Source.LocalPath, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("local path %q is not a directory", req.Source.LocalPath)
+		}
+		sess.WorkspaceDir = req.Source.LocalPath
+	} else {
+		wsDir := filepath.Join(r.cfg.Forge.WorkspacesDir, sess.ID)
+		if err := os.MkdirAll(wsDir, 0o750); err != nil { //nolint:gosec // path from trusted config
+			return nil, fmt.Errorf("create workspace dir: %w", err)
+		}
+		sess.WorkspaceDir = wsDir
 	}
-	sess.WorkspaceDir = wsDir
 
 	r.transition(sess, StatusStarting, ActivityStateStarting)
 
-	// Clone repo in background, then start Claude Code.
-	go r.provision(ctx, sess)
+	// Provision in background with a detached context — the HTTP request
+	// context would cancel as soon as the response is sent.
+	go r.provision(context.Background(), sess)
 
 	return sess, nil
 }
@@ -138,8 +151,9 @@ func (r *Runner) Delete(id string) error {
 		_ = r.Stop(id)
 	}
 
-	// Remove workspace directory.
-	if sess.WorkspaceDir != "" {
+	// Remove workspace directory — but never delete a local mount (user's project).
+	isLocalMount := sess.Source != nil && sess.Source.Type == "local_mount"
+	if sess.WorkspaceDir != "" && !isLocalMount {
 		_ = os.RemoveAll(sess.WorkspaceDir) //nolint:gosec // path from trusted session state
 	}
 
