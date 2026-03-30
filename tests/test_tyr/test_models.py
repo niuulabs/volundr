@@ -55,6 +55,7 @@ class TestRaidStatus:
     def test_values(self) -> None:
         assert RaidStatus.PENDING == "PENDING"
         assert RaidStatus.QUEUED == "QUEUED"
+        assert RaidStatus.CONTRACTING == "CONTRACTING"
         assert RaidStatus.RUNNING == "RUNNING"
         assert RaidStatus.REVIEW == "REVIEW"
         assert RaidStatus.ESCALATED == "ESCALATED"
@@ -62,7 +63,7 @@ class TestRaidStatus:
         assert RaidStatus.FAILED == "FAILED"
 
     def test_member_count(self) -> None:
-        assert len(RaidStatus) == 7
+        assert len(RaidStatus) == 8
 
 
 class TestConfidenceEventType:
@@ -78,9 +79,11 @@ class TestConfidenceEventType:
         assert ConfidenceEventType.PR_MERGEABLE == "pr_mergeable"
         assert ConfidenceEventType.MESSAGE_SENT == "message_sent"
         assert ConfidenceEventType.REVIEWER_SCORE == "reviewer_score"
+        assert ConfidenceEventType.CONTRACT_AGREED == "contract_agreed"
+        assert ConfidenceEventType.CONTRACT_FAILED == "contract_failed"
 
     def test_member_count(self) -> None:
-        assert len(ConfidenceEventType) == 11
+        assert len(ConfidenceEventType) == 13
 
 
 # ---------------------------------------------------------------------------
@@ -92,11 +95,31 @@ class TestRaidTransitions:
     def test_pending_to_queued(self) -> None:
         validate_transition(RaidStatus.PENDING, RaidStatus.QUEUED)
 
+    def test_queued_to_contracting(self) -> None:
+        validate_transition(RaidStatus.QUEUED, RaidStatus.CONTRACTING)
+
     def test_queued_to_running(self) -> None:
         validate_transition(RaidStatus.QUEUED, RaidStatus.RUNNING)
 
     def test_queued_to_failed(self) -> None:
         validate_transition(RaidStatus.QUEUED, RaidStatus.FAILED)
+
+    def test_contracting_to_running(self) -> None:
+        validate_transition(RaidStatus.CONTRACTING, RaidStatus.RUNNING)
+
+    def test_contracting_to_escalated(self) -> None:
+        validate_transition(RaidStatus.CONTRACTING, RaidStatus.ESCALATED)
+
+    def test_contracting_to_failed(self) -> None:
+        validate_transition(RaidStatus.CONTRACTING, RaidStatus.FAILED)
+
+    def test_invalid_contracting_to_merged(self) -> None:
+        with pytest.raises(InvalidStateTransitionError):
+            validate_transition(RaidStatus.CONTRACTING, RaidStatus.MERGED)
+
+    def test_invalid_contracting_to_review(self) -> None:
+        with pytest.raises(InvalidStateTransitionError):
+            validate_transition(RaidStatus.CONTRACTING, RaidStatus.REVIEW)
 
     def test_running_to_review(self) -> None:
         validate_transition(RaidStatus.RUNNING, RaidStatus.REVIEW)
@@ -173,7 +196,7 @@ class TestSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.9,
             created_at=NOW,
-        base_branch="dev",
+            base_branch="dev",
         )
         assert saga.tracker_id == "LIN-100"
         assert saga.name == "My Saga"
@@ -194,7 +217,7 @@ class TestSaga:
             status=SagaStatus.ACTIVE,
             confidence=0.5,
             created_at=NOW,
-        base_branch="dev",
+            base_branch="dev",
         )
         with pytest.raises(AttributeError):
             saga.slug = "changed"  # type: ignore[misc]
