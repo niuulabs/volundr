@@ -4,27 +4,30 @@ Volundr loads configuration from YAML with environment variable overrides.
 
 ## Local mode (CLI)
 
-If you used `volundr init`, your config lives at `~/.volundr/config.yaml`. The wizard sets up everything you need. You can edit it directly or use:
+If you used `niuu volundr init`, your config lives at `~/.volundr/config.yaml`. The wizard sets up everything you need. You can edit it directly or use:
 
 ```bash
-volundr config get database.host
-volundr config set database.host localhost
+niuu volundr config get database.host
+niuu volundr config set database.host localhost
 ```
 
 The most common settings to change for local development:
 
 | Setting | Where | What it does |
 |---------|-------|-------------|
-| Anthropic API key | `volundr init` wizard | Powers the AI agent |
-| GitHub token | `volundr init` wizard | Repo access |
-| Database mode | `volundr init` wizard | `embedded` (default) bundles PostgreSQL |
-| Runtime | `volundr init` wizard | `local`, `docker`, or `k3s` |
+| Anthropic API key | `niuu volundr init` wizard | Powers the AI agent |
+| GitHub token | `niuu volundr init` wizard | Repo access |
+| Database mode | `niuu volundr init` wizard | `embedded` (default) bundles PostgreSQL |
+| Runtime | `niuu volundr init` wizard | `local`, `docker`, or `k3s` |
 
-For most local users, the defaults from `volundr init` are sufficient. The full reference below is primarily for server deployments and advanced configuration.
+For most local users, the defaults from `niuu volundr init` are sufficient. The full reference below is primarily for server deployments and advanced configuration.
 
 ---
 
 ## Server / advanced configuration
+
+!!! tip
+    The sections below are for server deployments and advanced use cases. If you're running locally with `niuu volundr init` + `niuu volundr up`, you can skip everything below. For the full adapter and infrastructure reference, see the [Configuration section](../configuration/overview.md).
 
 ### Config file locations
 

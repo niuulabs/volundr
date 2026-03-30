@@ -20,21 +20,21 @@ Go from zero to a working AI coding session on your machine. No Kubernetes requi
 ```bash
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m); [ "$ARCH" = "x86_64" ] && ARCH="amd64"; [ "$ARCH" = "aarch64" ] && ARCH="arm64"
-curl -fsSL "https://github.com/niuulabs/volundr/releases/latest/download/volundr-${OS}-${ARCH}" -o volundr
-chmod +x volundr
-sudo mv volundr /usr/local/bin/
+curl -fsSL "https://github.com/niuulabs/volundr/releases/latest/download/niuu-${OS}-${ARCH}" -o niuu
+chmod +x niuu
+sudo mv niuu /usr/local/bin/
 ```
 
 Verify it works:
 
 ```bash
-volundr version
+niuu volundr version
 ```
 
 Expected output:
 
 ```
-volundr version 0.x.x (commit abc1234)
+niuu volundr version 0.x.x (commit abc1234)
 ```
 
 ---
@@ -42,7 +42,7 @@ volundr version 0.x.x (commit abc1234)
 ## Step 2: Initialize
 
 ```bash
-volundr init
+niuu volundr init
 ```
 
 The interactive wizard walks you through setup. Here are the prompts and recommended answers for local development:
@@ -72,7 +72,7 @@ This creates `~/.volundr/config.yaml` and stores your credentials encrypted.
 ## Step 3: Start Volundr
 
 ```bash
-volundr up
+niuu volundr up
 ```
 
 Volundr starts three services:
@@ -107,7 +107,7 @@ Wait until all services show `running`. The web UI is available at [http://local
 ### Option B: CLI
 
 ```bash
-volundr sessions create \
+niuu volundr sessions create \
   --name my-first-session \
   --repo your-org/your-repo \
   --model claude-sonnet-4
@@ -116,7 +116,7 @@ volundr sessions create \
 Then start it:
 
 ```bash
-volundr sessions start <session-id>
+niuu volundr sessions start <session-id>
 ```
 
 ---
@@ -138,7 +138,7 @@ This takes 10–30 seconds depending on repo size.
 Once the session is `RUNNING`:
 
 - **Web UI**: The **Chat** tab opens. Type a message to start working with the AI agent.
-- **CLI TUI**: Run `volundr` (no arguments) to launch the terminal UI. Use `Alt+2` for the chat view.
+- **CLI TUI**: Run `niuu volundr` (no arguments) to launch the terminal UI. Use `Alt+2` for the chat view.
 
 The session gives you:
 
@@ -157,14 +157,14 @@ The session gives you:
 When you're done:
 
 - **Web UI**: Click **Stop**.
-- **CLI**: `volundr sessions stop <session-id>`
+- **CLI**: `niuu volundr sessions stop <session-id>`
 
 A chronicle is automatically created — a summary of what happened, the changes made, and the conversation history.
 
 To shut down all Volundr services:
 
 ```bash
-volundr down
+niuu volundr down
 ```
 
 ---

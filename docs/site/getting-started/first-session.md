@@ -70,15 +70,15 @@ When you're done, click **Stop**. A chronicle is automatically created -- a summ
 If you're connecting to a remote Volundr instance, add it as a context:
 
 ```bash
-volundr context add local --server http://localhost:8080
+niuu volundr context add local --server http://localhost:8080
 ```
 
-Skip this if you ran `volundr init` and `volundr up` locally -- the context is already configured.
+Skip this if you ran `niuu volundr init` and `niuu volundr up` locally -- the context is already configured.
 
 ### 2. Create a session
 
 ```bash
-volundr sessions create \
+niuu volundr sessions create \
   --name my-project \
   --repo org/repo \
   --model claude-sonnet-4
@@ -89,13 +89,13 @@ This returns a session ID.
 ### 3. Start the session
 
 ```bash
-volundr sessions start <session-id>
+niuu volundr sessions start <session-id>
 ```
 
 ### 4. Open the TUI
 
 ```bash
-volundr
+niuu volundr
 ```
 
 The terminal UI gives you the same capabilities as the web UI: chat, terminal, diffs, and chronicles. Navigate between views with keyboard shortcuts.
@@ -103,7 +103,7 @@ The terminal UI gives you the same capabilities as the web UI: chat, terminal, d
 ### 5. Stop the session
 
 ```bash
-volundr sessions stop <session-id>
+niuu volundr sessions stop <session-id>
 ```
 
 A chronicle is created automatically, same as the web UI.

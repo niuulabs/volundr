@@ -4,7 +4,7 @@ Pick the path that matches your goal.
 
 | Goal | Path | Time |
 |------|------|------|
-| Try it out locally | CLI (`volundr init && volundr up`) | 5 min |
+| Try it out locally | CLI (`niuu volundr init && niuu volundr up`) | 5 min |
 | Local Kubernetes | [k3d cluster + Helm](local-k3d.md) | 15 min |
 | Single-node server (DGX Spark, homelab) | [k3s + Helm](single-node.md) | 20 min |
 | Team / production | [Kubernetes cluster + Helm](kubernetes.md) | 30 min |

@@ -1,12 +1,12 @@
 # CLI Reference
 
-The Volundr CLI operates in two modes: local (run everything on your machine) and remote (connect to a Volundr server). Run it without arguments to launch the interactive TUI.
+The `niuu` CLI includes `volundr` as a subcommand. It operates in two modes: local (run everything on your machine) and remote (connect to a Volundr server). Run `niuu volundr` without additional arguments to launch the interactive TUI.
 
 ## Local mode
 
 Run the full Volundr stack locally for development or single-user use.
 
-### `volundr init`
+### `niuu volundr init`
 
 Interactive setup wizard. Walks you through:
 
@@ -17,7 +17,7 @@ Interactive setup wizard. Walks you through:
 
 Creates `~/.volundr/config.yaml` and stores credentials encrypted.
 
-### `volundr up`
+### `niuu volundr up`
 
 Start all services — PostgreSQL (if embedded), API server, and reverse proxy. Blocks until you hit Ctrl+C.
 
@@ -26,11 +26,11 @@ Start all services — PostgreSQL (if embedded), API server, and reverse proxy. 
 | `--runtime <runtime>` | Override the configured runtime |
 | `--no-web` | Disable the embedded web UI |
 
-### `volundr down`
+### `niuu volundr down`
 
 Stop all services gracefully.
 
-### `volundr status`
+### `niuu volundr status`
 
 Print a status table showing each service's state:
 
@@ -47,7 +47,7 @@ Connect to a Volundr server running on Kubernetes.
 
 ### Authentication
 
-#### `volundr login`
+#### `niuu volundr login`
 
 Authenticate via OIDC. Opens your browser for the authorization code flow.
 
@@ -59,23 +59,23 @@ Authenticate via OIDC. Opens your browser for the authorization code flow.
 | `--force` | Force re-authentication even if tokens are valid |
 | `--context <name>` | Login to a specific context |
 
-#### `volundr logout`
+#### `niuu volundr logout`
 
 Clear stored tokens for the current context.
 
-#### `volundr whoami`
+#### `niuu volundr whoami`
 
 Show current user info: name, email, issuer, and token expiry.
 
 ### Sessions
 
-Alias: `volundr s` is shorthand for `volundr sessions`.
+Alias: `niuu volundr s` is shorthand for `niuu volundr sessions`.
 
-#### `volundr sessions list`
+#### `niuu volundr sessions list`
 
 List all your sessions.
 
-#### `volundr sessions create`
+#### `niuu volundr sessions create`
 
 Create a new session.
 
@@ -86,15 +86,15 @@ Create a new session.
 | `-m, --model <model>` | AI model to use |
 | `-b, --branch <branch>` | Git branch |
 
-#### `volundr sessions start <id>`
+#### `niuu volundr sessions start <id>`
 
 Start a stopped session.
 
-#### `volundr sessions stop <id>`
+#### `niuu volundr sessions stop <id>`
 
 Stop a running session.
 
-#### `volundr sessions delete <id>`
+#### `niuu volundr sessions delete <id>`
 
 Delete a session permanently.
 
@@ -102,7 +102,7 @@ Delete a session permanently.
 
 Contexts let you manage connections to multiple Volundr servers.
 
-#### `volundr context add <key> --server <url>`
+#### `niuu volundr context add <key> --server <url>`
 
 Add a server context.
 
@@ -112,35 +112,35 @@ Add a server context.
 | `--issuer <url>` | OIDC issuer URL |
 | `--client-id <id>` | OIDC client ID |
 
-#### `volundr context list`
+#### `niuu volundr context list`
 
 List all configured contexts.
 
-#### `volundr context remove <key>`
+#### `niuu volundr context remove <key>`
 
 Remove a context.
 
-#### `volundr context rename <old> <new>`
+#### `niuu volundr context rename <old> <new>`
 
 Rename a context.
 
 ### Config
 
-#### `volundr config get <key>`
+#### `niuu volundr config get <key>`
 
 Get a config value.
 
-#### `volundr config set <key> <value>`
+#### `niuu volundr config set <key> <value>`
 
 Set a config value.
 
-### `volundr version`
+### `niuu volundr version`
 
 Print version information.
 
 ## Interactive TUI
 
-Run `volundr` with no arguments (or `volundr tui`) to launch the full-screen terminal UI. Navigate between pages with keyboard shortcuts:
+Run `niuu volundr` with no additional arguments (or `niuu volundr tui`) to launch the full-screen terminal UI. Navigate between pages with keyboard shortcuts:
 
 | Page | Shortcut | Description |
 |------|----------|-------------|
@@ -184,5 +184,5 @@ These flags work with any command:
 All commands support the `--json` flag. Use it for scripting and automation:
 
 ```bash
-volundr sessions list --json | jq '.[].name'
+niuu volundr sessions list --json | jq '.[].name'
 ```

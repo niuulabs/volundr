@@ -1,5 +1,8 @@
 # Running
 
+!!! tip "Using the CLI binary?"
+    If you installed the `niuu` CLI binary, use `niuu volundr up` to start everything. This page covers running from source for contributors and advanced users.
+
 ## API server
 
 ```bash

@@ -257,13 +257,13 @@ Tokens are cached locally and refreshed automatically.
 ### Commands
 
 ```
-volundr session create    # Create a new session
-volundr session start     # Start a stopped session
-volundr session stop      # Stop a running session
-volundr session list      # List sessions
-volundr chat              # Interactive chat with a session
-volundr chronicle list    # List chronicles
-volundr context           # Manage server contexts
-volundr local start       # Start the local stack
-volundr tui               # Launch the interactive TUI
+niuu volundr session create    # Create a new session
+niuu volundr session start     # Start a stopped session
+niuu volundr session stop      # Stop a running session
+niuu volundr session list      # List sessions
+niuu volundr chat              # Interactive chat with a session
+niuu volundr chronicle list    # List chronicles
+niuu volundr context           # Manage server contexts
+niuu volundr up                # Start the local stack
+niuu volundr tui               # Launch the interactive TUI
 ```
