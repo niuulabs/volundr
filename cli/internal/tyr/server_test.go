@@ -151,7 +151,7 @@ func TestServerRegisterRoutes(t *testing.T) {
 	srv.RegisterRoutes(mux)
 
 	// Verify a known route is registered.
-	req := httptest.NewRequest("GET", "/api/v1/tyr/dispatch/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/dispatch/config", http.NoBody)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code == http.StatusNotFound {
