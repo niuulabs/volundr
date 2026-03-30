@@ -402,7 +402,7 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 	}
 
 	// Create browser broker for this session.
-	b := broker.NewBroker(sess.ID, transport)
+	b := broker.NewBroker(sess.ID, transport, sess.WorkspaceDir)
 	transport.SetOnCLIEvent(b.OnCLIEvent)
 
 	r.mu.Lock()

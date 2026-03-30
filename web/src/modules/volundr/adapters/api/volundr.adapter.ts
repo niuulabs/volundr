@@ -186,6 +186,7 @@ function transformSource(apiSource: ApiSessionResponse['source']): SessionSource
   if (apiSource.type === 'local_mount') {
     return {
       type: 'local_mount',
+      local_path: apiSource.local_path,
       paths: (apiSource.paths ?? []).map(p => ({
         host_path: p.host_path,
         mount_path: p.mount_path,

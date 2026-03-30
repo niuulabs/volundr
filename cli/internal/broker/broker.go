@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -33,8 +34,9 @@ type ConversationTurn struct {
 // TODO(standalone): When running as `niuu volundr broker`, a single Broker
 // is created with a standalone Transport that spawns Claude CLI directly.
 type Broker struct {
-	sessionID string
-	transport Transport
+	sessionID    string
+	transport    Transport
+	workspaceDir string
 
 	mu       sync.RWMutex
 	browsers []*browserConn
@@ -85,10 +87,11 @@ func (bc *browserConn) close() {
 }
 
 // NewBroker creates a broker for the given session and CLI transport.
-func NewBroker(sessionID string, transport Transport) *Broker {
+func NewBroker(sessionID string, transport Transport, workspaceDir string) *Broker {
 	return &Broker{
-		sessionID: sessionID,
-		transport: transport,
+		sessionID:    sessionID,
+		transport:    transport,
+		workspaceDir: workspaceDir,
 	}
 }
 
@@ -104,6 +107,8 @@ func (b *Broker) Routes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc(fmt.Sprintf("GET %s/session", prefix), b.HandleBrowserWS)
 	mux.HandleFunc(fmt.Sprintf("GET %s/api/conversation/history", prefix), b.handleConversationHistory)
 	mux.HandleFunc(fmt.Sprintf("POST %s/api/message", prefix), b.handleInjectMessage)
+	mux.HandleFunc(fmt.Sprintf("GET %s/api/diff/files", prefix), b.HandleDiffFiles)
+	mux.HandleFunc(fmt.Sprintf("GET %s/api/diff", prefix), b.HandleDiff)
 	mux.HandleFunc(fmt.Sprintf("GET %s/health", prefix), b.handleHealth)
 }
 
@@ -390,6 +395,154 @@ func (b *Broker) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		"status":     "healthy",
 		"session_id": b.sessionID,
 	})
+}
+
+func (b *Broker) HandleDiffFiles(w http.ResponseWriter, r *http.Request) {
+	if b.workspaceDir == "" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"files": []any{}})
+		return
+	}
+
+	base := r.URL.Query().Get("base")
+	var cmd *exec.Cmd
+	switch base {
+	case "default-branch":
+		cmd = exec.CommandContext(r.Context(), "git", "diff", "main...HEAD", "--numstat") //nolint:gosec // fixed args
+	default:
+		cmd = exec.CommandContext(r.Context(), "git", "diff", "HEAD", "--numstat")
+	}
+	cmd.Dir = b.workspaceDir
+
+	out, err := cmd.Output()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"files": []any{}})
+		return
+	}
+
+	var files []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		ins, del_ := 0, 0
+		if parts[0] != "-" {
+			fmt.Sscanf(parts[0], "%d", &ins)
+		}
+		if parts[1] != "-" {
+			fmt.Sscanf(parts[1], "%d", &del_)
+		}
+		files = append(files, map[string]any{
+			"path": parts[2], "status": "mod", "ins": ins, "del": del_,
+		})
+	}
+	if files == nil {
+		files = []map[string]any{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"files": files})
+}
+
+func (b *Broker) HandleDiff(w http.ResponseWriter, r *http.Request) {
+	filePath := r.URL.Query().Get("file")
+	if filePath == "" || b.workspaceDir == "" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"filePath": filePath, "hunks": []any{}})
+		return
+	}
+
+	base := r.URL.Query().Get("base")
+	var cmd *exec.Cmd
+	switch base {
+	case "default-branch":
+		cmd = exec.CommandContext(r.Context(), "git", "diff", "main...HEAD", "--", filePath) //nolint:gosec // filePath from query, workspace is trusted
+	default:
+		cmd = exec.CommandContext(r.Context(), "git", "diff", "HEAD", "--", filePath) //nolint:gosec // filePath from query
+	}
+	cmd.Dir = b.workspaceDir
+
+	out, err := cmd.Output()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"filePath": filePath, "hunks": []any{}})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(parseDiffOutput(string(out), filePath))
+}
+
+func parseDiffOutput(raw, filePath string) map[string]any {
+	var hunks []map[string]any
+	var currentHunk map[string]any
+	oldStart, newStart := 0, 0
+
+	for _, line := range strings.Split(raw, "\n") {
+		if strings.HasPrefix(line, "@@") {
+			parts := strings.SplitN(line, "@@", 3)
+			if len(parts) < 2 {
+				continue
+			}
+			header := strings.TrimSpace(parts[1])
+			oStart, oCount, nStart, nCount := 0, 0, 0, 0
+			for _, token := range strings.Fields(header) {
+				if strings.HasPrefix(token, "-") {
+					nums := strings.SplitN(token[1:], ",", 2)
+					fmt.Sscanf(nums[0], "%d", &oStart)
+					if len(nums) > 1 {
+						fmt.Sscanf(nums[1], "%d", &oCount)
+					} else {
+						oCount = 1
+					}
+				} else if strings.HasPrefix(token, "+") {
+					nums := strings.SplitN(token[1:], ",", 2)
+					fmt.Sscanf(nums[0], "%d", &nStart)
+					if len(nums) > 1 {
+						fmt.Sscanf(nums[1], "%d", &nCount)
+					} else {
+						nCount = 1
+					}
+				}
+			}
+			currentHunk = map[string]any{
+				"oldStart": oStart, "oldCount": oCount,
+				"newStart": nStart, "newCount": nCount,
+				"lines": []map[string]any{},
+			}
+			hunks = append(hunks, currentHunk)
+			oldStart, newStart = oStart, nStart
+			continue
+		}
+
+		if currentHunk == nil {
+			continue
+		}
+
+		lines := currentHunk["lines"].([]map[string]any)
+		if strings.HasPrefix(line, "+") {
+			lines = append(lines, map[string]any{"type": "add", "content": line[1:], "newLine": newStart})
+			newStart++
+		} else if strings.HasPrefix(line, "-") {
+			lines = append(lines, map[string]any{"type": "remove", "content": line[1:], "oldLine": oldStart})
+			oldStart++
+		} else if strings.HasPrefix(line, " ") {
+			lines = append(lines, map[string]any{"type": "context", "content": line[1:], "oldLine": oldStart, "newLine": newStart})
+			oldStart++
+			newStart++
+		}
+		currentHunk["lines"] = lines
+	}
+
+	if hunks == nil {
+		hunks = []map[string]any{}
+	}
+	return map[string]any{"filePath": filePath, "hunks": hunks}
 }
 
 // InjectMessage sends a message to the CLI from an external source (e.g. Tyr).

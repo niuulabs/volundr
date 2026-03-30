@@ -68,6 +68,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{session_id}/session", h.brokerWebSocket)
 	mux.HandleFunc("GET /s/{session_id}/api/conversation/history", h.brokerConversationHistory)
 	mux.HandleFunc("POST /s/{session_id}/api/message", h.brokerInjectMessage)
+	mux.HandleFunc("GET /s/{session_id}/api/diff/files", h.brokerDiffFiles)
+	mux.HandleFunc("GET /s/{session_id}/api/diff", h.brokerDiff)
 	mux.HandleFunc("GET /s/{session_id}/health", h.brokerHealth)
 }
 
@@ -516,6 +518,24 @@ func (h *Handler) brokerInjectMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+}
+
+func (h *Handler) brokerDiffFiles(w http.ResponseWriter, r *http.Request) {
+	brk := h.runner.GetBroker(r.PathValue("session_id"))
+	if brk == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{"files": []any{}})
+		return
+	}
+	brk.HandleDiffFiles(w, r)
+}
+
+func (h *Handler) brokerDiff(w http.ResponseWriter, r *http.Request) {
+	brk := h.runner.GetBroker(r.PathValue("session_id"))
+	if brk == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{"filePath": "", "hunks": []any{}})
+		return
+	}
+	brk.HandleDiff(w, r)
 }
 
 func (h *Handler) brokerHealth(w http.ResponseWriter, r *http.Request) {
