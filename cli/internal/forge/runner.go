@@ -97,6 +97,12 @@ func (r *Runner) CreateAndStart(ctx context.Context, req *CreateSessionRequest, 
 		sess.WorkspaceDir = wsDir
 	}
 
+	// Set ChatEndpoint eagerly so the UI can start probing immediately.
+	// The actual broker is created during provisioning, but the URL is
+	// deterministic so the probe will succeed once provisioning completes.
+	sess.ChatEndpoint = fmt.Sprintf("ws://%s:%d/s/%s/session",
+		r.cfg.Listen.Host, r.cfg.Listen.Port, sess.ID)
+
 	r.transition(sess, StatusStarting, ActivityStateStarting)
 
 	// Provision in background with a detached context — the HTTP request
@@ -403,17 +409,12 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 	r.brokers[sess.ID] = b
 	r.mu.Unlock()
 
-	// Set ChatEndpoint so the web UI knows where to connect.
-	sess.ChatEndpoint = fmt.Sprintf("ws://%s:%d/s/%s/session",
-		r.cfg.Listen.Host, r.cfg.Listen.Port, sess.ID)
-	sess.UpdatedAt = time.Now().UTC()
-	r.store.Put(sess)
-
 	args := []string{
 		"--sdk-url", transport.SDKURL(),
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
 		"--verbose",
+		"--permission-mode", "bypassPermissions",
 	}
 	if sess.Model != "" {
 		args = append(args, "--model", sess.Model)

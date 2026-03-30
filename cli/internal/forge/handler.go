@@ -44,11 +44,18 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// needs to boot and launch sessions from local folders.
 	mux.HandleFunc("GET /api/v1/volundr/models", h.listModels)
 	mux.HandleFunc("GET /api/v1/volundr/feature-flags", h.featureFlags)
+	mux.HandleFunc("GET /api/v1/volundr/features", h.featureModules)
+	mux.HandleFunc("GET /api/v1/volundr/features/preferences", emptyJSON)
+	mux.HandleFunc("PUT /api/v1/volundr/features/preferences", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/templates", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/presets", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/mcp-servers", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/secrets", emptyJSON)
 	mux.HandleFunc("GET /api/v1/niuu/repos", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/workspaces", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/credentials", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/integrations", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/resources", h.clusterResources)
 
 	// Per-session broker routes (skuld-mini).
 	mux.HandleFunc("GET /s/{session_id}/session", h.brokerWebSocket)
@@ -342,6 +349,29 @@ func (h *Handler) brokerHealth(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"status":     "healthy",
 		"session_id": r.PathValue("session_id"),
+	})
+}
+
+// featureModules returns the session panel configuration. In mini mode,
+// code/terminal/files are disabled since there's no container infrastructure.
+func (h *Handler) featureModules(w http.ResponseWriter, _ *http.Request) {
+	modules := []map[string]any{
+		{"key": "chat", "label": "Chat", "icon": "MessageSquare", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 10},
+		{"key": "terminal", "label": "Terminal", "icon": "Terminal", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 20},
+		{"key": "code", "label": "Code", "icon": "Code", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 30},
+		{"key": "files", "label": "Files", "icon": "FolderOpen", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 40},
+		{"key": "diffs", "label": "Diffs", "icon": "GitCompareArrows", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 50},
+		{"key": "chronicles", "label": "Chronicles", "icon": "ScrollText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 60},
+		{"key": "logs", "label": "Logs", "icon": "FileText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 70},
+	}
+	httputil.WriteJSON(w, http.StatusOK, modules)
+}
+
+// clusterResources returns empty resource info for mini mode.
+func (h *Handler) clusterResources(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"resource_types": []any{},
+		"nodes":          []any{},
 	})
 }
 
