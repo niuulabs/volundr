@@ -139,6 +139,14 @@ class RaidReviewService:
             raid.tracker_id, status=RaidStatus.MERGED
         )
 
+        # Close the tracker issue (sets it to Done in Linear/Jira)
+        try:
+            await self._tracker.close_raid(raid.tracker_id)
+        except Exception:
+            logger.warning(
+                "Failed to close tracker issue %s after approval", raid.tracker_id, exc_info=True
+            )
+
         # Phase gate check
         phase_gate_unlocked = False
         phase = await self._tracker.get_phase_for_raid(raid.tracker_id)

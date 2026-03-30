@@ -408,7 +408,7 @@ def create_dispatch_router() -> APIRouter:
                     ),
                     auth_token=auth_token,
                 )
-                # Record raid progress via TrackerPort
+                # Record raid progress and set tracker issue to In Progress
                 for adapter in adapters:
                     try:
                         await adapter.update_raid_progress(
@@ -422,6 +422,12 @@ def create_dispatch_router() -> APIRouter:
                     except Exception:
                         logger.warning(
                             "Failed to update raid progress for %s", issue.id, exc_info=True
+                        )
+                    try:
+                        await adapter.update_raid_state(issue.id, RaidStatus.RUNNING)
+                    except Exception:
+                        logger.warning(
+                            "Failed to set tracker issue %s to In Progress", issue.id, exc_info=True
                         )
 
                 results.append(

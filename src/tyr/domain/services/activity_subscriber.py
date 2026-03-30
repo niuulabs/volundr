@@ -420,6 +420,14 @@ class SessionActivitySubscriber:
             chronicle_summary=chronicle_summary,
         )
 
+        # Set tracker issue to In Review
+        try:
+            await tracker.update_raid_state(raid.tracker_id, RaidStatus.REVIEW)
+        except Exception:
+            logger.warning(
+                "Failed to set tracker issue %s to In Review", raid.tracker_id, exc_info=True
+            )
+
         await self._emit_state_changed(raid, owner_id, "REVIEW", pr_id=pr_id, pr_url=pr_url)
         logger.info(
             "Session %s completed (tracker=%s, pr=%s, chronicle=%s)",
