@@ -747,15 +747,17 @@ func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
 
 		raidStatus := linearStatusToRaid(issue.StatusType)
 		raids = append(raids, Raid{
-			ID:          uuid.New().String(),
-			PhaseID:     phaseID,
-			TrackerID:   issue.ID,
-			Name:        fmt.Sprintf("%s — %s", issue.Identifier, issue.Title),
-			Description: issue.Description,
-			Status:      raidStatus,
-			Confidence:  defaultInitialConfidence,
-			CreatedAt:   time.Now().UTC(),
-			UpdatedAt:   time.Now().UTC(),
+			ID:                 uuid.New().String(),
+			PhaseID:            phaseID,
+			TrackerID:          issue.ID,
+			Name:               fmt.Sprintf("%s — %s", issue.Identifier, issue.Title),
+			Description:        issue.Description,
+			AcceptanceCriteria: []string{},
+			DeclaredFiles:      []string{},
+			Status:             raidStatus,
+			Confidence:         defaultInitialConfidence,
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
 		})
 	}
 
