@@ -181,6 +181,8 @@ type PhaseDetailResponse struct {
 type RaidDetailResponse struct {
 	ID                 string   `json:"id"`
 	TrackerID          string   `json:"tracker_id"`
+	Identifier         string   `json:"identifier"`
+	URL                string   `json:"url"`
 	Name               string   `json:"name"`
 	Description        string   `json:"description"`
 	AcceptanceCriteria []string `json:"acceptance_criteria"`

@@ -142,6 +142,8 @@ func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
 			raidResponses = append(raidResponses, RaidDetailResponse{
 				ID:                 rd.ID,
 				TrackerID:          rd.TrackerID,
+				Identifier:         rd.Identifier,
+				URL:                rd.URL,
 				Name:               rd.Name,
 				Description:        rd.Description,
 				AcceptanceCriteria: rd.AcceptanceCriteria,
