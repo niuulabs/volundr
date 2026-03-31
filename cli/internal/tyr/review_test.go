@@ -1,6 +1,7 @@
 package tyr
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"strings"
 	"sync"
@@ -644,4 +645,394 @@ func TestReviewEngine_SpawnReviewer_SagaNotFound_FallsBackToAutoDecide(t *testin
 		t.Errorf("expected 0 spawn calls when saga not found, got %d", spawner.spawnCalls)
 	}
 	spawner.mu.Unlock()
+}
+
+func TestReviewEngine_SpawnReviewer_SpawnError_FallsBackToAutoDecide(t *testing.T) {
+	spawner := newMockSpawner()
+	spawner.spawnErr = sql.ErrConnDone
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{}, // No PR.
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, spawner)
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	expectSagaForRaid(mock, "raid-1", newSagaRow())
+
+	// autoDecide fallback: no PR, stays in REVIEW.
+	re.evaluate("raid-1")
+
+	spawner.mu.Lock()
+	if spawner.spawnCalls != 1 {
+		t.Errorf("expected 1 spawn call (failed), got %d", spawner.spawnCalls)
+	}
+	spawner.mu.Unlock()
+}
+
+func TestReviewEngine_HandleReviewerCompletion_ParseError_AutoDecide(t *testing.T) {
+	spawner := newMockSpawner()
+	spawner.lastAssistantMessage = "not valid json output"
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{}, // No PR.
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, spawner)
+
+	reviewerSID := "reviewer-1234abcd"
+	row := newRaidRow("raid-1", "REVIEW", "session-1", reviewerSID)
+	expectGetRaid(mock, "raid-1", row)
+
+	// autoDecide: no PR, no merge.
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_HandleReviewerCompletion_FetchError(t *testing.T) {
+	spawner := newMockSpawner()
+	spawner.lastAssistantMessageErr = sql.ErrConnDone
+	re, _, mock := setupReviewEngine(t, nil, spawner)
+
+	reviewerSID := "reviewer-1234abcd"
+	row := newRaidRow("raid-1", "REVIEW", "session-1", reviewerSID)
+	expectGetRaid(mock, "raid-1", row)
+
+	// Should log and return without doing anything.
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_AutoApprove_NilEventLog(t *testing.T) {
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{URL: "https://github.com/pr/1", CIPassed: true, Mergeable: true},
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, nil)
+	re.eventLog = nil // explicitly nil
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.75))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(raidColumns).AddRow(newRaidRow("raid-1", "REVIEW", "session-1", "")...))
+	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery("SELECT p\\..+ FROM phases p").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(nil))
+
+	// Should not panic with nil eventLog.
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_AutoApprove_WithTracker(t *testing.T) {
+	spawner := newMockSpawner()
+	spawner.lastAssistantMessage = `{"confidence": 1.0, "approved": true, "summary": "LGTM", "findings": []}`
+	re, _, mock := setupReviewEngine(t, nil, spawner)
+
+	reviewerSID := "reviewer-1234abcd"
+	row := newRaidRow("raid-1", "REVIEW", "session-1", reviewerSID)
+	row[2] = "TRACKER-1" // tracker_id
+	expectGetRaid(mock, "raid-1", row)
+
+	// AddConfidenceEvent (reviewer_score).
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.75))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	// AddConfidenceEvent (auto_approved).
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.85))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	// UpdateRaidStatus MERGED.
+	modifiedRow := newRaidRow("raid-1", "REVIEW", "session-1", reviewerSID)
+	modifiedRow[2] = "TRACKER-1"
+	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(raidColumns).AddRow(modifiedRow...))
+	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// checkPhaseGate.
+	mock.ExpectQuery("SELECT p\\..+ FROM phases p").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(nil))
+
+	re.evaluate("raid-1")
+
+	// Verify tracker was called with "Done".
+	trk := re.tracker.(*mockTracker)
+	trk.mu.Lock()
+	if len(trk.updateStateCalls) != 1 {
+		t.Errorf("expected 1 tracker UpdateIssueState call, got %d", len(trk.updateStateCalls))
+	} else if trk.updateStateCalls[0].arg != "Done" {
+		t.Errorf("expected 'Done', got %q", trk.updateStateCalls[0].arg)
+	}
+	trk.mu.Unlock()
+}
+
+func TestReviewEngine_Escalate_WithTracker(t *testing.T) {
+	spawner := newMockSpawner()
+	spawner.lastAssistantMessage = `{"confidence": 0.3, "approved": false, "summary": "bad", "findings": ["bug"]}`
+	re, _, mock := setupReviewEngine(t, nil, spawner)
+
+	reviewerSID := "reviewer-1234abcd"
+	row := newRaidRow("raid-1", "REVIEW", "session-1", reviewerSID)
+	row[2] = "TRACKER-1"
+	row[20] = 3 // review_round >= maxReviewRounds
+	expectGetRaid(mock, "raid-1", row)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.75))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(raidColumns).AddRow(row...))
+	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	re.evaluate("raid-1")
+
+	trk := re.tracker.(*mockTracker)
+	trk.mu.Lock()
+	if len(trk.addCommentCalls) != 1 {
+		t.Errorf("expected 1 AddComment call, got %d", len(trk.addCommentCalls))
+	}
+	trk.mu.Unlock()
+}
+
+func TestReviewEngine_CheckPhaseGate_NotAllMerged(t *testing.T) {
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{URL: "https://github.com/pr/1", CIPassed: true, Mergeable: true},
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, nil)
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.75))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(raidColumns).AddRow(newRaidRow("raid-1", "REVIEW", "session-1", "")...))
+	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// checkPhaseGate: phase found but not all merged.
+	mock.ExpectQuery("SELECT p\\..+ FROM phases p").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(phaseColumns).AddRow("phase-1", "saga-1", "p-t-1", 1, "Phase 1", "ACTIVE", 0.75))
+
+	// AllRaidsMerged returns false (1 remaining).
+	mock.ExpectQuery("SELECT COUNT").
+		WithArgs("phase-1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_CheckPhaseGate_NextPhaseNotGated(t *testing.T) {
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{URL: "https://github.com/pr/1", CIPassed: true, Mergeable: true},
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, nil)
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.75))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(raidColumns).AddRow(newRaidRow("raid-1", "REVIEW", "session-1", "")...))
+	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery("SELECT p\\..+ FROM phases p").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(phaseColumns).AddRow("phase-1", "saga-1", "p-t-1", 1, "Phase 1", "ACTIVE", 0.75))
+
+	mock.ExpectQuery("SELECT COUNT").
+		WithArgs("phase-1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	expectSagaForRaid(mock, "raid-1", newSagaRow())
+
+	// Next phase is ACTIVE, not GATED.
+	mock.ExpectQuery("SELECT .+ FROM phases WHERE saga_id").
+		WithArgs("saga-1", 2).
+		WillReturnRows(sqlmock.NewRows(phaseColumns).AddRow("phase-2", "saga-1", "p-t-2", 2, "Phase 2", "ACTIVE", 0.5))
+
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_CheckPhaseGate_NoNextPhase(t *testing.T) {
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{URL: "https://github.com/pr/1", CIPassed: true, Mergeable: true},
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, nil)
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.75))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(raidColumns).AddRow(newRaidRow("raid-1", "REVIEW", "session-1", "")...))
+	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery("SELECT p\\..+ FROM phases p").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows(phaseColumns).AddRow("phase-1", "saga-1", "p-t-1", 1, "Phase 1", "ACTIVE", 0.75))
+
+	mock.ExpectQuery("SELECT COUNT").
+		WithArgs("phase-1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	expectSagaForRaid(mock, "raid-1", newSagaRow())
+
+	// No next phase.
+	mock.ExpectQuery("SELECT .+ FROM phases WHERE saga_id").
+		WithArgs("saga-1", 2).
+		WillReturnRows(sqlmock.NewRows(nil))
+
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_HandleReviewerCompletion_Findings_NoWorkingSession(t *testing.T) {
+	spawner := newMockSpawner()
+	spawner.lastAssistantMessage = `{"confidence": 0.7, "approved": false, "summary": "issues", "findings": ["file.go:1 — [bug] err"]}`
+	re, _, mock := setupReviewEngine(t, nil, spawner)
+
+	// Raid with reviewer session but NO working session.
+	reviewerSID := "reviewer-1234abcd"
+	row := newRaidRow("raid-1", "REVIEW", "", reviewerSID)
+	row[20] = 1
+	expectGetRaid(mock, "raid-1", row)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT confidence FROM raids").
+		WithArgs("raid-1").
+		WillReturnRows(sqlmock.NewRows([]string{"confidence"}).AddRow(0.75))
+	mock.ExpectExec("INSERT INTO confidence_events").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE raids SET confidence").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	re.evaluate("raid-1")
+
+	// No SendMessage should be called (no working session).
+	spawner.mu.Lock()
+	if len(spawner.sendMessageCalls) != 0 {
+		t.Errorf("expected 0 send message calls without working session, got %d", len(spawner.sendMessageCalls))
+	}
+	spawner.mu.Unlock()
+}
+
+func TestReviewEngine_AutoDecide_CINotPassed(t *testing.T) {
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{URL: "https://github.com/pr/1", CIPassed: false, Mergeable: true},
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, nil)
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	re.evaluate("raid-1")
+
+	// Should stay in REVIEW, not merge.
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_AutoDecide_NotMergeable(t *testing.T) {
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{URL: "https://github.com/pr/1", CIPassed: true, Mergeable: false},
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, nil)
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+func TestReviewEngine_AutoDecide_PRCheckError(t *testing.T) {
+	prChecker := &mockPRChecker{
+		result: PRCheckResult{},
+		err:    sql.ErrConnDone,
+	}
+	re, _, mock := setupReviewEngine(t, prChecker, nil)
+
+	row := newRaidRow("raid-1", "REVIEW", "session-1", "")
+	expectGetRaid(mock, "raid-1", row)
+
+	// Should not panic, just log.
+	re.evaluate("raid-1")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
 }

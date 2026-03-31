@@ -132,7 +132,7 @@ func newRaidRow(id, status, sessionID, reviewerSID string) []driver.Value {
 	}
 }
 
-func setupSubscriber(t *testing.T, prChecker PRChecker, trk *mockTracker) (*ActivitySubscriber, *Store, sqlmock.Sqlmock, *mockEventSource) {
+func setupSubscriber(t *testing.T, prChecker PRChecker, trk tracker.Tracker) (*ActivitySubscriber, *Store, sqlmock.Sqlmock, *mockEventSource) {
 	t.Helper()
 	db, mock, err := sqlmock.New()
 	if err != nil {
