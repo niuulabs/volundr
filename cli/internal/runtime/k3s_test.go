@@ -3317,7 +3317,9 @@ func TestFindTyrMigrationsDir(t *testing.T) {
 		return
 	}
 
-	expected := filepath.Join(tmpDir, "migrations", "tyr")
+	// Resolve symlinks so macOS /var → /private/var doesn't cause mismatches.
+	resolvedTmp, _ := filepath.EvalSymlinks(tmpDir)
+	expected := filepath.Join(resolvedTmp, "migrations", "tyr")
 	if dir != expected {
 		t.Errorf("expected %q, got %q", expected, dir)
 	}
