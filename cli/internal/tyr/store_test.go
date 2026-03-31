@@ -223,8 +223,8 @@ func TestGetRaid_Found(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("raid-1", "phase-1", "raid-1", "Test Raid", "Do things", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "RUNNING", 0.8, "sess-1", "feat/raid-1", nil, nil, nil, nil, 1, "rev-1", 0, now, now)
+	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
+		AddRow("raid-1", "phase-1", "raid-1", "", "", "Test Raid", "Do things", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "RUNNING", 0.8, "sess-1", "feat/raid-1", nil, nil, nil, nil, 1, "rev-1", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(rows)
@@ -344,8 +344,8 @@ func TestListActiveRaids(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("raid-1", "p-1", "raid-1", "Active", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
+		AddRow("raid-1", "p-1", "raid-1", "", "", "Active", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE status NOT IN").WillReturnRows(rows)
 
 	raids, err := store.ListActiveRaids(ctx)
@@ -363,11 +363,11 @@ func TestUpdateRaidStatus_Success(t *testing.T) {
 
 	now := time.Now()
 	// GetRaid (for validation)
-	raidCols := []string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
+	raidCols := []string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err := store.UpdateRaidStatus(ctx, "raid-1", RaidStatusQueued, nil)
@@ -381,11 +381,11 @@ func TestUpdateRaidStatus_InvalidTransition(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	raidCols := []string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
+	raidCols := []string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 
 	err := store.UpdateRaidStatus(ctx, "raid-1", RaidStatusMerged, nil)
 	if err == nil {
@@ -430,8 +430,8 @@ func TestListRaids(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("r-1", "p-1", "r-1", "Raid 1", "desc", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
+		AddRow("r-1", "p-1", "r-1", "", "", "Raid 1", "desc", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE phase_id").
 		WithArgs("p-1").
 		WillReturnRows(rows)

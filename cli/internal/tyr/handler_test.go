@@ -530,7 +530,7 @@ func TestGetSaga_Success(t *testing.T) {
 
 	// ListRaids for the phase
 	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("r-1", "p-1", "r-1", "Raid 1", "desc", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+		AddRow("r-1", "p-1", "r-1", "", "", "Raid 1", "desc", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids").
 		WithArgs("p-1").
 		WillReturnRows(raidRows)
@@ -834,7 +834,7 @@ func TestFindRaidByTrackerID(t *testing.T) {
 
 	// ListRaids
 	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("r-1", "p-1", "NIU-100", "Raid 1", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Raid 1", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids").
 		WithArgs("p-1").
 		WillReturnRows(raidRows)
@@ -903,17 +903,17 @@ func TestDispatchApprove_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT .+ FROM phases").WillReturnRows(phaseRows)
 
 	raidRow := sqlmock.NewRows(raidCols).
-		AddRow("r-1", "p-1", "NIU-100", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids").WillReturnRows(raidRow)
 
 	// UpdateRaidStatus PENDING → QUEUED
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").WillReturnRows(sqlmock.NewRows(raidCols).
-		AddRow("r-1", "p-1", "NIU-100", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// UpdateRaidStatus QUEUED → RUNNING
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").WillReturnRows(sqlmock.NewRows(raidCols).
-		AddRow("r-1", "p-1", "NIU-100", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "QUEUED", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "QUEUED", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// UpdateRaidSession
