@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import string
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -174,14 +175,20 @@ def _build_prompt(
     raid_branch = issue.identifier.lower()
 
     if template:
-        return template.format(
-            identifier=issue.identifier,
-            title=issue.title,
-            description=issue.description or "",
-            repo=repo,
-            feature_branch=feature_branch,
-            raid_branch=raid_branch,
-        )
+        available = {
+            "identifier": issue.identifier,
+            "title": issue.title,
+            "description": issue.description or "",
+            "repo": repo,
+            "feature_branch": feature_branch,
+            "raid_branch": raid_branch,
+        }
+        used_fields = {
+            fname
+            for _, fname, _, _ in string.Formatter().parse(template)
+            if fname is not None
+        }
+        return template.format(**{k: v for k, v in available.items() if k in used_fields})
 
     # Minimal fallback when no template is configured.
     parts = [

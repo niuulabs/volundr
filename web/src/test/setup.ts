@@ -41,6 +41,10 @@ if (typeof Element.prototype.scrollIntoView === 'undefined') {
 // Polyfill ResizeObserver for assistant-ui components that use it
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
+    _callback?: ResizeObserverCallback;
+    constructor(callback?: ResizeObserverCallback) {
+      this._callback = callback;
+    }
     observe() {}
     unobserve() {}
     disconnect() {}
