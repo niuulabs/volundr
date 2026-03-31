@@ -896,11 +896,23 @@ func (h *Handler) buildSagaDetailFromTracker(saga *Saga) (*SagaDetailResponse, e
 	}
 
 	// Unassigned issues go in a default phase.
-	if len(unassigned) > 0 && len(milestones) == 0 {
+	if len(unassigned) > 0 {
+		raids := buildRaidResponsesFromTracker(unassigned)
+		completed := 0
+		for _, r := range raids {
+			if r.StatusType == "completed" {
+				completed++
+			}
+		}
+		progress := 0.0
+		if len(raids) > 0 {
+			progress = float64(completed) / float64(len(raids))
+		}
 		phaseResponses = append(phaseResponses, PhaseDetailResponse{
-			ID:    "default",
-			Name:  "Unassigned",
-			Raids: buildRaidResponsesFromTracker(unassigned),
+			ID:       "default",
+			Name:     "Unassigned",
+			Progress: progress,
+			Raids:    raids,
 		})
 	}
 
