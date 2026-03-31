@@ -257,6 +257,17 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 	}
 	forgeCfg.Tyr.LinearAPIKey = cfg.Linear.APIKey
 	forgeCfg.Tyr.LinearTeamID = cfg.Linear.TeamID
+
+	// GitHub instances for repo listing.
+	for _, inst := range cfg.Git.GitHub.Instances {
+		forgeCfg.GitHub = append(forgeCfg.GitHub, forge.GitHubInstance{
+			Name:     inst.Name,
+			BaseURL:  inst.BaseURL,
+			Token:    inst.Token,
+			TokenEnv: inst.TokenEnv,
+			Orgs:     inst.Orgs,
+		})
+	}
 	// Also check env var as fallback.
 	if forgeCfg.Tyr.LinearAPIKey == "" {
 		forgeCfg.Tyr.LinearAPIKey = os.Getenv("LINEAR_API_KEY")

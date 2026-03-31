@@ -58,7 +58,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/volundr/presets", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/mcp-servers", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/secrets", emptyJSON)
-	mux.HandleFunc("GET /api/v1/niuu/repos", emptyJSON)
+	mux.HandleFunc("GET /api/v1/niuu/repos", h.listRepos)
 	mux.HandleFunc("GET /api/v1/volundr/workspaces", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/credentials", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/integrations", emptyJSON)
@@ -302,6 +302,15 @@ func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 // expects but Forge doesn't need to populate in mini mode.
 func emptyJSON(w http.ResponseWriter, _ *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, []any{})
+}
+
+// listRepos returns repositories from configured GitHub instances.
+func (h *Handler) listRepos(w http.ResponseWriter, _ *http.Request) {
+	repos := fetchGitHubRepos(h.cfg)
+	if repos == nil {
+		repos = map[string][]GitHubRepo{}
+	}
+	httputil.WriteJSON(w, http.StatusOK, repos)
 }
 
 // listModels returns the available AI models from configuration.

@@ -27,8 +27,9 @@ type Config struct {
 	Anthropic AnthropicConfig `yaml:"anthropic"`
 	Web         bool            `yaml:"web"`
 	Tyr         TyrConfig       `yaml:"tyr"`
-	LocalMounts bool            `yaml:"local_mounts"`
-	AIModels    []AIModelEntry  `yaml:"ai_models,omitempty"`
+	LocalMounts bool             `yaml:"local_mounts"`
+	AIModels    []AIModelEntry   `yaml:"ai_models,omitempty"`
+	GitHub      []GitHubInstance `yaml:"github,omitempty"`
 }
 
 // AIModelEntry describes an available AI model.
