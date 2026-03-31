@@ -237,31 +237,11 @@ func (b *Broker) OnCLIEvent(data map[string]any) {
 	// Track conversation state for history.
 	switch msgType {
 	case "user":
-		// Initial prompt flushed from pending messages — record in history
-		// and echo to browsers so the user sees what was sent.
-		// Skip tool_result content (internal Claude tool calls).
+		// Record user messages in history — but only when content is a string
+		// (actual user messages / initial prompt). Tool result arrays are
+		// broadcast to browsers but NOT saved in history, matching Python Skuld.
 		if msg, ok := data["message"].(map[string]any); ok {
-			content := ""
-			if s, ok := msg["content"].(string); ok {
-				content = s
-			} else if arr, ok := msg["content"].([]any); ok {
-				// Content block array — check if it's just tool_results.
-				hasText := false
-				for _, block := range arr {
-					if bm, ok := block.(map[string]any); ok {
-						if bm["type"] == "text" {
-							hasText = true
-							break
-						}
-					}
-				}
-				if !hasText {
-					break // Skip tool_result-only messages.
-				}
-				raw, _ := json.Marshal(arr)
-				content = string(raw)
-			}
-			if content != "" {
+			if content, ok := msg["content"].(string); ok && content != "" {
 				b.appendTurn("user", content, nil, nil)
 				b.broadcast(map[string]any{
 					"type":    "user_confirmed",
