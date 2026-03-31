@@ -216,6 +216,20 @@ jobs:
           chmod +x /tmp/codecov
           /tmp/codecov -f coverage.xml -F backend-tyr -t "${CODECOV_TOKEN}"
 
+  # Rollup gate — branch ruleset requires "Python: Test"
+  python-test:
+    name: "Python: Test"
+    needs: [python-test-volundr, python-test-tyr]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.python-test-volundr.result }}" == "failure" ]] || \
+             [[ "${{ needs.python-test-tyr.result }}" == "failure" ]]; then
+            exit 1
+          fi
+
   # ---------------------------------------------------------------------------
   # Web
   # ---------------------------------------------------------------------------
