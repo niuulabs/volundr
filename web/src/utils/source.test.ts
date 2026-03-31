@@ -67,4 +67,39 @@ describe('getSourceLabel', () => {
     };
     expect(getSourceLabel(multiMount)).toBe('2 local mounts');
   });
+
+  it('returns directory name for local_path source', () => {
+    const localPath: LocalMountSource = {
+      type: 'local_mount',
+      local_path: '/home/user/projects/my-app',
+      paths: [],
+    };
+    expect(getSourceLabel(localPath)).toBe('my-app');
+  });
+
+  it('returns full path when local_path has no directory component', () => {
+    const localPath: LocalMountSource = {
+      type: 'local_mount',
+      local_path: 'my-app',
+      paths: [],
+    };
+    expect(getSourceLabel(localPath)).toBe('my-app');
+  });
+
+  it('handles trailing slash in local_path', () => {
+    const localPath: LocalMountSource = {
+      type: 'local_mount',
+      local_path: '/home/user/projects/my-app/',
+      paths: [],
+    };
+    expect(getSourceLabel(localPath)).toBe('my-app');
+  });
+
+  it('returns "0 local mounts" for empty paths without local_path', () => {
+    const emptyMount: LocalMountSource = {
+      type: 'local_mount',
+      paths: [],
+    };
+    expect(getSourceLabel(emptyMount)).toBe('0 local mounts');
+  });
 });
