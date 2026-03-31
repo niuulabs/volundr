@@ -174,11 +174,10 @@ func (r *Runner) Delete(id string) error {
 		_ = r.Stop(id)
 	}
 
-	// Remove workspace directory — but never delete a local mount (user's project).
-	isLocalMount := sess.Source != nil && sess.Source.Type == "local_mount"
-	if sess.WorkspaceDir != "" && !isLocalMount {
-		_ = os.RemoveAll(sess.WorkspaceDir) //nolint:gosec // path from trusted session state
-	}
+	// In mini mode, never delete workspaces — the work is local and the
+	// user may want to inspect it. Only k8s mode cleans up workspaces
+	// since sessions run in ephemeral pods.
+	// TODO: make this configurable or add an explicit "clean" flag.
 
 	r.store.Delete(id)
 	return nil
