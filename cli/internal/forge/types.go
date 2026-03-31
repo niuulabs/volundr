@@ -21,6 +21,7 @@ var (
 const (
 	ActivityStateActive        = "active"
 	ActivityStateIdle          = "idle"
+	ActivityStateTurnComplete  = "turn_complete"
 	ActivityStateStarting      = "starting"
 	ActivityStateToolExecuting = "tool_executing"
 	ActivityStateNone          = "none"

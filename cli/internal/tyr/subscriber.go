@@ -100,7 +100,14 @@ func (s *ActivitySubscriber) handleEvent(evt SessionEvent) {
 	}
 
 	switch evt.State {
+	case "turn_complete":
+		// A full Claude turn completed. For reviewer sessions, this is the
+		// reliable signal to process the output (fires once per turn, not
+		// on every tool call like idle does).
+		s.handleTurnComplete(sessionID)
 	case "idle":
+		// Only debounce-evaluate working sessions on idle.
+		// Reviewer sessions are handled by turn_complete above.
 		s.scheduleEvaluation(sessionID)
 	case "active", "tool_executing", "starting", "git":
 		s.cancelDebounce(sessionID)
@@ -146,16 +153,30 @@ func (s *ActivitySubscriber) cancelAll() {
 	}
 }
 
-func (s *ActivitySubscriber) evaluateCompletion(sessionID string) {
+func (s *ActivitySubscriber) handleTurnComplete(sessionID string) {
 	ctx := context.Background()
 
-	// Check if this is a reviewer session.
+	// Check if this is a reviewer session that completed a turn.
 	reviewRaid, _ := s.store.GetRaidByReviewerSessionID(ctx, sessionID)
 	if reviewRaid != nil {
-		// This is a reviewer session idle — let the review engine handle it.
+		log.Printf("tyr: subscriber: reviewer turn complete for session %s, raid %s",
+			sessionID[:min(len(sessionID), 8)], reviewRaid.Identifier)
 		for _, fn := range s.onReview {
 			fn(reviewRaid.ID)
 		}
+		return
+	}
+
+	// For working sessions, turn_complete is treated like idle — schedule evaluation.
+	s.scheduleEvaluation(sessionID)
+}
+
+func (s *ActivitySubscriber) evaluateCompletion(sessionID string) {
+	ctx := context.Background()
+
+	// Skip reviewer sessions — they are handled by handleTurnComplete.
+	reviewRaid, _ := s.store.GetRaidByReviewerSessionID(ctx, sessionID)
+	if reviewRaid != nil {
 		return
 	}
 

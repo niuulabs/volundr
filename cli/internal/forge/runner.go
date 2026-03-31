@@ -129,22 +129,15 @@ func (r *Runner) Stop(id string) error {
 	delete(r.processes, id)
 	transport := r.transports[id]
 	delete(r.transports, id)
-	// Keep broker alive — conversation history is needed by the review engine
-	// after session stop. Clean up browser connections after a grace period.
 	b := r.brokers[id]
+	delete(r.brokers, id)
 	r.mu.Unlock()
 
+	if b != nil {
+		b.Stop()
+	}
 	if transport != nil {
 		transport.Stop()
-	}
-	if b != nil {
-		go func() {
-			time.Sleep(30 * time.Second)
-			b.Stop()
-			r.mu.Lock()
-			delete(r.brokers, id)
-			r.mu.Unlock()
-		}()
 	}
 
 	if cmd != nil && cmd.Process != nil {

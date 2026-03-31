@@ -305,6 +305,7 @@ func (t *SDKTransport) handleCLIMessage(data map[string]any) {
 	case "assistant":
 		t.emitActivity(ActivityStateActive)
 	case "result":
+		t.emitActivity(ActivityStateTurnComplete)
 		t.emitActivity(ActivityStateIdle)
 	}
 
