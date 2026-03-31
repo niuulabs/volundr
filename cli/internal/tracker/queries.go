@@ -47,7 +47,7 @@ query GetProject($id: String!) {
 }`
 
 var qListMilestones = `
-query ListMilestones($projectId: ID!) {
+query ListMilestones($projectId: String!) {
   project(id: $projectId) {
     projectMilestones {
       nodes {
