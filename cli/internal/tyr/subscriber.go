@@ -27,6 +27,7 @@ type ActivitySubscriber struct {
 	pendingEvals map[string]*time.Timer // sessionID → debounce timer
 	onReview     []func(raidID string)
 	running      bool
+	eventLog     *EventLog
 }
 
 // NewActivitySubscriber creates a new subscriber.
@@ -187,6 +188,15 @@ func (s *ActivitySubscriber) evaluateCompletion(sessionID string) {
 		return
 	}
 
+	if s.eventLog != nil {
+		s.eventLog.Emit("raid.state_changed", map[string]any{
+			"raid_id":    raid.ID,
+			"identifier": raid.Identifier,
+			"status":     "REVIEW",
+			"session_id": sessionID,
+		}, "")
+	}
+
 	// Update Linear issue status.
 	if s.tracker != nil && raid.TrackerID != "" {
 		if err := s.tracker.UpdateIssueState(raid.TrackerID, "In Review"); err != nil {
@@ -217,6 +227,15 @@ func (s *ActivitySubscriber) handleSessionEnd(sessionID, status string) {
 
 	if err := s.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusFailed, &reason); err != nil {
 		log.Printf("tyr: subscriber: update raid status: %v", err)
+	}
+
+	if s.eventLog != nil {
+		s.eventLog.Emit("raid.state_changed", map[string]any{
+			"raid_id":    raid.ID,
+			"identifier": raid.Identifier,
+			"status":     "FAILED",
+			"reason":     reason,
+		}, "")
 	}
 
 	if s.tracker != nil && raid.TrackerID != "" {

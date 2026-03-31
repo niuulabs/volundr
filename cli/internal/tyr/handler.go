@@ -3,6 +3,7 @@ package tyr
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -15,7 +16,8 @@ import (
 )
 
 // defaultInitialConfidence is the starting confidence score for new raids.
-const defaultInitialConfidence = 0.75
+// Starts at 0 — confidence is earned through PR creation, CI passing, and review.
+const defaultInitialConfidence = 0.0
 
 // Handler holds the HTTP handlers for the tyr-mini REST API.
 type Handler struct {
@@ -26,6 +28,7 @@ type Handler struct {
 	defaultSystemPrompt string
 	subscriber          *ActivitySubscriber
 	reviewer            *ReviewEngine
+	eventLog            *EventLog
 }
 
 // NewHandler creates a new tyr-mini API handler.
@@ -602,6 +605,22 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 		_ = h.store.UpdateRaidSession(ctx, raid.ID, session.ID, branch)
 		_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusRunning, nil)
 
+		// Update Linear issue status to In Progress.
+		if h.tracker != nil && raid.TrackerID != "" {
+			if err := h.tracker.UpdateIssueState(raid.TrackerID, "In Progress"); err != nil {
+				log.Printf("tyr: dispatch: update tracker status: %v", err)
+			}
+		}
+
+		if h.eventLog != nil {
+			h.eventLog.Emit("session.spawned", map[string]any{
+				"raid_id":    raid.ID,
+				"identifier": raid.Identifier,
+				"session_id": session.ID,
+				"status":     "RUNNING",
+			}, ownerID)
+		}
+
 		log.Printf("tyr: dispatched session %s for issue %s (%s)",
 			session.ID, raid.Identifier, raid.Name)
 
@@ -1098,7 +1117,24 @@ func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	flusher.Flush()
 
-	// Keep connection alive with comments until client disconnects.
+	if h.eventLog == nil {
+		// No event log — just keepalive.
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-ticker.C:
+				_, _ = w.Write([]byte(": keepalive\n\n"))
+				flusher.Flush()
+			}
+		}
+	}
+
+	subID, ch := h.eventLog.Subscribe()
+	defer h.eventLog.Unsubscribe(subID)
+
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
@@ -1106,6 +1142,13 @@ func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
+		case evt, ok := <-ch:
+			if !ok {
+				return
+			}
+			data, _ := json.Marshal(evt)
+			_, _ = fmt.Fprintf(w, "id: %s\nevent: %s\ndata: %s\n\n", evt.ID, evt.Event, data)
+			flusher.Flush()
 		case <-ticker.C:
 			_, _ = w.Write([]byte(": keepalive\n\n"))
 			flusher.Flush()
@@ -1125,10 +1168,16 @@ func (h *Handler) dispatchClusters(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (h *Handler) dispatcherLog(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) dispatcherLog(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if h.eventLog == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{"events": []any{}, "total": 0})
+		return
+	}
+	events := h.eventLog.Recent(limit)
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
-		"events": []any{},
-		"total":  0,
+		"events": events,
+		"total":  len(events),
 	})
 }
 

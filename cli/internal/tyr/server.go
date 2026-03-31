@@ -115,9 +115,11 @@ func (s *Server) StartBackground(events EventSource, pr PRChecker, spawner Sessi
 	s.reviewer.Start(s.subscriber)
 	s.subscriber.Start(ctx)
 
-	// Give the handler references for health reporting.
+	// Give the handler references for health reporting and event streaming.
 	s.handler.subscriber = s.subscriber
 	s.handler.reviewer = s.reviewer
+	s.handler.eventLog = NewEventLog(100)
+	s.subscriber.eventLog = s.handler.eventLog
 }
 
 // Close stops background services and closes the database connection.
