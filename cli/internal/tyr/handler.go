@@ -19,19 +19,21 @@ const defaultInitialConfidence = 0.75
 
 // Handler holds the HTTP handlers for the tyr-mini REST API.
 type Handler struct {
-	store      *Store
-	dispatcher *Dispatcher
-	tracker    tracker.Tracker // nil if no tracker configured
-	aiModels   []AIModel
+	store               *Store
+	dispatcher          *Dispatcher
+	tracker             tracker.Tracker // nil if no tracker configured
+	aiModels            []AIModel
+	defaultSystemPrompt string
 }
 
 // NewHandler creates a new tyr-mini API handler.
-func NewHandler(store *Store, dispatcher *Dispatcher, t tracker.Tracker, models []AIModel) *Handler {
+func NewHandler(store *Store, dispatcher *Dispatcher, t tracker.Tracker, models []AIModel, systemPrompt string) *Handler {
 	return &Handler{
-		store:      store,
-		dispatcher: dispatcher,
-		tracker:    t,
-		aiModels:   models,
+		store:               store,
+		dispatcher:          dispatcher,
+		tracker:             t,
+		aiModels:            models,
+		defaultSystemPrompt: systemPrompt,
 	}
 }
 
@@ -587,7 +589,7 @@ func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
 		models = []AIModel{{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"}}
 	}
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
-		"default_system_prompt": "",
+		"default_system_prompt": h.defaultSystemPrompt,
 		"default_model":         "claude-sonnet-4-6",
 		"models":                models,
 	})

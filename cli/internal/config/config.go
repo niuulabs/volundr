@@ -86,7 +86,8 @@ type AIModelEntry struct {
 
 // TyrSettings holds tyr-mini settings within the main config.
 type TyrSettings struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled            bool   `yaml:"enabled"`
+	DefaultSystemPrompt string `yaml:"default_system_prompt,omitempty"`
 }
 
 // VolundrConfig holds Volundr stack mode and forge settings.

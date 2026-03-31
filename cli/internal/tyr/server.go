@@ -27,6 +27,8 @@ type Config struct {
 	LinearTeamID string
 	// AIModels is the list of available AI models for dispatch.
 	AIModels []AIModel
+	// DefaultSystemPrompt is the default system prompt for dispatched sessions.
+	DefaultSystemPrompt string
 }
 
 // AIModel represents an available AI model.
@@ -71,7 +73,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		})
 	}
 
-	handler := NewHandler(store, dispatcher, t, cfg.AIModels)
+	handler := NewHandler(store, dispatcher, t, cfg.AIModels, cfg.DefaultSystemPrompt)
 
 	return &Server{
 		cfg:     cfg,

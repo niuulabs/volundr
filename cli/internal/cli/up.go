@@ -257,6 +257,7 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 	}
 	forgeCfg.Tyr.LinearAPIKey = cfg.Linear.APIKey
 	forgeCfg.Tyr.LinearTeamID = cfg.Linear.TeamID
+	forgeCfg.Tyr.DefaultSystemPrompt = cfg.Volundr.Tyr.DefaultSystemPrompt
 
 	// GitHub instances for repo listing.
 	for _, inst := range cfg.Git.GitHub.Instances {
