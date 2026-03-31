@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/niuulabs/volundr/cli/internal/tracker"
 	"github.com/niuulabs/volundr/cli/internal/tyr"
 	"github.com/niuulabs/volundr/cli/internal/web"
 )
@@ -55,7 +56,16 @@ func NewServer(cfg *Config) (*Server, error) {
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
-	handler := NewHandler(s.runner, s.cfg)
+	// Initialize tracker for issue search if Linear is configured.
+	var t tracker.Tracker
+	if s.cfg.Tyr.LinearAPIKey != "" {
+		t = tracker.NewLinearTracker(tracker.LinearConfig{
+			APIKey: s.cfg.Tyr.LinearAPIKey,
+			TeamID: s.cfg.Tyr.LinearTeamID,
+		})
+	}
+
+	handler := NewHandler(s.runner, s.cfg, t)
 	handler.RegisterRoutes(mux)
 
 	// Admin shutdown endpoint — localhost-only, no auth.

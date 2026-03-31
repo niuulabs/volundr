@@ -12,19 +12,22 @@ import (
 
 	"github.com/niuulabs/volundr/cli/internal/broker"
 	"github.com/niuulabs/volundr/cli/internal/httputil"
+	"github.com/niuulabs/volundr/cli/internal/tracker"
 )
 
 // Handler holds the HTTP handlers for the Volundr-compatible REST API.
 type Handler struct {
-	runner SessionRunner
-	cfg    *Config
+	runner  SessionRunner
+	cfg     *Config
+	tracker tracker.Tracker // nil if no tracker configured
 }
 
 // NewHandler creates a new API handler.
-func NewHandler(runner SessionRunner, cfg *Config) *Handler {
+func NewHandler(runner SessionRunner, cfg *Config, t tracker.Tracker) *Handler {
 	return &Handler{
-		runner: runner,
-		cfg:    cfg,
+		runner:  runner,
+		cfg:     cfg,
+		tracker: t,
 	}
 }
 
@@ -59,6 +62,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/volundr/mcp-servers", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/secrets", emptyJSON)
 	mux.HandleFunc("GET /api/v1/niuu/repos", h.listRepos)
+	mux.HandleFunc("GET /api/v1/volundr/issues/search", h.searchIssues)
 	mux.HandleFunc("GET /api/v1/volundr/workspaces", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/credentials", emptyJSON)
 	mux.HandleFunc("GET /api/v1/volundr/integrations", emptyJSON)
@@ -311,6 +315,62 @@ func (h *Handler) listRepos(w http.ResponseWriter, _ *http.Request) {
 		repos = map[string][]GitHubRepo{}
 	}
 	httputil.WriteJSON(w, http.StatusOK, repos)
+}
+
+// searchIssues searches Linear issues for the launch wizard tracker link.
+func (h *Handler) searchIssues(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	// Search across all projects — fetch first 50 and filter by query.
+	projects, err := h.tracker.ListProjects()
+	if err != nil {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	var results []map[string]any
+	query = strings.ToLower(query)
+	for _, p := range projects {
+		issues, err := h.tracker.ListIssues(p.ID, nil)
+		if err != nil {
+			continue
+		}
+		for _, issue := range issues {
+			if strings.Contains(strings.ToLower(issue.Title), query) ||
+				strings.Contains(strings.ToLower(issue.Identifier), query) {
+				results = append(results, map[string]any{
+					"id":         issue.ID,
+					"identifier": issue.Identifier,
+					"title":      issue.Title,
+					"status":     issue.Status,
+					"assignee":   issue.Assignee,
+					"labels":     issue.Labels,
+					"priority":   issue.Priority,
+					"url":        issue.URL,
+				})
+			}
+			if len(results) >= 20 {
+				break
+			}
+		}
+		if len(results) >= 20 {
+			break
+		}
+	}
+
+	if results == nil {
+		results = []map[string]any{}
+	}
+	httputil.WriteJSON(w, http.StatusOK, results)
 }
 
 // listModels returns the available AI models from configuration.

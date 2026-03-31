@@ -122,7 +122,7 @@ func (m *mockRunner) GetBroker(_ string) *broker.Broker { return nil }
 func newTestHandler(t *testing.T) (*Handler, *mockRunner) {
 	t.Helper()
 	mock := newMockRunner()
-	h := NewHandler(mock, DefaultForgeConfig())
+	h := NewHandler(mock, DefaultForgeConfig(), nil)
 	return h, mock
 }
 
