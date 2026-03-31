@@ -419,14 +419,77 @@ func (h *Handler) dispatchQueue(w http.ResponseWriter, r *http.Request) {
 		SagaSlug      string   `json:"saga_slug"`
 		Repos         []string `json:"repos"`
 		FeatureBranch string   `json:"feature_branch"`
+		BaseBranch    string   `json:"base_branch"`
 		PhaseName     string   `json:"phase_name"`
 		IssueID       string   `json:"issue_id"`
 		Identifier    string   `json:"identifier"`
 		Title         string   `json:"title"`
 		Description   string   `json:"description"`
 		Status        string   `json:"status"`
+		StatusType    string   `json:"status_type"`
+		URL           string   `json:"url"`
 	}
 
+	// If tracker is configured, build queue from live Linear data.
+	if h.tracker != nil {
+		sagas, err := h.store.ListSagas(r.Context(), ownerID)
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, "list sagas: %v", err)
+			return
+		}
+
+		var queue []queueItem
+		for _, saga := range sagas {
+			if saga.Status != SagaStatusActive || saga.TrackerID == "" {
+				continue
+			}
+			_, milestones, issues, err := h.tracker.GetProjectFull(saga.TrackerID)
+			if err != nil {
+				log.Printf("tyr: dispatch queue: fetch project %s: %v", saga.TrackerID, err)
+				continue
+			}
+
+			// Build milestone ID → name map.
+			msNames := make(map[string]string)
+			for _, ms := range milestones {
+				msNames[ms.ID] = ms.Name
+			}
+
+			// Queue issues that are dispatchable (unstarted).
+			for _, issue := range issues {
+				if issue.StatusType != "unstarted" && issue.StatusType != "backlog" {
+					continue
+				}
+				phaseName := ""
+				if issue.MilestoneID != nil {
+					phaseName = msNames[*issue.MilestoneID]
+				}
+				queue = append(queue, queueItem{
+					SagaID:        saga.ID,
+					SagaName:      saga.Name,
+					SagaSlug:      saga.Slug,
+					Repos:         saga.Repos,
+					FeatureBranch: saga.FeatureBranch,
+					BaseBranch:    saga.BaseBranch,
+					PhaseName:     phaseName,
+					IssueID:       issue.ID,
+					Identifier:    issue.Identifier,
+					Title:         issue.Title,
+					Description:   issue.Description,
+					Status:        issue.Status,
+					StatusType:    issue.StatusType,
+					URL:           issue.URL,
+				})
+			}
+		}
+		if queue == nil {
+			queue = []queueItem{}
+		}
+		httputil.WriteJSON(w, http.StatusOK, queue)
+		return
+	}
+
+	// Fallback: read from DB.
 	items, err := h.store.ListDispatchQueue(r.Context(), ownerID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "list dispatch queue: %v", err)
