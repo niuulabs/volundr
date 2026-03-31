@@ -1,115 +1,88 @@
-// Atoms
-export { StatusDot } from './atoms/StatusDot';
-export type { StatusDotProps } from './atoms/StatusDot';
+// Atoms (shared)
+export { StatusDot } from '@/modules/shared/components/StatusDot';
+export type { StatusDotProps } from '@/modules/shared/components/StatusDot';
+export { StatusBadge } from '@/modules/shared/components/StatusBadge';
+export type { StatusBadgeProps } from '@/modules/shared/components/StatusBadge';
+export { ProgressRing } from '@/modules/shared/components/ProgressRing';
+export type { ProgressRingProps } from '@/modules/shared/components/ProgressRing';
 
-export { StatusBadge } from './atoms/StatusBadge';
-export type { StatusBadgeProps } from './atoms/StatusBadge';
+// Atoms (volundr)
+export { CircadianIcon } from '@/modules/volundr/components/atoms/CircadianIcon';
+export type { CircadianIconProps } from '@/modules/volundr/components/atoms/CircadianIcon';
 
-export { ProgressRing } from './atoms/ProgressRing';
-export type { ProgressRingProps } from './atoms/ProgressRing';
+// Molecules (shared)
+export { MetricCard } from '@/modules/shared/components/MetricCard';
+export type { MetricCardProps } from '@/modules/shared/components/MetricCard';
+export { ResourceBar } from '@/modules/shared/components/ResourceBar';
+export type { ResourceBarProps } from '@/modules/shared/components/ResourceBar';
+export { FilterTabs } from '@/modules/shared/components/FilterTabs';
+export type { FilterTabsProps } from '@/modules/shared/components/FilterTabs';
+export { SearchInput } from '@/modules/shared/components/SearchInput';
+export type { SearchInputProps } from '@/modules/shared/components/SearchInput';
+export { CollapsibleSection as MythologySection } from '@/modules/shared/components/CollapsibleSection';
+export type {
+  CollapsibleSectionProps as MythologySectionProps,
+  AccentColor,
+} from '@/modules/shared/components/CollapsibleSection';
 
-export { CircadianIcon } from './atoms/CircadianIcon';
-export type { CircadianIconProps } from './atoms/CircadianIcon';
+// Molecules (volundr)
+export { ConsciousnessPhaseIndicator } from '@/modules/volundr/components/molecules/ConsciousnessPhaseIndicator';
+export type { ConsciousnessPhaseIndicatorProps } from '@/modules/volundr/components/molecules/ConsciousnessPhaseIndicator';
+export { MessageCostFooter } from '@/modules/volundr/components/molecules/MessageCostFooter';
+export type { MessageCostFooterProps } from '@/modules/volundr/components/molecules/MessageCostFooter';
+export { SessionStartingIndicator } from '@/modules/volundr/components/molecules/SessionStartingIndicator';
+export type { SessionStartingIndicatorProps } from '@/modules/volundr/components/molecules/SessionStartingIndicator';
+export { TrackerIssueBadge } from '@/modules/volundr/components/molecules/TrackerIssueBadge';
+export type { TrackerIssueBadgeProps } from '@/modules/volundr/components/molecules/TrackerIssueBadge';
+export { TrackerIssueSearch } from '@/modules/volundr/components/molecules/TrackerIssueSearch';
+export type { TrackerIssueSearchProps } from '@/modules/volundr/components/molecules/TrackerIssueSearch';
+export { TrackerIssueSection } from '@/modules/volundr/components/molecules/TrackerIssueSection';
+export type { TrackerIssueSectionProps } from '@/modules/volundr/components/molecules/TrackerIssueSection';
 
-// Molecules
-export { ConsciousnessPhaseIndicator } from './molecules/ConsciousnessPhaseIndicator';
-export type { ConsciousnessPhaseIndicatorProps } from './molecules/ConsciousnessPhaseIndicator';
+// Organisms (shared)
+export { Modal } from '@/modules/shared/components/Modal';
+export type { ModalProps } from '@/modules/shared/components/Modal';
 
-export { MetricCard } from './molecules/MetricCard';
-export type { MetricCardProps } from './molecules/MetricCard';
+// Organisms (volundr)
+export { OdinStatusBar } from '@/modules/volundr/components/organisms/OdinStatusBar';
+export type { OdinStatusBarProps } from '@/modules/volundr/components/organisms/OdinStatusBar';
+export { RealmCard } from '@/modules/volundr/components/organisms/RealmCard';
+export type { RealmCardProps } from '@/modules/volundr/components/organisms/RealmCard';
+export { CampaignCard } from '@/modules/volundr/components/organisms/CampaignCard';
+export type { CampaignCardProps } from '@/modules/volundr/components/organisms/CampaignCard';
+export { ChronicleEntry } from '@/modules/volundr/components/organisms/ChronicleEntry';
+export type { ChronicleEntryProps } from '@/modules/volundr/components/organisms/ChronicleEntry';
+export { EinherjarCard } from '@/modules/volundr/components/organisms/EinherjarCard';
+export type { EinherjarCardProps } from '@/modules/volundr/components/organisms/EinherjarCard';
+export { MemoryCard } from '@/modules/volundr/components/organisms/MemoryCard';
+export type { MemoryCardProps } from '@/modules/volundr/components/organisms/MemoryCard';
+export { ConsultationCard } from '@/modules/volundr/components/organisms/ConsultationCard';
+export type { ConsultationCardProps } from '@/modules/volundr/components/organisms/ConsultationCard';
+export { SessionCard } from '@/modules/volundr/components/organisms/SessionCard';
+export type { SessionCardProps } from '@/modules/volundr/components/organisms/SessionCard';
+export { RealmDetailModal } from '@/modules/volundr/components/organisms/RealmDetailModal';
+export type { RealmDetailModalProps } from '@/modules/volundr/components/organisms/RealmDetailModal';
 
-export { ResourceBar } from './molecules/ResourceBar';
-export type { ResourceBarProps } from './molecules/ResourceBar';
-
-export { FilterTabs } from './molecules/FilterTabs';
-export type { FilterTabsProps } from './molecules/FilterTabs';
-
-export { SearchInput } from './molecules/SearchInput';
-export type { SearchInputProps } from './molecules/SearchInput';
-
-export { MythologySection } from './molecules/MythologySection';
-export type { MythologySectionProps, AccentColor } from './molecules/MythologySection';
-
-export { MessageCostFooter } from './molecules/MessageCostFooter';
-export type { MessageCostFooterProps } from './molecules/MessageCostFooter';
-
-export { SessionStartingIndicator } from './molecules/SessionStartingIndicator';
-export type { SessionStartingIndicatorProps } from './molecules/SessionStartingIndicator';
-
-export { TrackerIssueBadge } from './molecules/TrackerIssueBadge';
-export type { TrackerIssueBadgeProps } from './molecules/TrackerIssueBadge';
-
-export { TrackerIssueSearch } from './molecules/TrackerIssueSearch';
-export type { TrackerIssueSearchProps } from './molecules/TrackerIssueSearch';
-
-export { TrackerIssueSection } from './molecules/TrackerIssueSection';
-export type { TrackerIssueSectionProps } from './molecules/TrackerIssueSection';
-
-// Organisms
-export { OdinStatusBar } from './organisms/OdinStatusBar';
-export type { OdinStatusBarProps } from './organisms/OdinStatusBar';
-
-export { RealmCard } from './organisms/RealmCard';
-export type { RealmCardProps } from './organisms/RealmCard';
-
-export { CampaignCard } from './organisms/CampaignCard';
-export type { CampaignCardProps } from './organisms/CampaignCard';
-
-export { Modal } from './organisms/Modal';
-export type { ModalProps } from './organisms/Modal';
-
-export { ChronicleEntry } from './organisms/ChronicleEntry';
-export type { ChronicleEntryProps } from './organisms/ChronicleEntry';
-
-export { EinherjarCard } from './organisms/EinherjarCard';
-export type { EinherjarCardProps } from './organisms/EinherjarCard';
-
-export { MemoryCard } from './organisms/MemoryCard';
-export type { MemoryCardProps } from './organisms/MemoryCard';
-
-export { ConsultationCard } from './organisms/ConsultationCard';
-export type { ConsultationCardProps } from './organisms/ConsultationCard';
-
-export { SessionCard } from './organisms/SessionCard';
-export type { SessionCardProps } from './organisms/SessionCard';
-
-export { RealmDetailModal } from './organisms/RealmDetailModal';
-export type { RealmDetailModalProps } from './organisms/RealmDetailModal';
-
-// Session components
-export { SessionTerminal } from './SessionTerminal';
-export { SessionChat } from './SessionChat';
-// Terminal sub-components
-export { TerminalTabBar } from './TerminalTabBar';
-export type { TerminalTabBarProps } from './TerminalTabBar';
-export { TerminalAccessoryBar } from './TerminalAccessoryBar';
-export type { TerminalAccessoryBarProps } from './TerminalAccessoryBar';
-export { SessionChronicles } from './SessionChronicles';
-export type { SessionChroniclesProps } from './SessionChronicles';
-export { SessionDiffs } from './SessionDiffs';
-export type { SessionDiffsProps } from './SessionDiffs';
-
-export { EditorPanel } from './EditorPanel';
-export type { EditorPanelProps } from './EditorPanel';
-
-// Session group list
-export { SessionGroupList } from './SessionGroupList';
-
-// Context sidebar
-export { ContextSidebar } from './ContextSidebar';
-export type { ContextSidebarProps } from './ContextSidebar';
-
-// Template browser (deprecated — replaced by LaunchWizard)
-export { TemplateBrowser } from './TemplateBrowser';
-export type { TemplateBrowserProps } from './TemplateBrowser';
-
-// Launch wizard
-export { LaunchWizard } from './LaunchWizard';
-export type { LaunchWizardProps, LaunchConfig } from './LaunchWizard';
-
-// File manager
-export { FileManager } from './FileManager';
-
-// Integration components
-export { IntegrationCard } from './IntegrationCard';
-export { CredentialForm } from './CredentialForm';
+// Session components (volundr)
+export { SessionTerminal } from '@/modules/volundr/components/SessionTerminal';
+export { SessionChat } from '@/modules/shared/components/SessionChat';
+export { TerminalTabBar } from '@/modules/volundr/components/TerminalTabBar';
+export type { TerminalTabBarProps } from '@/modules/volundr/components/TerminalTabBar';
+export { TerminalAccessoryBar } from '@/modules/volundr/components/TerminalAccessoryBar';
+export type { TerminalAccessoryBarProps } from '@/modules/volundr/components/TerminalAccessoryBar';
+export { SessionChronicles } from '@/modules/volundr/components/SessionChronicles';
+export type { SessionChroniclesProps } from '@/modules/volundr/components/SessionChronicles';
+export { SessionDiffs } from '@/modules/volundr/components/SessionDiffs';
+export type { SessionDiffsProps } from '@/modules/volundr/components/SessionDiffs';
+export { EditorPanel } from '@/modules/volundr/components/EditorPanel';
+export type { EditorPanelProps } from '@/modules/volundr/components/EditorPanel';
+export { SessionGroupList } from '@/modules/volundr/components/SessionGroupList';
+export { ContextSidebar } from '@/modules/volundr/components/ContextSidebar';
+export type { ContextSidebarProps } from '@/modules/volundr/components/ContextSidebar';
+export { TemplateBrowser } from '@/modules/volundr/components/TemplateBrowser';
+export type { TemplateBrowserProps } from '@/modules/volundr/components/TemplateBrowser';
+export { LaunchWizard } from '@/modules/volundr/components/LaunchWizard';
+export type { LaunchWizardProps, LaunchConfig } from '@/modules/volundr/components/LaunchWizard';
+export { FileManager } from '@/modules/volundr/components/FileManager';
+export { IntegrationCard } from '@/modules/volundr/components/IntegrationCard';
+export { CredentialForm } from '@/modules/volundr/components/CredentialForm';

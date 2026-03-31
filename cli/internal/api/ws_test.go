@@ -78,6 +78,7 @@ func TestWSClient_Connect_FullURL(t *testing.T) {
 
 	if err := ws.Connect(wsURL + "/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	if ws.State() != WSConnected {
@@ -88,6 +89,7 @@ func TestWSClient_Connect_FullURL(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for read loop to finish")
+		return
 	}
 
 	mu.Lock()
@@ -126,12 +128,14 @@ func TestWSClient_Connect_RelativePath(t *testing.T) {
 
 	if err := ws.Connect("/ws/chat"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-errCh:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	_ = ws.Close()
@@ -166,10 +170,12 @@ func TestWSClient_SendText_Connected(t *testing.T) {
 
 	if err := ws.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	if err := ws.SendText("hello world"); err != nil {
 		t.Fatalf("SendText: %v", err)
+		return
 	}
 
 	select {
@@ -177,6 +183,7 @@ func TestWSClient_SendText_Connected(t *testing.T) {
 		var parsed map[string]string
 		if err := json.Unmarshal([]byte(msg), &parsed); err != nil {
 			t.Fatalf("unmarshal: %v", err)
+			return
 		}
 		if parsed["type"] != "user" {
 			t.Errorf("expected type %q, got %q", "user", parsed["type"])
@@ -186,6 +193,7 @@ func TestWSClient_SendText_Connected(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for message")
+		return
 	}
 
 	// Wait for readLoop to finish before closing to avoid race on setState.
@@ -226,10 +234,12 @@ func TestWSClient_SendRaw_Connected(t *testing.T) {
 
 	if err := ws.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	if err := ws.SendRaw([]byte("raw bytes")); err != nil {
 		t.Fatalf("SendRaw: %v", err)
+		return
 	}
 
 	select {
@@ -239,6 +249,7 @@ func TestWSClient_SendRaw_Connected(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	// Wait for readLoop to finish before closing to avoid race on setState.
@@ -285,6 +296,7 @@ func TestWSClient_Close_Connected(t *testing.T) {
 
 	if err := ws.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	// Close server side first so readLoop exits cleanly.
@@ -295,6 +307,7 @@ func TestWSClient_Close_Connected(t *testing.T) {
 	case <-errCh:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for readLoop to finish")
+		return
 	}
 
 	if ws.State() != WSDisconnected {
@@ -304,6 +317,7 @@ func TestWSClient_Close_Connected(t *testing.T) {
 	// Close should be safe even after readLoop has set state to disconnected.
 	if err := ws.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+		return
 	}
 }
 
@@ -340,18 +354,21 @@ func TestWSClient_ReadLoop_NDJSON(t *testing.T) {
 
 	if err := ws.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if len(events) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(events))
+		return
 	}
 	if events[0].Type != "content_block_start" {
 		t.Errorf("expected type %q, got %q", "content_block_start", events[0].Type)
@@ -391,18 +408,21 @@ func TestWSClient_ReadLoop_SSEPrefix(t *testing.T) {
 
 	if err := ws.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
+		return
 	}
 	if events[0].Type != "result" {
 		t.Errorf("expected type %q, got %q", "result", events[0].Type)
@@ -441,18 +461,21 @@ func TestWSClient_ReadLoop_InvalidJSON(t *testing.T) {
 
 	if err := ws.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
+		return
 	}
 	if events[0].Type != "raw" {
 		t.Errorf("expected type %q for invalid JSON, got %q", "raw", events[0].Type)

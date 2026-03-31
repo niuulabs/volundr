@@ -3,7 +3,61 @@ repos:
     hooks:
       - id: trufflehog
         name: TruffleHog secret scan
-        entry: bash -c 'trufflehog git file://. --since-commit HEAD --only-verified --fail'
+        entry: bash -c 'export PATH="${GOPATH:-$HOME/go}/bin:$PATH"; trufflehog git file://. --since-commit HEAD --only-verified --fail'
         language: system
         pass_filenames: false
+        stages: [pre-commit]
+
+      # ── Python ──────────────────────────────────────────────
+      - id: ruff-check
+        name: Ruff lint
+        entry: ruff check --fix
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: Ruff format
+        entry: ruff format
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      # ── Go ──────────────────────────────────────────────────
+      - id: go-fmt
+        name: Go format
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+        stages: [pre-commit]
+
+      - id: go-vet
+        name: Go vet
+        entry: bash -c 'cd cli && go vet ./...'
+        language: system
+        pass_filenames: false
+        files: ^cli/.*\.go$
+        stages: [pre-commit]
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'export PATH="${GOPATH:-$HOME/go}/bin:$PATH"; cd cli && golangci-lint run ./...'
+        language: system
+        pass_filenames: false
+        files: ^cli/.*\.go$
+        stages: [pre-commit]
+
+      # ── Web (TypeScript / CSS) ──────────────────────────────
+      - id: prettier
+        name: Prettier format
+        entry: npx prettier --write
+        language: system
+        files: ^web/src/.*\.(ts|tsx|css)$
+        stages: [pre-commit]
+
+      - id: eslint
+        name: ESLint
+        entry: bash -c 'cd web && npx eslint --fix "${@/#web\//}"' --
+        language: system
+        files: ^web/src/.*\.(ts|tsx)$
         stages: [pre-commit]

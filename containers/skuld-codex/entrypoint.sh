@@ -22,4 +22,4 @@ if [ -n "$OPENAI_API_KEY" ]; then
 fi
 
 echo "=== Starting Broker Service (port 8081) ==="
-exec python -m volundr.skuld
+exec python -m skuld

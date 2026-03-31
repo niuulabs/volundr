@@ -1,4 +1,5 @@
-FROM ubuntu:24.04@sha256:9d6e6f7d762bf55c4a2f17694dc43d3eefae8452ee70e067d5aa4ddd922fc462
+FROM ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c
+
 
 LABEL org.opencontainers.image.title="skuld-codex"
 LABEL org.opencontainers.image.description="Skuld Codex — remote AI coding session broker (OpenAI Codex)"

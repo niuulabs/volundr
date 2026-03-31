@@ -15,6 +15,7 @@ func TestDefaultConfig(t *testing.T) {
 
 	if cfg.Contexts == nil {
 		t.Fatal("expected non-nil Contexts map")
+		return
 	}
 
 	if len(cfg.Contexts) != 0 {
@@ -29,6 +30,7 @@ func TestConfigDirUsesVolundrHome(t *testing.T) {
 	dir, err := ConfigDir()
 	if err != nil {
 		t.Fatalf("config dir: %v", err)
+		return
 	}
 	if dir != tmpDir {
 		t.Errorf("expected %q, got %q", tmpDir, dir)
@@ -42,6 +44,7 @@ func TestConfigPathUsesVolundrHome(t *testing.T) {
 	path, err := ConfigPath()
 	if err != nil {
 		t.Fatalf("config path: %v", err)
+		return
 	}
 
 	expected := filepath.Join(tmpDir, remotesFile)
@@ -63,21 +66,25 @@ func TestSaveAndLoadWithVolundrHome(t *testing.T) {
 
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save: %v", err)
+		return
 	}
 
 	// Verify the file was written to VOLUNDR_HOME/remotes.yaml.
 	if _, err := os.Stat(filepath.Join(tmpDir, remotesFile)); err != nil {
 		t.Fatalf("expected remotes.yaml in VOLUNDR_HOME: %v", err)
+		return
 	}
 
 	loaded, err := Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	dev := loaded.GetContext("dev")
 	if dev == nil {
 		t.Fatal("expected dev context to exist")
+		return
 	}
 	if dev.Server != "https://dev.example.com" {
 		t.Errorf("expected server %q, got %q", "https://dev.example.com", dev.Server)
@@ -105,11 +112,13 @@ func TestConfigSaveAndLoad(t *testing.T) {
 
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save: %v", err)
+		return
 	}
 
 	loaded, err := Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	if loaded.Theme != "light" {
@@ -118,11 +127,13 @@ func TestConfigSaveAndLoad(t *testing.T) {
 
 	if len(loaded.Contexts) != 2 {
 		t.Fatalf("expected 2 contexts, got %d", len(loaded.Contexts))
+		return
 	}
 
 	prod := loaded.GetContext("prod")
 	if prod == nil {
 		t.Fatal("expected prod context to exist")
+		return
 	}
 	if prod.Server != "https://prod.example.com" {
 		t.Errorf("expected server %q, got %q", "https://prod.example.com", prod.Server)
@@ -137,6 +148,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 	staging := loaded.GetContext("staging")
 	if staging == nil {
 		t.Fatal("expected staging context to exist")
+		return
 	}
 	if staging.Server != "https://staging.example.com" {
 		t.Errorf("expected server %q, got %q", "https://staging.example.com", staging.Server)
@@ -152,6 +164,7 @@ func TestConfigMigration(t *testing.T) {
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return
 	}
 
 	oldConfig := `server: https://old.example.com
@@ -160,11 +173,13 @@ theme: dark
 `
 	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	if cfg.Theme != "dark" {
@@ -173,11 +188,13 @@ theme: dark
 
 	if len(cfg.Contexts) != 1 {
 		t.Fatalf("expected 1 context after migration, got %d", len(cfg.Contexts))
+		return
 	}
 
 	ctx := cfg.GetContext("default")
 	if ctx == nil {
 		t.Fatal("expected default context after migration")
+		return
 	}
 	if ctx.Server != "https://old.example.com" {
 		t.Errorf("expected server %q, got %q", "https://old.example.com", ctx.Server)
@@ -192,20 +209,24 @@ theme: dark
 	// Save in new format and reload — should NOT trigger migration again.
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save: %v", err)
+		return
 	}
 
 	reloaded, err := Load()
 	if err != nil {
 		t.Fatalf("reload: %v", err)
+		return
 	}
 
 	if len(reloaded.Contexts) != 1 {
 		t.Fatalf("expected 1 context after re-save, got %d", len(reloaded.Contexts))
+		return
 	}
 
 	rctx := reloaded.GetContext("default")
 	if rctx == nil {
 		t.Fatal("expected default context after re-save")
+		return
 	}
 	if rctx.Server != "https://old.example.com" {
 		t.Errorf("expected server %q after re-save, got %q", "https://old.example.com", rctx.Server)
@@ -220,6 +241,7 @@ func TestConfigMigrationPreservesAllFields(t *testing.T) {
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return
 	}
 
 	oldConfig := `server: https://full.example.com
@@ -232,11 +254,13 @@ theme: light
 `
 	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	if cfg.Theme != "light" {
@@ -246,6 +270,7 @@ theme: light
 	ctx := cfg.GetContext("default")
 	if ctx == nil {
 		t.Fatal("expected default context")
+		return
 	}
 
 	checks := map[string]string{
@@ -285,6 +310,7 @@ func TestAddContext(t *testing.T) {
 
 	if err := cfg.AddContext("prod", ctx); err != nil {
 		t.Fatalf("add: %v", err)
+		return
 	}
 
 	if len(cfg.Contexts) != 1 {
@@ -308,6 +334,7 @@ func TestRemoveContext(t *testing.T) {
 
 	if err := cfg.RemoveContext("prod"); err != nil {
 		t.Fatalf("remove: %v", err)
+		return
 	}
 
 	if len(cfg.Contexts) != 0 {
@@ -327,6 +354,7 @@ func TestRenameContext(t *testing.T) {
 
 	if err := cfg.RenameContext("old", "new"); err != nil {
 		t.Fatalf("rename: %v", err)
+		return
 	}
 
 	if cfg.GetContext("old") != nil {
@@ -336,6 +364,7 @@ func TestRenameContext(t *testing.T) {
 	ctx := cfg.GetContext("new")
 	if ctx == nil {
 		t.Fatal("expected new key to exist")
+		return
 	}
 	if ctx.Name != "new" {
 		t.Errorf("expected name to be updated to %q, got %q", "new", ctx.Name)
@@ -387,6 +416,7 @@ func TestClearTokens(t *testing.T) {
 
 	if err := cfg.ClearTokens("prod"); err != nil {
 		t.Fatalf("clear tokens: %v", err)
+		return
 	}
 
 	ctx := cfg.GetContext("prod")
@@ -427,6 +457,7 @@ func TestResolveContext_SingleContext(t *testing.T) {
 	got, key, err := cfg.ResolveContext("")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
+		return
 	}
 	if key != "only" {
 		t.Errorf("expected key %q, got %q", "only", key)
@@ -444,6 +475,7 @@ func TestResolveContext_ExplicitKey(t *testing.T) {
 	got, key, err := cfg.ResolveContext("b")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
+		return
 	}
 	if key != "b" {
 		t.Errorf("expected key %q, got %q", "b", key)
@@ -491,6 +523,7 @@ func TestLoadNonExistentFile(t *testing.T) {
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	if cfg.Theme != "dark" {
@@ -509,11 +542,13 @@ func TestLoadInvalidYAML(t *testing.T) {
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return
 	}
 
 	// Write invalid YAML.
 	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(":::invalid"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	_, err := Load()
@@ -526,15 +561,41 @@ func TestConfigDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv(envHome, "")
+	t.Setenv(envHomeLegacy, "")
 
 	dir, err := ConfigDir()
 	if err != nil {
 		t.Fatalf("config dir: %v", err)
+		return
 	}
 
-	expected := filepath.Join(tmpDir, ".config", "volundr")
+	expected := filepath.Join(tmpDir, ".config", "niuu")
 	if dir != expected {
 		t.Errorf("expected %q, got %q", expected, dir)
+	}
+}
+
+func TestConfigDir_LegacyFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv(envHome, "")
+	t.Setenv(envHomeLegacy, "")
+
+	// Create the legacy directory so it's picked up as fallback.
+	legacyPath := filepath.Join(tmpDir, ".config", "volundr")
+	if err := os.MkdirAll(legacyPath, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+		return
+	}
+
+	dir, err := ConfigDir()
+	if err != nil {
+		t.Fatalf("config dir: %v", err)
+		return
+	}
+
+	if dir != legacyPath {
+		t.Errorf("expected legacy fallback %q, got %q", legacyPath, dir)
 	}
 }
 
@@ -542,13 +603,15 @@ func TestConfigPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv(envHome, "")
+	t.Setenv(envHomeLegacy, "")
 
 	path, err := ConfigPath()
 	if err != nil {
 		t.Fatalf("config path: %v", err)
+		return
 	}
 
-	expected := filepath.Join(tmpDir, ".config", "volundr", "config.yaml")
+	expected := filepath.Join(tmpDir, ".config", "niuu", "config.yaml")
 	if path != expected {
 		t.Errorf("expected %q, got %q", expected, path)
 	}
@@ -562,6 +625,7 @@ func TestMigrationEmptyThemeDefaultsToDark(t *testing.T) {
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return
 	}
 
 	// Old format without a theme field.
@@ -570,11 +634,13 @@ token: tok
 `
 	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(oldConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	if cfg.Theme != "dark" {
@@ -590,6 +656,7 @@ func TestLoadNewFormatWithNilContexts(t *testing.T) {
 	configDir := filepath.Join(tmpDir, ".config", "volundr")
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return
 	}
 
 	// New format but contexts key absent.
@@ -597,15 +664,18 @@ func TestLoadNewFormatWithNilContexts(t *testing.T) {
 `
 	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(newConfig), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	if cfg.Contexts == nil {
 		t.Fatal("expected non-nil Contexts map")
+		return
 	}
 	if len(cfg.Contexts) != 0 {
 		t.Errorf("expected 0 contexts, got %d", len(cfg.Contexts))

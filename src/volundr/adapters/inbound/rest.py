@@ -23,6 +23,7 @@ from volundr.domain.models import (
     ModelTier,
     Principal,
     Session,
+    SessionActivityState,
     SessionSource,
     SessionStatus,
     TimelineEvent,
@@ -91,7 +92,7 @@ class SessionCreate(BaseModel):
     model: str = Field(
         default="",
         max_length=100,
-        description="LLM model identifier (e.g. claude-sonnet-4-20250514)",
+        description="LLM model identifier (e.g. claude-sonnet-4-6)",
     )
     source: SessionSource = Field(
         default_factory=GitSource,
@@ -131,6 +132,16 @@ class SessionCreate(BaseModel):
         default_factory=dict,
         description="Resource allocation overrides (cpu, memory, gpu)",
     )
+    system_prompt: str = Field(
+        default="",
+        max_length=100_000,
+        description="System prompt appended to Claude's default instructions",
+    )
+    initial_prompt: str = Field(
+        default="",
+        max_length=100_000,
+        description="Initial user message sent when the CLI starts",
+    )
     issue_id: str | None = Field(
         default=None,
         max_length=255,
@@ -146,7 +157,7 @@ class SessionCreate(BaseModel):
         "json_schema_extra": {
             "example": {
                 "name": "fix-auth-bug",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "source": {
                     "type": "git",
                     "repo": "github.com/acme/backend",
@@ -197,7 +208,7 @@ class SessionUpdate(BaseModel):
         "json_schema_extra": {
             "example": {
                 "name": "fix-auth-bug-v2",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "branch": "fix/auth-bypass",
                 "tracker_issue_id": "PROJ-1234",
             },
@@ -230,6 +241,13 @@ class DeleteSessionBody(BaseModel):
         default_factory=list,
         description="Resources to permanently delete alongside the session",
     )
+
+
+class ActivityReport(BaseModel):
+    """Request model for reporting session activity state."""
+
+    state: str = Field(description="Activity state (active/idle/tool_executing)")
+    metadata: dict = Field(default_factory=dict, description="Activity metadata")
 
 
 class SessionResponse(BaseModel):
@@ -281,13 +299,21 @@ class SessionResponse(BaseModel):
         default=None,
         description="Tenant ID for multi-tenant isolation",
     )
+    activity_state: str | None = Field(
+        default=None,
+        description="Current activity state (active/idle/tool_executing)",
+    )
+    activity_metadata: dict = Field(
+        default_factory=dict,
+        description="Metadata from the latest activity report",
+    )
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "name": "fix-auth-bug",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "source": {
                     "type": "git",
                     "repo": "github.com/acme/backend",
@@ -335,6 +361,8 @@ class SessionResponse(BaseModel):
             archived_at=(session.archived_at.isoformat() if session.archived_at else None),
             owner_id=session.owner_id,
             tenant_id=session.tenant_id,
+            activity_state=(session.activity_state.value if session.activity_state else None),
+            activity_metadata=session.activity_metadata,
         )
 
 
@@ -541,7 +569,7 @@ class ChronicleResponse(BaseModel):
                 "project": "backend",
                 "repo": "github.com/acme/backend",
                 "branch": "fix/auth-bug",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "config_snapshot": {},
                 "summary": "Fixed JWT validation bypass",
                 "key_changes": [
@@ -778,14 +806,16 @@ class WorkspaceResponse(BaseModel):
 
     @classmethod
     def from_workspace(cls, ws, session=None) -> "WorkspaceResponse":
-        source_url = None
-        source_ref = None
-        session_name = None
+        # Prefer workspace-stored metadata; fall back to session lookup.
+        session_name = ws.name
+        source_url = ws.source_url
+        source_ref = ws.source_ref
         if session is not None:
-            session_name = session.name
-            if hasattr(session.source, "repo"):
+            if not session_name:
+                session_name = session.name
+            if not source_url and hasattr(session.source, "repo"):
                 source_url = session.source.repo
-            if hasattr(session.source, "branch"):
+            if not source_ref and hasattr(session.source, "branch"):
                 source_ref = session.source.branch
         return cls(
             id=ws.id,
@@ -1042,6 +1072,8 @@ def create_router(
                 credential_names=data.credential_names,
                 integration_ids=data.integration_ids,
                 resource_config=data.resource_config or None,
+                system_prompt=data.system_prompt,
+                initial_prompt=data.initial_prompt,
             )
             return SessionResponse.from_session(started)
         except SessionStateError as e:
@@ -1219,6 +1251,67 @@ def create_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(e),
             )
+
+    @router.post(
+        "/sessions/{session_id}/activity",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        tags=["Sessions"],
+    )
+    async def report_activity(
+        request: Request,
+        data: ActivityReport,
+        session_id: UUID = Path(description="Unique session identifier"),
+    ) -> None:
+        """Report a session activity state change from Skuld.
+
+        Updates the session's activity_state and broadcasts a
+        session_activity SSE event for downstream consumers (e.g. Tyr).
+        """
+        # Authorization: caller must own the session
+        principal = await _optional_principal(request)
+        session = await service.get_session(session_id)
+        if session is not None and principal is not None:
+            try:
+                await service._check_access(session, principal, "report_activity")
+            except SessionAccessDeniedError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to report activity for session {session_id}",
+                )
+
+        try:
+            activity_state = SessionActivityState(data.state)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid activity state: {data.state}",
+            )
+
+        logger.info(
+            "Activity report: session=%s state=%s metadata=%s",
+            session_id,
+            data.state,
+            data.metadata,
+        )
+        try:
+            updated = await service.update_activity(
+                session_id, activity_state, data.metadata
+            )
+            logger.info(
+                "Activity updated: session=%s state=%s broadcaster=%s",
+                session_id,
+                updated.activity_state,
+                service._broadcaster is not None,
+            )
+        except SessionNotFoundError:
+            logger.warning("Activity report for unknown session: %s", session_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
+        except Exception:
+            logger.exception("Activity update failed for session %s", session_id)
 
     @router.patch(
         "/sessions/{session_id}/archive",
@@ -1454,6 +1547,137 @@ def create_router(
                 detail=f"Could not connect to session pod: {e}",
             )
 
+    @router.post(
+        "/sessions/{session_id}/messages",
+        tags=["Sessions"],
+        responses={
+            404: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+    )
+    async def send_session_message(
+        request: Request,
+        session_id: UUID = Path(description="Unique session identifier"),
+        body: dict = ...,
+    ) -> dict:
+        """Send a user message to a running session via its WebSocket."""
+        import ssl
+
+        from websockets.asyncio.client import connect
+
+        content = body.get("content", "")
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="content is required",
+            )
+
+        # Verify the caller owns this session
+        principal = await extract_principal(request)
+        session = await service.get_session(session_id)
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
+
+        if session.owner_id and session.owner_id != principal.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to message this session",
+            )
+
+        if not session.chat_endpoint:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} has no active endpoint",
+            )
+
+        # Build WS URL with access token
+        ws_url = session.chat_endpoint
+        auth = request.headers.get("authorization", "")
+        token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else ""
+        if token:
+            sep = "&" if "?" in ws_url else "?"
+            ws_url = f"{ws_url}{sep}access_token={token}"
+
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        try:
+            async with connect(ws_url, ssl=ssl_ctx, open_timeout=10) as ws:
+                # Drain any pending messages from the server
+                try:
+                    while True:
+                        await asyncio.wait_for(ws.recv(), timeout=1)
+                except TimeoutError:
+                    pass
+                # Send the user message
+                await ws.send(json.dumps({"type": "user", "content": content}))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to send message to session: {e}",
+            )
+
+        return {"status": "sent", "session_id": str(session_id)}
+
+    @router.get(
+        "/sessions/{session_id}/conversation",
+        tags=["Sessions"],
+        responses={
+            404: {"model": ErrorResponse},
+            502: {"model": ErrorResponse},
+        },
+    )
+    async def get_conversation(
+        request: Request,
+        session_id: UUID = Path(description="Unique session identifier"),
+    ) -> dict:
+        """Proxy conversation history retrieval from a running session pod."""
+        session = await service.get_session(session_id)
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session not found: {session_id}",
+            )
+
+        if not session.chat_endpoint:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} has no active endpoint",
+            )
+
+        base_url = session.chat_endpoint.replace("wss://", "https://").replace("ws://", "http://")
+        if base_url.endswith("/session"):
+            base_url = base_url[: -len("/session")]
+
+        # Forward the caller's auth to the session pod
+        headers = {}
+        auth = request.headers.get("authorization")
+        if auth:
+            headers["Authorization"] = auth
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{base_url}/api/conversation/history",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to fetch conversation from session pod: {e.response.status_code}",
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not connect to session pod: {e}",
+            )
+
     @router.get(
         "/providers",
         response_model=list[ProviderResponse],
@@ -1469,42 +1693,6 @@ def create_router(
             )
         providers = repo_service.list_providers()
         return [ProviderResponse.from_provider_info(p) for p in providers]
-
-    @router.get(
-        "/repos",
-        response_model=dict[str, list[RepoResponse]],
-        responses={503: {"model": ErrorResponse}},
-        tags=["Repositories"],
-    )
-    async def list_repos(
-        request: Request,
-    ) -> dict[str, list[RepoResponse]]:
-        """List repositories from all providers visible to the current user.
-
-        Combines shared/org-level providers with the user's own integration
-        connections. Credentials are resolved on-the-fly and never cached.
-        """
-        if repo_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Repo service not available",
-            )
-        user_id = await _optional_user_id(request)
-        repos_by_provider = await repo_service.list_repos(user_id=user_id)
-        return {
-            provider_name: [
-                RepoResponse(
-                    provider=repo.provider,
-                    org=repo.org,
-                    name=repo.name,
-                    url=repo.url,
-                    default_branch=repo.default_branch,
-                    branches=list(repo.branches),
-                )
-                for repo in repos
-            ]
-            for provider_name, repos in repos_by_provider.items()
-        }
 
     @router.get(
         "/repos/branches",

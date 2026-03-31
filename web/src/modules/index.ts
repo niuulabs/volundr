@@ -15,9 +15,15 @@ import {
   Palette,
   ToggleLeft,
   LayoutDashboard,
+  ShieldCheck,
+  Compass,
 } from 'lucide-react';
-import type { IVolundrService } from '@/ports';
-import { registerModule } from './registry';
+import type { IVolundrService } from '@/modules/volundr/ports';
+import { registerModule } from './shared/registry';
+
+// Product module self-registrations
+import './volundr/register';
+import './tyr/register';
 
 type ModuleComponent = ComponentType<{ service: IVolundrService }>;
 
@@ -26,7 +32,7 @@ type ModuleComponent = ComponentType<{ service: IVolundrService }>;
 registerModule({
   key: 'users',
   load: () =>
-    import('@/pages/Admin/sections/UsersSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/UsersSection').then(m => ({
       default: m.UsersSection,
     })),
   icon: Users,
@@ -35,7 +41,7 @@ registerModule({
 registerModule({
   key: 'tenants',
   load: () =>
-    import('@/pages/Admin/sections/TenantsSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/TenantsSection').then(m => ({
       default: m.TenantsSection,
     })),
   icon: Building2,
@@ -44,7 +50,7 @@ registerModule({
 registerModule({
   key: 'storage',
   load: () =>
-    import('@/pages/Admin/sections/StorageSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/StorageSection').then(m => ({
       default: m.StorageSection,
     })),
   icon: HardDrive,
@@ -53,7 +59,7 @@ registerModule({
 registerModule({
   key: 'resources',
   load: () =>
-    import('@/pages/Admin/sections/ResourcesSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/ResourcesSection').then(m => ({
       default: m.ResourcesSection,
     })),
   icon: Cpu,
@@ -62,7 +68,7 @@ registerModule({
 registerModule({
   key: 'feature-management',
   load: () =>
-    import('@/pages/Admin/sections/FeatureManagementSection').then(m => ({
+    import('@/modules/volundr/pages/Admin/sections/FeatureManagementSection').then(m => ({
       default: m.FeatureManagementSection,
     })),
   icon: ToggleLeft,
@@ -71,9 +77,18 @@ registerModule({
 // ── User modules ───────────────────────────────────────────────────
 
 registerModule({
+  key: 'tokens',
+  load: () =>
+    import('@/modules/volundr/pages/Settings/sections/AccessTokensSection').then(m => ({
+      default: m.AccessTokensSection,
+    })),
+  icon: ShieldCheck,
+});
+
+registerModule({
   key: 'credentials',
   load: () =>
-    import('@/pages/Settings/sections/CredentialsSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/CredentialsSection').then(m => ({
       default: m.CredentialsSection,
     })),
   icon: KeyRound,
@@ -82,7 +97,7 @@ registerModule({
 registerModule({
   key: 'workspaces',
   load: () =>
-    import('@/pages/Settings/sections/WorkspacesSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/WorkspacesSection').then(m => ({
       default: m.WorkspacesSection,
     })),
   icon: HardDrive,
@@ -91,7 +106,7 @@ registerModule({
 registerModule({
   key: 'integrations',
   load: () =>
-    import('@/pages/Settings/sections/IntegrationsSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/IntegrationsSection').then(m => ({
       default: m.IntegrationsSection,
     })),
   icon: Link2,
@@ -100,7 +115,7 @@ registerModule({
 registerModule({
   key: 'appearance',
   load: () =>
-    import('@/pages/Settings/sections/AppearanceSection').then(
+    import('@/modules/volundr/pages/Settings/sections/AppearanceSection').then(
       // AppearanceSection ignores the service prop — cast is safe
       m => ({ default: m.AppearanceSection as unknown as ModuleComponent })
     ),
@@ -110,13 +125,23 @@ registerModule({
 registerModule({
   key: 'layout',
   load: () =>
-    import('@/pages/Settings/sections/LayoutSection').then(m => ({
+    import('@/modules/volundr/pages/Settings/sections/LayoutSection').then(m => ({
       default: m.LayoutSection,
     })),
   icon: LayoutDashboard,
 });
 
+registerModule({
+  key: 'tyr-connections',
+  load: () =>
+    import('@/modules/tyr/pages/Settings/TyrConnectionsWrapper').then(m => ({
+      default: m.TyrConnectionsWrapper,
+    })),
+  icon: Compass,
+});
+
 // Re-export registry utilities
-export { getModule, getAllModules, registerModule } from './registry';
-export type { ModuleEntry } from './registry';
-export { resolveIcon } from './icons';
+export { getModule, getAllModules, registerModule } from './shared/registry';
+export { registerProductModule, getProductModules } from './shared/registry';
+export type { ModuleEntry, ProductModule } from './shared/registry';
+export { resolveIcon } from './shared/registry';

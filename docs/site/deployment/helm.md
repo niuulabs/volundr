@@ -1,9 +1,14 @@
 # Helm Deployment
 
-Volundr ships two Helm charts:
+Volundr ships three Helm charts, plus an umbrella chart:
 
-- `charts/volundr/` — the API server
+- `charts/niuu/` — umbrella chart that deploys Volundr and Tyr together
+- `charts/volundr/` — the API server and optional web UI
+- `charts/tyr/` — the saga coordinator for multi-repo campaigns
 - `charts/skuld/` — the WebSocket broker (deployed per-session by the pod manager)
+
+For full infrastructure prerequisites, see the
+[deployment prerequisites guide](../setup/deployment.md).
 
 ## Install
 

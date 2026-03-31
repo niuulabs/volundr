@@ -70,15 +70,15 @@ When you're done, click **Stop**. A chronicle is automatically created -- a summ
 If you're connecting to a remote Volundr instance, add it as a context:
 
 ```bash
-volundr context add local --server http://localhost:8080
+niuu context add local --server http://localhost:8080
 ```
 
-Skip this if you ran `volundr init` and `volundr up` locally -- the context is already configured.
+Skip this if you ran `niuu volundr init` and `niuu volundr up` locally -- the context is already configured.
 
 ### 2. Create a session
 
 ```bash
-volundr sessions create \
+niuu sessions create \
   --name my-project \
   --repo org/repo \
   --model claude-sonnet-4
@@ -89,13 +89,13 @@ This returns a session ID.
 ### 3. Start the session
 
 ```bash
-volundr sessions start <session-id>
+niuu sessions start <session-id>
 ```
 
 ### 4. Open the TUI
 
 ```bash
-volundr
+niuu
 ```
 
 The terminal UI gives you the same capabilities as the web UI: chat, terminal, diffs, and chronicles. Navigate between views with keyboard shortcuts.
@@ -103,7 +103,7 @@ The terminal UI gives you the same capabilities as the web UI: chat, terminal, d
 ### 5. Stop the session
 
 ```bash
-volundr sessions stop <session-id>
+niuu sessions stop <session-id>
 ```
 
 A chronicle is created automatically, same as the web UI.
@@ -112,7 +112,23 @@ A chronicle is created automatically, same as the web UI.
 
 ## What happens under the hood
 
-When you launch a session, Volundr creates a Kubernetes pod with three main containers:
+The details depend on your deployment mode.
+
+### Local mode (mini)
+
+In local mode, Volundr runs all services as processes on your machine:
+
+| Process | Role |
+|---------|------|
+| **PostgreSQL** | Stores session state, chronicles, and configuration |
+| **API server** | Handles lifecycle operations (create, start, stop, delete) |
+| **Reverse proxy** | Routes requests to the correct service |
+
+Sessions run as local processes with your repo cloned into a workspace directory.
+
+### Kubernetes mode (k3s or production)
+
+In Kubernetes mode, Volundr creates a pod for each session with dedicated containers:
 
 | Container | Role |
 |-----------|------|
@@ -120,7 +136,7 @@ When you launch a session, Volundr creates a Kubernetes pod with three main cont
 | **Code Server** | VS Code in the browser |
 | **Terminal** | Shell access to the workspace |
 
-All three containers share a workspace volume (PVC) where your repo is cloned.
+All containers share a workspace volume (PVC) where your repo is cloned.
 
 Chat messages go directly from your browser to the Skuld broker inside the pod -- they don't route through the Volundr API server. This keeps latency low and means the API server doesn't need to handle streaming LLM responses.
 
@@ -130,5 +146,7 @@ The Volundr API handles lifecycle operations only: creating, starting, stopping,
 
 ## Next steps
 
+- [Local Quickstart](local-quickstart.md) -- full end-to-end walkthrough for local mode
 - [Configuration](configuration.md) -- customize models, resource limits, and integrations
+- [Troubleshooting](troubleshooting.md) -- common issues and solutions
 - [Helm Deployment](../deployment/helm.md) -- run Volundr on a real cluster

@@ -70,10 +70,13 @@ class ProvisioningConfig(BaseModel):
 
 
 class LoggingConfig(BaseModel):
-    """Logging configuration."""
+    """Logging configuration.
 
-    level: str = Field(default="info")
-    format: str = Field(default="text")
+    Reads LOG_LEVEL and LOG_FORMAT environment variables if set.
+    """
+
+    level: str = Field(default_factory=lambda: os.environ.get("LOG_LEVEL", "info"))
+    format: str = Field(default_factory=lambda: os.environ.get("LOG_FORMAT", "text"))
 
 
 class DatabaseConfig(BaseModel):
@@ -686,14 +689,7 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
                 "args": ["-y", "@modelcontextprotocol/server-linear"],
                 "env_from_credentials": {"LINEAR_API_KEY": "api_key"},
             },
-            auth_type="oauth2_authorization_code",
-            oauth=OAuthSpecConfig(
-                authorize_url="https://linear.app/oauth/authorize",
-                token_url="https://api.linear.app/oauth/token",
-                revoke_url="https://api.linear.app/oauth/revoke",
-                scopes=["read", "write", "issues:create", "comments:create"],
-                token_field_mapping={"api_key": "access_token"},
-            ),
+            auth_type="api_key",
         ),
         IntegrationDefinitionConfig(
             slug="anthropic",
@@ -718,6 +714,48 @@ def _default_integration_definitions() -> list[IntegrationDefinitionConfig]:
                 "properties": {"api_key": {"label": "API Key", "type": "password"}},
             },
             env_from_credentials={"OPENAI_API_KEY": "api_key"},
+        ),
+        IntegrationDefinitionConfig(
+            slug="telegram",
+            name="Telegram",
+            description="Telegram bot — notifications, session alerts, and dispatch commands",
+            integration_type="messaging",
+            icon="telegram",
+            credential_schema={
+                "required": ["bot_token", "chat_id"],
+                "properties": {
+                    "bot_token": {
+                        "label": "Bot Token",
+                        "type": "password",
+                        "description": "Telegram bot API token (from @BotFather)",
+                    },
+                    "chat_id": {
+                        "label": "Chat ID",
+                        "type": "string",
+                        "description": "Chat or channel ID to send notifications to",
+                    },
+                },
+            },
+            auth_type="api_key",
+        ),
+        IntegrationDefinitionConfig(
+            slug="volundr",
+            name="Volundr API",
+            description="Volundr API connection — PAT for session-to-control-plane auth",
+            integration_type="code_forge",
+            icon="volundr",
+            credential_schema={
+                "required": ["token"],
+                "properties": {
+                    "token": {
+                        "label": "Personal Access Token",
+                        "type": "password",
+                        "description": "PAT for authenticating to the Volundr API",
+                    },
+                },
+            },
+            env_from_credentials={"VOLUNDR_API_TOKEN": "token"},
+            auth_type="pat",
         ),
     ]
 
@@ -874,6 +912,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
         ),
         # User-scoped modules
         FeatureModuleConfig(
+            key="tokens",
+            label="Access Tokens",
+            icon="ShieldCheck",
+            scope="user",
+            default_enabled=True,
+            order=5,
+        ),
+        FeatureModuleConfig(
             key="credentials",
             label="Credentials",
             icon="KeyRound",
@@ -898,6 +944,14 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             order=30,
         ),
         FeatureModuleConfig(
+            key="tyr-connections",
+            label="Tyr Connections",
+            icon="Compass",
+            scope="user",
+            default_enabled=True,
+            order=35,
+        ),
+        FeatureModuleConfig(
             key="appearance",
             label="Appearance",
             icon="Palette",
@@ -914,6 +968,31 @@ def _default_feature_modules() -> list[FeatureModuleConfig]:
             order=50,
         ),
     ]
+
+
+class PATConfig(BaseModel):
+    """Personal access token configuration."""
+
+    token_issuer_adapter: str = Field(
+        default="niuu.adapters.memory_token_issuer.MemoryTokenIssuer",
+        description="Fully-qualified class path for the token issuer adapter.",
+    )
+    token_issuer_kwargs: dict = Field(
+        default_factory=dict,
+        description="Kwargs passed to the token issuer adapter constructor.",
+    )
+    ttl_days: int = Field(
+        default=365,
+        description="Default PAT lifetime in days.",
+    )
+    revocation_cache_ttl: float = Field(
+        default=300.0,
+        description="Seconds to cache valid-token lookups before re-checking the DB.",
+    )
+    revoked_cache_ttl: float = Field(
+        default=60.0,
+        description="Seconds to cache revoked-token lookups (shorter for faster propagation).",
+    )
 
 
 class AuthDiscoveryConfig(BaseModel):
@@ -951,6 +1030,18 @@ class GitConfig(BaseModel):
     workflow: GitWorkflowConfig = Field(default_factory=GitWorkflowConfig)
 
 
+class AIModelConfig(BaseModel):
+    """Available AI model — configured via Helm values.
+
+    Mirrors niuu.domain.models.AIModelConfig but as a pydantic model
+    for settings deserialization.
+    """
+
+    id: str
+    name: str
+    cost_per_million_tokens: float = 0.0
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -985,12 +1076,14 @@ class Settings(BaseSettings):
     resource_provider: ResourceProviderConfig = Field(default_factory=ResourceProviderConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
+    pat: PATConfig = Field(default_factory=PATConfig)
     auth_discovery: AuthDiscoveryConfig = Field(default_factory=AuthDiscoveryConfig)
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
+    models: list[AIModelConfig] = Field(default_factory=list)
     profiles: list[ProfileConfig] = Field(default_factory=list)
     templates: list[TemplateConfig] = Field(default_factory=list)
     mcp_servers: list[MCPServerEntry] = Field(default_factory=list)

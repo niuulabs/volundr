@@ -59,6 +59,7 @@ func TestSessionsList_Empty(t *testing.T) {
 
 	if err := sessionsListCmd.RunE(sessionsListCmd, nil); err != nil {
 		t.Fatalf("sessions list: %v", err)
+		return
 	}
 }
 
@@ -91,6 +92,7 @@ func TestSessionsList_WithSessions(t *testing.T) {
 
 	if err := sessionsListCmd.RunE(sessionsListCmd, nil); err != nil {
 		t.Fatalf("sessions list: %v", err)
+		return
 	}
 }
 
@@ -125,6 +127,7 @@ func TestSessionsList_JSON(t *testing.T) {
 	if err := sessionsListCmd.RunE(sessionsListCmd, nil); err != nil {
 		os.Stdout = old
 		t.Fatalf("sessions list --json: %v", err)
+		return
 	}
 
 	_ = w.Close()
@@ -136,9 +139,11 @@ func TestSessionsList_JSON(t *testing.T) {
 	var result []api.Session
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+		return
 	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(result))
+		return
 	}
 	if result[0].Name != "test-session" {
 		t.Errorf("expected name %q, got %q", "test-session", result[0].Name)
@@ -175,6 +180,7 @@ func TestSessionsCreate(t *testing.T) {
 
 	if err := sessionsCreateCmd.RunE(sessionsCreateCmd, nil); err != nil {
 		t.Fatalf("sessions create: %v", err)
+		return
 	}
 }
 
@@ -209,6 +215,7 @@ func TestSessionsCreate_JSON(t *testing.T) {
 	if err := sessionsCreateCmd.RunE(sessionsCreateCmd, nil); err != nil {
 		os.Stdout = old
 		t.Fatalf("sessions create --json: %v", err)
+		return
 	}
 
 	_ = w.Close()
@@ -220,6 +227,7 @@ func TestSessionsCreate_JSON(t *testing.T) {
 	var result api.Session
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+		return
 	}
 	if result.Name != "new-session" {
 		t.Errorf("expected name %q, got %q", "new-session", result.Name)
@@ -239,6 +247,7 @@ func TestSessionsStart(t *testing.T) {
 
 	if err := sessionsStartCmd.RunE(sessionsStartCmd, []string{"test-id"}); err != nil {
 		t.Fatalf("sessions start: %v", err)
+		return
 	}
 }
 
@@ -255,6 +264,7 @@ func TestSessionsStop(t *testing.T) {
 
 	if err := sessionsStopCmd.RunE(sessionsStopCmd, []string{"test-id"}); err != nil {
 		t.Fatalf("sessions stop: %v", err)
+		return
 	}
 }
 
@@ -271,6 +281,7 @@ func TestSessionsDelete(t *testing.T) {
 
 	if err := sessionsDeleteCmd.RunE(sessionsDeleteCmd, []string{"test-id"}); err != nil {
 		t.Fatalf("sessions delete: %v", err)
+		return
 	}
 }
 
@@ -283,6 +294,7 @@ func TestSessionsList_ServerError(t *testing.T) {
 	err := sessionsListCmd.RunE(sessionsListCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when server returns 500")
+		return
 	}
 }
 
@@ -295,6 +307,7 @@ func TestSessionsStart_ServerError(t *testing.T) {
 	err := sessionsStartCmd.RunE(sessionsStartCmd, []string{"test-id"})
 	if err == nil {
 		t.Fatal("expected error when server returns 500")
+		return
 	}
 }
 
@@ -307,6 +320,7 @@ func TestSessionsStop_ServerError(t *testing.T) {
 	err := sessionsStopCmd.RunE(sessionsStopCmd, []string{"test-id"})
 	if err == nil {
 		t.Fatal("expected error when server returns 500")
+		return
 	}
 }
 
@@ -319,6 +333,7 @@ func TestSessionsDelete_ServerError(t *testing.T) {
 	err := sessionsDeleteCmd.RunE(sessionsDeleteCmd, []string{"test-id"})
 	if err == nil {
 		t.Fatal("expected error when server returns 500")
+		return
 	}
 }
 
@@ -351,6 +366,7 @@ func TestNewAPIClient_ContextOverride(t *testing.T) {
 	client, err := newAPIClient()
 	if err != nil {
 		t.Fatalf("newAPIClient: %v", err)
+		return
 	}
 	if client.BaseURL() != "https://staging.example.com" {
 		t.Errorf("expected URL %q, got %q", "https://staging.example.com", client.BaseURL())
@@ -378,6 +394,7 @@ func TestNewAPIClient_MultipleContextsNoFlag(t *testing.T) {
 	_, err := newAPIClient()
 	if err == nil {
 		t.Fatal("expected error when multiple contexts and no --context flag")
+		return
 	}
 }
 
@@ -405,8 +422,66 @@ func TestNewAPIClient_ServerFlagOnly(t *testing.T) {
 	client, err := newAPIClient()
 	if err != nil {
 		t.Fatalf("newAPIClient: %v", err)
+		return
 	}
 	if client.BaseURL() != "https://override.example.com" {
 		t.Errorf("expected URL %q, got %q", "https://override.example.com", client.BaseURL())
+	}
+}
+
+func TestNewAPIClient_BothFlags(t *testing.T) {
+	setupTestConfig(t, nil)
+
+	oldServer := cfgServer
+	oldToken := cfgToken
+	oldCtx := cfgContext
+	cfgServer = "https://flag.example.com"
+	cfgToken = "flag-token" //nolint:gosec // test fixture
+	cfgContext = ""
+	defer func() {
+		cfgServer = oldServer
+		cfgToken = oldToken
+		cfgContext = oldCtx
+	}()
+
+	client, err := newAPIClient()
+	if err != nil {
+		t.Fatalf("newAPIClient with both flags: %v", err)
+		return
+	}
+	if client.BaseURL() != "https://flag.example.com" {
+		t.Errorf("expected URL %q, got %q", "https://flag.example.com", client.BaseURL())
+	}
+}
+
+func TestNewAPIClient_TokenFlagOnly(t *testing.T) {
+	cfg := remote.DefaultConfig()
+	cfg.Contexts["default"] = &remote.Context{
+		Name:   "default",
+		Server: "https://config.example.com",
+		Token:  "config-token",
+	}
+	setupTestConfig(t, cfg)
+
+	oldServer := cfgServer
+	oldToken := cfgToken
+	oldCtx := cfgContext
+	cfgServer = ""
+	cfgToken = "override-token" //nolint:gosec // test fixture
+	cfgContext = ""
+	defer func() {
+		cfgServer = oldServer
+		cfgToken = oldToken
+		cfgContext = oldCtx
+	}()
+
+	client, err := newAPIClient()
+	if err != nil {
+		t.Fatalf("newAPIClient with token flag: %v", err)
+		return
+	}
+	// URL comes from config context, token is overridden.
+	if client.BaseURL() != "https://config.example.com" {
+		t.Errorf("expected URL %q, got %q", "https://config.example.com", client.BaseURL())
 	}
 }

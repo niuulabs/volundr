@@ -17,6 +17,10 @@ RUN npm run build
 # Stage 2: Serve with nginx
 FROM nginx:1.29-alpine@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0
 
+# Patch base image vulnerabilities (CVE-2026-22184: zlib).
+# Fix CVE-2026-22184: zlib critical vulnerability.
+RUN apk upgrade --no-cache zlib
+
 LABEL org.opencontainers.image.title="volundr-web"
 LABEL org.opencontainers.image.description="Volundr Web — AI-native development platform UI"
 LABEL org.opencontainers.image.vendor="Niuu Labs"

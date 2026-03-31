@@ -1,4 +1,5 @@
-FROM ubuntu:24.04@sha256:9d6e6f7d762bf55c4a2f17694dc43d3eefae8452ee70e067d5aa4ddd922fc462
+FROM ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c
+
 
 LABEL org.opencontainers.image.title="skuld"
 LABEL org.opencontainers.image.description="Skuld — remote AI coding session broker (Claude Code)"
@@ -30,7 +31,7 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally via npm
-RUN npm install -g @anthropic-ai/claude-code@2.1.76
+RUN npm install -g @anthropic-ai/claude-code@2.1.81
 
 # Create app user with UID 1000 (matches helm chart runAsUser)
 RUN existing=$(getent passwd 1000 | cut -d: -f1) && \

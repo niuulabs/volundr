@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"bufio"
 	"strings"
 	"testing"
+
+	"github.com/niuulabs/volundr/cli/internal/config"
 )
 
 func TestIsEnvVarName(t *testing.T) {
@@ -95,6 +98,60 @@ func TestInstallInstructions(t *testing.T) {
 	}
 }
 
+func TestMaskKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"empty", "", "****"},
+		{"short", "abc", "****"},
+		{"exactly 4", "abcd", "****"},
+		{"5 chars", "abcde", "****bcde"},
+		{"long key", "sk-ant-api03-abcdefghijklmnop", "****mnop"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := maskKey(tt.input)
+			if got != tt.expected {
+				t.Errorf("maskKey(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDefaultStr(t *testing.T) {
+	if got := defaultStr("hello", "fallback"); got != "hello" {
+		t.Errorf("defaultStr(\"hello\", \"fallback\") = %q, want \"hello\"", got)
+	}
+	if got := defaultStr("", "fallback"); got != "fallback" {
+		t.Errorf("defaultStr(\"\", \"fallback\") = %q, want \"fallback\"", got)
+	}
+}
+
+func TestListenHostLabel(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"127.0.0.1", "localhost"},
+		{"localhost", "localhost"},
+		{"", "localhost"},
+		{"0.0.0.0", "all"},
+		{"192.168.1.100", "192.168.1.100"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := listenHostLabel(tt.input)
+			if got != tt.expected {
+				t.Errorf("listenHostLabel(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestMachinePassphrase(t *testing.T) {
 	passphrase := machinePassphrase()
 	if passphrase == "" {
@@ -107,8 +164,168 @@ func TestMachinePassphrase(t *testing.T) {
 		t.Errorf("expected deterministic passphrase, got %q and %q", passphrase, passphrase2)
 	}
 
+	// Should start with "niuu-"
+	if len(passphrase) < 5 || passphrase[:5] != "niuu-" {
+		t.Errorf("expected passphrase to start with 'niuu-', got %q", passphrase)
+	}
+}
+
+func TestInstallInstructionsForOS_Claude(t *testing.T) {
+	result := installInstructionsForOS("claude", "linux", "amd64")
+	if !strings.Contains(result, "npm install") {
+		t.Errorf("expected npm install in claude instructions, got %q", result)
+	}
+	if !strings.Contains(result, "claude_binary") {
+		t.Errorf("expected claude_binary config hint, got %q", result)
+	}
+}
+
+func TestInstallInstructionsForOS_Git(t *testing.T) {
+	tests := []struct {
+		name     string
+		goos     string
+		contains string
+	}{
+		{"darwin", "darwin", "xcode-select"},
+		{"linux", "linux", "apt install git"},
+		{"windows", "windows", "git-scm.com"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := installInstructionsForOS("git", tt.goos, "amd64")
+			if !strings.Contains(result, tt.contains) {
+				t.Errorf("expected %q in result, got %q", tt.contains, result)
+			}
+		})
+	}
+}
+
+func TestRunInitPreflightChecks(t *testing.T) {
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+		return
+	}
+	cfg.Anthropic.APIKey = "sk-test-key"
+
+	results := runInitPreflightChecks(cfg)
+
+	// Should have exactly 4 checks: claude, api key, git, workspace.
+	if len(results) != 4 {
+		t.Fatalf("expected 4 results, got %d", len(results))
+		return
+	}
+
+	// API key should pass since we set it.
+	if !results[1].OK {
+		t.Errorf("expected API key check to pass, got: %s", results[1].Message)
+	}
+
+	// git should be available in the test environment.
+	if !results[2].OK {
+		t.Errorf("expected git check to pass, got: %s", results[2].Message)
+	}
+
+	// Workspace dir should be writable (default is under home).
+	if !results[3].OK {
+		t.Logf("workspace check failed (expected in some CI envs): %s", results[3].Message)
+	}
+}
+
+func TestRunInitPreflightChecks_CustomClaudeBinary(t *testing.T) {
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+		return
+	}
+	cfg.Volundr.Forge.ClaudeBinary = "nonexistent-claude-binary-xyz"
+
+	results := runInitPreflightChecks(cfg)
+
+	// First check should fail (custom binary not found).
+	if results[0].OK {
+		t.Error("expected custom claude binary check to fail")
+	}
+}
+
+func TestPromptTyrConfig_EnableDefault(t *testing.T) {
+	// Empty input (just Enter) should keep TyrEnabled = true.
+	reader := bufio.NewReader(strings.NewReader("\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = true
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if !cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to remain true on empty input")
+	}
+	if cfg.K3s.TyrImage != "ghcr.io/niuulabs/tyr:latest" {
+		t.Errorf("expected image unchanged, got %q", cfg.K3s.TyrImage)
+	}
+}
+
+func TestPromptTyrConfig_Disable(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("n\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = true
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to be false after 'n' input")
+	}
+}
+
+func TestPromptTyrConfig_EnableWithCustomImage(t *testing.T) {
+	// "yes" to enable, then custom image.
+	reader := bufio.NewReader(strings.NewReader("yes\ncustom-tyr:v2\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = false
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if !cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to be true after 'yes' input")
+	}
+	if cfg.K3s.TyrImage != "custom-tyr:v2" {
+		t.Errorf("expected custom image 'custom-tyr:v2', got %q", cfg.K3s.TyrImage)
+	}
+}
+
+func TestPromptTyrConfig_EnableKeepDefaultImage(t *testing.T) {
+	// "y" to enable, empty image (keep default).
+	reader := bufio.NewReader(strings.NewReader("y\n\n"))
+	cfg := &config.Config{}
+	cfg.K3s.TyrEnabled = false
+	cfg.K3s.TyrImage = "ghcr.io/niuulabs/tyr:latest"
+
+	promptTyrConfig(reader, cfg)
+
+	if !cfg.K3s.TyrEnabled {
+		t.Error("expected TyrEnabled to be true after 'y' input")
+	}
+	if cfg.K3s.TyrImage != "ghcr.io/niuulabs/tyr:latest" {
+		t.Errorf("expected default image, got %q", cfg.K3s.TyrImage)
+	}
+}
+
+func TestLegacyMachinePassphrase(t *testing.T) {
+	passphrase := legacyMachinePassphrase()
+	if passphrase == "" {
+		t.Error("expected non-empty passphrase")
+	}
+
 	// Should start with "volundr-"
 	if len(passphrase) < 8 || passphrase[:8] != "volundr-" {
-		t.Errorf("expected passphrase to start with 'volundr-', got %q", passphrase)
+		t.Errorf("expected legacy passphrase to start with 'volundr-', got %q", passphrase)
+	}
+
+	// New and legacy should differ.
+	newPassphrase := machinePassphrase()
+	if passphrase == newPassphrase {
+		t.Error("expected legacy and new passphrases to differ")
 	}
 }

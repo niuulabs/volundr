@@ -2,19 +2,49 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/auth';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { volundrService } from '@/adapters';
+import { useIdentity } from '@/hooks/useIdentity';
+import { volundrService } from '@/modules/volundr/adapters';
+import { AppShell } from '@/modules/shared/components/AppShell';
 // Initialize module registry (registers all built-in feature modules)
 import '@/modules';
 import styles from './App.module.css';
 
-const VolundrPage = lazy(() => import('@/pages/Volundr').then(m => ({ default: m.VolundrPage })));
+const VolundrPage = lazy(() =>
+  import('@/modules/volundr/pages/Volundr').then(m => ({ default: m.VolundrPage }))
+);
 const VolundrPopout = lazy(() =>
-  import('@/pages/Volundr/VolundrPopout').then(m => ({ default: m.VolundrPopout }))
+  import('@/modules/volundr/pages/Volundr/VolundrPopout').then(m => ({ default: m.VolundrPopout }))
 );
 const SettingsPage = lazy(() =>
-  import('@/pages/Settings').then(m => ({ default: m.SettingsPage }))
+  import('@/modules/volundr/pages/Settings').then(m => ({ default: m.SettingsPage }))
 );
-const AdminPage = lazy(() => import('@/pages/Admin').then(m => ({ default: m.AdminPage })));
+const AdminPage = lazy(() =>
+  import('@/modules/volundr/pages/Admin').then(m => ({ default: m.AdminPage }))
+);
+const TyrLayout = lazy(() =>
+  import('@/modules/tyr/pages/TyrLayout').then(m => ({ default: m.TyrLayout }))
+);
+const SagasView = lazy(() =>
+  import('@/modules/tyr/pages/SagasView').then(m => ({ default: m.SagasView }))
+);
+const SagaDetailView = lazy(() =>
+  import('@/modules/tyr/pages/DetailView').then(m => ({ default: m.DetailView }))
+);
+const DispatcherView = lazy(() =>
+  import('@/modules/tyr/pages/DispatcherView').then(m => ({ default: m.DispatcherView }))
+);
+const TyrSessionsView = lazy(() =>
+  import('@/modules/tyr/pages/SessionsView').then(m => ({ default: m.SessionsView }))
+);
+const ImportView = lazy(() =>
+  import('@/modules/tyr/pages/ImportView').then(m => ({ default: m.ImportView }))
+);
+const PlanSagaView = lazy(() =>
+  import('@/modules/tyr/pages/PlanSagaView').then(m => ({ default: m.PlanSagaView }))
+);
+const DashboardView = lazy(() =>
+  import('@/modules/tyr/pages/DashboardView').then(m => ({ default: m.DashboardView }))
+);
 
 function PageLoader() {
   return (
@@ -26,20 +56,32 @@ function PageLoader() {
 }
 
 function AppContent() {
+  const { isAdmin } = useIdentity(volundrService);
+
   return (
-    <div className={styles.app}>
-      <main className={styles.main}>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/" element={<VolundrPage />} />
-            <Route path="/volundr" element={<VolundrPage />} />
-            <Route path="/settings" element={<SettingsPage service={volundrService} />} />
-            <Route path="/admin" element={<AdminPage service={volundrService} />} />
-            <Route path="/integrations" element={<Navigate to="/settings" replace />} />
-          </Routes>
-        </Suspense>
-      </main>
-    </div>
+    <AppShell isAdmin={isAdmin}>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/volundr" replace />} />
+          <Route path="/volundr" element={<VolundrPage />} />
+          <Route path="/tyr" element={<TyrLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="sagas" element={<SagasView />} />
+            <Route path="sagas/:id" element={<SagaDetailView />} />
+            <Route path="new" element={<PlanSagaView />} />
+            <Route path="import" element={<ImportView />} />
+            <Route path="plan" element={<Navigate to="/tyr/new" replace />} />
+            <Route path="dispatcher" element={<DispatcherView />} />
+            <Route path="sessions" element={<TyrSessionsView />} />
+            <Route path="dashboard" element={<DashboardView />} />
+            <Route path="settings" element={<Navigate to="/settings" replace />} />
+          </Route>
+          <Route path="/settings" element={<SettingsPage service={volundrService} />} />
+          <Route path="/admin" element={<AdminPage service={volundrService} />} />
+          <Route path="/integrations" element={<Navigate to="/settings" replace />} />
+        </Routes>
+      </Suspense>
+    </AppShell>
   );
 }
 

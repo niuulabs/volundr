@@ -59,7 +59,7 @@ def _make_connection(
     now = datetime.datetime.now(datetime.UTC)
     return IntegrationConnection(
         id=conn_id,
-        user_id=user_id,
+        owner_id=user_id,
         slug=slug,
         adapter=adapter,
         credential_name=credential_name,

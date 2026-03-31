@@ -1,0 +1,30 @@
+# Niuu AI Platform — umbrella chart values
+#
+# Global values propagate to all subcharts:
+#   global.image.registry    → volundr.image, volundr.web.image, tyr.image
+#   global.image.tag         → all image tags
+#   global.imagePullSecrets  → all pod specs
+#   global.domain            → ingress/gateway hostname generation
+
+global:
+  imagePullSecrets: []
+  image:
+    registry: ghcr.io/niuulabs
+  domain: niuu.world
+  # Available AI models — propagated to both Tyr and Volundr
+  aiModels:
+    - id: "claude-opus-4-6"
+      name: "Opus 4.6"
+      costPerMillionTokens: 15.00
+    - id: "claude-sonnet-4-6"
+      name: "Sonnet 4.6"
+      costPerMillionTokens: 3.00
+    - id: "claude-haiku-4-5-20251001"
+      name: "Haiku 4.5"
+      costPerMillionTokens: 1.00
+
+volundr:
+  enabled: true
+
+tyr:
+  enabled: true

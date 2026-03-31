@@ -52,7 +52,7 @@ def _linear_definition():
 def _linear_connection(*, conn_id="conn-linear", enabled=True):
     return IntegrationConnection(
         id=conn_id,
-        user_id="user-1",
+        owner_id="user-1",
         integration_type="issue_tracker",
         adapter="volundr.adapters.outbound.linear.LinearAdapter",
         credential_name="linear-cred",
@@ -131,7 +131,7 @@ class TestIntegrationContributor:
 
         conn = IntegrationConnection(
             id="conn-jira",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="issue_tracker",
             adapter="volundr.adapters.outbound.jira.JiraAdapter",
             credential_name="jira-cred",
@@ -166,7 +166,7 @@ class TestIntegrationContributor:
 
         conn = IntegrationConnection(
             id="conn-anthropic",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="ai_provider",
             adapter="volundr.adapters.outbound.anthropic.AnthropicAdapter",
             credential_name="anthropic-cred",
@@ -205,7 +205,7 @@ class TestIntegrationContributor:
 
         conn = IntegrationConnection(
             id="conn-claude",
-            user_id="user-1",
+            owner_id="user-1",
             integration_type="ai_provider",
             adapter="",
             credential_name="claude-oauth-cred",

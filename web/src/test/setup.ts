@@ -33,13 +33,46 @@ vi.mock('@/components/EditorPanel/workbenchInit', () => ({
   switchSession: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Polyfill scrollIntoView — jsdom does not implement it
+if (typeof Element.prototype.scrollIntoView === 'undefined') {
+  Element.prototype.scrollIntoView = vi.fn();
+}
+
 // Polyfill ResizeObserver for assistant-ui components that use it
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
+    _callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this._callback = callback;
+    }
     observe() {}
     unobserve() {}
     disconnect() {}
   } as unknown as typeof globalThis.ResizeObserver;
+}
+
+// Polyfill localStorage — jsdom may provide a broken Storage in some contexts
+if (
+  typeof globalThis.localStorage === 'undefined' ||
+  typeof globalThis.localStorage.getItem !== 'function'
+) {
+  const store: Record<string, string> = {};
+  globalThis.localStorage = {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      for (const k of Object.keys(store)) delete store[k];
+    },
+    get length() {
+      return Object.keys(store).length;
+    },
+    key: (i: number) => Object.keys(store)[i] ?? null,
+  };
 }
 
 // Cleanup after each test

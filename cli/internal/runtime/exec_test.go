@@ -135,10 +135,12 @@ func withMockExecFail(t *testing.T) {
 
 // fakePostgres is a mock implementation of postgresProvider for testing.
 type fakePostgres struct {
-	startErr      error
-	stopErr       error
-	migrationsErr error
-	migrationsN   int
+	startErr         error
+	stopErr          error
+	migrationsErr    error
+	migrationsN      int
+	tyrMigrationsErr error
+	tyrMigrationsN   int
 }
 
 func (f *fakePostgres) Start(_ context.Context) error { return f.startErr }
@@ -148,6 +150,12 @@ func (f *fakePostgres) RunMigrations(_ context.Context, _ string) (int, error) {
 }
 func (f *fakePostgres) RunMigrationsFS(_ context.Context, _ fs.FS) (int, error) {
 	return f.migrationsN, f.migrationsErr
+}
+func (f *fakePostgres) RunTyrMigrations(_ context.Context, _ string) (int, error) {
+	return f.tyrMigrationsN, f.tyrMigrationsErr
+}
+func (f *fakePostgres) RunTyrMigrationsFS(_ context.Context, _ fs.FS) (int, error) {
+	return f.tyrMigrationsN, f.tyrMigrationsErr
 }
 
 // withMockPostgres replaces newPostgres with a function returning a fakePostgres.

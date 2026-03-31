@@ -2,17 +2,17 @@
 
 import base64
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from volundr.skuld.broker import (
+from skuld.broker import (
     Broker,
     _decode_jwt_claims,
     _extract_bearer_token,
     _extract_token_from_websocket,
 )
-from volundr.skuld.config import SkuldSettings
+from skuld.config import SkuldSettings
 
 
 def _make_jwt(claims: dict) -> str:
@@ -146,21 +146,23 @@ class TestBrokerJwtIntegration:
     def test_build_auth_headers_with_jwt(self, test_broker):
         token = _make_jwt({"sub": "u1"})
         test_broker._user_jwt = token
-        headers = test_broker._build_auth_headers()
+        with patch.dict("os.environ", {"VOLUNDR_API_TOKEN": ""}, clear=False):
+            headers = test_broker._build_auth_headers()
         assert headers == {"Authorization": f"Bearer {token}"}
 
-    def test_build_auth_headers_fallback_service_identity(self, test_broker):
+    def test_build_auth_headers_no_token_returns_empty(self, test_broker, monkeypatch):
+        monkeypatch.delenv("VOLUNDR_API_TOKEN", raising=False)
+        test_broker._user_jwt = None
         headers = test_broker._build_auth_headers()
-        assert "x-auth-user-id" in headers
-        assert headers["x-auth-roles"] == "volundr:service"
-        assert "Authorization" not in headers
+        assert headers == {}
 
     @pytest.mark.asyncio
     async def test_get_http_client_uses_jwt(self, test_broker):
         token = _make_jwt({"sub": "u1"})
         test_broker._user_jwt = token
 
-        client = await test_broker._get_http_client()
+        with patch.dict("os.environ", {"VOLUNDR_API_TOKEN": ""}, clear=False):
+            client = await test_broker._get_http_client()
         assert client.headers.get("authorization") == f"Bearer {token}"
 
         # Cleanup
@@ -170,12 +172,14 @@ class TestBrokerJwtIntegration:
     @pytest.mark.asyncio
     async def test_get_http_client_recreates_on_jwt_change(self, test_broker):
         token1 = _make_jwt({"sub": "u1"})
-        test_broker._user_jwt = token1
-        client1 = await test_broker._get_http_client()
-
         token2 = _make_jwt({"sub": "u1", "refreshed": True})
-        test_broker._user_jwt = token2
-        client2 = await test_broker._get_http_client()
+
+        with patch.dict("os.environ", {"VOLUNDR_API_TOKEN": ""}, clear=False):
+            test_broker._user_jwt = token1
+            client1 = await test_broker._get_http_client()
+
+            test_broker._user_jwt = token2
+            client2 = await test_broker._get_http_client()
 
         # Should be a new client instance
         assert client2 is not client1
@@ -194,7 +198,8 @@ class TestBrokerJwtIntegration:
         ws.headers = {"authorization": f"Bearer {token}"}
         ws.query_params = {}
 
-        test_broker._update_jwt_from_websocket(ws)
+        with patch.dict("os.environ", {"VOLUNDR_API_TOKEN": ""}, clear=False):
+            test_broker._update_jwt_from_websocket(ws)
 
         mock_watcher.update_headers.assert_called_once_with({"Authorization": f"Bearer {token}"})
 
@@ -224,10 +229,11 @@ class TestBrokerJwtIntegration:
         assert test_broker._user_jwt == existing_token
 
     @pytest.mark.asyncio
-    async def test_get_http_client_fallback_when_no_jwt(self, test_broker):
-        """When no JWT is set, client uses service identity headers."""
+    async def test_get_http_client_fallback_when_no_jwt(self, test_broker, monkeypatch):
+        """When no JWT or PAT is set, client has no auth headers."""
+        monkeypatch.delenv("VOLUNDR_API_TOKEN", raising=False)
+        test_broker._user_jwt = None
         client = await test_broker._get_http_client()
-        assert client.headers.get("x-auth-user-id") == "skuld-broker"
         assert "authorization" not in {k.lower() for k in client.headers.keys()}
 
         # Cleanup

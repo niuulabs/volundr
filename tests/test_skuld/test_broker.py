@@ -8,15 +8,15 @@ import pytest
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
-from volundr.skuld.broker import (
+from skuld.broker import (
     Broker,
     _log_buffer,
     _TokenRedactFilter,
     app,
     broker,
 )
-from volundr.skuld.config import SkuldSettings
-from volundr.skuld.transport import (
+from skuld.config import SkuldSettings
+from skuld.transport import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
@@ -631,28 +631,23 @@ class TestReportUsage:
         await client.aclose()
 
     @pytest.mark.asyncio
-    async def test_get_http_client_includes_service_auth_headers(self, tmp_path):
-        """HTTP client includes x-auth-* headers for service-to-service auth."""
+    async def test_get_http_client_uses_pat_for_auth(self, tmp_path, monkeypatch):
+        """HTTP client uses VOLUNDR_API_TOKEN (PAT) for Bearer auth."""
+        monkeypatch.setenv("VOLUNDR_API_TOKEN", "test-pat-token")
         settings = SkuldSettings(
             session={"id": "s1", "workspace_dir": str(tmp_path)},
             volundr_api_url="http://volundr-internal.volundr.svc",
-            service_user_id="skuld-broker",
-            service_tenant_id="test-tenant",
         )
         b = Broker(settings=settings)
-        client = await b._get_http_client()
-        assert client.headers["x-auth-user-id"] == "skuld-broker"
-        assert client.headers["x-auth-email"] == "skuld-broker@internal"
-        assert client.headers["x-auth-tenant"] == "test-tenant"
-        assert client.headers["x-auth-roles"] == "volundr:service"
-        await client.aclose()
+        headers = b._build_auth_headers()
+        assert headers["Authorization"] == "Bearer test-pat-token"
 
 
 class TestSessionArtifacts:
     """Tests for SessionArtifacts accumulator."""
 
     def test_record_tool_use_extracts_file_paths(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -675,7 +670,7 @@ class TestSessionArtifacts:
         assert artifacts.files_changed == ["/src/main.py", "/tests/test_main.py"]
 
     def test_record_tool_use_deduplicates(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {"content": [{"type": "tool_use", "input": {"file_path": "/src/main.py"}}]}
@@ -684,7 +679,7 @@ class TestSessionArtifacts:
         assert artifacts.files_changed == ["/src/main.py"]
 
     def test_record_tool_use_empty_content(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         artifacts.record_tool_use({"content": []})
@@ -692,7 +687,7 @@ class TestSessionArtifacts:
         assert artifacts.files_changed == []
 
     def test_record_result_increments_turns(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         assert artifacts.turn_count == 0
@@ -701,7 +696,7 @@ class TestSessionArtifacts:
         assert artifacts.turn_count == 2
 
     def test_duration_seconds(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         # duration should be >= 0
@@ -1271,7 +1266,7 @@ class TestRecordToolUseReturnsEvents:
     """Tests for record_tool_use returning timeline-reportable events."""
 
     def test_returns_file_event_for_edit(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -1290,7 +1285,7 @@ class TestRecordToolUseReturnsEvents:
         assert events[0]["action"] == "modified"
 
     def test_returns_file_event_for_write(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -1308,7 +1303,7 @@ class TestRecordToolUseReturnsEvents:
         assert events[0]["action"] == "created"
 
     def test_returns_terminal_event_for_bash(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -1326,7 +1321,7 @@ class TestRecordToolUseReturnsEvents:
         assert "pytest" in events[0]["label"]
 
     def test_returns_git_event_for_git_commit(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -1344,7 +1339,7 @@ class TestRecordToolUseReturnsEvents:
         assert "git commit" in events[0]["label"]
 
     def test_returns_git_event_for_chained_commit(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -1361,7 +1356,7 @@ class TestRecordToolUseReturnsEvents:
         assert events[0]["type"] == "git"
 
     def test_returns_multiple_events(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -1384,7 +1379,7 @@ class TestRecordToolUseReturnsEvents:
         assert events[1]["type"] == "terminal"
 
     def test_returns_empty_for_unknown_tools(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         data = {
@@ -1402,7 +1397,7 @@ class TestRecordToolUseReturnsEvents:
         assert artifacts.files_changed == ["/src/a.py"]
 
     def test_returns_empty_for_no_content(self):
-        from volundr.skuld.broker import SessionArtifacts
+        from skuld.broker import SessionArtifacts
 
         artifacts = SessionArtifacts()
         events = artifacts.record_tool_use({})
@@ -1413,34 +1408,34 @@ class TestIsGitCommit:
     """Tests for _is_git_commit helper."""
 
     def test_simple_git_commit(self):
-        from volundr.skuld.broker import _is_git_commit
+        from skuld.broker import _is_git_commit
 
         assert _is_git_commit('git commit -m "msg"') is True
 
     def test_git_commit_with_flags(self):
-        from volundr.skuld.broker import _is_git_commit
+        from skuld.broker import _is_git_commit
 
         assert _is_git_commit("git commit --amend --no-edit") is True
 
     def test_chained_git_add_and_commit(self):
-        from volundr.skuld.broker import _is_git_commit
+        from skuld.broker import _is_git_commit
 
         assert _is_git_commit('git add . && git commit -m "feat"') is True
 
     def test_git_config_prefix(self):
-        from volundr.skuld.broker import _is_git_commit
+        from skuld.broker import _is_git_commit
 
         assert _is_git_commit('git -c user.name="x" commit -m "y"') is True
 
     def test_not_git_commit(self):
-        from volundr.skuld.broker import _is_git_commit
+        from skuld.broker import _is_git_commit
 
         assert _is_git_commit("git status") is False
         assert _is_git_commit("git push origin main") is False
         assert _is_git_commit("python -m pytest") is False
 
     def test_empty_string(self):
-        from volundr.skuld.broker import _is_git_commit
+        from skuld.broker import _is_git_commit
 
         assert _is_git_commit("") is False
 
@@ -1850,7 +1845,7 @@ class TestTokenRedactFilter:
         """Lifespan attaches redact filter to uvicorn loggers."""
         import asyncio
 
-        from volundr.skuld.broker import lifespan
+        from skuld.broker import lifespan
 
         async def check():
             for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):

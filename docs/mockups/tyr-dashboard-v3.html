@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tyr Dashboard v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0:#09090b;--bg-1:#18181b;--bg-2:#27272a;--bg-3:#3f3f46;
+    --text-0:#fafafa;--text-1:#a1a1aa;--text-2:#71717a;--text-3:#52525b;
+    --border:#3f3f46;--border-s:#27272a;
+    --brand:#f59e0b;
+    --cyan:#06b6d4;--emerald:#10b981;--purple:#a855f7;
+    --red:#ef4444;--orange:#f97316;--indigo:#6366f1;--blue:#3b82f6;
+    --sans:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg-0);color:var(--text-0);font-family:var(--sans);font-size:13px;height:100vh;overflow:hidden}
+  .layout{display:flex;height:100vh}
+
+  /* Sidebar */
+  .sb{width:200px;background:var(--bg-1);border-right:1px solid var(--border-s);padding:16px 0;flex-shrink:0;display:flex;flex-direction:column}
+  .sb h2{padding:0 16px 16px;font-size:15px;font-weight:600}
+  .sb a{display:flex;align-items:center;gap:10px;padding:7px 16px;color:var(--text-1);text-decoration:none;font-size:13px;cursor:pointer;transition:all .15s}
+  .sb a:hover{color:var(--text-0);background:rgba(255,255,255,.04)}
+  .sb a.on{color:var(--brand);background:rgba(245,158,11,.08)}
+
+  .mn{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+  /* Top */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border-s);background:var(--bg-1);flex-shrink:0}
+  .top-l{display:flex;align-items:center;gap:14px}
+  .top h1{font-size:18px;font-weight:700;letter-spacing:-0.01em}
+  .top-meta{font-size:11px;color:var(--text-2)}
+  .top-r{display:flex;align-items:center;gap:12px}
+  .live{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--emerald);font-weight:500}
+  .live-d{width:5px;height:5px;border-radius:50%;background:var(--emerald);animation:p 2s ease-in-out infinite}
+  @keyframes p{0%,100%{opacity:1}50%{opacity:.25}}
+  .flt{padding:5px 10px;border:1px solid var(--border-s);border-radius:6px;background:var(--bg-0);color:var(--text-0);font-size:11px;font-family:var(--sans)}
+
+  /* Attention */
+  .attn{display:flex;gap:8px;padding:10px 24px;border-bottom:1px solid var(--border-s);flex-shrink:0;overflow-x:auto}
+  .attn-c{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;border:1px solid var(--border-s);background:var(--bg-1);cursor:pointer;white-space:nowrap;transition:all .15s}
+  .attn-c:hover{border-color:var(--border);background:var(--bg-2)}
+  .attn-c[data-u="high"]{border-color:rgba(239,68,68,.25)}
+  .attn-c[data-u="med"]{border-color:rgba(249,115,22,.2)}
+  .ad{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .ad.red{background:var(--red)}.ad.orange{background:var(--orange)}.ad.brand{background:var(--brand)}
+  .ad.pulse{animation:p 1.5s ease-in-out infinite}
+  .attn-t{font-size:12px}.attn-s{font-size:10px;color:var(--text-3);margin-left:auto;font-family:var(--mono)}
+
+  /* Stats */
+  .stats{display:flex;gap:2px;padding:10px 24px;flex-shrink:0}
+  .st{flex:1;text-align:center;padding:8px 0;background:var(--bg-1);border-radius:6px}
+  .st-n{font-size:18px;font-weight:700;font-family:var(--mono);line-height:1}
+  .st-l{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2);margin-top:2px}
+  .st[data-s="running"] .st-n{color:var(--cyan)}
+  .st[data-s="review"] .st-n{color:var(--brand)}
+  .st[data-s="escalated"] .st-n{color:var(--orange)}
+  .st[data-s="merged"] .st-n{color:var(--emerald)}
+  .st[data-s="failed"] .st-n{color:var(--red)}
+  .st[data-s="queued"] .st-n{color:var(--purple)}
+  .st[data-s="pending"] .st-n{color:var(--text-3)}
+
+  /* Body */
+  .body{flex:1;display:flex;min-height:0}
+  .left{flex:1;overflow-y:auto;padding:16px 24px;min-width:0}
+  .right{width:340px;border-left:1px solid var(--border-s);overflow-y:auto;display:flex;flex-direction:column;flex-shrink:0}
+
+  /* Panel */
+  .pnl{border-bottom:1px solid var(--border-s)}
+  .pnl-h{display:flex;align-items:center;justify-content:space-between;padding:10px 16px}
+  .pnl-t{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2)}
+  .pnl-c{font-size:10px;padding:1px 7px;border-radius:99px;background:rgba(245,158,11,.1);color:var(--brand);font-weight:600}
+
+  /* Raid table with fixed columns */
+  .rtbl{width:100%;border-collapse:collapse;border:1px solid var(--border-s);border-radius:10px;overflow:hidden;background:var(--bg-1)}
+  .rtbl th{padding:6px 12px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);text-align:left;background:var(--bg-2);border-bottom:1px solid var(--border-s)}
+  .rtbl td{padding:8px 12px;border-bottom:1px solid var(--border-s);vertical-align:middle}
+  .rtbl tr:last-child td{border-bottom:none}
+  .rtbl tr.rr{cursor:pointer;transition:background .1s}
+  .rtbl tr.rr:hover td{background:rgba(255,255,255,.02)}
+  .rtbl tr.rr.expanded td{background:var(--bg-2);border-bottom:none}
+
+  /* Fixed column widths */
+  .rtbl .c-ticket{width:240px}
+  .rtbl .c-status{width:100px}
+  .rtbl .c-conf{width:90px}
+  .rtbl .c-session{width:80px}
+  .rtbl .c-cluster{width:70px}
+  .rtbl .c-pr{width:50px}
+  .rtbl .c-time{width:50px;text-align:right}
+
+  .raid-id{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--brand)}
+  .raid-title{font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600}
+  .bd{width:5px;height:5px;border-radius:50%;background:currentColor}
+  .bd.a{animation:p 2.4s ease-in-out infinite}
+  .badge[data-s="running"]{background:rgba(6,182,212,.1);color:var(--cyan)}
+  .badge[data-s="review"]{background:rgba(245,158,11,.1);color:var(--brand)}
+  .badge[data-s="escalated"]{background:rgba(249,115,22,.1);color:var(--orange)}
+  .badge[data-s="merged"]{background:rgba(16,185,129,.1);color:var(--emerald)}
+  .badge[data-s="failed"]{background:rgba(239,68,68,.1);color:var(--red)}
+  .conf{display:flex;align-items:center;gap:5px}
+  .conf-bar{width:32px;height:3px;border-radius:2px;background:var(--bg-3)}
+  .conf-fill{height:100%;border-radius:2px}
+  .conf-fill.hi{background:var(--emerald)}.conf-fill.md{background:var(--brand)}.conf-fill.lo{background:var(--red)}
+  .conf-val{font-family:var(--mono);font-size:11px;color:var(--text-1)}
+  .chip{font-size:10px;padding:1px 5px;border-radius:99px;background:var(--bg-3);color:var(--text-2);font-family:var(--mono)}
+  .sid{font-family:var(--mono);font-size:10px;color:var(--cyan)}
+  .pr-l{font-family:var(--mono);font-size:10px;color:var(--emerald)}
+  .muted{color:var(--text-3)}
+  .ts{font-size:10px;color:var(--text-3)}
+
+  /* Expanded raid row — timeline dropdown */
+  .raid-expand{display:none;background:var(--bg-2)}
+  .raid-expand.open{display:table-row}
+  .raid-expand td{padding:0}
+  .raid-detail{padding:12px 16px 16px;display:flex;gap:20px}
+  .raid-tl{flex:1;min-width:0}
+  .tl-item{display:flex;gap:8px;padding:4px 0;position:relative}
+  .tl-item::before{content:'';position:absolute;left:4px;top:16px;bottom:-4px;width:1px;background:var(--border-s)}
+  .tl-item:last-child::before{display:none}
+  .tl-dot{width:9px;height:9px;border-radius:50%;border:2px solid var(--bg-2);flex-shrink:0;margin-top:3px}
+  .tl-dot.cyan{background:var(--cyan)}.tl-dot.brand{background:var(--brand)}
+  .tl-dot.emerald{background:var(--emerald)}.tl-dot.red{background:var(--red)}
+  .tl-dot.orange{background:var(--orange)}.tl-dot.purple{background:var(--purple)}
+  .tl-body{flex:1;min-width:0}
+  .tl-main{font-size:12px}.tl-sub{font-size:10px;color:var(--text-3);margin-top:1px}
+
+  /* Review panel inside expanded row */
+  .review-panel{width:300px;flex-shrink:0;border-left:1px solid var(--border-s);padding-left:16px}
+  .review-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);margin-bottom:10px}
+  .review-score{font-family:var(--mono);font-size:24px;font-weight:700;margin-bottom:4px}
+  .review-verdict{font-size:12px;color:var(--text-1);margin-bottom:12px}
+  .review-issues{list-style:none;display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .review-issues li{font-size:11px;color:var(--text-1);padding-left:12px;position:relative}
+  .review-issues li::before{content:'';position:absolute;left:0;top:6px;width:4px;height:4px;border-radius:50%;background:var(--orange)}
+  .review-actions{display:flex;gap:6px}
+  .rbtn{padding:6px 14px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:none;font-family:var(--sans);transition:opacity .15s}
+  .rbtn:hover{opacity:.85}
+  .rbtn.approve{background:var(--emerald);color:var(--bg-0)}
+  .rbtn.retry{background:var(--bg-3);color:var(--text-0)}
+  .rbtn.reject{background:transparent;border:1px solid var(--red);color:var(--red)}
+
+  /* Feedback textarea */
+  .fb{display:none;margin-top:12px;flex-direction:column;gap:8px}
+  .fb.open{display:flex}
+  .fb-area{width:100%;min-height:80px;padding:8px 10px;border:1px solid var(--border-s);border-radius:6px;background:var(--bg-0);color:var(--text-0);font-size:12px;font-family:var(--mono);resize:vertical;line-height:1.5}
+  .fb-area:focus{outline:1px solid var(--brand);border-color:var(--brand)}
+  .fb-row{display:flex;gap:6px;align-items:center}
+  .fb-send{padding:5px 14px;border:none;border-radius:5px;background:var(--brand);color:var(--bg-0);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+  .fb-send:hover{opacity:.85}
+  .fb-cancel{padding:5px 14px;border:1px solid var(--border-s);border-radius:5px;background:transparent;color:var(--text-2);font-size:11px;cursor:pointer;font-family:var(--sans)}
+  .fb-hint{font-size:10px;color:var(--text-3);margin-left:auto}
+
+  /* Chat-style feedback */
+  .fb-chat{display:none;margin-top:12px;flex-direction:column;gap:0;border:1px solid var(--border-s);border-radius:8px;overflow:hidden;max-height:260px}
+  .fb-chat.open{display:flex}
+  .fb-msgs{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px;background:var(--bg-0);max-height:160px}
+  .fb-msg{font-size:11px;padding:5px 8px;border-radius:6px;max-width:85%}
+  .fb-msg.reviewer{background:rgba(249,115,22,.08);color:var(--text-0);align-self:flex-start}
+  .fb-msg.human{background:rgba(245,158,11,.12);color:var(--text-0);align-self:flex-end}
+  .fb-msg.session{background:rgba(6,182,212,.08);color:var(--text-0);align-self:flex-start}
+  .fb-msg-who{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+  .fb-msg-who.reviewer-label{color:var(--orange)}
+  .fb-msg-who.human-label{color:var(--brand)}
+  .fb-msg-who.session-label{color:var(--cyan)}
+  .fb-input-row{display:flex;border-top:1px solid var(--border-s);background:var(--bg-1)}
+  .fb-input{flex:1;padding:8px 10px;border:none;background:transparent;color:var(--text-0);font-size:12px;font-family:var(--sans)}
+  .fb-input:focus{outline:none}
+  .fb-input::placeholder{color:var(--text-3)}
+  .fb-submit{padding:8px 14px;border:none;background:var(--brand);color:var(--bg-0);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+  .fb-submit:hover{opacity:.85}
+
+  /* Sagas */
+  .saga{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border-s);cursor:pointer;transition:background .1s}
+  .saga:hover{background:rgba(255,255,255,.02)}
+  .saga:last-child{border-bottom:none}
+  .saga-info{flex:1;min-width:0}
+  .saga-name{font-size:13px;font-weight:500}.saga-meta{font-size:10px;color:var(--text-3);margin-top:1px}
+  .saga-bar{width:60px;height:4px;border-radius:2px;background:var(--bg-3)}
+  .saga-fill{height:100%;border-radius:2px;background:var(--emerald)}
+  .saga-n{font-family:var(--mono);font-size:11px;color:var(--text-2);min-width:30px;text-align:right}
+
+  /* Health */
+  .hlth{display:flex;flex-wrap:wrap;gap:5px;padding:8px 16px}
+  .hi{display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:4px;background:var(--bg-0)}
+  .hd{width:6px;height:6px;border-radius:50%}.hd.ok{background:var(--emerald)}.hd.p{animation:p 2s ease-in-out infinite}
+
+  /* Event log */
+  .ev-wrap{flex:1;display:flex;flex-direction:column;min-height:0}
+  .ev-scroll{flex:1;overflow-y:auto}
+  .ev{display:grid;grid-template-columns:42px 1fr;padding:4px 16px;font-size:11px;transition:background .1s}
+  .ev:hover{background:rgba(255,255,255,.02)}
+  .ev-t{font-family:var(--mono);color:var(--text-3);font-size:10px}
+  .ev-body{display:flex;gap:5px;align-items:baseline;min-width:0}
+  .ev-tag{font-family:var(--mono);font-size:10px;font-weight:500;padding:0 4px;border-radius:3px;white-space:nowrap}
+  .ev-tag.state{background:rgba(6,182,212,.08);color:var(--cyan)}
+  .ev-tag.conf{background:rgba(245,158,11,.08);color:var(--brand)}
+  .ev-tag.phase{background:rgba(16,185,129,.08);color:var(--emerald)}
+  .ev-tag.dispatch{background:rgba(168,85,247,.08);color:var(--purple)}
+  .ev-tag.session{background:rgba(99,102,241,.08);color:var(--indigo)}
+  .ev-tag.review{background:rgba(249,115,22,.08);color:var(--orange)}
+  .ev-msg{color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sb">
+    <h2>Tyr</h2>
+    <a class="on">Dashboard</a>
+    <a>Sagas</a>
+    <a>New Saga</a>
+    <a>Dispatcher</a>
+  </aside>
+
+  <div class="mn">
+    <div class="top">
+      <div class="top-l"><h1>Dashboard</h1><span class="top-meta">3 sagas &middot; 24 raids &middot; 2 clusters</span></div>
+      <div class="top-r">
+        <div class="live"><span class="live-d"></span>connected</div>
+        <select class="flt"><option>All Clusters</option><option>noatun</option><option>valhalla</option></select>
+      </div>
+    </div>
+
+    <div class="attn">
+      <div class="attn-c" data-u="high"><span class="ad red pulse"></span><span class="attn-t">NIU-246 failed — CI failed 3x</span><span class="attn-s">2h</span></div>
+      <div class="attn-c" data-u="med"><span class="ad orange"></span><span class="attn-t">NIU-248 escalated — needs review</span><span class="attn-s">35m</span></div>
+      <div class="attn-c"><span class="ad brand"></span><span class="attn-t">NIU-256 review complete — 0.85</span><span class="attn-s">12m</span></div>
+    </div>
+
+    <div class="stats">
+      <div class="st" data-s="running"><div class="st-n">4</div><div class="st-l">Running</div></div>
+      <div class="st" data-s="review"><div class="st-n">1</div><div class="st-l">Review</div></div>
+      <div class="st" data-s="escalated"><div class="st-n">1</div><div class="st-l">Escalated</div></div>
+      <div class="st" data-s="queued"><div class="st-n">2</div><div class="st-l">Queued</div></div>
+      <div class="st" data-s="pending"><div class="st-n">3</div><div class="st-l">Pending</div></div>
+      <div class="st" data-s="merged"><div class="st-n">12</div><div class="st-l">Merged</div></div>
+      <div class="st" data-s="failed"><div class="st-n">1</div><div class="st-l">Failed</div></div>
+    </div>
+
+    <div class="body">
+      <div class="left">
+        <table class="rtbl">
+          <thead><tr>
+            <th class="c-ticket">Ticket</th>
+            <th class="c-status">Status</th>
+            <th class="c-conf">Confidence</th>
+            <th class="c-session">Session</th>
+            <th class="c-cluster">Cluster</th>
+            <th class="c-pr">PR</th>
+            <th class="c-time"></th>
+          </tr></thead>
+          <tbody>
+            <!-- Normal row -->
+            <tr class="rr" onclick="toggleRow('r1')">
+              <td class="c-ticket"><div class="raid-id">NIU-258</div><div class="raid-title">Notification channel retry logic</div></td>
+              <td class="c-status"><span class="badge" data-s="running"><span class="bd a"></span>Running</span></td>
+              <td class="c-conf"><div class="conf"><div class="conf-bar"><div class="conf-fill md" style="width:62%"></div></div><span class="conf-val">62%</span></div></td>
+              <td class="c-session"><span class="sid">a3f8b21e</span></td>
+              <td class="c-cluster"><span class="chip">noatun</span></td>
+              <td class="c-pr"><span class="muted">&mdash;</span></td>
+              <td class="c-time"><span class="ts">2m</span></td>
+            </tr>
+            <!-- Expanded row for NIU-258 -->
+            <tr class="raid-expand" id="r1"><td colspan="7">
+              <div class="raid-detail">
+                <div class="raid-tl">
+                  <div class="tl-item"><span class="tl-dot purple"></span><div class="tl-body"><div class="tl-main">Dispatched to noatun</div><div class="tl-sub">14:22 &middot; session a3f8b21e</div></div></div>
+                  <div class="tl-item"><span class="tl-dot cyan"></span><div class="tl-body"><div class="tl-main">Session active &mdash; working on retry logic</div><div class="tl-sub">14:24 &middot; turn 3 &middot; reading notification channel adapter</div></div></div>
+                  <div class="tl-item"><span class="tl-dot cyan"></span><div class="tl-body"><div class="tl-main">Session active &mdash; writing tests</div><div class="tl-sub">14:38 &middot; turn 12 &middot; 4 files changed</div></div></div>
+                  <div class="tl-item"><span class="tl-dot cyan"></span><div class="tl-body"><div class="tl-main">Session active &mdash; running CI locally</div><div class="tl-sub">14:50 &middot; turn 18</div></div></div>
+                </div>
+              </div>
+            </td></tr>
+
+            <!-- Review row (click to show review panel) -->
+            <tr class="rr" onclick="toggleRow('r2')">
+              <td class="c-ticket"><div class="raid-id">NIU-256</div><div class="raid-title">SessionChat UI polish</div></td>
+              <td class="c-status"><span class="badge" data-s="review"><span class="bd"></span>Review</span></td>
+              <td class="c-conf"><div class="conf"><div class="conf-bar"><div class="conf-fill hi" style="width:85%"></div></div><span class="conf-val">85%</span></div></td>
+              <td class="c-session"><span class="sid">3bc8646d</span></td>
+              <td class="c-cluster"><span class="chip">noatun</span></td>
+              <td class="c-pr"><span class="pr-l">#176</span></td>
+              <td class="c-time"><span class="ts">12m</span></td>
+            </tr>
+            <tr class="raid-expand" id="r2"><td colspan="7">
+              <div class="raid-detail">
+                <div class="raid-tl">
+                  <div class="tl-item"><span class="tl-dot purple"></span><div class="tl-body"><div class="tl-main">Dispatched to noatun</div><div class="tl-sub">12:10 &middot; session 3bc8646d</div></div></div>
+                  <div class="tl-item"><span class="tl-dot cyan"></span><div class="tl-body"><div class="tl-main">Session completed &mdash; 72 turns, 45 min</div><div class="tl-sub">12:55 &middot; PR #176 created</div></div></div>
+                  <div class="tl-item"><span class="tl-dot brand"></span><div class="tl-body"><div class="tl-main">Entered review &mdash; reviewer session spawned</div><div class="tl-sub">12:56 &middot; reviewer b2c1a9ef (Opus)</div></div></div>
+                  <div class="tl-item"><span class="tl-dot brand"></span><div class="tl-body"><div class="tl-main">Reviewer scored 0.85 &mdash; 3 minor issues</div><div class="tl-sub">13:04 &middot; feedback sent to working session</div></div></div>
+                </div>
+                <!-- Review panel — Option A: textarea feedback -->
+                <div class="review-panel">
+                  <div class="review-title">Reviewer Assessment</div>
+                  <div class="review-score" style="color:var(--emerald)">0.85</div>
+                  <div class="review-verdict">Approve with comments &mdash; non-blocking nits only</div>
+                  <ul class="review-issues">
+                    <li>font-size: 10px in .codeHeaderBtnLabel &mdash; use --text-xs token</li>
+                    <li>--color-tool-default defined but no CSS selector</li>
+                    <li>.reasoningContent uses hardcoded padding 10px 14px</li>
+                  </ul>
+                  <div class="review-actions">
+                    <button class="rbtn approve">Approve & Merge</button>
+                    <button class="rbtn retry" onclick="document.getElementById('fb1').classList.toggle('open')">Send Feedback</button>
+                    <button class="rbtn reject">Reject</button>
+                  </div>
+                  <div class="fb" id="fb1">
+                    <textarea class="fb-area" placeholder="Write feedback to the session...">Fix these 3 issues before merge:
+
+1. MarkdownContent.module.css .codeHeaderBtnLabel — use var(--text-xs) instead of 10px
+2. Add CSS selector for [data-tool-category='default'] or remove --color-tool-default token
+3. Replace hardcoded padding 10px 14px in .reasoningContent with var(--space-2) var(--space-3)</textarea>
+                    <div class="fb-row">
+                      <button class="fb-send">Send to Session</button>
+                      <button class="fb-cancel" onclick="document.getElementById('fb1').classList.remove('open')">Cancel</button>
+                      <span class="fb-hint">Session 3bc8646d will receive this message</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td></tr>
+
+            <!-- Escalated row -->
+            <tr class="rr" onclick="toggleRow('r3')">
+              <td class="c-ticket"><div class="raid-id">NIU-248</div><div class="raid-title">Telegram deep-link for raid actions</div></td>
+              <td class="c-status"><span class="badge" data-s="escalated"><span class="bd"></span>Escalated</span></td>
+              <td class="c-conf"><div class="conf"><div class="conf-bar"><div class="conf-fill lo" style="width:42%"></div></div><span class="conf-val">42%</span></div></td>
+              <td class="c-session"><span class="sid">d9f10a23</span></td>
+              <td class="c-cluster"><span class="chip">noatun</span></td>
+              <td class="c-pr"><span class="pr-l">#169</span></td>
+              <td class="c-time"><span class="ts">35m</span></td>
+            </tr>
+            <tr class="raid-expand" id="r3"><td colspan="7">
+              <div class="raid-detail">
+                <div class="raid-tl">
+                  <div class="tl-item"><span class="tl-dot purple"></span><div class="tl-body"><div class="tl-main">Dispatched to noatun</div><div class="tl-sub">13:00 &middot; session d9f10a23</div></div></div>
+                  <div class="tl-item"><span class="tl-dot cyan"></span><div class="tl-body"><div class="tl-main">Session completed &mdash; 45 turns</div><div class="tl-sub">13:42 &middot; PR #169 created</div></div></div>
+                  <div class="tl-item"><span class="tl-dot red"></span><div class="tl-body"><div class="tl-main">Reviewer scored 0.42 &mdash; significant issues</div><div class="tl-sub">13:50 &middot; module boundary violation, missing tests</div></div></div>
+                  <div class="tl-item"><span class="tl-dot orange"></span><div class="tl-body"><div class="tl-main">Escalated to human review</div><div class="tl-sub">13:52 &middot; confidence below threshold</div></div></div>
+                </div>
+                <!-- Review panel — Option B: chat-style feedback -->
+                <div class="review-panel">
+                  <div class="review-title">Reviewer Assessment</div>
+                  <div class="review-score" style="color:var(--red)">0.42</div>
+                  <div class="review-verdict">Significant rework needed &mdash; 2 critical issues</div>
+                  <ul class="review-issues">
+                    <li>Tyr imports from Volundr &mdash; module boundary violation (CRITICAL)</li>
+                    <li>No tests for the new Telegram webhook handler</li>
+                    <li>Hardcoded timeout 30s in retry loop &mdash; no-magic-numbers violation</li>
+                  </ul>
+                  <div class="review-actions">
+                    <button class="rbtn retry" onclick="document.getElementById('fb2').classList.toggle('open')">Open Chat</button>
+                    <button class="rbtn reject">Reject</button>
+                  </div>
+                  <div class="fb-chat" id="fb2">
+                    <div class="fb-msgs">
+                      <div class="fb-msg reviewer"><div class="fb-msg-who reviewer-label">Reviewer (auto)</div>CRITICAL: src/tyr/adapters/telegram.py line 42 imports from volundr.domain.models. This violates module boundaries. Move the shared model to niuu/domain/models.py.</div>
+                      <div class="fb-msg reviewer"><div class="fb-msg-who reviewer-label">Reviewer (auto)</div>No tests for TelegramWebhookHandler. Need at least: test_command_dispatch, test_callback_query, test_unknown_command. Coverage is at 72% (below 85% threshold).</div>
+                      <div class="fb-msg human"><div class="fb-msg-who human-label">You</div>Fix the module boundary issue first. The shared model should be CallbackPayload in niuu/domain/models.py. Also add tests — look at test_telegram_webhook.py for the pattern.</div>
+                      <div class="fb-msg session"><div class="fb-msg-who session-label">Session d9f10a23</div>Understood. Moving CallbackPayload to niuu/domain/models.py and adding webhook handler tests. Working on it now.</div>
+                    </div>
+                    <div class="fb-input-row">
+                      <input class="fb-input" placeholder="Send message to session d9f10a23..." />
+                      <button class="fb-submit">Send</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td></tr>
+
+            <!-- More regular rows -->
+            <tr class="rr" onclick="toggleRow('r4')">
+              <td class="c-ticket"><div class="raid-id">NIU-257</div><div class="raid-title">Phase gate notification on unlock</div></td>
+              <td class="c-status"><span class="badge" data-s="running"><span class="bd a"></span>Running</span></td>
+              <td class="c-conf"><div class="conf"><div class="conf-bar"><div class="conf-fill md" style="width:58%"></div></div><span class="conf-val">58%</span></div></td>
+              <td class="c-session"><span class="sid">7c2e9f01</span></td>
+              <td class="c-cluster"><span class="chip">noatun</span></td>
+              <td class="c-pr"><span class="muted">&mdash;</span></td>
+              <td class="c-time"><span class="ts">5m</span></td>
+            </tr>
+            <tr class="raid-expand" id="r4"><td colspan="7"><div class="raid-detail"><div class="raid-tl">
+              <div class="tl-item"><span class="tl-dot purple"></span><div class="tl-body"><div class="tl-main">Dispatched to noatun</div><div class="tl-sub">14:02 &middot; session 7c2e9f01</div></div></div>
+              <div class="tl-item"><span class="tl-dot cyan"></span><div class="tl-body"><div class="tl-main">Session active &mdash; turn 15</div><div class="tl-sub">14:50 &middot; reading event bus code</div></div></div>
+            </div></div></td></tr>
+
+            <tr class="rr">
+              <td class="c-ticket"><div class="raid-id">NIU-253</div><div class="raid-title">Saga import from YAML</div></td>
+              <td class="c-status"><span class="badge" data-s="running"><span class="bd a"></span>Running</span></td>
+              <td class="c-conf"><div class="conf"><div class="conf-bar"><div class="conf-fill md" style="width:50%"></div></div><span class="conf-val">50%</span></div></td>
+              <td class="c-session"><span class="sid">e441bc90</span></td>
+              <td class="c-cluster"><span class="chip">valhalla</span></td>
+              <td class="c-pr"><span class="muted">&mdash;</span></td>
+              <td class="c-time"><span class="ts">8m</span></td>
+            </tr>
+            <tr class="rr">
+              <td class="c-ticket"><div class="raid-id">NIU-250</div><div class="raid-title">Raids summary endpoint</div></td>
+              <td class="c-status"><span class="badge" data-s="merged"><span class="bd"></span>Merged</span></td>
+              <td class="c-conf"><div class="conf"><div class="conf-bar"><div class="conf-fill hi" style="width:95%"></div></div><span class="conf-val">95%</span></div></td>
+              <td class="c-session"><span class="muted">&mdash;</span></td>
+              <td class="c-cluster"><span class="chip">noatun</span></td>
+              <td class="c-pr"><span class="pr-l">#170</span></td>
+              <td class="c-time"><span class="ts">1h</span></td>
+            </tr>
+            <tr class="rr">
+              <td class="c-ticket"><div class="raid-id">NIU-246</div><div class="raid-title">Rate limiter for dispatch queue</div></td>
+              <td class="c-status"><span class="badge" data-s="failed"><span class="bd"></span>Failed</span></td>
+              <td class="c-conf"><div class="conf"><div class="conf-bar"><div class="conf-fill lo" style="width:18%"></div></div><span class="conf-val">18%</span></div></td>
+              <td class="c-session"><span class="muted">&mdash;</span></td>
+              <td class="c-cluster"><span class="chip">noatun</span></td>
+              <td class="c-pr"><span class="muted">&mdash;</span></td>
+              <td class="c-time"><span class="ts">2h</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="right">
+        <div class="pnl">
+          <div class="pnl-h"><span class="pnl-t">Sagas</span><span class="pnl-c">3</span></div>
+          <div class="saga"><div class="saga-info"><div class="saga-name">Tyr Autonomous Pipeline</div><div class="saga-meta">Phase 2/3 &middot; noatun</div></div><div class="saga-bar"><div class="saga-fill" style="width:65%"></div></div><div class="saga-n">8/12</div></div>
+          <div class="saga"><div class="saga-info"><div class="saga-name">Volundr Session Polish</div><div class="saga-meta">Phase 1/2 &middot; noatun</div></div><div class="saga-bar"><div class="saga-fill" style="width:40%"></div></div><div class="saga-n">2/5</div></div>
+          <div class="saga"><div class="saga-info"><div class="saga-name">Infrastructure Hardening</div><div class="saga-meta">Phase 1/3 &middot; valhalla</div></div><div class="saga-bar"><div class="saga-fill" style="width:20%"></div></div><div class="saga-n">1/5</div></div>
+        </div>
+        <div class="pnl">
+          <div class="pnl-h"><span class="pnl-t">Systems</span></div>
+          <div class="hlth">
+            <div class="hi"><span class="hd ok"></span>DB</div>
+            <div class="hi"><span class="hd ok p"></span>Events</div>
+            <div class="hi"><span class="hd ok p"></span>Subscriber</div>
+            <div class="hi"><span class="hd ok p"></span>Reviewer</div>
+            <div class="hi"><span class="hd ok"></span>Notifs</div>
+            <div class="hi"><span class="hd ok"></span>Dispatcher</div>
+          </div>
+        </div>
+        <div class="pnl ev-wrap" style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div class="pnl-h"><span class="pnl-t">Event Log</span><span class="pnl-c">live</span></div>
+          <div class="ev-scroll">
+            <div class="ev"><span class="ev-t">14:52</span><div class="ev-body"><span class="ev-tag state">state</span><span class="ev-msg">NIU-256 &rarr; REVIEW (0.85)</span></div></div>
+            <div class="ev"><span class="ev-t">14:50</span><div class="ev-body"><span class="ev-tag conf">conf</span><span class="ev-msg">NIU-256 ci_pass +0.30</span></div></div>
+            <div class="ev"><span class="ev-t">14:48</span><div class="ev-body"><span class="ev-tag session">idle</span><span class="ev-msg">3bc8646d completed (72 turns)</span></div></div>
+            <div class="ev"><span class="ev-t">14:45</span><div class="ev-body"><span class="ev-tag review">review</span><span class="ev-msg">Spawned reviewer for NIU-256</span></div></div>
+            <div class="ev"><span class="ev-t">14:40</span><div class="ev-body"><span class="ev-tag state">state</span><span class="ev-msg">NIU-248 &rarr; ESCALATED</span></div></div>
+            <div class="ev"><span class="ev-t">14:35</span><div class="ev-body"><span class="ev-tag phase">phase</span><span class="ev-msg">Phase 2 unlocked</span></div></div>
+            <div class="ev"><span class="ev-t">14:30</span><div class="ev-body"><span class="ev-tag state">state</span><span class="ev-msg">NIU-250 &rarr; MERGED</span></div></div>
+            <div class="ev"><span class="ev-t">14:22</span><div class="ev-body"><span class="ev-tag dispatch">dispatch</span><span class="ev-msg">NIU-258 &rarr; noatun</span></div></div>
+            <div class="ev"><span class="ev-t">14:15</span><div class="ev-body"><span class="ev-tag session">active</span><span class="ev-msg">7c2e9f01 turn 15</span></div></div>
+            <div class="ev"><span class="ev-t">14:10</span><div class="ev-body"><span class="ev-tag state">state</span><span class="ev-msg">NIU-246 &rarr; FAILED</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function toggleRow(id) {
+  const el = document.getElementById(id);
+  const tr = el.previousElementSibling;
+  const isOpen = el.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.raid-expand').forEach(e => e.classList.remove('open'));
+  document.querySelectorAll('.rr').forEach(e => e.classList.remove('expanded'));
+  // Toggle this one
+  if (!isOpen) {
+    el.classList.add('open');
+    tr.classList.add('expanded');
+  }
+}
+</script>
+</body>
+</html>

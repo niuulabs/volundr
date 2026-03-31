@@ -22,6 +22,7 @@ func TestNewClient(t *testing.T) {
 	}
 	if c.httpClient == nil {
 		t.Fatal("expected non-nil httpClient")
+		return
 	}
 	if c.ctx != nil {
 		t.Error("expected nil ctx for simple client")
@@ -76,9 +77,11 @@ func TestListSessions(t *testing.T) {
 	got, err := c.ListSessions()
 	if err != nil {
 		t.Fatalf("ListSessions: %v", err)
+		return
 	}
 	if len(got) != 2 {
 		t.Fatalf("expected 2 sessions, got %d", len(got))
+		return
 	}
 	if got[0].ID != "s1" {
 		t.Errorf("expected first session ID %q, got %q", "s1", got[0].ID)
@@ -99,6 +102,7 @@ func TestListSessions_Error(t *testing.T) {
 	_, err := c.ListSessions()
 	if err == nil {
 		t.Fatal("expected error for 500 response")
+		return
 	}
 }
 
@@ -118,6 +122,7 @@ func TestGetSession(t *testing.T) {
 	got, err := c.GetSession("abc")
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
+		return
 	}
 	if got.ID != "abc" {
 		t.Errorf("expected ID %q, got %q", "abc", got.ID)
@@ -152,6 +157,7 @@ func TestCreateSession(t *testing.T) {
 	got, err := c.CreateSession(&SessionCreate{Name: "new-session", Model: "claude"})
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
+		return
 	}
 	if got.ID != "new-id" {
 		t.Errorf("expected ID %q, got %q", "new-id", got.ID)
@@ -174,6 +180,7 @@ func TestStartSession(t *testing.T) {
 	c := NewClient(srv.URL, "tok")
 	if err := c.StartSession("s1"); err != nil {
 		t.Fatalf("StartSession: %v", err)
+		return
 	}
 }
 
@@ -190,6 +197,7 @@ func TestStopSession(t *testing.T) {
 	c := NewClient(srv.URL, "tok")
 	if err := c.StopSession("s1"); err != nil {
 		t.Fatalf("StopSession: %v", err)
+		return
 	}
 }
 
@@ -209,6 +217,7 @@ func TestDeleteSession(t *testing.T) {
 	c := NewClient(srv.URL, "tok")
 	if err := c.DeleteSession("s1"); err != nil {
 		t.Fatalf("DeleteSession: %v", err)
+		return
 	}
 }
 
@@ -230,9 +239,11 @@ func TestListModels(t *testing.T) {
 	got, err := c.ListModels()
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
+		return
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 model, got %d", len(got))
+		return
 	}
 	if got[0].Provider != "anthropic" {
 		t.Errorf("expected provider %q, got %q", "anthropic", got[0].Provider)
@@ -255,6 +266,7 @@ func TestGetStats(t *testing.T) {
 	got, err := c.GetStats()
 	if err != nil {
 		t.Fatalf("GetStats: %v", err)
+		return
 	}
 	if got.TotalSessions != 42 {
 		t.Errorf("expected TotalSessions 42, got %d", got.TotalSessions)
@@ -285,6 +297,7 @@ func TestGetAuthConfig(t *testing.T) {
 	got, err := c.GetAuthConfig()
 	if err != nil {
 		t.Fatalf("GetAuthConfig: %v", err)
+		return
 	}
 	if got.Issuer != "https://idp.example.com" {
 		t.Errorf("expected issuer %q, got %q", "https://idp.example.com", got.Issuer)
@@ -425,6 +438,7 @@ func TestDecodeResponse_Error(t *testing.T) {
 	_, err := c.ListSessions()
 	if err == nil {
 		t.Fatal("expected error for 403 response")
+		return
 	}
 }
 
@@ -439,6 +453,7 @@ func TestDecodeResponse_InvalidJSON(t *testing.T) {
 	_, err := c.ListSessions()
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response")
+		return
 	}
 }
 
@@ -467,6 +482,7 @@ func TestStartSession_Error(t *testing.T) {
 	err := c.StartSession("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for 404 response")
+		return
 	}
 }
 
@@ -481,6 +497,7 @@ func TestStopSession_Error(t *testing.T) {
 	err := c.StopSession("s1")
 	if err == nil {
 		t.Fatal("expected error for 400 response")
+		return
 	}
 }
 
@@ -495,6 +512,7 @@ func TestDeleteSession_Error(t *testing.T) {
 	err := c.DeleteSession("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for 404 response")
+		return
 	}
 }
 
@@ -516,9 +534,11 @@ func TestListChronicles(t *testing.T) {
 	got, err := c.ListChronicles()
 	if err != nil {
 		t.Fatalf("ListChronicles: %v", err)
+		return
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 chronicle, got %d", len(got))
+		return
 	}
 	if got[0].ID != "c1" {
 		t.Errorf("expected ID %q, got %q", "c1", got[0].ID)
@@ -548,9 +568,11 @@ func TestGetTimeline(t *testing.T) {
 	got, err := c.GetTimeline("s1")
 	if err != nil {
 		t.Fatalf("GetTimeline: %v", err)
+		return
 	}
 	if len(got.Events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(got.Events))
+		return
 	}
 }
 
@@ -588,6 +610,7 @@ func TestWSClient_SendText_NotConnected(t *testing.T) {
 	err := ws.SendText("hello")
 	if err == nil {
 		t.Fatal("expected error sending text without connection")
+		return
 	}
 }
 
@@ -596,6 +619,7 @@ func TestWSClient_SendRaw_NotConnected(t *testing.T) {
 	err := ws.SendRaw([]byte("data"))
 	if err == nil {
 		t.Fatal("expected error sending raw without connection")
+		return
 	}
 }
 
@@ -604,6 +628,7 @@ func TestWSClient_Close_NilConn(t *testing.T) {
 	err := ws.Close()
 	if err != nil {
 		t.Fatalf("expected nil error closing nil conn, got %v", err)
+		return
 	}
 }
 
@@ -643,6 +668,7 @@ func TestWSClient_Connect_InvalidURL(t *testing.T) {
 	err := ws.Connect("/ws/test")
 	if err == nil {
 		t.Fatal("expected error connecting to invalid address")
+		return
 	}
 	if ws.State() != WSDisconnected {
 		t.Errorf("expected disconnected after failed connect, got %v", ws.State())
@@ -683,6 +709,7 @@ func TestTerminalWSClient_SendRaw_NotConnected(t *testing.T) {
 	err := tw.SendRaw([]byte("data"))
 	if err == nil {
 		t.Fatal("expected error sending raw without connection")
+		return
 	}
 }
 
@@ -691,6 +718,7 @@ func TestTerminalWSClient_SendResize_NotConnected(t *testing.T) {
 	err := tw.SendResize(80, 24)
 	if err == nil {
 		t.Fatal("expected error sending resize without connection")
+		return
 	}
 }
 
@@ -699,6 +727,7 @@ func TestTerminalWSClient_Close_NilConn(t *testing.T) {
 	err := tw.Close()
 	if err != nil {
 		t.Fatalf("expected nil error closing nil conn, got %v", err)
+		return
 	}
 }
 
@@ -719,6 +748,7 @@ func TestTerminalWSClient_Connect_InvalidURL(t *testing.T) {
 	err := tw.Connect("/ws/terminal")
 	if err == nil {
 		t.Fatal("expected error connecting to invalid address")
+		return
 	}
 	if tw.State() != WSDisconnected {
 		t.Errorf("expected disconnected after failed connect, got %v", tw.State())
@@ -758,6 +788,7 @@ func TestSSEClient_Connect_NonOK(t *testing.T) {
 	err := sse.Connect("/events")
 	if err == nil {
 		t.Fatal("expected error for non-200 SSE response")
+		return
 	}
 }
 
@@ -774,6 +805,7 @@ func TestSSEClient_Connect_ParsesEvents(t *testing.T) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			t.Fatal("server does not support flushing")
+			return
 		}
 		_, _ = fmt.Fprintf(w, "id: 1\nevent: update\ndata: hello world\n\n")
 		flusher.Flush()
@@ -789,6 +821,7 @@ func TestSSEClient_Connect_ParsesEvents(t *testing.T) {
 
 	if err := sse.Connect("/events"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
@@ -804,6 +837,7 @@ func TestSSEClient_Connect_ParsesEvents(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for SSE event")
+		return
 	}
 
 	sse.Close()
@@ -828,6 +862,7 @@ func TestSSEClient_Connect_MultilineData(t *testing.T) {
 
 	if err := sse.Connect("/events"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
@@ -837,6 +872,7 @@ func TestSSEClient_Connect_MultilineData(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for SSE event")
+		return
 	}
 
 	sse.Close()
@@ -856,6 +892,7 @@ func TestSSEClient_Connect_NoAuthHeader(t *testing.T) {
 	sse := NewSSEClient(srv.URL, "")
 	if err := sse.Connect("/events"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 	sse.Close()
 }
@@ -876,6 +913,7 @@ func TestDo_ContentTypeJSON(t *testing.T) {
 	resp, err := c.do("GET", "/api/test", nil)
 	if err != nil {
 		t.Fatalf("do: %v", err)
+		return
 	}
 	_ = resp.Body.Close()
 }
@@ -896,6 +934,7 @@ func TestDo_WithBody(t *testing.T) {
 	resp, err := c.do("POST", "/api/test", map[string]string{"key": "value"})
 	if err != nil {
 		t.Fatalf("do: %v", err)
+		return
 	}
 	_ = resp.Body.Close()
 }
@@ -911,6 +950,7 @@ func TestGetAuthConfig_Error(t *testing.T) {
 	_, err := c.GetAuthConfig()
 	if err == nil {
 		t.Fatal("expected error for 404")
+		return
 	}
 }
 
@@ -925,6 +965,7 @@ func TestGetSession_Error(t *testing.T) {
 	_, err := c.GetSession("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for 404")
+		return
 	}
 }
 
@@ -939,5 +980,6 @@ func TestCreateSession_Error(t *testing.T) {
 	_, err := c.CreateSession(&SessionCreate{Name: "test"})
 	if err == nil {
 		t.Fatal("expected error for 400")
+		return
 	}
 }

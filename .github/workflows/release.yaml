@@ -18,6 +18,11 @@ jobs:
     outputs:
       version: ${{ steps.extract.outputs.version }}
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - name: Extract version from tag
         id: extract
         run: |
@@ -40,6 +45,11 @@ jobs:
         platform: [amd64, arm64]
         container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Docker Buildx
@@ -94,6 +104,11 @@ jobs:
       matrix:
         container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           sparse-checkout: containers/${{ matrix.container }}/Dockerfile
@@ -145,7 +160,12 @@ jobs:
             "${IMAGE}:${VERSION}-arm64"
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
+        run: |
+          COSIGN_VERSION="2.4.3"
+          curl -sSfL "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64" -o /usr/local/bin/cosign
+          echo "caaad125acef1cb81d58dcdc454a1e429d09a750d1e9e2b3ed1aed8964454708  /usr/local/bin/cosign" | sha256sum -c -
+          chmod +x /usr/local/bin/cosign
+          cosign version
 
       - name: Sign container image
         run: |
@@ -165,6 +185,11 @@ jobs:
       matrix:
         container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh]
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Log in to Container Registry
@@ -174,27 +199,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install Syft
+        run: |
+          SYFT_VERSION="1.22.0"
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/9ab83874ed21c07479d8eeddd88a6894e1ff8537/install.sh | sh -s -- -b /usr/local/bin "v${SYFT_VERSION}"
+          syft version
+
       - name: Generate SBOM
-        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0
-        with:
-          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}
-          artifact-name: sbom-${{ matrix.container }}.spdx.json
-          output-file: sbom-${{ matrix.container }}.spdx.json
+        run: |
+          syft "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}" \
+            -o spdx-json > "sbom-${{ matrix.container }}.spdx.json"
 
-      - name: Scan container with Trivy
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+      - name: Upload SBOM
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}
-          format: sarif
-          output: trivy-${{ matrix.container }}.sarif
-          severity: CRITICAL,HIGH
+          name: sbom-${{ matrix.container }}.spdx.json
+          path: sbom-${{ matrix.container }}.spdx.json
 
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@c6f931105cb2c34c8f901cc885ba1e2e259cf745 # v4
-        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.container)) != ''
+      - name: Install Grype
+        run: |
+          GRYPE_VERSION="0.87.0"
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/247f5d72abf2131aa37f3164a98495c121b29029/install.sh | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}"
+          grype version
+
+      - name: Scan container with Grype
+        run: |
+          grype "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.container }}:${{ needs.version.outputs.version }}" \
+            --only-fixed \
+            --fail-on critical \
+            -o sarif > "grype-${{ matrix.container }}.sarif"
+
+      - name: Upload Grype results
+        uses: github/codeql-action/upload-sarif@38697555549f1db7851b81482ff19f1fa5c4fedc # v4
+        if: always()
         with:
-          sarif_file: trivy-${{ matrix.container }}.sarif
-          category: trivy-${{ matrix.container }}
+          sarif_file: grype-${{ matrix.container }}.sarif
+          category: grype-${{ matrix.container }}
 
   # ---------------------------------------------------------------------------
   # CLI binaries
@@ -218,6 +258,11 @@ jobs:
           - goos: linux
             goarch: arm64
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
@@ -248,16 +293,16 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          BINARY="volundr-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BINARY="niuu-${{ matrix.goos }}-${{ matrix.goarch }}"
           go build -tags embed_web \
             -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=${VERSION}" \
-            -o "dist/${BINARY}" ./cmd/volundr
+            -o "dist/${BINARY}" ./cmd/niuu
 
       - name: Upload artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
-          name: volundr-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: cli/dist/volundr-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: niuu-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: cli/dist/niuu-${{ matrix.goos }}-${{ matrix.goarch }}
 
   # ---------------------------------------------------------------------------
   # Helm charts
@@ -270,12 +315,21 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
-        with:
-          version: v3.14.0
+      - name: Install Helm
+        run: |
+          HELM_VERSION="3.14.0"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
 
       - name: Update chart versions
         run: |
@@ -289,8 +343,17 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" charts/volundr/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/volundr/Chart.yaml
 
-          cat charts/skuld/Chart.yaml
-          cat charts/volundr/Chart.yaml
+          # Update tyr chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/tyr/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/tyr/Chart.yaml
+
+          # Update skuld-planner chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/skuld-planner/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/skuld-planner/Chart.yaml
+
+          # Update niuu umbrella chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/niuu/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu/Chart.yaml
 
           # Update pyproject.toml
           sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
@@ -298,7 +361,11 @@ jobs:
       - name: Package Helm charts
         run: |
           helm package charts/skuld -d .helm-packages/
+          helm package charts/skuld-planner -d .helm-packages/
           helm package charts/volundr -d .helm-packages/
+          helm package charts/tyr -d .helm-packages/
+          helm dependency build charts/niuu
+          helm package charts/niuu -d .helm-packages/
 
       - name: Log in to Container Registry
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
@@ -309,8 +376,11 @@ jobs:
 
       - name: Push Helm charts to OCI registry
         run: |
-          helm push .helm-packages/skuld-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/skuld-0*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/skuld-planner-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/tyr-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-*.tgz ${{ env.CHART_REPO }}
 
   # ---------------------------------------------------------------------------
   # npm package
@@ -326,6 +396,11 @@ jobs:
       run:
         working-directory: web
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Node.js
@@ -364,36 +439,41 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download CLI artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: cli-binaries
-          pattern: volundr-*
+          pattern: niuu-*
 
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          for dir in cli-binaries/volundr-*/; do
+          for dir in cli-binaries/niuu-*/; do
             binary=$(basename "$dir")
             cp "${dir}${binary}" "release-assets/${binary}"
             chmod +x "release-assets/${binary}"
           done
-          cd release-assets && sha256sum volundr-* > checksums.txt
+          cd release-assets && sha256sum niuu-* > checksums.txt
           ls -lh
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
-          subject-path: release-assets/volundr-*
+          subject-path: release-assets/niuu-*
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
-        with:
-          tag_name: v${{ needs.version.outputs.version }}
-          name: Release v${{ needs.version.outputs.version }}
-          generate_release_notes: true
-          files: |
-            release-assets/volundr-*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ needs.version.outputs.version }}" \
+            --title "Release v${{ needs.version.outputs.version }}" \
+            --generate-notes \
+            release-assets/niuu-* \
             release-assets/checksums.txt

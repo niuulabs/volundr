@@ -266,6 +266,7 @@ func TestDefaultBindings(t *testing.T) {
 	bindings := DefaultBindings()
 	if len(bindings) == 0 {
 		t.Fatal("expected non-empty bindings")
+		return
 	}
 
 	// Check that at least some expected keys are present.
@@ -398,6 +399,7 @@ func TestMentionMenu_SelectedItem(t *testing.T) {
 	item := m.SelectedItem()
 	if item == nil {
 		t.Fatal("expected non-nil selected item")
+		return
 	}
 	if item.Label != "first" {
 		t.Errorf("expected 'first', got %q", item.Label)
@@ -548,11 +550,13 @@ func TestPalette_Update_Enter(t *testing.T) {
 	cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd for select")
+		return
 	}
 	msg := cmd()
 	sel, ok := msg.(PaletteSelectedMsg)
 	if !ok {
 		t.Fatalf("expected PaletteSelectedMsg, got %T", msg)
+		return
 	}
 	if sel.Item.Label != items[0].Label {
 		t.Errorf("expected first item, got %q", sel.Item.Label)

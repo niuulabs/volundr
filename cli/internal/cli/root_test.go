@@ -8,21 +8,20 @@ func TestRootCmd_HasSubcommands(t *testing.T) {
 	subcmds := rootCmd.Commands()
 	if len(subcmds) == 0 {
 		t.Fatal("expected root command to have subcommands")
+		return
 	}
 
+	// Top-level commands under niuu.
 	expected := map[string]bool{
-		"init":     false,
-		"up":       false,
-		"down":     false,
-		"status":   false,
-		"version":  false,
-		"tui":      false,
-		"sessions": false,
-		"config":   false,
-		"login":    false,
-		"logout":   false,
-		"whoami":   false,
-		"context":  false,
+		"volundr": false,
+		"tyr":     false,
+		"version": false,
+		"tui":     false,
+		"config":  false,
+		"login":   false,
+		"logout":  false,
+		"whoami":  false,
+		"context": false,
 	}
 
 	for _, cmd := range subcmds {
@@ -34,6 +33,29 @@ func TestRootCmd_HasSubcommands(t *testing.T) {
 	for name, found := range expected {
 		if !found {
 			t.Errorf("expected subcommand %q not found", name)
+		}
+	}
+}
+
+func TestVolundrCmd_HasSubcommands(t *testing.T) {
+	subcmds := volundrCmd.Commands()
+	expected := map[string]bool{
+		"init":     false,
+		"up":       false,
+		"down":     false,
+		"status":   false,
+		"sessions": false,
+	}
+
+	for _, cmd := range subcmds {
+		if _, ok := expected[cmd.Name()]; ok {
+			expected[cmd.Name()] = true
+		}
+	}
+
+	for name, found := range expected {
+		if !found {
+			t.Errorf("expected volundr subcommand %q not found", name)
 		}
 	}
 }
@@ -129,6 +151,7 @@ func TestSessionsCmd_HasSubcommands(t *testing.T) {
 func TestSessionsCmd_Alias(t *testing.T) {
 	if len(sessionsCmd.Aliases) == 0 {
 		t.Fatal("expected sessions command to have aliases")
+		return
 	}
 	found := false
 	for _, a := range sessionsCmd.Aliases {
@@ -148,6 +171,7 @@ func TestExecute_Version(t *testing.T) {
 
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute version: %v", err)
+		return
 	}
 }
 
@@ -158,6 +182,7 @@ func TestExecute_UnknownCommand(t *testing.T) {
 	err := Execute()
 	if err == nil {
 		t.Fatal("expected error for unknown command")
+		return
 	}
 }
 
@@ -178,5 +203,40 @@ func TestConfigCmd_HasSubcommands(t *testing.T) {
 		if !found {
 			t.Errorf("expected config subcommand %q not found", name)
 		}
+	}
+}
+
+func TestTyrCmd_Properties(t *testing.T) {
+	if tyrCmd.Use != "tyr" {
+		t.Errorf("expected Use %q, got %q", "tyr", tyrCmd.Use)
+	}
+	if tyrCmd.Short == "" {
+		t.Error("expected non-empty Short description")
+	}
+}
+
+func TestRootCmd_UseName(t *testing.T) {
+	if rootCmd.Use != "niuu" {
+		t.Errorf("expected root command Use %q, got %q", "niuu", rootCmd.Use)
+	}
+}
+
+func TestExecute_Tyr(t *testing.T) {
+	// tyr subcommand prints info and returns nil.
+	rootCmd.SetArgs([]string{"tyr"})
+	defer rootCmd.SetArgs(nil)
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute tyr: %v", err)
+		return
+	}
+}
+
+func TestExecute_HomeFlag(t *testing.T) {
+	// --home flag sets the home directory env var via PersistentPreRun.
+	rootCmd.SetArgs([]string{"--home", "/tmp/test-niuu-home", "version"})
+	defer rootCmd.SetArgs(nil)
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute with --home: %v", err)
+		return
 	}
 }

@@ -737,6 +737,7 @@ func TestTUIModel_HandleSessionSelected(t *testing.T) {
 
 	if updated.activeSession == nil {
 		t.Fatal("expected activeSession to be set")
+		return
 	}
 	if updated.activeSession.ID != "test-session-id" {
 		t.Errorf("expected session ID %q, got %q", "test-session-id", updated.activeSession.ID)

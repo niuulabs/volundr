@@ -112,7 +112,7 @@ class ProfileCreateRequest(BaseModel):
                 "name": "gpu-heavy",
                 "description": "Profile for GPU-intensive workloads",
                 "workload_type": "session",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "resource_config": {"cpu": "4", "memory": "16Gi", "gpu": "1"},
                 "is_default": False,
             },

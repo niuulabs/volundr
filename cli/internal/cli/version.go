@@ -49,9 +49,9 @@ var versionCmd = &cobra.Command{
 			Italic(true)
 
 		fmt.Println(hammerStyle.Render(tuipkg.HammerLogo))
-		fmt.Println(titleStyle.Render("  Volundr — The Coding Forge"))
+		fmt.Println(titleStyle.Render("  niuu — The Development Platform"))
 		fmt.Println(versionStyle.Render(fmt.Sprintf("  Version: %s", version)))
-		fmt.Println(taglineStyle.Render("  \"Skilled craftsman of the gods\""))
+		fmt.Println(taglineStyle.Render("  \"Tools of the gods\""))
 		fmt.Println()
 		fmt.Printf("  commit:  %s\n", commit)
 		fmt.Printf("  built:   %s\n", date)

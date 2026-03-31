@@ -126,6 +126,7 @@ spec:
               WORKSPACE="{{ include "skuld.workspacePath" . }}"
               REPO_URL="{{ .Values.git.repoUrl }}"
               BRANCH="{{ .Values.git.branch | default "main" }}"
+              BASE_BRANCH="{{ .Values.git.baseBranch | default "" }}"
               {{- if .Values.git.credentials.secretName }}
               # Inject credentials into HTTPS URL for fetch
               PROTO="${REPO_URL%%://*}"
@@ -134,19 +135,40 @@ spec:
               {{- else }}
               AUTH_URL="$REPO_URL"
               {{- end }}
-              if [ -d "$WORKSPACE/.git" ]; then
-                echo "Workspace already contains a git repository, skipping clone"
+              if [ -d "$WORKSPACE/.git" ] && git -C "$WORKSPACE" rev-parse HEAD >/dev/null 2>&1; then
+                echo "Workspace already contains a valid git repository, skipping clone"
               else
-                # Use init+fetch+checkout instead of clone (works with non-empty directories)
+                # Clean up any broken .git state
+                rm -rf "$WORKSPACE/.git"
                 mkdir -p "$WORKSPACE"
                 git init "$WORKSPACE"
                 git -C "$WORKSPACE" remote add origin "$AUTH_URL"
                 git -C "$WORKSPACE" fetch origin
-                git -C "$WORKSPACE" checkout -B "$BRANCH" "origin/$BRANCH"
+                if git -C "$WORKSPACE" rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+                  git -C "$WORKSPACE" checkout -B "$BRANCH" "origin/$BRANCH"
+                  echo "Checked out existing branch $BRANCH"
+                else
+                  # Use explicit base branch, or fall back to remote HEAD
+                  if [ -n "$BASE_BRANCH" ] && git -C "$WORKSPACE" rev-parse --verify "origin/$BASE_BRANCH" >/dev/null 2>&1; then
+                    FALLBACK="$BASE_BRANCH"
+                  else
+                    FALLBACK=$(git -C "$WORKSPACE" remote show origin | sed -n 's/.*HEAD branch: //p')
+                    FALLBACK=${FALLBACK:-main}
+                  fi
+                  echo "Branch $BRANCH not found on remote, creating from $FALLBACK"
+                  git -C "$WORKSPACE" checkout -B "$FALLBACK" "origin/$FALLBACK"
+                  git -C "$WORKSPACE" checkout -b "$BRANCH"
+                fi
                 # Store clean URL without embedded credentials
                 git -C "$WORKSPACE" remote set-url origin "$REPO_URL"
                 echo "Repository cloned successfully"
               fi
+              {{- if .Values.git.credentials.secretName }}
+              # Configure credential helper so git push uses GIT_TOKEN env var
+              git -C "$WORKSPACE" config credential.helper \
+                '!f() { echo "username=${GIT_USERNAME:-x-access-token}"; echo "password=$GIT_TOKEN"; }; f'
+              echo "Git credential helper configured"
+              {{- end }}
           {{- if .Values.git.credentials.secretName }}
           env:
             - name: GIT_USERNAME
@@ -242,6 +264,26 @@ spec:
             {{- range .Values.envVars }}
             - name: {{ .name }}
               value: {{ .value | quote }}
+            {{- end }}
+            {{- if .Values.git.credentials.secretName }}
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.git.credentials.secretName }}
+                  key: {{ .Values.git.credentials.tokenKey | default "token" }}
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.git.credentials.secretName }}
+                  key: {{ .Values.git.credentials.tokenKey | default "token" }}
+            {{- end }}
+            {{- if .Values.session.systemPrompt }}
+            - name: SESSION_SYSTEM_PROMPT
+              value: {{ .Values.session.systemPrompt | quote }}
+            {{- end }}
+            {{- if .Values.session.initialPrompt }}
+            - name: SESSION_INITIAL_PROMPT
+              value: {{ .Values.session.initialPrompt | quote }}
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

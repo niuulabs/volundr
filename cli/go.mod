@@ -8,9 +8,10 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/charmbracelet/x/vt v0.0.0-20260309091332-e8ca31595cc4
-	github.com/fergusstrange/embedded-postgres v1.33.0
+	github.com/fergusstrange/embedded-postgres v1.34.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.49.0
 	gopkg.in/yaml.v3 v3.0.1

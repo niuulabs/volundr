@@ -42,6 +42,10 @@ class _StubProvider(GitProvider):
         return "stub"
 
     @property
+    def base_url(self) -> str:
+        return f"https://{self._hosts[0]}"
+
+    @property
     def orgs(self) -> tuple[str, ...]:
         return ()
 

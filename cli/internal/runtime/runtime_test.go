@@ -40,11 +40,13 @@ func TestBuildGitConfig_EnabledWithInstances(t *testing.T) {
 	gh, ok := result["github"]
 	if !ok {
 		t.Fatal("expected 'github' key in result")
+		return
 	}
 
 	ghMap, ok := gh.(map[string]interface{})
 	if !ok {
 		t.Fatal("expected github to be a map")
+		return
 	}
 
 	if ghMap["enabled"] != true {
@@ -54,10 +56,12 @@ func TestBuildGitConfig_EnabledWithInstances(t *testing.T) {
 	instances, ok := ghMap["instances"].([]map[string]interface{})
 	if !ok {
 		t.Fatal("expected instances to be a slice of maps")
+		return
 	}
 
 	if len(instances) != 2 {
 		t.Fatalf("expected 2 instances, got %d", len(instances))
+		return
 	}
 
 	// First instance.
@@ -77,9 +81,11 @@ func TestBuildGitConfig_EnabledWithInstances(t *testing.T) {
 	orgs, ok := inst["orgs"].([]string)
 	if !ok {
 		t.Fatal("expected orgs to be a string slice")
+		return
 	}
 	if len(orgs) != 2 {
 		t.Fatalf("expected 2 orgs, got %d", len(orgs))
+		return
 	}
 
 	// Second instance — no token/orgs.
@@ -107,11 +113,13 @@ func TestBuildGitConfig_EnabledNoInstances(t *testing.T) {
 	gh, ok := result["github"]
 	if !ok {
 		t.Fatal("expected 'github' key in result")
+		return
 	}
 
 	ghMap, ok := gh.(map[string]interface{})
 	if !ok {
 		t.Fatal("expected github to be a map")
+		return
 	}
 
 	if ghMap["enabled"] != true {
@@ -129,6 +137,7 @@ func TestEnsureContainerStorageDirs(t *testing.T) {
 	err := ensureContainerStorageDirs(tmpDir)
 	if err != nil {
 		t.Fatalf("ensureContainerStorageDirs: %v", err)
+		return
 	}
 
 	// Verify all expected directories were created.
@@ -156,6 +165,7 @@ func TestEnsureContainerStorageDirs_ChmodCfgDirError(t *testing.T) {
 	err := ensureContainerStorageDirs("/nonexistent/dir/that/does/not/exist")
 	if err == nil {
 		t.Fatal("expected error for non-existent config dir")
+		return
 	}
 	if !strings.Contains(err.Error(), "chmod config dir") {
 		t.Errorf("expected 'chmod config dir' in error, got %q", err.Error())
@@ -169,11 +179,13 @@ func TestEnsureContainerStorageDirs_MkdirError(t *testing.T) {
 	dataPath := filepath.Join(tmpDir, "data")
 	if err := os.WriteFile(dataPath, []byte("block"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	err := ensureContainerStorageDirs(tmpDir)
 	if err == nil {
 		t.Fatal("expected error when directory creation fails")
+		return
 	}
 	if !strings.Contains(err.Error(), "create directory") {
 		t.Errorf("expected 'create directory' in error, got %q", err.Error())
@@ -186,9 +198,25 @@ func TestEnsureContainerStorageDirs_Idempotent(t *testing.T) {
 	// Call twice — should not error on second call.
 	if err := ensureContainerStorageDirs(tmpDir); err != nil {
 		t.Fatalf("first call: %v", err)
+		return
 	}
 	if err := ensureContainerStorageDirs(tmpDir); err != nil {
 		t.Fatalf("second call: %v", err)
+		return
+	}
+}
+
+func TestImageOrDefault_CustomImage(t *testing.T) {
+	got := imageOrDefault("custom:latest", "default:v1")
+	if got != "custom:latest" {
+		t.Errorf("expected custom:latest, got %q", got)
+	}
+}
+
+func TestImageOrDefault_EmptyFallsBack(t *testing.T) {
+	got := imageOrDefault("", "default:v1")
+	if got != "default:v1" {
+		t.Errorf("expected default:v1, got %q", got)
 	}
 }
 
@@ -241,17 +269,32 @@ func TestServiceStatusJSON(t *testing.T) {
 
 func TestStackStatus(t *testing.T) {
 	s := StackStatus{
-		Runtime: "docker",
+		Runtime: "k3s",
 		Services: []ServiceStatus{
 			{Name: "api", State: StateRunning},
 			{Name: "postgres", State: StateRunning},
 		},
 	}
 
-	if s.Runtime != "docker" {
-		t.Errorf("expected runtime 'docker', got %q", s.Runtime)
+	if s.Runtime != "k3s" {
+		t.Errorf("expected runtime 'k3s', got %q", s.Runtime)
 	}
 	if len(s.Services) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(s.Services))
+		return
+	}
+}
+
+func TestImageOrDefault_UsesImageWhenSet(t *testing.T) {
+	result := imageOrDefault("custom/image:latest", "default/image:latest")
+	if result != "custom/image:latest" {
+		t.Errorf("expected custom/image:latest, got %q", result)
+	}
+}
+
+func TestImageOrDefault_UsesDefaultWhenEmpty(t *testing.T) {
+	result := imageOrDefault("", "default/image:latest")
+	if result != "default/image:latest" {
+		t.Errorf("expected default/image:latest, got %q", result)
 	}
 }

@@ -30,6 +30,8 @@ const (
 	k3sLoadBalancerHTTPSPort = "443:443@loadbalancer"
 	// Host port the API listens on in k3s mode.
 	k3sAPIInternalPort = 18080
+	// Host port the Tyr container listens on in k3s mode.
+	k3sTyrInternalPort = 18081
 )
 
 // k3sComposeFileName is the generated compose file name for k3s mode.
@@ -37,6 +39,9 @@ const k3sComposeFileName = "docker-compose.k3s.yaml"
 
 // k3sContainerName is the API container name in k3s mode.
 const k3sContainerName = "volundr-k3s-api"
+
+// k3sTyrContainerName is the Tyr container name in k3s mode.
+const k3sTyrContainerName = "volundr-k3s-tyr"
 
 // k3sHostKubeconfigFile is the kubeconfig file for host-side kubectl/helm.
 // Written to ~/.volundr/ so we never touch ~/.kube/config.
@@ -79,6 +84,33 @@ var k3sComposeTemplate = template.Must(template.New("k3s-compose").Parse(`servic
 {{- end}}
     networks:
       - k3d-{{.ClusterName}}
+{{- if .TyrEnabled}}
+
+  tyr:
+    image: {{.TyrImage}}
+    container_name: {{.TyrContainerName}}
+    ports:
+      - "127.0.0.1:{{.TyrPort}}:8081"
+    environment:
+      DATABASE__HOST: "{{.DBHost}}"
+      DATABASE__PORT: "{{.DBPort}}"
+      DATABASE__USER: "{{.DBUser}}"
+      DATABASE__PASSWORD: "{{.DBPassword}}"
+      DATABASE__NAME: "{{.DBName}}"
+      VOLUNDR__URL: "http://{{.ContainerName}}:8080"
+      AUTH__ALLOW_ANONYMOUS_DEV: "true"
+      EVENT_BUS__ADAPTER: "volundr.adapters.outbound.events.InMemoryEventSinkAdapter"
+{{- if .ExtraHosts}}
+    extra_hosts:
+{{- range .ExtraHosts}}
+      - "{{.}}"
+{{- end}}
+{{- end}}
+    networks:
+      - k3d-{{.ClusterName}}
+    depends_on:
+      - api
+{{- end}}
 
 networks:
   k3d-{{.ClusterName}}:
@@ -87,20 +119,24 @@ networks:
 
 // k3sComposeData holds the template data for the k3s compose file.
 type k3sComposeData struct {
-	APIImage        string
-	ContainerName   string
-	APIPort         int
-	DBHost          string
-	DBPort          int
-	DBUser          string
-	DBPassword      string
-	DBName          string
-	AnthropicAPIKey string
-	ConfigPath      string
-	KubeconfigPath  string
-	StorageDir      string
-	ClusterName     string
-	ExtraHosts      []string
+	APIImage         string
+	ContainerName    string
+	APIPort          int
+	DBHost           string
+	DBPort           int
+	DBUser           string
+	DBPassword       string
+	DBName           string
+	AnthropicAPIKey  string
+	ConfigPath       string
+	KubeconfigPath   string
+	StorageDir       string
+	ClusterName      string
+	ExtraHosts       []string
+	TyrEnabled       bool
+	TyrImage         string
+	TyrContainerName string
+	TyrPort          int
 }
 
 // k3sAPIConfig represents the Python API config file structure for k3s mode.
@@ -235,7 +271,7 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 		}
 		fmt.Printf("started (port %d, data: %s)\n", cfg.Database.Port, cfg.Database.DataDir)
 
-		// Run migrations.
+		// Run Volundr migrations.
 		fmt.Print("  Migrations    ... ")
 		applied, source, err := runMigrationsAuto(ctx, r.pg)
 		if err != nil {
@@ -246,6 +282,21 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 			fmt.Printf("applied (%d migrations, source: %s)\n", applied, source)
 		} else {
 			fmt.Println("skipped (no migrations found)")
+		}
+
+		// Run Tyr migrations if Tyr is enabled.
+		if cfg.K3s.TyrEnabled {
+			fmt.Print("  Tyr migrations ... ")
+			tyrApplied, tyrSource, tyrErr := runTyrMigrationsAuto(ctx, r.pg)
+			if tyrErr != nil {
+				fmt.Println("failed")
+				return fmt.Errorf("run tyr migrations: %w", tyrErr)
+			}
+			if tyrSource != "" {
+				fmt.Printf("applied (%d migrations, source: %s)\n", tyrApplied, tyrSource)
+			} else {
+				fmt.Println("skipped (no migrations found)")
+			}
 		}
 	}
 
@@ -300,6 +351,14 @@ func (r *K3sRuntime) Up(ctx context.Context, cfg *config.Config) error {
 	if err := rtr.SetSessionBackend("http://127.0.0.1:80"); err != nil {
 		fmt.Println("failed")
 		return fmt.Errorf("set session backend: %w", err)
+	}
+	// Route /api/v1/tyr/ to the Tyr container if enabled.
+	if cfg.K3s.TyrEnabled {
+		tyrURL := fmt.Sprintf("http://127.0.0.1:%d", k3sTyrInternalPort)
+		if err := rtr.AddBackend("/api/v1/tyr/", tyrURL); err != nil {
+			fmt.Println("failed")
+			return fmt.Errorf("add tyr backend: %w", err)
+		}
 	}
 	// Rewrite Docker-internal endpoint hostnames in API responses so
 	// the browser gets URLs it can resolve (using the request Host header).
@@ -436,6 +495,24 @@ func (r *K3sRuntime) Status(_ context.Context) (*StackStatus, error) {
 
 // Logs streams logs for a service.
 func (r *K3sRuntime) Logs(_ context.Context, service string, follow bool) (io.ReadCloser, error) {
+	// For Docker Compose services (tyr), use docker logs.
+	if service == "tyr" {
+		args := []string{"logs", k3sTyrContainerName}
+		if follow {
+			args = append(args, "-f")
+		}
+		cmd := execCommand("docker", args...) //nolint:gosec // arguments from trusted internal config
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, fmt.Errorf("get stdout pipe: %w", err)
+		}
+		cmd.Stderr = cmd.Stdout
+		if err := cmd.Start(); err != nil {
+			return nil, fmt.Errorf("start docker logs: %w", err)
+		}
+		return &cmdReadCloser{cmd: cmd, ReadCloser: stdout}, nil
+	}
+
 	// For host services (api, postgres), use log files.
 	if service == "api" || service == "postgres" {
 		cfgDir, err := config.ConfigDir()
@@ -1005,9 +1082,9 @@ func (r *K3sRuntime) generateK3sConfig(cfg *config.Config) (string, error) {
 				"ingress_class":   "traefik",
 				"ingress_backend": fmt.Sprintf("k3d-%s-serverlb", k3sClusterName),
 				"storage_path":    k3sNodeStoragePath,
-				"skuld_image":     cfg.Docker.SkuldImage,
-				"reh_image":       cfg.Docker.RehImage,
-				"devrunner_image": cfg.Docker.TtydImage,
+				"skuld_image":     cfg.K3s.SkuldImage,
+				"reh_image":       cfg.K3s.RehImage,
+				"devrunner_image": cfg.K3s.TtydImage,
 				"db_host":         "host.k3d.internal",
 				"db_port":         cfg.Database.Port,
 				"db_user":         cfg.Database.User,
@@ -1107,19 +1184,23 @@ func (r *K3sRuntime) startAPIContainer(_ context.Context, cfg *config.Config) er
 	}
 
 	data := k3sComposeData{
-		APIImage:        dockerImageOrDefault(cfg.Docker.APIImage, "ghcr.io/niuulabs/volundr:latest"),
-		ContainerName:   k3sContainerName,
-		APIPort:         k3sAPIInternalPort,
-		DBHost:          dbHost,
-		DBPort:          cfg.Database.Port,
-		DBUser:          cfg.Database.User,
-		DBPassword:      cfg.Database.Password,
-		DBName:          cfg.Database.Name,
-		AnthropicAPIKey: cfg.Anthropic.APIKey,
-		ConfigPath:      filepath.Join(cfgDir, k3sConfigFileName),
-		KubeconfigPath:  kubeconfigPath,
-		StorageDir:      cfgDir,
-		ClusterName:     k3sClusterName,
+		APIImage:         imageOrDefault(cfg.K3s.APIImage, "ghcr.io/niuulabs/volundr:latest"),
+		ContainerName:    k3sContainerName,
+		APIPort:          k3sAPIInternalPort,
+		DBHost:           dbHost,
+		DBPort:           cfg.Database.Port,
+		DBUser:           cfg.Database.User,
+		DBPassword:       cfg.Database.Password,
+		DBName:           cfg.Database.Name,
+		AnthropicAPIKey:  cfg.Anthropic.APIKey,
+		ConfigPath:       filepath.Join(cfgDir, k3sConfigFileName),
+		KubeconfigPath:   kubeconfigPath,
+		StorageDir:       cfgDir,
+		ClusterName:      k3sClusterName,
+		TyrEnabled:       cfg.K3s.TyrEnabled,
+		TyrImage:         imageOrDefault(cfg.K3s.TyrImage, "ghcr.io/niuulabs/tyr:latest"),
+		TyrContainerName: k3sTyrContainerName,
+		TyrPort:          k3sTyrInternalPort,
 	}
 
 	// On Linux, host.docker.internal doesn't resolve by default
@@ -1228,6 +1309,14 @@ func (r *K3sRuntime) writeStateFile(cfg *config.Config) error {
 	services := []ServiceStatus{
 		{Name: "proxy", State: StateRunning, Port: cfg.Listen.Port},
 		{Name: "api", State: StateRunning, Port: k3sAPIInternalPort},
+	}
+
+	if cfg.K3s.TyrEnabled {
+		services = append(services, ServiceStatus{
+			Name:  "tyr",
+			State: StateRunning,
+			Port:  k3sTyrInternalPort,
+		})
 	}
 
 	if cfg.Database.Mode == "embedded" {

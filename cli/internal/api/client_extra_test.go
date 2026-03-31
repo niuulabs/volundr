@@ -34,6 +34,7 @@ func TestGetMe(t *testing.T) {
 	got, err := c.GetMe()
 	if err != nil {
 		t.Fatalf("GetMe: %v", err)
+		return
 	}
 	if got.UserID != "u1" {
 		t.Errorf("expected userID %q, got %q", "u1", got.UserID)
@@ -54,6 +55,7 @@ func TestGetMe_Error(t *testing.T) {
 	_, err := c.GetMe()
 	if err == nil {
 		t.Fatal("expected error for 401")
+		return
 	}
 }
 
@@ -75,9 +77,11 @@ func TestListUsers(t *testing.T) {
 	got, err := c.ListUsers()
 	if err != nil {
 		t.Fatalf("ListUsers: %v", err)
+		return
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(got))
+		return
 	}
 	if got[0].Email != "admin@example.com" {
 		t.Errorf("expected email %q, got %q", "admin@example.com", got[0].Email)
@@ -95,6 +99,7 @@ func TestListUsers_Error(t *testing.T) {
 	_, err := c.ListUsers()
 	if err == nil {
 		t.Fatal("expected error for 403")
+		return
 	}
 }
 
@@ -116,9 +121,11 @@ func TestListTenants(t *testing.T) {
 	got, err := c.ListTenants()
 	if err != nil {
 		t.Fatalf("ListTenants: %v", err)
+		return
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 tenant, got %d", len(got))
+		return
 	}
 	if got[0].Name != "Acme Corp" {
 		t.Errorf("expected name %q, got %q", "Acme Corp", got[0].Name)
@@ -136,6 +143,7 @@ func TestListTenants_Error(t *testing.T) {
 	_, err := c.ListTenants()
 	if err == nil {
 		t.Fatal("expected error for 500")
+		return
 	}
 }
 
@@ -157,9 +165,11 @@ func TestListIntegrationCatalog(t *testing.T) {
 	got, err := c.ListIntegrationCatalog()
 	if err != nil {
 		t.Fatalf("ListIntegrationCatalog: %v", err)
+		return
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(got))
+		return
 	}
 	if got[0].Slug != "gitlab" {
 		t.Errorf("expected slug %q, got %q", "gitlab", got[0].Slug)
@@ -177,6 +187,7 @@ func TestListIntegrationCatalog_Error(t *testing.T) {
 	_, err := c.ListIntegrationCatalog()
 	if err == nil {
 		t.Fatal("expected error for 500")
+		return
 	}
 }
 
@@ -198,9 +209,11 @@ func TestListIntegrations(t *testing.T) {
 	got, err := c.ListIntegrations()
 	if err != nil {
 		t.Fatalf("ListIntegrations: %v", err)
+		return
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 connection, got %d", len(got))
+		return
 	}
 	if !got[0].Enabled {
 		t.Error("expected enabled=true")
@@ -218,6 +231,7 @@ func TestListIntegrations_Error(t *testing.T) {
 	_, err := c.ListIntegrations()
 	if err == nil {
 		t.Fatal("expected error for 403")
+		return
 	}
 }
 
@@ -237,6 +251,7 @@ func TestTestIntegration_Success(t *testing.T) {
 	c := NewClient(srv.URL, "tok")
 	if err := c.TestIntegration("c1"); err != nil {
 		t.Fatalf("TestIntegration: %v", err)
+		return
 	}
 }
 
@@ -251,6 +266,7 @@ func TestTestIntegration_Error(t *testing.T) {
 	err := c.TestIntegration("c1")
 	if err == nil {
 		t.Fatal("expected error for 502")
+		return
 	}
 	if !strings.Contains(err.Error(), "502") {
 		t.Errorf("expected error to contain status code, got %q", err.Error())
@@ -275,9 +291,11 @@ func TestListAdminWorkspaces(t *testing.T) {
 	got, err := c.ListAdminWorkspaces()
 	if err != nil {
 		t.Fatalf("ListAdminWorkspaces: %v", err)
+		return
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 workspace, got %d", len(got))
+		return
 	}
 	if got[0].PodName != "pod-1" {
 		t.Errorf("expected podName %q, got %q", "pod-1", got[0].PodName)
@@ -295,6 +313,7 @@ func TestListAdminWorkspaces_Error(t *testing.T) {
 	_, err := c.ListAdminWorkspaces()
 	if err == nil {
 		t.Fatal("expected error for 403")
+		return
 	}
 }
 
@@ -311,6 +330,7 @@ func TestPing_Success(t *testing.T) {
 	c := NewClient(srv.URL, "tok")
 	if err := c.Ping(); err != nil {
 		t.Fatalf("Ping: %v", err)
+		return
 	}
 }
 
@@ -324,6 +344,7 @@ func TestPing_Error(t *testing.T) {
 	err := c.Ping()
 	if err == nil {
 		t.Fatal("expected error for 503")
+		return
 	}
 	if !strings.Contains(err.Error(), "503") {
 		t.Errorf("expected error to contain status code, got %q", err.Error())
@@ -335,6 +356,106 @@ func TestPing_ConnectionError(t *testing.T) {
 	err := c.Ping()
 	if err == nil {
 		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestListChronicles_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.ListChronicles()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestGetTimeline_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetTimeline("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestListModels_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.ListModels()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestGetStats_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetStats()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestListSessions_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.ListSessions()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestGetSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestCreateSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.CreateSession(&SessionCreate{Name: "test"})
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestStartSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	err := c.StartSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestStopSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	err := c.StopSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestDeleteSession_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	err := c.DeleteSession("s1")
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
+	}
+}
+
+func TestGetAuthConfig_ConnectionError(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", "tok")
+	_, err := c.GetAuthConfig()
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+		return
 	}
 }
 
@@ -350,6 +471,7 @@ func TestDecodeResponse_NonJSONContentType(t *testing.T) {
 	_, err := c.ListSessions()
 	if err == nil {
 		t.Fatal("expected error for non-JSON content type")
+		return
 	}
 	if !strings.Contains(err.Error(), "unexpected response") {
 		t.Errorf("expected 'unexpected response' in error, got %q", err.Error())
@@ -373,6 +495,7 @@ func TestDecodeResponse_NonJSONContentType_LongBody(t *testing.T) {
 	_, err := c.ListSessions()
 	if err == nil {
 		t.Fatal("expected error for non-JSON content type")
+		return
 	}
 	// The preview should be truncated to 200 chars.
 	if !strings.Contains(err.Error(), "unexpected response") {

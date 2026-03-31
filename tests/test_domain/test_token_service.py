@@ -6,6 +6,7 @@ import pytest
 
 from tests.conftest import InMemorySessionRepository, InMemoryTokenTracker
 from volundr.adapters.outbound.pricing import HardcodedPricingProvider
+from volundr.config import AIModelConfig
 from volundr.domain.models import GitSource, ModelProvider, Session, SessionStatus
 from volundr.domain.services import (
     SessionNotFoundError,
@@ -28,8 +29,15 @@ def token_tracker() -> InMemoryTokenTracker:
 
 @pytest.fixture
 def pricing_provider() -> HardcodedPricingProvider:
-    """Create a pricing provider."""
-    return HardcodedPricingProvider()
+    """Create a pricing provider with test models."""
+    return HardcodedPricingProvider(
+        [
+            AIModelConfig(
+                id="claude-sonnet-4-20250514", name="Sonnet", cost_per_million_tokens=3.0
+            ),
+            AIModelConfig(id="claude-opus-4-20250514", name="Opus", cost_per_million_tokens=15.0),
+        ]
+    )
 
 
 @pytest.fixture

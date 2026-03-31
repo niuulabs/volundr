@@ -156,7 +156,7 @@ def create_oauth_router(
         now = datetime.now(UTC)
         connection = IntegrationConnection(
             id=str(uuid4()),
-            user_id=user_id,
+            owner_id=user_id,
             integration_type=defn.integration_type,
             adapter=defn.adapter,
             credential_name=credential_name,

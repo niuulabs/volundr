@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from niuu.adapters.inbound.rest_repos import create_repos_router
 from volundr.adapters.inbound.rest import create_router
 from volundr.adapters.inbound.rest_admin_settings import create_admin_settings_router
 from volundr.adapters.inbound.rest_credentials import create_credentials_router
@@ -101,13 +102,14 @@ def configure_logging(config: LoggingConfig | None = None) -> None:
     else:
         fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-    # Configure root logger
+    # Configure root logger — set level directly to avoid uvicorn overriding
     logging.basicConfig(
         level=level,
         format=fmt,
         stream=sys.stderr,
-        force=True,  # Override any existing configuration
+        force=True,
     )
+    logging.getLogger().setLevel(level)
 
     logging.getLogger(__name__).info(
         "Logging configured: level=%s, format=%s",
@@ -467,7 +469,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             token_tracker = PostgresTokenTracker(pool)
             pod_manager = _create_pod_manager(settings)
             gateway_adapter = _create_gateway_adapter(settings)
-            pricing_provider = HardcodedPricingProvider()
+            pricing_provider = HardcodedPricingProvider(settings.models or None)
             git_registry = create_git_registry(settings.git)
             broadcaster = InMemoryEventBroadcaster()
 
@@ -553,6 +555,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 git_registry,
                 user_integration=user_integration_service,
             )
+
+            # TODO: extract niuu shared service to its own process — for now
+            # volundr hosts the /api/v1/niuu endpoints alongside its own.
+            niuu_repos_router = create_repos_router(repo_service)
+            app.include_router(niuu_repos_router)
+
             chronicle_repository = PostgresChronicleRepository(pool)
             timeline_repository = PostgresTimelineRepository(pool)
             chronicle_service = ChronicleService(
@@ -612,6 +620,39 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             preset_service = PresetService(preset_repository)
             presets_router = create_presets_router(preset_service)
             app.include_router(presets_router)
+
+            # Personal access tokens
+            from volundr.adapters.outbound.postgres_pats import PostgresPATRepository
+            from volundr.domain.services.pat import PATService
+
+            pat_repository = PostgresPATRepository(pool)
+
+            from niuu.domain.services.pat_validator import PATValidator
+
+            pat_validator = PATValidator(
+                repo=pat_repository,
+                cache_ttl=settings.pat.revocation_cache_ttl,
+                revoked_cache_ttl=settings.pat.revoked_cache_ttl,
+            )
+            app.state.pat_validator = pat_validator
+
+            # Resolve the token issuer (IDP adapter) via dynamic import
+            token_issuer_cls = import_class(settings.pat.token_issuer_adapter)
+            token_issuer = token_issuer_cls(**settings.pat.token_issuer_kwargs)
+
+            pat_service = PATService(
+                repo=pat_repository,
+                token_issuer=token_issuer,
+                ttl_days=settings.pat.ttl_days,
+                validator=pat_validator,
+            )
+            app.state.pat_service = pat_service
+
+            from volundr.adapters.inbound.auth import extract_principal as _extract_principal
+            from volundr.adapters.inbound.rest_pats import create_pats_router
+
+            pats_router = create_pats_router(_extract_principal)
+            app.include_router(pats_router)
 
             git_router = create_git_router(git_workflow_service)
             app.include_router(git_router)
@@ -821,6 +862,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # PAT revocation enforcement
+    from niuu.adapters.pat_revocation_middleware import PATRevocationMiddleware
+
+    app.add_middleware(PATRevocationMiddleware)
 
     @app.get("/health", tags=["Health"])
     async def health_check() -> dict[str, str]:

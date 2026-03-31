@@ -33,6 +33,7 @@ func TestChatPage_HandleStreamEvent_Assistant(t *testing.T) {
 
 	if len(page.messages) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(page.messages))
+		return
 	}
 	if page.messages[0].Role != "assistant" {
 		t.Errorf("expected role assistant, got %q", page.messages[0].Role)
@@ -150,6 +151,7 @@ func TestChatPage_HandleStreamEvent_Error(t *testing.T) {
 	})
 	if len(page.messages) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(page.messages))
+		return
 	}
 	if page.messages[0].Role != "system" {
 		t.Errorf("expected system role, got %q", page.messages[0].Role)
@@ -167,6 +169,7 @@ func TestChatPage_HandleStreamEvent_ErrorEmpty(t *testing.T) {
 	})
 	if len(page.messages) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(page.messages))
+		return
 	}
 }
 
@@ -178,6 +181,7 @@ func TestChatPage_HandleStreamEvent_System(t *testing.T) {
 	})
 	if len(page.messages) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(page.messages))
+		return
 	}
 	if page.messages[0].Content != "system message here" {
 		t.Errorf("expected unquoted content, got %q", page.messages[0].Content)
@@ -369,6 +373,7 @@ func TestChatPage_Update_ChatHistoryLoadedError(t *testing.T) {
 	page, _ = page.Update(ChatHistoryLoadedMsg{Err: errors.New("fail")})
 	if len(page.messages) != 1 {
 		t.Fatalf("expected 1 error message, got %d", len(page.messages))
+		return
 	}
 	if page.messages[0].Role != "system" {
 		t.Errorf("expected system role for error, got %q", page.messages[0].Role)
@@ -507,6 +512,7 @@ func TestTimelineEventsFromAPI(t *testing.T) {
 	result := timelineEventsFromAPI(events)
 	if len(result) != 3 {
 		t.Fatalf("expected 3 events, got %d", len(result))
+		return
 	}
 	if result[0].Type != EventMessage {
 		t.Errorf("expected message type, got %v", result[0].Type)
@@ -1443,6 +1449,7 @@ func TestSessionsPage_selectedSession(t *testing.T) {
 	sel := page.selectedSession()
 	if sel == nil {
 		t.Fatal("expected non-nil selected session")
+		return
 	}
 	if sel.ID != "s1" {
 		t.Errorf("expected ID s1, got %q", sel.ID)
@@ -1632,6 +1639,7 @@ func TestTerminalPage_CreateTab(t *testing.T) {
 	page.createTab("s1", "shell-1", "term-1", "ws://localhost/ws")
 	if len(page.tabs) != 1 {
 		t.Fatalf("expected 1 tab, got %d", len(page.tabs))
+		return
 	}
 	tab := page.tabs[0]
 	if tab.label != "shell-1" {
@@ -1665,6 +1673,7 @@ func TestTerminalPage_CreateMultipleTabs(t *testing.T) {
 
 	if len(page.tabs) != 3 {
 		t.Fatalf("expected 3 tabs, got %d", len(page.tabs))
+		return
 	}
 
 	// Clean up.
@@ -1685,6 +1694,7 @@ func TestTerminalPage_CloseTab(t *testing.T) {
 	page.closeTab(0)
 	if len(page.tabs) != 1 {
 		t.Fatalf("expected 1 tab after close, got %d", len(page.tabs))
+		return
 	}
 	if page.tabs[0].label != "tab-2" {
 		t.Errorf("expected remaining tab to be tab-2, got %q", page.tabs[0].label)
@@ -1742,6 +1752,7 @@ func TestTerminalPage_HandleSessionsLoaded(t *testing.T) {
 
 	if len(page.tabs) != 2 {
 		t.Fatalf("expected 2 tabs, got %d", len(page.tabs))
+		return
 	}
 	if page.tabs[0].label != "shell-1" {
 		t.Errorf("expected label %q, got %q", "shell-1", page.tabs[0].label)
@@ -1779,6 +1790,7 @@ func TestTerminalPage_HandleSpawned(t *testing.T) {
 
 	if len(page.tabs) != 2 {
 		t.Fatalf("expected 2 tabs, got %d", len(page.tabs))
+		return
 	}
 	if page.activeTab != 1 {
 		t.Errorf("expected active tab 1, got %d", page.activeTab)
@@ -1985,6 +1997,7 @@ func TestTerminalPage_Update_TerminalSessionsLoadedMsg(t *testing.T) {
 	})
 	if len(page.tabs) != 1 {
 		t.Fatalf("expected 1 tab, got %d", len(page.tabs))
+		return
 	}
 
 	// Clean up.
@@ -2004,6 +2017,7 @@ func TestTerminalPage_Update_TerminalSpawnedMsg(t *testing.T) {
 	})
 	if len(page.tabs) != 1 {
 		t.Fatalf("expected 1 tab, got %d", len(page.tabs))
+		return
 	}
 
 	// Clean up.
@@ -2474,6 +2488,7 @@ func TestTerminalPage_HandleSessionsLoaded_ClearsOldTabs(t *testing.T) {
 
 	if len(page.tabs) != 1 {
 		t.Fatalf("expected 1 tab, got %d", len(page.tabs))
+		return
 	}
 	if page.tabs[0].label != "new-shell" {
 		t.Errorf("expected label %q, got %q", "new-shell", page.tabs[0].label)

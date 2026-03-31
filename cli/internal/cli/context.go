@@ -37,7 +37,7 @@ func init() {
 var contextCmd = &cobra.Command{
 	Use:   "context",
 	Short: "Manage cluster contexts",
-	Long:  "Add, list, remove, and rename Volundr cluster contexts.",
+	Long:  "Add, list, remove, and rename cluster contexts.",
 }
 
 var contextAddCmd = &cobra.Command{
@@ -46,8 +46,8 @@ var contextAddCmd = &cobra.Command{
 	Long: `Add a new cluster context with the given key and server URL.
 
 Example:
-  volundr context add prod --server https://volundr.prod.example.com --name "Production"
-  volundr context add local --server http://127.0.0.1:8080`,
+  niuu context add prod --server https://volundr.prod.example.com --name "Production"
+  niuu context add local --server http://127.0.0.1:8080`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		cfg, err := remote.Load()
@@ -99,7 +99,7 @@ var contextListCmd = &cobra.Command{
 		}
 
 		if len(cfg.Contexts) == 0 {
-			fmt.Println("No contexts configured. Add one with: volundr context add <name> --server <url>")
+			fmt.Println("No contexts configured. Add one with: niuu context add <name> --server <url>")
 			return nil
 		}
 

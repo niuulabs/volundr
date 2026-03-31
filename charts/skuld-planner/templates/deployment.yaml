@@ -1,0 +1,380 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "skuld.fullname" . }}
+  labels:
+    {{- include "skuld.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "skuld.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "skuld.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.session.name }}
+      hostname: {{ .Values.session.name | lower | trunc 63 | trimSuffix "-" | quote }}
+      {{- end }}
+      {{- with .Values.runtimeClassName }}
+      runtimeClassName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccountName }}
+      serviceAccountName: {{ .Values.serviceAccountName | quote }}
+      {{- end }}
+      # Allow time for chronicle summary generation during graceful shutdown
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+      {{- include "skuld.imagePullSecrets" . | nindent 6 }}
+      {{- if or .Values.git.repoUrl .Values.homeVolume.enabled }}
+      initContainers:
+        {{- if .Values.homeVolume.enabled }}
+        - name: home-setup
+          image: "{{ .Values.git.image.repository }}:{{ .Values.git.image.tag }}"
+          imagePullPolicy: {{ .Values.git.image.pullPolicy }}
+          securityContext:
+            # Run as root to create directories on NFS-backed RWX volumes
+            # (fsGroup does not reliably set ownership on NFS mounts).
+            # Ownership is handed back to the non-root user via chown.
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              HOME_DIR="{{ .Values.homeVolume.mountPath }}"
+              SECRET_DIR="{{ .Values.homeVolume.credentialFiles.secretMountPath }}"
+              DEST_DIR="{{ .Values.homeVolume.credentialFiles.destDir }}"
+              TARGET_UID="{{ .Values.securityContext.runAsUser }}"
+              TARGET_GID="{{ .Values.securityContext.fsGroup }}"
+
+              # Create directory structure on the home PVC (idempotent)
+              mkdir -p "$HOME_DIR/$DEST_DIR"
+              mkdir -p "$HOME_DIR/vscode-data/User"
+              mkdir -p "$HOME_DIR/.config"
+
+              # Ensure the non-root user owns the home directory tree.
+              # Ignore transient errors from stale sockets/files on hostPath
+              # volumes that vanish mid-traversal.
+              chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/tmp/chown.err || true
+              if [ -s /tmp/chown.err ]; then
+                grep -Ev 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err >&2 || true
+                if grep -qEv 'Invalid argument|No such file or directory|Stale file handle' /tmp/chown.err; then
+                  echo "ERROR: chown encountered unexpected errors" >&2
+                  cat /tmp/chown.err >&2
+                  exit 1
+                fi
+              fi
+
+              # Symlink each credential file from the K8s secret into $DEST_DIR/
+              # Full volume mounts auto-update when the secret changes (~60s),
+              # and symlinks transparently resolve to the latest content.
+              if [ -d "$SECRET_DIR" ]; then
+                for f in "$SECRET_DIR"/*; do
+                  [ -f "$f" ] || continue
+                  name=$(basename "$f")
+                  ln -sf "$SECRET_DIR/$name" "$HOME_DIR/$DEST_DIR/$name"
+                done
+                echo "Credential files symlinked from secret into $DEST_DIR"
+              fi
+
+              echo "Home directory initialized at $HOME_DIR"
+          volumeMounts:
+            - name: home
+              mountPath: {{ .Values.homeVolume.mountPath }}
+            {{- if .Values.homeVolume.credentialFiles.secretName }}
+            - name: credential-files
+              mountPath: {{ .Values.homeVolume.credentialFiles.secretMountPath }}
+              readOnly: true
+            {{- end }}
+        {{- end }}
+        {{- if .Values.git.repoUrl }}
+        - name: git-clone
+          image: "{{ .Values.git.image.repository }}:{{ .Values.git.image.tag }}"
+          imagePullPolicy: {{ .Values.git.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.securityContext.runAsUser }}
+            allowPrivilegeEscalation: false
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              export GIT_TERMINAL_PROMPT=0
+              WORKSPACE="{{ include "skuld.workspacePath" . }}"
+              REPO_URL="{{ .Values.git.repoUrl }}"
+              BRANCH="{{ .Values.git.branch | default "main" }}"
+              BASE_BRANCH="{{ .Values.git.baseBranch | default "" }}"
+              {{- if .Values.git.credentials.secretName }}
+              # Inject credentials into HTTPS URL for fetch
+              PROTO="${REPO_URL%%://*}"
+              HOST_AND_PATH="${REPO_URL#*://}"
+              AUTH_URL="${PROTO}://${GIT_USERNAME}:${GIT_TOKEN}@${HOST_AND_PATH}"
+              {{- else }}
+              AUTH_URL="$REPO_URL"
+              {{- end }}
+              if [ -d "$WORKSPACE/.git" ] && git -C "$WORKSPACE" rev-parse HEAD >/dev/null 2>&1; then
+                echo "Workspace already contains a valid git repository, skipping clone"
+              else
+                # Clean up any broken .git state
+                rm -rf "$WORKSPACE/.git"
+                mkdir -p "$WORKSPACE"
+                git init "$WORKSPACE"
+                git -C "$WORKSPACE" remote add origin "$AUTH_URL"
+                git -C "$WORKSPACE" fetch origin
+                if git -C "$WORKSPACE" rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+                  git -C "$WORKSPACE" checkout -B "$BRANCH" "origin/$BRANCH"
+                  echo "Checked out existing branch $BRANCH"
+                else
+                  # Use explicit base branch, or fall back to remote HEAD
+                  if [ -n "$BASE_BRANCH" ] && git -C "$WORKSPACE" rev-parse --verify "origin/$BASE_BRANCH" >/dev/null 2>&1; then
+                    FALLBACK="$BASE_BRANCH"
+                  else
+                    FALLBACK=$(git -C "$WORKSPACE" remote show origin | sed -n 's/.*HEAD branch: //p')
+                    FALLBACK=${FALLBACK:-main}
+                  fi
+                  echo "Branch $BRANCH not found on remote, creating from $FALLBACK"
+                  git -C "$WORKSPACE" checkout -B "$FALLBACK" "origin/$FALLBACK"
+                  git -C "$WORKSPACE" checkout -b "$BRANCH"
+                fi
+                # Store clean URL without embedded credentials
+                git -C "$WORKSPACE" remote set-url origin "$REPO_URL"
+                echo "Repository cloned successfully"
+              fi
+              {{- if .Values.git.credentials.secretName }}
+              # Configure credential helper so git push uses GIT_TOKEN env var
+              git -C "$WORKSPACE" config credential.helper \
+                '!f() { echo "username=${GIT_USERNAME:-x-access-token}"; echo "password=$GIT_TOKEN"; }; f'
+              echo "Git credential helper configured"
+              {{- end }}
+          {{- if .Values.git.credentials.secretName }}
+          env:
+            - name: GIT_USERNAME
+              value: {{ .Values.git.credentials.username | default "x-access-token" | quote }}
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.git.credentials.secretName }}
+                  key: {{ .Values.git.credentials.tokenKey | default "token" }}
+          {{- end }}
+          volumeMounts:
+            - name: sessions
+              mountPath: {{ .Values.persistence.mountPath }}
+        {{- end }}
+      {{- end }}
+      containers:
+        # Nginx - single entry point, routes all traffic internally
+        - name: nginx
+          image: "{{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag }}"
+          imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.securityContext.runAsUser }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.nginx.resources | nindent 12 }}
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: sessions
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+        # Skuld broker - Claude Code CLI + REST API
+        - name: skuld
+          image: {{ include "skuld.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.securityContext.runAsUser }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          ports:
+            - name: broker
+              containerPort: 8081
+              protocol: TCP
+          env:
+            # WORKSPACE_DIR is computed from template helpers — kept as env var
+            - name: WORKSPACE_DIR
+              value: {{ include "skuld.workspacePath" . | quote }}
+            {{- if .Values.homeVolume.enabled }}
+            - name: HOME
+              value: {{ .Values.homeVolume.mountPath | quote }}
+            {{- if eq (toString .Values.broker.cliType) "codex" }}
+            - name: CODEX_HOME
+              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
+            {{- else }}
+            - name: CLAUDE_CONFIG_DIR
+              value: "{{ .Values.homeVolume.mountPath }}/{{ .Values.homeVolume.credentialFiles.destDir }}"
+            {{- end }}
+            {{- end }}
+            {{- range .Values.envSecrets }}
+            - name: {{ .envVar }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.envVars }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- if .Values.git.credentials.secretName }}
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.git.credentials.secretName }}
+                  key: {{ .Values.git.credentials.tokenKey | default "token" }}
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.git.credentials.secretName }}
+                  key: {{ .Values.git.credentials.tokenKey | default "token" }}
+            {{- end }}
+            {{- if .Values.session.systemPrompt }}
+            - name: SESSION_SYSTEM_PROMPT
+              value: {{ .Values.session.systemPrompt | quote }}
+            {{- end }}
+            {{- if .Values.session.initialPrompt }}
+            - name: SESSION_INITIAL_PROMPT
+              value: {{ .Values.session.initialPrompt | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: skuld-config
+              mountPath: /etc/skuld/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: sessions
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.homeVolume.enabled }}
+            - name: home
+              mountPath: {{ .Values.homeVolume.mountPath }}
+            {{- if .Values.homeVolume.credentialFiles.secretName }}
+            - name: credential-files
+              mountPath: {{ .Values.homeVolume.credentialFiles.secretMountPath }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            {{- if .Values.secretManifest }}
+            - name: secret-manifest
+              mountPath: /run/secrets/manifest.json
+              subPath: manifest.json
+              readOnly: true
+            {{- end }}
+            {{- range .Values.extraVolumeMounts }}
+            - {{- toYaml . | nindent 14 }}
+            {{- end }}
+        {{- if .Values.envoy.enabled }}
+        # Envoy sidecar - JWT validation and header extraction
+        - name: envoy
+          image: "{{ .Values.envoy.image.repository }}:{{ .Values.envoy.image.tag }}"
+          imagePullPolicy: {{ .Values.envoy.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.securityContext.runAsUser }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          ports:
+            - name: envoy
+              containerPort: {{ .Values.envoy.port }}
+              protocol: TCP
+          {{- with .Values.envoy.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.envoy.adminPort }}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.envoy.adminPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 15
+        {{- end }}
+      volumes:
+        - name: skuld-config
+          configMap:
+            name: {{ include "skuld.fullname" . }}-config
+        - name: nginx-config
+          configMap:
+            name: {{ include "skuld.fullname" . }}-nginx
+        {{- if .Values.envoy.enabled }}
+        - name: envoy-config
+          configMap:
+            name: {{ include "skuld.fullname" . }}-envoy
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
+        - name: sessions
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim }}
+        {{- end }}
+        {{- if .Values.homeVolume.enabled }}
+        - name: home
+          persistentVolumeClaim:
+            claimName: {{ .Values.homeVolume.existingClaim }}
+        {{- if .Values.homeVolume.credentialFiles.secretName }}
+        - name: credential-files
+          secret:
+            secretName: {{ .Values.homeVolume.credentialFiles.secretName }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secretManifest }}
+        - name: secret-manifest
+          configMap:
+            name: {{ include "skuld.fullname" . }}-secret-manifest
+        {{- end }}
+        {{- range .Values.extraVolumes }}
+        - {{- toYaml . | nindent 10 }}
+        {{- end }}

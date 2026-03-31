@@ -208,6 +208,40 @@ class TestEnvironment:
         assert env_dict["CUSTOM_VAR"] == "custom_value"
         assert env_dict["PORT"] == "3000"
 
+    def test_build_env_with_system_prompt(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(session={"systemPrompt": "You are an agent."})
+        env = pod_manager._build_env(sample_session, spec)
+
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
+        assert env_dict["SKULD__SESSION__SYSTEM_PROMPT"] == "You are an agent."
+
+    def test_build_env_with_initial_prompt(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec(session={"initialPrompt": "Fix the auth bug."})
+        env = pod_manager._build_env(sample_session, spec)
+
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
+        assert env_dict["SKULD__SESSION__INITIAL_PROMPT"] == "Fix the auth bug."
+
+    def test_build_env_without_prompts_omits_vars(
+        self,
+        pod_manager: DirectK8sPodManager,
+        sample_session: Session,
+    ) -> None:
+        spec = make_spec()
+        env = pod_manager._build_env(sample_session, spec)
+
+        env_dict = {e["name"]: e["value"] for e in env if "value" in e}
+        assert "SKULD__SESSION__SYSTEM_PROMPT" not in env_dict
+        assert "SKULD__SESSION__INITIAL_PROMPT" not in env_dict
+
 
 class TestManifests:
     """Test manifest generation."""

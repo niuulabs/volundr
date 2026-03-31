@@ -1,6 +1,6 @@
 """Tests for the JSONL → chronicle timeline event mapper."""
 
-from volundr.skuld.event_mapper import EventMapper, _extract_git_commit_info, _is_git_commit
+from skuld.event_mapper import EventMapper, _extract_git_commit_info, _is_git_commit
 
 
 class TestGitHelpers:

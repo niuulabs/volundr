@@ -18,9 +18,11 @@ func setupTestConfig(t *testing.T, cfg *remote.Config) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("NIUU_HOME", "")
+	t.Setenv("VOLUNDR_HOME", "")
 
 	if cfg != nil {
-		configDir := filepath.Join(tmpDir, ".config", "volundr")
+		configDir := filepath.Join(tmpDir, ".config", "niuu")
 		if err := os.MkdirAll(configDir, 0o750); err != nil { //nolint:gosec // test directory
 			t.Fatalf("mkdir: %v", err)
 		}
@@ -46,15 +48,18 @@ func TestContextAdd(t *testing.T) {
 
 	if err := contextAddCmd.RunE(contextAddCmd, []string{"prod"}); err != nil {
 		t.Fatalf("context add: %v", err)
+		return
 	}
 
 	cfg, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	ctx := cfg.GetContext("prod")
 	if ctx == nil {
 		t.Fatal("expected prod context to exist")
+		return
 	}
 	if ctx.Server != "https://prod.example.com" {
 		t.Errorf("expected server %q, got %q", "https://prod.example.com", ctx.Server)
@@ -76,6 +81,7 @@ func TestContextAdd_DuplicateKey(t *testing.T) {
 	err := contextAddCmd.RunE(contextAddCmd, []string{"prod"})
 	if err == nil {
 		t.Fatal("expected error adding duplicate context")
+		return
 	}
 }
 
@@ -88,15 +94,18 @@ func TestContextAdd_DefaultsNameToKey(t *testing.T) {
 
 	if err := contextAddCmd.RunE(contextAddCmd, []string{"staging"}); err != nil {
 		t.Fatalf("context add: %v", err)
+		return
 	}
 
 	cfg, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	ctx := cfg.GetContext("staging")
 	if ctx == nil {
 		t.Fatal("expected staging context")
+		return
 	}
 	if ctx.Name != "staging" {
 		t.Errorf("expected name %q, got %q", "staging", ctx.Name)
@@ -118,11 +127,13 @@ func TestContextAdd_WithIssuer(t *testing.T) {
 
 	if err := contextAddCmd.RunE(contextAddCmd, []string{"prod"}); err != nil {
 		t.Fatalf("context add: %v", err)
+		return
 	}
 
 	cfg, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	ctx := cfg.GetContext("prod")
 	if ctx.Issuer != "https://idp.example.com" {
@@ -141,6 +152,7 @@ func TestContextList_Empty(t *testing.T) {
 
 	if err := contextListCmd.RunE(contextListCmd, nil); err != nil {
 		t.Fatalf("context list: %v", err)
+		return
 	}
 }
 
@@ -155,6 +167,7 @@ func TestContextList_WithContexts(t *testing.T) {
 
 	if err := contextListCmd.RunE(contextListCmd, nil); err != nil {
 		t.Fatalf("context list: %v", err)
+		return
 	}
 }
 
@@ -174,6 +187,7 @@ func TestContextList_JSON(t *testing.T) {
 	if err := contextListCmd.RunE(contextListCmd, nil); err != nil {
 		os.Stdout = old
 		t.Fatalf("context list --json: %v", err)
+		return
 	}
 
 	_ = w.Close()
@@ -185,10 +199,12 @@ func TestContextList_JSON(t *testing.T) {
 	var entries []contextListEntry
 	if err := json.Unmarshal(buf.Bytes(), &entries); err != nil {
 		t.Fatalf("unmarshal JSON output: %v\noutput: %s", err, buf.String())
+		return
 	}
 
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
+		return
 	}
 
 	found := false
@@ -209,11 +225,13 @@ func TestContextRemove(t *testing.T) {
 
 	if err := contextRemoveCmd.RunE(contextRemoveCmd, []string{"prod"}); err != nil {
 		t.Fatalf("context remove: %v", err)
+		return
 	}
 
 	loaded, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	if loaded.GetContext("prod") != nil {
 		t.Error("expected prod context to be removed")
@@ -226,6 +244,7 @@ func TestContextRemove_NotFound(t *testing.T) {
 	err := contextRemoveCmd.RunE(contextRemoveCmd, []string{"nonexistent"})
 	if err == nil {
 		t.Fatal("expected error removing non-existent context")
+		return
 	}
 }
 
@@ -236,11 +255,13 @@ func TestContextRename(t *testing.T) {
 
 	if err := contextRenameCmd.RunE(contextRenameCmd, []string{"old", "new"}); err != nil {
 		t.Fatalf("context rename: %v", err)
+		return
 	}
 
 	loaded, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	if loaded.GetContext("old") != nil {
 		t.Error("expected old key to be gone")
@@ -248,6 +269,7 @@ func TestContextRename(t *testing.T) {
 	ctx := loaded.GetContext("new")
 	if ctx == nil {
 		t.Fatal("expected new key to exist")
+		return
 	}
 	if ctx.Server != "https://old.example.com" {
 		t.Errorf("expected server preserved, got %q", ctx.Server)
@@ -260,6 +282,7 @@ func TestContextRename_NotFound(t *testing.T) {
 	err := contextRenameCmd.RunE(contextRenameCmd, []string{"nonexistent", "new"})
 	if err == nil {
 		t.Fatal("expected error renaming non-existent context")
+		return
 	}
 }
 
@@ -325,6 +348,7 @@ func TestSortedContextKeys(t *testing.T) {
 	keys := sortedContextKeys(cfg)
 	if len(keys) != 3 {
 		t.Fatalf("expected 3 keys, got %d", len(keys))
+		return
 	}
 	if keys[0] != "a" || keys[1] != "m" || keys[2] != "z" {
 		t.Errorf("expected sorted keys [a, m, z], got %v", keys)
@@ -358,6 +382,7 @@ func TestResolveAuthConfig_BothFlags(t *testing.T) {
 	issuer, clientID, err := resolveAuthConfig(rctx)
 	if err != nil {
 		t.Fatalf("resolveAuthConfig: %v", err)
+		return
 	}
 	if issuer != "https://flag-issuer.com" {
 		t.Errorf("expected flag issuer, got %q", issuer)
@@ -386,6 +411,7 @@ func TestResolveAuthConfig_SavedContext(t *testing.T) {
 	issuer, clientID, err := resolveAuthConfig(rctx)
 	if err != nil {
 		t.Fatalf("resolveAuthConfig: %v", err)
+		return
 	}
 	if issuer != "https://saved-issuer.com" {
 		t.Errorf("expected saved issuer, got %q", issuer)
@@ -410,6 +436,7 @@ func TestResolveAuthConfig_NoConfig(t *testing.T) {
 	_, _, err := resolveAuthConfig(rctx)
 	if err == nil {
 		t.Fatal("expected error when no auth config available")
+		return
 	}
 }
 
@@ -443,6 +470,7 @@ func TestTryAuthDiscovery_ServerWithAuthConfig(t *testing.T) {
 	result := tryAuthDiscovery(rctx)
 	if result == nil {
 		t.Fatal("expected non-nil result from server with auth config")
+		return
 	}
 	if result.Issuer != "https://idp.example.com" {
 		t.Errorf("expected issuer %q, got %q", "https://idp.example.com", result.Issuer)
@@ -492,6 +520,7 @@ func TestConfigGet_Theme(t *testing.T) {
 
 	if err := configGetCmd.RunE(configGetCmd, []string{"theme"}); err != nil {
 		t.Fatalf("config get theme: %v", err)
+		return
 	}
 }
 
@@ -500,11 +529,13 @@ func TestConfigSet_Theme(t *testing.T) {
 
 	if err := configSetCmd.RunE(configSetCmd, []string{"theme", "light"}); err != nil {
 		t.Fatalf("config set theme: %v", err)
+		return
 	}
 
 	cfg, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	if cfg.Theme != "light" {
 		t.Errorf("expected theme %q, got %q", "light", cfg.Theme)
@@ -522,6 +553,7 @@ func TestConfigGet_Server(t *testing.T) {
 
 	if err := configGetCmd.RunE(configGetCmd, []string{"server"}); err != nil {
 		t.Fatalf("config get server: %v", err)
+		return
 	}
 }
 
@@ -536,11 +568,13 @@ func TestConfigSet_Server(t *testing.T) {
 
 	if err := configSetCmd.RunE(configSetCmd, []string{"server", "https://new.example.com"}); err != nil {
 		t.Fatalf("config set server: %v", err)
+		return
 	}
 
 	loaded, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	if loaded.GetContext("default").Server != "https://new.example.com" {
 		t.Errorf("expected updated server")
@@ -559,6 +593,7 @@ func TestConfigGet_UnknownKey(t *testing.T) {
 	err := configGetCmd.RunE(configGetCmd, []string{"nonexistent"})
 	if err == nil {
 		t.Fatal("expected error for unknown key")
+		return
 	}
 }
 
@@ -574,6 +609,7 @@ func TestConfigSet_UnknownKey(t *testing.T) {
 	err := configSetCmd.RunE(configSetCmd, []string{"nonexistent", "value"})
 	if err == nil {
 		t.Fatal("expected error for unknown key")
+		return
 	}
 }
 
@@ -596,11 +632,13 @@ func TestLogout(t *testing.T) {
 
 	if err := logoutCmd.RunE(logoutCmd, nil); err != nil {
 		t.Fatalf("logout: %v", err)
+		return
 	}
 
 	loaded, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 	ctx := loaded.GetContext("default")
 	if ctx.Token != "" {
@@ -627,6 +665,7 @@ func TestLogout_NoContext(t *testing.T) {
 	err := logoutCmd.RunE(logoutCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when no contexts configured")
+		return
 	}
 }
 
@@ -768,6 +807,7 @@ func TestNewAPIClient_SingleContext(t *testing.T) {
 	client, err := newAPIClient()
 	if err != nil {
 		t.Fatalf("newAPIClient: %v", err)
+		return
 	}
 	if client.BaseURL() != "https://prod.example.com" {
 		t.Errorf("expected URL %q, got %q", "https://prod.example.com", client.BaseURL())
@@ -789,6 +829,7 @@ func TestNewAPIClient_FlagOverride(t *testing.T) {
 	client, err := newAPIClient()
 	if err != nil {
 		t.Fatalf("newAPIClient: %v", err)
+		return
 	}
 	if client.BaseURL() != "https://cli-override.com" {
 		t.Errorf("expected URL %q, got %q", "https://cli-override.com", client.BaseURL())
@@ -813,5 +854,6 @@ func TestNewAPIClient_NoContexts(t *testing.T) {
 	_, err := newAPIClient()
 	if err == nil {
 		t.Fatal("expected error when no contexts configured")
+		return
 	}
 }
