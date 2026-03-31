@@ -3,11 +3,77 @@ package tyr
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 
 	"github.com/niuulabs/volundr/cli/internal/tracker"
 )
+
+const defaultReviewerSystemPrompt = `You are a senior code reviewer. You do not just check rules — you READ the code, UNDERSTAND it, and provide substantive feedback on quality, design, and correctness.
+
+## Setup
+
+1. Read CLAUDE.md and ` + "`" + `.claude/rules/` + "`" + ` — they are the authoritative project rules.
+2. Ensure tools are available:
+   - ` + "`" + `gh` + "`" + ` (GitHub CLI): check ~/` + "`" + ` or PATH. Install if missing (` + "`" + `brew install gh` + "`" + `).
+
+## Review Process
+
+Read the full diff and review EVERY changed file across three dimensions:
+
+### 1. Code Reuse
+- Search the codebase for existing utilities that could replace newly written code.
+- Flag new functions that duplicate existing functionality — suggest the existing one.
+- Flag inline logic that could use an existing utility.
+
+### 2. Code Quality
+- **Redundant state**: state duplicating other state, values that could be derived.
+- **Parameter sprawl**: adding params instead of restructuring.
+- **Copy-paste with variation**: near-duplicate blocks that should be unified.
+- **Leaky abstractions**: exposing internals, breaking abstraction boundaries.
+- **Architecture violations**: wrong layer imports, missing port/adapter separation.
+
+### 3. Efficiency
+- **Unnecessary work**: redundant computations, repeated reads, N+1 patterns.
+- **Missed concurrency**: independent operations run sequentially.
+- **Memory**: unbounded data structures, missing cleanup.
+
+### 4. Correctness & Safety
+- Verify acceptance criteria are met.
+- Check the PR targets the feature branch, NOT main.
+- Check codecov/patch — it is a hard gate, not advisory.
+- Look for edge cases, error handling gaps, and security issues.
+
+## Every Finding Must Be Addressed
+
+Every finding is blocking. For each finding, suggest a specific fix — reference file names and line numbers.
+
+## Confidence Scoring
+
+| Score | Meaning |
+|-------|---------|
+| 1.0 | No findings — clean code, ready to merge. |
+| 0.80-0.99 | Minor findings — fixable in one round. |
+| 0.50-0.79 | Significant findings — needs rework. |
+| <0.50 | Fundamental issues — architecture or design problems. |
+
+Only approve when findings is empty.
+
+## Response Format
+
+` + "```" + `json
+{
+  "confidence": <0.0-1.0>,
+  "approved": <true only if findings is empty and PR is merged>,
+  "summary": "<one-line summary of the review>",
+  "findings": [
+    "file:line — [category] description and suggested fix"
+  ]
+}
+` + "```" + `
+
+Categories: [bug], [security], [architecture], [reuse], [quality], [efficiency], [test], [style].`
 
 // ReviewEngineConfig holds configuration for the review engine.
 type ReviewEngineConfig struct {
@@ -25,11 +91,12 @@ type ReviewEngine struct {
 	tracker  tracker.Tracker
 	spawner  SessionSpawner
 	cfg      ReviewEngineConfig
+	forgeURL string
 	running  bool
 }
 
 // NewReviewEngine creates a new review engine.
-func NewReviewEngine(store *Store, pr PRChecker, t tracker.Tracker, spawner SessionSpawner, cfg ReviewEngineConfig) *ReviewEngine {
+func NewReviewEngine(store *Store, pr PRChecker, t tracker.Tracker, spawner SessionSpawner, cfg ReviewEngineConfig, forgeURL string) *ReviewEngine {
 	if cfg.AutoApproveThreshold == 0 {
 		cfg.AutoApproveThreshold = 0.80
 	}
@@ -39,12 +106,16 @@ func NewReviewEngine(store *Store, pr PRChecker, t tracker.Tracker, spawner Sess
 	if cfg.ReviewerModel == "" {
 		cfg.ReviewerModel = "claude-sonnet-4-6"
 	}
+	if cfg.ReviewerSystemPrompt == "" {
+		cfg.ReviewerSystemPrompt = defaultReviewerSystemPrompt
+	}
 	return &ReviewEngine{
-		store:   store,
-		pr:      pr,
-		tracker: t,
-		spawner: spawner,
-		cfg:     cfg,
+		store:    store,
+		pr:       pr,
+		tracker:  t,
+		spawner:  spawner,
+		cfg:      cfg,
+		forgeURL: forgeURL,
 	}
 }
 
@@ -97,7 +168,11 @@ func (re *ReviewEngine) spawnReviewer(ctx context.Context, raid *Raid) {
 		return
 	}
 
-	prompt := buildReviewerPrompt(raid)
+	workingSessionID := ""
+	if raid.SessionID != nil {
+		workingSessionID = *raid.SessionID
+	}
+	prompt := buildReviewerPrompt(raid, workingSessionID, re.cfg.MaxReviewRounds, re.forgeURL)
 
 	sessionID, err := re.spawner.SpawnReviewerSession(
 		raid, saga, re.cfg.ReviewerModel,
@@ -279,13 +354,17 @@ func parseReviewerResponse(text string) *ReviewerResult {
 
 // --- Prompt builders ---
 
-func buildReviewerPrompt(raid *Raid) string {
+func buildReviewerPrompt(raid *Raid, workingSessionID string, maxRounds int, forgeURL string) string {
 	var b strings.Builder
 	b.WriteString("## Review Request\n\n")
 	b.WriteString("**Ticket**: " + raid.Identifier + "\n")
 	b.WriteString("**Raid**: " + raid.Name + "\n")
 	if raid.Description != "" {
-		b.WriteString("**Description**: " + raid.Description[:min(len(raid.Description), 500)] + "\n")
+		desc := raid.Description
+		if len(desc) > 500 {
+			desc = desc[:500] + "..."
+		}
+		b.WriteString("**Description**: " + desc + "\n")
 	}
 	b.WriteString("\n")
 
@@ -295,20 +374,50 @@ func buildReviewerPrompt(raid *Raid) string {
 
 	b.WriteString("## Instructions\n\n")
 	b.WriteString("1. Read CLAUDE.md and `.claude/rules/` for project conventions.\n")
-	b.WriteString("2. Read the full diff — every changed file.\n")
-	b.WriteString("3. Search for existing utilities that overlap with new code.\n")
-	b.WriteString("4. Verify acceptance criteria are met.\n")
-	b.WriteString("5. Check CI status.\n\n")
+	b.WriteString("2. Read the full diff — every changed file, not just the summary.\n")
+	b.WriteString("3. For each changed file, also read the SURROUNDING code to understand context.\n")
+	b.WriteString("4. Search the codebase for existing utilities that overlap with new code.\n")
+	b.WriteString("5. Verify acceptance criteria are met.\n")
+	b.WriteString("6. Verify PR targets the feature branch, not `main`.\n")
+	b.WriteString("7. Check CI status — `codecov/patch` is a hard gate.\n\n")
 
-	b.WriteString("When satisfied (no findings), merge the PR:\n\n")
+	// Review loop section — inter-session communication via message API.
+	if workingSessionID != "" {
+		msgURL := forgeURL + "/api/v1/volundr/sessions/" + workingSessionID + "/messages"
+		b.WriteString("## Review Loop\n\n")
+		b.WriteString("You have direct access to the working session that produced this code.\n")
+		b.WriteString("Working Session ID: `" + workingSessionID + "`\n")
+		b.WriteString("Max review rounds: " + strings.Repeat("", 0) + fmt.Sprintf("%d", maxRounds) + "\n\n")
+		b.WriteString("When you find blocking issues:\n\n")
+		b.WriteString("1. Send detailed feedback to the working session:\n")
+		b.WriteString("   ```bash\n")
+		b.WriteString("   curl -s -X POST " + msgURL + " \\\n")
+		b.WriteString("     -H 'Content-Type: application/json' \\\n")
+		b.WriteString("     -d '{\"content\": \"<YOUR FEEDBACK HERE>\"}'\n")
+		b.WriteString("   ```\n")
+		b.WriteString("2. In your feedback, tell the working session to:\n")
+		b.WriteString("   a. Fix the issues\n")
+		b.WriteString("   b. `git add` and `git commit` the fixes\n")
+		b.WriteString("   c. `git push` to update the PR\n")
+		b.WriteString("   d. Notify you when done (the system handles this automatically)\n")
+		b.WriteString("3. After the working session pushes, run `git pull` to get the latest changes\n")
+		b.WriteString("4. Re-read the diff and re-review\n")
+		b.WriteString("5. Repeat until no blocking issues remain or you exhaust all review rounds\n")
+		b.WriteString(fmt.Sprintf("6. After %d rounds with unresolved blocking issues, set approved=false\n\n", maxRounds))
+	}
+
+	b.WriteString("## Merging\n\n")
+	b.WriteString("When satisfied (no findings remaining), merge the PR:\n\n")
 	b.WriteString("```bash\ngh pr merge --squash --delete-branch\n```\n\n")
+	b.WriteString("If `gh` is not found, install it (`brew install gh`).\n")
+	b.WriteString("If merge fails, set approved=false and explain why.\n\n")
 
-	b.WriteString("## Response Format\n\n")
+	b.WriteString("## Final Output\n\n")
 	b.WriteString("```json\n{\n")
 	b.WriteString("  \"confidence\": <0.0-1.0>,\n")
 	b.WriteString("  \"approved\": <true only if findings empty and PR merged>,\n")
 	b.WriteString("  \"summary\": \"<one line>\",\n")
-	b.WriteString("  \"findings\": [\"file:line — [category] description\"]\n")
+	b.WriteString("  \"findings\": [\"file:line — [category] description and fix\"]\n")
 	b.WriteString("}\n```\n")
 
 	return b.String()

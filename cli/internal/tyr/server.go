@@ -120,7 +120,7 @@ func (s *Server) StartBackground(events EventSource, pr PRChecker, spawner Sessi
 	s.reviewer = NewReviewEngine(s.store, pr, s.handler.tracker, spawner, ReviewEngineConfig{
 		ReviewerSystemPrompt: s.cfg.ReviewerSystemPrompt,
 		ReviewerModel:        reviewerModel,
-	})
+	}, s.cfg.ForgeURL)
 	s.reviewer.Start(s.subscriber)
 	s.subscriber.Start(ctx)
 
