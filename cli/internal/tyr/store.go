@@ -330,7 +330,8 @@ func (s *Store) CountByStatus(ctx context.Context) (map[string]int, error) {
 	return counts, rows.Err()
 }
 
-// ListActiveRaids returns all raids that are not in a terminal state.
+// ListActiveRaids returns all tracked raids (all statuses, matching Python Tyr).
+// The UI filters terminal states with a showCompleted toggle.
 func (s *Store) ListActiveRaids(ctx context.Context) ([]Raid, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, phase_id, tracker_id, COALESCE(identifier, ''), COALESCE(url, ''),
@@ -340,7 +341,7 @@ func (s *Store) ListActiveRaids(ctx context.Context) ([]Raid, error) {
 			chronicle_summary, pr_url, pr_id, reason, retry_count,
 			COALESCE(reviewer_session_id, ''), COALESCE(review_round, 0),
 			created_at, updated_at
-		FROM raids WHERE status NOT IN ('MERGED', 'FAILED')
+		FROM raids
 		ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("query active raids: %w", err)

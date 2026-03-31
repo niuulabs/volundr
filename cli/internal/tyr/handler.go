@@ -327,8 +327,9 @@ func (h *Handler) raidsActive(w http.ResponseWriter, r *http.Request) {
 		rd := &raids[i]
 		results = append(results, ActiveRaidResponse{
 			TrackerID:         rd.TrackerID,
-			Identifier:        rd.TrackerID,
+			Identifier:        rd.Identifier,
 			Title:             rd.Name,
+			URL:               rd.URL,
 			Status:            string(rd.Status),
 			SessionID:         rd.SessionID,
 			ReviewerSessionID: rd.ReviewerSessionID,
