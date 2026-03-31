@@ -216,6 +216,18 @@ func (s *ActivitySubscriber) evaluateCompletion(sessionID string) {
 func (s *ActivitySubscriber) handleSessionEnd(sessionID, status string) {
 	ctx := context.Background()
 
+	// Check if this is a reviewer session that stopped/completed.
+	reviewRaid, _ := s.store.GetRaidByReviewerSessionID(ctx, sessionID)
+	if reviewRaid != nil {
+		log.Printf("tyr: subscriber: reviewer session %s %s for raid %s, triggering review",
+			sessionID[:min(len(sessionID), 8)], status, reviewRaid.Identifier)
+		for _, fn := range s.onReview {
+			fn(reviewRaid.ID)
+		}
+		return
+	}
+
+	// Check if this is a working session.
 	raid, err := s.store.GetRaidBySessionID(ctx, sessionID)
 	if err != nil || raid == nil {
 		return
@@ -226,7 +238,7 @@ func (s *ActivitySubscriber) handleSessionEnd(sessionID, status string) {
 
 	reason := "session " + status
 	log.Printf("tyr: subscriber: session %s %s, marking raid %s as FAILED",
-		sessionID[:8], status, raid.Identifier)
+		sessionID[:min(len(sessionID), 8)], status, raid.Identifier)
 
 	if err := s.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusFailed, &reason); err != nil {
 		log.Printf("tyr: subscriber: update raid status: %v", err)

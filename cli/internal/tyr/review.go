@@ -92,6 +92,7 @@ type ReviewEngine struct {
 	spawner  SessionSpawner
 	cfg      ReviewEngineConfig
 	forgeURL string
+	eventLog *EventLog
 	running  bool
 }
 
@@ -200,12 +201,18 @@ func (re *ReviewEngine) handleReviewerCompletion(ctx context.Context, raid *Raid
 	}
 
 	if output == "" {
-		return // Intermediate idle — reviewer still working.
+		log.Printf("tyr: review: no output from reviewer for %s", raid.Identifier)
+		// Reviewer stopped without producing output — auto-decide based on PR status.
+		re.autoDecide(ctx, raid)
+		return
 	}
 
 	result := parseReviewerResponse(output)
 	if result == nil {
-		return // No structured response yet — still working.
+		log.Printf("tyr: review: could not parse reviewer response for %s (output: %.200s)", raid.Identifier, output)
+		// Couldn't parse structured response — auto-decide.
+		re.autoDecide(ctx, raid)
+		return
 	}
 
 	log.Printf("tyr: review: reviewer for %s: approved=%v confidence=%.2f findings=%d",
@@ -240,7 +247,17 @@ func (re *ReviewEngine) autoApprove(ctx context.Context, raid *Raid, reviewerSes
 	log.Printf("tyr: review: auto-approving raid %s", raid.Identifier)
 
 	_ = re.store.AddConfidenceEvent(ctx, raid.ID, "auto_approved", 0.1)
-	_ = re.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusMerged, nil)
+	if err := re.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusMerged, nil); err != nil {
+		log.Printf("tyr: review: update raid status to MERGED: %v", err)
+	}
+
+	if re.eventLog != nil {
+		re.eventLog.Emit("raid.state_changed", map[string]any{
+			"raid_id":    raid.ID,
+			"identifier": raid.Identifier,
+			"status":     "MERGED",
+		}, "")
+	}
 
 	if re.tracker != nil && raid.TrackerID != "" {
 		_ = re.tracker.UpdateIssueState(raid.TrackerID, "Done")
