@@ -10,6 +10,7 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL driver
 
 	"github.com/niuulabs/volundr/cli/internal/postgres"
+	"github.com/niuulabs/volundr/cli/internal/tracker"
 )
 
 // Config holds configuration for the tyr-mini server.
@@ -20,6 +21,10 @@ type Config struct {
 	DatabaseDSN string
 	// ForgeURL is the base URL for the Forge server (for session dispatch).
 	ForgeURL string
+	// LinearAPIKey is the Linear API key for tracker integration.
+	LinearAPIKey string
+	// LinearTeamID is the Linear team ID (auto-discovered if empty).
+	LinearTeamID string
 }
 
 // Server manages the tyr-mini lifecycle: database, migrations, and HTTP handlers.
@@ -48,7 +53,17 @@ func NewServer(cfg *Config) (*Server, error) {
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher(cfg.ForgeURL)
-	handler := NewHandler(store, dispatcher)
+
+	// Initialize tracker if a Linear API key is available.
+	var t tracker.Tracker
+	if cfg.LinearAPIKey != "" {
+		t = tracker.NewLinearTracker(tracker.LinearConfig{
+			APIKey: cfg.LinearAPIKey,
+			TeamID: cfg.LinearTeamID,
+		})
+	}
+
+	handler := NewHandler(store, dispatcher, t)
 
 	return &Server{
 		cfg:     cfg,

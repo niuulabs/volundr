@@ -255,6 +255,12 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 	if cfg.Volundr.Tyr.Enabled {
 		forgeCfg.Tyr.DatabaseDSN = cfg.DSN()
 	}
+	forgeCfg.Tyr.LinearAPIKey = cfg.Linear.APIKey
+	forgeCfg.Tyr.LinearTeamID = cfg.Linear.TeamID
+	// Also check env var as fallback.
+	if forgeCfg.Tyr.LinearAPIKey == "" {
+		forgeCfg.Tyr.LinearAPIKey = os.Getenv("LINEAR_API_KEY")
+	}
 
 	// Local mounts and AI models.
 	forgeCfg.LocalMounts = cfg.LocalMounts.Enabled

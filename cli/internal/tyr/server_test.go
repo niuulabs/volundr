@@ -54,7 +54,7 @@ func TestRegisterRoutes_Integration(t *testing.T) {
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
-	handler := NewHandler(store, dispatcher)
+	handler := NewHandler(store, dispatcher, nil)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -146,7 +146,7 @@ func TestServerRegisterRoutes(t *testing.T) {
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
-	handler := NewHandler(store, dispatcher)
+	handler := NewHandler(store, dispatcher, nil)
 	srv := &Server{handler: handler}
 
 	mux := http.NewServeMux()

@@ -140,6 +140,7 @@ type Config struct {
 	K3s         K3sConfig         `yaml:"k3s,omitempty"`
 	LocalMounts LocalMountsConfig `yaml:"local_mounts,omitempty"`
 	AIModels    []AIModelEntry    `yaml:"ai_models,omitempty"`
+	Linear      LinearConfig      `yaml:"linear,omitempty"`
 
 	// Runtime is deprecated: use Volundr.Mode instead.
 	Runtime string `yaml:"runtime,omitempty"`
@@ -172,6 +173,12 @@ type DatabaseConfig struct {
 // AnthropicConfig holds Anthropic API settings.
 type AnthropicConfig struct {
 	APIKey string `yaml:"api_key"`
+}
+
+// LinearConfig holds Linear tracker settings.
+type LinearConfig struct {
+	APIKey string `yaml:"api_key,omitempty"`
+	TeamID string `yaml:"team_id,omitempty"`
 }
 
 // ConfigDir returns the path to the niuu config directory.

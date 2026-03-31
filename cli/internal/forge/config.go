@@ -12,8 +12,10 @@ import (
 
 // TyrConfig holds tyr-mini configuration within Forge.
 type TyrConfig struct {
-	Enabled     bool   `yaml:"enabled"`
-	DatabaseDSN string `yaml:"database_dsn"`
+	Enabled      bool   `yaml:"enabled"`
+	DatabaseDSN  string `yaml:"database_dsn"`
+	LinearAPIKey string `yaml:"linear_api_key,omitempty"`
+	LinearTeamID string `yaml:"linear_team_id,omitempty"`
 }
 
 // Config holds the forge server configuration.

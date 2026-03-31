@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/niuulabs/volundr/cli/internal/httputil"
+	"github.com/niuulabs/volundr/cli/internal/tracker"
 )
 
 // defaultInitialConfidence is the starting confidence score for new raids.
@@ -19,13 +20,15 @@ const defaultInitialConfidence = 0.75
 type Handler struct {
 	store      *Store
 	dispatcher *Dispatcher
+	tracker    tracker.Tracker // nil if no tracker configured
 }
 
 // NewHandler creates a new tyr-mini API handler.
-func NewHandler(store *Store, dispatcher *Dispatcher) *Handler {
+func NewHandler(store *Store, dispatcher *Dispatcher, t tracker.Tracker) *Handler {
 	return &Handler{
 		store:      store,
 		dispatcher: dispatcher,
+		tracker:    t,
 	}
 }
 
@@ -684,7 +687,15 @@ func (h *Handler) dispatcherLog(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) trackerProjects(w http.ResponseWriter, _ *http.Request) {
-	// TODO(tracker): Integrate with Linear API to list projects.
-	// For now return an empty list.
-	httputil.WriteJSON(w, http.StatusOK, []any{})
+	if h.tracker == nil {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+	projects, err := h.tracker.ListProjects()
+	if err != nil {
+		log.Printf("tyr: list tracker projects: %v", err)
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, projects)
 }

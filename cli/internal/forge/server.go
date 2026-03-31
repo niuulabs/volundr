@@ -163,9 +163,11 @@ func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
 	addr := fmt.Sprintf("http://%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
 	tyrCfg := &tyr.Config{
-		Enabled:     true,
-		DatabaseDSN: s.cfg.Tyr.DatabaseDSN,
-		ForgeURL:    addr,
+		Enabled:      true,
+		DatabaseDSN:  s.cfg.Tyr.DatabaseDSN,
+		ForgeURL:     addr,
+		LinearAPIKey: s.cfg.Tyr.LinearAPIKey,
+		LinearTeamID: s.cfg.Tyr.LinearTeamID,
 	}
 
 	tyrSrv, err := tyr.NewServer(tyrCfg)
