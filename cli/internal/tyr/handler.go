@@ -122,93 +122,23 @@ func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	phases, err := h.store.ListPhases(r.Context(), saga.ID)
-	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "list phases: %v", err)
-		return
-	}
-
-	phaseResponses := make([]PhaseDetailResponse, 0, len(phases))
-	for pi := range phases {
-		p := &phases[pi]
-		raids, err := h.store.ListRaids(r.Context(), p.ID)
+	// If tracker is configured, fetch live data from Linear instead of DB.
+	if h.tracker != nil && saga.TrackerID != "" {
+		resp, err := h.buildSagaDetailFromTracker(saga)
 		if err != nil {
-			httputil.WriteError(w, http.StatusInternalServerError, "list raids: %v", err)
+			log.Printf("tyr: fetch live tracker data: %v, falling back to DB", err)
+		} else {
+			httputil.WriteJSON(w, http.StatusOK, resp)
 			return
 		}
-		raidResponses := make([]RaidDetailResponse, 0, len(raids))
-		mergedCount := 0
-		for ri := range raids {
-			rd := &raids[ri]
-			statusType := raidStatusToType(rd.Status)
-			if rd.Status == RaidStatusMerged {
-				mergedCount++
-			}
-			raidResponses = append(raidResponses, RaidDetailResponse{
-				ID:            rd.ID,
-				Identifier:    rd.Identifier,
-				Title:         rd.Name,
-				Status:        string(rd.Status),
-				StatusType:    statusType,
-				Labels:        []string{},
-				URL:           rd.URL,
-				Description:   rd.Description,
-				Confidence:    rd.Confidence,
-				SessionID:     rd.SessionID,
-				PRUrl:         rd.PRUrl,
-				RetryCount:    rd.RetryCount,
-			})
-		}
-
-		phaseProgress := 0.0
-		if len(raids) > 0 {
-			phaseProgress = float64(mergedCount) / float64(len(raids))
-		}
-
-		phaseResponses = append(phaseResponses, PhaseDetailResponse{
-			ID:          p.ID,
-			Name:        p.Name,
-			Description: "",
-			SortOrder:   p.Number,
-			Progress:    phaseProgress,
-			Status:      string(p.Status),
-			Confidence:  p.Confidence,
-			Raids:       raidResponses,
-		})
 	}
 
-	// Compute overall progress from phases.
-	var totalProgress float64
-	if len(phaseResponses) > 0 {
-		for _, pr := range phaseResponses {
-			totalProgress += pr.Progress
-		}
-		totalProgress /= float64(len(phaseResponses))
+	// Fallback: read from DB (for sagas without tracker or when tracker is unavailable).
+	resp, err := h.buildSagaDetailFromDB(r.Context(), saga)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "%v", err)
+		return
 	}
-
-	// Build tracker URL.
-	sagaURL := ""
-	if saga.TrackerType == "linear" && saga.TrackerID != "" {
-		sagaURL = "https://linear.app/project/" + saga.TrackerID
-	}
-
-	resp := SagaDetailResponse{
-		ID:            saga.ID,
-		TrackerID:     saga.TrackerID,
-		TrackerType:   saga.TrackerType,
-		Slug:          saga.Slug,
-		Name:          saga.Name,
-		Description:   "",
-		Repos:         saga.Repos,
-		FeatureBranch: slugToFeatureBranch(saga.Slug),
-		BaseBranch:    saga.BaseBranch,
-		Status:        string(saga.Status),
-		Progress:      totalProgress,
-		Confidence:    saga.Confidence,
-		URL:           sagaURL,
-		Phases:        phaseResponses,
-	}
-
 	httputil.WriteJSON(w, http.StatusOK, resp)
 }
 
@@ -721,83 +651,14 @@ func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:     time.Now().UTC(),
 	}
 
-	// Fetch milestones and issues from Linear to create phases and raids.
-	milestones, _ := h.tracker.ListMilestones(req.ProjectID)
-	allIssues, _ := h.tracker.ListIssues(req.ProjectID, nil)
-
-	// Build milestone ID → phase number mapping.
-	var phases []Phase
-	msToPhase := make(map[string]string) // milestone ID → phase ID
-	for i, ms := range milestones {
-		phaseID := uuid.New().String()
-		phases = append(phases, Phase{
-			ID:        phaseID,
-			SagaID:    saga.ID,
-			TrackerID: ms.ID,
-			Number:    i + 1,
-			Name:      ms.Name,
-			Status:    PhaseStatusGated,
-		})
-		msToPhase[ms.ID] = phaseID
-	}
-	// If no milestones, create a default phase.
-	if len(phases) == 0 {
-		defaultPhaseID := uuid.New().String()
-		phases = append(phases, Phase{
-			ID:     defaultPhaseID,
-			SagaID: saga.ID,
-			Number: 1,
-			Name:   "Phase 1",
-			Status: PhaseStatusActive,
-		})
-		// All issues go to the default phase.
-		for _, issue := range allIssues {
-			if issue.MilestoneID != nil {
-				msToPhase[*issue.MilestoneID] = defaultPhaseID
-			}
-		}
-	}
-	// First phase is active.
-	if len(phases) > 0 {
-		phases[0].Status = PhaseStatusActive
-	}
-
-	// Map issues to raids.
-	var raids []Raid
-	for _, issue := range allIssues {
-		phaseID := ""
-		if issue.MilestoneID != nil {
-			phaseID = msToPhase[*issue.MilestoneID]
-		}
-		if phaseID == "" && len(phases) > 0 {
-			phaseID = phases[0].ID // default to first phase
-		}
-
-		raidStatus := linearStatusToRaid(issue.StatusType)
-		raids = append(raids, Raid{
-			ID:                 uuid.New().String(),
-			PhaseID:            phaseID,
-			TrackerID:          issue.ID,
-			Identifier:         issue.Identifier,
-			URL:                issue.URL,
-			Name:               issue.Title,
-			Description:        issue.Description,
-			AcceptanceCriteria: []string{},
-			DeclaredFiles:      []string{},
-			Status:             raidStatus,
-			Confidence:         defaultInitialConfidence,
-			CreatedAt:          time.Now().UTC(),
-			UpdatedAt:          time.Now().UTC(),
-		})
-	}
-
-	if err := h.store.CreateSaga(context.Background(), saga, phases, raids); err != nil {
+	// Only store the saga shell — phases and raids are fetched live from Linear.
+	if err := h.store.CreateSaga(context.Background(), saga, nil, nil); err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "create saga: %v", err)
 		return
 	}
 
-	log.Printf("tyr: imported saga '%s' from project %s (%d phases, %d raids)",
-		saga.Name, project.ID, len(phases), len(raids))
+	log.Printf("tyr: imported saga '%s' from project %s (%d milestones, %d issues)",
+		saga.Name, project.ID, project.MilestoneCount, project.IssueCount)
 
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"id":             saga.ID,
@@ -809,6 +670,158 @@ func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
 		"phase_count":    project.MilestoneCount,
 		"raid_count":     project.IssueCount,
 	})
+}
+
+func (h *Handler) buildSagaDetailFromTracker(saga *Saga) (*SagaDetailResponse, error) {
+	project, milestones, issues, err := h.tracker.GetProjectFull(saga.TrackerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build milestone ID → issues mapping.
+	msIssues := make(map[string][]tracker.Issue)
+	var unassigned []tracker.Issue
+	for _, issue := range issues {
+		if issue.MilestoneID != nil && *issue.MilestoneID != "" {
+			msIssues[*issue.MilestoneID] = append(msIssues[*issue.MilestoneID], issue)
+		} else {
+			unassigned = append(unassigned, issue)
+		}
+	}
+
+	phaseResponses := make([]PhaseDetailResponse, 0, len(milestones))
+	for i, ms := range milestones {
+		raidResponses := buildRaidResponsesFromTracker(msIssues[ms.ID])
+
+		phaseResponses = append(phaseResponses, PhaseDetailResponse{
+			ID:          ms.ID,
+			Name:        ms.Name,
+			Description: ms.Desc,
+			SortOrder:   i + 1,
+			Progress:    ms.Progress,
+			TargetDate:  ms.TargetDate,
+			Status:      "ACTIVE",
+			Raids:       raidResponses,
+		})
+	}
+
+	// Unassigned issues go in a default phase.
+	if len(unassigned) > 0 && len(milestones) == 0 {
+		phaseResponses = append(phaseResponses, PhaseDetailResponse{
+			ID:    "default",
+			Name:  "Unassigned",
+			Raids: buildRaidResponsesFromTracker(unassigned),
+		})
+	}
+
+	return &SagaDetailResponse{
+		ID:            saga.ID,
+		TrackerID:     saga.TrackerID,
+		TrackerType:   saga.TrackerType,
+		Slug:          saga.Slug,
+		Name:          project.Name,
+		Description:   project.Description,
+		Repos:         saga.Repos,
+		FeatureBranch: saga.FeatureBranch,
+		BaseBranch:    saga.BaseBranch,
+		Status:        string(saga.Status),
+		Progress:      project.Progress,
+		URL:           project.URL,
+		Phases:        phaseResponses,
+	}, nil
+}
+
+func buildRaidResponsesFromTracker(issues []tracker.Issue) []RaidDetailResponse {
+	responses := make([]RaidDetailResponse, 0, len(issues))
+	for _, issue := range issues {
+		responses = append(responses, RaidDetailResponse{
+			ID:            issue.ID,
+			Identifier:    issue.Identifier,
+			Title:         issue.Title,
+			Status:        issue.Status,
+			StatusType:    issue.StatusType,
+			Assignee:      issue.Assignee,
+			Labels:        issue.Labels,
+			Priority:      issue.Priority,
+			PriorityLabel: issue.PriorityLabel,
+			Estimate:      issue.Estimate,
+			URL:           issue.URL,
+			Description:   issue.Description,
+		})
+	}
+	if responses == nil {
+		responses = []RaidDetailResponse{}
+	}
+	return responses
+}
+
+func (h *Handler) buildSagaDetailFromDB(ctx context.Context, saga *Saga) (*SagaDetailResponse, error) {
+	phases, err := h.store.ListPhases(ctx, saga.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	phaseResponses := make([]PhaseDetailResponse, 0, len(phases))
+	for pi := range phases {
+		p := &phases[pi]
+		raids, err := h.store.ListRaids(ctx, p.ID)
+		if err != nil {
+			return nil, err
+		}
+		raidResponses := make([]RaidDetailResponse, 0, len(raids))
+		mergedCount := 0
+		for ri := range raids {
+			rd := &raids[ri]
+			if rd.Status == RaidStatusMerged {
+				mergedCount++
+			}
+			raidResponses = append(raidResponses, RaidDetailResponse{
+				ID:         rd.ID,
+				Identifier: rd.Identifier,
+				Title:      rd.Name,
+				Status:     string(rd.Status),
+				StatusType: raidStatusToType(rd.Status),
+				Labels:     []string{},
+				URL:        rd.URL,
+			})
+		}
+
+		phaseProgress := 0.0
+		if len(raids) > 0 {
+			phaseProgress = float64(mergedCount) / float64(len(raids))
+		}
+
+		phaseResponses = append(phaseResponses, PhaseDetailResponse{
+			ID:        p.ID,
+			Name:      p.Name,
+			SortOrder: p.Number,
+			Progress:  phaseProgress,
+			Status:    string(p.Status),
+			Raids:     raidResponses,
+		})
+	}
+
+	var totalProgress float64
+	if len(phaseResponses) > 0 {
+		for _, pr := range phaseResponses {
+			totalProgress += pr.Progress
+		}
+		totalProgress /= float64(len(phaseResponses))
+	}
+
+	return &SagaDetailResponse{
+		ID:            saga.ID,
+		TrackerID:     saga.TrackerID,
+		TrackerType:   saga.TrackerType,
+		Slug:          saga.Slug,
+		Name:          saga.Name,
+		Repos:         saga.Repos,
+		FeatureBranch: saga.FeatureBranch,
+		BaseBranch:    saga.BaseBranch,
+		Status:        string(saga.Status),
+		Progress:      totalProgress,
+		Phases:        phaseResponses,
+	}, nil
 }
 
 // raidStatusToType maps raid status to Linear-compatible status type for the UI.
