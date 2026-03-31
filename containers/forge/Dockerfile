@@ -17,6 +17,10 @@ RUN cd cli && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # Stage 2: Minimal runtime image
 FROM alpine:3.21
 
+# Patch base image vulnerabilities.
+# Fix CVE-2026-22184: zlib critical vulnerability.
+RUN apk upgrade --no-cache zlib
+
 LABEL org.opencontainers.image.title="forge"
 LABEL org.opencontainers.image.description="Forge — macOS-native session runner for Volundr"
 LABEL org.opencontainers.image.vendor="Niuu Labs"
