@@ -153,47 +153,57 @@ type SagaListItem struct {
 }
 
 // SagaDetailResponse is returned by GET /api/v1/tyr/sagas/{id}.
+// Matches the web UI's SagaDetail interface.
 type SagaDetailResponse struct {
 	ID            string                `json:"id"`
 	TrackerID     string                `json:"tracker_id"`
 	TrackerType   string                `json:"tracker_type"`
 	Slug          string                `json:"slug"`
 	Name          string                `json:"name"`
+	Description   string                `json:"description"`
 	Repos         []string              `json:"repos"`
 	FeatureBranch string                `json:"feature_branch"`
 	BaseBranch    string                `json:"base_branch"`
 	Status        string                `json:"status"`
+	Progress      float64               `json:"progress"`
 	Confidence    float64               `json:"confidence"`
+	URL           string                `json:"url"`
 	Phases        []PhaseDetailResponse `json:"phases"`
 }
 
 // PhaseDetailResponse is a phase with its raids.
+// Matches the web UI's SagaPhase interface.
 type PhaseDetailResponse struct {
-	ID         string               `json:"id"`
-	Number     int                  `json:"number"`
-	Name       string               `json:"name"`
-	Status     string               `json:"status"`
-	Confidence float64              `json:"confidence"`
-	Raids      []RaidDetailResponse `json:"raids"`
+	ID          string               `json:"id"`
+	Name        string               `json:"name"`
+	Description string               `json:"description"`
+	SortOrder   int                  `json:"sort_order"`
+	Progress    float64              `json:"progress"`
+	TargetDate  *string              `json:"target_date"`
+	Status      string               `json:"status"`
+	Confidence  float64              `json:"confidence"`
+	Raids       []RaidDetailResponse `json:"raids"`
 }
 
 // RaidDetailResponse is a raid within a phase.
+// Matches the web UI's SagaRaid interface.
 type RaidDetailResponse struct {
-	ID                 string   `json:"id"`
-	TrackerID          string   `json:"tracker_id"`
-	Identifier         string   `json:"identifier"`
-	URL                string   `json:"url"`
-	Name               string   `json:"name"`
-	Description        string   `json:"description"`
-	AcceptanceCriteria []string `json:"acceptance_criteria"`
-	Status             string   `json:"status"`
-	Confidence         float64  `json:"confidence"`
-	SessionID          *string  `json:"session_id"`
-	Branch             *string  `json:"branch"`
-	PRUrl              *string  `json:"pr_url"`
-	RetryCount         int      `json:"retry_count"`
-	CreatedAt          string   `json:"created_at"`
-	UpdatedAt          string   `json:"updated_at"`
+	ID            string   `json:"id"`
+	Identifier    string   `json:"identifier"`
+	Title         string   `json:"title"`
+	Status        string   `json:"status"`
+	StatusType    string   `json:"status_type"`
+	Assignee      *string  `json:"assignee"`
+	Labels        []string `json:"labels"`
+	Priority      int      `json:"priority"`
+	PriorityLabel string   `json:"priority_label"`
+	Estimate      *int     `json:"estimate"`
+	URL           string   `json:"url"`
+	Description   string   `json:"description"`
+	Confidence    float64  `json:"confidence"`
+	SessionID     *string  `json:"session_id"`
+	PRUrl         *string  `json:"pr_url"`
+	RetryCount    int      `json:"retry_count"`
 }
 
 // ActiveRaidResponse is returned by GET /api/v1/tyr/raids/active.

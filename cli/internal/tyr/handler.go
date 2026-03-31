@@ -137,35 +137,59 @@ func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		raidResponses := make([]RaidDetailResponse, 0, len(raids))
+		mergedCount := 0
 		for ri := range raids {
 			rd := &raids[ri]
+			statusType := raidStatusToType(rd.Status)
+			if rd.Status == RaidStatusMerged {
+				mergedCount++
+			}
 			raidResponses = append(raidResponses, RaidDetailResponse{
-				ID:                 rd.ID,
-				TrackerID:          rd.TrackerID,
-				Identifier:         rd.Identifier,
-				URL:                rd.URL,
-				Name:               rd.Name,
-				Description:        rd.Description,
-				AcceptanceCriteria: rd.AcceptanceCriteria,
-				Status:             string(rd.Status),
-				Confidence:         rd.Confidence,
-				SessionID:          rd.SessionID,
-				Branch:             rd.Branch,
-				PRUrl:              rd.PRUrl,
-				RetryCount:         rd.RetryCount,
-				CreatedAt:          rd.CreatedAt.UTC().Format(time.RFC3339),
-				UpdatedAt:          rd.UpdatedAt.UTC().Format(time.RFC3339),
+				ID:            rd.ID,
+				Identifier:    rd.Identifier,
+				Title:         rd.Name,
+				Status:        string(rd.Status),
+				StatusType:    statusType,
+				Labels:        []string{},
+				URL:           rd.URL,
+				Description:   rd.Description,
+				Confidence:    rd.Confidence,
+				SessionID:     rd.SessionID,
+				PRUrl:         rd.PRUrl,
+				RetryCount:    rd.RetryCount,
 			})
 		}
 
+		phaseProgress := 0.0
+		if len(raids) > 0 {
+			phaseProgress = float64(mergedCount) / float64(len(raids))
+		}
+
 		phaseResponses = append(phaseResponses, PhaseDetailResponse{
-			ID:         p.ID,
-			Number:     p.Number,
-			Name:       p.Name,
-			Status:     string(p.Status),
-			Confidence: p.Confidence,
-			Raids:      raidResponses,
+			ID:          p.ID,
+			Name:        p.Name,
+			Description: "",
+			SortOrder:   p.Number,
+			Progress:    phaseProgress,
+			Status:      string(p.Status),
+			Confidence:  p.Confidence,
+			Raids:       raidResponses,
 		})
+	}
+
+	// Compute overall progress from phases.
+	var totalProgress float64
+	if len(phaseResponses) > 0 {
+		for _, pr := range phaseResponses {
+			totalProgress += pr.Progress
+		}
+		totalProgress /= float64(len(phaseResponses))
+	}
+
+	// Build tracker URL.
+	sagaURL := ""
+	if saga.TrackerType == "linear" && saga.TrackerID != "" {
+		sagaURL = "https://linear.app/project/" + saga.TrackerID
 	}
 
 	resp := SagaDetailResponse{
@@ -174,11 +198,14 @@ func (h *Handler) getSaga(w http.ResponseWriter, r *http.Request) {
 		TrackerType:   saga.TrackerType,
 		Slug:          saga.Slug,
 		Name:          saga.Name,
+		Description:   "",
 		Repos:         saga.Repos,
 		FeatureBranch: slugToFeatureBranch(saga.Slug),
 		BaseBranch:    saga.BaseBranch,
 		Status:        string(saga.Status),
+		Progress:      totalProgress,
 		Confidence:    saga.Confidence,
+		URL:           sagaURL,
 		Phases:        phaseResponses,
 	}
 
@@ -782,6 +809,20 @@ func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
 		"phase_count":    project.MilestoneCount,
 		"raid_count":     project.IssueCount,
 	})
+}
+
+// raidStatusToType maps raid status to Linear-compatible status type for the UI.
+func raidStatusToType(status RaidStatus) string {
+	switch status {
+	case RaidStatusMerged:
+		return "completed"
+	case RaidStatusFailed:
+		return "canceled"
+	case RaidStatusRunning, RaidStatusReview, RaidStatusEscalated:
+		return "started"
+	default:
+		return "unstarted"
+	}
 }
 
 // linearStatusToRaid maps Linear issue status types to raid statuses.
