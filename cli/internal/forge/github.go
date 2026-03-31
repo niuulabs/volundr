@@ -7,7 +7,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,8 +24,18 @@ type GitHubRepo struct {
 	Branches      []string `json:"branches"`
 }
 
+// GitHubInstance is the config for a single GitHub instance.
+type GitHubInstance struct {
+	Name     string
+	BaseURL  string
+	Token    string
+	TokenEnv string
+	Orgs     []string
+}
+
+var ghClient = &http.Client{Timeout: 15 * time.Second}
+
 // fetchGitHubRepos returns repos for the configured GitHub instances.
-// Returns a map keyed by instance name.
 func fetchGitHubRepos(cfg *Config) map[string][]GitHubRepo {
 	result := make(map[string][]GitHubRepo)
 
@@ -43,14 +55,14 @@ func fetchGitHubRepos(cfg *Config) map[string][]GitHubRepo {
 
 		var repos []GitHubRepo
 		for _, org := range inst.Orgs {
-			orgRepos := listOrgRepos(baseURL, token, org)
-			repos = append(repos, orgRepos...)
+			repos = append(repos, listReposForAccount(baseURL, token, org)...)
 		}
-
-		// If no orgs configured, list user's repos.
 		if len(inst.Orgs) == 0 {
 			repos = append(repos, listUserRepos(baseURL, token)...)
 		}
+
+		// Fetch branches concurrently.
+		fetchAllBranches(baseURL, token, repos)
 
 		name := strings.ToLower(inst.Name)
 		if name == "" {
@@ -65,35 +77,150 @@ func fetchGitHubRepos(cfg *Config) map[string][]GitHubRepo {
 	return result
 }
 
-func listOrgRepos(baseURL, token, org string) []GitHubRepo {
-	url := fmt.Sprintf("%s/orgs/%s/repos?per_page=100&sort=updated", baseURL, org)
-	return fetchRepoPage(url, token, org)
+// listReposForAccount tries /orgs/{account}/repos first, then falls back
+// to /user/repos filtered by owner for personal accounts.
+func listReposForAccount(baseURL, token, account string) []GitHubRepo {
+	// Try org endpoint first.
+	url := fmt.Sprintf("%s/orgs/%s/repos?per_page=100&type=all&sort=updated", baseURL, account)
+	repos, status := fetchRepoPages(url, token)
+	if status != http.StatusNotFound {
+		// Filter to this org's repos only.
+		for i := range repos {
+			if repos[i].Org == "" {
+				repos[i].Org = account
+			}
+		}
+		return repos
+	}
+
+	// Org not found — try as a personal account via /user/repos.
+	log.Printf("github: org %q not found, falling back to user repos", account)
+	url = fmt.Sprintf("%s/user/repos?per_page=100&visibility=all&affiliation=owner,collaborator,organization_member&sort=updated", baseURL)
+	allRepos, _ := fetchRepoPages(url, token)
+
+	// Filter to repos owned by this account.
+	var filtered []GitHubRepo
+	for _, r := range allRepos {
+		if strings.EqualFold(r.Org, account) {
+			filtered = append(filtered, r)
+		}
+	}
+
+	// If still empty, try /users/{account}/repos (public repos).
+	if len(filtered) == 0 {
+		url = fmt.Sprintf("%s/users/%s/repos?per_page=100&type=all&sort=updated", baseURL, account)
+		filtered, _ = fetchRepoPages(url, token)
+	}
+
+	return filtered
 }
 
 func listUserRepos(baseURL, token string) []GitHubRepo {
 	url := fmt.Sprintf("%s/user/repos?per_page=100&sort=updated&affiliation=owner,organization_member", baseURL)
-	return fetchRepoPage(url, token, "")
+	repos, _ := fetchRepoPages(url, token)
+	return repos
 }
 
-func fetchRepoPage(url, token, defaultOrg string) []GitHubRepo {
-	client := &http.Client{Timeout: 15 * time.Second}
+// fetchRepoPages fetches all pages of repos from a GitHub API URL.
+// Returns the repos and the HTTP status of the first request.
+func fetchRepoPages(url, token string) ([]GitHubRepo, int) {
+	var allRepos []GitHubRepo
+	firstStatus := 0
+
+	for url != "" {
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			return allRepos, 0
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/vnd.github+json")
+
+		resp, err := ghClient.Do(req)
+		if err != nil {
+			log.Printf("github: fetch repos error: %v", err)
+			return allRepos, 0
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		if firstStatus == 0 {
+			firstStatus = resp.StatusCode
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode != http.StatusNotFound {
+				log.Printf("github: %s returned %d", url, resp.StatusCode)
+			}
+			return allRepos, firstStatus
+		}
+
+		var apiRepos []struct {
+			Name          string `json:"name"`
+			CloneURL      string `json:"clone_url"`
+			HTMLURL       string `json:"html_url"`
+			DefaultBranch string `json:"default_branch"`
+			Owner         struct {
+				Login string `json:"login"`
+			} `json:"owner"`
+		}
+		if err := json.Unmarshal(body, &apiRepos); err != nil {
+			log.Printf("github: parse repos: %v", err)
+			return allRepos, firstStatus
+		}
+
+		for _, r := range apiRepos {
+			allRepos = append(allRepos, GitHubRepo{
+				Provider:      "github",
+				Org:           r.Owner.Login,
+				Name:          r.Name,
+				CloneURL:      r.CloneURL,
+				URL:           r.HTMLURL,
+				DefaultBranch: r.DefaultBranch,
+				Branches:      []string{r.DefaultBranch}, // placeholder, filled later
+			})
+		}
+
+		url = nextLink(resp.Header.Get("Link"))
+	}
+
+	return allRepos, firstStatus
+}
+
+// fetchAllBranches fetches branches for all repos concurrently.
+func fetchAllBranches(baseURL, token string, repos []GitHubRepo) {
+	var wg sync.WaitGroup
+	for i := range repos {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			r := &repos[idx]
+			branches := fetchBranches(baseURL, token, r.Org, r.Name)
+			if len(branches) > 0 {
+				r.Branches = branches
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+func fetchBranches(baseURL, token, org, repo string) []string {
+	url := fmt.Sprintf("%s/repos/%s/%s/branches?per_page=100", baseURL, org, repo)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return []GitHubRepo{}
+		return nil
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := client.Do(req)
+	resp, err := ghClient.Do(req)
 	if err != nil {
-		log.Printf("github: fetch repos error: %v", err)
-		return []GitHubRepo{}
+		return nil
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("github: fetch repos %s returned %d", url, resp.StatusCode)
-		return []GitHubRepo{}
+		return nil
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -101,92 +228,30 @@ func fetchRepoPage(url, token, defaultOrg string) []GitHubRepo {
 		return nil
 	}
 
-	var apiRepos []struct {
-		FullName      string `json:"full_name"`
-		Name          string `json:"name"`
-		CloneURL      string `json:"clone_url"`
-		HTMLURL       string `json:"html_url"`
-		DefaultBranch string `json:"default_branch"`
-		Owner         struct {
-			Login string `json:"login"`
-		} `json:"owner"`
+	var apiBranches []struct {
+		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(body, &apiRepos); err != nil {
-		log.Printf("github: parse repos response: %v", err)
-		return []GitHubRepo{}
+	if err := json.Unmarshal(body, &apiBranches); err != nil {
+		return nil
 	}
 
-	repos := make([]GitHubRepo, 0, len(apiRepos))
-	for _, r := range apiRepos {
-		org := r.Owner.Login
-		if org == "" {
-			org = defaultOrg
-		}
-		repos = append(repos, GitHubRepo{
-			Provider:      "github",
-			Org:           org,
-			Name:          r.Name,
-			CloneURL:      r.CloneURL,
-			URL:           r.HTMLURL,
-			DefaultBranch: r.DefaultBranch,
-			Branches:      []string{r.DefaultBranch},
-		})
+	branches := make([]string, len(apiBranches))
+	for i, b := range apiBranches {
+		branches[i] = b.Name
 	}
-	return repos
+	return branches
 }
 
-// GitHubInstance is a simplified config for the handler.
-type GitHubInstance struct {
-	Name     string
-	BaseURL  string
-	Token    string
-	TokenEnv string
-	Orgs     []string
-}
+// nextLink parses the GitHub Link header to find the next page URL.
+var linkNextRe = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
 
-// parseGitHubConfig extracts GitHub instances from the forge config's
-// git section. The config stores instances but the handler needs them flat.
-func parseGitHubConfig(instances []GitHubInstance) []GitHubInstance {
-	// Filter out instances without tokens.
-	var result []GitHubInstance
-	for _, inst := range instances {
-		token := inst.Token
-		if token == "" && inst.TokenEnv != "" {
-			token = os.Getenv(inst.TokenEnv)
-		}
-		if token != "" {
-			result = append(result, inst)
-		}
+func nextLink(header string) string {
+	if header == "" {
+		return ""
 	}
-	return result
-}
-
-// resolveGitHubToken returns a GitHub token from config or common env vars.
-func resolveGitHubToken(cfg *Config) string {
-	for _, inst := range cfg.GitHub {
-		if inst.Token != "" {
-			return inst.Token
-		}
-		if inst.TokenEnv != "" {
-			if t := os.Getenv(inst.TokenEnv); t != "" {
-				return t
-			}
-		}
+	matches := linkNextRe.FindStringSubmatch(header)
+	if len(matches) < 2 {
+		return ""
 	}
-	// Fallback to common env vars.
-	for _, env := range []string{"GITHUB_TOKEN", "GH_TOKEN"} {
-		if t := os.Getenv(env); t != "" {
-			return t
-		}
-	}
-	return ""
-}
-
-// splitRepoFullName splits "org/name" into org and name.
-func splitRepoFullName(fullName string) (org, name string) {
-	parts := strings.SplitN(fullName, "/", 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1]
-	}
-	return "", fullName
+	return matches[1]
 }
