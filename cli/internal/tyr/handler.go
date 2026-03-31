@@ -534,6 +534,7 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 	for _, item := range req.Items {
 		saga, err := h.store.GetSaga(ctx, item.SagaID, ownerID)
 		if err != nil || saga == nil {
+			log.Printf("tyr: dispatch: saga %s not found", item.SagaID)
 			results = append(results, DispatchResult{
 				IssueID: item.IssueID,
 				Status:  "failed",
@@ -541,9 +542,11 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Find the raid by tracker_id (issue_id).
-		raid := h.findRaidByTrackerID(ctx, saga.ID, item.IssueID)
+		// Build a Raid from the issue data. For tracker-linked sagas, the
+		// issue lives in Linear, not in our DB.
+		raid := h.resolveRaidForDispatch(ctx, saga, item.IssueID)
 		if raid == nil {
+			log.Printf("tyr: dispatch: issue %s not found", item.IssueID)
 			results = append(results, DispatchResult{
 				IssueID: item.IssueID,
 				Status:  "failed",
@@ -551,14 +554,20 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Transition raid: PENDING → QUEUED → RUNNING
-		_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusQueued, nil)
-		_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusRunning, nil)
+		// Use the repo from the dispatch item if specified, otherwise saga default.
+		if item.Repo != "" && len(saga.Repos) > 0 {
+			// Override the first repo with the dispatched one.
+			saga.Repos[0] = item.Repo
+		}
 
-		session, err := h.dispatcher.SpawnSession(ctx, raid, saga, req.Model)
+		model := req.Model
+		if model == "" {
+			model = "claude-sonnet-4-6"
+		}
+
+		session, err := h.dispatcher.SpawnSession(ctx, raid, saga, model)
 		if err != nil {
-			// Revert to FAILED on dispatch error.
-			_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusFailed, nil)
+			log.Printf("tyr: dispatch: spawn session for %s failed: %v", item.IssueID, err)
 			results = append(results, DispatchResult{
 				IssueID: item.IssueID,
 				Status:  "failed",
@@ -566,8 +575,8 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		raidBranch := raid.TrackerID
-		_ = h.store.UpdateRaidSession(ctx, raid.ID, session.ID, raidBranch)
+		log.Printf("tyr: dispatched session %s for issue %s (%s)",
+			session.ID, raid.Identifier, raid.Name)
 
 		results = append(results, DispatchResult{
 			IssueID:     item.IssueID,
@@ -581,6 +590,46 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 		results = []DispatchResult{}
 	}
 	httputil.WriteJSON(w, http.StatusOK, results)
+}
+
+// resolveRaidForDispatch builds a Raid from either the DB or the tracker.
+func (h *Handler) resolveRaidForDispatch(ctx context.Context, saga *Saga, issueID string) *Raid {
+	// Try DB first (for non-tracker sagas).
+	raid := h.findRaidByTrackerID(ctx, saga.ID, issueID)
+	if raid != nil {
+		return raid
+	}
+
+	// Fetch from tracker if available.
+	if h.tracker == nil {
+		return nil
+	}
+
+	issues, err := h.tracker.ListIssues(saga.TrackerID, nil)
+	if err != nil {
+		return nil
+	}
+
+	for _, issue := range issues {
+		if issue.ID == issueID {
+			return &Raid{
+				ID:                 issue.ID,
+				TrackerID:          issue.ID,
+				Identifier:         issue.Identifier,
+				URL:                issue.URL,
+				Name:               issue.Title,
+				Description:        issue.Description,
+				AcceptanceCriteria: []string{},
+				DeclaredFiles:      []string{},
+				Status:             RaidStatusPending,
+				Confidence:         defaultInitialConfidence,
+				CreatedAt:          time.Now().UTC(),
+				UpdatedAt:          time.Now().UTC(),
+			}
+		}
+	}
+
+	return nil
 }
 
 func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
@@ -974,9 +1023,11 @@ func (h *Handler) healthDetailed(w http.ResponseWriter, _ *http.Request) {
 	if dbStatus != "ok" {
 		status = "degraded"
 	}
+	trackerOK := h.tracker != nil
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"status":                       status,
 		"database":                     dbStatus,
+		"tracker_connected":            trackerOK,
 		"event_bus_subscriber_count":   0,
 		"activity_subscriber_running":  false,
 		"notification_service_running": false,
