@@ -162,12 +162,18 @@ func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
 // initTyr initializes the tyr-mini server, runs migrations, and mounts routes.
 func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
 	addr := fmt.Sprintf("http://%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
+	var tyrModels []tyr.AIModel
+	for _, m := range s.cfg.AIModels {
+		tyrModels = append(tyrModels, tyr.AIModel{ID: m.ID, Name: m.Name})
+	}
+
 	tyrCfg := &tyr.Config{
 		Enabled:      true,
 		DatabaseDSN:  s.cfg.Tyr.DatabaseDSN,
 		ForgeURL:     addr,
 		LinearAPIKey: s.cfg.Tyr.LinearAPIKey,
 		LinearTeamID: s.cfg.Tyr.LinearTeamID,
+		AIModels:     tyrModels,
 	}
 
 	tyrSrv, err := tyr.NewServer(tyrCfg)

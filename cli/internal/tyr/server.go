@@ -25,6 +25,14 @@ type Config struct {
 	LinearAPIKey string
 	// LinearTeamID is the Linear team ID (auto-discovered if empty).
 	LinearTeamID string
+	// AIModels is the list of available AI models for dispatch.
+	AIModels []AIModel
+}
+
+// AIModel represents an available AI model.
+type AIModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Server manages the tyr-mini lifecycle: database, migrations, and HTTP handlers.
@@ -63,7 +71,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		})
 	}
 
-	handler := NewHandler(store, dispatcher, t)
+	handler := NewHandler(store, dispatcher, t, cfg.AIModels)
 
 	return &Server{
 		cfg:     cfg,

@@ -22,14 +22,16 @@ type Handler struct {
 	store      *Store
 	dispatcher *Dispatcher
 	tracker    tracker.Tracker // nil if no tracker configured
+	aiModels   []AIModel
 }
 
 // NewHandler creates a new tyr-mini API handler.
-func NewHandler(store *Store, dispatcher *Dispatcher, t tracker.Tracker) *Handler {
+func NewHandler(store *Store, dispatcher *Dispatcher, t tracker.Tracker, models []AIModel) *Handler {
 	return &Handler{
 		store:      store,
 		dispatcher: dispatcher,
 		tracker:    t,
+		aiModels:   models,
 	}
 }
 
@@ -580,10 +582,14 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
+	models := h.aiModels
+	if models == nil {
+		models = []AIModel{{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"}}
+	}
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"default_system_prompt": "",
 		"default_model":         "claude-sonnet-4-6",
-		"models":                []map[string]string{},
+		"models":                models,
 	})
 }
 

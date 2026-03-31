@@ -26,7 +26,7 @@ func setupHandler(t *testing.T) (*Handler, sqlmock.Sqlmock) {
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
-	handler := NewHandler(store, dispatcher, nil)
+	handler := NewHandler(store, dispatcher, nil, nil)
 	return handler, mock
 }
 
@@ -888,7 +888,7 @@ func TestDispatchApprove_Success(t *testing.T) {
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher(forgeServer.URL)
-	h := NewHandler(store, dispatcher, nil)
+	h := NewHandler(store, dispatcher, nil, nil)
 
 	// GetSaga
 	sagaRows := sqlmock.NewRows([]string{"id", "tracker_id", "tracker_type", "slug", "name", "repos", "status", "confidence", "owner_id", "base_branch", "created_at"}).
