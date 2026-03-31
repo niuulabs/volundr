@@ -435,7 +435,8 @@ def create_dispatch_router() -> APIRouter:
                         )
                     except Exception:
                         logger.error(
-                            "FAILED: %s.update_raid_state for %s", adapter_name, issue.id, exc_info=True
+                            "FAILED: %s.update_raid_state for %s",
+                            adapter_name, issue.id, exc_info=True,
                         )
 
                 results.append(
