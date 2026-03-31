@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/niuulabs/volundr/cli/internal/broker"
 	"github.com/niuulabs/volundr/cli/internal/tracker"
 	"github.com/niuulabs/volundr/cli/internal/tyr"
 	"github.com/niuulabs/volundr/cli/internal/web"
@@ -204,8 +206,118 @@ func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
 	tyrSrv.RegisterRoutes(mux)
 	s.tyrSrv = tyrSrv
 
+	// Start background services (activity subscriber + review engine).
+	eventAdapter := &tyrEventAdapter{bus: s.bus}
+	prAdapter := &tyrPRAdapter{runner: s.runner}
+	spawnerAdapter := &tyrSpawnerAdapter{runner: s.runner, forgeURL: addr}
+	tyrSrv.StartBackground(eventAdapter, prAdapter, spawnerAdapter)
+
 	log.Println("tyr-mini: routes registered on /api/v1/tyr/*")
 	return nil
+}
+
+// --- Adapters to satisfy tyr interfaces without import cycles ---
+
+type tyrEventAdapter struct {
+	bus EventEmitter
+}
+
+func (a *tyrEventAdapter) Subscribe() (string, <-chan tyr.SessionEvent) {
+	id, ch := a.bus.Subscribe()
+	out := make(chan tyr.SessionEvent, 64)
+	go func() {
+		for evt := range ch {
+			out <- tyr.SessionEvent{
+				SessionID:     evt.SessionID,
+				State:         evt.State,
+				SessionStatus: evt.SessionStatus,
+				OwnerID:       evt.OwnerID,
+				Metadata:      evt.Metadata,
+			}
+		}
+		close(out)
+	}()
+	return id, out
+}
+
+func (a *tyrEventAdapter) Unsubscribe(id string) {
+	a.bus.Unsubscribe(id)
+}
+
+type tyrPRAdapter struct {
+	runner *Runner
+}
+
+func (a *tyrPRAdapter) GetPRStatus(sessionID string) (tyr.PRCheckResult, error) {
+	pr, err := a.runner.GetPRStatus(sessionID)
+	if err != nil {
+		return tyr.PRCheckResult{}, err
+	}
+	ciPassed := false
+	if pr.CIPassed != nil {
+		ciPassed = *pr.CIPassed
+	}
+	return tyr.PRCheckResult{
+		URL:       pr.URL,
+		PRID:      pr.PRID,
+		State:     pr.State,
+		Mergeable: pr.Mergeable,
+		CIPassed:  ciPassed,
+	}, nil
+}
+
+type tyrSpawnerAdapter struct {
+	runner   *Runner
+	forgeURL string
+}
+
+func (a *tyrSpawnerAdapter) SpawnReviewerSession(raid *tyr.Raid, saga *tyr.Saga, model, systemPrompt, initialPrompt string) (string, error) {
+	// Create session via Forge.
+	req := &CreateSessionRequest{
+		Name:          "review-" + strings.ToLower(raid.Identifier),
+		Model:         model,
+		SystemPrompt:  systemPrompt,
+		InitialPrompt: initialPrompt,
+		IssueID:       raid.Identifier,
+		IssueURL:      raid.URL,
+	}
+	if len(saga.Repos) > 0 {
+		req.Source = &SessionSource{
+			Type:       "git",
+			Repo:       saga.Repos[0],
+			Branch:     saga.FeatureBranch,
+			BaseBranch: saga.BaseBranch,
+		}
+	}
+	sess, err := a.runner.CreateAndStart(context.Background(), req, "tyr-reviewer")
+	if err != nil {
+		return "", err
+	}
+	return sess.ID, nil
+}
+
+func (a *tyrSpawnerAdapter) SendMessage(sessionID, content string) error {
+	return a.runner.SendMessage(sessionID, content)
+}
+
+func (a *tyrSpawnerAdapter) GetLastAssistantMessage(sessionID string) (string, error) {
+	b := a.runner.GetBroker(sessionID)
+	if b == nil {
+		return "", fmt.Errorf("no broker for session %s", sessionID)
+	}
+	history := b.ConversationHistory()
+	turns, _ := history["turns"].([]broker.ConversationTurn)
+	// Find last assistant turn.
+	for i := len(turns) - 1; i >= 0; i-- {
+		if turns[i].Role == "assistant" {
+			return turns[i].Content, nil
+		}
+	}
+	return "", nil
+}
+
+func (a *tyrSpawnerAdapter) StopSession(sessionID string) error {
+	return a.runner.Stop(sessionID)
 }
 
 // Addr returns the configured listen address as "host:port".

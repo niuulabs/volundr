@@ -664,7 +664,7 @@ func TestHandler_StopSession_DeletedDuringStop(t *testing.T) {
 	mock.sessions["s1"] = &Session{ID: "s1", Status: StatusRunning}
 
 	// Override Stop to also delete the session.
-	h := NewHandler(&deletingStopRunner{mockRunner: *mock}, DefaultForgeConfig())
+	h := NewHandler(&deletingStopRunner{mockRunner: *mock}, DefaultForgeConfig(), nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -693,7 +693,7 @@ func TestHandler_CreateSession_RunnerError(t *testing.T) {
 	mock := newMockRunner()
 	mock.sessions["existing"] = &Session{ID: "existing", Status: StatusRunning}
 
-	h := NewHandler(&maxConcurrentRunner{mockRunner: *mock}, DefaultForgeConfig())
+	h := NewHandler(&maxConcurrentRunner{mockRunner: *mock}, DefaultForgeConfig(), nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)

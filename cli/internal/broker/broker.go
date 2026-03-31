@@ -236,6 +236,25 @@ func (b *Broker) OnCLIEvent(data map[string]any) {
 
 	// Track conversation state for history.
 	switch msgType {
+	case "user":
+		// Initial prompt flushed from pending messages — record in history
+		// and echo to browsers so the user sees what was sent.
+		if msg, ok := data["message"].(map[string]any); ok {
+			content := ""
+			if s, ok := msg["content"].(string); ok {
+				content = s
+			} else {
+				raw, _ := json.Marshal(msg["content"])
+				content = string(raw)
+			}
+			b.appendTurn("user", content, nil, nil)
+			b.broadcast(map[string]any{
+				"type":    "user_confirmed",
+				"id":      uuid.New().String(),
+				"content": content,
+			})
+		}
+
 	case "system":
 		subtype, _ := data["subtype"].(string)
 		if subtype == "init" {

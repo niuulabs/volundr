@@ -39,10 +39,13 @@ type AIModel struct {
 
 // Server manages the tyr-mini lifecycle: database, migrations, and HTTP handlers.
 type Server struct {
-	cfg     *Config
-	store   *Store
-	handler *Handler
-	db      *sql.DB
+	cfg        *Config
+	store      *Store
+	handler    *Handler
+	db         *sql.DB
+	subscriber *ActivitySubscriber
+	reviewer   *ReviewEngine
+	cancel     context.CancelFunc
 }
 
 // NewServer creates and initializes a tyr-mini server.
@@ -98,8 +101,30 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	s.handler.RegisterRoutes(mux)
 }
 
-// Close closes the database connection.
+// StartBackground starts the activity subscriber and review engine.
+// Must be called after Forge's event bus and runner are available.
+func (s *Server) StartBackground(events EventSource, pr PRChecker, spawner SessionSpawner) {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+
+	s.subscriber = NewActivitySubscriber(s.store, events, pr, s.handler.tracker, SubscriberConfig{})
+
+	s.reviewer = NewReviewEngine(s.store, pr, s.handler.tracker, spawner, ReviewEngineConfig{
+		ReviewerSystemPrompt: s.cfg.DefaultSystemPrompt,
+	})
+	s.reviewer.Start(s.subscriber)
+	s.subscriber.Start(ctx)
+
+	// Give the handler references for health reporting.
+	s.handler.subscriber = s.subscriber
+	s.handler.reviewer = s.reviewer
+}
+
+// Close stops background services and closes the database connection.
 func (s *Server) Close() error {
+	if s.cancel != nil {
+		s.cancel()
+	}
 	if s.db != nil {
 		return s.db.Close()
 	}

@@ -491,6 +491,166 @@ func (s *Store) ListDispatchQueue(ctx context.Context, ownerID string) ([]Dispat
 	return items, rows.Err()
 }
 
+// --- Activity subscriber / review engine queries ---
+
+// GetRaidBySessionID finds a raid by its working session ID.
+func (s *Store) GetRaidBySessionID(ctx context.Context, sessionID string) (*Raid, error) {
+	var r Raid
+	var reviewerSID string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, phase_id, tracker_id, COALESCE(identifier, ''), COALESCE(url, ''),
+			name, COALESCE(description, ''),
+			COALESCE(acceptance_criteria, '{}'), COALESCE(declared_files, '{}'),
+			estimate_hours, status, confidence, session_id, branch,
+			chronicle_summary, pr_url, pr_id, reason, retry_count,
+			COALESCE(reviewer_session_id, ''), COALESCE(review_round, 0),
+			created_at, updated_at
+		FROM raids WHERE session_id = $1 AND status NOT IN ('MERGED', 'FAILED')
+		LIMIT 1`, sessionID).
+		Scan(&r.ID, &r.PhaseID, &r.TrackerID, &r.Identifier, &r.URL,
+			&r.Name, &r.Description,
+			pq.Array(&r.AcceptanceCriteria), pq.Array(&r.DeclaredFiles),
+			&r.EstimateHours, &r.Status, &r.Confidence, &r.SessionID, &r.Branch,
+			&r.ChronicleSummary, &r.PRUrl, &r.PRID, &r.Reason, &r.RetryCount,
+			&reviewerSID, &r.ReviewRound,
+			&r.CreatedAt, &r.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if reviewerSID != "" {
+		r.ReviewerSessionID = &reviewerSID
+	}
+	return &r, nil
+}
+
+// GetRaidByReviewerSessionID finds a raid by its reviewer session ID.
+func (s *Store) GetRaidByReviewerSessionID(ctx context.Context, sessionID string) (*Raid, error) {
+	var r Raid
+	var reviewerSID string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, phase_id, tracker_id, COALESCE(identifier, ''), COALESCE(url, ''),
+			name, COALESCE(description, ''),
+			COALESCE(acceptance_criteria, '{}'), COALESCE(declared_files, '{}'),
+			estimate_hours, status, confidence, session_id, branch,
+			chronicle_summary, pr_url, pr_id, reason, retry_count,
+			COALESCE(reviewer_session_id, ''), COALESCE(review_round, 0),
+			created_at, updated_at
+		FROM raids WHERE reviewer_session_id = $1
+		LIMIT 1`, sessionID).
+		Scan(&r.ID, &r.PhaseID, &r.TrackerID, &r.Identifier, &r.URL,
+			&r.Name, &r.Description,
+			pq.Array(&r.AcceptanceCriteria), pq.Array(&r.DeclaredFiles),
+			&r.EstimateHours, &r.Status, &r.Confidence, &r.SessionID, &r.Branch,
+			&r.ChronicleSummary, &r.PRUrl, &r.PRID, &r.Reason, &r.RetryCount,
+			&reviewerSID, &r.ReviewRound,
+			&r.CreatedAt, &r.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if reviewerSID != "" {
+		r.ReviewerSessionID = &reviewerSID
+	}
+	return &r, nil
+}
+
+// UpdateRaidPR updates the PR info on a raid.
+func (s *Store) UpdateRaidPR(ctx context.Context, raidID, prURL, prID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE raids SET pr_url = $2, pr_id = $3, updated_at = NOW() WHERE id = $1`,
+		raidID, prURL, prID)
+	return err
+}
+
+// UpdateRaidReviewer sets the reviewer session ID and increments the review round.
+func (s *Store) UpdateRaidReviewer(ctx context.Context, raidID, reviewerSessionID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE raids SET reviewer_session_id = $2, review_round = review_round + 1, updated_at = NOW() WHERE id = $1`,
+		raidID, reviewerSessionID)
+	return err
+}
+
+// UpdatePhaseStatus updates a phase's status.
+func (s *Store) UpdatePhaseStatus(ctx context.Context, phaseID string, status PhaseStatus) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE phases SET status = $2 WHERE id = $1`,
+		phaseID, string(status))
+	return err
+}
+
+// AllRaidsMerged returns true if all raids in the phase have MERGED status.
+func (s *Store) AllRaidsMerged(ctx context.Context, phaseID string) (bool, error) {
+	var remaining int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM raids WHERE phase_id = $1 AND status != 'MERGED'`,
+		phaseID).Scan(&remaining)
+	return remaining == 0, err
+}
+
+// GetNextPhase returns the phase after the given number in a saga.
+func (s *Store) GetNextPhase(ctx context.Context, sagaID string, currentNumber int) (*Phase, error) {
+	var p Phase
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, saga_id, tracker_id, number, name, status, confidence
+		 FROM phases WHERE saga_id = $1 AND number = $2`,
+		sagaID, currentNumber+1).
+		Scan(&p.ID, &p.SagaID, &p.TrackerID, &p.Number, &p.Name, &p.Status, &p.Confidence)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// GetPhaseForRaid returns the phase containing a raid.
+func (s *Store) GetPhaseForRaid(ctx context.Context, raidID string) (*Phase, error) {
+	var p Phase
+	err := s.db.QueryRowContext(ctx,
+		`SELECT p.id, p.saga_id, p.tracker_id, p.number, p.name, p.status, p.confidence
+		 FROM phases p JOIN raids r ON r.phase_id = p.id WHERE r.id = $1`,
+		raidID).
+		Scan(&p.ID, &p.SagaID, &p.TrackerID, &p.Number, &p.Name, &p.Status, &p.Confidence)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// EnsureRaidExists inserts a raid if it doesn't already exist (by tracker_id).
+func (s *Store) EnsureRaidExists(ctx context.Context, raid *Raid) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO raids (id, phase_id, tracker_id, identifier, url, name, description,
+			acceptance_criteria, declared_files, status, confidence, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		ON CONFLICT (id) DO NOTHING`,
+		raid.ID, raid.PhaseID, raid.TrackerID, raid.Identifier, raid.URL,
+		raid.Name, raid.Description,
+		pq.Array(raid.AcceptanceCriteria), pq.Array(raid.DeclaredFiles),
+		string(raid.Status), raid.Confidence, raid.CreatedAt, raid.UpdatedAt)
+	return err
+}
+
+// EnsurePhaseExists inserts a phase if it doesn't already exist.
+func (s *Store) EnsurePhaseExists(ctx context.Context, phase *Phase) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO phases (id, saga_id, tracker_id, number, name, status, confidence)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (id) DO NOTHING`,
+		phase.ID, phase.SagaID, phase.TrackerID, phase.Number, phase.Name,
+		string(phase.Status), phase.Confidence)
+	return err
+}
+
 // Helpers.
 
 func scanRaids(rows *sql.Rows) ([]Raid, error) {

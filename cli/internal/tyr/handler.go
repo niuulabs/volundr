@@ -24,6 +24,8 @@ type Handler struct {
 	tracker             tracker.Tracker // nil if no tracker configured
 	aiModels            []AIModel
 	defaultSystemPrompt string
+	subscriber          *ActivitySubscriber
+	reviewer            *ReviewEngine
 }
 
 // NewHandler creates a new tyr-mini API handler.
@@ -565,15 +567,36 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 			model = "claude-sonnet-4-6"
 		}
 
+		// Ensure the raid exists in DB for the activity subscriber to track.
+		if raid.PhaseID == "" {
+			defaultPhaseID := uuid.New().String()
+			_ = h.store.EnsurePhaseExists(ctx, &Phase{
+				ID: defaultPhaseID, SagaID: saga.ID,
+				Number: 1, Name: "Default", Status: PhaseStatusActive,
+			})
+			raid.PhaseID = defaultPhaseID
+		}
+		_ = h.store.EnsureRaidExists(ctx, raid)
+
 		session, err := h.dispatcher.SpawnSession(ctx, raid, saga, model)
 		if err != nil {
 			log.Printf("tyr: dispatch: spawn session for %s failed: %v", item.IssueID, err)
+			reason := err.Error()
+			_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusFailed, &reason)
 			results = append(results, DispatchResult{
 				IssueID: item.IssueID,
 				Status:  "failed",
 			})
 			continue
 		}
+
+		// Record session-to-raid mapping and transition to RUNNING.
+		branch := strings.ToLower(raid.Identifier)
+		if branch == "" {
+			branch = raid.ID[:8]
+		}
+		_ = h.store.UpdateRaidSession(ctx, raid.ID, session.ID, branch)
+		_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusRunning, nil)
 
 		log.Printf("tyr: dispatched session %s for issue %s (%s)",
 			session.ID, raid.Identifier, raid.Name)
@@ -1024,14 +1047,16 @@ func (h *Handler) healthDetailed(w http.ResponseWriter, _ *http.Request) {
 		status = "degraded"
 	}
 	trackerOK := h.tracker != nil
+	subRunning := h.subscriber != nil && h.subscriber.IsRunning()
+	revRunning := h.reviewer != nil && h.reviewer.IsRunning()
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"status":                       status,
 		"database":                     dbStatus,
 		"tracker_connected":            trackerOK,
 		"event_bus_subscriber_count":   0,
-		"activity_subscriber_running":  false,
+		"activity_subscriber_running":  subRunning,
 		"notification_service_running": false,
-		"review_engine_running":        false,
+		"review_engine_running":        revRunning,
 	})
 }
 
