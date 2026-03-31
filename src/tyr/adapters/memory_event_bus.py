@@ -54,7 +54,7 @@ class InMemoryEventBus(EventBusPort):
         try:
             self._queues.remove(q)
         except ValueError:
-            pass
+            pass  # Queue already removed; safe to ignore
 
     async def emit(self, event: TyrEvent) -> None:
         """Broadcast an event to every connected client queue.

@@ -107,7 +107,7 @@ class SessionActivitySubscriber:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                pass  # Expected during graceful shutdown
             self._task = None
         logger.info("Session activity subscriber stopped")
 
@@ -345,7 +345,7 @@ class SessionActivitySubscriber:
                 pr_id = pr.pr_id
                 pr_url = pr.url
         except Exception:
-            pass
+            logger.debug("PR status check failed for session %s", raid.session_id, exc_info=True)
 
         # Signal 3: Extended idle (metadata.duration_seconds as proxy)
         idle_seconds = metadata.get("duration_seconds", 0)
