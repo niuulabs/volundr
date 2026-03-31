@@ -58,6 +58,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/tyr/dispatch/clusters", h.dispatchClusters)
 	mux.HandleFunc("GET /api/v1/tyr/dispatcher/log", h.dispatcherLog)
 	mux.HandleFunc("GET /api/v1/tyr/tracker/projects", h.trackerProjects)
+	mux.HandleFunc("GET /api/v1/tyr/tracker/projects/{id}", h.trackerProject)
+	mux.HandleFunc("GET /api/v1/tyr/tracker/projects/{id}/milestones", h.trackerMilestones)
+	mux.HandleFunc("GET /api/v1/tyr/tracker/projects/{id}/issues", h.trackerIssues)
 
 	// Not-implemented stubs for full Tyr endpoints
 	mux.HandleFunc("POST /api/v1/tyr/sagas/decompose", h.notImplemented)
@@ -610,6 +613,53 @@ func extractOwner(r *http.Request) string {
 		return "local"
 	}
 	return ownerID
+}
+
+func (h *Handler) trackerProject(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		httputil.WriteError(w, http.StatusNotFound, "no tracker configured")
+		return
+	}
+	project, err := h.tracker.GetProject(r.PathValue("id"))
+	if err != nil {
+		log.Printf("tyr: get tracker project: %v", err)
+		httputil.WriteError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, project)
+}
+
+func (h *Handler) trackerMilestones(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+	milestones, err := h.tracker.ListMilestones(r.PathValue("id"))
+	if err != nil {
+		log.Printf("tyr: list tracker milestones: %v", err)
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, milestones)
+}
+
+func (h *Handler) trackerIssues(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+	milestoneID := r.URL.Query().Get("milestone_id")
+	var msPtr *string
+	if milestoneID != "" {
+		msPtr = &milestoneID
+	}
+	issues, err := h.tracker.ListIssues(r.PathValue("id"), msPtr)
+	if err != nil {
+		log.Printf("tyr: list tracker issues: %v", err)
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, issues)
 }
 
 func nilIfEmpty(s string) *string {
