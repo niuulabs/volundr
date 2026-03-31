@@ -29,6 +29,10 @@ type Config struct {
 	AIModels []AIModel
 	// DefaultSystemPrompt is the default system prompt for dispatched sessions.
 	DefaultSystemPrompt string
+	// ReviewerSystemPrompt is the system prompt for reviewer sessions.
+	ReviewerSystemPrompt string
+	// ReviewerModel is the AI model for reviewer sessions.
+	ReviewerModel string
 }
 
 // AIModel represents an available AI model.
@@ -109,8 +113,13 @@ func (s *Server) StartBackground(events EventSource, pr PRChecker, spawner Sessi
 
 	s.subscriber = NewActivitySubscriber(s.store, events, pr, s.handler.tracker, SubscriberConfig{})
 
+	reviewerModel := s.cfg.ReviewerModel
+	if reviewerModel == "" {
+		reviewerModel = "claude-sonnet-4-6"
+	}
 	s.reviewer = NewReviewEngine(s.store, pr, s.handler.tracker, spawner, ReviewEngineConfig{
-		ReviewerSystemPrompt: s.cfg.DefaultSystemPrompt,
+		ReviewerSystemPrompt: s.cfg.ReviewerSystemPrompt,
+		ReviewerModel:        reviewerModel,
 	})
 	s.reviewer.Start(s.subscriber)
 	s.subscriber.Start(ctx)

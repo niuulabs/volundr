@@ -14,9 +14,11 @@ import (
 type TyrConfig struct {
 	Enabled      bool   `yaml:"enabled"`
 	DatabaseDSN  string `yaml:"database_dsn"`
-	LinearAPIKey        string `yaml:"linear_api_key,omitempty"`
-	LinearTeamID        string `yaml:"linear_team_id,omitempty"`
-	DefaultSystemPrompt string `yaml:"default_system_prompt,omitempty"`
+	LinearAPIKey         string `yaml:"linear_api_key,omitempty"`
+	LinearTeamID         string `yaml:"linear_team_id,omitempty"`
+	DefaultSystemPrompt  string `yaml:"default_system_prompt,omitempty"`
+	ReviewerSystemPrompt string `yaml:"reviewer_system_prompt,omitempty"`
+	ReviewerModel        string `yaml:"reviewer_model,omitempty"`
 }
 
 // Config holds the forge server configuration.

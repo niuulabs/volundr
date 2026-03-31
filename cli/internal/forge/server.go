@@ -185,8 +185,10 @@ func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
 		ForgeURL:     addr,
 		LinearAPIKey:        s.cfg.Tyr.LinearAPIKey,
 		LinearTeamID:        s.cfg.Tyr.LinearTeamID,
-		AIModels:            tyrModels,
-		DefaultSystemPrompt: s.cfg.Tyr.DefaultSystemPrompt,
+		AIModels:             tyrModels,
+		DefaultSystemPrompt:  s.cfg.Tyr.DefaultSystemPrompt,
+		ReviewerSystemPrompt: s.cfg.Tyr.ReviewerSystemPrompt,
+		ReviewerModel:        s.cfg.Tyr.ReviewerModel,
 	}
 
 	tyrSrv, err := tyr.NewServer(tyrCfg)
