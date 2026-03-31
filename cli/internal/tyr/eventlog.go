@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// TyrEvent is a single event in the Tyr event log.
-type TyrEvent struct {
+// Event is a single event in the Tyr event log.
+type Event struct {
 	ID        string         `json:"id"`
 	Event     string         `json:"event"`
 	Data      map[string]any `json:"data"`
@@ -19,9 +19,9 @@ type TyrEvent struct {
 // EventLog is a ring buffer of recent Tyr events with SSE broadcast.
 type EventLog struct {
 	mu          sync.RWMutex
-	events      []TyrEvent
+	events      []Event
 	maxSize     int
-	subscribers map[string]chan TyrEvent
+	subscribers map[string]chan Event
 }
 
 // NewEventLog creates a new event log.
@@ -30,15 +30,15 @@ func NewEventLog(maxSize int) *EventLog {
 		maxSize = 100
 	}
 	return &EventLog{
-		events:      make([]TyrEvent, 0, maxSize),
+		events:      make([]Event, 0, maxSize),
 		maxSize:     maxSize,
-		subscribers: make(map[string]chan TyrEvent),
+		subscribers: make(map[string]chan Event),
 	}
 }
 
 // Emit adds an event and broadcasts to all SSE subscribers.
 func (el *EventLog) Emit(eventType string, data map[string]any, ownerID string) {
-	evt := TyrEvent{
+	evt := Event{
 		ID:        uuid.New().String(),
 		Event:     eventType,
 		Data:      data,
@@ -63,9 +63,9 @@ func (el *EventLog) Emit(eventType string, data map[string]any, ownerID string) 
 }
 
 // Subscribe returns a channel that receives new events.
-func (el *EventLog) Subscribe() (string, <-chan TyrEvent) {
+func (el *EventLog) Subscribe() (subID string, out <-chan Event) {
 	id := uuid.New().String()
-	ch := make(chan TyrEvent, 64)
+	ch := make(chan Event, 64)
 	el.mu.Lock()
 	el.subscribers[id] = ch
 	el.mu.Unlock()
@@ -83,7 +83,7 @@ func (el *EventLog) Unsubscribe(id string) {
 }
 
 // Recent returns the last N events.
-func (el *EventLog) Recent(n int) []TyrEvent {
+func (el *EventLog) Recent(n int) []Event {
 	el.mu.RLock()
 	defer el.mu.RUnlock()
 
@@ -91,7 +91,7 @@ func (el *EventLog) Recent(n int) []TyrEvent {
 		n = len(el.events)
 	}
 	start := len(el.events) - n
-	result := make([]TyrEvent, n)
+	result := make([]Event, n)
 	copy(result, el.events[start:])
 	return result
 }

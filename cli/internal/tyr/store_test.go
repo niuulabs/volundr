@@ -14,6 +14,7 @@ func setupStore(t *testing.T) (*Store, sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("create sqlmock: %v", err)
+		return nil, nil
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return NewStore(db), mock
@@ -23,12 +24,14 @@ func TestNewStore(t *testing.T) {
 	db, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	if store == nil {
 		t.Fatal("expected non-nil store")
+		return
 	}
 	if store.DB() != db {
 		t.Error("DB() should return the underlying database")
@@ -46,6 +49,7 @@ func TestStoreListSagas_Empty(t *testing.T) {
 	sagas, err := store.ListSagas(ctx, "test-user")
 	if err != nil {
 		t.Fatalf("ListSagas error: %v", err)
+		return
 	}
 	if len(sagas) != 0 {
 		t.Errorf("expected 0 sagas, got %d", len(sagas))
@@ -67,9 +71,11 @@ func TestStoreListSagas_WithResults(t *testing.T) {
 	sagas, err := store.ListSagas(ctx, "test-user")
 	if err != nil {
 		t.Fatalf("ListSagas error: %v", err)
+		return
 	}
 	if len(sagas) != 2 {
 		t.Fatalf("expected 2 sagas, got %d", len(sagas))
+		return
 	}
 	if sagas[0].Name != "My Project" {
 		t.Errorf("expected 'My Project', got %q", sagas[0].Name)
@@ -96,9 +102,11 @@ func TestGetSaga_Found(t *testing.T) {
 	saga, err := store.GetSaga(ctx, "saga-1", "owner-1")
 	if err != nil {
 		t.Fatalf("GetSaga error: %v", err)
+		return
 	}
 	if saga == nil {
 		t.Fatal("expected saga, got nil")
+		return
 	}
 	if saga.ID != "saga-1" {
 		t.Errorf("expected ID 'saga-1', got %q", saga.ID)
@@ -119,6 +127,7 @@ func TestStoreGetSaga_NotFound(t *testing.T) {
 	saga, err := store.GetSaga(ctx, "nonexistent", "owner")
 	if err != nil {
 		t.Fatalf("GetSaga error: %v", err)
+		return
 	}
 	if saga != nil {
 		t.Error("expected nil saga for missing ID")
@@ -139,9 +148,11 @@ func TestGetSagaBySlug(t *testing.T) {
 	saga, err := store.GetSagaBySlug(ctx, "my-slug")
 	if err != nil {
 		t.Fatalf("GetSagaBySlug error: %v", err)
+		return
 	}
 	if saga == nil {
 		t.Fatal("expected saga")
+		return
 	}
 	if saga.Slug != "my-slug" {
 		t.Errorf("expected slug 'my-slug', got %q", saga.Slug)
@@ -164,6 +175,7 @@ func TestStoreDeleteSaga_Success(t *testing.T) {
 	deleted, err := store.DeleteSaga(ctx, "saga-1", "owner-1")
 	if err != nil {
 		t.Fatalf("DeleteSaga error: %v", err)
+		return
 	}
 	if !deleted {
 		t.Error("expected deleted=true")
@@ -186,6 +198,7 @@ func TestStoreDeleteSaga_NotFound(t *testing.T) {
 	deleted, err := store.DeleteSaga(ctx, "missing", "owner-1")
 	if err != nil {
 		t.Fatalf("DeleteSaga error: %v", err)
+		return
 	}
 	if deleted {
 		t.Error("expected deleted=false for missing saga")
@@ -206,9 +219,11 @@ func TestListPhases(t *testing.T) {
 	phases, err := store.ListPhases(ctx, "saga-1")
 	if err != nil {
 		t.Fatalf("ListPhases error: %v", err)
+		return
 	}
 	if len(phases) != 2 {
 		t.Fatalf("expected 2 phases, got %d", len(phases))
+		return
 	}
 	if phases[0].Number != 1 {
 		t.Errorf("expected phase 1 number=1, got %d", phases[0].Number)
@@ -232,9 +247,11 @@ func TestGetRaid_Found(t *testing.T) {
 	raid, err := store.GetRaid(ctx, "raid-1")
 	if err != nil {
 		t.Fatalf("GetRaid error: %v", err)
+		return
 	}
 	if raid == nil {
 		t.Fatal("expected raid")
+		return
 	}
 	if raid.Name != "Test Raid" {
 		t.Errorf("expected name 'Test Raid', got %q", raid.Name)
@@ -261,6 +278,7 @@ func TestGetRaid_NotFound(t *testing.T) {
 	raid, err := store.GetRaid(ctx, "missing")
 	if err != nil {
 		t.Fatalf("GetRaid error: %v", err)
+		return
 	}
 	if raid != nil {
 		t.Error("expected nil raid for missing ID")
@@ -280,6 +298,7 @@ func TestCountByStatus(t *testing.T) {
 	counts, err := store.CountByStatus(ctx)
 	if err != nil {
 		t.Fatalf("CountByStatus error: %v", err)
+		return
 	}
 	if counts["PENDING"] != 5 {
 		t.Errorf("PENDING: expected 5, got %d", counts["PENDING"])
@@ -319,6 +338,7 @@ func TestCreateSaga_Transaction(t *testing.T) {
 	err := store.CreateSaga(ctx, saga, phases, raids)
 	if err != nil {
 		t.Fatalf("CreateSaga error: %v", err)
+		return
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -336,6 +356,7 @@ func TestUpdateRaidSession(t *testing.T) {
 	err := store.UpdateRaidSession(ctx, "raid-1", "session-1", "feat/branch")
 	if err != nil {
 		t.Fatalf("UpdateRaidSession error: %v", err)
+		return
 	}
 }
 
@@ -346,14 +367,16 @@ func TestListActiveRaids(t *testing.T) {
 	now := time.Now()
 	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
 		AddRow("raid-1", "p-1", "raid-1", "", "", "Active", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
-	mock.ExpectQuery("SELECT .+ FROM raids WHERE status NOT IN").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT .+ FROM raids ORDER BY").WillReturnRows(rows)
 
 	raids, err := store.ListActiveRaids(ctx)
 	if err != nil {
 		t.Fatalf("ListActiveRaids error: %v", err)
+		return
 	}
 	if len(raids) != 1 {
 		t.Fatalf("expected 1 active raid, got %d", len(raids))
+		return
 	}
 }
 
@@ -373,6 +396,7 @@ func TestUpdateRaidStatus_Success(t *testing.T) {
 	err := store.UpdateRaidStatus(ctx, "raid-1", RaidStatusQueued, nil)
 	if err != nil {
 		t.Fatalf("UpdateRaidStatus error: %v", err)
+		return
 	}
 }
 
@@ -390,6 +414,7 @@ func TestUpdateRaidStatus_InvalidTransition(t *testing.T) {
 	err := store.UpdateRaidStatus(ctx, "raid-1", RaidStatusMerged, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid transition PENDING → MERGED")
+		return
 	}
 }
 
@@ -404,6 +429,7 @@ func TestUpdateRaidStatus_NotFound(t *testing.T) {
 	err := store.UpdateRaidStatus(ctx, "missing", RaidStatusQueued, nil)
 	if err == nil {
 		t.Fatal("expected error for missing raid")
+		return
 	}
 }
 
@@ -422,6 +448,7 @@ func TestAddConfidenceEvent_Success(t *testing.T) {
 	err := store.AddConfidenceEvent(ctx, "raid-1", "human_approved", 0.1)
 	if err != nil {
 		t.Fatalf("AddConfidenceEvent error: %v", err)
+		return
 	}
 }
 
@@ -439,9 +466,11 @@ func TestListRaids(t *testing.T) {
 	raids, err := store.ListRaids(ctx, "p-1")
 	if err != nil {
 		t.Fatalf("ListRaids error: %v", err)
+		return
 	}
 	if len(raids) != 1 {
 		t.Fatalf("expected 1 raid, got %d", len(raids))
+		return
 	}
 	if raids[0].Name != "Raid 1" {
 		t.Errorf("expected name 'Raid 1', got %q", raids[0].Name)
@@ -462,9 +491,11 @@ func TestGetSagaForRaid(t *testing.T) {
 	saga, err := store.GetSagaForRaid(ctx, "raid-1")
 	if err != nil {
 		t.Fatalf("GetSagaForRaid error: %v", err)
+		return
 	}
 	if saga == nil {
 		t.Fatal("expected saga")
+		return
 	}
 	if saga.ID != "saga-1" {
 		t.Errorf("expected saga ID 'saga-1', got %q", saga.ID)

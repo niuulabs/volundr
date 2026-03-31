@@ -20,9 +20,11 @@ func TestNewServer_ValidConfig(t *testing.T) {
 	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
+		return
 	}
 	if srv == nil {
 		t.Fatal("expected non-nil server")
+		return
 	}
 	if srv.store == nil {
 		t.Error("expected non-nil store")
@@ -65,6 +67,7 @@ func TestServer_GracefulShutdown(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("find free port: %v", err)
+		return
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	_ = ln.Close()
@@ -74,6 +77,7 @@ func TestServer_GracefulShutdown(t *testing.T) {
 	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
+		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -93,9 +97,11 @@ func TestServer_GracefulShutdown(t *testing.T) {
 	case err := <-errCh:
 		if err != nil {
 			t.Fatalf("server returned error: %v", err)
+			return
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not shut down within timeout")
+		return
 	}
 }
 
@@ -107,6 +113,7 @@ func TestServer_MaxConcurrentFromConfig(t *testing.T) {
 	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
+		return
 	}
 
 	if srv.cfg.Forge.MaxConcurrent != 8 {
@@ -144,6 +151,7 @@ func startTestServer(t *testing.T, cfg *Config) (string, context.CancelFunc) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("find free port: %v", err)
+		return "", nil
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	_ = ln.Close()
@@ -154,6 +162,7 @@ func startTestServer(t *testing.T, cfg *Config) (string, context.CancelFunc) {
 	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
+		return "", nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -189,6 +198,7 @@ func TestServer_AdminShutdownEndpoint(t *testing.T) {
 	resp, err := http.Post(url, "application/json", http.NoBody) //nolint:noctx // test request
 	if err != nil {
 		t.Fatalf("POST /admin/shutdown: %v", err)
+		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -204,6 +214,7 @@ func TestServer_Addr(t *testing.T) {
 	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
+		return
 	}
 
 	expected := "127.0.0.1:8080"
@@ -219,6 +230,7 @@ func TestServer_TyrServer_NilByDefault(t *testing.T) {
 	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
+		return
 	}
 
 	if srv.TyrServer() != nil {
@@ -237,11 +249,13 @@ func TestServer_WebEnabled_ServesConfigJSON(t *testing.T) {
 	resp, err := http.Get(baseURL + "/config.json")
 	if err != nil {
 		t.Fatalf("GET /config.json: %v", err)
+		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
+		return
 	}
 
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
@@ -252,6 +266,7 @@ func TestServer_WebEnabled_ServesConfigJSON(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if err := json.Unmarshal(body, &rtCfg); err != nil {
 		t.Fatalf("decode config.json: %v", err)
+		return
 	}
 
 	expectedURL := fmt.Sprintf("http://%s:%d", cfg.Listen.Host, cfg.Listen.Port)
@@ -272,6 +287,7 @@ func TestServer_WebEnabled_SPAFallback(t *testing.T) {
 	resp, err := http.Get(baseURL + "/sessions/some-id")
 	if err != nil {
 		t.Fatalf("GET /sessions/some-id: %v", err)
+		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -292,6 +308,7 @@ func TestServer_WebEnabled_APIRoutesPrecedence(t *testing.T) {
 	resp, err := http.Get(baseURL + "/health")
 	if err != nil {
 		t.Fatalf("GET /health: %v", err)
+		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -302,6 +319,7 @@ func TestServer_WebEnabled_APIRoutesPrecedence(t *testing.T) {
 	resp2, err := http.Get(baseURL + "/api/v1/volundr/sessions")
 	if err != nil {
 		t.Fatalf("GET /api/v1/volundr/sessions: %v", err)
+		return
 	}
 	defer func() { _ = resp2.Body.Close() }()
 
@@ -322,6 +340,7 @@ func TestServer_WebDisabled_NoSPA(t *testing.T) {
 	resp, err := http.Get(baseURL + "/config.json")
 	if err != nil {
 		t.Fatalf("GET /config.json: %v", err)
+		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -333,6 +352,7 @@ func TestServer_WebDisabled_NoSPA(t *testing.T) {
 	resp2, err := http.Get(baseURL + "/health")
 	if err != nil {
 		t.Fatalf("GET /health: %v", err)
+		return
 	}
 	defer func() { _ = resp2.Body.Close() }()
 

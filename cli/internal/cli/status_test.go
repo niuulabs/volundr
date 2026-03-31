@@ -37,6 +37,7 @@ database:
 	err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 }
 
@@ -52,6 +53,7 @@ func TestRunStatus_NoPIDFile(t *testing.T) {
 
 	if err := runStatus(nil, nil); err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 }
 
@@ -76,12 +78,14 @@ func TestRunStatus_JSON_NoPIDFile(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("runStatus JSON: %v", err)
+		return
 	}
 
 	// Read and validate JSON output.
 	var result DetailedStatus
 	if decErr := json.NewDecoder(r).Decode(&result); decErr != nil {
 		t.Fatalf("decode JSON: %v", decErr)
+		return
 	}
 
 	if result.Mode != "mini" {
@@ -100,6 +104,7 @@ func TestRunStatus_WithStateFile(t *testing.T) {
 	stateContent := `{"runtime":"mini","services":[{"name":"forge","state":"running","pid":12345,"port":8080},{"name":"postgres","state":"running","pid":0,"port":0,"error":""}]}`
 	if err := os.WriteFile(tmpDir+"/state.json", []byte(stateContent), 0o600); err != nil {
 		t.Fatalf("write state: %v", err)
+		return
 	}
 
 	oldJSON := jsonOutput
@@ -108,6 +113,7 @@ func TestRunStatus_WithStateFile(t *testing.T) {
 
 	if err := runStatus(nil, nil); err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 }
 
@@ -121,6 +127,7 @@ func TestRunStatus_WithPIDFile_DeadProcess(t *testing.T) {
 	pidFile := filepath.Join(tmpDir, "volundr.pid")
 	if err := os.WriteFile(pidFile, []byte("99999999"), 0o600); err != nil {
 		t.Fatalf("write pid file: %v", err)
+		return
 	}
 
 	oldJSON := jsonOutput
@@ -129,6 +136,7 @@ func TestRunStatus_WithPIDFile_DeadProcess(t *testing.T) {
 
 	if err := runStatus(nil, nil); err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 }
 
@@ -143,6 +151,7 @@ func TestRunStatus_NoConfig_Fallback(t *testing.T) {
 
 	if err := runStatus(nil, nil); err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 }
 
@@ -165,11 +174,13 @@ func TestRunStatus_NoConfig_JSON_Fallback(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 
 	var result DetailedStatus
 	if decErr := json.NewDecoder(r).Decode(&result); decErr != nil {
 		t.Fatalf("decode JSON: %v", decErr)
+		return
 	}
 	if result.Server.Status != "stopped" {
 		t.Errorf("expected server stopped, got %s", result.Server.Status)
@@ -188,6 +199,7 @@ func TestRunStatus_K3sMode_NoPIDFile(t *testing.T) {
 
 	if err := runStatus(nil, nil); err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 }
 
@@ -212,11 +224,13 @@ func TestRunStatus_K3sMode_JSON(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 
 	var result DetailedStatus
 	if decErr := json.NewDecoder(r).Decode(&result); decErr != nil {
 		t.Fatalf("decode JSON: %v", decErr)
+		return
 	}
 	if result.Mode != "k3s" {
 		t.Errorf("expected mode k3s, got %s", result.Mode)
@@ -233,6 +247,7 @@ func TestRunStatus_WithStateFile_Running(t *testing.T) {
 	pidFile := filepath.Join(tmpDir, "volundr.pid")
 	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write pid file: %v", err)
+		return
 	}
 
 	// Write state file.
@@ -243,6 +258,7 @@ func TestRunStatus_WithStateFile_Running(t *testing.T) {
 	]`
 	if err := os.WriteFile(filepath.Join(tmpDir, "state.json"), []byte(stateData), 0o600); err != nil {
 		t.Fatalf("write state: %v", err)
+		return
 	}
 
 	oldJSON := jsonOutput
@@ -260,11 +276,13 @@ func TestRunStatus_WithStateFile_Running(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 
 	var result DetailedStatus
 	if decErr := json.NewDecoder(r).Decode(&result); decErr != nil {
 		t.Fatalf("decode JSON: %v", decErr)
+		return
 	}
 
 	if result.Server.Status != "running" {
@@ -275,6 +293,7 @@ func TestRunStatus_WithStateFile_Running(t *testing.T) {
 	}
 	if result.Database == nil {
 		t.Fatal("expected database info")
+		return
 	}
 	if result.Database.Port != 5433 {
 		t.Errorf("expected db port 5433, got %d", result.Database.Port)
@@ -290,6 +309,7 @@ func TestRunStatus_WithStateFile_TextOutput(t *testing.T) {
 	pidFile := filepath.Join(tmpDir, "volundr.pid")
 	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write pid file: %v", err)
+		return
 	}
 
 	stateData := `[
@@ -299,6 +319,7 @@ func TestRunStatus_WithStateFile_TextOutput(t *testing.T) {
 	]`
 	if err := os.WriteFile(filepath.Join(tmpDir, "state.json"), []byte(stateData), 0o600); err != nil {
 		t.Fatalf("write state: %v", err)
+		return
 	}
 
 	oldJSON := jsonOutput
@@ -308,6 +329,7 @@ func TestRunStatus_WithStateFile_TextOutput(t *testing.T) {
 	// Should not error — just prints.
 	if err := runStatus(nil, nil); err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 }
 
@@ -355,15 +377,18 @@ database:
 `
 	if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(cfgData), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	// Write PID + state to indicate running.
 	if err := os.WriteFile(filepath.Join(tmpDir, "volundr.pid"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write pid: %v", err)
+		return
 	}
 	stateData := `[{"name": "proxy", "state": "running", "port": 8080}]`
 	if err := os.WriteFile(filepath.Join(tmpDir, "state.json"), []byte(stateData), 0o600); err != nil {
 		t.Fatalf("write state: %v", err)
+		return
 	}
 
 	oldJSON := jsonOutput
@@ -381,15 +406,18 @@ database:
 
 	if err != nil {
 		t.Fatalf("runStatus: %v", err)
+		return
 	}
 
 	var result DetailedStatus
 	if decErr := json.NewDecoder(r).Decode(&result); decErr != nil {
 		t.Fatalf("decode JSON: %v", decErr)
+		return
 	}
 
 	if result.Sessions == nil {
 		t.Fatal("expected sessions info")
+		return
 	}
 	if result.Sessions.Active != 2 {
 		t.Errorf("expected 2 active sessions, got %d", result.Sessions.Active)
@@ -519,6 +547,7 @@ func TestBuildDetailedStatus_K3sWithPods(t *testing.T) {
 	}
 	if ds.Cluster == nil {
 		t.Fatal("expected cluster info")
+		return
 	}
 	if ds.Cluster.Status != "running" {
 		t.Errorf("expected cluster running, got %s", ds.Cluster.Status)
@@ -526,6 +555,7 @@ func TestBuildDetailedStatus_K3sWithPods(t *testing.T) {
 	// Tyr should be detected from tyr-prefixed pod and excluded from pods list.
 	if ds.Tyr == nil {
 		t.Fatal("expected tyr info from tyr-prefixed pod")
+		return
 	}
 	if len(ds.Pods) != 1 {
 		t.Errorf("expected 1 pod (tyr excluded), got %d", len(ds.Pods))
@@ -553,6 +583,7 @@ func TestBuildDetailedStatus_WithTyrService(t *testing.T) {
 
 	if ds.Tyr == nil {
 		t.Fatal("expected tyr info")
+		return
 	}
 	if ds.Tyr.Status != "running" {
 		t.Errorf("expected tyr running, got %s", ds.Tyr.Status)
@@ -643,6 +674,7 @@ func TestFindService(t *testing.T) {
 	svc := findService("api", services)
 	if svc == nil {
 		t.Fatal("expected to find api service")
+		return
 	}
 	if svc.PID != 123 {
 		t.Errorf("expected PID 123, got %d", svc.PID)
@@ -663,6 +695,7 @@ func TestFindServicePrefix(t *testing.T) {
 	svc := findServicePrefix("tyr", services)
 	if svc == nil {
 		t.Fatal("expected to find tyr-prefixed service")
+		return
 	}
 	if svc.Name != "tyr-abc-123" {
 		t.Errorf("expected tyr-abc-123, got %s", svc.Name)
@@ -847,6 +880,7 @@ func TestFetchMiniSessions_WithMockServer(t *testing.T) {
 
 	if ds.Sessions == nil {
 		t.Fatal("expected sessions to be populated")
+		return
 	}
 	if ds.Sessions.Active != 1 {
 		t.Errorf("expected 1 active, got %d", ds.Sessions.Active)
@@ -856,6 +890,7 @@ func TestFetchMiniSessions_WithMockServer(t *testing.T) {
 	}
 	if len(ds.Sessions.List) != 1 {
 		t.Fatalf("expected 1 session in list, got %d", len(ds.Sessions.List))
+		return
 	}
 
 	sess := ds.Sessions.List[0]
@@ -900,6 +935,7 @@ func TestFetchMiniSessions_StatsError(t *testing.T) {
 	// Stats failed but sessions should still be fetched.
 	if ds.Sessions == nil {
 		t.Fatal("expected sessions to be populated")
+		return
 	}
 	if len(ds.Sessions.List) != 1 {
 		t.Errorf("expected 1 session, got %d", len(ds.Sessions.List))
@@ -936,6 +972,7 @@ func TestFetchMiniSessions_SessionsError(t *testing.T) {
 	// Stats should succeed even if sessions fail.
 	if ds.Sessions == nil {
 		t.Fatal("expected sessions from stats")
+		return
 	}
 	if ds.Sessions.Active != 1 {
 		t.Errorf("expected 1 active, got %d", ds.Sessions.Active)

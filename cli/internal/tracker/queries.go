@@ -1,7 +1,7 @@
 package tracker
 
 // GraphQL queries for the Linear API, ported from
-// src/tyr/adapters/linear.py
+// src/tyr/adapters/linear.py.
 
 const projectFields = `
       id

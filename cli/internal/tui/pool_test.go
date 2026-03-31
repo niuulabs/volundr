@@ -32,11 +32,13 @@ func TestNewClientPool_SingleContext(t *testing.T) {
 
 	if len(pool.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(pool.Entries))
+		return
 	}
 
 	entry := pool.GetEntry("prod")
 	if entry == nil {
 		t.Fatal("expected prod entry to exist")
+		return
 	}
 	if entry.Key != "prod" {
 		t.Errorf("expected key %q, got %q", "prod", entry.Key)
@@ -77,12 +79,14 @@ func TestNewClientPool_MultipleContexts(t *testing.T) {
 
 	if len(pool.Entries) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(pool.Entries))
+		return
 	}
 
 	// Check ordered keys are sorted.
 	keys := pool.OrderedKeys()
 	if len(keys) != 3 {
 		t.Fatalf("expected 3 keys, got %d", len(keys))
+		return
 	}
 	if keys[0] != "dev" || keys[1] != "prod" || keys[2] != "staging" {
 		t.Errorf("expected keys [dev, prod, staging], got %v", keys)
@@ -116,6 +120,7 @@ func TestNewClientPool_NoAuthContext(t *testing.T) {
 	entry := pool.GetEntry("noauth")
 	if entry == nil {
 		t.Fatal("expected entry to exist")
+		return
 	}
 	if entry.Status != ClusterConnected {
 		t.Errorf("expected NoAuth, got %v", entry.Status)
@@ -148,6 +153,7 @@ func TestClientPool_ConnectedClients(t *testing.T) {
 
 	if len(connected) != 3 {
 		t.Fatalf("expected 3 connected, got %d", len(connected))
+		return
 	}
 
 	// Should be in sorted order.
@@ -171,6 +177,7 @@ func TestClientPool_GetEntry(t *testing.T) {
 	entry := pool.GetEntry("x")
 	if entry == nil {
 		t.Fatal("expected entry for key x")
+		return
 	}
 	if entry.Key != "x" {
 		t.Errorf("expected key %q, got %q", "x", entry.Key)
@@ -238,11 +245,13 @@ func TestNewClientPoolFromFlags(t *testing.T) {
 
 	if len(pool.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(pool.Entries))
+		return
 	}
 
 	entry := pool.GetEntry("cli-override")
 	if entry == nil {
 		t.Fatal("expected cli-override entry")
+		return
 	}
 	if entry.Server != "https://cli.example.com" {
 		t.Errorf("expected server %q, got %q", "https://cli.example.com", entry.Server)
@@ -261,6 +270,7 @@ func TestNewClientPoolFromFlags_NoToken(t *testing.T) {
 	entry := pool.GetEntry("cli-override")
 	if entry == nil {
 		t.Fatal("expected cli-override entry")
+		return
 	}
 	if entry.Status != ClusterConnected {
 		t.Errorf("expected NoAuth, got %v", entry.Status)
@@ -327,6 +337,7 @@ func TestClientPool_OrderedKeys(t *testing.T) {
 
 	if len(keys) != 3 {
 		t.Fatalf("expected 3 keys, got %d", len(keys))
+		return
 	}
 	if keys[0] != "a" || keys[1] != "m" || keys[2] != "z" {
 		t.Errorf("expected [a, m, z], got %v", keys)

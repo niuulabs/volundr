@@ -174,17 +174,17 @@ func (s *Server) handleShutdown(w http.ResponseWriter, _ *http.Request) {
 // initTyr initializes the tyr-mini server, runs migrations, and mounts routes.
 func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
 	addr := fmt.Sprintf("http://%s:%d", s.cfg.Listen.Host, s.cfg.Listen.Port)
-	var tyrModels []tyr.AIModel
+	tyrModels := make([]tyr.AIModel, 0, len(s.cfg.AIModels))
 	for _, m := range s.cfg.AIModels {
 		tyrModels = append(tyrModels, tyr.AIModel{ID: m.ID, Name: m.Name})
 	}
 
 	tyrCfg := &tyr.Config{
-		Enabled:      true,
-		DatabaseDSN:  s.cfg.Tyr.DatabaseDSN,
-		ForgeURL:     addr,
-		LinearAPIKey:        s.cfg.Tyr.LinearAPIKey,
-		LinearTeamID:        s.cfg.Tyr.LinearTeamID,
+		Enabled:              true,
+		DatabaseDSN:          s.cfg.Tyr.DatabaseDSN,
+		ForgeURL:             addr,
+		LinearAPIKey:         s.cfg.Tyr.LinearAPIKey,
+		LinearTeamID:         s.cfg.Tyr.LinearTeamID,
 		AIModels:             tyrModels,
 		DefaultSystemPrompt:  s.cfg.Tyr.DefaultSystemPrompt,
 		ReviewerSystemPrompt: s.cfg.Tyr.ReviewerSystemPrompt,
@@ -218,13 +218,13 @@ func (s *Server) initTyr(ctx context.Context, mux *http.ServeMux) error {
 	return nil
 }
 
-// --- Adapters to satisfy tyr interfaces without import cycles ---
+// Adapters to satisfy tyr interfaces without import cycles.
 
 type tyrEventAdapter struct {
 	bus EventEmitter
 }
 
-func (a *tyrEventAdapter) Subscribe() (string, <-chan tyr.SessionEvent) {
+func (a *tyrEventAdapter) Subscribe() (subID string, events <-chan tyr.SessionEvent) {
 	id, ch := a.bus.Subscribe()
 	out := make(chan tyr.SessionEvent, 64)
 	go func() {

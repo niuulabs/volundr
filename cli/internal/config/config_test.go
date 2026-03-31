@@ -10,6 +10,7 @@ func TestDefaultConfig(t *testing.T) {
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 
 	if cfg.Volundr.Mode != "mini" {
@@ -54,6 +55,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 
 	cfg.Anthropic.APIKey = "sk-ant-test"
@@ -61,11 +63,13 @@ func TestConfigSaveAndLoad(t *testing.T) {
 
 	if err := cfg.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo() error: %v", err)
+		return
 	}
 
 	loaded, err := LoadFrom(path)
 	if err != nil {
 		t.Fatalf("LoadFrom() error: %v", err)
+		return
 	}
 
 	if loaded.Volundr.Mode != cfg.Volundr.Mode {
@@ -159,6 +163,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg, err := DefaultConfig()
 			if err != nil {
 				t.Fatalf("DefaultConfig() error: %v", err)
+				return
 			}
 			tt.modify(cfg)
 			err = cfg.Validate()
@@ -209,15 +214,18 @@ func TestConfigFilePermissions(t *testing.T) {
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 
 	if err := cfg.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo() error: %v", err)
+		return
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("Stat() error: %v", err)
+		return
 	}
 
 	perm := info.Mode().Perm()
@@ -230,10 +238,12 @@ func TestGeneratePassword(t *testing.T) {
 	p1, err := generatePassword()
 	if err != nil {
 		t.Fatalf("generatePassword() error: %v", err)
+		return
 	}
 	p2, err := generatePassword()
 	if err != nil {
 		t.Fatalf("generatePassword() error: %v", err)
+		return
 	}
 
 	if p1 == p2 {
@@ -253,6 +263,7 @@ func TestConfigDir(t *testing.T) {
 		dir, err := ConfigDir()
 		if err != nil {
 			t.Fatalf("ConfigDir() error: %v", err)
+			return
 		}
 		if dir != tmpDir {
 			t.Errorf("ConfigDir() = %q, want %q", dir, tmpDir)
@@ -267,6 +278,7 @@ func TestConfigDir(t *testing.T) {
 		dir, err := ConfigDir()
 		if err != nil {
 			t.Fatalf("ConfigDir() error: %v", err)
+			return
 		}
 		if dir != tmpDir {
 			t.Errorf("ConfigDir() = %q, want %q", dir, tmpDir)
@@ -284,6 +296,7 @@ func TestConfigDir(t *testing.T) {
 		dir, err := ConfigDir()
 		if err != nil {
 			t.Fatalf("ConfigDir() error: %v", err)
+			return
 		}
 
 		expected := filepath.Join(tmpHome, DefaultConfigDir)
@@ -300,6 +313,7 @@ func TestConfigPath(t *testing.T) {
 	path, err := ConfigPath()
 	if err != nil {
 		t.Fatalf("ConfigPath() error: %v", err)
+		return
 	}
 
 	expected := filepath.Join(tmpDir, DefaultConfigFile)
@@ -315,16 +329,19 @@ func TestLoadAndSaveViaDefaults(t *testing.T) {
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 	cfg.Anthropic.APIKey = "sk-ant-roundtrip"
 
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("Save() error: %v", err)
+		return
 	}
 
 	loaded, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
+		return
 	}
 
 	if loaded.Anthropic.APIKey != "sk-ant-roundtrip" {
@@ -343,6 +360,7 @@ func TestExists(t *testing.T) {
 		exists, err := Exists()
 		if err != nil {
 			t.Fatalf("Exists() error: %v", err)
+			return
 		}
 		if exists {
 			t.Error("Exists() = true, want false")
@@ -356,14 +374,17 @@ func TestExists(t *testing.T) {
 		cfg, err := DefaultConfig()
 		if err != nil {
 			t.Fatalf("DefaultConfig() error: %v", err)
+			return
 		}
 		if err := cfg.Save(); err != nil {
 			t.Fatalf("Save() error: %v", err)
+			return
 		}
 
 		exists, err := Exists()
 		if err != nil {
 			t.Fatalf("Exists() error: %v", err)
+			return
 		}
 		if !exists {
 			t.Error("Exists() = false, want true")
@@ -379,6 +400,7 @@ func TestLoadFromInvalidYAML(t *testing.T) {
 	// trigger an unmarshal error into the Config struct.
 	if err := os.WriteFile(path, []byte("runtime:\n  - :\n  :\n\t"), 0o600); err != nil {
 		t.Fatalf("write test file: %v", err)
+		return
 	}
 
 	_, err := LoadFrom(path)
@@ -402,6 +424,7 @@ func TestValidateDBPortOutOfRange(t *testing.T) {
 			cfg, err := DefaultConfig()
 			if err != nil {
 				t.Fatalf("DefaultConfig() error: %v", err)
+				return
 			}
 			cfg.Volundr.Mode = "k3s"
 			cfg.Database.Port = tt.port
@@ -420,6 +443,7 @@ func TestDefaultConfigWithNIUU_HOME(t *testing.T) {
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 
 	expectedDataDir := filepath.Join(tmpDir, "data", "pg")
@@ -506,12 +530,14 @@ func TestSaveToReadOnlyDir(t *testing.T) {
 	readOnly := filepath.Join(tmpDir, "readonly")
 	if err := os.Mkdir(readOnly, 0o500); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return
 	}
 	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) }) //nolint:gosec // restoring permissions for cleanup
 
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 
 	nested := filepath.Join(readOnly, "sub", "config.yaml")
@@ -540,11 +566,13 @@ tls:
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	cfg, err := LoadFrom(path)
 	if err != nil {
 		t.Fatalf("LoadFrom: %v", err)
+		return
 	}
 
 	if cfg.Volundr.Mode != "mini" {
@@ -571,11 +599,13 @@ tls:
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	cfg, err := LoadFrom(path)
 	if err != nil {
 		t.Fatalf("LoadFrom: %v", err)
+		return
 	}
 
 	if cfg.Volundr.Mode != "k3s" {
@@ -590,10 +620,12 @@ func TestSaveToCreatesDirectory(t *testing.T) {
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 
 	if err := cfg.SaveTo(nested); err != nil {
 		t.Fatalf("SaveTo() error: %v", err)
+		return
 	}
 
 	if _, err := os.Stat(nested); err != nil {
@@ -605,6 +637,7 @@ func TestDefaultConfig_TyrDefaults(t *testing.T) {
 	cfg, err := DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig() error: %v", err)
+		return
 	}
 
 	if cfg.K3s.TyrImage != "ghcr.io/niuulabs/tyr:latest" {
@@ -637,11 +670,13 @@ func TestK3sConfig_TyrFieldsRoundTrip(t *testing.T) {
 
 	if err := cfg.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo: %v", err)
+		return
 	}
 
 	loaded, err := LoadFrom(path)
 	if err != nil {
 		t.Fatalf("LoadFrom: %v", err)
+		return
 	}
 
 	if loaded.K3s.TyrImage != "ghcr.io/niuulabs/tyr:v2.0" {
@@ -673,11 +708,13 @@ func TestK3sConfig_TyrDisabledRoundTrip(t *testing.T) {
 
 	if err := cfg.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo: %v", err)
+		return
 	}
 
 	loaded, err := LoadFrom(path)
 	if err != nil {
 		t.Fatalf("LoadFrom: %v", err)
+		return
 	}
 
 	if loaded.K3s.TyrEnabled {

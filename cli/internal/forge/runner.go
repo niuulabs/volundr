@@ -26,10 +26,10 @@ type Runner struct {
 	bus   EventEmitter
 
 	mu         sync.Mutex
-	processes  map[string]*exec.Cmd     // session ID -> Claude Code process
-	transports map[string]*SDKTransport // session ID -> SDK WebSocket transport
+	processes  map[string]*exec.Cmd      // session ID -> Claude Code process
+	transports map[string]*SDKTransport  // session ID -> SDK WebSocket transport
 	brokers    map[string]*broker.Broker // session ID -> browser broker
-	nextPort   int                      // next SDK port to allocate
+	nextPort   int                       // next SDK port to allocate
 }
 
 // Compile-time check that Runner satisfies SessionRunner.
@@ -82,7 +82,7 @@ func (r *Runner) CreateAndStart(ctx context.Context, req *CreateSessionRequest, 
 	// Set workspace directory.
 	if req.Source != nil && req.Source.Type == "local_mount" && req.Source.LocalPath != "" {
 		// Local mount: use the existing directory directly.
-		info, err := os.Stat(req.Source.LocalPath)
+		info, err := os.Stat(req.Source.LocalPath) //nolint:gosec // path from user-provided session config, validated below
 		if err != nil {
 			return nil, fmt.Errorf("local path %q: %w", req.Source.LocalPath, err)
 		}
@@ -108,7 +108,7 @@ func (r *Runner) CreateAndStart(ctx context.Context, req *CreateSessionRequest, 
 
 	// Provision in background with a detached context — the HTTP request
 	// context would cancel as soon as the response is sent.
-	go r.provision(context.Background(), sess)
+	go r.provision(context.Background(), sess) //nolint:gosec // detached context is intentional — provisioning must outlive the HTTP request
 
 	return sess, nil
 }

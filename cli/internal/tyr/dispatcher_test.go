@@ -14,6 +14,7 @@ func TestNewDispatcher(t *testing.T) {
 	d := NewDispatcher("http://localhost:8080/")
 	if d == nil {
 		t.Fatal("expected non-nil dispatcher")
+		return
 	}
 	if d.forgeURL != "http://localhost:8080" {
 		t.Errorf("expected trailing slash stripped, got %q", d.forgeURL)
@@ -32,6 +33,7 @@ func TestSpawnSession_Success(t *testing.T) {
 		var req forgeCreateSessionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
+			return
 		}
 
 		if req.Name == "" {
@@ -76,6 +78,7 @@ func TestSpawnSession_Success(t *testing.T) {
 	session, err := d.SpawnSession(context.Background(), raid, saga, "claude-sonnet-4-6")
 	if err != nil {
 		t.Fatalf("SpawnSession error: %v", err)
+		return
 	}
 	if session.ID != "session-123" {
 		t.Errorf("expected session ID 'session-123', got %q", session.ID)
@@ -96,6 +99,7 @@ func TestSpawnSession_ForgeError(t *testing.T) {
 	_, err := d.SpawnSession(context.Background(), raid, saga, "")
 	if err == nil {
 		t.Fatal("expected error from forge conflict")
+		return
 	}
 	if !strings.Contains(err.Error(), "409") {
 		t.Errorf("expected 409 in error, got: %v", err)
@@ -123,6 +127,7 @@ func TestSpawnSession_EmptyRepos(t *testing.T) {
 	_, err := d.SpawnSession(context.Background(), raid, saga, "")
 	if err != nil {
 		t.Fatalf("SpawnSession error: %v", err)
+		return
 	}
 }
 
@@ -199,6 +204,7 @@ func TestSpawnSession_FallbackBranch(t *testing.T) {
 	_, err := d.SpawnSession(context.Background(), raid, saga, "")
 	if err != nil {
 		t.Fatalf("SpawnSession error: %v", err)
+		return
 	}
 	if receivedName != "12345678" {
 		t.Errorf("expected session name '12345678', got %q", receivedName)

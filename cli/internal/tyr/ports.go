@@ -10,8 +10,8 @@ type EventSource interface {
 // SessionEvent mirrors forge.ActivityEvent without importing forge.
 type SessionEvent struct {
 	SessionID     string
-	State         string         // active, idle, tool_executing, starting
-	SessionStatus string         // running, stopped, failed
+	State         string // active, idle, tool_executing, starting
+	SessionStatus string // running, stopped, failed
 	OwnerID       string
 	Metadata      map[string]any
 }

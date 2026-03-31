@@ -48,9 +48,11 @@ func TestRunInit_ExistingConfig_Abort(t *testing.T) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {
 		t.Fatalf("create default config: %v", err)
+		return
 	}
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
+		return
 	}
 
 	oldFlag := initModeFlag
@@ -68,6 +70,7 @@ func TestRunInit_ExistingConfig_Abort(t *testing.T) {
 	err = runInit(nil, nil)
 	if err != nil {
 		t.Fatalf("runInit abort: %v", err)
+		return
 	}
 }
 
@@ -79,9 +82,11 @@ func TestRunInit_ExistingConfig_Overwrite(t *testing.T) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {
 		t.Fatalf("create default config: %v", err)
+		return
 	}
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
+		return
 	}
 
 	oldFlag := initModeFlag
@@ -348,6 +353,7 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {
 		t.Fatalf("create default config: %v", err)
+		return
 	}
 	cfg.Listen.Host = "0.0.0.0"
 	cfg.Anthropic.APIKey = "sk-existing-key"
@@ -361,6 +367,7 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 	cfg.Git.GitHub.CloneToken = "test-clone-token"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
+		return
 	}
 
 	oldFlag := initModeFlag
@@ -397,6 +404,7 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 	loaded, err := config.Load()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
+		return
 	}
 	if loaded.Listen.Host != "0.0.0.0" {
 		t.Errorf("expected listen host 0.0.0.0, got %q", loaded.Listen.Host)
@@ -409,6 +417,7 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 	}
 	if len(loaded.Git.GitHub.Instances) == 0 {
 		t.Fatal("expected GitHub instances to be preserved")
+		return
 	}
 	if loaded.Git.GitHub.Instances[0].Token != "test-existing-token" {
 		t.Errorf("expected existing token preserved, got %q", loaded.Git.GitHub.Instances[0].Token)
@@ -423,6 +432,7 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {
 		t.Fatalf("create default config: %v", err)
+		return
 	}
 	cfg.Anthropic.APIKey = "sk-old-key"
 	cfg.Git.GitHub.Enabled = true
@@ -435,6 +445,7 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 	cfg.Git.GitHub.CloneToken = "test-old-clone"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
+		return
 	}
 
 	oldFlag := initModeFlag
@@ -471,12 +482,14 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 	loaded, err := config.Load()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
+		return
 	}
 	if loaded.Anthropic.APIKey != "sk-new-key" {
 		t.Errorf("expected new API key, got %q", loaded.Anthropic.APIKey)
 	}
 	if len(loaded.Git.GitHub.Instances) == 0 {
 		t.Fatal("expected GitHub instances")
+		return
 	}
 	inst := loaded.Git.GitHub.Instances[0]
 	if inst.TokenEnv != "NEW_TOKEN_ENV" {
@@ -498,6 +511,7 @@ func TestRunInit_PrefillExternalDB(t *testing.T) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {
 		t.Fatalf("create default config: %v", err)
+		return
 	}
 	cfg.Database.Mode = "external"
 	cfg.Database.Host = "db.old.com"
@@ -507,6 +521,7 @@ func TestRunInit_PrefillExternalDB(t *testing.T) {
 	cfg.Database.Name = "olddb"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
+		return
 	}
 
 	oldFlag := initModeFlag
@@ -543,6 +558,7 @@ func TestRunInit_PrefillExternalDB(t *testing.T) {
 	loaded, err := config.Load()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
+		return
 	}
 	if loaded.Database.Host != "db.old.com" {
 		t.Errorf("expected db host preserved, got %q", loaded.Database.Host)
@@ -573,6 +589,7 @@ func TestRunInit_K3sMode_PreflightChecks(t *testing.T) {
 	err := runInit(nil, nil)
 	if err == nil {
 		t.Fatal("expected preflight check error for missing docker")
+		return
 	}
 	if !strings.Contains(err.Error(), "docker is required") {
 		t.Errorf("expected docker error, got: %v", err)

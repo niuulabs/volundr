@@ -453,7 +453,8 @@ func (h *Handler) dispatchQueue(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var queue []queueItem
-		for _, saga := range sagas {
+		for i := range sagas {
+			saga := &sagas[i]
 			if saga.Status != SagaStatusActive || saga.TrackerID == "" {
 				continue
 			}
@@ -470,7 +471,8 @@ func (h *Handler) dispatchQueue(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Queue issues that are dispatchable (unstarted).
-			for _, issue := range issues {
+			for j := range issues {
+				issue := &issues[j]
 				if issue.StatusType != "unstarted" && issue.StatusType != "backlog" {
 					continue
 				}
@@ -659,8 +661,9 @@ func (h *Handler) resolveRaidForDispatch(ctx context.Context, saga *Saga, issueI
 		return nil
 	}
 
-	for _, issue := range issues {
-		if issue.ID == issueID {
+	for i := range issues {
+		if issues[i].ID == issueID {
+			issue := &issues[i]
 			return &Raid{
 				ID:                 issue.ID,
 				TrackerID:          issue.ID,
@@ -713,7 +716,7 @@ func (h *Handler) raidMessages(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) planConfig(w http.ResponseWriter, _ *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"planner_system_prompt": "",
-		"finalize_prompt":      "",
+		"finalize_prompt":       "",
 	})
 }
 
@@ -872,7 +875,8 @@ func (h *Handler) buildSagaDetailFromTracker(saga *Saga) (*SagaDetailResponse, e
 	// Build milestone ID → issues mapping.
 	msIssues := make(map[string][]tracker.Issue)
 	var unassigned []tracker.Issue
-	for _, issue := range issues {
+	for i := range issues {
+		issue := issues[i]
 		if issue.MilestoneID != nil && *issue.MilestoneID != "" {
 			msIssues[*issue.MilestoneID] = append(msIssues[*issue.MilestoneID], issue)
 		} else {
@@ -900,8 +904,8 @@ func (h *Handler) buildSagaDetailFromTracker(saga *Saga) (*SagaDetailResponse, e
 	if len(unassigned) > 0 {
 		raids := buildRaidResponsesFromTracker(unassigned)
 		completed := 0
-		for _, r := range raids {
-			if r.StatusType == "completed" {
+		for i := range raids {
+			if raids[i].StatusType == "completed" {
 				completed++
 			}
 		}
@@ -936,20 +940,20 @@ func (h *Handler) buildSagaDetailFromTracker(saga *Saga) (*SagaDetailResponse, e
 
 func buildRaidResponsesFromTracker(issues []tracker.Issue) []RaidDetailResponse {
 	responses := make([]RaidDetailResponse, 0, len(issues))
-	for _, issue := range issues {
+	for i := range issues {
 		responses = append(responses, RaidDetailResponse{
-			ID:            issue.ID,
-			Identifier:    issue.Identifier,
-			Title:         issue.Title,
-			Status:        issue.Status,
-			StatusType:    issue.StatusType,
-			Assignee:      issue.Assignee,
-			Labels:        issue.Labels,
-			Priority:      issue.Priority,
-			PriorityLabel: issue.PriorityLabel,
-			Estimate:      issue.Estimate,
-			URL:           issue.URL,
-			Description:   issue.Description,
+			ID:            issues[i].ID,
+			Identifier:    issues[i].Identifier,
+			Title:         issues[i].Title,
+			Status:        issues[i].Status,
+			StatusType:    issues[i].StatusType,
+			Assignee:      issues[i].Assignee,
+			Labels:        issues[i].Labels,
+			Priority:      issues[i].Priority,
+			PriorityLabel: issues[i].PriorityLabel,
+			Estimate:      issues[i].Estimate,
+			URL:           issues[i].URL,
+			Description:   issues[i].Description,
 		})
 	}
 	if responses == nil {
@@ -1041,20 +1045,6 @@ func raidStatusToType(status RaidStatus) string {
 	}
 }
 
-// linearStatusToRaid maps Linear issue status types to raid statuses.
-func linearStatusToRaid(statusType string) RaidStatus {
-	switch statusType {
-	case "completed":
-		return RaidStatusMerged
-	case "canceled", "cancelled":
-		return RaidStatusFailed
-	case "started":
-		return RaidStatusRunning
-	default:
-		return RaidStatusPending
-	}
-}
-
 func slugify(name string) string {
 	s := strings.ToLower(name)
 	// Replace non-alphanumeric with hyphens.
@@ -1095,7 +1085,7 @@ func nilIfEmpty(s string) *string {
 	return &s
 }
 
-// --- Dashboard endpoints ---
+// Dashboard endpoints.
 
 func (h *Handler) healthDetailed(w http.ResponseWriter, _ *http.Request) {
 	dbStatus := "ok"

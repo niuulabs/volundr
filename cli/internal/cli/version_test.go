@@ -21,6 +21,7 @@ func TestVersionCmd_JSON(t *testing.T) {
 	if err := versionCmd.RunE(versionCmd, nil); err != nil {
 		os.Stdout = old
 		t.Fatalf("version --json: %v", err)
+		return
 	}
 
 	_ = w.Close()
@@ -32,6 +33,7 @@ func TestVersionCmd_JSON(t *testing.T) {
 	var result map[string]string
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal JSON output: %v\noutput: %s", err, buf.String())
+		return
 	}
 
 	if result["version"] != version {
@@ -59,5 +61,6 @@ func TestVersionCmd_Text(t *testing.T) {
 	// Just verify it doesn't error
 	if err := versionCmd.RunE(versionCmd, nil); err != nil {
 		t.Fatalf("version (text): %v", err)
+		return
 	}
 }

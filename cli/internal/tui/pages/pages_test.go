@@ -646,6 +646,7 @@ func TestDemoRealms(t *testing.T) {
 	realms := demoRealms()
 	if len(realms) == 0 {
 		t.Fatal("expected non-empty demo realms")
+		return
 	}
 	for i, r := range realms {
 		if r.Name == "" {
@@ -820,6 +821,7 @@ func TestDemoCampaigns(t *testing.T) {
 	campaigns := demoCampaigns()
 	if len(campaigns) == 0 {
 		t.Fatal("expected non-empty demo campaigns")
+		return
 	}
 	for i, c := range campaigns {
 		if c.Name == "" {

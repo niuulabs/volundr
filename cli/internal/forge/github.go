@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -123,12 +124,12 @@ func listUserRepos(baseURL, token string) []GitHubRepo {
 
 // fetchRepoPages fetches all pages of repos from a GitHub API URL.
 // Returns the repos and the HTTP status of the first request.
-func fetchRepoPages(url, token string) ([]GitHubRepo, int) {
+func fetchRepoPages(url, token string) (repos []GitHubRepo, status int) {
 	var allRepos []GitHubRepo
 	firstStatus := 0
 
 	for url != "" {
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody) //nolint:gosec // URL is from trusted GitHub API config
 		if err != nil {
 			return allRepos, 0
 		}
@@ -206,14 +207,14 @@ func fetchAllBranches(baseURL, token string, repos []GitHubRepo) {
 
 func fetchBranches(baseURL, token, org, repo string) []string {
 	url := fmt.Sprintf("%s/repos/%s/%s/branches?per_page=100", baseURL, org, repo)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody) //nolint:gosec // URL is from trusted GitHub API config
 	if err != nil {
 		return nil
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := ghClient.Do(req)
+	resp, err := ghClient.Do(req) //nolint:gosec // request uses trusted URL from config
 	if err != nil {
 		return nil
 	}

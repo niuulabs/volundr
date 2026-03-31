@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -69,7 +70,7 @@ func NewLinearTracker(cfg LinearConfig) *LinearTracker {
 // Close is a no-op for the HTTP-based client.
 func (lt *LinearTracker) Close() error { return nil }
 
-// --- GraphQL execution ---
+// GraphQL execution.
 
 func (lt *LinearTracker) query(gql string, vars map[string]any) (map[string]any, error) {
 	payload := map[string]any{"query": gql}
@@ -83,7 +84,7 @@ func (lt *LinearTracker) query(gql string, vars map[string]any) (map[string]any,
 
 	var lastErr error
 	for attempt := range lt.maxRetries + 1 {
-		req, err := http.NewRequest(http.MethodPost, lt.apiURL, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, lt.apiURL, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("create request: %w", err)
 		}
@@ -99,7 +100,7 @@ func (lt *LinearTracker) query(gql string, vars map[string]any) (map[string]any,
 		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 
-		if resp.StatusCode == 429 && attempt < lt.maxRetries {
+		if resp.StatusCode == http.StatusTooManyRequests && attempt < lt.maxRetries {
 			retryAfter, _ := strconv.ParseFloat(resp.Header.Get("Retry-After"), 64)
 			if retryAfter < 1 {
 				retryAfter = 1
@@ -132,7 +133,7 @@ func (lt *LinearTracker) query(gql string, vars map[string]any) (map[string]any,
 	return nil, fmt.Errorf("exhausted retries")
 }
 
-// --- Cache ---
+// Cache.
 
 func (lt *LinearTracker) getCached(key string) any {
 	lt.mu.RLock()
@@ -160,7 +161,7 @@ func (lt *LinearTracker) invalidateCache(prefix string) {
 	}
 }
 
-// --- Team discovery ---
+// Team discovery.
 
 func (lt *LinearTracker) getTeamID() (string, error) {
 	if lt.teamID != "" {
@@ -178,8 +179,9 @@ func (lt *LinearTracker) getTeamID() (string, error) {
 	return lt.teamID, nil
 }
 
-// --- CRUD: Read ---
+// CRUD: Read.
 
+// ListProjects returns all accessible Linear projects.
 func (lt *LinearTracker) ListProjects() ([]Project, error) {
 	if cached := lt.getCached("projects:all"); cached != nil {
 		return cached.([]Project), nil
@@ -197,6 +199,7 @@ func (lt *LinearTracker) ListProjects() ([]Project, error) {
 	return projects, nil
 }
 
+// GetProject returns a single Linear project by ID.
 func (lt *LinearTracker) GetProject(id string) (*Project, error) {
 	data, err := lt.query(qGetProject, map[string]any{"id": id})
 	if err != nil {
@@ -210,6 +213,7 @@ func (lt *LinearTracker) GetProject(id string) (*Project, error) {
 	return &p, nil
 }
 
+// GetProjectFull returns a project with its milestones and issues.
 func (lt *LinearTracker) GetProjectFull(id string) (*Project, []Milestone, []Issue, error) {
 	data, err := lt.query(qGetProjectFull, map[string]any{"id": id, "issueFirst": 250})
 	if err != nil {
@@ -236,13 +240,14 @@ func (lt *LinearTracker) GetProjectFull(id string) (*Project, []Milestone, []Iss
 
 	issueNodes := jsonNodesKey(node, "issuesFull")
 	issues := make([]Issue, 0, len(issueNodes))
-	for _, in_ := range issueNodes {
-		issues = append(issues, nodeToIssue(in_))
+	for _, issueNode := range issueNodes {
+		issues = append(issues, nodeToIssue(issueNode))
 	}
 
 	return &p, milestones, issues, nil
 }
 
+// ListMilestones returns milestones for a given project.
 func (lt *LinearTracker) ListMilestones(projectID string) ([]Milestone, error) {
 	cacheKey := "milestones:" + projectID
 	if cached := lt.getCached(cacheKey); cached != nil {
@@ -265,6 +270,7 @@ func (lt *LinearTracker) ListMilestones(projectID string) ([]Milestone, error) {
 	return milestones, nil
 }
 
+// ListIssues returns issues for a project, optionally filtered by milestone.
 func (lt *LinearTracker) ListIssues(projectID string, milestoneID *string) ([]Issue, error) {
 	cacheKey := fmt.Sprintf("issues:%s:%v", projectID, milestoneID)
 	if cached := lt.getCached(cacheKey); cached != nil {
@@ -295,8 +301,9 @@ func (lt *LinearTracker) ListIssues(projectID string, milestoneID *string) ([]Is
 	return issues, nil
 }
 
-// --- CRUD: Create ---
+// CRUD: Create.
 
+// CreateProject creates a new Linear project and returns its ID.
 func (lt *LinearTracker) CreateProject(name, description string) (string, error) {
 	teamID, err := lt.getTeamID()
 	if err != nil {
@@ -316,6 +323,7 @@ func (lt *LinearTracker) CreateProject(name, description string) (string, error)
 	return jsonStr(project, "id"), nil
 }
 
+// CreateMilestone creates a new milestone in a Linear project and returns its ID.
 func (lt *LinearTracker) CreateMilestone(name, projectID string, sortOrder float64) (string, error) {
 	data, err := lt.query(qCreateMilestone, map[string]any{
 		"name": name, "projectId": projectID, "sortOrder": sortOrder,
@@ -331,6 +339,7 @@ func (lt *LinearTracker) CreateMilestone(name, projectID string, sortOrder float
 	return jsonStr(ms, "id"), nil
 }
 
+// CreateIssue creates a new issue in a Linear project and returns its ID.
 func (lt *LinearTracker) CreateIssue(title, description, projectID string, milestoneID *string, estimate *int) (string, error) {
 	teamID, err := lt.getTeamID()
 	if err != nil {
@@ -358,8 +367,9 @@ func (lt *LinearTracker) CreateIssue(title, description, projectID string, miles
 	return jsonStr(issue, "id"), nil
 }
 
-// --- CRUD: Update ---
+// CRUD: Update.
 
+// UpdateIssueState transitions a Linear issue to the named workflow state.
 func (lt *LinearTracker) UpdateIssueState(issueID, stateName string) error {
 	stateID, err := lt.resolveStateID(issueID, stateName)
 	if err != nil {
@@ -375,6 +385,7 @@ func (lt *LinearTracker) UpdateIssueState(issueID, stateName string) error {
 	return nil
 }
 
+// AddComment adds a comment to a Linear issue.
 func (lt *LinearTracker) AddComment(issueID, body string) error {
 	_, err := lt.query(qAddComment, map[string]any{
 		"issueId": issueID, "body": body,
@@ -382,7 +393,7 @@ func (lt *LinearTracker) AddComment(issueID, body string) error {
 	return err
 }
 
-// --- Internal helpers ---
+// Internal helpers.
 
 func (lt *LinearTracker) resolveStateID(issueID, stateName string) (string, error) {
 	data, err := lt.query(qIssueTeam, map[string]any{"id": issueID})
@@ -413,7 +424,7 @@ func (lt *LinearTracker) resolveStateID(issueID, stateName string) (string, erro
 	return "", fmt.Errorf("state '%s' not found. Available: %s", stateName, strings.Join(available, ", "))
 }
 
-// --- Node conversion ---
+// Node conversion.
 
 func nodeToProject(n map[string]any) Project {
 	msNodes := jsonNodes(n, "projectMilestones")
@@ -448,8 +459,8 @@ func nodeToProject(n map[string]any) Project {
 		IssueCount:     len(jsonNodes(n, "issues")),
 		Slug:           slug,
 		Progress:       progress,
-		StartDate:       jsonStrPtr(n, "startDate"),
-		TargetDate:      jsonStrPtr(n, "targetDate"),
+		StartDate:      jsonStrPtr(n, "startDate"),
+		TargetDate:     jsonStrPtr(n, "targetDate"),
 	}
 }
 
@@ -504,7 +515,7 @@ func nodeToIssue(n map[string]any) Issue {
 	}
 }
 
-// --- JSON helpers ---
+// JSON helpers.
 
 func jsonStr(m map[string]any, key string) string {
 	if m == nil {

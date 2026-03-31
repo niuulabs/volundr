@@ -339,23 +339,24 @@ func (h *Handler) searchIssues(w http.ResponseWriter, r *http.Request) {
 
 	var results []map[string]any
 	query = strings.ToLower(query)
-	for _, p := range projects {
+	for i := range projects {
+		p := &projects[i]
 		issues, err := h.tracker.ListIssues(p.ID, nil)
 		if err != nil {
 			continue
 		}
-		for _, issue := range issues {
-			if strings.Contains(strings.ToLower(issue.Title), query) ||
-				strings.Contains(strings.ToLower(issue.Identifier), query) {
+		for i := range issues {
+			if strings.Contains(strings.ToLower(issues[i].Title), query) ||
+				strings.Contains(strings.ToLower(issues[i].Identifier), query) {
 				results = append(results, map[string]any{
-					"id":         issue.ID,
-					"identifier": issue.Identifier,
-					"title":      issue.Title,
-					"status":     issue.Status,
-					"assignee":   issue.Assignee,
-					"labels":     issue.Labels,
-					"priority":   issue.Priority,
-					"url":        issue.URL,
+					"id":         issues[i].ID,
+					"identifier": issues[i].Identifier,
+					"title":      issues[i].Title,
+					"status":     issues[i].Status,
+					"assignee":   issues[i].Assignee,
+					"labels":     issues[i].Labels,
+					"priority":   issues[i].Priority,
+					"url":        issues[i].URL,
 				})
 			}
 			if len(results) >= 20 {
@@ -419,11 +420,12 @@ func (h *Handler) getChronicleTimeline(w http.ResponseWriter, r *http.Request) {
 			elapsed = 0
 		}
 
-		if turn.Role == "user" {
+		switch turn.Role {
+		case "user":
 			events = append(events, map[string]any{
 				"t": elapsed, "type": "message", "label": truncate(turn.Content, 80),
 			})
-		} else if turn.Role == "assistant" {
+		case "assistant":
 			tokens := 0
 			if usage, ok := turn.Metadata["usage"].(map[string]any); ok {
 				for _, modelUsage := range usage {
@@ -485,9 +487,8 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-func appendGitData(workspaceDir string, sessionStart time.Time, events []map[string]any) ([]map[string]string, []map[string]any, []map[string]any) {
-	var commits []map[string]string
-	var files []map[string]any
+func appendGitData(workspaceDir string, sessionStart time.Time, events []map[string]any) (commits []map[string]string, files, enrichedEvents []map[string]any) {
+	enrichedEvents = events
 
 	// Get commits since session start.
 	sinceArg := fmt.Sprintf("--since=%s", sessionStart.Format(time.RFC3339))
@@ -505,7 +506,7 @@ func appendGitData(workspaceDir string, sessionStart time.Time, events []map[str
 				"msg":  parts[1],
 				"time": time.Now().Format("15:04"),
 			})
-			events = append(events, map[string]any{
+			enrichedEvents = append(enrichedEvents, map[string]any{
 				"t": 0, "type": "git", "label": parts[1], "hash": parts[0],
 			})
 		}
@@ -540,14 +541,14 @@ func appendGitData(workspaceDir string, sessionStart time.Time, events []map[str
 		}
 	}
 
-	return commits, files, events
+	return commits, files, enrichedEvents
 }
 
 func (h *Handler) getSessionLogs(w http.ResponseWriter, _ *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, []any{})
 }
 
-// --- Per-session broker routes (skuld-mini) ---
+// Per-session broker routes (skuld-mini).
 
 func (h *Handler) brokerWebSocket(w http.ResponseWriter, r *http.Request) {
 	b := h.runner.GetBroker(r.PathValue("session_id"))

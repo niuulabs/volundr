@@ -14,6 +14,7 @@ func TestCheckBinary_Found(t *testing.T) {
 	r := CheckBinary("go", "version")
 	if !r.OK {
 		t.Fatalf("expected go binary to be found, got: %s", r.Message)
+		return
 	}
 	if r.Detail == "" {
 		t.Error("expected non-empty detail")
@@ -27,6 +28,7 @@ func TestCheckBinary_NotFound(t *testing.T) {
 	r := CheckBinary("volundr-nonexistent-binary-99999")
 	if r.OK {
 		t.Fatal("expected check to fail for nonexistent binary")
+		return
 	}
 	if !strings.Contains(r.Message, "not found") {
 		t.Errorf("expected 'not found' in message, got %q", r.Message)
@@ -37,6 +39,7 @@ func TestCheckBinary_NoVersionArgs(t *testing.T) {
 	r := CheckBinary("go")
 	if !r.OK {
 		t.Fatalf("expected go binary to be found, got: %s", r.Message)
+		return
 	}
 	// Detail should be the path only (no version).
 	if strings.Contains(r.Detail, "(") {
@@ -49,6 +52,7 @@ func TestCheckBinary_VersionCommandFails(t *testing.T) {
 	r := CheckBinary("go", "--nonexistent-flag-xyz")
 	if !r.OK {
 		t.Fatalf("expected go binary to be found even with bad version flag, got: %s", r.Message)
+		return
 	}
 	// Detail should just be the path (version extraction failed gracefully).
 	if strings.Contains(r.Detail, "(") {
@@ -61,6 +65,7 @@ func TestCheckPortAvailable_Free(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to find free port: %v", err)
+		return
 	}
 	addr := ln.Addr().(*net.TCPAddr)
 	port := addr.Port
@@ -77,6 +82,7 @@ func TestCheckPortAvailable_InUse(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to bind port: %v", err)
+		return
 	}
 	defer func() { _ = ln.Close() }()
 
@@ -114,6 +120,7 @@ func TestCheckDirWritable_NotWritable(t *testing.T) {
 	readOnly := filepath.Join(dir, "readonly")
 	if err := os.Mkdir(readOnly, 0o555); err != nil {
 		t.Fatalf("failed to create readonly dir: %v", err)
+		return
 	}
 
 	r := CheckDirWritable(filepath.Join(readOnly, "sub"))

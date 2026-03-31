@@ -204,6 +204,7 @@ func TestRunInitPreflightChecks(t *testing.T) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig: %v", err)
+		return
 	}
 	cfg.Anthropic.APIKey = "sk-test-key"
 
@@ -212,6 +213,7 @@ func TestRunInitPreflightChecks(t *testing.T) {
 	// Should have exactly 4 checks: claude, api key, git, workspace.
 	if len(results) != 4 {
 		t.Fatalf("expected 4 results, got %d", len(results))
+		return
 	}
 
 	// API key should pass since we set it.
@@ -234,6 +236,7 @@ func TestRunInitPreflightChecks_CustomClaudeBinary(t *testing.T) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {
 		t.Fatalf("DefaultConfig: %v", err)
+		return
 	}
 	cfg.Volundr.Forge.ClaudeBinary = "nonexistent-claude-binary-xyz"
 

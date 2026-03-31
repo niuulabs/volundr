@@ -64,6 +64,7 @@ func TestNewOIDCClient(t *testing.T) {
 		c := NewOIDCClient("https://idp.example.com")
 		if c.httpClient == nil {
 			t.Fatal("expected non-nil httpClient")
+			return
 		}
 	})
 }
@@ -77,6 +78,7 @@ func TestDiscover(t *testing.T) {
 		got, err := c.Discover()
 		if err != nil {
 			t.Fatalf("Discover: %v", err)
+			return
 		}
 		if got.Issuer != wantDisc.Issuer {
 			t.Errorf("expected issuer %q, got %q", wantDisc.Issuer, got.Issuer)
@@ -124,6 +126,7 @@ func TestDiscover(t *testing.T) {
 		_, err := c.Discover()
 		if err == nil {
 			t.Fatal("expected error for non-200 response")
+			return
 		}
 		if !strings.Contains(err.Error(), "HTTP 404") {
 			t.Errorf("expected error to contain HTTP 404, got %q", err.Error())
@@ -141,6 +144,7 @@ func TestDiscover(t *testing.T) {
 		_, err := c.Discover()
 		if err == nil {
 			t.Fatal("expected error for invalid JSON")
+			return
 		}
 		if !strings.Contains(err.Error(), "decoding discovery document") {
 			t.Errorf("expected decoding error, got %q", err.Error())
@@ -152,6 +156,7 @@ func TestDiscover(t *testing.T) {
 		_, err := c.Discover()
 		if err == nil {
 			t.Fatal("expected error for connection failure")
+			return
 		}
 		if !strings.Contains(err.Error(), "fetching discovery document") {
 			t.Errorf("expected fetch error, got %q", err.Error())
@@ -175,6 +180,7 @@ func TestRefreshToken(t *testing.T) {
 				}
 				if err := r.ParseForm(); err != nil { //nolint:gosec // test handler, no real risk
 					t.Fatalf("parsing form: %v", err)
+					return
 				}
 				if r.FormValue("grant_type") != "refresh_token" { //nolint:gosec // test handler
 					t.Errorf("expected grant_type=refresh_token, got %q", r.FormValue("grant_type")) //nolint:gosec // test handler
@@ -195,6 +201,7 @@ func TestRefreshToken(t *testing.T) {
 		got, err := c.RefreshToken("my-client", "old-refresh")
 		if err != nil {
 			t.Fatalf("RefreshToken: %v", err)
+			return
 		}
 		if got.AccessToken != "new-access-token" {
 			t.Errorf("expected access token %q, got %q", "new-access-token", got.AccessToken)
@@ -217,6 +224,7 @@ func TestRefreshToken(t *testing.T) {
 		_, err := c.RefreshToken("my-client", "bad-refresh")
 		if err == nil {
 			t.Fatal("expected error for bad refresh token")
+			return
 		}
 		if !strings.Contains(err.Error(), "HTTP 400") {
 			t.Errorf("expected HTTP 400 error, got %q", err.Error())
@@ -228,6 +236,7 @@ func TestRefreshToken(t *testing.T) {
 		_, err := c.RefreshToken("my-client", "refresh")
 		if err == nil {
 			t.Fatal("expected error when discovery fails")
+			return
 		}
 	})
 }
@@ -261,6 +270,7 @@ func TestUserinfo(t *testing.T) {
 		got, err := c.Userinfo("my-access-token")
 		if err != nil {
 			t.Fatalf("Userinfo: %v", err)
+			return
 		}
 		if got.Sub != wantInfo.Sub {
 			t.Errorf("expected sub %q, got %q", wantInfo.Sub, got.Sub)
@@ -292,6 +302,7 @@ func TestUserinfo(t *testing.T) {
 		_, err := c.Userinfo("bad-token")
 		if err == nil {
 			t.Fatal("expected error for 401 response")
+			return
 		}
 		if !strings.Contains(err.Error(), "HTTP 401") {
 			t.Errorf("expected HTTP 401 error, got %q", err.Error())
@@ -311,6 +322,7 @@ func TestUserinfo(t *testing.T) {
 		_, err := c.Userinfo("my-token")
 		if err == nil {
 			t.Fatal("expected error for invalid JSON")
+			return
 		}
 		if !strings.Contains(err.Error(), "decoding userinfo") {
 			t.Errorf("expected decoding error, got %q", err.Error())
@@ -322,6 +334,7 @@ func TestUserinfo(t *testing.T) {
 		_, err := c.Userinfo("tok")
 		if err == nil {
 			t.Fatal("expected error when discovery fails")
+			return
 		}
 	})
 }
@@ -340,6 +353,7 @@ func TestExchangeCode(t *testing.T) {
 			"/token": func(w http.ResponseWriter, r *http.Request) {
 				if err := r.ParseForm(); err != nil { //nolint:gosec // test handler, no real risk
 					t.Fatalf("parsing form: %v", err)
+					return
 				}
 				if r.FormValue("grant_type") != "authorization_code" { //nolint:gosec // test handler
 					t.Errorf("expected grant_type=authorization_code, got %q", r.FormValue("grant_type")) //nolint:gosec // test handler
@@ -366,6 +380,7 @@ func TestExchangeCode(t *testing.T) {
 		got, err := c.exchangeCode("my-client", "auth-code", "http://localhost:9999/callback", "my-verifier")
 		if err != nil {
 			t.Fatalf("exchangeCode: %v", err)
+			return
 		}
 		if got.AccessToken != "access-123" {
 			t.Errorf("expected access token %q, got %q", "access-123", got.AccessToken)
@@ -388,6 +403,7 @@ func TestExchangeCode(t *testing.T) {
 		_, err := c.exchangeCode("my-client", "bad-code", "http://localhost/callback", "verifier")
 		if err == nil {
 			t.Fatal("expected error for bad code exchange")
+			return
 		}
 	})
 }
@@ -409,6 +425,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 				}
 				if err := r.ParseForm(); err != nil { //nolint:gosec // test handler, no real risk
 					t.Fatalf("parsing form: %v", err)
+					return
 				}
 				if r.FormValue("client_id") != "my-client" { //nolint:gosec // test handler
 					t.Errorf("expected client_id=my-client, got %q", r.FormValue("client_id")) //nolint:gosec // test handler
@@ -426,6 +443,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 			"/token": func(w http.ResponseWriter, r *http.Request) {
 				if err := r.ParseForm(); err != nil { //nolint:gosec // test handler, no real risk
 					t.Fatalf("parsing form: %v", err)
+					return
 				}
 				if r.FormValue("grant_type") != "urn:ietf:params:oauth:grant-type:device_code" { //nolint:gosec // test handler
 					t.Errorf("unexpected grant_type %q", r.FormValue("grant_type")) //nolint:gosec // test handler
@@ -450,6 +468,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("DeviceCodeFlow: %v", err)
+			return
 		}
 		if got.AccessToken != "device-access-token" {
 			t.Errorf("expected access token %q, got %q", "device-access-token", got.AccessToken)
@@ -479,6 +498,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 		_, err := c.DeviceCodeFlow(context.Background(), "client", func(_ DeviceCodeResponse) {})
 		if err == nil {
 			t.Fatal("expected error for missing device auth endpoint")
+			return
 		}
 		if !strings.Contains(err.Error(), "does not support device authorization") {
 			t.Errorf("unexpected error: %q", err.Error())
@@ -516,6 +536,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 		_, err := c.DeviceCodeFlow(ctx, "my-client", func(_ DeviceCodeResponse) {})
 		if err == nil {
 			t.Fatal("expected error on context cancellation")
+			return
 		}
 	})
 
@@ -532,6 +553,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 		_, err := c.DeviceCodeFlow(context.Background(), "client", func(_ DeviceCodeResponse) {})
 		if err == nil {
 			t.Fatal("expected error for device endpoint failure")
+			return
 		}
 		if !strings.Contains(err.Error(), "HTTP 500") {
 			t.Errorf("expected HTTP 500 error, got %q", err.Error())
@@ -574,6 +596,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 		got, err := c.DeviceCodeFlow(context.Background(), "client", func(_ DeviceCodeResponse) {})
 		if err != nil {
 			t.Fatalf("DeviceCodeFlow: %v", err)
+			return
 		}
 		if got.AccessToken != "tok" {
 			t.Errorf("expected access token %q, got %q", "tok", got.AccessToken)
@@ -603,6 +626,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 		_, err := c.DeviceCodeFlow(context.Background(), "client", func(_ DeviceCodeResponse) {})
 		if err == nil {
 			t.Fatal("expected error for access_denied")
+			return
 		}
 	})
 
@@ -611,6 +635,7 @@ func TestDeviceCodeFlow(t *testing.T) {
 		_, err := c.DeviceCodeFlow(context.Background(), "client", func(_ DeviceCodeResponse) {})
 		if err == nil {
 			t.Fatal("expected error when discovery fails")
+			return
 		}
 	})
 }
@@ -662,6 +687,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 			"/token": func(w http.ResponseWriter, r *http.Request) {
 				if err := r.ParseForm(); err != nil { //nolint:gosec // test handler, no real risk
 					t.Fatalf("parsing form: %v", err)
+					return
 				}
 				if r.FormValue("grant_type") != "authorization_code" { //nolint:gosec // test handler
 					t.Errorf("expected grant_type=authorization_code, got %q", r.FormValue("grant_type")) //nolint:gosec // test handler
@@ -697,6 +723,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		got, redirectURI, err := c.AuthorizationCodeFlow(context.Background(), "my-client", openBrowser)
 		if err != nil {
 			t.Fatalf("AuthorizationCodeFlow: %v", err)
+			return
 		}
 		if got.AccessToken != "auth-code-access" {
 			t.Errorf("expected access token %q, got %q", "auth-code-access", got.AccessToken)
@@ -737,6 +764,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		_, _, err := c.AuthorizationCodeFlow(context.Background(), "my-client", openBrowser)
 		if err == nil {
 			t.Fatal("expected error for authorization error callback")
+			return
 		}
 		if !strings.Contains(err.Error(), "access_denied") {
 			t.Errorf("expected access_denied error, got %q", err.Error())
@@ -772,6 +800,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		_, _, err := c.AuthorizationCodeFlow(context.Background(), "my-client", openBrowser)
 		if err == nil {
 			t.Fatal("expected error for missing authorization code")
+			return
 		}
 		if !strings.Contains(err.Error(), "no authorization code") {
 			t.Errorf("expected no-code error, got %q", err.Error())
@@ -799,6 +828,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		_, _, err := c.AuthorizationCodeFlow(ctx, "my-client", openBrowser)
 		if err == nil {
 			t.Fatal("expected error on context cancellation")
+			return
 		}
 	})
 
@@ -815,6 +845,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		_, _, err := c.AuthorizationCodeFlow(context.Background(), "my-client", openBrowser)
 		if err == nil {
 			t.Fatal("expected error when browser fails to open")
+			return
 		}
 		if !strings.Contains(err.Error(), "opening browser") {
 			t.Errorf("expected browser open error, got %q", err.Error())
@@ -826,6 +857,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		_, _, err := c.AuthorizationCodeFlow(context.Background(), "client", func(_ string) error { return nil })
 		if err == nil {
 			t.Fatal("expected error when discovery fails")
+			return
 		}
 	})
 }
@@ -850,6 +882,7 @@ func TestPostToken(t *testing.T) {
 		got, err := c.postToken(srv.URL, data)
 		if err != nil {
 			t.Fatalf("postToken: %v", err)
+			return
 		}
 		if got.AccessToken != "tok" {
 			t.Errorf("expected access token %q, got %q", "tok", got.AccessToken)
@@ -867,6 +900,7 @@ func TestPostToken(t *testing.T) {
 		_, err := c.postToken(srv.URL, url.Values{})
 		if err == nil {
 			t.Fatal("expected error for 401")
+			return
 		}
 	})
 
@@ -880,6 +914,7 @@ func TestPostToken(t *testing.T) {
 		_, err := c.postToken(srv.URL, url.Values{})
 		if err == nil {
 			t.Fatal("expected error for invalid JSON")
+			return
 		}
 	})
 
@@ -888,6 +923,7 @@ func TestPostToken(t *testing.T) {
 		_, err := c.postToken("http://127.0.0.1:1/token", url.Values{})
 		if err == nil {
 			t.Fatal("expected error for connection failure")
+			return
 		}
 	})
 }

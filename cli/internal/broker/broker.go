@@ -96,7 +96,7 @@ func NewBroker(sessionID string, transport Transport, workspaceDir string) *Brok
 }
 
 // Routes registers the broker's HTTP/WebSocket handlers on a mux.
-// prefix is the path prefix (e.g. "/s/{session_id}" or "" for standalone).
+// Prefix is the path prefix (e.g. "/s/{session_id}" or "" for standalone).
 //
 // Registered routes:
 //   - GET  {prefix}/session                  — browser WebSocket
@@ -413,6 +413,7 @@ func (b *Broker) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// HandleDiffFiles returns changed files from git diff for the session workspace.
 func (b *Broker) HandleDiffFiles(w http.ResponseWriter, r *http.Request) {
 	if b.workspaceDir == "" {
 		w.Header().Set("Content-Type", "application/json")
@@ -426,7 +427,7 @@ func (b *Broker) HandleDiffFiles(w http.ResponseWriter, r *http.Request) {
 	case "default-branch":
 		cmd = exec.CommandContext(r.Context(), "git", "diff", "main...HEAD", "--numstat") //nolint:gosec // fixed args
 	default:
-		cmd = exec.CommandContext(r.Context(), "git", "diff", "HEAD", "--numstat")
+		cmd = exec.CommandContext(r.Context(), "git", "diff", "HEAD", "--numstat") //nolint:gosec // fixed args, context from request
 	}
 	cmd.Dir = b.workspaceDir
 
@@ -446,15 +447,15 @@ func (b *Broker) HandleDiffFiles(w http.ResponseWriter, r *http.Request) {
 		if len(parts) != 3 {
 			continue
 		}
-		ins, del_ := 0, 0
+		ins, del := 0, 0
 		if parts[0] != "-" {
-			fmt.Sscanf(parts[0], "%d", &ins)
+			_, _ = fmt.Sscanf(parts[0], "%d", &ins)
 		}
 		if parts[1] != "-" {
-			fmt.Sscanf(parts[1], "%d", &del_)
+			_, _ = fmt.Sscanf(parts[1], "%d", &del)
 		}
 		files = append(files, map[string]any{
-			"path": parts[2], "status": "mod", "ins": ins, "del": del_,
+			"path": parts[2], "status": "mod", "ins": ins, "del": del,
 		})
 	}
 	if files == nil {
@@ -465,6 +466,7 @@ func (b *Broker) HandleDiffFiles(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"files": files})
 }
 
+// HandleDiff returns the unified diff for a single file in the session workspace.
 func (b *Broker) HandleDiff(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("file")
 	if filePath == "" || b.workspaceDir == "" {
@@ -510,17 +512,17 @@ func parseDiffOutput(raw, filePath string) map[string]any {
 			for _, token := range strings.Fields(header) {
 				if strings.HasPrefix(token, "-") {
 					nums := strings.SplitN(token[1:], ",", 2)
-					fmt.Sscanf(nums[0], "%d", &oStart)
+					_, _ = fmt.Sscanf(nums[0], "%d", &oStart)
 					if len(nums) > 1 {
-						fmt.Sscanf(nums[1], "%d", &oCount)
+						_, _ = fmt.Sscanf(nums[1], "%d", &oCount)
 					} else {
 						oCount = 1
 					}
 				} else if strings.HasPrefix(token, "+") {
 					nums := strings.SplitN(token[1:], ",", 2)
-					fmt.Sscanf(nums[0], "%d", &nStart)
+					_, _ = fmt.Sscanf(nums[0], "%d", &nStart)
 					if len(nums) > 1 {
-						fmt.Sscanf(nums[1], "%d", &nCount)
+						_, _ = fmt.Sscanf(nums[1], "%d", &nCount)
 					} else {
 						nCount = 1
 					}
@@ -541,13 +543,14 @@ func parseDiffOutput(raw, filePath string) map[string]any {
 		}
 
 		lines := currentHunk["lines"].([]map[string]any)
-		if strings.HasPrefix(line, "+") {
+		switch {
+		case strings.HasPrefix(line, "+"):
 			lines = append(lines, map[string]any{"type": "add", "content": line[1:], "newLine": newStart})
 			newStart++
-		} else if strings.HasPrefix(line, "-") {
+		case strings.HasPrefix(line, "-"):
 			lines = append(lines, map[string]any{"type": "remove", "content": line[1:], "oldLine": oldStart})
 			oldStart++
-		} else if strings.HasPrefix(line, " ") {
+		case strings.HasPrefix(line, " "):
 			lines = append(lines, map[string]any{"type": "context", "content": line[1:], "oldLine": oldStart, "newLine": newStart})
 			oldStart++
 			newStart++
@@ -571,7 +574,7 @@ func (b *Broker) InjectMessage(content string) error {
 	return nil
 }
 
-// --- internal helpers ---
+// Internal helpers.
 
 func (b *Broker) broadcast(data map[string]any) {
 	payload, err := json.Marshal(data)

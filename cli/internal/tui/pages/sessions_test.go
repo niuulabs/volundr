@@ -79,6 +79,7 @@ func TestSessionsPage_SelectedSession_Valid(t *testing.T) {
 	sel := page.SelectedSession()
 	if sel == nil {
 		t.Fatal("expected non-nil selected session")
+		return
 	}
 	if sel.ID != "s1" {
 		t.Errorf("expected ID %q, got %q", "s1", sel.ID)
@@ -301,6 +302,7 @@ func TestDemoSessions(t *testing.T) {
 	demos := demoSessions()
 	if len(demos) == 0 {
 		t.Fatal("expected non-empty demo sessions")
+		return
 	}
 
 	// Verify all demo sessions have required fields.

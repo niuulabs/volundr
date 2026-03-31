@@ -52,6 +52,7 @@ func TestWhoamiCmd_NotLoggedIn(t *testing.T) {
 	err := whoamiCmd.RunE(whoamiCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when not logged in")
+		return
 	}
 }
 
@@ -72,6 +73,7 @@ func TestWhoamiCmd_NoIssuer(t *testing.T) {
 	err := whoamiCmd.RunE(whoamiCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when no issuer configured")
+		return
 	}
 }
 
@@ -85,5 +87,6 @@ func TestWhoamiCmd_NoContext(t *testing.T) {
 	err := whoamiCmd.RunE(whoamiCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when no contexts configured")
+		return
 	}
 }

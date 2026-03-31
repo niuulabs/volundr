@@ -16,6 +16,7 @@ func TestSDKTransport_StartAndStop(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -38,6 +39,7 @@ func TestSDKTransport_SendMessage_NoConnection(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -53,6 +55,7 @@ func TestSDKTransport_CLIConnectsAndReceivesMessage(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -61,6 +64,7 @@ func TestSDKTransport_CLIConnectsAndReceivesMessage(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
+		return
 	}
 	defer func() { _ = conn.Close() }()
 	if resp != nil && resp.Body != nil {
@@ -72,22 +76,26 @@ func TestSDKTransport_CLIConnectsAndReceivesMessage(t *testing.T) {
 	case <-transport.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("CLI connection not signaled as ready")
+		return
 	}
 
 	// Send a message via the transport.
 	if err := transport.SendMessage("test content"); err != nil {
 		t.Fatalf("SendMessage: %v", err)
+		return
 	}
 
 	// Read the message on the CLI side.
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("read: %v", err)
+		return
 	}
 
 	var msg map[string]any
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 
 	if msg["type"] != "user" {
@@ -97,6 +105,7 @@ func TestSDKTransport_CLIConnectsAndReceivesMessage(t *testing.T) {
 	message, ok := msg["message"].(map[string]any)
 	if !ok {
 		t.Fatal("expected message field")
+		return
 	}
 	if message["content"] != "test content" {
 		t.Errorf("expected content 'test content', got %v", message["content"])
@@ -112,6 +121,7 @@ func TestSDKTransport_EmitsActivityEvents(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -120,6 +130,7 @@ func TestSDKTransport_EmitsActivityEvents(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
+		return
 	}
 	defer func() { _ = conn.Close() }()
 	if resp != nil && resp.Body != nil {
@@ -130,6 +141,7 @@ func TestSDKTransport_EmitsActivityEvents(t *testing.T) {
 	case <-transport.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("CLI connection not signaled as ready")
+		return
 	}
 
 	// Send an assistant message from the CLI (simulating Claude responding).
@@ -140,6 +152,7 @@ func TestSDKTransport_EmitsActivityEvents(t *testing.T) {
 	payload, _ := json.Marshal(assistantMsg)
 	if err := conn.WriteMessage(websocket.TextMessage, append(payload, '\n')); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	// Should receive an "active" activity event.
@@ -163,9 +176,18 @@ func TestSDKTransport_EmitsActivityEvents(t *testing.T) {
 	payload, _ = json.Marshal(resultMsg)
 	if err := conn.WriteMessage(websocket.TextMessage, append(payload, '\n')); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
-	// Should receive an "idle" activity event.
+	// Should receive a "turn_complete" event followed by "idle".
+	select {
+	case event := <-ch:
+		if event.State != ActivityStateTurnComplete {
+			t.Errorf("expected state 'turn_complete', got %q", event.State)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("expected turn_complete event, timed out")
+	}
 	select {
 	case event := <-ch:
 		if event.State != ActivityStateIdle {
@@ -190,6 +212,7 @@ func TestSDKTransport_InitMessage(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -197,6 +220,7 @@ func TestSDKTransport_InitMessage(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
+		return
 	}
 	defer func() { _ = conn.Close() }()
 	if resp != nil && resp.Body != nil {
@@ -207,6 +231,7 @@ func TestSDKTransport_InitMessage(t *testing.T) {
 	case <-transport.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("not ready")
+		return
 	}
 
 	// Send a system init message to set CLI session ID.
@@ -218,6 +243,7 @@ func TestSDKTransport_InitMessage(t *testing.T) {
 	payload, _ := json.Marshal(initMsg)
 	if err := conn.WriteMessage(websocket.TextMessage, append(payload, '\n')); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	// Give time for processing.
@@ -226,16 +252,19 @@ func TestSDKTransport_InitMessage(t *testing.T) {
 	// Send a message and verify session_id is populated in the sent message.
 	if err := transport.SendMessage("hello"); err != nil {
 		t.Fatalf("SendMessage: %v", err)
+		return
 	}
 
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("read: %v", err)
+		return
 	}
 
 	var msg map[string]any
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if msg["session_id"] != "cli-session-42" {
 		t.Errorf("expected session_id 'cli-session-42', got %v", msg["session_id"])
@@ -248,6 +277,7 @@ func TestSDKTransport_InvalidJSON(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -255,6 +285,7 @@ func TestSDKTransport_InvalidJSON(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
+		return
 	}
 	defer func() { _ = conn.Close() }()
 	if resp != nil && resp.Body != nil {
@@ -265,11 +296,13 @@ func TestSDKTransport_InvalidJSON(t *testing.T) {
 	case <-transport.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("not ready")
+		return
 	}
 
 	// Send invalid JSON — should not crash.
 	if err := conn.WriteMessage(websocket.TextMessage, []byte("{bad json}\n")); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	// Give time for processing; no panic means success.
@@ -282,6 +315,7 @@ func TestSDKTransport_SessionIDFromNonSystemMessage(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -289,6 +323,7 @@ func TestSDKTransport_SessionIDFromNonSystemMessage(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
+		return
 	}
 	defer func() { _ = conn.Close() }()
 	if resp != nil && resp.Body != nil {
@@ -299,6 +334,7 @@ func TestSDKTransport_SessionIDFromNonSystemMessage(t *testing.T) {
 	case <-transport.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("not ready")
+		return
 	}
 
 	// Send an assistant message with session_id.
@@ -310,6 +346,7 @@ func TestSDKTransport_SessionIDFromNonSystemMessage(t *testing.T) {
 	payload, _ := json.Marshal(msg)
 	if err := conn.WriteMessage(websocket.TextMessage, append(payload, '\n')); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	// Give time for processing.
@@ -318,16 +355,19 @@ func TestSDKTransport_SessionIDFromNonSystemMessage(t *testing.T) {
 	// The session_id should now be captured.
 	if err := transport.SendMessage("response"); err != nil {
 		t.Fatalf("SendMessage: %v", err)
+		return
 	}
 
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("read: %v", err)
+		return
 	}
 
 	var reply map[string]any
 	if err := json.Unmarshal(raw, &reply); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if reply["session_id"] != "from-assistant-msg" {
 		t.Errorf("expected session_id 'from-assistant-msg', got %v", reply["session_id"])
@@ -343,6 +383,7 @@ func TestSDKTransport_EmitsToolExecuting(t *testing.T) {
 
 	if err := transport.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
+		return
 	}
 	defer transport.Stop()
 
@@ -350,6 +391,7 @@ func TestSDKTransport_EmitsToolExecuting(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
+		return
 	}
 	defer func() { _ = conn.Close() }()
 	if resp != nil && resp.Body != nil {
@@ -360,6 +402,7 @@ func TestSDKTransport_EmitsToolExecuting(t *testing.T) {
 	case <-transport.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("not ready")
+		return
 	}
 
 	// Send assistant message with tool_use.
@@ -376,6 +419,7 @@ func TestSDKTransport_EmitsToolExecuting(t *testing.T) {
 	payload, _ := json.Marshal(toolMsg)
 	if err := conn.WriteMessage(websocket.TextMessage, append(payload, '\n')); err != nil {
 		t.Fatalf("write: %v", err)
+		return
 	}
 
 	// Should get active first, then tool_executing.
@@ -386,6 +430,7 @@ func TestSDKTransport_EmitsToolExecuting(t *testing.T) {
 			events = append(events, event.State)
 		case <-time.After(2 * time.Second):
 			t.Fatal("timed out waiting for events")
+			return
 		}
 	}
 

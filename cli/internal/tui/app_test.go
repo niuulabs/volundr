@@ -79,6 +79,7 @@ func TestApp_Update_ToggleSidebar(t *testing.T) {
 	app := NewApp("")
 	if !app.ShowSidebar {
 		t.Fatal("expected sidebar shown initially")
+		return
 	}
 
 	app, _ = app.Update(tea.KeyPressMsg{Code: '['})
@@ -516,6 +517,7 @@ func TestClusterStatusMsg_Fields(t *testing.T) {
 func TestContextAccentColors_NonEmpty(t *testing.T) {
 	if len(ContextAccentColors) == 0 {
 		t.Fatal("expected non-empty ContextAccentColors")
+		return
 	}
 	for i, c := range ContextAccentColors {
 		if c == nil {

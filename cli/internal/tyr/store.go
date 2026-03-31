@@ -492,7 +492,7 @@ func (s *Store) ListDispatchQueue(ctx context.Context, ownerID string) ([]Dispat
 	return items, rows.Err()
 }
 
-// --- Activity subscriber / review engine queries ---
+// Activity subscriber / review engine queries.
 
 // GetRaidBySessionID finds a raid by its working session ID.
 func (s *Store) GetRaidBySessionID(ctx context.Context, sessionID string) (*Raid, error) {

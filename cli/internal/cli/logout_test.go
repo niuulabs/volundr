@@ -30,11 +30,13 @@ func TestLogout_SpecificContext(t *testing.T) {
 
 	if err := logoutCmd.RunE(logoutCmd, nil); err != nil {
 		t.Fatalf("logout: %v", err)
+		return
 	}
 
 	loaded, err := remote.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
+		return
 	}
 
 	// Prod should be cleared.
@@ -62,6 +64,7 @@ func TestLogout_NonexistentContext(t *testing.T) {
 	err := logoutCmd.RunE(logoutCmd, nil)
 	if err == nil {
 		t.Fatal("expected error for nonexistent context")
+		return
 	}
 }
 
@@ -78,5 +81,6 @@ func TestLogout_MultipleContextsNoFlag(t *testing.T) {
 	err := logoutCmd.RunE(logoutCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when multiple contexts and no --context flag")
+		return
 	}
 }

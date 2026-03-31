@@ -334,7 +334,7 @@ func (re *ReviewEngine) checkPhaseGate(ctx context.Context, raid *Raid) {
 	}
 }
 
-// --- Reviewer response parsing ---
+// Reviewer response parsing.
 
 // ReviewerResult is the structured output from a reviewer session.
 type ReviewerResult struct {
@@ -369,7 +369,7 @@ func parseReviewerResponse(text string) *ReviewerResult {
 	return &result
 }
 
-// --- Prompt builders ---
+// Prompt builders.
 
 func buildReviewerPrompt(raid *Raid, workingSessionID string, maxRounds int, forgeURL string) string {
 	var b strings.Builder
@@ -420,7 +420,7 @@ func buildReviewerPrompt(raid *Raid, workingSessionID string, maxRounds int, for
 		b.WriteString("3. After the working session pushes, run `git pull` to get the latest changes\n")
 		b.WriteString("4. Re-read the diff and re-review\n")
 		b.WriteString("5. Repeat until no blocking issues remain or you exhaust all review rounds\n")
-		b.WriteString(fmt.Sprintf("6. After %d rounds with unresolved blocking issues, set approved=false\n\n", maxRounds))
+		fmt.Fprintf(&b, "6. After %d rounds with unresolved blocking issues, set approved=false\n\n", maxRounds)
 	}
 
 	b.WriteString("## Merging\n\n")

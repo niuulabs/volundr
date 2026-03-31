@@ -17,6 +17,7 @@ func TestCheckNotRunning_NoPIDFile(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	err := CheckNotRunning()
@@ -32,12 +33,14 @@ func TestCheckNotRunning_StalePIDFile(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	// Write a PID file with a PID that's very unlikely to be running.
 	pidPath := filepath.Join(volundrDir, PIDFile)
 	if err := os.WriteFile(pidPath, []byte("999999999"), 0o600); err != nil {
 		t.Fatalf("write stale PID file: %v", err)
+		return
 	}
 
 	err := CheckNotRunning()
@@ -58,12 +61,14 @@ func TestCheckNotRunning_InvalidPIDFile(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	// Write an invalid PID file.
 	pidPath := filepath.Join(volundrDir, PIDFile)
 	if err := os.WriteFile(pidPath, []byte("not-a-number"), 0o600); err != nil {
 		t.Fatalf("write invalid PID file: %v", err)
+		return
 	}
 
 	err := CheckNotRunning()
@@ -84,17 +89,20 @@ func TestCheckNotRunning_RunningProcess(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	// Write PID file with our own PID (always running).
 	pidPath := filepath.Join(volundrDir, PIDFile)
 	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write PID file: %v", err)
+		return
 	}
 
 	err := CheckNotRunning()
 	if err == nil {
 		t.Fatal("expected error when process is running")
+		return
 	}
 	if !containsStr(err.Error(), "already running") {
 		t.Errorf("expected 'already running' error, got: %v", err)
@@ -121,11 +129,13 @@ func TestWritePIDFile_RemovePIDFile(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	// Write PID file.
 	if err := WritePIDFile(); err != nil {
 		t.Fatalf("WritePIDFile: %v", err)
+		return
 	}
 
 	// Verify the file was written with the current PID.
@@ -133,11 +143,13 @@ func TestWritePIDFile_RemovePIDFile(t *testing.T) {
 	data, err := os.ReadFile(pidPath) //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read PID file: %v", err)
+		return
 	}
 
 	pid, err := strconv.Atoi(string(data))
 	if err != nil {
 		t.Fatalf("parse PID: %v", err)
+		return
 	}
 
 	if pid != os.Getpid() {
@@ -147,6 +159,7 @@ func TestWritePIDFile_RemovePIDFile(t *testing.T) {
 	// Remove PID file.
 	if err := RemovePIDFile(); err != nil {
 		t.Fatalf("RemovePIDFile: %v", err)
+		return
 	}
 
 	// Verify the file was removed.
@@ -162,6 +175,7 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	services := []ServiceStatus{
@@ -172,6 +186,7 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 	// Write state file.
 	if err := WriteStateFile(services); err != nil {
 		t.Fatalf("WriteStateFile: %v", err)
+		return
 	}
 
 	// Read it back.
@@ -179,15 +194,18 @@ func TestWriteStateFile_ReadBack(t *testing.T) {
 	data, err := os.ReadFile(stateFilePath) //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("read state file: %v", err)
+		return
 	}
 
 	var readBack []ServiceStatus
 	if err := json.Unmarshal(data, &readBack); err != nil {
 		t.Fatalf("unmarshal state: %v", err)
+		return
 	}
 
 	if len(readBack) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(readBack))
+		return
 	}
 
 	if readBack[0].Name != "api" || readBack[0].State != StateRunning || readBack[0].Port != 8080 {
@@ -206,6 +224,7 @@ func TestRemoveStateFile_NoFile(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	// Removing a non-existent state file should return an error.
@@ -222,6 +241,7 @@ func TestRemovePIDFile_NoFile(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	err := RemovePIDFile()
@@ -237,16 +257,19 @@ func TestRemoveStateFile(t *testing.T) {
 	volundrDir := filepath.Join(tmpDir, ".niuu")
 	if err := os.MkdirAll(volundrDir, 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)
+		return
 	}
 
 	// Write then remove.
 	services := []ServiceStatus{{Name: "api", State: StateRunning}}
 	if err := WriteStateFile(services); err != nil {
 		t.Fatalf("WriteStateFile: %v", err)
+		return
 	}
 
 	if err := RemoveStateFile(); err != nil {
 		t.Fatalf("RemoveStateFile: %v", err)
+		return
 	}
 
 	stateFilePath := filepath.Join(volundrDir, StateFile)

@@ -18,6 +18,7 @@ func TestNewSessionPodClient(t *testing.T) {
 	}
 	if spc.httpClient == nil {
 		t.Fatal("expected non-nil httpClient")
+		return
 	}
 }
 
@@ -45,6 +46,7 @@ func TestSessionPodClient_DoWithBody_Auth(t *testing.T) {
 	resp, err := spc.do("GET", "/test")
 	if err != nil {
 		t.Fatalf("do: %v", err)
+		return
 	}
 	_ = resp.Body.Close()
 }
@@ -63,6 +65,7 @@ func TestSessionPodClient_DoWithBody_NoAuth(t *testing.T) {
 	resp, err := spc.do("GET", "/test")
 	if err != nil {
 		t.Fatalf("do: %v", err)
+		return
 	}
 	_ = resp.Body.Close()
 }
@@ -83,6 +86,7 @@ func TestSessionPodClient_DoWithBody_JSONBody(t *testing.T) {
 	resp, err := spc.doWithBody("POST", "/test", map[string]string{"name": "test"})
 	if err != nil {
 		t.Fatalf("doWithBody: %v", err)
+		return
 	}
 	_ = resp.Body.Close()
 }
@@ -118,9 +122,11 @@ func TestGetDiffFiles_Success(t *testing.T) {
 			files, err := spc.GetDiffFiles(tt.base)
 			if err != nil {
 				t.Fatalf("GetDiffFiles: %v", err)
+				return
 			}
 			if len(files) != 2 {
 				t.Fatalf("expected 2 files, got %d", len(files))
+				return
 			}
 			if files[0].Path != "main.go" {
 				t.Errorf("expected path %q, got %q", "main.go", files[0].Path)
@@ -143,6 +149,7 @@ func TestGetDiffFiles_Error(t *testing.T) {
 	_, err := spc.GetDiffFiles("")
 	if err == nil {
 		t.Fatal("expected error for 500 response")
+		return
 	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Errorf("expected error to contain status code, got %q", err.Error())
@@ -160,6 +167,7 @@ func TestGetDiffFiles_InvalidJSON(t *testing.T) {
 	_, err := spc.GetDiffFiles("")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+		return
 	}
 }
 
@@ -197,6 +205,7 @@ func TestGetFileDiff_Success(t *testing.T) {
 	diff, err := spc.GetFileDiff("main", "main.go")
 	if err != nil {
 		t.Fatalf("GetFileDiff: %v", err)
+		return
 	}
 	if !strings.Contains(diff, "@@ -1,3 +1,4 @@") {
 		t.Errorf("expected hunk header, got %q", diff)
@@ -223,6 +232,7 @@ func TestGetFileDiff_Error(t *testing.T) {
 	_, err := spc.GetFileDiff("main", "missing.go")
 	if err == nil {
 		t.Fatal("expected error for 404")
+		return
 	}
 }
 
@@ -237,6 +247,7 @@ func TestGetFileDiff_InvalidJSON(t *testing.T) {
 	_, err := spc.GetFileDiff("main", "file.go")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+		return
 	}
 }
 
@@ -298,9 +309,11 @@ func TestGetConversationHistory_Success(t *testing.T) {
 	turns, err := spc.GetConversationHistory()
 	if err != nil {
 		t.Fatalf("GetConversationHistory: %v", err)
+		return
 	}
 	if len(turns) != 2 {
 		t.Fatalf("expected 2 turns, got %d", len(turns))
+		return
 	}
 	if turns[0].Role != "user" {
 		t.Errorf("expected role %q, got %q", "user", turns[0].Role)
@@ -321,6 +334,7 @@ func TestGetConversationHistory_Error(t *testing.T) {
 	_, err := spc.GetConversationHistory()
 	if err == nil {
 		t.Fatal("expected error for 403")
+		return
 	}
 }
 
@@ -335,6 +349,7 @@ func TestGetConversationHistory_InvalidJSON(t *testing.T) {
 	_, err := spc.GetConversationHistory()
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+		return
 	}
 }
 
@@ -367,9 +382,11 @@ func TestListFiles_Success(t *testing.T) {
 			files, err := spc.ListFiles(tt.dirPath)
 			if err != nil {
 				t.Fatalf("ListFiles: %v", err)
+				return
 			}
 			if len(files) != 2 {
 				t.Fatalf("expected 2 files, got %d", len(files))
+				return
 			}
 			if files[0].Name != "main.go" {
 				t.Errorf("expected name %q, got %q", "main.go", files[0].Name)
@@ -392,6 +409,7 @@ func TestListFiles_Error(t *testing.T) {
 	_, err := spc.ListFiles("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for 404")
+		return
 	}
 }
 
@@ -406,6 +424,7 @@ func TestListFiles_InvalidJSON(t *testing.T) {
 	_, err := spc.ListFiles("")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+		return
 	}
 }
 
@@ -429,12 +448,14 @@ func TestListCliSessions_Success(t *testing.T) {
 	result, err := spc.ListCliSessions()
 	if err != nil {
 		t.Fatalf("ListCliSessions: %v", err)
+		return
 	}
 	if !result.Tmux {
 		t.Error("expected tmux=true")
 	}
 	if len(result.Sessions) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(result.Sessions))
+		return
 	}
 	if result.Sessions[0].TerminalID != "t1" {
 		t.Errorf("expected terminalID %q, got %q", "t1", result.Sessions[0].TerminalID)
@@ -452,6 +473,7 @@ func TestListCliSessions_Error(t *testing.T) {
 	_, err := spc.ListCliSessions()
 	if err == nil {
 		t.Fatal("expected error for 503")
+		return
 	}
 }
 
@@ -466,6 +488,7 @@ func TestListCliSessions_InvalidJSON(t *testing.T) {
 	_, err := spc.ListCliSessions()
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+		return
 	}
 }
 
@@ -492,6 +515,7 @@ func TestCreateCliSession_Success(t *testing.T) {
 	result, err := spc.CreateCliSession(CreateCliSessionRequest{CliType: "bash", Label: "dev"})
 	if err != nil {
 		t.Fatalf("CreateCliSession: %v", err)
+		return
 	}
 	if result.TerminalID != "new-t" {
 		t.Errorf("expected terminalID %q, got %q", "new-t", result.TerminalID)
@@ -509,6 +533,7 @@ func TestCreateCliSession_Error(t *testing.T) {
 	_, err := spc.CreateCliSession(CreateCliSessionRequest{CliType: "bash"})
 	if err == nil {
 		t.Fatal("expected error for 400")
+		return
 	}
 }
 
@@ -523,6 +548,7 @@ func TestCreateCliSession_InvalidJSON(t *testing.T) {
 	_, err := spc.CreateCliSession(CreateCliSessionRequest{CliType: "bash"})
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+		return
 	}
 }
 
@@ -547,6 +573,7 @@ func TestKillCliSession_Success(t *testing.T) {
 	spc := NewSessionPodClient(srv.URL, "tok")
 	if err := spc.KillCliSession("t1"); err != nil {
 		t.Fatalf("KillCliSession: %v", err)
+		return
 	}
 }
 
@@ -561,6 +588,7 @@ func TestKillCliSession_Error(t *testing.T) {
 	err := spc.KillCliSession("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for 404")
+		return
 	}
 }
 

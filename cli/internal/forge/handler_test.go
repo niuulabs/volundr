@@ -154,11 +154,13 @@ func TestHandler_GetStats(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var stats StatsResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &stats); err != nil {
 		t.Fatalf("decode stats: %v", err)
+		return
 	}
 	if stats.ActiveSessions != 1 {
 		t.Errorf("expected 1 active session, got %d", stats.ActiveSessions)
@@ -179,11 +181,13 @@ func TestHandler_ListSessions_Empty(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var sessions []SessionResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &sessions); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if len(sessions) != 0 {
 		t.Errorf("expected 0 sessions, got %d", len(sessions))
@@ -222,11 +226,13 @@ func TestHandler_GetSession_Found(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var sess SessionResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &sess); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if sess.Name != "test-session" {
 		t.Errorf("expected name 'test-session', got %q", sess.Name)
@@ -292,11 +298,13 @@ func TestHandler_GetMe(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var me map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if me["user_id"] != "alice" {
 		t.Errorf("expected user_id 'alice', got %v", me["user_id"])
@@ -345,11 +353,13 @@ func TestHandler_CreateSession_Success(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+		return
 	}
 
 	var sess SessionResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &sess); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if sess.Name != "my-session" {
 		t.Errorf("expected name 'my-session', got %q", sess.Name)
@@ -388,11 +398,13 @@ func TestHandler_CreateSession_DefaultOwner(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", rec.Code)
+		return
 	}
 
 	var sess SessionResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &sess); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if sess.OwnerID != "local" {
 		t.Errorf("expected default owner 'local', got %q", sess.OwnerID)
@@ -512,11 +524,13 @@ func TestHandler_GetPRStatus_Found(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var pr PRStatusResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &pr); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if pr.State != ActivityStateNone {
 		t.Errorf("expected state 'none', got %q", pr.State)
@@ -536,11 +550,13 @@ func TestHandler_GetChronicle_Found(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var chronicle ChronicleResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &chronicle); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if chronicle.Summary != "mock chronicle" {
 		t.Errorf("expected 'mock chronicle', got %q", chronicle.Summary)
@@ -558,11 +574,13 @@ func TestHandler_GetMe_DefaultOwner(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var me map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if me["user_id"] != "local" {
 		t.Errorf("expected default user_id 'local', got %v", me["user_id"])
@@ -596,6 +614,7 @@ func TestHandler_StartSession_AlreadyRunning(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 }
 
@@ -618,11 +637,13 @@ func TestHandler_StartSession_RestartsStopped(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		return
 	}
 
 	var sess SessionResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &sess); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if sess.OwnerID != "bob" {
 		t.Errorf("expected owner 'bob', got %q", sess.OwnerID)
@@ -732,11 +753,13 @@ func TestHandler_ListSessions_WithSessions(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+		return
 	}
 
 	var sessions []SessionResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &sessions); err != nil {
 		t.Fatalf("decode: %v", err)
+		return
 	}
 	if len(sessions) != 2 {
 		t.Errorf("expected 2 sessions, got %d", len(sessions))

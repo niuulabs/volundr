@@ -4,23 +4,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// translateUserMessage converts a browser user message into the SDK format
-// expected by Claude CLI.
-//
-//	Browser: {type:"user", content:"text"} or {type:"user", content:[blocks]}
-//	SDK:     {type:"user", message:{role:"user", content:...}, parent_tool_use_id:null, session_id:"..."}
-func translateUserMessage(content any, cliSessionID string) map[string]any {
-	return map[string]any{
-		"type": "user",
-		"message": map[string]any{
-			"role":    "user",
-			"content": content,
-		},
-		"parent_tool_use_id": nil,
-		"session_id":         cliSessionID,
-	}
-}
-
 // translatePermissionResponse converts a browser permission_response into an
 // SDK control_response.
 //
@@ -29,8 +12,8 @@ func translateUserMessage(content any, cliSessionID string) map[string]any {
 func translatePermissionResponse(msg map[string]any) map[string]any {
 	requestID, _ := msg["request_id"].(string)
 	behavior, _ := msg["behavior"].(string)
-	updatedInput, _ := msg["updated_input"]
-	updatedPermissions, _ := msg["updated_permissions"]
+	updatedInput := msg["updated_input"]
+	updatedPermissions := msg["updated_permissions"]
 
 	if updatedInput == nil {
 		updatedInput = map[string]any{}

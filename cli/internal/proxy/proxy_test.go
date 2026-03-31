@@ -17,9 +17,11 @@ func TestNewRouter(t *testing.T) {
 	r, err := NewRouter("http://localhost:8081")
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	if r == nil {
 		t.Fatal("expected non-nil Router")
+		return
 	}
 }
 
@@ -155,11 +157,13 @@ func TestSetWebConfigConfigJSON(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", w.Code)
+		return
 	}
 
 	var result web.RuntimeConfig
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to unmarshal config.json: %v", err)
+		return
 	}
 	if result.APIBaseURL != "http://api.example.com" {
 		t.Errorf("expected apiBaseUrl %q, got %q", "http://api.example.com", result.APIBaseURL)
@@ -175,9 +179,11 @@ func TestSetSessionBackend(t *testing.T) {
 		err := r.SetSessionBackend("http://127.0.0.1:80")
 		if err != nil {
 			t.Fatalf("SetSessionBackend() error: %v", err)
+			return
 		}
 		if r.sessionBackend == nil {
 			t.Fatal("expected sessionBackend to be set")
+			return
 		}
 		if r.sessionBackend.Host != "127.0.0.1:80" {
 			t.Errorf("expected host 127.0.0.1:80, got %s", r.sessionBackend.Host)
@@ -199,6 +205,7 @@ func TestAddRewriteHost(t *testing.T) {
 	r.AddRewriteHost("internal-host:8080")
 	if len(r.rewriteHosts) != 1 {
 		t.Fatalf("expected 1 rewrite host, got %d", len(r.rewriteHosts))
+		return
 	}
 	if r.rewriteHosts[0] != "internal-host:8080" {
 		t.Errorf("expected rewrite host %q, got %q", "internal-host:8080", r.rewriteHosts[0])
@@ -207,6 +214,7 @@ func TestAddRewriteHost(t *testing.T) {
 	r.AddRewriteHost("another-host:9090")
 	if len(r.rewriteHosts) != 2 {
 		t.Fatalf("expected 2 rewrite hosts, got %d", len(r.rewriteHosts))
+		return
 	}
 }
 
@@ -280,6 +288,7 @@ func TestHandlerAPIProxy(t *testing.T) {
 	r, err := NewRouter(backend.URL)
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	handler := r.Handler()
 
@@ -324,9 +333,11 @@ func TestHandlerSessionProxy(t *testing.T) {
 	r, err := NewRouter("http://localhost:8081")
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	if err := r.SetSessionBackend(backend.URL); err != nil {
 		t.Fatalf("SetSessionBackend() error: %v", err)
+		return
 	}
 	handler := r.Handler()
 
@@ -356,6 +367,7 @@ func TestHandlerRewriteHostsInAPIResponse(t *testing.T) {
 	r, err := NewRouter(backend.URL)
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	r.AddRewriteHost(internalHost)
 	handler := r.Handler()
@@ -390,6 +402,7 @@ func TestHandlerRewriteSkipsNonTextContent(t *testing.T) {
 	r, err := NewRouter(backend.URL)
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	r.AddRewriteHost(internalHost)
 	handler := r.Handler()
@@ -417,6 +430,7 @@ func TestHandlerRewriteWithTextContentType(t *testing.T) {
 	r, err := NewRouter(backend.URL)
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	r.AddRewriteHost(internalHost)
 	handler := r.Handler()
@@ -447,6 +461,7 @@ func TestHandlerRewriteNoHostHeader(t *testing.T) {
 	r, err := NewRouter(backend.URL)
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	r.AddRewriteHost(internalHost)
 	handler := r.Handler()
@@ -521,6 +536,7 @@ func TestListenAndServeContextCancel(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("ListenAndServe did not return after context cancel")
+		return
 	}
 }
 
@@ -551,6 +567,7 @@ func TestHandlerNoRewriteHostsDoesNotModifyResponse(t *testing.T) {
 	r, err := NewRouter(backend.URL)
 	if err != nil {
 		t.Fatalf("NewRouter() error: %v", err)
+		return
 	}
 	// No rewrite hosts added — response should pass through unchanged.
 	handler := r.Handler()
@@ -570,14 +587,17 @@ func TestAddBackend(t *testing.T) {
 	r, err := NewRouter("http://localhost:8080")
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
+		return
 	}
 
 	if err := r.AddBackend("/api/v1/tyr/", "http://localhost:18081"); err != nil {
 		t.Fatalf("AddBackend: %v", err)
+		return
 	}
 
 	if len(r.extraBackends) != 1 {
 		t.Fatalf("expected 1 extra backend, got %d", len(r.extraBackends))
+		return
 	}
 
 	if r.extraBackends[0].pathPrefix != "/api/v1/tyr/" {
@@ -615,10 +635,12 @@ func TestAddBackendRouting(t *testing.T) {
 	r, err := NewRouter(apiBackend.URL)
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
+		return
 	}
 
 	if err := r.AddBackend("/api/v1/tyr/", tyrBackend.URL); err != nil {
 		t.Fatalf("AddBackend: %v", err)
+		return
 	}
 
 	handler := r.Handler()
@@ -650,5 +672,6 @@ func TestAddMultipleBackends(t *testing.T) {
 
 	if len(r.extraBackends) != 2 {
 		t.Fatalf("expected 2 extra backends, got %d", len(r.extraBackends))
+		return
 	}
 }

@@ -87,11 +87,13 @@ auth:
 `
 	if err := os.WriteFile(cfgPath, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	cfg, err := LoadForgeConfig(cfgPath)
 	if err != nil {
 		t.Fatalf("LoadForgeConfig: %v", err)
+		return
 	}
 
 	if cfg.Listen.Host != "127.0.0.1" {
@@ -182,6 +184,7 @@ func TestLoadForgeConfig_InvalidYAML(t *testing.T) {
 	cfgPath := filepath.Join(dir, "bad.yaml")
 	if err := os.WriteFile(cfgPath, []byte("{{not yaml"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	_, err := LoadForgeConfig(cfgPath)
