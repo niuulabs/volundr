@@ -49,6 +49,13 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/tyr/dispatch/queue", h.dispatchQueue)
 	mux.HandleFunc("GET /api/v1/tyr/dispatch/config", h.dispatchConfig)
 
+	// Dashboard endpoints
+	mux.HandleFunc("GET /api/v1/tyr/health/detailed", h.healthDetailed)
+	mux.HandleFunc("GET /api/v1/tyr/events", h.events)
+	mux.HandleFunc("GET /api/v1/tyr/dispatch/clusters", h.dispatchClusters)
+	mux.HandleFunc("GET /api/v1/tyr/dispatcher/log", h.dispatcherLog)
+	mux.HandleFunc("GET /api/v1/tyr/tracker/projects", h.trackerProjects)
+
 	// Not-implemented stubs for full Tyr endpoints
 	mux.HandleFunc("POST /api/v1/tyr/sagas/decompose", h.notImplemented)
 	mux.HandleFunc("POST /api/v1/tyr/sagas/plan", h.notImplemented)
@@ -607,4 +614,77 @@ func nilIfEmpty(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// --- Dashboard endpoints ---
+
+func (h *Handler) healthDetailed(w http.ResponseWriter, _ *http.Request) {
+	dbStatus := "ok"
+	if err := h.store.Ping(context.Background()); err != nil {
+		dbStatus = "unavailable"
+	}
+	status := "ok"
+	if dbStatus != "ok" {
+		status = "degraded"
+	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"status":                       status,
+		"database":                     dbStatus,
+		"event_bus_subscriber_count":   0,
+		"activity_subscriber_running":  false,
+		"notification_service_running": false,
+		"review_engine_running":        false,
+	})
+}
+
+func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher.Flush()
+
+	// Keep connection alive with comments until client disconnects.
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			_, _ = w.Write([]byte(": keepalive\n\n"))
+			flusher.Flush()
+		}
+	}
+}
+
+func (h *Handler) dispatchClusters(w http.ResponseWriter, _ *http.Request) {
+	// In mini mode, there's one local "cluster" — the Forge server itself.
+	httputil.WriteJSON(w, http.StatusOK, []map[string]any{
+		{
+			"connection_id": "local",
+			"name":          "Local (mini mode)",
+			"url":           "http://127.0.0.1:8080",
+			"enabled":       true,
+		},
+	})
+}
+
+func (h *Handler) dispatcherLog(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"events": []any{},
+		"total":  0,
+	})
+}
+
+func (h *Handler) trackerProjects(w http.ResponseWriter, _ *http.Request) {
+	// TODO(tracker): Integrate with Linear API to list projects.
+	// For now return an empty list.
+	httputil.WriteJSON(w, http.StatusOK, []any{})
 }

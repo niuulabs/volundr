@@ -21,6 +21,11 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
+// Ping checks that the database is reachable.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
+}
+
 // DB returns the underlying database connection for use in migrations.
 func (s *Store) DB() *sql.DB {
 	return s.db
