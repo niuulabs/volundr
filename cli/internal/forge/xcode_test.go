@@ -38,6 +38,7 @@ func TestDetectXcodeInstallations_NoXcodeAppPattern(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "NotXcode"), 0o755); err != nil {
 		t.Fatal(err)
+		return
 	}
 	installs := DetectXcodeInstallations([]string{dir})
 	if len(installs) != 0 {
@@ -57,6 +58,7 @@ func TestDetectXcodeInstallations_FakeXcodeApp(t *testing.T) {
 	xcodeApp := filepath.Join(dir, "Xcode.app")
 	if err := os.MkdirAll(filepath.Join(xcodeApp, "Contents", "Developer"), 0o755); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	installs := DetectXcodeInstallations([]string{dir})
@@ -70,6 +72,7 @@ func TestDetectXcodeInstallations_NonAppXcodeDir(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "XcodeStuff"), 0o750); err != nil {
 		t.Fatal(err)
+		return
 	}
 	installs := DetectXcodeInstallations([]string{dir})
 	if len(installs) != 0 {
@@ -83,6 +86,7 @@ func TestDetectXcodeInstallations_XcodeAppNoVersionPlist(t *testing.T) {
 	xcodeApp := filepath.Join(dir, "Xcode.app")
 	if err := os.MkdirAll(filepath.Join(xcodeApp, "Contents"), 0o750); err != nil {
 		t.Fatal(err)
+		return
 	}
 	installs := DetectXcodeInstallations([]string{dir})
 	// Without version.plist, xcodeVersion returns "" and entry is skipped.

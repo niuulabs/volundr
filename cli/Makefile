@@ -5,6 +5,7 @@ WEB_DIR := ../web
 MIGRATIONS_DIR := ../migrations
 EMBED_WEB_DEST := internal/web/dist
 EMBED_MIG_DEST := internal/migrations/sql
+EMBED_TYR_MIG_DEST := internal/migrations/tyr_sql
 DIST_DIR := dist
 BUILD_TAGS := embed_web,embed_migrations
 
@@ -36,9 +37,10 @@ web:
 
 # migrations copies SQL migration files into the embed directory.
 migrations:
-	rm -rf $(EMBED_MIG_DEST)
-	mkdir -p $(EMBED_MIG_DEST)
+	rm -rf $(EMBED_MIG_DEST) $(EMBED_TYR_MIG_DEST)
+	mkdir -p $(EMBED_MIG_DEST) $(EMBED_TYR_MIG_DEST)
 	cp $(MIGRATIONS_DIR)/*.up.sql $(EMBED_MIG_DEST)/
+	cp $(MIGRATIONS_DIR)/tyr/*.up.sql $(EMBED_TYR_MIG_DEST)/
 
 test:
 	go test ./... -v -count=1
@@ -64,4 +66,4 @@ fmt:
 	gofmt -w .
 
 clean:
-	rm -rf bin/ $(EMBED_WEB_DEST) $(EMBED_MIG_DEST) $(DIST_DIR)
+	rm -rf bin/ $(EMBED_WEB_DEST) $(EMBED_MIG_DEST) $(EMBED_TYR_MIG_DEST) $(DIST_DIR)

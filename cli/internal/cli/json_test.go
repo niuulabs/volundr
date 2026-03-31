@@ -19,6 +19,7 @@ func TestPrintJSON_Map(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("printJSON: %v", err)
+		return
 	}
 
 	var buf bytes.Buffer
@@ -27,6 +28,7 @@ func TestPrintJSON_Map(t *testing.T) {
 	var result map[string]string
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+		return
 	}
 	if result["key"] != "value" {
 		t.Errorf("expected value %q, got %q", "value", result["key"])
@@ -45,6 +47,7 @@ func TestPrintJSON_Slice(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("printJSON: %v", err)
+		return
 	}
 
 	var buf bytes.Buffer
@@ -53,6 +56,7 @@ func TestPrintJSON_Slice(t *testing.T) {
 	var result []int
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+		return
 	}
 	if len(result) != 3 || result[0] != 1 {
 		t.Errorf("expected [1,2,3], got %v", result)
@@ -76,6 +80,7 @@ func TestPrintJSON_Struct(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("printJSON: %v", err)
+		return
 	}
 
 	var buf bytes.Buffer
@@ -84,6 +89,7 @@ func TestPrintJSON_Struct(t *testing.T) {
 	var result testStruct
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+		return
 	}
 	if result.Name != "test" || result.Count != 42 {
 		t.Errorf("expected {test 42}, got %+v", result)
@@ -102,5 +108,6 @@ func TestPrintJSON_Nil(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("printJSON nil: %v", err)
+		return
 	}
 }

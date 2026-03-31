@@ -8,6 +8,7 @@ func TestRootCmd_HasSubcommands(t *testing.T) {
 	subcmds := rootCmd.Commands()
 	if len(subcmds) == 0 {
 		t.Fatal("expected root command to have subcommands")
+		return
 	}
 
 	// Top-level commands under niuu.
@@ -150,6 +151,7 @@ func TestSessionsCmd_HasSubcommands(t *testing.T) {
 func TestSessionsCmd_Alias(t *testing.T) {
 	if len(sessionsCmd.Aliases) == 0 {
 		t.Fatal("expected sessions command to have aliases")
+		return
 	}
 	found := false
 	for _, a := range sessionsCmd.Aliases {
@@ -169,6 +171,7 @@ func TestExecute_Version(t *testing.T) {
 
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute version: %v", err)
+		return
 	}
 }
 
@@ -179,6 +182,7 @@ func TestExecute_UnknownCommand(t *testing.T) {
 	err := Execute()
 	if err == nil {
 		t.Fatal("expected error for unknown command")
+		return
 	}
 }
 
@@ -223,6 +227,7 @@ func TestExecute_Tyr(t *testing.T) {
 	defer rootCmd.SetArgs(nil)
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute tyr: %v", err)
+		return
 	}
 }
 
@@ -232,5 +237,6 @@ func TestExecute_HomeFlag(t *testing.T) {
 	defer rootCmd.SetArgs(nil)
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute with --home: %v", err)
+		return
 	}
 }

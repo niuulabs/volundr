@@ -13,16 +13,31 @@ The fastest way to try Volundr. No Kubernetes required.
 Grab the latest binary from [GitHub Releases](https://github.com/niuulabs/volundr/releases):
 
 ```bash
-# macOS / Linux
-curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/volundr-$(uname -s)-$(uname -m) -o volundr
-chmod +x volundr
-sudo mv volundr /usr/local/bin/
+# macOS (Apple Silicon)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-darwin-arm64 -o niuu
+chmod +x niuu
+sudo mv niuu /usr/local/bin/
+
+# macOS (Intel)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-darwin-amd64 -o niuu
+chmod +x niuu
+sudo mv niuu /usr/local/bin/
+
+# Linux (x86_64)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-linux-amd64 -o niuu
+chmod +x niuu
+sudo mv niuu /usr/local/bin/
+
+# Linux (ARM64)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-linux-arm64 -o niuu
+chmod +x niuu
+sudo mv niuu /usr/local/bin/
 ```
 
 ### 2. Initialize
 
 ```bash
-volundr init
+niuu volundr init
 ```
 
 The wizard asks a few questions:
@@ -39,12 +54,12 @@ The wizard asks a few questions:
 ### 3. Start everything
 
 ```bash
-volundr up
+niuu volundr up
 ```
 
 This starts PostgreSQL (if embedded), the Python API server, and a reverse proxy. Open [http://localhost:8080](http://localhost:8080) when it's ready.
 
-That's it. Jump to [First Session](first-session.md) to create your first AI coding session.
+That's it. Jump to [Local Quickstart](local-quickstart.md) for a full end-to-end walkthrough, or [First Session](first-session.md) to create your first AI coding session.
 
 ---
 
@@ -91,7 +106,9 @@ Once everything shows `Running`, open [http://localhost:8080](http://localhost:8
 
 ## Next steps
 
+- [Local Quickstart](local-quickstart.md) -- end-to-end walkthrough from zero to working session
 - [First Session](first-session.md) -- create and use your first AI coding session
 - [Installation](installation.md) -- full installation details and prerequisites
 - [Configuration](configuration.md) -- all configuration options
+- [Troubleshooting](troubleshooting.md) -- common issues and solutions
 - [Helm Deployment](../deployment/helm.md) -- production Kubernetes deployment

@@ -19,11 +19,13 @@ func TestCredentialsRoundTrip(t *testing.T) {
 
 	if err := SaveCredentialsTo(creds, passphrase, path); err != nil {
 		t.Fatalf("SaveCredentialsTo() error: %v", err)
+		return
 	}
 
 	loaded, err := LoadCredentialsFrom(passphrase, path)
 	if err != nil {
 		t.Fatalf("LoadCredentialsFrom() error: %v", err)
+		return
 	}
 
 	if loaded.AnthropicAPIKey != creds.AnthropicAPIKey {
@@ -46,6 +48,7 @@ func TestCredentialsWrongPassphrase(t *testing.T) {
 
 	if err := SaveCredentialsTo(creds, "correct-passphrase", path); err != nil {
 		t.Fatalf("SaveCredentialsTo() error: %v", err)
+		return
 	}
 
 	_, err := LoadCredentialsFrom("wrong-passphrase", path)
@@ -63,11 +66,13 @@ func TestCredentialsEmptyFields(t *testing.T) {
 
 	if err := SaveCredentialsTo(creds, passphrase, path); err != nil {
 		t.Fatalf("SaveCredentialsTo() error: %v", err)
+		return
 	}
 
 	loaded, err := LoadCredentialsFrom(passphrase, path)
 	if err != nil {
 		t.Fatalf("LoadCredentialsFrom() error: %v", err)
+		return
 	}
 
 	if loaded.AnthropicAPIKey != "" {
@@ -92,6 +97,7 @@ func TestCredentialsTruncatedFile(t *testing.T) {
 	// Write a file that is too short.
 	if err := os.WriteFile(path, []byte("short"), 0o600); err != nil {
 		t.Fatalf("write test file: %v", err)
+		return
 	}
 
 	_, err := LoadCredentialsFrom("passphrase", path)
@@ -141,6 +147,7 @@ func TestCredentialsPath(t *testing.T) {
 	path, err := CredentialsPath()
 	if err != nil {
 		t.Fatalf("CredentialsPath() error: %v", err)
+		return
 	}
 
 	expected := filepath.Join(tmpDir, CredentialsFile)
@@ -161,11 +168,13 @@ func TestSaveAndLoadCredentialsViaDefaults(t *testing.T) {
 
 	if err := SaveCredentials(creds, passphrase); err != nil {
 		t.Fatalf("SaveCredentials() error: %v", err)
+		return
 	}
 
 	loaded, err := LoadCredentials(passphrase)
 	if err != nil {
 		t.Fatalf("LoadCredentials() error: %v", err)
+		return
 	}
 
 	if loaded.AnthropicAPIKey != creds.AnthropicAPIKey {
@@ -184,6 +193,7 @@ func TestCredentialsExist(t *testing.T) {
 		exists, err := CredentialsExist()
 		if err != nil {
 			t.Fatalf("CredentialsExist() error: %v", err)
+			return
 		}
 		if exists {
 			t.Error("CredentialsExist() = true, want false")
@@ -197,11 +207,13 @@ func TestCredentialsExist(t *testing.T) {
 		creds := &Credentials{AnthropicAPIKey: "test"} //nolint:gosec // test fixture
 		if err := SaveCredentials(creds, "pass"); err != nil {
 			t.Fatalf("SaveCredentials() error: %v", err)
+			return
 		}
 
 		exists, err := CredentialsExist()
 		if err != nil {
 			t.Fatalf("CredentialsExist() error: %v", err)
+			return
 		}
 		if !exists {
 			t.Error("CredentialsExist() = false, want true")
@@ -216,11 +228,13 @@ func TestCredentialsFilePermissions(t *testing.T) {
 	creds := &Credentials{AnthropicAPIKey: "test"} //nolint:gosec // test fixture
 	if err := SaveCredentialsTo(creds, "pass", path); err != nil {
 		t.Fatalf("SaveCredentialsTo() error: %v", err)
+		return
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("Stat() error: %v", err)
+		return
 	}
 
 	perm := info.Mode().Perm()
@@ -274,6 +288,7 @@ func TestSaveCredentialsToReadOnlyDir(t *testing.T) {
 	readOnly := filepath.Join(tmpDir, "readonly")
 	if err := os.Mkdir(readOnly, 0o500); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return
 	}
 	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) }) //nolint:gosec // restoring permissions for cleanup
 
@@ -291,12 +306,14 @@ func TestLoadCredentialsFromCorruptedCiphertext(t *testing.T) {
 	creds := &Credentials{AnthropicAPIKey: "test"} //nolint:gosec // test fixture
 	if err := SaveCredentialsTo(creds, "pass", path); err != nil {
 		t.Fatalf("SaveCredentialsTo() error: %v", err)
+		return
 	}
 
 	// Corrupt the ciphertext (after the salt) to trigger GCM decryption error.
 	data, err := os.ReadFile(path) //nolint:gosec // test file path
 	if err != nil {
 		t.Fatalf("ReadFile() error: %v", err)
+		return
 	}
 	// Flip bytes in ciphertext area.
 	for i := SaltSize; i < len(data); i++ {
@@ -304,6 +321,7 @@ func TestLoadCredentialsFromCorruptedCiphertext(t *testing.T) {
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil { //nolint:gosec // test file path
 		t.Fatalf("WriteFile() error: %v", err)
+		return
 	}
 
 	_, err = LoadCredentialsFrom("pass", path)
@@ -319,6 +337,7 @@ func TestSaveCredentialsToCreatesDirectory(t *testing.T) {
 	creds := &Credentials{AnthropicAPIKey: "test"} //nolint:gosec // test fixture
 	if err := SaveCredentialsTo(creds, "pass", nested); err != nil {
 		t.Fatalf("SaveCredentialsTo() error: %v", err)
+		return
 	}
 
 	if _, err := os.Stat(nested); err != nil {

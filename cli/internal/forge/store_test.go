@@ -23,6 +23,7 @@ func TestStore_PutAndGet(t *testing.T) {
 	got := store.Get("test-1")
 	if got == nil {
 		t.Fatal("expected session, got nil")
+		return
 	}
 	if got.Name != "my-session" {
 		t.Errorf("expected name 'my-session', got %q", got.Name)
@@ -48,6 +49,7 @@ func TestStore_List(t *testing.T) {
 	list := store.List()
 	if len(list) != 2 {
 		t.Fatalf("expected 2 sessions, got %d", len(list))
+		return
 	}
 }
 
@@ -92,6 +94,7 @@ func TestStore_Persistence(t *testing.T) {
 	// Verify file was written.
 	if _, err := os.Stat(fp); err != nil {
 		t.Fatalf("state file not created: %v", err)
+		return
 	}
 
 	// Load from a new store — running sessions should become stopped.
@@ -99,6 +102,7 @@ func TestStore_Persistence(t *testing.T) {
 	got := store2.Get("x")
 	if got == nil {
 		t.Fatal("expected to restore session from disk")
+		return
 	}
 	if got.Name != "persisted" {
 		t.Errorf("expected name 'persisted', got %q", got.Name)
@@ -128,6 +132,7 @@ func TestStore_Persistence_AllStatuses(t *testing.T) {
 		got := store2.Get(id)
 		if got == nil {
 			t.Fatalf("expected session %s", id)
+			return
 		}
 		if got.Status != StatusStopped {
 			t.Errorf("session %s: expected stopped, got %q", id, got.Status)
@@ -147,6 +152,7 @@ func TestStore_Persistence_AllStatuses(t *testing.T) {
 		got := store2.Get(tc.id)
 		if got == nil {
 			t.Fatalf("expected session %s", tc.id)
+			return
 		}
 		if got.Status != tc.status {
 			t.Errorf("session %s: expected %s, got %q", tc.id, tc.status, got.Status)
@@ -159,6 +165,7 @@ func TestStore_LoadInvalidJSON(t *testing.T) {
 	fp := filepath.Join(dir, "state.json")
 	if err := os.WriteFile(fp, []byte("{bad json"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	// Should log warning but not panic.

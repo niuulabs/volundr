@@ -46,6 +46,7 @@ func TestTerminalWSClient_Connect_FullURL(t *testing.T) {
 
 	if err := tw.Connect(wsURL + "/terminal/ws/t1"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	if tw.State() != WSConnected {
@@ -56,12 +57,14 @@ func TestTerminalWSClient_Connect_FullURL(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for readLoop")
+		return
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if len(received) == 0 {
 		t.Fatal("expected at least one data callback")
+		return
 	}
 	if received[0] != "hello terminal" {
 		t.Errorf("expected %q, got %q", "hello terminal", received[0])
@@ -90,12 +93,14 @@ func TestTerminalWSClient_Connect_RelativePath(t *testing.T) {
 
 	if err := tw.Connect("/terminal/ws/t1"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 }
 
@@ -127,12 +132,14 @@ func TestTerminalWSClient_ReadLoop_BinaryMessage(t *testing.T) {
 
 	if err := tw.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	mu.Lock()
@@ -170,18 +177,21 @@ func TestTerminalWSClient_ReadLoop_InvalidJSON(t *testing.T) {
 
 	if err := tw.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if len(received) == 0 {
 		t.Fatal("expected data callback for invalid JSON")
+		return
 	}
 	if received[0] != "not json" {
 		t.Errorf("expected %q, got %q", "not json", received[0])
@@ -216,12 +226,14 @@ func TestTerminalWSClient_ReadLoop_UnknownType(t *testing.T) {
 
 	if err := tw.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	mu.Lock()
@@ -252,12 +264,14 @@ func TestTerminalWSClient_ReadLoop_NoOnData(t *testing.T) {
 
 	if err := tw.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 }
 
@@ -290,10 +304,12 @@ func TestTerminalWSClient_SendRaw_Connected(t *testing.T) {
 
 	if err := tw.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	if err := tw.SendRaw([]byte("ls -la")); err != nil {
 		t.Fatalf("SendRaw: %v", err)
+		return
 	}
 
 	select {
@@ -304,6 +320,7 @@ func TestTerminalWSClient_SendRaw_Connected(t *testing.T) {
 		}
 		if err := json.Unmarshal([]byte(msg), &parsed); err != nil {
 			t.Fatalf("unmarshal: %v", err)
+			return
 		}
 		if parsed.Type != "input" {
 			t.Errorf("expected type %q, got %q", "input", parsed.Type)
@@ -313,6 +330,7 @@ func TestTerminalWSClient_SendRaw_Connected(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	// Wait for readLoop to finish before closing to avoid race on setState.
@@ -353,10 +371,12 @@ func TestTerminalWSClient_SendResize_Connected(t *testing.T) {
 
 	if err := tw.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	if err := tw.SendResize(120, 40); err != nil {
 		t.Fatalf("SendResize: %v", err)
+		return
 	}
 
 	select {
@@ -368,6 +388,7 @@ func TestTerminalWSClient_SendResize_Connected(t *testing.T) {
 		}
 		if err := json.Unmarshal([]byte(msg), &parsed); err != nil {
 			t.Fatalf("unmarshal: %v", err)
+			return
 		}
 		if parsed.Type != "resize" {
 			t.Errorf("expected type %q, got %q", "resize", parsed.Type)
@@ -380,6 +401,7 @@ func TestTerminalWSClient_SendResize_Connected(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	// Wait for readLoop to finish before closing to avoid race on setState.
@@ -411,6 +433,7 @@ func TestTerminalWSClient_Close_Connected(t *testing.T) {
 
 	if err := tw.Connect("/ws"); err != nil {
 		t.Fatalf("Connect: %v", err)
+		return
 	}
 
 	// Wait for readLoop to finish.
@@ -418,6 +441,7 @@ func TestTerminalWSClient_Close_Connected(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out")
+		return
 	}
 
 	if tw.State() != WSDisconnected {
@@ -427,6 +451,7 @@ func TestTerminalWSClient_Close_Connected(t *testing.T) {
 	// Close after readLoop has finished should be safe.
 	if err := tw.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+		return
 	}
 }
 
@@ -436,6 +461,7 @@ func TestTerminalWSClient_Connect_ErrorIncludes_Debug(t *testing.T) {
 	err := tw.Connect("/terminal/ws/t1")
 	if err == nil {
 		t.Fatal("expected error for unreachable server")
+		return
 	}
 	// Error should include token length.
 	errStr := err.Error()

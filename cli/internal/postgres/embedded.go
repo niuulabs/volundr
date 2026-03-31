@@ -174,7 +174,41 @@ func (e *EmbeddedPostgres) RunMigrationsFS(ctx context.Context, migrationFS fs.F
 		}
 	}()
 
-	return runMigrationsWithFS(ctx, db, migrationFS)
+	return RunMigrationsWithFSTable(ctx, db, migrationFS, "schema_migrations")
+}
+
+// RunTyrMigrations applies Tyr-specific migrations from the given directory.
+// Uses a separate tracking table to avoid version conflicts with Volundr migrations.
+func (e *EmbeddedPostgres) RunTyrMigrations(ctx context.Context, migrationsDir string) (applied int, err error) {
+	dsn := e.config.DSN()
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return 0, fmt.Errorf("open database: %w", err)
+	}
+	defer func() {
+		if cerr := db.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close database: %w", cerr)
+		}
+	}()
+
+	return runMigrationsWithTableDB(ctx, db, migrationsDir, "tyr_schema_migrations")
+}
+
+// RunTyrMigrationsFS applies Tyr-specific migrations from an fs.FS.
+// Uses a separate tracking table to avoid version conflicts with Volundr migrations.
+func (e *EmbeddedPostgres) RunTyrMigrationsFS(ctx context.Context, migrationFS fs.FS) (applied int, err error) {
+	dsn := e.config.DSN()
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return 0, fmt.Errorf("open database: %w", err)
+	}
+	defer func() {
+		if cerr := db.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close database: %w", cerr)
+		}
+	}()
+
+	return RunMigrationsWithFSTable(ctx, db, migrationFS, "tyr_schema_migrations")
 }
 
 // defaultMigrationsTable is the default table name for tracking applied migrations.
@@ -193,6 +227,7 @@ func RunMigrationsWithFSTable(ctx context.Context, db *sql.DB, migrationFS fs.FS
 		return 0, fmt.Errorf("ping database: %w", err)
 	}
 
+	//nolint:gosec // table name is a trusted internal constant, not user input
 	_, err := db.ExecContext(ctx, fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			version TEXT PRIMARY KEY,
@@ -221,6 +256,7 @@ func RunMigrationsWithFSTable(ctx context.Context, db *sql.DB, migrationFS fs.FS
 		version := extractVersion(f)
 
 		var exists bool
+		//nolint:gosec // table name is a trusted internal constant, not user input
 		err := db.QueryRowContext(ctx,
 			fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE version = $1)", table),
 			version,
@@ -247,6 +283,7 @@ func RunMigrationsWithFSTable(ctx context.Context, db *sql.DB, migrationFS fs.FS
 			return applied, fmt.Errorf("execute migration %s: %w", f, err)
 		}
 
+		//nolint:gosec // table name is a trusted internal constant, not user input
 		if _, err := tx.ExecContext(ctx,
 			fmt.Sprintf("INSERT INTO %s (version) VALUES ($1)", table),
 			version,
@@ -267,19 +304,26 @@ func RunMigrationsWithFSTable(ctx context.Context, db *sql.DB, migrationFS fs.FS
 
 // runMigrationsWithDB applies all pending up migrations using the provided database connection.
 func runMigrationsWithDB(ctx context.Context, db *sql.DB, migrationsDir string) (int, error) {
+	return runMigrationsWithTableDB(ctx, db, migrationsDir, "schema_migrations")
+}
+
+// runMigrationsWithTableDB applies all pending up migrations using the provided
+// database connection and the specified tracking table name.
+func runMigrationsWithTableDB(ctx context.Context, db *sql.DB, migrationsDir, table string) (int, error) {
 	if err := db.PingContext(ctx); err != nil {
 		return 0, fmt.Errorf("ping database: %w", err)
 	}
 
 	// Create migrations tracking table.
-	_, err := db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
+	//nolint:gosec // table name is a trusted internal constant, not user input
+	_, err := db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ DEFAULT NOW()
 		)
-	`)
+	`, table))
 	if err != nil {
-		return 0, fmt.Errorf("create schema_migrations table: %w", err)
+		return 0, fmt.Errorf("create %s table: %w", table, err)
 	}
 
 	// Find all up migration files.
@@ -294,8 +338,9 @@ func runMigrationsWithDB(ctx context.Context, db *sql.DB, migrationsDir string) 
 
 		// Check if already applied.
 		var exists bool
+		//nolint:gosec // table name is a trusted internal constant, not user input
 		err := db.QueryRowContext(ctx,
-			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)",
+			fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE version = $1)", table),
 			version,
 		).Scan(&exists)
 		if err != nil {
@@ -321,8 +366,9 @@ func runMigrationsWithDB(ctx context.Context, db *sql.DB, migrationsDir string) 
 			return applied, fmt.Errorf("execute migration %s: %w", f, err)
 		}
 
+		//nolint:gosec // table name is a trusted internal constant, not user input
 		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO schema_migrations (version) VALUES ($1)",
+			fmt.Sprintf("INSERT INTO %s (version) VALUES ($1)", table),
 			version,
 		); err != nil {
 			_ = tx.Rollback()

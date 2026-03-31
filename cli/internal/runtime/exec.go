@@ -29,6 +29,8 @@ type postgresProvider interface {
 	Stop() error
 	RunMigrations(ctx context.Context, dir string) (int, error)
 	RunMigrationsFS(ctx context.Context, migrationFS fs.FS) (int, error)
+	RunTyrMigrations(ctx context.Context, dir string) (int, error)
+	RunTyrMigrationsFS(ctx context.Context, migrationFS fs.FS) (int, error)
 }
 
 // newPostgres is a hookable function for creating a postgres provider.

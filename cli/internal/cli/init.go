@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/niuulabs/volundr/cli/internal/config"
+	"github.com/niuulabs/volundr/cli/internal/preflight"
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
@@ -99,6 +100,11 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 		fmt.Println("  helm     ... ok")
 		fmt.Println()
+	}
+
+	// Prompt for Tyr (saga coordinator) in k3s mode.
+	if cfg.Volundr.Mode == "k3s" {
+		promptTyrConfig(reader, cfg)
 	}
 
 	// Prompt for listen host.
@@ -331,6 +337,20 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Enable local mounts for mini mode (sessions run directly on the host).
+	if cfg.Volundr.Mode == "mini" {
+		cfg.LocalMounts.Enabled = true
+	}
+
+	// Ensure default AI models are configured.
+	if len(cfg.AIModels) == 0 {
+		cfg.AIModels = []config.AIModelEntry{
+			{ID: "claude-opus-4-6", Name: "Opus 4.6"},
+			{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"},
+			{ID: "claude-haiku-4-5-20251001", Name: "Haiku 4.5"},
+		}
+	}
+
 	// Validate.
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
@@ -361,6 +381,14 @@ func runInit(_ *cobra.Command, _ []string) error {
 		fmt.Println("  credentials.enc    ... done")
 	}
 
+	// Run mini-mode preflight checks (warnings only — don't block init).
+	if cfg.Volundr.Mode == "mini" {
+		fmt.Println()
+		fmt.Println("Preflight checks:")
+		results := runInitPreflightChecks(cfg)
+		fmt.Print(preflight.FormatResults(results))
+	}
+
 	// Run runtime-specific init (k3s only — mini mode needs no runtime setup).
 	if cfg.Volundr.Mode == "k3s" {
 		rt := runtime.NewRuntime("k3s")
@@ -374,6 +402,17 @@ func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Println("Run 'niuu volundr up' to start.")
 
 	return nil
+}
+
+// runInitPreflightChecks runs non-blocking checks after the init wizard and
+// returns the results for display.
+func runInitPreflightChecks(cfg *config.Config) []preflight.Result {
+	return []preflight.Result{
+		preflight.CheckBinary(claudeBinaryName(cfg), "--version"),
+		preflight.CheckAPIKeySet(cfg.Anthropic.APIKey),
+		preflight.CheckBinary("git", "--version"),
+		preflight.CheckDirWritable(expandHome(cfg.Volundr.Forge.Workspace)),
+	}
 }
 
 // isEnvVarName returns true if the string looks like an environment variable name
@@ -407,6 +446,21 @@ func installInstructions(tool string) string {
 // installInstructionsForOS returns install instructions for a tool on the given OS/arch.
 func installInstructionsForOS(tool, goos, goarch string) string {
 	switch tool {
+	case "claude":
+		return "  npm install -g @anthropic-ai/claude-code\n\n" +
+			"  Or specify a custom path in ~/.niuu/config.yaml:\n" +
+			"    volundr:\n" +
+			"      forge:\n" +
+			"        claude_binary: /path/to/claude"
+	case "git":
+		switch goos {
+		case "darwin":
+			return "  xcode-select --install\n  or: brew install git"
+		case "linux":
+			return "  sudo apt install git\n  or: sudo dnf install git"
+		default:
+			return "  https://git-scm.com/downloads"
+		}
 	case "kubectl":
 		switch goos {
 		case "darwin":
@@ -474,6 +528,34 @@ func machinePassphrase() string {
 		homeDir = "/tmp"
 	}
 	return fmt.Sprintf("niuu-%s-%s", hostname, homeDir)
+}
+
+// promptTyrConfig prompts the user to enable/disable Tyr and optionally
+// set a custom Tyr image. It modifies cfg in place.
+func promptTyrConfig(reader *bufio.Reader, cfg *config.Config) {
+	tyrDefault := "Y"
+	if !cfg.K3s.TyrEnabled {
+		tyrDefault = "N"
+	}
+	fmt.Printf("Enable Tyr (saga coordinator)? [Y/n] (%s): ", tyrDefault)
+	tyrAnswer, _ := reader.ReadString('\n')
+	tyrAnswer = strings.TrimSpace(strings.ToLower(tyrAnswer))
+	switch tyrAnswer {
+	case "n", "no":
+		cfg.K3s.TyrEnabled = false
+	case "y", "yes", "":
+		cfg.K3s.TyrEnabled = true
+	}
+
+	if cfg.K3s.TyrEnabled {
+		fmt.Printf("Tyr image (%s): ", cfg.K3s.TyrImage)
+		tyrImage, _ := reader.ReadString('\n')
+		tyrImage = strings.TrimSpace(tyrImage)
+		if tyrImage != "" {
+			cfg.K3s.TyrImage = tyrImage
+		}
+	}
+	fmt.Println()
 }
 
 // legacyMachinePassphrase returns the old "volundr-" prefixed passphrase

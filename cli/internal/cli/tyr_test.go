@@ -41,6 +41,7 @@ func TestTyrGet_Success(t *testing.T) {
 	resp, err := tyrGet(server.URL + "/test")
 	if err != nil {
 		t.Fatalf("tyrGet error: %v", err)
+		return
 	}
 	if len(resp) == 0 {
 		t.Error("expected non-empty response")
@@ -57,6 +58,7 @@ func TestTyrGet_ServerError(t *testing.T) {
 	_, err := tyrGet(server.URL + "/test")
 	if err == nil {
 		t.Fatal("expected error for 500 response")
+		return
 	}
 }
 
@@ -64,6 +66,7 @@ func TestTyrGet_ConnectionError(t *testing.T) {
 	_, err := tyrGet("http://127.0.0.1:1/nonexistent")
 	if err == nil {
 		t.Fatal("expected error for connection failure")
+		return
 	}
 }
 
@@ -95,6 +98,7 @@ func writeTyrConfig(t *testing.T, addr string) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 }
 
@@ -105,6 +109,7 @@ func TestTyrBaseURL_NoConfig(t *testing.T) {
 	_, err := tyrBaseURL()
 	if err == nil {
 		t.Fatal("expected error when no config")
+		return
 	}
 }
 
@@ -116,11 +121,13 @@ func TestTyrBaseURL_TyrDisabled(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	_, err := tyrBaseURL()
 	if err == nil {
 		t.Fatal("expected error when tyr disabled")
+		return
 	}
 }
 
@@ -130,6 +137,7 @@ func TestTyrBaseURL_Success(t *testing.T) {
 	url, err := tyrBaseURL()
 	if err != nil {
 		t.Fatalf("tyrBaseURL: %v", err)
+		return
 	}
 	if url != "http://127.0.0.1:9999" {
 		t.Errorf("expected http://127.0.0.1:9999, got %q", url)
@@ -155,6 +163,7 @@ func TestRunTyrSagasList_Success(t *testing.T) {
 
 	if err := runTyrSagasList(nil, nil); err != nil {
 		t.Fatalf("runTyrSagasList: %v", err)
+		return
 	}
 }
 
@@ -186,6 +195,7 @@ func TestRunTyrSagasList_JSON(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("runTyrSagasList JSON: %v", err)
+		return
 	}
 }
 
@@ -204,6 +214,7 @@ func TestRunTyrSagasList_Empty(t *testing.T) {
 
 	if err := runTyrSagasList(nil, nil); err != nil {
 		t.Fatalf("runTyrSagasList empty: %v", err)
+		return
 	}
 }
 
@@ -224,6 +235,7 @@ func TestRunTyrRaidsSummary_Success(t *testing.T) {
 
 	if err := runTyrRaidsSummary(nil, nil); err != nil {
 		t.Fatalf("runTyrRaidsSummary: %v", err)
+		return
 	}
 }
 
@@ -253,6 +265,7 @@ func TestRunTyrRaidsSummary_JSON(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("runTyrRaidsSummary JSON: %v", err)
+		return
 	}
 }
 
@@ -271,6 +284,7 @@ func TestRunTyrRaidsSummary_Empty(t *testing.T) {
 
 	if err := runTyrRaidsSummary(nil, nil); err != nil {
 		t.Fatalf("runTyrRaidsSummary empty: %v", err)
+		return
 	}
 }
 
@@ -294,6 +308,7 @@ func TestRunTyrRaidsActive_Success(t *testing.T) {
 
 	if err := runTyrRaidsActive(nil, nil); err != nil {
 		t.Fatalf("runTyrRaidsActive: %v", err)
+		return
 	}
 }
 
@@ -325,6 +340,7 @@ func TestRunTyrRaidsActive_JSON(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("runTyrRaidsActive JSON: %v", err)
+		return
 	}
 }
 
@@ -343,6 +359,7 @@ func TestRunTyrRaidsActive_Empty(t *testing.T) {
 
 	if err := runTyrRaidsActive(nil, nil); err != nil {
 		t.Fatalf("runTyrRaidsActive empty: %v", err)
+		return
 	}
 }
 
@@ -365,5 +382,6 @@ func TestRunTyrRaidsActive_NoSession(t *testing.T) {
 
 	if err := runTyrRaidsActive(nil, nil); err != nil {
 		t.Fatalf("runTyrRaidsActive no session: %v", err)
+		return
 	}
 }

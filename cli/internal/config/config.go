@@ -41,6 +41,8 @@ type K3sConfig struct {
 	Namespace  string `yaml:"namespace"`             // default: volundr
 	Provider   string `yaml:"provider"`              // "auto", "k3d", "native" (default: auto)
 	APIImage   string `yaml:"api_image,omitempty"`   // default: ghcr.io/niuulabs/volundr:latest
+	TyrImage   string `yaml:"tyr_image,omitempty"`   // default: ghcr.io/niuulabs/tyr:latest
+	TyrEnabled bool   `yaml:"tyr_enabled"`           // default: true
 	SkuldImage string `yaml:"skuld_image,omitempty"` // default: ghcr.io/niuulabs/skuld:latest
 	RehImage   string `yaml:"reh_image,omitempty"`   // default: ghcr.io/niuulabs/vscode-reh:latest
 	TtydImage  string `yaml:"ttyd_image,omitempty"`  // default: ghcr.io/niuulabs/devrunner:latest
@@ -76,9 +78,18 @@ type LocalMountsConfig struct {
 	DefaultReadOnly bool     `yaml:"default_read_only"`
 }
 
+// AIModelEntry describes an available AI model.
+type AIModelEntry struct {
+	ID   string `yaml:"id"`
+	Name string `yaml:"name"`
+}
+
 // TyrSettings holds tyr-mini settings within the main config.
 type TyrSettings struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled              bool   `yaml:"enabled"`
+	DefaultSystemPrompt  string `yaml:"default_system_prompt,omitempty"`
+	ReviewerSystemPrompt string `yaml:"reviewer_system_prompt,omitempty"`
+	ReviewerModel        string `yaml:"reviewer_model,omitempty"`
 }
 
 // VolundrConfig holds Volundr stack mode and forge settings.
@@ -131,6 +142,8 @@ type Config struct {
 	Git         GitConfig         `yaml:"git,omitempty"`
 	K3s         K3sConfig         `yaml:"k3s,omitempty"`
 	LocalMounts LocalMountsConfig `yaml:"local_mounts,omitempty"`
+	AIModels    []AIModelEntry    `yaml:"ai_models,omitempty"`
+	Linear      LinearConfig      `yaml:"linear,omitempty"`
 
 	// Runtime is deprecated: use Volundr.Mode instead.
 	Runtime string `yaml:"runtime,omitempty"`
@@ -163,6 +176,12 @@ type DatabaseConfig struct {
 // AnthropicConfig holds Anthropic API settings.
 type AnthropicConfig struct {
 	APIKey string `yaml:"api_key"`
+}
+
+// LinearConfig holds Linear tracker settings.
+type LinearConfig struct {
+	APIKey string `yaml:"api_key,omitempty"`
+	TeamID string `yaml:"team_id,omitempty"`
 }
 
 // ConfigDir returns the path to the niuu config directory.
@@ -253,11 +272,21 @@ func DefaultConfig() (*Config, error) {
 			Name:     DefaultDBName,
 		},
 		Anthropic: AnthropicConfig{},
+		LocalMounts: LocalMountsConfig{
+			Enabled: true,
+		},
+		AIModels: []AIModelEntry{
+			{ID: "claude-opus-4-6", Name: "Opus 4.6"},
+			{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"},
+			{ID: "claude-haiku-4-5-20251001", Name: "Haiku 4.5"},
+		},
 		K3s: K3sConfig{
 			Kubeconfig: "",
 			Namespace:  "volundr",
 			Provider:   "auto",
 			APIImage:   "ghcr.io/niuulabs/volundr:latest",
+			TyrImage:   "ghcr.io/niuulabs/tyr:latest",
+			TyrEnabled: true,
 			SkuldImage: "ghcr.io/niuulabs/skuld:latest",
 			RehImage:   "ghcr.io/niuulabs/vscode-reh:latest",
 			TtydImage:  "ghcr.io/niuulabs/devrunner:latest",

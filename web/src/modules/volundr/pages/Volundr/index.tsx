@@ -521,6 +521,8 @@ export function VolundrPage() {
     }));
   }, [sessionPanels, panelPrefs]);
 
+  const codeTabEnabled = tabs.some(t => t.id === 'code');
+
   const selectedModel = effectiveSelectedSession ? models[effectiveSelectedSession.model] : null;
   const isLocal = selectedModel?.provider === 'local';
 
@@ -1187,7 +1189,7 @@ export function VolundrPage() {
                   <p>Start the session to access IDE</p>
                 </div>
               ))}
-            {isSessionReady && (
+            {isSessionReady && codeTabEnabled && (
               <Suspense fallback={null}>
                 <EditorPanel
                   hostname={effectiveSelectedSession.hostname ?? null}

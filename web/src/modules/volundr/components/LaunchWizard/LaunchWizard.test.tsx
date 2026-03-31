@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { LaunchWizard } from './LaunchWizard';
 import type {
@@ -75,7 +76,7 @@ const mockService = {
   listWorkspaces: vi.fn().mockResolvedValue([]),
   getCredentials: vi.fn().mockResolvedValue([]),
   getIntegrations: vi.fn().mockResolvedValue([]),
-  getFeatures: vi.fn().mockResolvedValue({ localMountsEnabled: false }),
+  getFeatures: vi.fn().mockResolvedValue({ localMountsEnabled: false, miniMode: false }),
   getClusterResources: vi.fn().mockResolvedValue({ resourceTypes: [], nodes: [] }),
 } as unknown as import('@/ports').IVolundrService;
 
@@ -283,6 +284,28 @@ describe('LaunchWizard', () => {
       const nav = screen.getByRole('navigation', { name: 'Wizard steps' });
       const currentStep = nav.querySelector('[aria-current="step"]');
       expect(currentStep?.textContent).toContain('Configure');
+    });
+  });
+
+  describe('mini mode with local mounts', () => {
+    it('defaults to local_mount source when localMountsEnabled and no repos', async () => {
+      const miniService = {
+        ...mockService,
+        getFeatures: vi.fn().mockResolvedValue({ localMountsEnabled: true, miniMode: true }),
+      } as unknown as import('@/ports').IVolundrService;
+
+      render(<LaunchWizard {...defaultProps} repos={[]} service={miniService} />);
+
+      // Select blank template to go to step 2.
+      const blankBtn = await screen.findByText(/^Blank$/);
+      await userEvent.click(blankBtn);
+
+      // Wait for features to load and source type to be set.
+      await vi.waitFor(() => {
+        // The source type should default to local_mount since no repos and local mounts enabled.
+        const projectDirInput = screen.queryByPlaceholderText(/absolute path/i);
+        expect(projectDirInput).toBeInTheDocument();
+      });
     });
   });
 });

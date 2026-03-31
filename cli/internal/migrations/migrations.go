@@ -13,3 +13,9 @@ import "io/fs"
 func FS() fs.FS {
 	return migrationsFS()
 }
+
+// TyrFS returns the embedded Tyr migrations filesystem, or nil if
+// migrations are not embedded in this build.
+func TyrFS() fs.FS {
+	return tyrMigrationsFS()
+}

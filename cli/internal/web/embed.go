@@ -103,6 +103,13 @@ func spaHandler(assets fs.FS) http.Handler {
 			return
 		}
 
+		// Static assets that don't exist should 404, not fall back to HTML.
+		// This prevents the browser from trying to parse HTML as JS/CSS.
+		if strings.HasPrefix(path, "assets/") || strings.HasPrefix(path, "fonts/") {
+			http.NotFound(w, r)
+			return
+		}
+
 		// File not found — serve index.html for SPA routing.
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)

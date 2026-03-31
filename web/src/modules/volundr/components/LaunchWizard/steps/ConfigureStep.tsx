@@ -18,7 +18,6 @@ import {
   KeyRound,
   Plug,
   HardDriveDownload,
-  Trash2,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { serializePresetYaml, parsePresetYaml } from '@/utils/presetYaml';
@@ -54,6 +53,7 @@ export interface ConfigureStepProps {
   service: IVolundrService;
   searchTrackerIssues?: (query: string) => Promise<TrackerIssue[]>;
   localMountsEnabled?: boolean;
+  miniMode?: boolean;
   onChange: (updates: Partial<WizardState>) => void;
   onSavePreset: (
     preset: Omit<VolundrPreset, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
@@ -122,6 +122,7 @@ export function ConfigureStep({
   service,
   searchTrackerIssues,
   localMountsEnabled = false,
+  miniMode = false,
   onChange,
   onSavePreset,
 }: ConfigureStepProps) {
@@ -311,7 +312,11 @@ export function ConfigureStep({
           }
         } else if (src.type === 'local_mount') {
           updates.sourceType = 'local_mount';
-          updates.mountPaths = [...src.paths];
+          if (src.local_path) {
+            updates.mountPaths = [{ host_path: src.local_path, mount_path: '', read_only: false }];
+          } else if (src.paths) {
+            updates.mountPaths = [...src.paths];
+          }
         }
       }
 
@@ -393,7 +398,13 @@ export function ConfigureStep({
           updates.branch = parsed.source.branch;
         } else if (parsed.source && parsed.source.type === 'local_mount') {
           updates.sourceType = 'local_mount';
-          updates.mountPaths = [...parsed.source.paths];
+          if (parsed.source.local_path) {
+            updates.mountPaths = [
+              { host_path: parsed.source.local_path, mount_path: '', read_only: false },
+            ];
+          } else if (parsed.source.paths) {
+            updates.mountPaths = [...parsed.source.paths];
+          }
         }
       }
       if (parsed.integrationIds) updates.selectedIntegrations = parsed.integrationIds;
@@ -856,7 +867,28 @@ export function ConfigureStep({
           </>
         )}
 
-        {state.sourceType === 'local_mount' && (
+        {state.sourceType === 'local_mount' && miniMode && (
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>
+              <HardDriveDownload className={styles.formLabelIcon} />
+              Project Directory
+              <span className={styles.required}>*</span>
+            </label>
+            <input
+              className={styles.formInput}
+              type="text"
+              placeholder="Absolute path to your project (e.g. /Users/you/projects/my-app)"
+              value={state.mountPaths[0]?.host_path ?? ''}
+              onChange={e => {
+                onChange({
+                  mountPaths: [{ host_path: e.target.value, mount_path: '', read_only: false }],
+                });
+              }}
+            />
+          </div>
+        )}
+
+        {state.sourceType === 'local_mount' && !miniMode && (
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>
               <HardDriveDownload className={styles.formLabelIcon} />
@@ -909,7 +941,7 @@ export function ConfigureStep({
                         onChange({ mountPaths: updated });
                       }}
                     >
-                      <Trash2 className={styles.buttonIcon} />
+                      <X className={styles.buttonIcon} />
                     </button>
                   )}
                 </div>
@@ -926,7 +958,7 @@ export function ConfigureStep({
                   })
                 }
               >
-                <Plus className={styles.buttonIcon} />
+                <Plus className={styles.addIcon} />
                 Add mount
               </button>
             </div>

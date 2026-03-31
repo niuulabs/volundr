@@ -28,6 +28,7 @@ func TestNew(t *testing.T) {
 	pg := New(cfg)
 	if pg == nil {
 		t.Fatal("expected non-nil EmbeddedPostgres")
+		return
 	}
 	if pg.config != cfg {
 		t.Error("expected config to be stored")
@@ -101,6 +102,7 @@ func TestStartDataDirError(t *testing.T) {
 	if err == nil {
 		_ = pg.Stop()
 		t.Fatal("expected error creating data directory")
+		return
 	}
 
 	expected := "create data directory"
@@ -118,11 +120,13 @@ func TestStartRuntimeDirError(t *testing.T) {
 	volundrHome := filepath.Join(tmpDir, "volundr_home")
 	if err := os.MkdirAll(volundrHome, 0o700); err != nil {
 		t.Fatal(err)
+		return
 	}
 	// Create a file named "run" so MkdirAll("run/pg") will fail.
 	runFile := filepath.Join(volundrHome, "run")
 	if err := os.WriteFile(runFile, []byte("block"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	t.Setenv("VOLUNDR_HOME", volundrHome)
@@ -143,6 +147,7 @@ func TestStartRuntimeDirError(t *testing.T) {
 	if err == nil {
 		_ = pg.Stop()
 		t.Fatal("expected error creating runtime directory")
+		return
 	}
 
 	expected := "create runtime directory"
@@ -166,16 +171,19 @@ func TestFindMigrationFiles(t *testing.T) {
 	for _, f := range files {
 		if err := os.WriteFile(filepath.Join(tmpDir, f), []byte("-- test"), 0o600); err != nil {
 			t.Fatalf("create test file: %v", err)
+			return
 		}
 	}
 
 	result, err := findMigrationFiles(tmpDir)
 	if err != nil {
 		t.Fatalf("findMigrationFiles() error: %v", err)
+		return
 	}
 
 	if len(result) != 2 {
 		t.Fatalf("expected 2 up migration files, got %d", len(result))
+		return
 	}
 
 	if result[0] != "000001_initial.up.sql" {
@@ -192,6 +200,7 @@ func TestFindMigrationFilesEmpty(t *testing.T) {
 	result, err := findMigrationFiles(tmpDir)
 	if err != nil {
 		t.Fatalf("findMigrationFiles() error: %v", err)
+		return
 	}
 
 	if len(result) != 0 {
@@ -212,19 +221,23 @@ func TestFindMigrationFilesSkipsSubdirectories(t *testing.T) {
 	// Create a subdirectory that looks like a migration.
 	if err := os.Mkdir(filepath.Join(tmpDir, "000001_subdir.up.sql"), 0o700); err != nil {
 		t.Fatal(err)
+		return
 	}
 	// Create a real migration file.
 	if err := os.WriteFile(filepath.Join(tmpDir, "000002_real.up.sql"), []byte("-- test"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	result, err := findMigrationFiles(tmpDir)
 	if err != nil {
 		t.Fatalf("findMigrationFiles() error: %v", err)
+		return
 	}
 
 	if len(result) != 1 {
 		t.Fatalf("expected 1 file (skipping subdirectory), got %d", len(result))
+		return
 	}
 	if result[0] != "000002_real.up.sql" {
 		t.Errorf("expected 000002_real.up.sql, got %q", result[0])
@@ -243,17 +256,20 @@ func TestFindMigrationFilesSortsCorrectly(t *testing.T) {
 	for _, f := range files {
 		if err := os.WriteFile(filepath.Join(tmpDir, f), []byte("-- test"), 0o600); err != nil {
 			t.Fatal(err)
+			return
 		}
 	}
 
 	result, err := findMigrationFiles(tmpDir)
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	expected := []string{"000001_first.up.sql", "000002_second.up.sql", "000003_third.up.sql"}
 	if len(result) != len(expected) {
 		t.Fatalf("expected %d files, got %d", len(expected), len(result))
+		return
 	}
 	for i, want := range expected {
 		if result[i] != want {
@@ -292,6 +308,7 @@ func TestRunMigrationsWithDB_PingError(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -300,6 +317,7 @@ func TestRunMigrationsWithDB_PingError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, t.TempDir())
 	if err == nil {
 		t.Fatal("expected ping error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -317,6 +335,7 @@ func TestRunMigrationsWithDB_CreateTableError(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -327,6 +346,7 @@ func TestRunMigrationsWithDB_CreateTableError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, t.TempDir())
 	if err == nil {
 		t.Fatal("expected create table error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -344,6 +364,7 @@ func TestRunMigrationsWithDB_InvalidMigrationsDir(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -354,6 +375,7 @@ func TestRunMigrationsWithDB_InvalidMigrationsDir(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, "/nonexistent/migrations/dir")
 	if err == nil {
 		t.Fatal("expected error for non-existent migrations directory")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -371,6 +393,7 @@ func TestRunMigrationsWithDB_NoMigrations(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -381,6 +404,7 @@ func TestRunMigrationsWithDB_NoMigrations(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -395,14 +419,17 @@ func TestRunMigrationsWithDB_AppliesNewMigrations(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "000002_add_col.up.sql"), []byte("ALTER TABLE test ADD COLUMN name TEXT"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -437,6 +464,7 @@ func TestRunMigrationsWithDB_AppliesNewMigrations(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if applied != 2 {
 		t.Errorf("expected 2 applied, got %d", applied)
@@ -451,14 +479,17 @@ func TestRunMigrationsWithDB_SkipsAlreadyApplied(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "000002_add_col.up.sql"), []byte("ALTER TABLE test ADD COLUMN name TEXT"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -486,6 +517,7 @@ func TestRunMigrationsWithDB_SkipsAlreadyApplied(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if applied != 1 {
 		t.Errorf("expected 1 applied (skipped 000001), got %d", applied)
@@ -500,11 +532,13 @@ func TestRunMigrationsWithDB_CheckVersionError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -518,6 +552,7 @@ func TestRunMigrationsWithDB_CheckVersionError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err == nil {
 		t.Fatal("expected error checking migration version")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -537,11 +572,13 @@ func TestRunMigrationsWithDB_ReadMigrationFileError(t *testing.T) {
 	migrationFile := filepath.Join(tmpDir, "000001_init.up.sql")
 	if err := os.WriteFile(migrationFile, []byte("CREATE TABLE test (id INT)"), 0o000); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -555,6 +592,7 @@ func TestRunMigrationsWithDB_ReadMigrationFileError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err == nil {
 		t.Fatal("expected error reading migration file")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -572,11 +610,13 @@ func TestRunMigrationsWithDB_BeginTxError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -591,6 +631,7 @@ func TestRunMigrationsWithDB_BeginTxError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err == nil {
 		t.Fatal("expected begin transaction error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -608,11 +649,13 @@ func TestRunMigrationsWithDB_ExecMigrationError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("INVALID SQL"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -630,6 +673,7 @@ func TestRunMigrationsWithDB_ExecMigrationError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err == nil {
 		t.Fatal("expected exec migration error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -647,11 +691,13 @@ func TestRunMigrationsWithDB_RecordMigrationError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -672,6 +718,7 @@ func TestRunMigrationsWithDB_RecordMigrationError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err == nil {
 		t.Fatal("expected record migration error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -689,11 +736,13 @@ func TestRunMigrationsWithDB_CommitError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -714,6 +763,7 @@ func TestRunMigrationsWithDB_CommitError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err == nil {
 		t.Fatal("expected commit error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -731,11 +781,13 @@ func TestRunMigrationsWithDB_AllAlreadyApplied(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -749,6 +801,7 @@ func TestRunMigrationsWithDB_AllAlreadyApplied(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied (all already applied), got %d", applied)
@@ -763,14 +816,17 @@ func TestRunMigrationsWithDB_PartialApplyOnError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "000002_fail.up.sql"), []byte("BAD SQL"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -802,6 +858,7 @@ func TestRunMigrationsWithDB_PartialApplyOnError(t *testing.T) {
 	applied, err := runMigrationsWithDB(context.Background(), db, tmpDir)
 	if err == nil {
 		t.Fatal("expected error on second migration")
+		return
 	}
 	if applied != 1 {
 		t.Errorf("expected 1 applied (first succeeded), got %d", applied)
@@ -818,6 +875,7 @@ func TestRunMigrationsWithFS_PingError(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -826,6 +884,7 @@ func TestRunMigrationsWithFS_PingError(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(t.TempDir()))
 	if err == nil {
 		t.Fatal("expected ping error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -843,6 +902,7 @@ func TestRunMigrationsWithFS_CreateTableError(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -853,6 +913,7 @@ func TestRunMigrationsWithFS_CreateTableError(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(t.TempDir()))
 	if err == nil {
 		t.Fatal("expected create table error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -870,6 +931,7 @@ func TestRunMigrationsWithFS_NoMigrations(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -880,6 +942,7 @@ func TestRunMigrationsWithFS_NoMigrations(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(t.TempDir()))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -894,18 +957,22 @@ func TestRunMigrationsWithFS_AppliesNewMigrations(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "000002_add_col.up.sql"), []byte("ALTER TABLE test ADD COLUMN name TEXT"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 	// Also add a down migration to verify it's skipped.
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.down.sql"), []byte("DROP TABLE test"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -940,6 +1007,7 @@ func TestRunMigrationsWithFS_AppliesNewMigrations(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if applied != 2 {
 		t.Errorf("expected 2 applied, got %d", applied)
@@ -954,11 +1022,13 @@ func TestRunMigrationsWithFS_SkipsAlreadyApplied(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -972,6 +1042,7 @@ func TestRunMigrationsWithFS_SkipsAlreadyApplied(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -986,11 +1057,13 @@ func TestRunMigrationsWithFS_CheckVersionError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -1004,6 +1077,7 @@ func TestRunMigrationsWithFS_CheckVersionError(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
 	if err == nil {
 		t.Fatal("expected error checking migration version")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -1021,11 +1095,13 @@ func TestRunMigrationsWithFS_BeginTxError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -1040,6 +1116,7 @@ func TestRunMigrationsWithFS_BeginTxError(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
 	if err == nil {
 		t.Fatal("expected begin transaction error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -1057,11 +1134,13 @@ func TestRunMigrationsWithFS_ExecMigrationError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("INVALID SQL"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -1079,6 +1158,7 @@ func TestRunMigrationsWithFS_ExecMigrationError(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
 	if err == nil {
 		t.Fatal("expected exec migration error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -1096,11 +1176,13 @@ func TestRunMigrationsWithFS_RecordMigrationError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -1121,6 +1203,7 @@ func TestRunMigrationsWithFS_RecordMigrationError(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
 	if err == nil {
 		t.Fatal("expected record migration error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -1138,11 +1221,13 @@ func TestRunMigrationsWithFS_CommitError(t *testing.T) {
 	tmpDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmpDir, "000001_init.up.sql"), []byte("CREATE TABLE test (id INT)"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -1163,6 +1248,7 @@ func TestRunMigrationsWithFS_CommitError(t *testing.T) {
 	applied, err := runMigrationsWithFS(context.Background(), db, os.DirFS(tmpDir))
 	if err == nil {
 		t.Fatal("expected commit error")
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -1194,6 +1280,7 @@ func TestRunMigrationsFS_OpenDatabaseError(t *testing.T) {
 	_, err := pg.RunMigrationsFS(context.Background(), os.DirFS(t.TempDir()))
 	if err == nil {
 		t.Fatal("expected error when no database is running")
+		return
 	}
 }
 
@@ -1209,6 +1296,7 @@ func TestAllowDockerConnections_NoHbaFile(t *testing.T) {
 	err := pg.allowDockerConnections(context.Background(), tmpDir)
 	if err == nil {
 		t.Fatal("expected error reading pg_hba.conf")
+		return
 	}
 	if !contains(err.Error(), "read pg_hba.conf") {
 		t.Errorf("expected 'read pg_hba.conf' in error, got %q", err.Error())
@@ -1223,6 +1311,7 @@ func TestAllowDockerConnections_AlreadyContainsRule(t *testing.T) {
 	hbaPath := filepath.Join(tmpDir, "pg_hba.conf")
 	if err := os.WriteFile(hbaPath, []byte("host all all 172.16.0.0/12 password\n"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	cfg := &config.Config{}
@@ -1232,6 +1321,7 @@ func TestAllowDockerConnections_AlreadyContainsRule(t *testing.T) {
 	err := pg.allowDockerConnections(context.Background(), tmpDir)
 	if err != nil {
 		t.Fatalf("expected no error when rule already exists, got: %v", err)
+		return
 	}
 }
 
@@ -1243,12 +1333,14 @@ func TestAllowDockerConnections_AppendsRule(t *testing.T) {
 	pgCtlDir := filepath.Join(tmpDir, "cache", "pg", "bin")
 	if err := os.MkdirAll(pgCtlDir, 0o700); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	// Write pg_hba.conf without the Docker rule.
 	hbaPath := filepath.Join(tmpDir, "pg_hba.conf")
 	if err := os.WriteFile(hbaPath, []byte("# Default rules\nlocal all all trust\n"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	cfg := &config.Config{}
@@ -1262,6 +1354,7 @@ func TestAllowDockerConnections_AppendsRule(t *testing.T) {
 	data, readErr := os.ReadFile(hbaPath) //nolint:gosec // test file path from t.TempDir()
 	if readErr != nil {
 		t.Fatalf("read pg_hba.conf: %v", readErr)
+		return
 	}
 
 	if !strings.Contains(string(data), "172.16.0.0/12") {
@@ -1292,6 +1385,47 @@ func TestRunMigrations_OpenDatabaseError(t *testing.T) {
 	_, err := pg.RunMigrations(context.Background(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected error when no database is running")
+		return
+	}
+}
+
+func TestRunTyrMigrations_OpenDatabaseError(t *testing.T) {
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Port:     15433,
+			User:     "test",
+			Password: "test",
+			Name:     "testdb",
+		},
+	}
+
+	pg := New(cfg)
+	// RunTyrMigrations will fail at PingContext because no real DB is running.
+	_, err := pg.RunTyrMigrations(context.Background(), t.TempDir())
+	if err == nil {
+		t.Fatal("expected error when no database is running")
+		return
+	}
+}
+
+func TestRunTyrMigrationsFS_OpenDatabaseError(t *testing.T) {
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Mode:     "embedded",
+			Port:     15433,
+			User:     "test",
+			Password: "test",
+			Name:     "testdb",
+		},
+	}
+
+	pg := New(cfg)
+	// RunTyrMigrationsFS will fail at PingContext because no real DB is running.
+	_, err := pg.RunTyrMigrationsFS(context.Background(), os.DirFS(t.TempDir()))
+	if err == nil {
+		t.Fatal("expected error when no database is running")
+		return
 	}
 }
 

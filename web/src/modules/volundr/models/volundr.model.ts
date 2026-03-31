@@ -3,6 +3,7 @@ import type { SessionStatus } from './status.model';
 export interface VolundrFeatures {
   localMountsEnabled: boolean;
   fileManagerEnabled: boolean;
+  miniMode: boolean;
 }
 
 export type FileRoot = 'workspace' | 'home';
@@ -46,6 +47,7 @@ export interface MountMapping {
 
 export interface LocalMountSource {
   type: 'local_mount';
+  local_path?: string;
   paths: MountMapping[];
   node_selector?: Record<string, string>;
 }

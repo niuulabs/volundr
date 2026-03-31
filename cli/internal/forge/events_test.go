@@ -27,6 +27,7 @@ func TestEventBus_SubscribeAndEmit(t *testing.T) {
 		}
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("timed out waiting for event")
+		return
 	}
 }
 
@@ -59,6 +60,7 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 			}
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("timed out waiting for event on subscriber")
+			return
 		}
 	}
 }

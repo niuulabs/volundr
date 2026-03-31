@@ -19,6 +19,7 @@ func TestRunDown_NoPIDFile(t *testing.T) {
 	err := runDown(nil, nil)
 	if err == nil {
 		t.Fatal("expected error when no PID file exists")
+		return
 	}
 }
 
@@ -30,6 +31,7 @@ func TestRunDown_MiniMode_HTTPShutdown(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
+		return
 	}
 	addr := ln.Addr().String()
 
@@ -48,11 +50,13 @@ func TestRunDown_MiniMode_HTTPShutdown(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	err = runDown(nil, nil)
 	if err != nil {
 		t.Fatalf("runDown: %v", err)
+		return
 	}
 }
 
@@ -65,12 +69,14 @@ func TestRunDown_MiniMode_FallbackToPID(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	// No PID file either — should error through fallback.
 	err := runDown(nil, nil)
 	if err == nil {
 		t.Fatal("expected error when forge unreachable and no PID file")
+		return
 	}
 }
 
@@ -96,6 +102,7 @@ database:
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	// Will fail because k3s runtime deps aren't available, but tests
@@ -116,9 +123,11 @@ func TestCleanupStateFiles(t *testing.T) {
 	pidFile := filepath.Join(tmpDir, "volundr.pid")
 	if err := os.WriteFile(forgeState, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 	if err := os.WriteFile(pidFile, []byte("12345"), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	cleanupStateFiles()
@@ -148,12 +157,14 @@ func TestDownMini_BadListenAddress(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	// Should fall back to PID shutdown (and fail because no PID file).
 	err := runDown(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for bad listen address with no PID fallback")
+		return
 	}
 }
 
@@ -165,6 +176,7 @@ func TestDownMini_NonOKResponse(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
+		return
 	}
 	addr := ln.Addr().String()
 
@@ -180,12 +192,14 @@ func TestDownMini_NonOKResponse(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	// Should fall back to PID shutdown (and fail because no PID file).
 	err = runDown(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for non-OK response with no PID fallback")
+		return
 	}
 }
 
@@ -201,12 +215,14 @@ func TestRunDown_UnknownMode_FallbackPID(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	// Falls back to PID — no PID file so it errors.
 	err := runDown(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown mode with no PID fallback")
+		return
 	}
 }
 
@@ -218,6 +234,7 @@ func TestDownMini_ShutdownResponseBody(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
+		return
 	}
 	addr := ln.Addr().String()
 
@@ -235,10 +252,12 @@ func TestDownMini_ShutdownResponseBody(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+		return
 	}
 
 	err = runDown(nil, nil)
 	if err != nil {
 		t.Fatalf("runDown: %v", err)
+		return
 	}
 }

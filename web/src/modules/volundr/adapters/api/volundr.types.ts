@@ -23,6 +23,7 @@ export interface ApiSessionSource {
   type: 'git' | 'local_mount';
   repo?: string;
   branch?: string;
+  local_path?: string;
   paths?: Array<{ host_path: string; mount_path: string; read_only: boolean }>;
   node_selector?: Record<string, string>;
 }

@@ -24,24 +24,36 @@ Not all prerequisites apply to every method. Check the table for your path.
 The fastest path. Download a pre-built binary, answer a few questions, and you're running.
 
 ```bash
-# Download from GitHub releases
+# Download from GitHub releases (pick your platform)
 # https://github.com/niuulabs/volundr/releases
-curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/volundr-$(uname -s)-$(uname -m) -o volundr
-chmod +x volundr
-sudo mv volundr /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-darwin-arm64 -o niuu
+
+# macOS (Intel)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-darwin-amd64 -o niuu
+
+# Linux (x86_64)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-linux-amd64 -o niuu
+
+# Linux (ARM64)
+curl -fsSL https://github.com/niuulabs/volundr/releases/latest/download/niuu-linux-arm64 -o niuu
+
+chmod +x niuu
+sudo mv niuu /usr/local/bin/
 
 # Initialize (interactive wizard)
-volundr init
+niuu volundr init
 
 # Start everything
-volundr up
+niuu volundr up
 ```
 
-`volundr init` walks you through runtime selection, API keys, database mode, and GitHub configuration. `volundr up` starts PostgreSQL (if you chose embedded mode), the API server, and a reverse proxy.
+`niuu volundr init` walks you through runtime selection, API keys, database mode, and GitHub configuration. `niuu volundr up` starts PostgreSQL (if you chose embedded mode), the API server, and a reverse proxy.
 
 Open [http://localhost:8080](http://localhost:8080).
 
-See the [Quick Start](quick-start.md) for a step-by-step walkthrough.
+See the [Quick Start](quick-start.md) for a step-by-step walkthrough, or the [Local Quickstart](local-quickstart.md) for a full end-to-end guide.
 
 ---
 
@@ -156,6 +168,8 @@ curl http://localhost:8080/api/v1/version
 ## Next steps
 
 - [Quick Start](quick-start.md) -- get running in 5 minutes
+- [Local Quickstart](local-quickstart.md) -- full end-to-end walkthrough
 - [First Session](first-session.md) -- create your first AI coding session
 - [Configuration](configuration.md) -- full configuration reference
+- [Troubleshooting](troubleshooting.md) -- common issues and solutions
 - [Helm Deployment](../deployment/helm.md) -- production Kubernetes deployment

@@ -12,6 +12,7 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/lib/pq"
+	"github.com/niuulabs/volundr/cli/internal/tracker"
 )
 
 // Test helpers.
@@ -21,12 +22,13 @@ func setupHandler(t *testing.T) (*Handler, sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("create sqlmock: %v", err)
+		return nil, nil
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
-	handler := NewHandler(store, dispatcher)
+	handler := NewHandler(store, dispatcher, nil, nil, "")
 	return handler, mock
 }
 
@@ -67,11 +69,13 @@ func TestListSagas_Empty(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result []SagaListItem
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
+		return
 	}
 	if len(result) != 0 {
 		t.Errorf("expected 0 sagas, got %d", len(result))
@@ -99,14 +103,17 @@ func TestListSagas_WithResults(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result []SagaListItem
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
+		return
 	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 saga, got %d", len(result))
+		return
 	}
 	if result[0].Name != "My Project" {
 		t.Errorf("expected name 'My Project', got %q", result[0].Name)
@@ -134,6 +141,7 @@ func TestGetSaga_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -177,11 +185,13 @@ func TestCommitSaga_Success(t *testing.T) {
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result CommittedSagaResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
+		return
 	}
 	if result.Name != "Test Saga" {
 		t.Errorf("expected name 'Test Saga', got %q", result.Name)
@@ -191,12 +201,14 @@ func TestCommitSaga_Success(t *testing.T) {
 	}
 	if len(result.Phases) != 1 {
 		t.Fatalf("expected 1 phase, got %d", len(result.Phases))
+		return
 	}
 	if result.Phases[0].Status != "ACTIVE" {
 		t.Errorf("first phase should be ACTIVE, got %q", result.Phases[0].Status)
 	}
 	if len(result.Phases[0].Raids) != 1 {
 		t.Fatalf("expected 1 raid, got %d", len(result.Phases[0].Raids))
+		return
 	}
 	if result.FeatureBranch != "feat/test-saga" {
 		t.Errorf("expected feature branch 'feat/test-saga', got %q", result.FeatureBranch)
@@ -225,6 +237,7 @@ func TestCommitSaga_DuplicateSlug(t *testing.T) {
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -266,6 +279,7 @@ func TestDeleteSaga_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -284,11 +298,13 @@ func TestRaidsSummary(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var counts map[string]int
 	if err := json.Unmarshal(w.Body.Bytes(), &counts); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if counts["PENDING"] != 3 {
 		t.Errorf("expected PENDING=3, got %d", counts["PENDING"])
@@ -305,22 +321,25 @@ func TestRaidsActive(t *testing.T) {
 	h, mock := setupHandler(t)
 
 	now := time.Now()
-	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("raid-1", "phase-1", "raid-1", "Active Raid", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, "session-1", "feature/raid-1", nil, nil, nil, nil, 0, "", 0, now, now)
-	mock.ExpectQuery("SELECT .+ FROM raids WHERE status NOT IN").WillReturnRows(rows)
+	rows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
+		AddRow("raid-1", "phase-1", "raid-1", "", "", "Active Raid", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, "session-1", "feature/raid-1", nil, nil, nil, nil, 0, "", 0, now, now)
+	mock.ExpectQuery("SELECT .+ FROM raids ORDER BY").WillReturnRows(rows)
 
 	w := doRequest(h.raidsActive, "GET", "/api/v1/tyr/raids/active", nil)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var results []ActiveRaidResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &results); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 active raid, got %d", len(results))
+		return
 	}
 	if results[0].Title != "Active Raid" {
 		t.Errorf("expected title 'Active Raid', got %q", results[0].Title)
@@ -344,6 +363,7 @@ func TestApproveRaid_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -362,6 +382,7 @@ func TestRejectRaid_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -372,11 +393,13 @@ func TestNotImplemented(t *testing.T) {
 
 	if w.Code != http.StatusNotImplemented {
 		t.Fatalf("expected 501, got %d", w.Code)
+		return
 	}
 
 	var result map[string]string
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if result["detail"] == "" {
 		t.Error("expected non-empty detail message")
@@ -390,11 +413,13 @@ func TestDispatchConfig(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+		return
 	}
 
 	var result map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if result["default_model"] != "claude-sonnet-4-6" {
 		t.Errorf("expected default_model 'claude-sonnet-4-6', got %v", result["default_model"])
@@ -413,11 +438,13 @@ func TestDispatchQueue_Empty(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result []any
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if len(result) != 0 {
 		t.Errorf("expected empty queue, got %d items", len(result))
@@ -529,8 +556,8 @@ func TestGetSaga_Success(t *testing.T) {
 		WillReturnRows(phaseRows)
 
 	// ListRaids for the phase
-	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("r-1", "p-1", "r-1", "Raid 1", "desc", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
+		AddRow("r-1", "p-1", "r-1", "", "", "Raid 1", "desc", pq.Array([]string{"it works"}), pq.Array([]string{"file.go"}), 2.0, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids").
 		WithArgs("p-1").
 		WillReturnRows(raidRows)
@@ -543,20 +570,24 @@ func TestGetSaga_Success(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result SagaDetailResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if result.Name != "Test" {
 		t.Errorf("expected name 'Test', got %q", result.Name)
 	}
 	if len(result.Phases) != 1 {
 		t.Fatalf("expected 1 phase, got %d", len(result.Phases))
+		return
 	}
 	if len(result.Phases[0].Raids) != 1 {
 		t.Fatalf("expected 1 raid, got %d", len(result.Phases[0].Raids))
+		return
 	}
 	if result.FeatureBranch != "feat/test" {
 		t.Errorf("expected feature branch 'feat/test', got %q", result.FeatureBranch)
@@ -583,6 +614,7 @@ func TestDeleteSaga_Success(t *testing.T) {
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -590,19 +622,19 @@ func TestApproveRaid_Success(t *testing.T) {
 	h, mock := setupHandler(t)
 
 	now := time.Now()
-	raidCols := []string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
+	raidCols := []string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
 
 	// GetRaid (initial)
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "REVIEW", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "REVIEW", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 
 	// UpdateRaidStatus: GetRaid + ValidateTransition + UPDATE
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "REVIEW", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "REVIEW", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// AddConfidenceEvent
@@ -616,7 +648,7 @@ func TestApproveRaid_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "MERGED", 0.9, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "MERGED", 0.9, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/raids/raid-1/approve", http.NoBody)
 	req.SetPathValue("id", "raid-1")
@@ -625,6 +657,7 @@ func TestApproveRaid_Success(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -632,19 +665,19 @@ func TestRejectRaid_Success(t *testing.T) {
 	h, mock := setupHandler(t)
 
 	now := time.Now()
-	raidCols := []string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
+	raidCols := []string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
 
 	// GetRaid (initial)
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 
 	// UpdateRaidStatus
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "RUNNING", 0.8, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// AddConfidenceEvent
@@ -658,7 +691,7 @@ func TestRejectRaid_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "FAILED", 0.6, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "FAILED", 0.6, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 
 	body := bytes.NewReader([]byte(`{"reason":"tests failed"}`))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/raids/raid-1/reject", body)
@@ -669,6 +702,7 @@ func TestRejectRaid_Success(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -686,6 +720,7 @@ func TestRetryRaid_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -693,19 +728,19 @@ func TestRetryRaid_Success(t *testing.T) {
 	h, mock := setupHandler(t)
 
 	now := time.Now()
-	raidCols := []string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
+	raidCols := []string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
 
 	// GetRaid (initial)
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "FAILED", 0.5, nil, nil, nil, nil, nil, nil, 1, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "FAILED", 0.5, nil, nil, nil, nil, nil, nil, 1, "", 0, now, now))
 
 	// UpdateRaidStatus
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "FAILED", 0.5, nil, nil, nil, nil, nil, nil, 1, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "FAILED", 0.5, nil, nil, nil, nil, nil, nil, 1, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// AddConfidenceEvent
@@ -719,7 +754,7 @@ func TestRetryRaid_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").
 		WithArgs("raid-1").
 		WillReturnRows(sqlmock.NewRows(raidCols).
-			AddRow("raid-1", "p-1", "raid-1", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "QUEUED", 0.4, nil, nil, nil, nil, nil, nil, 2, "", 0, now, now))
+			AddRow("raid-1", "p-1", "raid-1", "", "", "Test", "", pq.Array([]string{}), pq.Array([]string{}), nil, "QUEUED", 0.4, nil, nil, nil, nil, nil, nil, 2, "", 0, now, now))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/raids/raid-1/retry", http.NoBody)
 	req.SetPathValue("id", "raid-1")
@@ -728,6 +763,7 @@ func TestRetryRaid_Success(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -745,14 +781,17 @@ func TestDispatchQueue_WithPendingRaids(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result []map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 queued item, got %d", len(result))
+		return
 	}
 	if result[0]["title"] != "Pending Raid" {
 		t.Errorf("expected title 'Pending Raid', got %v", result[0]["title"])
@@ -770,6 +809,7 @@ func TestDispatchApprove_InvalidBody(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -781,11 +821,13 @@ func TestDispatchApprove_EmptyItems(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result []DispatchResult
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if len(result) != 0 {
 		t.Errorf("expected empty results, got %d", len(result))
@@ -806,14 +848,17 @@ func TestDispatchApprove_SagaNotFound(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result []DispatchResult
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result))
+		return
 	}
 	if result[0].Status != "failed" {
 		t.Errorf("expected status 'failed', got %q", result[0].Status)
@@ -833,8 +878,8 @@ func TestFindRaidByTrackerID(t *testing.T) {
 		WillReturnRows(phaseRows)
 
 	// ListRaids
-	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
-		AddRow("r-1", "p-1", "NIU-100", "Raid 1", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+	raidRows := sqlmock.NewRows([]string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}).
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Raid 1", "", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids").
 		WithArgs("p-1").
 		WillReturnRows(raidRows)
@@ -842,6 +887,7 @@ func TestFindRaidByTrackerID(t *testing.T) {
 	raid := h.findRaidByTrackerID(ctx, "saga-1", "NIU-100")
 	if raid == nil {
 		t.Fatal("expected to find raid")
+		return
 	}
 	if raid.TrackerID != "NIU-100" {
 		t.Errorf("expected tracker ID 'NIU-100', got %q", raid.TrackerID)
@@ -871,7 +917,7 @@ func TestFindRaidByTrackerID_NotFound(t *testing.T) {
 
 func TestDispatchApprove_Success(t *testing.T) {
 	now := time.Now()
-	raidCols := []string{"id", "phase_id", "tracker_id", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
+	raidCols := []string{"id", "phase_id", "tracker_id", "identifier", "url", "name", "description", "acceptance_criteria", "declared_files", "estimate_hours", "status", "confidence", "session_id", "branch", "chronicle_summary", "pr_url", "pr_id", "reason", "retry_count", "reviewer_session_id", "review_round", "created_at", "updated_at"}
 
 	// Mock Forge server
 	forgeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -883,12 +929,13 @@ func TestDispatchApprove_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher(forgeServer.URL)
-	h := NewHandler(store, dispatcher)
+	h := NewHandler(store, dispatcher, nil, nil, "")
 
 	// GetSaga
 	sagaRows := sqlmock.NewRows([]string{"id", "tracker_id", "tracker_type", "slug", "name", "repos", "status", "confidence", "owner_id", "base_branch", "created_at"}).
@@ -903,17 +950,17 @@ func TestDispatchApprove_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT .+ FROM phases").WillReturnRows(phaseRows)
 
 	raidRow := sqlmock.NewRows(raidCols).
-		AddRow("r-1", "p-1", "NIU-100", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now)
 	mock.ExpectQuery("SELECT .+ FROM raids").WillReturnRows(raidRow)
 
 	// UpdateRaidStatus PENDING → QUEUED
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").WillReturnRows(sqlmock.NewRows(raidCols).
-		AddRow("r-1", "p-1", "NIU-100", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "PENDING", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// UpdateRaidStatus QUEUED → RUNNING
 	mock.ExpectQuery("SELECT .+ FROM raids WHERE id").WillReturnRows(sqlmock.NewRows(raidCols).
-		AddRow("r-1", "p-1", "NIU-100", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "QUEUED", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
+		AddRow("r-1", "p-1", "NIU-100", "NIU-100", "", "Test Raid", "desc", pq.Array([]string{}), pq.Array([]string{}), nil, "QUEUED", 0.75, nil, nil, nil, nil, nil, nil, 0, "", 0, now, now))
 	mock.ExpectExec("UPDATE raids SET status").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// UpdateRaidSession
@@ -926,14 +973,17 @@ func TestDispatchApprove_Success(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 
 	var result []DispatchResult
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+		return
 	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result))
+		return
 	}
 	if result[0].Status != "spawned" {
 		t.Errorf("expected status 'spawned', got %q", result[0].Status)
@@ -954,6 +1004,7 @@ func TestCommitSaga_InvalidBody(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+		return
 	}
 }
 
@@ -967,6 +1018,7 @@ func TestListSagas_StoreError(t *testing.T) {
 	w := doRequest(h.listSagas, "GET", "/api/v1/tyr/sagas", nil)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+		return
 	}
 }
 
@@ -985,6 +1037,7 @@ func TestGetSaga_StoreError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+		return
 	}
 }
 
@@ -1010,6 +1063,7 @@ func TestGetSaga_PhaseListError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+		return
 	}
 }
 
@@ -1027,6 +1081,7 @@ func TestApproveRaid_StoreError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+		return
 	}
 }
 
@@ -1045,6 +1100,7 @@ func TestRejectRaid_StoreError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+		return
 	}
 }
 
@@ -1062,6 +1118,7 @@ func TestRetryRaid_StoreError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+		return
 	}
 }
 
@@ -1078,6 +1135,579 @@ func TestDeleteSaga_StoreError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+		return
+	}
+}
+
+// --- Simple handler endpoint tests ---
+
+func TestRaidReview(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	w := doRequest(h.raidReview, "GET", "/api/v1/tyr/raids/raid-1/review", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result["status"] != "pending" {
+		t.Errorf("expected status 'pending', got %v", result["status"])
+	}
+}
+
+func TestRaidMessages(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	w := doRequest(h.raidMessages, "GET", "/api/v1/tyr/raids/raid-1/messages", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty array, got %d items", len(result))
+	}
+}
+
+func TestPlanConfig(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	w := doRequest(h.planConfig, "GET", "/api/v1/tyr/config/plan", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := result["planner_system_prompt"]; !ok {
+		t.Error("expected planner_system_prompt in response")
+	}
+}
+
+func TestSlugify(t *testing.T) {
+	tests := []struct {
+		input, expected string
+	}{
+		{"Hello World", "hello-world"},
+		{"  spaces  ", "spaces"},
+		{"My-Project_123", "my-project-123"},
+		{"ABC", "abc"},
+		{"123", "123"},
+	}
+	for _, tc := range tests {
+		got := slugify(tc.input)
+		if got != tc.expected {
+			t.Errorf("slugify(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func TestRaidStatusToType(t *testing.T) {
+	tests := []struct {
+		status   RaidStatus
+		expected string
+	}{
+		{RaidStatusMerged, "completed"},
+		{RaidStatusFailed, "canceled"},
+		{RaidStatusRunning, "started"},
+		{RaidStatusReview, "started"},
+		{RaidStatusEscalated, "started"},
+		{RaidStatusPending, "unstarted"},
+		{RaidStatusQueued, "unstarted"},
+	}
+	for _, tc := range tests {
+		got := raidStatusToType(tc.status)
+		if got != tc.expected {
+			t.Errorf("raidStatusToType(%q) = %q, want %q", tc.status, got, tc.expected)
+		}
+	}
+}
+
+func TestTrackerProject_NoTracker(t *testing.T) {
+	h, _ := setupHandler(t) // h.tracker is nil
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/proj-1", http.NoBody)
+	req.SetPathValue("id", "proj-1")
+	w := httptest.NewRecorder()
+	h.trackerProject(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestTrackerMilestones_NoTracker(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/proj-1/milestones", http.NoBody)
+	req.SetPathValue("id", "proj-1")
+	w := httptest.NewRecorder()
+	h.trackerMilestones(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestTrackerIssues_NoTracker(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/proj-1/issues", http.NoBody)
+	req.SetPathValue("id", "proj-1")
+	w := httptest.NewRecorder()
+	h.trackerIssues(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestTrackerImport_NoTracker(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	body := map[string]any{"project_id": "proj-1", "repos": []string{"repo1"}, "base_branch": "main"}
+	w := doRequest(h.trackerImport, "POST", "/api/v1/tyr/tracker/import", body)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestTrackerProjects_NoTracker(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	w := doRequest(h.trackerProjects, "GET", "/api/v1/tyr/tracker/projects", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestDispatchClusters(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	w := doRequest(h.dispatchClusters, "GET", "/api/v1/tyr/dispatch/clusters", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(result) != 1 {
+		t.Errorf("expected 1 cluster, got %d", len(result))
+	}
+}
+
+func TestDispatcherLog_NoEventLog(t *testing.T) {
+	h, _ := setupHandler(t)
+	h.eventLog = nil
+
+	w := doRequest(h.dispatcherLog, "GET", "/api/v1/tyr/dispatch/log", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestDispatcherLog_WithEventLog(t *testing.T) {
+	h, _ := setupHandler(t)
+	h.eventLog = NewEventLog(100)
+	h.eventLog.Emit("test.event", nil, "")
+
+	w := doRequest(h.dispatcherLog, "GET", "/api/v1/tyr/dispatch/log", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	total := result["total"].(float64)
+	if total != 1 {
+		t.Errorf("expected total=1, got %v", total)
+	}
+}
+
+func TestHealthDetailed(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	// sqlmock Ping is not monitored by default, so Ping will fail,
+	// resulting in degraded status. This still exercises the full code path.
+	w := doRequest(h.healthDetailed, "GET", "/api/v1/tyr/health", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	// Verify all expected fields are present.
+	for _, field := range []string{"status", "database", "tracker_connected", "activity_subscriber_running", "review_engine_running"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("expected field %q in health response", field)
+		}
+	}
+}
+
+func TestHealthDetailed_WithSubscriberAndReviewer(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	// Set subscriber and reviewer.
+	db, _, _ := sqlmock.New()
+	defer func() { _ = db.Close() }()
+	store := NewStore(db)
+	events := newMockEventSource()
+	h.subscriber = NewActivitySubscriber(store, events, &mockPRChecker{}, nil, SubscriberConfig{})
+	h.reviewer = NewReviewEngine(store, &mockPRChecker{}, nil, nil, ReviewEngineConfig{}, "")
+
+	w := doRequest(h.healthDetailed, "GET", "/api/v1/tyr/health", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestDispatchQueue_StoreError(t *testing.T) {
+	h, mock := setupHandler(t)
+
+	mock.ExpectQuery("SELECT .+ FROM raids r").
+		WithArgs("test-user", "PENDING").
+		WillReturnError(fmt.Errorf("db error"))
+
+	w := doRequest(h.dispatchQueue, "GET", "/api/v1/tyr/dispatch/queue", nil)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// --- Handler tests with tracker ---
+
+type testTracker struct {
+	projects   []tracker.Project
+	milestones []tracker.Milestone
+	issues     []tracker.Issue
+	projectErr error
+}
+
+func (t *testTracker) ListProjects() ([]tracker.Project, error) { return t.projects, nil }
+func (t *testTracker) GetProject(id string) (*tracker.Project, error) {
+	if t.projectErr != nil {
+		return nil, t.projectErr
+	}
+	for i := range t.projects {
+		if t.projects[i].ID == id {
+			return &t.projects[i], nil
+		}
+	}
+	return nil, fmt.Errorf("not found")
+}
+func (t *testTracker) GetProjectFull(_ string) (*tracker.Project, []tracker.Milestone, []tracker.Issue, error) {
+	if t.projectErr != nil {
+		return nil, nil, nil, t.projectErr
+	}
+	return &t.projects[0], t.milestones, t.issues, nil
+}
+func (t *testTracker) ListMilestones(_ string) ([]tracker.Milestone, error) {
+	return t.milestones, nil
+}
+func (t *testTracker) ListIssues(_ string, _ *string) ([]tracker.Issue, error) {
+	return t.issues, nil
+}
+func (t *testTracker) CreateProject(_, _ string) (string, error)            { return "", nil }
+func (t *testTracker) CreateMilestone(_, _ string, _ float64) (string, error) { return "", nil }
+func (t *testTracker) CreateIssue(_, _, _ string, _ *string, _ *int) (string, error) {
+	return "", nil
+}
+func (t *testTracker) UpdateIssueState(_, _ string) error { return nil }
+func (t *testTracker) AddComment(_, _ string) error       { return nil }
+func (t *testTracker) Close() error                       { return nil }
+
+func setupHandlerWithTracker(t *testing.T) (*Handler, sqlmock.Sqlmock, *testTracker) {
+	t.Helper()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	store := NewStore(db)
+	dispatcher := NewDispatcher("http://localhost:8080")
+
+	msID := "ms-1"
+	trk := &testTracker{
+		projects: []tracker.Project{
+			{ID: "proj-1", Name: "Test Project", Description: "desc", Status: "active", URL: "http://example.com", Slug: "test-proj", Progress: 0.5, MilestoneCount: 1, IssueCount: 2},
+		},
+		milestones: []tracker.Milestone{
+			{ID: "ms-1", ProjectID: "proj-1", Name: "Phase 1", SortOrder: 1, Progress: 0.5},
+		},
+		issues: []tracker.Issue{
+			{ID: "iss-1", Identifier: "TYR-1", Title: "Task 1", Status: "Todo", StatusType: "unstarted", Priority: 1, PriorityLabel: "Urgent", URL: "http://example.com/1", MilestoneID: &msID, Labels: []string{"bug"}},
+			{ID: "iss-2", Identifier: "TYR-2", Title: "Task 2", Status: "Done", StatusType: "completed", Priority: 2, PriorityLabel: "Medium", URL: "http://example.com/2"},
+		},
+	}
+
+	handler := NewHandler(store, dispatcher, trk, nil, "")
+	return handler, mock, trk
+}
+
+func TestGetSaga_WithTracker(t *testing.T) {
+	h, mock, _ := setupHandlerWithTracker(t)
+
+	now := time.Now()
+	sagaRows := sqlmock.NewRows([]string{"id", "tracker_id", "tracker_type", "slug", "name", "repos", "status", "confidence", "owner_id", "base_branch", "created_at"}).
+		AddRow("saga-1", "proj-1", "linear", "test-proj", "Test", pq.Array([]string{"r1"}), "ACTIVE", 0.75, "test-user", "main", now)
+	mock.ExpectQuery("SELECT .+ FROM sagas").
+		WithArgs("saga-1", "test-user").
+		WillReturnRows(sagaRows)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/sagas/saga-1", http.NoBody)
+	req.Header.Set("X-Auth-User-Id", "test-user")
+	req.SetPathValue("id", "saga-1")
+	w := httptest.NewRecorder()
+	h.getSaga(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result SagaDetailResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result.Name != "Test Project" {
+		t.Errorf("expected name from tracker, got %q", result.Name)
+	}
+	if len(result.Phases) < 1 {
+		t.Error("expected at least 1 phase from tracker")
+	}
+}
+
+func TestGetSaga_TrackerError_FallsBackToDB(t *testing.T) {
+	h, mock, trk := setupHandlerWithTracker(t)
+	trk.projectErr = fmt.Errorf("tracker down")
+
+	now := time.Now()
+	sagaRows := sqlmock.NewRows([]string{"id", "tracker_id", "tracker_type", "slug", "name", "repos", "status", "confidence", "owner_id", "base_branch", "created_at"}).
+		AddRow("saga-1", "proj-1", "linear", "test-proj", "Test", pq.Array([]string{"r1"}), "ACTIVE", 0.75, "test-user", "main", now)
+	mock.ExpectQuery("SELECT .+ FROM sagas").
+		WithArgs("saga-1", "test-user").
+		WillReturnRows(sagaRows)
+
+	// Fallback to DB: ListPhases.
+	mock.ExpectQuery("SELECT .+ FROM phases").
+		WithArgs("saga-1").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "saga_id", "tracker_id", "number", "name", "status", "confidence"}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/sagas/saga-1", http.NoBody)
+	req.Header.Set("X-Auth-User-Id", "test-user")
+	req.SetPathValue("id", "saga-1")
+	w := httptest.NewRecorder()
+	h.getSaga(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestTrackerProject_WithTracker(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/proj-1", http.NoBody)
+	req.SetPathValue("id", "proj-1")
+	w := httptest.NewRecorder()
+	h.trackerProject(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestTrackerProject_NotFound(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/nonexistent", http.NoBody)
+	req.SetPathValue("id", "nonexistent")
+	w := httptest.NewRecorder()
+	h.trackerProject(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestTrackerMilestones_WithTracker(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/proj-1/milestones", http.NoBody)
+	req.SetPathValue("id", "proj-1")
+	w := httptest.NewRecorder()
+	h.trackerMilestones(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestTrackerIssues_WithTracker(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/proj-1/issues", http.NoBody)
+	req.SetPathValue("id", "proj-1")
+	w := httptest.NewRecorder()
+	h.trackerIssues(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestTrackerIssues_WithMilestoneFilter(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/tracker/projects/proj-1/issues?milestone_id=ms-1", http.NoBody)
+	req.SetPathValue("id", "proj-1")
+	w := httptest.NewRecorder()
+	h.trackerIssues(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestTrackerProjects_WithTracker(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	w := doRequest(h.trackerProjects, "GET", "/api/v1/tyr/tracker/projects", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestDispatchQueue_WithTracker(t *testing.T) {
+	h, mock, _ := setupHandlerWithTracker(t)
+
+	now := time.Now()
+	sagaRows := sqlmock.NewRows([]string{"id", "tracker_id", "tracker_type", "slug", "name", "repos", "status", "confidence", "owner_id", "base_branch", "created_at"}).
+		AddRow("saga-1", "proj-1", "linear", "test-proj", "Test", pq.Array([]string{"r1"}), "ACTIVE", 0.75, "test-user", "main", now)
+	mock.ExpectQuery("SELECT .+ FROM sagas").
+		WithArgs("test-user").
+		WillReturnRows(sagaRows)
+
+	w := doRequest(h.dispatchQueue, "GET", "/api/v1/tyr/dispatch/queue", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestTrackerImport_WithTracker(t *testing.T) {
+	h, mock, _ := setupHandlerWithTracker(t)
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO sagas").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	body := map[string]any{"project_id": "proj-1", "repos": []string{"repo1"}, "base_branch": "main"}
+	w := doRequest(h.trackerImport, "POST", "/api/v1/tyr/tracker/import", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result["name"] != "Test Project" {
+		t.Errorf("expected name 'Test Project', got %v", result["name"])
+	}
+}
+
+func TestTrackerImport_InvalidBody(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tyr/tracker/import", bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.trackerImport(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestTrackerImport_ProjectNotFound(t *testing.T) {
+	h, _, _ := setupHandlerWithTracker(t)
+
+	body := map[string]any{"project_id": "nonexistent", "repos": []string{"repo1"}, "base_branch": "main"}
+	w := doRequest(h.trackerImport, "POST", "/api/v1/tyr/tracker/import", body)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestEvents_NoFlusher(t *testing.T) {
+	h, _ := setupHandler(t)
+
+	// httptest.ResponseRecorder implements http.Flusher, so this path won't
+	// be hit. Instead, test that the endpoint works when eventLog is nil.
+	h.eventLog = nil
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/events", http.NoBody)
+	ctx, cancel := context.WithTimeout(req.Context(), 50*time.Millisecond)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.events(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestEvents_WithEventLog(t *testing.T) {
+	h, _ := setupHandler(t)
+	h.eventLog = NewEventLog(100)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tyr/events", http.NoBody)
+	ctx, cancel := context.WithTimeout(req.Context(), 50*time.Millisecond)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.events(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if w.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type text/event-stream, got %q", w.Header().Get("Content-Type"))
+	}
+}
+
+func TestDispatchQueue_DBFallback(t *testing.T) {
+	h, mock := setupHandler(t)
+
+	dqCols := []string{"saga_id", "saga_name", "saga_slug", "repos", "feature_branch", "phase_name", "tracker_id", "raid_name", "description", "status"}
+	mock.ExpectQuery("SELECT .+ FROM raids r").
+		WithArgs("test-user", "PENDING").
+		WillReturnRows(sqlmock.NewRows(dqCols).
+			AddRow("saga-1", "Saga", "saga", pq.Array([]string{"r1"}), "feat/saga", "Phase 1", "t-1", "Raid 1", "desc", "PENDING"))
+
+	w := doRequest(h.dispatchQueue, "GET", "/api/v1/tyr/dispatch/queue", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

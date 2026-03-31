@@ -11,9 +11,11 @@ func TestGenerateCodeVerifier(t *testing.T) {
 		verifier, err := GenerateCodeVerifier()
 		if err != nil {
 			t.Fatalf("GenerateCodeVerifier: %v", err)
+			return
 		}
 		if verifier == "" {
 			t.Fatal("expected non-empty verifier")
+			return
 		}
 
 		// RFC 7636 requires 43-128 characters.
@@ -32,10 +34,12 @@ func TestGenerateCodeVerifier(t *testing.T) {
 		v1, err := GenerateCodeVerifier()
 		if err != nil {
 			t.Fatalf("GenerateCodeVerifier: %v", err)
+			return
 		}
 		v2, err := GenerateCodeVerifier()
 		if err != nil {
 			t.Fatalf("GenerateCodeVerifier: %v", err)
+			return
 		}
 		if v1 == v2 {
 			t.Error("expected unique verifiers, got identical values")

@@ -186,6 +186,7 @@ function transformSource(apiSource: ApiSessionResponse['source']): SessionSource
   if (apiSource.type === 'local_mount') {
     return {
       type: 'local_mount',
+      local_path: apiSource.local_path,
       paths: (apiSource.paths ?? []).map(p => ({
         host_path: p.host_path,
         mount_path: p.mount_path,
@@ -570,13 +571,15 @@ export class ApiVolundrService implements IVolundrService {
       const response = await api.get<{
         local_mounts_enabled: boolean;
         file_manager_enabled: boolean;
+        mini_mode: boolean;
       }>('/feature-flags');
       return {
         localMountsEnabled: response.local_mounts_enabled,
         fileManagerEnabled: response.file_manager_enabled ?? true,
+        miniMode: response.mini_mode ?? false,
       };
     } catch {
-      return { localMountsEnabled: false, fileManagerEnabled: true };
+      return { localMountsEnabled: false, fileManagerEnabled: true, miniMode: false };
     }
   }
 

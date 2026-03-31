@@ -29,6 +29,14 @@ type SDKTransport struct {
 
 	// cliSessionID is the Claude Code session ID received from the init message.
 	cliSessionID string
+
+	// onCLIEvent is called for every parsed CLI message, allowing the broker
+	// to intercept and forward events to browser clients.
+	onCLIEvent func(map[string]any)
+
+	// pendingMessages are sent to the CLI after it connects. Used for
+	// initial prompts since --print doesn't work in SDK mode.
+	pendingMessages []map[string]any
 }
 
 // NewSDKTransport creates a transport that listens on the given port.
@@ -44,6 +52,55 @@ func NewSDKTransport(sessionID string, port int, bus EventEmitter) *SDKTransport
 // SDKURL returns the WebSocket URL the CLI should connect to.
 func (t *SDKTransport) SDKURL() string {
 	return fmt.Sprintf("ws://localhost:%d/ws/cli/%s", t.port, t.sessionID)
+}
+
+// SetOnCLIEvent registers a callback invoked for every CLI message.
+// Used by the broker to intercept events for browser forwarding.
+func (t *SDKTransport) SetOnCLIEvent(fn func(map[string]any)) {
+	t.onCLIEvent = fn
+}
+
+// CLISessionID returns the Claude Code session ID captured from the init message.
+func (t *SDKTransport) CLISessionID() string {
+	return t.cliSessionID
+}
+
+// SendUserMessage sends a typed user message to the CLI, accepting any content
+// (string or content block array) and the CLI session ID.
+func (t *SDKTransport) SendUserMessage(content any, cliSessionID string) error {
+	msg := map[string]any{
+		"type": "user",
+		"message": map[string]any{
+			"role":    "user",
+			"content": content,
+		},
+		"parent_tool_use_id": nil,
+		"session_id":         cliSessionID,
+	}
+	return t.sendJSON(msg)
+}
+
+// SendControlResponse sends a control_response message to the CLI.
+func (t *SDKTransport) SendControlResponse(response map[string]any) error {
+	msg := map[string]any{
+		"type":     "control_response",
+		"response": response,
+	}
+	return t.sendJSON(msg)
+}
+
+// QueueInitialPrompt queues an initial prompt to be sent to the CLI
+// after it connects. This replaces --print which doesn't work in SDK mode.
+func (t *SDKTransport) QueueInitialPrompt(prompt string) {
+	t.pendingMessages = append(t.pendingMessages, map[string]any{
+		"type": "user",
+		"message": map[string]any{
+			"role":    "user",
+			"content": prompt,
+		},
+		"parent_tool_use_id": nil,
+		"session_id":         "",
+	})
 }
 
 // Port returns the actual listening port (useful when port 0 is used).
@@ -149,8 +206,39 @@ func (t *SDKTransport) handleCLIConnect(w http.ResponseWriter, r *http.Request) 
 		close(t.ready)
 	}
 
+	// Flush pending messages (initial prompt) to the CLI.
+	if len(t.pendingMessages) > 0 {
+		log.Printf("sdk transport: flushing %d pending messages to CLI", len(t.pendingMessages))
+		for _, msg := range t.pendingMessages {
+			if err := t.sendJSON(msg); err != nil {
+				log.Printf("sdk transport: flush pending message: %v", err)
+			}
+			// Also emit to broker so the message appears in conversation history.
+			if t.onCLIEvent != nil {
+				t.onCLIEvent(msg)
+			}
+		}
+		t.pendingMessages = nil
+	}
+
+	// Send keep-alive pings every 10 seconds to keep the CLI connection alive.
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				_ = t.sendJSON(map[string]any{"type": "keep_alive"})
+			}
+		}
+	}()
+
 	// Read messages from CLI.
 	t.receiveLoop(conn)
+	close(done)
 }
 
 func (t *SDKTransport) receiveLoop(conn *websocket.Conn) {
@@ -185,6 +273,10 @@ func (t *SDKTransport) receiveLoop(conn *websocket.Conn) {
 			}
 
 			t.handleCLIMessage(data)
+
+			if t.onCLIEvent != nil {
+				t.onCLIEvent(data)
+			}
 		}
 	}
 }
@@ -213,6 +305,7 @@ func (t *SDKTransport) handleCLIMessage(data map[string]any) {
 	case "assistant":
 		t.emitActivity(ActivityStateActive)
 	case "result":
+		t.emitActivity(ActivityStateTurnComplete)
 		t.emitActivity(ActivityStateIdle)
 	}
 

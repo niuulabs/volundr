@@ -38,6 +38,7 @@ RUN chmod +x ./download-reh.sh && \
 # ---------------------------------------------------------------------------
 FROM ubuntu:24.04
 
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \

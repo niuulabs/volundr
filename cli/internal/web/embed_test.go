@@ -55,6 +55,7 @@ func TestHandlerConfigJSON(t *testing.T) {
 
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected status 200, got %d", w.Code)
+				return
 			}
 
 			ct := w.Header().Get("Content-Type")
@@ -70,6 +71,7 @@ func TestHandlerConfigJSON(t *testing.T) {
 			var result RuntimeConfig
 			if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 				t.Fatalf("failed to unmarshal config.json: %v", err)
+				return
 			}
 
 			if result.APIBaseURL != tc.wantAPIURL {
@@ -106,6 +108,7 @@ func TestHandlerConfigJSONOIDCFields(t *testing.T) {
 	var result RuntimeConfig
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
+		return
 	}
 
 	if result.OIDC.Authority != "https://auth.example.com" {
@@ -134,6 +137,7 @@ func TestHandlerRootServesIndexHTML(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", w.Code)
+		return
 	}
 
 	ct := w.Header().Get("Content-Type")
@@ -220,6 +224,7 @@ func TestSPAHandlerStaticAssetCaching(t *testing.T) {
 
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected status 200, got %d", w.Code)
+				return
 			}
 
 			cc := w.Header().Get("Cache-Control")
@@ -260,12 +265,14 @@ func TestDistFSReturnsValidFS(t *testing.T) {
 	assets := distFS()
 	if assets == nil {
 		t.Fatal("distFS() returned nil")
+		return
 	}
 
 	// index.html must exist in the returned filesystem.
 	f, err := assets.Open("index.html")
 	if err != nil {
 		t.Fatalf("expected index.html to exist in distFS: %v", err)
+		return
 	}
 	_ = f.Close()
 }
@@ -276,6 +283,7 @@ func TestDistFSIndexHTMLContent(t *testing.T) {
 	data, err := fs.ReadFile(assets, "index.html")
 	if err != nil {
 		t.Fatalf("failed to read index.html: %v", err)
+		return
 	}
 
 	if len(data) == 0 {
@@ -298,6 +306,7 @@ func TestHandlerServesExistingStaticFile(t *testing.T) {
 
 	if w.Code != http.StatusMovedPermanently {
 		t.Fatalf("expected status 301 (redirect to /), got %d", w.Code)
+		return
 	}
 
 	loc := w.Header().Get("Location")
@@ -338,6 +347,7 @@ func TestRuntimeConfigJSONSerialization(t *testing.T) {
 			data, err := json.Marshal(tc.cfg)
 			if err != nil {
 				t.Fatalf("json.Marshal() error: %v", err)
+				return
 			}
 
 			s := string(data)
@@ -388,6 +398,7 @@ func TestOIDCConfigOmitEmpty(t *testing.T) {
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("json.Marshal() error: %v", err)
+		return
 	}
 
 	s := string(data)

@@ -94,6 +94,7 @@ func TestResolveAuthConfig_FlagIssuerOnly(t *testing.T) {
 	issuer, clientID, err := resolveAuthConfig(rctx)
 	if err != nil {
 		t.Fatalf("resolveAuthConfig: %v", err)
+		return
 	}
 	if issuer != "https://flag-issuer.com" {
 		t.Errorf("expected flag issuer, got %q", issuer)
@@ -122,6 +123,7 @@ func TestResolveAuthConfig_FlagClientIDOnly(t *testing.T) {
 	issuer, clientID, err := resolveAuthConfig(rctx)
 	if err != nil {
 		t.Fatalf("resolveAuthConfig: %v", err)
+		return
 	}
 	if issuer != "https://saved-issuer.com" {
 		t.Errorf("expected saved issuer, got %q", issuer)
@@ -155,6 +157,7 @@ func TestResolveAuthConfig_DiscoveryFromServer(t *testing.T) {
 	issuer, clientID, err := resolveAuthConfig(rctx)
 	if err != nil {
 		t.Fatalf("resolveAuthConfig: %v", err)
+		return
 	}
 	if issuer != "https://discovered-issuer.com" {
 		t.Errorf("expected discovered issuer, got %q", issuer)
@@ -188,6 +191,7 @@ func TestResolveAuthConfig_DiscoveryFails_FallsBackToSaved(t *testing.T) {
 	issuer, clientID, err := resolveAuthConfig(rctx)
 	if err != nil {
 		t.Fatalf("resolveAuthConfig: %v", err)
+		return
 	}
 	if issuer != "https://saved-issuer.com" {
 		t.Errorf("expected saved issuer, got %q", issuer)
@@ -225,6 +229,7 @@ func TestTryAuthDiscovery_SuccessfulDiscovery(t *testing.T) {
 	result := tryAuthDiscovery(rctx)
 	if result == nil {
 		t.Fatal("expected non-nil result")
+		return
 	}
 	if result.Issuer != "https://idp.example.com" {
 		t.Errorf("expected issuer %q, got %q", "https://idp.example.com", result.Issuer)
@@ -256,6 +261,7 @@ func TestSortedContextKeys_TableDriven(t *testing.T) {
 			got := sortedContextKeys(cfg)
 			if len(got) != len(tt.expected) {
 				t.Fatalf("expected %d keys, got %d", len(tt.expected), len(got))
+				return
 			}
 			for i, k := range got {
 				if k != tt.expected[i] {
@@ -290,6 +296,7 @@ func TestLoginAllContexts_AllSkipped_ValidTokens(t *testing.T) {
 	err := loginAllContexts(cfg)
 	if err != nil {
 		t.Fatalf("loginAllContexts: %v", err)
+		return
 	}
 }
 
@@ -308,6 +315,7 @@ func TestLoginAllContexts_SkipNoServer(t *testing.T) {
 	err := loginAllContexts(cfg)
 	if err != nil {
 		t.Fatalf("loginAllContexts: %v", err)
+		return
 	}
 }
 
@@ -339,6 +347,7 @@ func TestLoginAllContexts_SkipNoAuth(t *testing.T) {
 	err := loginAllContexts(cfg)
 	if err != nil {
 		t.Fatalf("loginAllContexts: %v", err)
+		return
 	}
 }
 
@@ -380,6 +389,7 @@ func TestLoginAllContexts_MixedSkippedAndNoAuth(t *testing.T) {
 	err := loginAllContexts(cfg)
 	if err != nil {
 		t.Fatalf("loginAllContexts: %v", err)
+		return
 	}
 }
 
@@ -412,6 +422,7 @@ func TestLoginCmd_MultipleContexts_CallsLoginAll(t *testing.T) {
 	err := loginCmd.RunE(loginCmd, nil)
 	if err != nil {
 		t.Fatalf("login (multi-context): %v", err)
+		return
 	}
 }
 
@@ -444,6 +455,7 @@ func TestLoginCmd_SingleContext_NoIssuer(t *testing.T) {
 	err := loginCmd.RunE(loginCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when no auth config available")
+		return
 	}
 }
 
@@ -457,5 +469,6 @@ func TestLoginCmd_NoContexts(t *testing.T) {
 	err := loginCmd.RunE(loginCmd, nil)
 	if err == nil {
 		t.Fatal("expected error when no contexts configured")
+		return
 	}
 }

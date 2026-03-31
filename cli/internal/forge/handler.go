@@ -1,23 +1,33 @@
 package forge
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os/exec"
+	"strings"
+	"time"
 
+	"github.com/niuulabs/volundr/cli/internal/broker"
 	"github.com/niuulabs/volundr/cli/internal/httputil"
+	"github.com/niuulabs/volundr/cli/internal/tracker"
 )
 
 // Handler holds the HTTP handlers for the Volundr-compatible REST API.
 type Handler struct {
-	runner SessionRunner
+	runner  SessionRunner
+	cfg     *Config
+	tracker tracker.Tracker // nil if no tracker configured
 }
 
 // NewHandler creates a new API handler.
-func NewHandler(runner SessionRunner) *Handler {
+func NewHandler(runner SessionRunner, cfg *Config, t tracker.Tracker) *Handler {
 	return &Handler{
-		runner: runner,
+		runner:  runner,
+		cfg:     cfg,
+		tracker: t,
 	}
 }
 
@@ -33,9 +43,38 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/volundr/sessions/{id}/messages", h.sendMessage)
 	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/pr", h.getPRStatus)
 	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/chronicle", h.getChronicle)
+	mux.HandleFunc("GET /api/v1/volundr/sessions/{id}/logs", h.getSessionLogs)
+	mux.HandleFunc("GET /api/v1/volundr/chronicles/{session_id}/timeline", h.getChronicleTimeline)
 	mux.HandleFunc("GET /api/v1/volundr/stats", h.getStats)
 	mux.HandleFunc("GET /api/v1/volundr/me", h.getMe)
 	mux.HandleFunc("GET /health", h.health)
+
+	// Mini-mode endpoints — the full Volundr API serves these via
+	// the Python backend but Forge implements the subset the web UI
+	// needs to boot and launch sessions from local folders.
+	mux.HandleFunc("GET /api/v1/volundr/models", h.listModels)
+	mux.HandleFunc("GET /api/v1/volundr/feature-flags", h.featureFlags)
+	mux.HandleFunc("GET /api/v1/volundr/features", h.featureModules)
+	mux.HandleFunc("GET /api/v1/volundr/features/preferences", emptyJSON)
+	mux.HandleFunc("PUT /api/v1/volundr/features/preferences", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/templates", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/presets", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/mcp-servers", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/secrets", emptyJSON)
+	mux.HandleFunc("GET /api/v1/niuu/repos", h.listRepos)
+	mux.HandleFunc("GET /api/v1/volundr/issues/search", h.searchIssues)
+	mux.HandleFunc("GET /api/v1/volundr/workspaces", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/credentials", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/integrations", emptyJSON)
+	mux.HandleFunc("GET /api/v1/volundr/resources", h.clusterResources)
+
+	// Per-session broker routes (skuld-mini).
+	mux.HandleFunc("GET /s/{session_id}/session", h.brokerWebSocket)
+	mux.HandleFunc("GET /s/{session_id}/api/conversation/history", h.brokerConversationHistory)
+	mux.HandleFunc("POST /s/{session_id}/api/message", h.brokerInjectMessage)
+	mux.HandleFunc("GET /s/{session_id}/api/diff/files", h.brokerDiffFiles)
+	mux.HandleFunc("GET /s/{session_id}/api/diff", h.brokerDiff)
+	mux.HandleFunc("GET /s/{session_id}/health", h.brokerHealth)
 }
 
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
@@ -228,6 +267,14 @@ func (h *Handler) streamActivity(w http.ResponseWriter, r *http.Request) {
 			}
 			data, _ := json.Marshal(event)
 			_, _ = fmt.Fprintf(w, "event: session_activity\ndata: %s\n\n", data)
+
+			// Also emit session_updated so the UI picks up status transitions
+			// (starting → running, running → stopped, etc.).
+			if sess := h.runner.GetSession(event.SessionID); sess != nil {
+				sessData, _ := json.Marshal(sess.ToResponse())
+				_, _ = fmt.Fprintf(w, "event: session_updated\ndata: %s\n\n", sessData)
+			}
+
 			flusher.Flush()
 		}
 	}
@@ -253,4 +300,368 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// emptyJSON returns an empty JSON array. Used for endpoints the web UI
+// expects but Forge doesn't need to populate in mini mode.
+func emptyJSON(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, []any{})
+}
+
+// listRepos returns repositories from configured GitHub instances.
+func (h *Handler) listRepos(w http.ResponseWriter, _ *http.Request) {
+	repos := fetchGitHubRepos(h.cfg)
+	if repos == nil {
+		repos = map[string][]GitHubRepo{}
+	}
+	httputil.WriteJSON(w, http.StatusOK, repos)
+}
+
+// searchIssues searches Linear issues for the launch wizard tracker link.
+func (h *Handler) searchIssues(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	// Search across all projects — fetch first 50 and filter by query.
+	projects, err := h.tracker.ListProjects()
+	if err != nil {
+		httputil.WriteJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	var results []map[string]any
+	query = strings.ToLower(query)
+	for i := range projects {
+		p := &projects[i]
+		issues, err := h.tracker.ListIssues(p.ID, nil)
+		if err != nil {
+			continue
+		}
+		for i := range issues {
+			if strings.Contains(strings.ToLower(issues[i].Title), query) ||
+				strings.Contains(strings.ToLower(issues[i].Identifier), query) {
+				results = append(results, map[string]any{
+					"id":         issues[i].ID,
+					"identifier": issues[i].Identifier,
+					"title":      issues[i].Title,
+					"status":     issues[i].Status,
+					"assignee":   issues[i].Assignee,
+					"labels":     issues[i].Labels,
+					"priority":   issues[i].Priority,
+					"url":        issues[i].URL,
+				})
+			}
+			if len(results) >= 20 {
+				break
+			}
+		}
+		if len(results) >= 20 {
+			break
+		}
+	}
+
+	if results == nil {
+		results = []map[string]any{}
+	}
+	httputil.WriteJSON(w, http.StatusOK, results)
+}
+
+// listModels returns the available AI models from configuration.
+func (h *Handler) listModels(w http.ResponseWriter, _ *http.Request) {
+	models := h.cfg.AIModels
+	if len(models) == 0 {
+		models = []AIModelEntry{
+			{ID: "claude-sonnet-4-6", Name: "Sonnet 4.6"},
+		}
+	}
+	httputil.WriteJSON(w, http.StatusOK, models)
+}
+
+func (h *Handler) getChronicleTimeline(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("session_id")
+	sess := h.runner.GetSession(sessionID)
+	if sess == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{
+			"events": []any{}, "files": []any{}, "commits": []any{}, "token_burn": []int{},
+		})
+		return
+	}
+
+	brk := h.runner.GetBroker(sessionID)
+	history := brk.ConversationHistory()
+	turns, _ := history["turns"].([]broker.ConversationTurn)
+
+	sessionStart := sess.CreatedAt
+	var events []map[string]any
+	var tokenBurn []int
+	totalTokens := 0
+
+	// Session start event.
+	events = append(events, map[string]any{
+		"t": 0, "type": "session", "label": "Session started",
+	})
+
+	// Build events from conversation turns.
+	for _, turn := range turns {
+		t, err := time.Parse(time.RFC3339, turn.CreatedAt)
+		if err != nil {
+			continue
+		}
+		elapsed := int(t.Sub(sessionStart).Seconds())
+		if elapsed < 0 {
+			elapsed = 0
+		}
+
+		switch turn.Role {
+		case "user":
+			events = append(events, map[string]any{
+				"t": elapsed, "type": "message", "label": truncate(turn.Content, 80),
+			})
+		case "assistant":
+			tokens := 0
+			if usage, ok := turn.Metadata["usage"].(map[string]any); ok {
+				for _, modelUsage := range usage {
+					if mu, ok := modelUsage.(map[string]any); ok {
+						if out, ok := mu["outputTokens"].(float64); ok {
+							tokens += int(out)
+						}
+						if in, ok := mu["inputTokens"].(float64); ok {
+							tokens += int(in)
+						}
+					}
+				}
+			}
+			totalTokens += tokens
+			ev := map[string]any{
+				"t": elapsed, "type": "message", "label": truncate(turn.Content, 80),
+			}
+			if tokens > 0 {
+				ev["tokens"] = tokens
+			}
+			events = append(events, ev)
+		}
+	}
+
+	// Token burn: single bucket with total.
+	if totalTokens > 0 {
+		tokenBurn = append(tokenBurn, totalTokens)
+	}
+
+	// Git commits from workspace.
+	var commits []map[string]string
+	var files []map[string]any
+	if sess.WorkspaceDir != "" {
+		commits, files, events = appendGitData(sess.WorkspaceDir, sessionStart, events)
+	}
+
+	if commits == nil {
+		commits = []map[string]string{}
+	}
+	if files == nil {
+		files = []map[string]any{}
+	}
+	if tokenBurn == nil {
+		tokenBurn = []int{}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"events":     events,
+		"files":      files,
+		"commits":    commits,
+		"token_burn": tokenBurn,
+	})
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+func appendGitData(workspaceDir string, sessionStart time.Time, events []map[string]any) (commits []map[string]string, files, enrichedEvents []map[string]any) {
+	enrichedEvents = events
+
+	// Get commits since session start.
+	sinceArg := fmt.Sprintf("--since=%s", sessionStart.Format(time.RFC3339))
+	cmd := exec.CommandContext(context.Background(), "git", "log", sinceArg, "--pretty=format:%h|%s|%H", "--reverse") //nolint:gosec // format string is fixed
+	cmd.Dir = workspaceDir
+	out, err := cmd.Output()
+	if err == nil && len(out) > 0 {
+		for _, line := range strings.Split(string(out), "\n") {
+			parts := strings.SplitN(line, "|", 3)
+			if len(parts) < 2 {
+				continue
+			}
+			commits = append(commits, map[string]string{
+				"hash": parts[0],
+				"msg":  parts[1],
+				"time": time.Now().Format("15:04"),
+			})
+			enrichedEvents = append(enrichedEvents, map[string]any{
+				"t": 0, "type": "git", "label": parts[1], "hash": parts[0],
+			})
+		}
+	}
+
+	// Get changed files.
+	cmd = exec.CommandContext(context.Background(), "git", "diff", "--stat", "--name-status", "HEAD~1") //nolint:gosec // fixed args
+	cmd.Dir = workspaceDir
+	out, err = cmd.Output()
+	if err == nil && len(out) > 0 {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				continue
+			}
+			status := "mod"
+			switch parts[0] {
+			case "A":
+				status = "new"
+			case "D":
+				status = "del"
+			case "M":
+				status = "mod"
+			}
+			files = append(files, map[string]any{
+				"path": parts[1], "status": status, "ins": 0, "del": 0,
+			})
+		}
+	}
+
+	return commits, files, enrichedEvents
+}
+
+func (h *Handler) getSessionLogs(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, []any{})
+}
+
+// Per-session broker routes (skuld-mini).
+
+func (h *Handler) brokerWebSocket(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteError(w, http.StatusNotFound, "session not found or not running")
+		return
+	}
+	b.HandleBrowserWS(w, r)
+}
+
+func (h *Handler) brokerConversationHistory(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{"turns": []any{}, "is_active": false})
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, b.ConversationHistory())
+}
+
+func (h *Handler) brokerInjectMessage(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteError(w, http.StatusNotFound, "session not found or not running")
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
+		httputil.WriteError(w, http.StatusBadRequest, "content is required")
+		return
+	}
+
+	if err := b.InjectMessage(req.Content); err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+}
+
+func (h *Handler) brokerDiffFiles(w http.ResponseWriter, r *http.Request) {
+	brk := h.runner.GetBroker(r.PathValue("session_id"))
+	if brk == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{"files": []any{}})
+		return
+	}
+	brk.HandleDiffFiles(w, r)
+}
+
+func (h *Handler) brokerDiff(w http.ResponseWriter, r *http.Request) {
+	brk := h.runner.GetBroker(r.PathValue("session_id"))
+	if brk == nil {
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{"filePath": "", "hunks": []any{}})
+		return
+	}
+	brk.HandleDiff(w, r)
+}
+
+func (h *Handler) brokerHealth(w http.ResponseWriter, r *http.Request) {
+	b := h.runner.GetBroker(r.PathValue("session_id"))
+	if b == nil {
+		httputil.WriteError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"status":     "healthy",
+		"session_id": r.PathValue("session_id"),
+	})
+}
+
+// featureModules returns feature module configuration. In mini mode,
+// code/terminal/files are disabled since there's no container infrastructure.
+func (h *Handler) featureModules(w http.ResponseWriter, r *http.Request) {
+	scope := r.URL.Query().Get("scope")
+
+	var modules []map[string]any
+
+	if scope == "" || scope == "session" {
+		modules = append(modules,
+			map[string]any{"key": "chat", "label": "Chat", "icon": "MessageSquare", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 10},
+			map[string]any{"key": "terminal", "label": "Terminal", "icon": "Terminal", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 20},
+			map[string]any{"key": "code", "label": "Code", "icon": "Code", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 30},
+			map[string]any{"key": "files", "label": "Files", "icon": "FolderOpen", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 40},
+			map[string]any{"key": "diffs", "label": "Diffs", "icon": "GitCompareArrows", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 50},
+			map[string]any{"key": "chronicles", "label": "Chronicles", "icon": "ScrollText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 60},
+			map[string]any{"key": "logs", "label": "Logs", "icon": "FileText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 70},
+		)
+	}
+
+	if scope == "" || scope == "user" {
+		modules = append(modules,
+			map[string]any{"key": "appearance", "label": "Appearance", "icon": "Palette", "scope": "user", "enabled": true, "default_enabled": true, "admin_only": false, "order": 40},
+			map[string]any{"key": "layout", "label": "Layout", "icon": "LayoutDashboard", "scope": "user", "enabled": true, "default_enabled": true, "admin_only": false, "order": 50},
+		)
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, modules)
+}
+
+// clusterResources returns empty resource info for mini mode.
+func (h *Handler) clusterResources(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"resource_types": []any{},
+		"nodes":          []any{},
+	})
+}
+
+// featureFlags returns feature toggles for the web UI based on configuration.
+func (h *Handler) featureFlags(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"local_mounts_enabled": h.cfg.LocalMounts,
+		"file_manager_enabled": true,
+		"mini_mode":            true,
+	})
 }

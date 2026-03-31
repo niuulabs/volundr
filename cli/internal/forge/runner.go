@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/niuulabs/volundr/cli/internal/broker"
 )
 
 // Runner manages session lifecycles: workspace creation, git clone,
@@ -23,9 +26,10 @@ type Runner struct {
 	bus   EventEmitter
 
 	mu         sync.Mutex
-	processes  map[string]*exec.Cmd     // session ID -> Claude Code process
-	transports map[string]*SDKTransport // session ID -> SDK WebSocket transport
-	nextPort   int                      // next SDK port to allocate
+	processes  map[string]*exec.Cmd      // session ID -> Claude Code process
+	transports map[string]*SDKTransport  // session ID -> SDK WebSocket transport
+	brokers    map[string]*broker.Broker // session ID -> browser broker
+	nextPort   int                       // next SDK port to allocate
 }
 
 // Compile-time check that Runner satisfies SessionRunner.
@@ -39,6 +43,7 @@ func NewRunner(cfg *Config, store SessionStore, bus EventEmitter) *Runner {
 		bus:        bus,
 		processes:  make(map[string]*exec.Cmd),
 		transports: make(map[string]*SDKTransport),
+		brokers:    make(map[string]*broker.Broker),
 		nextPort:   cfg.Forge.SDKPortStart,
 	}
 }
@@ -74,17 +79,36 @@ func (r *Runner) CreateAndStart(ctx context.Context, req *CreateSessionRequest, 
 		LastActive:    now,
 	}
 
-	// Create workspace directory.
-	wsDir := filepath.Join(r.cfg.Forge.WorkspacesDir, sess.ID)
-	if err := os.MkdirAll(wsDir, 0o750); err != nil { //nolint:gosec // path from trusted config
-		return nil, fmt.Errorf("create workspace dir: %w", err)
+	// Set workspace directory.
+	if req.Source != nil && req.Source.Type == "local_mount" && req.Source.LocalPath != "" {
+		// Local mount: use the existing directory directly.
+		info, err := os.Stat(req.Source.LocalPath) //nolint:gosec // path from user-provided session config, validated below
+		if err != nil {
+			return nil, fmt.Errorf("local path %q: %w", req.Source.LocalPath, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("local path %q is not a directory", req.Source.LocalPath)
+		}
+		sess.WorkspaceDir = req.Source.LocalPath
+	} else {
+		wsDir := filepath.Join(r.cfg.Forge.WorkspacesDir, sess.ID)
+		if err := os.MkdirAll(wsDir, 0o750); err != nil { //nolint:gosec // path from trusted config
+			return nil, fmt.Errorf("create workspace dir: %w", err)
+		}
+		sess.WorkspaceDir = wsDir
 	}
-	sess.WorkspaceDir = wsDir
+
+	// Set ChatEndpoint eagerly so the UI can start probing immediately.
+	// The actual broker is created during provisioning, but the URL is
+	// deterministic so the probe will succeed once provisioning completes.
+	sess.ChatEndpoint = fmt.Sprintf("ws://%s:%d/s/%s/session",
+		r.cfg.Listen.Host, r.cfg.Listen.Port, sess.ID)
 
 	r.transition(sess, StatusStarting, ActivityStateStarting)
 
-	// Clone repo in background, then start Claude Code.
-	go r.provision(ctx, sess)
+	// Provision in background with a detached context — the HTTP request
+	// context would cancel as soon as the response is sent.
+	go r.provision(context.Background(), sess) //nolint:gosec // detached context is intentional — provisioning must outlive the HTTP request
 
 	return sess, nil
 }
@@ -105,8 +129,13 @@ func (r *Runner) Stop(id string) error {
 	delete(r.processes, id)
 	transport := r.transports[id]
 	delete(r.transports, id)
+	b := r.brokers[id]
+	delete(r.brokers, id)
 	r.mu.Unlock()
 
+	if b != nil {
+		b.Stop()
+	}
 	if transport != nil {
 		transport.Stop()
 	}
@@ -138,10 +167,10 @@ func (r *Runner) Delete(id string) error {
 		_ = r.Stop(id)
 	}
 
-	// Remove workspace directory.
-	if sess.WorkspaceDir != "" {
-		_ = os.RemoveAll(sess.WorkspaceDir) //nolint:gosec // path from trusted session state
-	}
+	// In mini mode, never delete workspaces — the work is local and the
+	// user may want to inspect it. Only k8s mode cleans up workspaces
+	// since sessions run in ephemeral pods.
+	// TODO: make this configurable or add an explicit "clean" flag.
 
 	r.store.Delete(id)
 	return nil
@@ -195,6 +224,13 @@ func (r *Runner) ListSessions() []*Session {
 // GetSession returns a session by ID, or nil if not found.
 func (r *Runner) GetSession(id string) *Session {
 	return r.store.Get(id)
+}
+
+// GetBroker returns the broker for a session, or nil if not found.
+func (r *Runner) GetBroker(id string) *broker.Broker {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.brokers[id]
 }
 
 // GetStats returns aggregate session statistics.
@@ -287,13 +323,44 @@ func (r *Runner) gitClone(ctx context.Context, sess *Session) error {
 		cloneURL = strings.Replace(cloneURL, "https://", "https://x-access-token:"+ghToken+"@", 1)
 	}
 
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
 	args := []string{"clone", "--branch", branch, "--single-branch", "--depth", "50", cloneURL, "."}
 	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // args are from validated session config
 	cmd.Dir = sess.WorkspaceDir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = env
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		// If the branch doesn't exist, try the base branch or default branch.
+		baseBranch := sess.Source.BaseBranch
+		if baseBranch == "" {
+			baseBranch = "main"
+		}
+		if baseBranch != branch {
+			log.Printf("git clone: branch %q not found, trying base branch %q", branch, baseBranch)
+			// Clean workspace for retry.
+			entries, _ := os.ReadDir(sess.WorkspaceDir)
+			for _, e := range entries {
+				_ = os.RemoveAll(filepath.Join(sess.WorkspaceDir, e.Name()))
+			}
+
+			args = []string{"clone", "--branch", baseBranch, "--single-branch", "--depth", "50", cloneURL, "."}
+			cmd = exec.CommandContext(ctx, "git", args...) //nolint:gosec // args from validated config
+			cmd.Dir = sess.WorkspaceDir
+			cmd.Env = env
+			output, err = cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("%s: %w", strings.TrimSpace(string(output)), err)
+			}
+			// Create the feature branch from base.
+			cmd = exec.CommandContext(ctx, "git", "checkout", "-b", branch) //nolint:gosec // branch from session config
+			cmd.Dir = sess.WorkspaceDir
+			if out, err := cmd.CombinedOutput(); err != nil {
+				log.Printf("git checkout -b %s: %s", branch, strings.TrimSpace(string(out)))
+			}
+			return nil
+		}
 		return fmt.Errorf("%s: %w", strings.TrimSpace(string(output)), err)
 	}
 
@@ -365,11 +432,20 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 		return fmt.Errorf("start sdk transport: %w", err)
 	}
 
+	// Create browser broker for this session.
+	b := broker.NewBroker(sess.ID, transport, sess.WorkspaceDir)
+	transport.SetOnCLIEvent(b.OnCLIEvent)
+
+	r.mu.Lock()
+	r.brokers[sess.ID] = b
+	r.mu.Unlock()
+
 	args := []string{
 		"--sdk-url", transport.SDKURL(),
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
 		"--verbose",
+		"--permission-mode", "bypassPermissions",
 	}
 	if sess.Model != "" {
 		args = append(args, "--model", sess.Model)
@@ -377,8 +453,10 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 	if sess.SystemPrompt != "" {
 		args = append(args, "--append-system-prompt", sess.SystemPrompt)
 	}
+	// Initial prompt is sent via WebSocket after CLI connects (not --print,
+	// which doesn't work in SDK mode). Queue it on the transport.
 	if sess.InitialPrompt != "" {
-		args = append(args, "--print", sess.InitialPrompt)
+		transport.QueueInitialPrompt(sess.InitialPrompt)
 	}
 
 	cmd := exec.CommandContext(ctx, claudeBin, args...) //nolint:gosec // binary path from trusted config

@@ -23,6 +23,7 @@ func TestNewServer_MissingDSN(t *testing.T) {
 	_, err := NewServer(cfg)
 	if err == nil {
 		t.Fatal("expected error for missing DSN")
+		return
 	}
 }
 
@@ -49,12 +50,13 @@ func TestRegisterRoutes_Integration(t *testing.T) {
 	db, _, err := sqlmockNew()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
-	handler := NewHandler(store, dispatcher)
+	handler := NewHandler(store, dispatcher, nil, nil, "")
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -68,10 +70,12 @@ func TestMigrationsFS_Embedded(t *testing.T) {
 	entries, err := sqlFS.ReadDir("sql")
 	if err != nil {
 		t.Fatalf("read embedded sql dir: %v", err)
+		return
 	}
 
 	if len(entries) == 0 {
 		t.Fatal("expected embedded migration files")
+		return
 	}
 
 	foundInitial := false
@@ -89,6 +93,7 @@ func TestMigrationsFS_AllFilesReadable(t *testing.T) {
 	entries, err := sqlFS.ReadDir("sql")
 	if err != nil {
 		t.Fatalf("read embedded sql dir: %v", err)
+		return
 	}
 
 	for _, e := range entries {
@@ -114,6 +119,7 @@ func TestServerClose_WithDB(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	mock.ExpectClose()
 
@@ -127,6 +133,7 @@ func TestServerStore(t *testing.T) {
 	db, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -141,12 +148,13 @@ func TestServerRegisterRoutes(t *testing.T) {
 	db, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
 	store := NewStore(db)
 	dispatcher := NewDispatcher("http://localhost:8080")
-	handler := NewHandler(store, dispatcher)
+	handler := NewHandler(store, dispatcher, nil, nil, "")
 	srv := &Server{handler: handler}
 
 	mux := http.NewServeMux()
@@ -168,6 +176,7 @@ func TestServerRunMigrations_SubFSError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -185,6 +194,7 @@ func TestServerRunMigrations_SubFSError(t *testing.T) {
 	applied, err := srv.RunMigrations(context.Background())
 	if err != nil {
 		t.Fatalf("RunMigrations error: %v", err)
+		return
 	}
 	if applied != 0 {
 		t.Errorf("expected 0 applied, got %d", applied)
@@ -195,6 +205,7 @@ func TestRunMigrationsFS_Success(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -206,6 +217,7 @@ func TestRunMigrationsFS_Success(t *testing.T) {
 	entries, err := sqlFS.ReadDir("sql")
 	if err != nil {
 		t.Fatalf("read sql dir: %v", err)
+		return
 	}
 
 	// For each .up.sql file, expect a check + apply
@@ -225,11 +237,13 @@ func TestRunMigrationsFS_Success(t *testing.T) {
 	subFS, err2 := fs.Sub(sqlFS, "sql")
 	if err2 != nil {
 		t.Fatalf("sub fs: %v", err2)
+		return
 	}
 
 	applied, err := postgres.RunMigrationsWithFSTable(context.Background(), db, subFS, "tyr_schema_migrations")
 	if err != nil {
 		t.Fatalf("runMigrationsFS error: %v", err)
+		return
 	}
 	// All migrations marked as already applied
 	if applied != 0 {
@@ -241,6 +255,7 @@ func TestRunMigrationsFS_ApplyNew(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer func() { _ = db.Close() }()
 
@@ -272,6 +287,7 @@ func TestRunMigrationsFS_ApplyNew(t *testing.T) {
 	applied, err := postgres.RunMigrationsWithFSTable(context.Background(), db, subFS, "tyr_schema_migrations")
 	if err != nil {
 		t.Fatalf("runMigrationsFS error: %v", err)
+		return
 	}
 	if applied != migrationCount {
 		t.Errorf("expected %d applied, got %d", migrationCount, applied)

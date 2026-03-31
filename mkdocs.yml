@@ -46,10 +46,12 @@ nav:
   - Home: index.md
   - Getting Started:
       - Quick Start: getting-started/quick-start.md
+      - Local Quickstart: getting-started/local-quickstart.md
       - Installation: getting-started/installation.md
       - Your First Session: getting-started/first-session.md
       - Configuration: getting-started/configuration.md
       - Running: getting-started/running.md
+      - Troubleshooting: getting-started/troubleshooting.md
   - User Guide:
       - Sessions: user-guide/sessions.md
       - Templates & Profiles: user-guide/templates.md

@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/niuulabs/volundr/cli/internal/broker"
 )
 
 // Sentinel errors for typed error handling in handlers.
@@ -19,6 +21,7 @@ var (
 const (
 	ActivityStateActive        = "active"
 	ActivityStateIdle          = "idle"
+	ActivityStateTurnComplete  = "turn_complete"
 	ActivityStateStarting      = "starting"
 	ActivityStateToolExecuting = "tool_executing"
 	ActivityStateNone          = "none"
@@ -53,6 +56,7 @@ type SessionRunner interface {
 
 	ListSessions() []*Session
 	GetSession(id string) *Session
+	GetBroker(id string) *broker.Broker
 	GetStats() StatsResponse
 	GetPRStatus(id string) (PRStatusResponse, error)
 	GetChronicle(id string) (string, error)
@@ -66,9 +70,10 @@ type SessionRunner interface {
 // SessionSource describes where the session code comes from.
 type SessionSource struct {
 	Type       string `json:"type"`
-	Repo       string `json:"repo"`
-	Branch     string `json:"branch"`
+	Repo       string `json:"repo,omitempty"`
+	Branch     string `json:"branch,omitempty"`
 	BaseBranch string `json:"base_branch,omitempty"`
+	LocalPath  string `json:"local_path,omitempty"`
 }
 
 // CreateSessionRequest matches the body Tyr sends to POST /api/v1/volundr/sessions.

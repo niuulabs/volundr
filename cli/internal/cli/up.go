@@ -16,6 +16,7 @@ import (
 	"github.com/niuulabs/volundr/cli/internal/config"
 	"github.com/niuulabs/volundr/cli/internal/forge"
 	"github.com/niuulabs/volundr/cli/internal/postgres"
+	"github.com/niuulabs/volundr/cli/internal/preflight"
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
 
@@ -90,6 +91,10 @@ func runUp(_ *cobra.Command, _ []string) error {
 }
 
 func runMiniMode(cfg *config.Config) error {
+	if err := runUpPreflightChecks(cfg); err != nil {
+		return err
+	}
+
 	// Start embedded PostgreSQL if tyr-mini is enabled.
 	if cfg.Volundr.Tyr.Enabled {
 		pg := postgres.New(cfg)
@@ -115,6 +120,52 @@ func runMiniMode(cfg *config.Config) error {
 
 	fmt.Printf("\nStarting Volundr (mode: mini)...\n")
 	return srv.Run(context.Background())
+}
+
+// runUpPreflightChecks validates mini-mode prerequisites before starting.
+// Returns an error for hard failures; prints warnings for soft issues.
+func runUpPreflightChecks(cfg *config.Config) error {
+	claudeBin := claudeBinaryName(cfg)
+
+	// Hard failure: claude binary must be available.
+	cr := preflight.CheckBinary(claudeBin)
+	if !cr.OK {
+		return fmt.Errorf("%s\n\n%s", cr.Message, installInstructions("claude"))
+	}
+
+	// Hard failure: listen port must be available.
+	fs := cfg.Volundr.Forge
+	host, portStr, err := net.SplitHostPort(fs.Listen)
+	if err != nil {
+		return fmt.Errorf("invalid forge listen address %q: %w", fs.Listen, err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return fmt.Errorf("invalid forge listen port %q: %w", portStr, err)
+	}
+	pr := preflight.CheckPortAvailable(host, port)
+	if !pr.OK {
+		return fmt.Errorf("%s\n\nAnother process is using this port.\nEither stop that process or change the port in ~/.niuu/config.yaml:\n  volundr:\n    forge:\n      listen: \"%s:%d\"",
+			pr.Message, host, port+1)
+	}
+
+	// Hard failure: workspace directory must be writable.
+	workspace := expandHome(fs.Workspace)
+	dr := preflight.CheckDirWritable(workspace)
+	if !dr.OK {
+		return fmt.Errorf("%s\n\nEnsure the directory exists and is writable, or change it in ~/.niuu/config.yaml:\n  volundr:\n    forge:\n      workspace: /path/to/workspaces",
+			dr.Message)
+	}
+
+	// Soft warning: API key.
+	ar := preflight.CheckAPIKeySet(cfg.Anthropic.APIKey)
+	if !ar.OK {
+		fmt.Printf("Warning: %s\n", ar.Message)
+		fmt.Println("  Set it via 'niuu volundr init' or the ANTHROPIC_API_KEY environment variable.")
+		fmt.Println()
+	}
+
+	return nil
 }
 
 func runK3sMode(cfg *config.Config) error {
@@ -204,8 +255,42 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 	if cfg.Volundr.Tyr.Enabled {
 		forgeCfg.Tyr.DatabaseDSN = cfg.DSN()
 	}
+	forgeCfg.Tyr.LinearAPIKey = cfg.Linear.APIKey
+	forgeCfg.Tyr.LinearTeamID = cfg.Linear.TeamID
+	forgeCfg.Tyr.DefaultSystemPrompt = cfg.Volundr.Tyr.DefaultSystemPrompt
+	forgeCfg.Tyr.ReviewerSystemPrompt = cfg.Volundr.Tyr.ReviewerSystemPrompt
+	forgeCfg.Tyr.ReviewerModel = cfg.Volundr.Tyr.ReviewerModel
+
+	// GitHub instances for repo listing.
+	for _, inst := range cfg.Git.GitHub.Instances {
+		forgeCfg.GitHub = append(forgeCfg.GitHub, forge.GitHubInstance{
+			Name:     inst.Name,
+			BaseURL:  inst.BaseURL,
+			Token:    inst.Token,
+			TokenEnv: inst.TokenEnv,
+			Orgs:     inst.Orgs,
+		})
+	}
+	// Also check env var as fallback.
+	if forgeCfg.Tyr.LinearAPIKey == "" {
+		forgeCfg.Tyr.LinearAPIKey = os.Getenv("LINEAR_API_KEY")
+	}
+
+	// Local mounts and AI models.
+	forgeCfg.LocalMounts = cfg.LocalMounts.Enabled
+	for _, m := range cfg.AIModels {
+		forgeCfg.AIModels = append(forgeCfg.AIModels, forge.AIModelEntry{ID: m.ID, Name: m.Name})
+	}
 
 	return forgeCfg, nil
+}
+
+// claudeBinaryName returns the configured claude binary name, defaulting to "claude".
+func claudeBinaryName(cfg *config.Config) string {
+	if cfg.Volundr.Forge.ClaudeBinary != "" {
+		return cfg.Volundr.Forge.ClaudeBinary
+	}
+	return "claude"
 }
 
 // expandHome replaces a leading ~/ with the user's home directory.

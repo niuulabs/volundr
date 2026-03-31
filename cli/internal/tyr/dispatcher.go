@@ -54,7 +54,10 @@ type ForgeSessionResponse struct {
 
 // SpawnSession calls Forge's POST /api/v1/volundr/sessions to create a session for a raid.
 func (d *Dispatcher) SpawnSession(ctx context.Context, raid *Raid, saga *Saga, model string) (*ForgeSessionResponse, error) {
-	raidBranch := strings.ToLower(raid.TrackerID)
+	raidBranch := strings.ToLower(raid.Identifier)
+	if raidBranch == "" {
+		raidBranch = strings.ToLower(raid.TrackerID)
+	}
 	if raidBranch == "" {
 		raidBranch = raid.ID[:8]
 	}
@@ -81,7 +84,8 @@ func (d *Dispatcher) SpawnSession(ctx context.Context, raid *Raid, saga *Saga, m
 			BaseBranch: saga.BaseBranch,
 		},
 		InitialPrompt: prompt,
-		IssueID:       raid.TrackerID,
+		IssueID:       raid.Identifier,
+		IssueURL:      raid.URL,
 	}
 
 	body, err := json.Marshal(req)
@@ -119,7 +123,11 @@ func (d *Dispatcher) SpawnSession(ctx context.Context, raid *Raid, saga *Saga, m
 // buildDispatchPrompt creates the initial prompt for a dispatch session.
 func buildDispatchPrompt(raid *Raid, repo, featureBranch, raidBranch string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Task: %s — %s\n\n", raid.TrackerID, raid.Name)
+	identifier := raid.Identifier
+	if identifier == "" {
+		identifier = raid.TrackerID
+	}
+	fmt.Fprintf(&b, "# Task: %s — %s\n\n", identifier, raid.Name)
 
 	if raid.Description != "" {
 		fmt.Fprintf(&b, "%s\n\n", raid.Description)

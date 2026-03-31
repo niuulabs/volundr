@@ -36,6 +36,7 @@ func TestRunner_CreateAndStart_CreatesWorkspace(t *testing.T) {
 	sess, err := runner.CreateAndStart(context.Background(), &req, "test-user")
 	if err != nil {
 		t.Fatalf("CreateAndStart: %v", err)
+		return
 	}
 
 	if sess.ID == "" {
@@ -57,6 +58,7 @@ func TestRunner_CreateAndStart_CreatesWorkspace(t *testing.T) {
 	stored := store.Get(sess.ID)
 	if stored == nil {
 		t.Fatal("expected session in store")
+		return
 	}
 	// Status should be starting or provisioning (async).
 	if stored.Status != StatusStarting && stored.Status != StatusProvisioning &&
@@ -105,11 +107,13 @@ func TestRunner_Stop_UpdatesStatus(t *testing.T) {
 
 	if err := runner.Stop("sess-1"); err != nil {
 		t.Fatalf("Stop: %v", err)
+		return
 	}
 
 	sess := store.Get("sess-1")
 	if sess == nil {
 		t.Fatal("expected session in store after stop")
+		return
 	}
 	if sess.Status != StatusStopped {
 		t.Errorf("expected status stopped, got %q", sess.Status)
@@ -131,6 +135,7 @@ func TestRunner_Delete_RemovesWorkspace(t *testing.T) {
 	wsDir := filepath.Join(t.TempDir(), "workspace")
 	if err := os.MkdirAll(wsDir, 0o755); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	store.Put(&Session{
@@ -141,6 +146,7 @@ func TestRunner_Delete_RemovesWorkspace(t *testing.T) {
 
 	if err := runner.Delete("sess-del"); err != nil {
 		t.Fatalf("Delete: %v", err)
+		return
 	}
 
 	// Session should be gone from store.
@@ -148,9 +154,9 @@ func TestRunner_Delete_RemovesWorkspace(t *testing.T) {
 		t.Error("expected session removed from store")
 	}
 
-	// Workspace should be removed.
-	if _, err := os.Stat(wsDir); !os.IsNotExist(err) {
-		t.Error("expected workspace dir to be removed")
+	// In mini mode, workspaces are preserved (not deleted).
+	if _, err := os.Stat(wsDir); os.IsNotExist(err) {
+		t.Error("expected workspace dir to be preserved in mini mode")
 	}
 }
 
@@ -211,11 +217,13 @@ func TestRunner_WriteClaudeMD_NewFile(t *testing.T) {
 
 	if err := runner.writeClaudeMD(sess); err != nil {
 		t.Fatalf("writeClaudeMD: %v", err)
+		return
 	}
 
 	content, err := os.ReadFile(filepath.Join(wsDir, "CLAUDE.md"))
 	if err != nil {
 		t.Fatalf("read CLAUDE.md: %v", err)
+		return
 	}
 
 	s := string(content)
@@ -231,6 +239,7 @@ func TestRunner_WriteClaudeMD_AppendsExisting(t *testing.T) {
 	existing := "# Existing CLAUDE.md\nSome rules.\n"
 	if err := os.WriteFile(filepath.Join(wsDir, "CLAUDE.md"), []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	sess := &Session{
@@ -240,11 +249,13 @@ func TestRunner_WriteClaudeMD_AppendsExisting(t *testing.T) {
 
 	if err := runner.writeClaudeMD(sess); err != nil {
 		t.Fatalf("writeClaudeMD: %v", err)
+		return
 	}
 
 	content, err := os.ReadFile(filepath.Join(wsDir, "CLAUDE.md"))
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	s := string(content)
@@ -261,6 +272,7 @@ func TestRunner_WriteClaudeMD_EmptyNoFile(t *testing.T) {
 
 	if err := runner.writeClaudeMD(sess); err != nil {
 		t.Fatalf("writeClaudeMD: %v", err)
+		return
 	}
 
 	// No CLAUDE.md should be created for empty content.
@@ -285,6 +297,7 @@ func TestRunner_Provision_GitCloneFailure(t *testing.T) {
 	sess, err := runner.CreateAndStart(context.Background(), &req, "test-user")
 	if err != nil {
 		t.Fatalf("CreateAndStart: %v", err)
+		return
 	}
 
 	// Wait for provision goroutine to fail.
@@ -300,6 +313,7 @@ func TestRunner_Provision_GitCloneFailure(t *testing.T) {
 		select {
 		case <-deadline:
 			t.Fatalf("timed out waiting for provision failure; status=%s", stored.Status)
+			return
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
@@ -318,6 +332,7 @@ func TestRunner_Provision_NoClaude(t *testing.T) {
 	sess, err := runner.CreateAndStart(context.Background(), &req, "test-user")
 	if err != nil {
 		t.Fatalf("CreateAndStart: %v", err)
+		return
 	}
 
 	// Wait for provision to fail due to missing claude binary.
@@ -335,8 +350,10 @@ func TestRunner_Provision_NoClaude(t *testing.T) {
 		case <-deadline:
 			if stored != nil {
 				t.Fatalf("timed out; status=%s error=%s", stored.Status, stored.Error)
+				return
 			}
 			t.Fatal("timed out; session not found")
+			return
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
@@ -349,6 +366,7 @@ func TestRunner_WriteClaudeMD_AppendError(t *testing.T) {
 	claudePath := filepath.Join(wsDir, "CLAUDE.md")
 	if err := os.WriteFile(claudePath, []byte("existing"), 0o400); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	sess := &Session{
@@ -403,6 +421,7 @@ func TestRunner_FailSession_SetsError(t *testing.T) {
 	stored := store.Get("fail-sess")
 	if stored == nil {
 		t.Fatal("expected session in store")
+		return
 	}
 	if stored.Status != StatusFailed {
 		t.Errorf("expected failed status, got %q", stored.Status)
@@ -432,6 +451,7 @@ func TestRunner_GetSession(t *testing.T) {
 	sess := runner.GetSession("s1")
 	if sess == nil {
 		t.Fatal("expected session")
+		return
 	}
 	if sess.Name != "test" {
 		t.Errorf("expected name 'test', got %q", sess.Name)
@@ -498,6 +518,7 @@ func TestRunner_GetPRStatus_NoWorkspace(t *testing.T) {
 	pr, err := runner.GetPRStatus("s1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if pr.State != ActivityStateNone {
 		t.Errorf("expected state 'none', got %q", pr.State)
@@ -513,6 +534,7 @@ func TestRunner_GetChronicle_EmptyLog(t *testing.T) {
 	summary, err := runner.GetChronicle("s1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	// No log file exists, so chronicle should be empty.
 	if summary != "" {
@@ -527,12 +549,14 @@ func TestRunner_GetChronicle_WithLog(t *testing.T) {
 	logContent := "session started\nassistant: hello\n"
 	if err := os.WriteFile(filepath.Join(wsDir, ".forge-claude.log"), []byte(logContent), 0o600); err != nil {
 		t.Fatal(err)
+		return
 	}
 	store.Put(&Session{ID: "s1", Status: StatusRunning, WorkspaceDir: wsDir})
 
 	summary, err := runner.GetChronicle("s1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	if summary == "" {
 		t.Error("expected non-empty chronicle")
@@ -545,6 +569,7 @@ func TestRunner_Delete_StopsRunningSession(t *testing.T) {
 	wsDir := filepath.Join(t.TempDir(), "workspace")
 	if err := os.MkdirAll(wsDir, 0o750); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	store.Put(&Session{
@@ -555,6 +580,7 @@ func TestRunner_Delete_StopsRunningSession(t *testing.T) {
 
 	if err := runner.Delete("sess-running"); err != nil {
 		t.Fatalf("Delete: %v", err)
+		return
 	}
 
 	if store.Get("sess-running") != nil {
@@ -568,6 +594,7 @@ func TestRunner_SendMessage_WithTransportNoConnection(t *testing.T) {
 	transport := NewSDKTransport("s1", 0, runner.bus.(*EventBus))
 	if err := transport.Start(); err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer transport.Stop()
 
@@ -589,6 +616,7 @@ func TestRunner_SendMessage_WithConnectedClient(t *testing.T) {
 	transport := NewSDKTransport("s1", 0, runner.bus.(*EventBus))
 	if err := transport.Start(); err != nil {
 		t.Fatal(err)
+		return
 	}
 	defer transport.Stop()
 
@@ -602,6 +630,7 @@ func TestRunner_SendMessage_WithConnectedClient(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
+		return
 	}
 	defer func() { _ = conn.Close() }()
 	if resp != nil && resp.Body != nil {
@@ -612,17 +641,20 @@ func TestRunner_SendMessage_WithConnectedClient(t *testing.T) {
 	case <-transport.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("not ready")
+		return
 	}
 
 	// Now SendMessage should succeed.
 	if err := runner.SendMessage("s1", "hello from test"); err != nil {
 		t.Fatalf("SendMessage: %v", err)
+		return
 	}
 
 	// Verify message count was incremented.
 	sess := store.Get("s1")
 	if sess == nil {
 		t.Fatal("expected session in store")
+		return
 	}
 	if sess.MessageCount != 1 {
 		t.Errorf("expected message count 1, got %d", sess.MessageCount)
@@ -646,6 +678,7 @@ func TestRunner_Stop_WithTransport(t *testing.T) {
 	transport := NewSDKTransport("s1", 0, runner.bus.(*EventBus))
 	if err := transport.Start(); err != nil {
 		t.Fatal(err)
+		return
 	}
 
 	wsDir := t.TempDir()
@@ -656,11 +689,13 @@ func TestRunner_Stop_WithTransport(t *testing.T) {
 
 	if err := runner.Stop("s1"); err != nil {
 		t.Fatalf("Stop: %v", err)
+		return
 	}
 
 	sess := store.Get("s1")
 	if sess == nil {
 		t.Fatal("expected session in store")
+		return
 	}
 	if sess.Status != StatusStopped {
 		t.Errorf("expected stopped, got %q", sess.Status)
@@ -676,6 +711,7 @@ func TestRunner_GetPRStatus_NoGitWorkspace(t *testing.T) {
 	pr, err := runner.GetPRStatus("s1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+		return
 	}
 	// gh pr view will fail in non-git dir, should return none state.
 	if pr.State != ActivityStateNone {
@@ -694,6 +730,7 @@ func TestRunner_Delete_NoWorkspaceDir(t *testing.T) {
 
 	if err := runner.Delete("sess-nowsdir"); err != nil {
 		t.Fatalf("Delete: %v", err)
+		return
 	}
 
 	if store.Get("sess-nowsdir") != nil {
