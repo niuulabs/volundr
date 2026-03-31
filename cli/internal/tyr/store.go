@@ -67,10 +67,10 @@ func (s *Store) CreateSaga(ctx context.Context, saga *Saga, phases []Phase, raid
 	for i := range raids {
 		r := &raids[i]
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO raids (id, phase_id, tracker_id, name, description, acceptance_criteria, declared_files,
+			INSERT INTO raids (id, phase_id, tracker_id, identifier, url, name, description, acceptance_criteria, declared_files,
 				estimate_hours, status, confidence, retry_count, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			r.ID, r.PhaseID, r.TrackerID, r.Name, r.Description,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+			r.ID, r.PhaseID, r.TrackerID, r.Identifier, r.URL, r.Name, r.Description,
 			pq.Array(r.AcceptanceCriteria), pq.Array(r.DeclaredFiles),
 			r.EstimateHours, string(r.Status), r.Confidence,
 			r.RetryCount, r.CreatedAt, r.UpdatedAt,
@@ -220,7 +220,8 @@ func (s *Store) ListPhases(ctx context.Context, sagaID string) ([]Phase, error) 
 // ListRaids returns all raids for a phase.
 func (s *Store) ListRaids(ctx context.Context, phaseID string) ([]Raid, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, phase_id, tracker_id, name, COALESCE(description, ''),
+		SELECT id, phase_id, tracker_id, COALESCE(identifier, ''), COALESCE(url, ''),
+			name, COALESCE(description, ''),
 			COALESCE(acceptance_criteria, '{}'), COALESCE(declared_files, '{}'),
 			estimate_hours, status, confidence, session_id, branch,
 			chronicle_summary, pr_url, pr_id, reason, retry_count,
@@ -240,14 +241,16 @@ func (s *Store) GetRaid(ctx context.Context, raidID string) (*Raid, error) {
 	var r Raid
 	var reviewerSID string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, phase_id, tracker_id, name, COALESCE(description, ''),
+		SELECT id, phase_id, tracker_id, COALESCE(identifier, ''), COALESCE(url, ''),
+			name, COALESCE(description, ''),
 			COALESCE(acceptance_criteria, '{}'), COALESCE(declared_files, '{}'),
 			estimate_hours, status, confidence, session_id, branch,
 			chronicle_summary, pr_url, pr_id, reason, retry_count,
 			COALESCE(reviewer_session_id, ''), COALESCE(review_round, 0),
 			created_at, updated_at
 		FROM raids WHERE id = $1`, raidID).
-		Scan(&r.ID, &r.PhaseID, &r.TrackerID, &r.Name, &r.Description,
+		Scan(&r.ID, &r.PhaseID, &r.TrackerID, &r.Identifier, &r.URL,
+			&r.Name, &r.Description,
 			pq.Array(&r.AcceptanceCriteria), pq.Array(&r.DeclaredFiles),
 			&r.EstimateHours, &r.Status, &r.Confidence, &r.SessionID, &r.Branch,
 			&r.ChronicleSummary, &r.PRUrl, &r.PRID, &r.Reason, &r.RetryCount,
@@ -330,7 +333,8 @@ func (s *Store) CountByStatus(ctx context.Context) (map[string]int, error) {
 // ListActiveRaids returns all raids that are not in a terminal state.
 func (s *Store) ListActiveRaids(ctx context.Context) ([]Raid, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, phase_id, tracker_id, name, COALESCE(description, ''),
+		SELECT id, phase_id, tracker_id, COALESCE(identifier, ''), COALESCE(url, ''),
+			name, COALESCE(description, ''),
 			COALESCE(acceptance_criteria, '{}'), COALESCE(declared_files, '{}'),
 			estimate_hours, status, confidence, session_id, branch,
 			chronicle_summary, pr_url, pr_id, reason, retry_count,

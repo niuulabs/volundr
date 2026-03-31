@@ -3,7 +3,6 @@ package tyr
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -750,7 +749,9 @@ func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
 			ID:                 uuid.New().String(),
 			PhaseID:            phaseID,
 			TrackerID:          issue.ID,
-			Name:               fmt.Sprintf("%s — %s", issue.Identifier, issue.Title),
+			Identifier:         issue.Identifier,
+			URL:                issue.URL,
+			Name:               issue.Title,
 			Description:        issue.Description,
 			AcceptanceCriteria: []string{},
 			DeclaredFiles:      []string{},
