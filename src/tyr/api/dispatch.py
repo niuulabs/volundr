@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import string
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -174,7 +175,9 @@ def _build_prompt(
     raid_branch = issue.identifier.lower()
 
     if template:
-        return template.format(
+        # Build full context; filter to only keys the template actually uses
+        # so callers are free to omit placeholders (e.g. {repo}) without error.
+        context = dict(
             identifier=issue.identifier,
             title=issue.title,
             description=issue.description or "",
@@ -182,6 +185,12 @@ def _build_prompt(
             feature_branch=feature_branch,
             raid_branch=raid_branch,
         )
+        used_keys = {
+            fname
+            for _, fname, _, _ in string.Formatter().parse(template)
+            if fname is not None
+        }
+        return template.format(**{k: v for k, v in context.items() if k in used_keys})
 
     # Minimal fallback when no template is configured.
     parts = [

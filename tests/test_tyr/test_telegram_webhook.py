@@ -354,6 +354,7 @@ class StubReplyClient(TelegramReplyClient):
     """Captures replies instead of making HTTP calls."""
 
     def __init__(self) -> None:
+        super().__init__(bot_token="", timeout=5.0)
         self.replies: list[tuple[str, str]] = []
 
     async def send(self, chat_id: str, text: str) -> None:

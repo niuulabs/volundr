@@ -66,12 +66,10 @@ class TestDatabasePool:
         mock_pool = AsyncMock()
         mock_pool.close = AsyncMock()
 
-        with (
-            patch("tyr.infrastructure.database.create_pool", new_callable=AsyncMock) as m_create,
-            pytest.raises(RuntimeError, match="boom"),
-        ):
+        with patch("tyr.infrastructure.database.create_pool", new_callable=AsyncMock) as m_create:
             m_create.return_value = mock_pool
-            async with database_pool(config):
-                raise RuntimeError("boom")
+            with pytest.raises(RuntimeError, match="boom"):
+                async with database_pool(config):
+                    raise RuntimeError("boom")
 
-        mock_pool.close.assert_awaited_once()
+            mock_pool.close.assert_awaited_once()

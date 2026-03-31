@@ -45,7 +45,6 @@ _RAID_STATUS_DISPLAY: dict[RaidStatus, str] = {
     RaidStatus.FAILED: "Failed",
 }
 
-_DISPLAY_TO_RAID: dict[str, RaidStatus] = {v: k for k, v in _RAID_STATUS_DISPLAY.items()}
 
 
 class NativeTrackerAdapter(TrackerPort):

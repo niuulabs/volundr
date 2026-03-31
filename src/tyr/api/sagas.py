@@ -464,7 +464,6 @@ def create_sagas_router() -> APIRouter:
         Creates a lightweight skuld-planner session that the user chats with
         to iteratively decompose a specification into a saga structure.
         """
-        auth_token = extract_bearer_token(request)
         settings = request.app.state.settings
         model = body.model or settings.dispatch.default_model
 

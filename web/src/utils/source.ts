@@ -18,7 +18,9 @@ export function getSourceLabel(source: SessionSource): string {
   }
   if (source.local_path) {
     // Show the last directory component for brevity, full path as fallback.
-    const parts = source.local_path.replace(/\/+$/, '').split('/');
+    let path = source.local_path;
+    while (path.endsWith('/')) path = path.slice(0, -1);
+    const parts = path.split('/');
     return parts[parts.length - 1] || source.local_path;
   }
   const count = source.paths.length;
