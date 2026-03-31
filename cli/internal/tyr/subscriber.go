@@ -89,6 +89,9 @@ func (s *ActivitySubscriber) handleEvent(evt SessionEvent) {
 		return
 	}
 
+	log.Printf("tyr: subscriber: event session=%s state=%s status=%s",
+		sessionID[:min(len(sessionID), 8)], evt.State, evt.SessionStatus)
+
 	// Session stopped or failed — transition raid to FAILED.
 	if evt.SessionStatus == "stopped" || evt.SessionStatus == "failed" {
 		s.cancelDebounce(sessionID)

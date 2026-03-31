@@ -589,6 +589,7 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("tyr: dispatch: spawn session for %s failed: %v", item.IssueID, err)
 			reason := err.Error()
+			_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusQueued, nil)
 			_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusFailed, &reason)
 			results = append(results, DispatchResult{
 				IssueID: item.IssueID,
@@ -603,6 +604,7 @@ func (h *Handler) dispatchApprove(w http.ResponseWriter, r *http.Request) {
 			branch = raid.ID[:8]
 		}
 		_ = h.store.UpdateRaidSession(ctx, raid.ID, session.ID, branch)
+		_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusQueued, nil)
 		_ = h.store.UpdateRaidStatus(ctx, raid.ID, RaidStatusRunning, nil)
 
 		// Update Linear issue status to In Progress.
