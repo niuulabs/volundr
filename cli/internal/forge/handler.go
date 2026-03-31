@@ -550,18 +550,32 @@ func (h *Handler) brokerHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// featureModules returns the session panel configuration. In mini mode,
+// featureModules returns feature module configuration. In mini mode,
 // code/terminal/files are disabled since there's no container infrastructure.
-func (h *Handler) featureModules(w http.ResponseWriter, _ *http.Request) {
-	modules := []map[string]any{
-		{"key": "chat", "label": "Chat", "icon": "MessageSquare", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 10},
-		{"key": "terminal", "label": "Terminal", "icon": "Terminal", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 20},
-		{"key": "code", "label": "Code", "icon": "Code", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 30},
-		{"key": "files", "label": "Files", "icon": "FolderOpen", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 40},
-		{"key": "diffs", "label": "Diffs", "icon": "GitCompareArrows", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 50},
-		{"key": "chronicles", "label": "Chronicles", "icon": "ScrollText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 60},
-		{"key": "logs", "label": "Logs", "icon": "FileText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 70},
+func (h *Handler) featureModules(w http.ResponseWriter, r *http.Request) {
+	scope := r.URL.Query().Get("scope")
+
+	var modules []map[string]any
+
+	if scope == "" || scope == "session" {
+		modules = append(modules,
+			map[string]any{"key": "chat", "label": "Chat", "icon": "MessageSquare", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 10},
+			map[string]any{"key": "terminal", "label": "Terminal", "icon": "Terminal", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 20},
+			map[string]any{"key": "code", "label": "Code", "icon": "Code", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 30},
+			map[string]any{"key": "files", "label": "Files", "icon": "FolderOpen", "scope": "session", "enabled": false, "default_enabled": false, "admin_only": false, "order": 40},
+			map[string]any{"key": "diffs", "label": "Diffs", "icon": "GitCompareArrows", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 50},
+			map[string]any{"key": "chronicles", "label": "Chronicles", "icon": "ScrollText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 60},
+			map[string]any{"key": "logs", "label": "Logs", "icon": "FileText", "scope": "session", "enabled": true, "default_enabled": true, "admin_only": false, "order": 70},
+		)
 	}
+
+	if scope == "" || scope == "user" {
+		modules = append(modules,
+			map[string]any{"key": "appearance", "label": "Appearance", "icon": "Palette", "scope": "user", "enabled": true, "default_enabled": true, "admin_only": false, "order": 40},
+			map[string]any{"key": "layout", "label": "Layout", "icon": "LayoutDashboard", "scope": "user", "enabled": true, "default_enabled": true, "admin_only": false, "order": 50},
+		)
+	}
+
 	httputil.WriteJSON(w, http.StatusOK, modules)
 }
 
