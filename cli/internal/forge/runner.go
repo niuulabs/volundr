@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -323,13 +324,44 @@ func (r *Runner) gitClone(ctx context.Context, sess *Session) error {
 		cloneURL = strings.Replace(cloneURL, "https://", "https://x-access-token:"+ghToken+"@", 1)
 	}
 
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
 	args := []string{"clone", "--branch", branch, "--single-branch", "--depth", "50", cloneURL, "."}
 	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // args are from validated session config
 	cmd.Dir = sess.WorkspaceDir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = env
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		// If the branch doesn't exist, try the base branch or default branch.
+		baseBranch := sess.Source.BaseBranch
+		if baseBranch == "" {
+			baseBranch = "main"
+		}
+		if baseBranch != branch {
+			log.Printf("git clone: branch %q not found, trying base branch %q", branch, baseBranch)
+			// Clean workspace for retry.
+			entries, _ := os.ReadDir(sess.WorkspaceDir)
+			for _, e := range entries {
+				_ = os.RemoveAll(filepath.Join(sess.WorkspaceDir, e.Name()))
+			}
+
+			args = []string{"clone", "--branch", baseBranch, "--single-branch", "--depth", "50", cloneURL, "."}
+			cmd = exec.CommandContext(ctx, "git", args...) //nolint:gosec // args from validated config
+			cmd.Dir = sess.WorkspaceDir
+			cmd.Env = env
+			output, err = cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("%s: %w", strings.TrimSpace(string(output)), err)
+			}
+			// Create the feature branch from base.
+			cmd = exec.CommandContext(ctx, "git", "checkout", "-b", branch) //nolint:gosec // branch from session config
+			cmd.Dir = sess.WorkspaceDir
+			if out, err := cmd.CombinedOutput(); err != nil {
+				log.Printf("git checkout -b %s: %s", branch, strings.TrimSpace(string(out)))
+			}
+			return nil
+		}
 		return fmt.Errorf("%s: %w", strings.TrimSpace(string(output)), err)
 	}
 
