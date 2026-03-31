@@ -454,8 +454,10 @@ func (r *Runner) startClaude(ctx context.Context, sess *Session) error {
 	if sess.SystemPrompt != "" {
 		args = append(args, "--append-system-prompt", sess.SystemPrompt)
 	}
+	// Initial prompt is sent via WebSocket after CLI connects (not --print,
+	// which doesn't work in SDK mode). Queue it on the transport.
 	if sess.InitialPrompt != "" {
-		args = append(args, "--print", sess.InitialPrompt)
+		transport.QueueInitialPrompt(sess.InitialPrompt)
 	}
 
 	cmd := exec.CommandContext(ctx, claudeBin, args...) //nolint:gosec // binary path from trusted config
