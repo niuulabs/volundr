@@ -3,6 +3,7 @@ package tyr
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -692,12 +693,79 @@ func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:     time.Now().UTC(),
 	}
 
-	if err := h.store.CreateSaga(context.Background(), saga, nil, nil); err != nil {
+	// Fetch milestones and issues from Linear to create phases and raids.
+	milestones, _ := h.tracker.ListMilestones(req.ProjectID)
+	allIssues, _ := h.tracker.ListIssues(req.ProjectID, nil)
+
+	// Build milestone ID → phase number mapping.
+	var phases []Phase
+	msToPhase := make(map[string]string) // milestone ID → phase ID
+	for i, ms := range milestones {
+		phaseID := uuid.New().String()
+		phases = append(phases, Phase{
+			ID:        phaseID,
+			SagaID:    saga.ID,
+			TrackerID: ms.ID,
+			Number:    i + 1,
+			Name:      ms.Name,
+			Status:    PhaseStatusGated,
+		})
+		msToPhase[ms.ID] = phaseID
+	}
+	// If no milestones, create a default phase.
+	if len(phases) == 0 {
+		defaultPhaseID := uuid.New().String()
+		phases = append(phases, Phase{
+			ID:     defaultPhaseID,
+			SagaID: saga.ID,
+			Number: 1,
+			Name:   "Phase 1",
+			Status: PhaseStatusActive,
+		})
+		// All issues go to the default phase.
+		for _, issue := range allIssues {
+			if issue.MilestoneID != nil {
+				msToPhase[*issue.MilestoneID] = defaultPhaseID
+			}
+		}
+	}
+	// First phase is active.
+	if len(phases) > 0 {
+		phases[0].Status = PhaseStatusActive
+	}
+
+	// Map issues to raids.
+	var raids []Raid
+	for _, issue := range allIssues {
+		phaseID := ""
+		if issue.MilestoneID != nil {
+			phaseID = msToPhase[*issue.MilestoneID]
+		}
+		if phaseID == "" && len(phases) > 0 {
+			phaseID = phases[0].ID // default to first phase
+		}
+
+		raidStatus := linearStatusToRaid(issue.StatusType)
+		raids = append(raids, Raid{
+			ID:          uuid.New().String(),
+			PhaseID:     phaseID,
+			TrackerID:   issue.ID,
+			Name:        fmt.Sprintf("%s — %s", issue.Identifier, issue.Title),
+			Description: issue.Description,
+			Status:      raidStatus,
+			Confidence:  defaultInitialConfidence,
+			CreatedAt:   time.Now().UTC(),
+			UpdatedAt:   time.Now().UTC(),
+		})
+	}
+
+	if err := h.store.CreateSaga(context.Background(), saga, phases, raids); err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "create saga: %v", err)
 		return
 	}
 
-	log.Printf("tyr: imported saga '%s' from project %s", saga.Name, project.ID)
+	log.Printf("tyr: imported saga '%s' from project %s (%d phases, %d raids)",
+		saga.Name, project.ID, len(phases), len(raids))
 
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"id":             saga.ID,
@@ -709,6 +777,20 @@ func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
 		"phase_count":    project.MilestoneCount,
 		"raid_count":     project.IssueCount,
 	})
+}
+
+// linearStatusToRaid maps Linear issue status types to raid statuses.
+func linearStatusToRaid(statusType string) RaidStatus {
+	switch statusType {
+	case "completed":
+		return RaidStatusMerged
+	case "canceled", "cancelled":
+		return RaidStatusFailed
+	case "started":
+		return RaidStatusRunning
+	default:
+		return RaidStatusPending
+	}
 }
 
 func slugify(name string) string {
