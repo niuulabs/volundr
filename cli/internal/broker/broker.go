@@ -239,20 +239,36 @@ func (b *Broker) OnCLIEvent(data map[string]any) {
 	case "user":
 		// Initial prompt flushed from pending messages — record in history
 		// and echo to browsers so the user sees what was sent.
+		// Skip tool_result content (internal Claude tool calls).
 		if msg, ok := data["message"].(map[string]any); ok {
 			content := ""
 			if s, ok := msg["content"].(string); ok {
 				content = s
-			} else {
-				raw, _ := json.Marshal(msg["content"])
+			} else if arr, ok := msg["content"].([]any); ok {
+				// Content block array — check if it's just tool_results.
+				hasText := false
+				for _, block := range arr {
+					if bm, ok := block.(map[string]any); ok {
+						if bm["type"] == "text" {
+							hasText = true
+							break
+						}
+					}
+				}
+				if !hasText {
+					break // Skip tool_result-only messages.
+				}
+				raw, _ := json.Marshal(arr)
 				content = string(raw)
 			}
-			b.appendTurn("user", content, nil, nil)
-			b.broadcast(map[string]any{
-				"type":    "user_confirmed",
-				"id":      uuid.New().String(),
-				"content": content,
-			})
+			if content != "" {
+				b.appendTurn("user", content, nil, nil)
+				b.broadcast(map[string]any{
+					"type":    "user_confirmed",
+					"id":      uuid.New().String(),
+					"content": content,
+				})
+			}
 		}
 
 	case "system":
@@ -314,7 +330,8 @@ func (b *Broker) OnCLIEvent(data map[string]any) {
 		if parts == nil {
 			parts = []any{}
 		}
-		// Fallback: if no streaming text was accumulated, use the result field.
+		// Fallback: if no streaming text was accumulated, use the result
+		// field — but only if it's a plain string, not a tool_result array.
 		if content == "" {
 			if r, ok := data["result"].(string); ok {
 				content = r

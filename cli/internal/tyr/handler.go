@@ -70,11 +70,15 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/tyr/tracker/projects/{id}/issues", h.trackerIssues)
 	mux.HandleFunc("POST /api/v1/tyr/tracker/import", h.trackerImport)
 
+	// Raid detail endpoints
+	mux.HandleFunc("GET /api/v1/tyr/raids/{id}/review", h.raidReview)
+	mux.HandleFunc("GET /api/v1/tyr/raids/{id}/messages", h.raidMessages)
+
 	// Not-implemented stubs for full Tyr endpoints
 	mux.HandleFunc("POST /api/v1/tyr/sagas/decompose", h.notImplemented)
 	mux.HandleFunc("POST /api/v1/tyr/sagas/plan", h.notImplemented)
 	mux.HandleFunc("POST /api/v1/tyr/sagas/extract-structure", h.notImplemented)
-	mux.HandleFunc("GET /api/v1/tyr/sagas/plan/config", h.notImplemented)
+	mux.HandleFunc("GET /api/v1/tyr/sagas/plan/config", h.planConfig)
 }
 
 // Saga handlers.
@@ -668,6 +672,28 @@ func (h *Handler) dispatchConfig(w http.ResponseWriter, _ *http.Request) {
 }
 
 // Not-implemented stub.
+
+func (h *Handler) raidReview(w http.ResponseWriter, _ *http.Request) {
+	// Return empty review state — the review engine handles this internally.
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"status":      "pending",
+		"round":       0,
+		"findings":    []any{},
+		"confidence":  0,
+		"reviewer_id": nil,
+	})
+}
+
+func (h *Handler) raidMessages(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, []any{})
+}
+
+func (h *Handler) planConfig(w http.ResponseWriter, _ *http.Request) {
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"planner_system_prompt": "",
+		"finalize_prompt":      "",
+	})
+}
 
 func (h *Handler) notImplemented(w http.ResponseWriter, _ *http.Request) {
 	httputil.WriteJSON(w, http.StatusNotImplemented, map[string]string{
