@@ -498,7 +498,8 @@ func scanRaids(rows *sql.Rows) ([]Raid, error) {
 	for rows.Next() {
 		var r Raid
 		var reviewerSID string
-		if err := rows.Scan(&r.ID, &r.PhaseID, &r.TrackerID, &r.Name, &r.Description,
+		if err := rows.Scan(&r.ID, &r.PhaseID, &r.TrackerID, &r.Identifier, &r.URL,
+			&r.Name, &r.Description,
 			pq.Array(&r.AcceptanceCriteria), pq.Array(&r.DeclaredFiles),
 			&r.EstimateHours, &r.Status, &r.Confidence, &r.SessionID, &r.Branch,
 			&r.ChronicleSummary, &r.PRUrl, &r.PRID, &r.Reason, &r.RetryCount,
