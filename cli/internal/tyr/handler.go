@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,6 +62,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/tyr/tracker/projects/{id}", h.trackerProject)
 	mux.HandleFunc("GET /api/v1/tyr/tracker/projects/{id}/milestones", h.trackerMilestones)
 	mux.HandleFunc("GET /api/v1/tyr/tracker/projects/{id}/issues", h.trackerIssues)
+	mux.HandleFunc("POST /api/v1/tyr/tracker/import", h.trackerImport)
 
 	// Not-implemented stubs for full Tyr endpoints
 	mux.HandleFunc("POST /api/v1/tyr/sagas/decompose", h.notImplemented)
@@ -641,6 +643,86 @@ func (h *Handler) trackerMilestones(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, milestones)
+}
+
+func (h *Handler) trackerImport(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		httputil.WriteError(w, http.StatusBadRequest, "no tracker configured")
+		return
+	}
+
+	var req struct {
+		ProjectID  string   `json:"project_id"`
+		Repos      []string `json:"repos"`
+		BaseBranch string   `json:"base_branch"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request: %v", err)
+		return
+	}
+
+	project, err := h.tracker.GetProject(req.ProjectID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusNotFound, "project not found: %v", err)
+		return
+	}
+
+	slug := project.Slug
+	if slug == "" {
+		slug = slugify(project.Name)
+	}
+
+	ownerID := r.Header.Get("X-Auth-User-Id")
+	if ownerID == "" {
+		ownerID = "local"
+	}
+
+	saga := &Saga{
+		ID:            uuid.New().String(),
+		TrackerID:     project.ID,
+		TrackerType:   "linear",
+		Slug:          slug,
+		Name:          project.Name,
+		Repos:         req.Repos,
+		FeatureBranch: "feat/" + slug,
+		BaseBranch:    req.BaseBranch,
+		Status:        SagaStatusActive,
+		Confidence:    0,
+		OwnerID:       ownerID,
+		CreatedAt:     time.Now().UTC(),
+	}
+
+	if err := h.store.CreateSaga(context.Background(), saga, nil, nil); err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "create saga: %v", err)
+		return
+	}
+
+	log.Printf("tyr: imported saga '%s' from project %s", saga.Name, project.ID)
+
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		"id":             saga.ID,
+		"tracker_id":     saga.TrackerID,
+		"name":           saga.Name,
+		"repos":          saga.Repos,
+		"feature_branch": saga.FeatureBranch,
+		"status":         string(saga.Status),
+		"phase_count":    project.MilestoneCount,
+		"raid_count":     project.IssueCount,
+	})
+}
+
+func slugify(name string) string {
+	s := strings.ToLower(name)
+	// Replace non-alphanumeric with hyphens.
+	var b strings.Builder
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			b.WriteRune(c)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 func (h *Handler) trackerIssues(w http.ResponseWriter, r *http.Request) {
