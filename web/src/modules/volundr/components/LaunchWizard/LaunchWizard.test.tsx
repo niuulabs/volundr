@@ -296,7 +296,7 @@ describe('LaunchWizard', () => {
       render(<LaunchWizard {...defaultProps} repos={[]} service={miniService} />);
 
       // Select blank template to go to step 2.
-      const blankBtn = await screen.findByRole('button', { name: /blank session/i });
+      const blankBtn = await screen.findByText(/^Blank$/);
       await userEvent.click(blankBtn);
 
       // Wait for features to load and source type to be set.
