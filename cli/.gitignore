@@ -4,3 +4,4 @@ dist/
 *.exe
 internal/web/dist/
 cli/niuu
+coverage.out
