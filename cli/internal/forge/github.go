@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -51,9 +52,12 @@ func fetchGitHubRepos(cfg *Config) map[string][]GitHubRepo {
 			repos = append(repos, listUserRepos(baseURL, token)...)
 		}
 
-		name := inst.Name
+		name := strings.ToLower(inst.Name)
 		if name == "" {
 			name = "github"
+		}
+		if repos == nil {
+			repos = []GitHubRepo{}
 		}
 		result[name] = repos
 	}
@@ -75,19 +79,21 @@ func fetchRepoPage(url, token, defaultOrg string) []GitHubRepo {
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil
+		return []GitHubRepo{}
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil
+		log.Printf("github: fetch repos error: %v", err)
+		return []GitHubRepo{}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil
+		log.Printf("github: fetch repos %s returned %d", url, resp.StatusCode)
+		return []GitHubRepo{}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -106,7 +112,8 @@ func fetchRepoPage(url, token, defaultOrg string) []GitHubRepo {
 		} `json:"owner"`
 	}
 	if err := json.Unmarshal(body, &apiRepos); err != nil {
-		return nil
+		log.Printf("github: parse repos response: %v", err)
+		return []GitHubRepo{}
 	}
 
 	repos := make([]GitHubRepo, 0, len(apiRepos))
