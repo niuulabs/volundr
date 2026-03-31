@@ -540,7 +540,7 @@ jobs:
   build-charts:
     name: Build Helm Charts
     needs: changes
-    if: needs.changes.outputs.helm == 'true'
+    if: needs.changes.outputs.helm == 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -654,6 +654,7 @@ jobs:
   # ---------------------------------------------------------------------------
   dependency-review:
     name: Dependency Review
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
