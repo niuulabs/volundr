@@ -1794,3 +1794,61 @@ class TestIssueToRaidLaunchCommand:
         node = _issue_node()
         raid = LinearTrackerAdapter._issue_to_raid(node, progress=None)
         assert raid.launch_command is None
+
+
+class TestGetIssueResolution:
+    @pytest.mark.asyncio
+    async def test_done_returns_merged(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": {"id": "i1", "identifier": "NIU-1", "title": "T",
+                                "state": {"name": "Done"}}}}
+        )
+        result = await adapter.get_issue_resolution("NIU-1")
+        assert result == "merged"
+
+    @pytest.mark.asyncio
+    async def test_canceled_without_merge_returns_abandoned(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": {"id": "i1", "identifier": "NIU-1", "title": "T",
+                                "state": {"name": "Canceled"}}}}
+        )
+        pool.fetchrow.return_value = {"status": "RUNNING"}
+        result = await adapter.get_issue_resolution("NIU-1")
+        assert result == "abandoned"
+
+    @pytest.mark.asyncio
+    async def test_canceled_after_merge_returns_reverted(self):
+        adapter, pool = _make_adapter_with_pool()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": {"id": "i1", "identifier": "NIU-1", "title": "T",
+                                "state": {"name": "Canceled"}}}}
+        )
+        pool.fetchrow.return_value = {"status": RaidStatus.MERGED.value}
+        result = await adapter.get_issue_resolution("NIU-1")
+        assert result == "reverted"
+
+    @pytest.mark.asyncio
+    async def test_open_returns_none(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": {"id": "i1", "identifier": "NIU-1", "title": "T",
+                                "state": {"name": "In Progress"}}}}
+        )
+        result = await adapter.get_issue_resolution("NIU-1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_issue_not_found_returns_none(self):
+        adapter = _make_adapter()
+        adapter._gql._client = AsyncMock()
+        adapter._gql._client.post.return_value = _mock_response(
+            {"data": {"issue": None}}
+        )
+        result = await adapter.get_issue_resolution("NIU-999")
+        assert result is None
