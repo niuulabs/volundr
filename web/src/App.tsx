@@ -45,6 +45,9 @@ const PlanSagaView = lazy(() =>
 const DashboardView = lazy(() =>
   import('@/modules/tyr/pages/DashboardView').then(m => ({ default: m.DashboardView }))
 );
+const CalibrationView = lazy(() =>
+  import('@/modules/tyr/pages/CalibrationView').then(m => ({ default: m.CalibrationView }))
+);
 
 function PageLoader() {
   return (
@@ -74,6 +77,7 @@ function AppContent() {
             <Route path="dispatcher" element={<DispatcherView />} />
             <Route path="sessions" element={<TyrSessionsView />} />
             <Route path="dashboard" element={<DashboardView />} />
+            <Route path="calibration" element={<CalibrationView />} />
             <Route path="settings" element={<Navigate to="/settings" replace />} />
           </Route>
           <Route path="/settings" element={<SettingsPage service={volundrService} />} />

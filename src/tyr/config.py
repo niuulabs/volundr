@@ -131,6 +131,10 @@ class ReviewConfig(BaseModel):
         default=0.1,
         description="Small confidence bonus applied when a reviewer session is spawned.",
     )
+    outcome_poll_interval_seconds: float = Field(
+        default=300.0,
+        description="Interval in seconds between outcome resolution polling cycles.",
+    )
     max_review_rounds: int = Field(
         default=6,
         ge=6,

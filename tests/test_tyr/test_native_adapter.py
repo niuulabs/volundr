@@ -1155,3 +1155,37 @@ class TestGetSessionMessages:
 
         result = await adapter.get_session_messages("tracker-1")
         assert result == []
+
+
+class TestGetIssueResolution:
+    @pytest.mark.asyncio
+    async def test_done_returns_merged(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = {"status": "Done"}
+        adapter = _make_adapter(pool)
+        result = await adapter.get_issue_resolution("tracker-1")
+        assert result == "merged"
+
+    @pytest.mark.asyncio
+    async def test_failed_returns_abandoned(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = {"status": "Failed"}
+        adapter = _make_adapter(pool)
+        result = await adapter.get_issue_resolution("tracker-1")
+        assert result == "abandoned"
+
+    @pytest.mark.asyncio
+    async def test_other_status_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = {"status": "InProgress"}
+        adapter = _make_adapter(pool)
+        result = await adapter.get_issue_resolution("tracker-1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_no_row_returns_none(self):
+        pool = _make_pool()
+        pool.fetchrow.return_value = None
+        adapter = _make_adapter(pool)
+        result = await adapter.get_issue_resolution("tracker-1")
+        assert result is None

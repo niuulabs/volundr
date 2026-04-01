@@ -77,6 +77,40 @@ class InMemoryOutcomeRepo(ReviewerOutcomeRepository):
         diverged = [o for o in auto_approved if o.actual_outcome in ("reverted", "abandoned")]
         return len(diverged) / len(auto_approved)
 
+    async def list_unresolved(self, owner_id: str) -> list[ReviewerOutcome]:
+        return [o for o in self.outcomes if o.owner_id == owner_id and o.actual_outcome is None]
+
+    async def calibration_summary(
+        self,
+        owner_id: str,
+        window_days: int = 30,
+    ):  # type: ignore[override]
+        from tyr.ports.reviewer_outcome_repository import CalibrationSummary
+
+        relevant = [o for o in self.outcomes if o.owner_id == owner_id]
+        return CalibrationSummary(
+            window_days=window_days,
+            total_decisions=len(relevant),
+            auto_approved=len([o for o in relevant if o.reviewer_decision == "auto_approved"]),
+            retried=len([o for o in relevant if o.reviewer_decision == "retried"]),
+            escalated=len([o for o in relevant if o.reviewer_decision == "escalated"]),
+            divergence_rate=await self.divergence_rate(owner_id, window_days),
+            avg_confidence_approved=0.0,
+            avg_confidence_reverted=0.0,
+            pending_resolution=len([o for o in relevant if o.actual_outcome is None]),
+        )
+
+    async def resolve_by_tracker_id(
+        self,
+        tracker_id: str,
+        actual_outcome: str,
+        notes: str | None = None,
+    ) -> int:
+        return 0
+
+    async def list_unresolved_owner_ids(self) -> list[str]:
+        return list({o.owner_id for o in self.outcomes if o.actual_outcome is None})
+
 
 # ---------------------------------------------------------------------------
 # Stubs (minimal, reused from test_review_engine pattern)

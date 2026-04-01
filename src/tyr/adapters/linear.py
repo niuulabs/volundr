@@ -956,6 +956,31 @@ class LinearTrackerAdapter(TrackerPort):
             for r in rows
         ]
 
+    # -- Outcome resolution --
+
+    async def get_issue_resolution(self, tracker_id: str) -> str | None:
+        """Map Linear issue state to a domain outcome.
+
+        Done → "merged"
+        Canceled (after previously being Done/Merged) → "reverted"
+        Canceled (otherwise) → "abandoned"
+        Anything else → None (still open)
+        """
+        data = await self._gql.query(_GET_ISSUE_QUERY, {"id": tracker_id})
+        issue = data.get("issue")
+        if issue is None:
+            return None
+        state_name = (issue.get("state") or {}).get("name", "")
+        if state_name == "Done":
+            return "merged"
+        if state_name == "Canceled":
+            # Check if the raid was previously merged (via local progress table)
+            progress = await self._fetch_progress(tracker_id)
+            if progress and progress.get("status") == RaidStatus.MERGED.value:
+                return "reverted"
+            return "abandoned"
+        return None
+
     # -- Internal helpers --
 
     async def _fetch_progress(self, tracker_id: str) -> dict | None:

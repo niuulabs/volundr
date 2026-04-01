@@ -31,6 +31,7 @@ from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
+from tyr.api.calibration import create_calibration_router, resolve_outcome_repo
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
@@ -48,12 +49,14 @@ from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
 from tyr.domain.services.contract_engine import ContractEngine
 from tyr.domain.services.notification import NotificationService
+from tyr.domain.services.outcome_resolver import OutcomeResolver
 from tyr.domain.services.review_engine import ReviewEngine
 from tyr.domain.services.reviewer_session import ReviewerSessionService
 from tyr.infrastructure.database import database_pool
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort
 from tyr.ports.git import GitPort
+from tyr.ports.reviewer_outcome_repository import ReviewerOutcomeRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import VolundrPort
@@ -101,6 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from tyr.adapters.inbound.auth import extract_principal as _extract_principal
 
     app.include_router(create_pats_router(_extract_principal))
+    app.include_router(create_calibration_router())
     app.include_router(create_integrations_router())
     app.include_router(
         create_telegram_setup_router(
@@ -321,7 +325,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 outcome_repo=outcome_repo,
             )
             app.state.review_engine = review_engine
+            app.state.outcome_repo = outcome_repo
+
+            async def _resolve_outcome_repo() -> ReviewerOutcomeRepository:
+                return outcome_repo
+
+            app.dependency_overrides[resolve_outcome_repo] = _resolve_outcome_repo
+
             await review_engine.start()
+
+            # Wire outcome resolver (background polling for actual outcomes)
+            outcome_resolver = OutcomeResolver(
+                outcome_repo=outcome_repo,
+                tracker_factory=app.state.tracker_factory,
+                interval=settings.review.outcome_poll_interval_seconds,
+            )
+            app.state.outcome_resolver = outcome_resolver
+            await outcome_resolver.start()
 
             # Wire contract engine (planner-driven sprint contracts)
             contract_engine = ContractEngine(
@@ -352,6 +372,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
 
             # Lifecycle cleanup
+            await outcome_resolver.stop()
             await contract_engine.stop()
             await review_engine.stop()
             await notification_service.stop()

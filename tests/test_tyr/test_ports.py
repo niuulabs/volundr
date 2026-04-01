@@ -49,6 +49,7 @@ class TestTrackerPort:
             "attach_document",
             "add_comment",
             "attach_issue_document",
+            "get_issue_resolution",
         }
         abstract_methods = {
             name

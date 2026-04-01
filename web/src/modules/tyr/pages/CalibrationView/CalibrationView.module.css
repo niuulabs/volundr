@@ -1,0 +1,212 @@
+.page {
+  padding: var(--space-6);
+  max-width: 960px;
+}
+
+.heading {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-4);
+}
+
+.subheading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--space-2);
+}
+
+.loading {
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.error {
+  color: var(--color-accent-red);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  text-align: center;
+  padding: var(--space-12) 0;
+}
+
+/* Window selector */
+.windowSelector {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
+}
+
+.windowBtn {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.windowBtn:hover {
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.windowBtnActive {
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 8%, var(--color-bg-secondary));
+}
+
+/* Stats row */
+.statsRow {
+  display: flex;
+  gap: 2px;
+  margin-bottom: var(--space-6);
+}
+
+.statCard {
+  flex: 1;
+  text-align: center;
+  padding: var(--space-3) var(--space-2);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.statValue {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.statLabel {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  font-family: var(--font-sans);
+}
+
+/* Section */
+.section {
+  margin-bottom: var(--space-6);
+}
+
+/* Divergence badge */
+.badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.badge[data-band='green'] {
+  background: color-mix(in srgb, var(--color-accent-emerald) 20%, transparent);
+  color: var(--color-accent-emerald);
+  border: 1px solid color-mix(in srgb, var(--color-accent-emerald) 30%, transparent);
+}
+
+.badge[data-band='amber'] {
+  background: color-mix(in srgb, var(--color-accent-amber) 20%, transparent);
+  color: var(--color-accent-amber);
+  border: 1px solid color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
+}
+
+.badge[data-band='red'] {
+  background: color-mix(in srgb, var(--color-accent-red) 20%, transparent);
+  color: var(--color-accent-red);
+  border: 1px solid color-mix(in srgb, var(--color-accent-red) 30%, transparent);
+}
+
+/* Confidence text */
+.confidenceText {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.confidenceText strong {
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+}
+
+/* Prompt editor */
+.collapseToggle {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.collapseToggle:hover {
+  color: var(--color-text-primary);
+}
+
+.promptEditor {
+  margin-top: var(--space-3);
+}
+
+.promptTextarea {
+  width: 100%;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: var(--space-3);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.promptTextarea:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
+.saveBtn {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-brand);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-bg-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.saveBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
