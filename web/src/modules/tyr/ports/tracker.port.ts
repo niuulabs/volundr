@@ -6,5 +6,5 @@ export interface ITrackerBrowserService {
   getProject(projectId: string): Promise<TrackerProject>;
   listMilestones(projectId: string): Promise<TrackerMilestone[]>;
   listIssues(projectId: string, milestoneId?: string): Promise<TrackerIssue[]>;
-  importProject(projectId: string, repos: string[]): Promise<Saga>;
+  importProject(projectId: string, repos: string[], baseBranch?: string): Promise<Saga>;
 }

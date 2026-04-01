@@ -471,7 +471,7 @@ export class MockTrackerBrowserService implements ITrackerBrowserService {
     return issues.map(i => ({ ...i, labels: [...i.labels] }));
   }
 
-  async importProject(projectId: string, repos: string[]): Promise<Saga> {
+  async importProject(projectId: string, repos: string[], _baseBranch = 'main'): Promise<Saga> {
     await delay(500);
     const project = mockProjects.find(p => p.id === projectId);
     if (!project) {
