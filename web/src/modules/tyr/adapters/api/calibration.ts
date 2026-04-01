@@ -1,5 +1,9 @@
 import { createApiClient } from '@/modules/shared/api/client';
-import type { ICalibrationService, CalibrationData, ReviewerConfig } from '../../ports/calibration.port';
+import type {
+  ICalibrationService,
+  CalibrationData,
+  ReviewerConfig,
+} from '../../ports/calibration.port';
 
 const api = createApiClient('/api/v1/tyr');
 

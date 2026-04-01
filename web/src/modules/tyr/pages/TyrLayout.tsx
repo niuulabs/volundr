@@ -1,5 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { ScrollText, PlusCircle, Radio, Monitor, Download, LayoutDashboard, Gauge } from 'lucide-react';
+import {
+  ScrollText,
+  PlusCircle,
+  Radio,
+  Monitor,
+  Download,
+  LayoutDashboard,
+  Gauge,
+} from 'lucide-react';
 import { cn } from '@/modules/shared/utils/classnames';
 import styles from './TyrLayout.module.css';
 

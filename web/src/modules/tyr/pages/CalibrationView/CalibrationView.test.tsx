@@ -57,7 +57,7 @@ describe('CalibrationView', () => {
   it('renders divergence badge with amber band for rate 5-15%', () => {
     vi.mocked(useCalibration).mockReturnValue({
       ...defaultHookResult,
-      data: { ...mockCalibrationData, divergence_rate: 0.10 },
+      data: { ...mockCalibrationData, divergence_rate: 0.1 },
     });
     render(<CalibrationView />);
     const badge = screen.getByText('10.0%');

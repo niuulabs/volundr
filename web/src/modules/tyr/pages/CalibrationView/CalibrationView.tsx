@@ -44,11 +44,19 @@ export function CalibrationView() {
   };
 
   if (error) {
-    return <div className={styles.page}><p className={styles.error}>{error}</p></div>;
+    return (
+      <div className={styles.page}>
+        <p className={styles.error}>{error}</p>
+      </div>
+    );
   }
 
   if (loading) {
-    return <div className={styles.page}><p className={styles.loading}>Loading calibration data…</p></div>;
+    return (
+      <div className={styles.page}>
+        <p className={styles.loading}>Loading calibration data…</p>
+      </div>
+    );
   }
 
   if (!data || data.total_decisions === 0) {
@@ -116,19 +124,14 @@ export function CalibrationView() {
       <div className={styles.section}>
         <h2 className={styles.subheading}>Confidence Delta</h2>
         <p className={styles.confidenceText}>
-          Avg confidence: approved{' '}
-          <strong>{data.avg_confidence_approved.toFixed(2)}</strong> vs reverted{' '}
-          <strong>{data.avg_confidence_reverted.toFixed(2)}</strong>
+          Avg confidence: approved <strong>{data.avg_confidence_approved.toFixed(2)}</strong> vs
+          reverted <strong>{data.avg_confidence_reverted.toFixed(2)}</strong>
         </p>
       </div>
 
       {/* Reviewer prompt editor */}
       <div className={styles.section}>
-        <button
-          type="button"
-          className={styles.collapseToggle}
-          onClick={handleTogglePrompt}
-        >
+        <button type="button" className={styles.collapseToggle} onClick={handleTogglePrompt}>
           {promptOpen ? '▾' : '▸'} Reviewer Prompt Editor
         </button>
         {promptOpen && (
