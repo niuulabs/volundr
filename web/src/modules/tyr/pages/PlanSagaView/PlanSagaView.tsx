@@ -115,7 +115,7 @@ export function PlanSagaView() {
         }
       })
       .catch(() => {});
-  }, [skuld.messages]);
+  }, [skuld.messages, activeSession?.source?.repo, repo]);
 
   const repoDisplayName = useMemo(() => {
     if (!repo) return '';
@@ -191,7 +191,7 @@ export function PlanSagaView() {
     } finally {
       setCommitting(false);
     }
-  }, [detectedStructure, repo, repoDisplayName, navigate]);
+  }, [detectedStructure, repo, repoDisplayName, navigate, commitRepo, includeTranscript, skuld.messages]);
 
   // Fetch finalize prompt from Tyr config
   const [finalizePrompt, setFinalizePrompt] = useState<string | null>(null);
