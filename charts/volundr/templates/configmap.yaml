@@ -265,6 +265,15 @@ data:
       cli_client_id: {{ .Values.authDiscovery.cliClientId | default "volundr-cli" | quote }}
       scopes: {{ .Values.authDiscovery.scopes | default "openid profile email" | quote }}
 
+    {{- if .Values.pat }}
+    pat:
+      token_issuer_adapter: {{ .Values.pat.token_issuer_adapter | quote }}
+      token_issuer_kwargs: {{ .Values.pat.token_issuer_kwargs | toJson }}
+      {{- if .Values.pat.ttl_days }}
+      ttl_days: {{ .Values.pat.ttl_days }}
+      {{- end }}
+    {{- end }}
+
     gateway:
       adapter: {{ .Values.gateway.adapter | quote }}
       kwargs: {{ .Values.gateway.kwargs | toJson }}
