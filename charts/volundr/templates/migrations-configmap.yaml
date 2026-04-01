@@ -589,4 +589,18 @@ data:
   000023_session_activity_state.down.sql: |
     ALTER TABLE sessions DROP COLUMN IF EXISTS activity_metadata;
     ALTER TABLE sessions DROP COLUMN IF EXISTS activity_state;
+
+  000024_rename_user_id_to_owner_id.up.sql: |
+    -- Rename user_id to owner_id in integration_connections
+    -- Code already references owner_id; this migration aligns the schema.
+    ALTER TABLE integration_connections RENAME COLUMN user_id TO owner_id;
+    DROP INDEX IF EXISTS idx_integration_connections_user;
+    CREATE INDEX IF NOT EXISTS idx_integration_connections_owner
+        ON integration_connections(owner_id, integration_type);
+
+  000024_rename_user_id_to_owner_id.down.sql: |
+    ALTER TABLE integration_connections RENAME COLUMN owner_id TO user_id;
+    DROP INDEX IF EXISTS idx_integration_connections_owner;
+    CREATE INDEX IF NOT EXISTS idx_integration_connections_user
+        ON integration_connections(user_id, integration_type);
 {{- end }}
