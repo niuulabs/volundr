@@ -496,6 +496,26 @@ class NativeTrackerAdapter(TrackerPort):
             for r in rows
         ]
 
+    async def get_issue_resolution(self, tracker_id: str) -> str | None:
+        """Map native raid status to a domain outcome.
+
+        Done → "merged", Failed → "abandoned", anything else → None.
+        """
+        row = await self._pool.fetchrow(
+            "SELECT status FROM raids WHERE tracker_id = $1",
+            tracker_id,
+        )
+        if row is None:
+            return None
+        status_text = row["status"]
+        match status_text:
+            case "Done":
+                return "merged"
+            case "Failed":
+                return "abandoned"
+            case _:
+                return None
+
     async def close(self) -> None:
         """No-op — pool lifecycle is managed externally."""
 

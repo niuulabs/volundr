@@ -170,3 +170,12 @@ class TrackerPort(ABC):
 
     @abstractmethod
     async def get_session_messages(self, tracker_id: str) -> list[SessionMessage]: ...
+
+    # -- Outcome resolution --
+
+    async def get_issue_resolution(self, tracker_id: str) -> str | None:
+        """Return the terminal outcome of a tracker issue, or None if still open.
+
+        Returns one of: "merged", "reverted", "abandoned", or None.
+        """
+        return None

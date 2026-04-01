@@ -10,12 +10,14 @@ import {
   ApiDispatcherService,
   ApiTrackerBrowserService,
   ApiTyrIntegrationService,
+  ApiCalibrationService,
 } from './api';
 import type { ITyrService } from '../ports';
 import type { IDispatcherService } from '../ports';
 import type { ITyrSessionService } from '../ports';
 import type { ITrackerBrowserService } from '../ports';
 import type { ITyrIntegrationService } from '../ports';
+import type { ICalibrationService } from '../ports/calibration.port';
 
 const useMocks = import.meta.env.VITE_USE_MOCK_TYR === 'true';
 
@@ -30,3 +32,4 @@ export const trackerService: ITrackerBrowserService = useMocks
 export const tyrIntegrationService: ITyrIntegrationService = useMocks
   ? new MockTyrIntegrationService()
   : new ApiTyrIntegrationService();
+export const calibrationService: ICalibrationService = new ApiCalibrationService();
