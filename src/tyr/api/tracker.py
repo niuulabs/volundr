@@ -41,7 +41,7 @@ class ImportRequest(BaseModel):
 
     project_id: str = Field(description="External tracker project ID")
     repos: list[str] = Field(description="Repositories (org/repo)")
-    base_branch: str = Field(default="dev", description="Branch to create feature branch from")
+    base_branch: str = Field(description="Branch to create feature branch from")
 
 
 class SagaResponse(BaseModel):
