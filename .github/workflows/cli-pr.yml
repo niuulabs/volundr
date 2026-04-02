@@ -1,0 +1,145 @@
+name: "CLI: PR"
+
+on:
+  pull_request:
+    paths:
+      - "src/cli/**"
+      - "src/niuu/**"
+      - "src/volundr/**"
+      - "src/tyr/**"
+      - "src/skuld/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Makefile"
+      - "scripts/smoke-test.sh"
+      - ".github/workflows/cli-pr.yml"
+
+permissions: read-all
+
+concurrency:
+  group: cli-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: "CLI: Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Ruff lint
+        run: uv run ruff check src/cli/ tests/test_cli/
+
+      - name: Ruff format check
+        run: uv run ruff format --check src/cli/ tests/test_cli/
+
+  test:
+    name: "CLI: Test"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run CLI tests with coverage
+        run: |
+          uv run pytest tests/test_cli/ -v --tb=short \
+            --override-ini="addopts=" \
+            --cov=src/cli \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
+
+      - name: Upload coverage to Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          CODECOV_VERSION="v0.8.0"
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
+          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
+          cd /tmp && sha256sum -c codecov.SHA256SUM
+          chmod +x /tmp/codecov
+          /tmp/codecov -f coverage.xml -F cli-python -t "${CODECOV_TOKEN}"
+
+  build:
+    name: "CLI: Build"
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies (with cli extras)
+        run: uv sync --extra cli --dev
+
+      - name: Install patchelf
+        run: sudo apt-get update && sudo apt-get install -y patchelf
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Copy migrations
+        run: make copy-migrations
+
+      - name: Nuitka build (dry run)
+        run: uv run python -m cli.build --dry-run
+
+  smoke:
+    name: "CLI: Smoke Test (script only)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Validate smoke test script syntax
+        run: bash -n scripts/smoke-test.sh
