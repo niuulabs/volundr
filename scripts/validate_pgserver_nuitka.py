@@ -17,7 +17,6 @@ Usage (compiled with Nuitka):
     ./validate_pgserver_nuitka.bin
 
 Expected output on success:
-    [OK] pgserver imported
     [OK] Embedded PG started at <host>:<port>
     [OK] Table created
     [OK] Row inserted

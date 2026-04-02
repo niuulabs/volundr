@@ -191,6 +191,22 @@ class TestStop:
         assert db._pg_instance is None
 
     @pytest.mark.asyncio
+    async def test_stop_cleans_up_pg_even_if_conn_close_fails(self):
+        mock_pg = _make_mock_pg()
+        mock_conn = _make_mock_conn()
+        mock_conn.close = AsyncMock(side_effect=ConnectionError("already closed"))
+
+        db = PgserverEmbeddedDatabase()
+        db._pg_instance = mock_pg
+        db._conn = mock_conn
+
+        await db.stop()
+
+        mock_pg.cleanup.assert_called_once()
+        assert db._conn is None
+        assert db._pg_instance is None
+
+    @pytest.mark.asyncio
     async def test_stop_is_safe_when_not_started(self):
         db = PgserverEmbeddedDatabase()
         await db.stop()  # should not raise

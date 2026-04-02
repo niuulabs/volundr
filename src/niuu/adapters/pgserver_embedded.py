@@ -97,10 +97,13 @@ class PgserverEmbeddedDatabase(EmbeddedDatabasePort):
 
     async def stop(self) -> None:
         if self._conn is not None:
-            await asyncio.wait_for(
-                self._conn.close(),
-                timeout=self._cleanup_timeout_s,
-            )
+            try:
+                await asyncio.wait_for(
+                    self._conn.close(),
+                    timeout=self._cleanup_timeout_s,
+                )
+            except Exception:
+                logger.warning("Failed to close asyncpg connection cleanly", exc_info=True)
             self._conn = None
             logger.info("asyncpg connection closed")
 
