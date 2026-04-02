@@ -35,6 +35,53 @@ class PluginConfig(BaseModel):
     )
 
 
+class DatabaseConfig(BaseModel):
+    """Database configuration for mini mode."""
+
+    mode: str = Field(
+        default="embedded",
+        description="Database mode: 'embedded' (pgserver) or 'external'.",
+    )
+    dsn: str = Field(
+        default="",
+        description="Database DSN for external mode.",
+    )
+
+
+class PodManagerConfig(BaseModel):
+    """Pod manager configuration for mini mode."""
+
+    adapter: str = Field(
+        default="volundr.adapters.outbound.local_process.LocalProcessPodManager",
+        description="Fully-qualified class path for the pod manager adapter.",
+    )
+    workspaces_dir: str = Field(
+        default="~/.niuu/workspaces",
+        description="Directory for session workspaces.",
+    )
+    claude_binary: str = Field(
+        default="claude",
+        description="Path or name of the claude binary.",
+    )
+    max_concurrent: int = Field(
+        default=4,
+        description="Maximum concurrent sessions.",
+    )
+
+
+class ServerConfig(BaseModel):
+    """Server configuration — single port for all services."""
+
+    host: str = Field(
+        default="127.0.0.1",
+        description="Host to bind the server to.",
+    )
+    port: int = Field(
+        default=8080,
+        description="Single port for all services (Volundr, Tyr, Web UI).",
+    )
+
+
 class ServiceConfig(BaseModel):
     """Service management configuration."""
 
@@ -72,6 +119,13 @@ class CLISettings(BaseSettings):
         extra="ignore",
     )
 
+    mode: str = Field(
+        default="mini",
+        description="Operating mode: 'mini' (local) or 'cluster'.",
+    )
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    pod_manager: PodManagerConfig = Field(default_factory=PodManagerConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     services: ServiceConfig = Field(default_factory=ServiceConfig)
     tui: TUIConfig = Field(default_factory=TUIConfig)

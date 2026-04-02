@@ -1,0 +1,264 @@
+"""Preflight checks — validate the environment before starting services.
+
+Each check returns a PreflightResult with pass/fail and an actionable error
+message. Checks are run sequentially; the first failure can optionally abort
+the entire startup.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import shutil
+import socket
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+logger = logging.getLogger(__name__)
+
+# Defaults — override via PreflightConfig
+DEFAULT_PORTS: list[int] = [8080, 8081, 9100]
+MIN_DISK_SPACE_BYTES = 1_073_741_824  # 1 GB
+
+
+@dataclass(frozen=True)
+class PreflightResult:
+    """Result of a single preflight check."""
+
+    name: str
+    passed: bool
+    message: str
+    warn_only: bool = False
+
+
+@dataclass
+class PreflightConfig:
+    """Configuration for preflight checks."""
+
+    claude_binary: str = "claude"
+    api_key_env: str = "ANTHROPIC_API_KEY"
+    ports: list[int] = field(default_factory=lambda: list(DEFAULT_PORTS))
+    workspaces_dir: str = "~/.niuu/workspaces"
+    min_disk_space_bytes: int = MIN_DISK_SPACE_BYTES
+    database_mode: str = "embedded"
+    database_dsn: str = ""
+
+
+def check_claude_binary(config: PreflightConfig) -> PreflightResult:
+    """Verify the claude binary is available and executable."""
+    binary = config.claude_binary
+    resolved = shutil.which(binary)
+    if not resolved:
+        return PreflightResult(
+            name="claude binary",
+            passed=False,
+            message=f"claude binary '{binary}' not found in PATH. "
+            "Install it or set claude_binary in config.",
+        )
+    return PreflightResult(
+        name="claude binary",
+        passed=True,
+        message=f"claude binary found: {resolved}",
+    )
+
+
+def check_api_key(config: PreflightConfig) -> PreflightResult:
+    """Verify the Anthropic API key is set."""
+    key = os.environ.get(config.api_key_env, "")
+    if not key:
+        return PreflightResult(
+            name="API key",
+            passed=False,
+            message=f"{config.api_key_env} is not set. Export it or add it to your secrets config.",
+        )
+    # Basic format validation — key should be non-trivial
+    if len(key) < 10:
+        return PreflightResult(
+            name="API key",
+            passed=False,
+            message=f"{config.api_key_env} appears invalid (too short).",
+        )
+    return PreflightResult(
+        name="API key",
+        passed=True,
+        message=f"{config.api_key_env} is set.",
+    )
+
+
+def check_port_available(port: int) -> PreflightResult:
+    """Check a single port is not already bound."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            result = sock.connect_ex(("127.0.0.1", port))
+            if result == 0:
+                return PreflightResult(
+                    name=f"port {port}",
+                    passed=False,
+                    message=f"Port {port} is already in use. "
+                    "Stop the conflicting process or change the port in config.",
+                )
+    except OSError:
+        pass
+    return PreflightResult(
+        name=f"port {port}",
+        passed=True,
+        message=f"Port {port} is available.",
+    )
+
+
+def check_ports(config: PreflightConfig) -> list[PreflightResult]:
+    """Check all configured ports are available."""
+    return [check_port_available(port) for port in config.ports]
+
+
+def check_workspace_dir(config: PreflightConfig) -> PreflightResult:
+    """Verify workspaces_dir exists and is writable, create if missing."""
+    ws_path = Path(config.workspaces_dir).expanduser()
+    try:
+        ws_path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return PreflightResult(
+            name="workspace dir",
+            passed=False,
+            message=f"Cannot create workspace directory '{ws_path}': {exc}",
+        )
+    if not os.access(ws_path, os.W_OK):
+        return PreflightResult(
+            name="workspace dir",
+            passed=False,
+            message=f"Workspace directory '{ws_path}' is not writable.",
+        )
+    return PreflightResult(
+        name="workspace dir",
+        passed=True,
+        message=f"Workspace directory ready: {ws_path}",
+    )
+
+
+def check_database(config: PreflightConfig) -> PreflightResult:
+    """Verify database availability based on mode."""
+    if config.database_mode == "embedded":
+        try:
+            import pgserver  # noqa: F401
+
+            return PreflightResult(
+                name="database",
+                passed=True,
+                message="pgserver available for embedded PostgreSQL.",
+            )
+        except ImportError:
+            return PreflightResult(
+                name="database",
+                passed=False,
+                message="pgserver not installed. Install it with: pip install pgserver",
+            )
+    # external mode — just check DSN is set
+    if not config.database_dsn:
+        return PreflightResult(
+            name="database",
+            passed=False,
+            message="External database mode requires database_dsn to be set.",
+        )
+    return PreflightResult(
+        name="database",
+        passed=True,
+        message="External database DSN configured.",
+    )
+
+
+def check_git(config: PreflightConfig) -> PreflightResult:
+    """Verify git is installed. Warn if gh is missing."""
+    git_path = shutil.which("git")
+    if not git_path:
+        return PreflightResult(
+            name="git",
+            passed=False,
+            message="git is not installed. Install it to continue.",
+        )
+    gh_path = shutil.which("gh")
+    if not gh_path:
+        return PreflightResult(
+            name="git",
+            passed=True,
+            warn_only=True,
+            message="git found. Warning: gh (GitHub CLI) not installed — "
+            "PR features will be unavailable.",
+        )
+    return PreflightResult(
+        name="git",
+        passed=True,
+        message="git and gh found.",
+    )
+
+
+def check_disk_space(config: PreflightConfig) -> PreflightResult:
+    """Warn if less than 1GB free in workspaces_dir."""
+    ws_path = Path(config.workspaces_dir).expanduser()
+    # Use parent if dir doesn't exist yet
+    check_path = ws_path if ws_path.exists() else ws_path.parent
+    if not check_path.exists():
+        check_path = Path.home()
+    try:
+        stat = shutil.disk_usage(check_path)
+        if stat.free < config.min_disk_space_bytes:
+            free_mb = stat.free // (1024 * 1024)
+            return PreflightResult(
+                name="disk space",
+                passed=True,
+                warn_only=True,
+                message=f"Low disk space: {free_mb}MB free in {check_path}. "
+                "Recommend at least 1GB.",
+            )
+    except OSError as exc:
+        return PreflightResult(
+            name="disk space",
+            passed=True,
+            warn_only=True,
+            message=f"Could not check disk space: {exc}",
+        )
+    return PreflightResult(
+        name="disk space",
+        passed=True,
+        message="Sufficient disk space available.",
+    )
+
+
+def run_preflight_checks(config: PreflightConfig) -> list[PreflightResult]:
+    """Run all preflight checks and return results.
+
+    Checks are run sequentially. All results are collected regardless
+    of pass/fail so the caller can decide how to handle them.
+    """
+    results: list[PreflightResult] = []
+    results.append(check_claude_binary(config))
+    results.append(check_api_key(config))
+    results.extend(check_ports(config))
+    results.append(check_workspace_dir(config))
+    results.append(check_database(config))
+    results.append(check_git(config))
+    results.append(check_disk_space(config))
+    return results
+
+
+def has_failures(results: Sequence[PreflightResult]) -> bool:
+    """Return True if any non-warning check failed."""
+    return any(not r.passed and not r.warn_only for r in results)
+
+
+def format_results(results: Sequence[PreflightResult]) -> str:
+    """Format preflight results for terminal output."""
+    lines: list[str] = []
+    for r in results:
+        if not r.passed:
+            icon = "FAIL"
+        elif r.warn_only:
+            icon = "WARN"
+        else:
+            icon = " OK "
+        lines.append(f"  [{icon}] {r.name}: {r.message}")
+    return "\n".join(lines)

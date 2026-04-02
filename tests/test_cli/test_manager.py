@@ -9,6 +9,7 @@ from cli.services.manager import (
     CircularDependencyError,
     ServiceManager,
     ServiceState,
+    StartupError,
 )
 from tests.test_cli.conftest import FakePlugin, StubService
 
@@ -98,7 +99,17 @@ class TestServiceLifecycle:
     async def test_start_unhealthy(self, registry: PluginRegistry, manager: ServiceManager) -> None:
         svc = StubService(healthy=False)
         registry.register(FakePlugin(name="a", service=svc))
-        await manager.start_all()
+        with pytest.raises(StartupError, match="health check failed"):
+            await manager.start_all()
+        assert svc.started is True
+        assert manager.services["a"].state == ServiceState.UNHEALTHY
+
+    async def test_start_unhealthy_no_rollback(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        svc = StubService(healthy=False)
+        registry.register(FakePlugin(name="a", service=svc))
+        await manager.start_all(rollback_on_failure=False)
         assert svc.started is True
         assert manager.services["a"].state == ServiceState.UNHEALTHY
 
@@ -151,3 +162,176 @@ class TestServiceLifecycle:
         services = manager.services
         services.clear()
         assert len(manager.services) == 1
+
+
+class TestRollback:
+    """Tests for rollback behavior on startup failure."""
+
+    async def test_rollback_stops_started_services(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        svc_a = StubService()
+        svc_b = StubService(healthy=False)
+        registry.register(FakePlugin(name="a", service=svc_a))
+        registry.register(FakePlugin(name="b", deps=["a"], service=svc_b))
+        with pytest.raises(StartupError, match="b"):
+            await manager.start_all()
+        # a was started then rolled back
+        assert svc_a.started is True
+        assert svc_a.stopped is True
+        # b was started but unhealthy, not in "started" list for rollback
+        assert svc_b.started is True
+
+    async def test_rollback_on_start_exception(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        svc_a = StubService()
+        svc_b = StubService()
+
+        async def bad_start() -> None:
+            raise RuntimeError("boom")
+
+        svc_b.start = bad_start  # type: ignore[assignment]
+
+        registry.register(FakePlugin(name="a", service=svc_a))
+        registry.register(FakePlugin(name="b", deps=["a"], service=svc_b))
+        with pytest.raises(StartupError, match="b"):
+            await manager.start_all()
+        assert svc_a.stopped is True
+
+    async def test_rollback_handles_stop_errors(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        svc_a = StubService()
+
+        async def bad_stop() -> None:
+            raise RuntimeError("stop failed")
+
+        svc_a.stop = bad_stop  # type: ignore[assignment]
+
+        svc_b = StubService(healthy=False)
+        registry.register(FakePlugin(name="a", service=svc_a))
+        registry.register(FakePlugin(name="b", deps=["a"], service=svc_b))
+        # Should not raise from the rollback stop error
+        with pytest.raises(StartupError, match="b"):
+            await manager.start_all()
+
+    async def test_no_rollback_when_disabled(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        svc_a = StubService()
+        svc_b = StubService(healthy=False)
+        registry.register(FakePlugin(name="a", service=svc_a))
+        registry.register(FakePlugin(name="b", deps=["a"], service=svc_b))
+        await manager.start_all(rollback_on_failure=False)
+        assert svc_a.stopped is False
+
+
+class TestStatusCallback:
+    """Tests for on_status_change callback."""
+
+    async def test_callback_called_on_transitions(self, registry: PluginRegistry) -> None:
+        events: list[tuple[str, ServiceState]] = []
+
+        def callback(name: str, state: ServiceState) -> None:
+            events.append((name, state))
+
+        mgr = ServiceManager(
+            registry=registry,
+            health_check_interval=0.01,
+            health_check_timeout=1.0,
+            health_check_max_retries=3,
+            on_status_change=callback,
+        )
+        svc = StubService()
+        registry.register(FakePlugin(name="a", service=svc))
+        await mgr.start_all()
+        assert ("a", ServiceState.STARTING) in events
+        assert ("a", ServiceState.HEALTHY) in events
+
+    async def test_callback_on_stop(self, registry: PluginRegistry) -> None:
+        events: list[tuple[str, ServiceState]] = []
+
+        def callback(name: str, state: ServiceState) -> None:
+            events.append((name, state))
+
+        mgr = ServiceManager(
+            registry=registry,
+            health_check_interval=0.01,
+            health_check_timeout=1.0,
+            health_check_max_retries=3,
+            on_status_change=callback,
+        )
+        svc = StubService()
+        registry.register(FakePlugin(name="a", service=svc))
+        await mgr.start_all()
+        events.clear()
+        await mgr.stop_all()
+        assert ("a", ServiceState.STOPPING) in events
+        assert ("a", ServiceState.STOPPED) in events
+
+    async def test_callback_on_rollback(self, registry: PluginRegistry) -> None:
+        events: list[tuple[str, ServiceState]] = []
+
+        def callback(name: str, state: ServiceState) -> None:
+            events.append((name, state))
+
+        mgr = ServiceManager(
+            registry=registry,
+            health_check_interval=0.01,
+            health_check_timeout=1.0,
+            health_check_max_retries=3,
+            on_status_change=callback,
+        )
+        svc_a = StubService()
+        svc_b = StubService(healthy=False)
+        registry.register(FakePlugin(name="a", service=svc_a))
+        registry.register(FakePlugin(name="b", deps=["a"], service=svc_b))
+        with pytest.raises(StartupError):
+            await mgr.start_all()
+        # a should have been rolled back
+        assert ("a", ServiceState.STOPPING) in events
+        assert ("a", ServiceState.STOPPED) in events
+
+    async def test_no_callback_when_none(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        # Default manager has no callback — should not crash
+        svc = StubService()
+        registry.register(FakePlugin(name="a", service=svc))
+        await manager.start_all()
+        assert manager.services["a"].state == ServiceState.HEALTHY
+
+
+class TestStartOrder:
+    """Tests for start_order property."""
+
+    async def test_start_order_recorded(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        registry.register(FakePlugin(name="a"))
+        registry.register(FakePlugin(name="b", deps=["a"]))
+        await manager.start_all()
+        assert manager.start_order == ["a", "b"]
+
+    def test_start_order_empty_before_start(self, manager: ServiceManager) -> None:
+        assert manager.start_order == []
+
+    async def test_start_order_is_copy(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        registry.register(FakePlugin(name="a"))
+        await manager.start_all()
+        order = manager.start_order
+        order.clear()
+        assert len(manager.start_order) == 1
+
+
+class TestStartupError:
+    """Tests for StartupError exception."""
+
+    def test_startup_error_attributes(self) -> None:
+        err = StartupError("tyr", "connection refused")
+        assert err.service_name == "tyr"
+        assert "tyr" in str(err)
+        assert "connection refused" in str(err)
