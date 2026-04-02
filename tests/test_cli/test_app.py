@@ -18,7 +18,7 @@ def _build_test_app(
     """Build a test app with given plugins (no entry point discovery)."""
     settings = CLISettings()
     registry = PluginRegistry()
-    for p in (plugins or []):
+    for p in plugins or []:
         registry.register(p)
     app = build_app(settings=settings, registry=registry)
     return app, settings, registry

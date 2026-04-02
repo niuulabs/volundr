@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 import typer
 
-from cli.registry import ServicePlugin
+from niuu.ports.plugin import ServicePlugin
 
 
 class TyrPlugin(ServicePlugin):

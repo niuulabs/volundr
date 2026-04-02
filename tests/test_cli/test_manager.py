@@ -51,9 +51,7 @@ class TestDependencyResolution:
         assert order.index("b") < order.index("d")
         assert order.index("c") < order.index("d")
 
-    def test_circular_dependency(
-        self, registry: PluginRegistry, manager: ServiceManager
-    ) -> None:
+    def test_circular_dependency(self, registry: PluginRegistry, manager: ServiceManager) -> None:
         registry.register(FakePlugin(name="a", deps=["b"]))
         registry.register(FakePlugin(name="b", deps=["a"]))
         with pytest.raises(CircularDependencyError, match="circular dependency"):
@@ -70,9 +68,7 @@ class TestDependencyResolution:
         assert "b" in order
         assert "c" not in order
 
-    def test_only_single_no_deps(
-        self, registry: PluginRegistry, manager: ServiceManager
-    ) -> None:
+    def test_only_single_no_deps(self, registry: PluginRegistry, manager: ServiceManager) -> None:
         registry.register(FakePlugin(name="a"))
         registry.register(FakePlugin(name="b"))
         order = manager.resolve_start_order(only="a")
@@ -99,9 +95,7 @@ class TestServiceLifecycle:
         assert svc.started is True
         assert manager.services["a"].state == ServiceState.HEALTHY
 
-    async def test_start_unhealthy(
-        self, registry: PluginRegistry, manager: ServiceManager
-    ) -> None:
+    async def test_start_unhealthy(self, registry: PluginRegistry, manager: ServiceManager) -> None:
         svc = StubService(healthy=False)
         registry.register(FakePlugin(name="a", service=svc))
         await manager.start_all()
@@ -116,9 +110,7 @@ class TestServiceLifecycle:
         assert svc.stopped is True
         assert manager.services["a"].state == ServiceState.STOPPED
 
-    async def test_start_with_only(
-        self, registry: PluginRegistry, manager: ServiceManager
-    ) -> None:
+    async def test_start_with_only(self, registry: PluginRegistry, manager: ServiceManager) -> None:
         svc_a = StubService()
         svc_b = StubService()
         svc_c = StubService()

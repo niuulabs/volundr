@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cli.config import CLISettings, PluginConfig, ServiceConfig, TUIConfig
 
 
@@ -29,12 +31,7 @@ class TestCLISettings:
         config = TUIConfig()
         assert config.theme == "textual-dark"
 
-    def test_settings_from_env(self, monkeypatch: object) -> None:
-        import os
-
-        os.environ["NIUU_CONTEXT"] = "remote"
-        try:
-            settings = CLISettings()
-            assert settings.context == "remote"
-        finally:
-            del os.environ["NIUU_CONTEXT"]
+    def test_settings_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NIUU_CONTEXT", "remote")
+        settings = CLISettings()
+        assert settings.context == "remote"

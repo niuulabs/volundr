@@ -11,7 +11,8 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 
-from cli.registry import PluginRegistry, Service
+from cli.registry import PluginRegistry
+from niuu.ports.plugin import Service
 
 logger = logging.getLogger(__name__)
 
@@ -93,15 +94,8 @@ class ServiceManager:
 
     def _topological_sort(self, graph: dict[str, list[str]]) -> list[str]:
         """Kahn's algorithm for topological sort. Detects cycles."""
-        in_degree: dict[str, int] = {n: 0 for n in graph}
-        for node, deps in graph.items():
-            for dep in deps:
-                if dep not in in_degree:
-                    in_degree[dep] = 0
-                in_degree[dep] = in_degree.get(dep, 0)
-
         # Build adjacency for "dep -> dependent"
-        adj: dict[str, list[str]] = {n: [] for n in in_degree}
+        adj: dict[str, list[str]] = {n: [] for n in graph}
         for node, deps in graph.items():
             for dep in deps:
                 if dep not in adj:
@@ -171,8 +165,12 @@ class ServiceManager:
             status.state = ServiceState.STOPPED
 
     async def _wait_healthy(self, name: str, service: Service) -> bool:
-        """Poll health check until healthy or timeout."""
+        """Poll health check until healthy, timeout, or max retries."""
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + self._health_check_timeout
         for attempt in range(self._health_check_max_retries):
+            if loop.time() > deadline:
+                break
             try:
                 if await service.health_check():
                     return True
