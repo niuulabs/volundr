@@ -159,7 +159,7 @@ class TestDynamicUpCallback:
         assert "volundr" in sig.parameters
         assert "tyr" in sig.parameters
         assert "skip_preflight" in sig.parameters
-        assert "start_all" in sig.parameters
+        assert "all" in sig.parameters
 
     def test_up_flag_defaults_are_none_for_services(self) -> None:
         service_defs = {"skuld": _make_svc_def("skuld", default_enabled=False)}
@@ -245,7 +245,9 @@ class TestCreatePlatformCommands:
         platform, *_ = self._make_platform()
         result = runner.invoke(platform, ["up", "--help"])
         assert result.exit_code == 0
-        assert "all" in result.output.lower()
+        # Must be --all, not --start-all
+        assert "--all" in result.output
+        assert "--start-all" not in result.output
 
 
 class TestDependencyResolutionViaEnabledServices:

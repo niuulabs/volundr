@@ -167,7 +167,7 @@ def _build_up_callback(
     def up(**kwargs: bool | None) -> None:
         """Start platform services."""
         skip_preflight: bool = bool(kwargs.pop("skip_preflight", False))
-        start_all: bool = bool(kwargs.pop("start_all", False))
+        start_all: bool = bool(kwargs.pop("all", False))
         svc_flags: dict[str, bool | None] = dict(kwargs)
 
         enabled = _resolve_enabled_services(service_defs, settings, start_all, svc_flags)
@@ -198,8 +198,9 @@ def _build_up_callback(
             loop.close()
         typer.echo("All services stopped. Goodbye.")
 
-    # Build dynamic signature: skip_preflight, start_all, then one Optional[bool]
-    # per service.  Typer reads __signature__ and __annotations__ for introspection.
+    # Build dynamic signature: skip_preflight, all, then one bool | None per service.
+    # Typer reads __signature__ and __annotations__ for introspection.
+    # "all" is a valid inspect.Parameter name even though it shadows the builtin.
     params = [
         inspect.Parameter(
             "skip_preflight",
@@ -208,7 +209,7 @@ def _build_up_callback(
             annotation=bool,
         ),
         inspect.Parameter(
-            "start_all",
+            "all",
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=False,
             annotation=bool,
