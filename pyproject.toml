@@ -35,6 +35,10 @@ otel = [
 encryption = [
     "cryptography>=42.0",
 ]
+cli = [
+    "textual>=0.79",
+    "nuitka>=2.1",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -42,6 +46,7 @@ dev = [
     "ruff>=0.1",
     "respx>=0.21",
     "cryptography>=42.0",
+    "textual>=0.79",
 ]
 
 [project.scripts]
