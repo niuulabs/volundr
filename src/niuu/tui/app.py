@@ -21,8 +21,8 @@ MAX_LOG_ROWS = 50
 class StatusBar(Static):
     """Displays async worker status and tick count."""
 
-    def __init__(self) -> None:
-        super().__init__("Worker: idle | Ticks: 0")
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__("Worker: idle | Ticks: 0", **kwargs)
         self._ticks: int = 0
         self._worker_status: str = "idle"
 
@@ -117,7 +117,7 @@ class SpikeApp(App[str]):
                 yield Static("- CSS styling", classes="sidebar-info")
             with Vertical(id="content"):
                 yield DataTable(id="log-table")
-                yield StatusBar()
+                yield StatusBar(id="status-bar")
         yield Input(placeholder="Type a message and press Enter...", id="input-bar")
         yield Footer()
 
@@ -151,7 +151,7 @@ class SpikeApp(App[str]):
         now = datetime.now(UTC).strftime("%H:%M:%S")
         table.add_row(now, source, message)
         if table.row_count > MAX_LOG_ROWS:
-            table.remove_row(table.rows[next(iter(table.rows))].key)
+            table.remove_row(next(iter(table.rows)))
 
     @work(exclusive=True)
     async def _start_tick_worker(self) -> None:
