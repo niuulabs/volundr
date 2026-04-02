@@ -15,12 +15,13 @@ Parameterised via BINARY_NAME / ENTRY_POINT for future targets
 
 from __future__ import annotations
 
-import argparse
 import platform
 import shlex
 import subprocess
 import sys
 from pathlib import Path
+
+import typer
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -117,46 +118,30 @@ def build_command(
     return cmd
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Parse args and run the Nuitka build."""
-    parser = argparse.ArgumentParser(description="Build Niuu single-binary distribution")
-    parser.add_argument(
-        "--name",
-        default=DEFAULT_BINARY_NAME,
-        help=f"Binary name (default: {DEFAULT_BINARY_NAME})",
-    )
-    parser.add_argument(
-        "--entry",
-        default=DEFAULT_ENTRY_POINT,
-        help=f"Entry point module (default: {DEFAULT_ENTRY_POINT})",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default=DEFAULT_OUTPUT_DIR,
-        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print the command without running it",
-    )
+build_cli = typer.Typer()
 
-    args = parser.parse_args(argv)
-    cmd = build_command(
-        binary_name=args.name,
-        entry_point=args.entry,
-        output_dir=args.output_dir,
-    )
 
-    if args.dry_run:
-        print(shlex.join(cmd))
-        return 0
+@build_cli.command()
+def main(
+    name: str = typer.Option(
+        DEFAULT_BINARY_NAME, help=f"Binary name (default: {DEFAULT_BINARY_NAME})"
+    ),
+    entry: str = typer.Option(DEFAULT_ENTRY_POINT, help="Entry point module"),
+    output_dir: str = typer.Option(DEFAULT_OUTPUT_DIR, "--output-dir", help="Output directory"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print command without running"),
+) -> None:
+    """Build Niuu single-binary distribution."""
+    cmd = build_command(binary_name=name, entry_point=entry, output_dir=output_dir)
 
-    print(f"Building {args.name} binary …")
-    print(f"Command: {shlex.join(cmd)}")
+    if dry_run:
+        typer.echo(shlex.join(cmd))
+        raise typer.Exit()
+
+    typer.echo(f"Building {name} binary …")
+    typer.echo(f"Command: {shlex.join(cmd)}")
     result = subprocess.run(cmd, check=False)
-    return result.returncode
+    raise typer.Exit(result.returncode)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    build_cli()

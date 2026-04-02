@@ -1,30 +1,12 @@
-"""Tests for individual CLI commands."""
+"""Tests for individual CLI commands (_commands/ modules)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import patch
 
-from cli._commands.down import execute as down_execute
 from cli._commands.migrate import execute as migrate_execute
 from cli._commands.serve import execute as serve_execute
-from cli._commands.status import execute as status_execute
-from cli._commands.up import execute as up_execute
-
-
-class TestUpCommand:
-    def test_returns_zero(self):
-        assert up_execute() == 0
-
-
-class TestDownCommand:
-    def test_returns_zero(self):
-        assert down_execute() == 0
-
-
-class TestStatusCommand:
-    def test_returns_zero(self):
-        assert status_execute() == 0
 
 
 class TestServeCommand:

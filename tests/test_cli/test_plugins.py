@@ -1,11 +1,10 @@
-"""Tests for volundr.plugin, tyr.plugin, and the command plugin registry."""
+"""Tests for volundr.plugin, tyr.plugin, and the plugin registry."""
 
 from __future__ import annotations
 
 import typer
 from typer.testing import CliRunner
 
-from cli.plugins import PLUGIN_REGISTRY
 from cli.registry import PluginRegistry
 from tyr.plugin import TyrPlugin
 from volundr.plugin import VolundrPlugin
@@ -121,27 +120,3 @@ class TestPluginDiscovery:
         manager = ServiceManager(registry=registry)
         order = manager.resolve_start_order()
         assert order.index("volundr") < order.index("tyr")
-
-
-class TestCommandPluginRegistry:
-    """Tests for the PLUGIN_REGISTRY from cli.plugins (NIU-400)."""
-
-    def test_registry_is_dict(self) -> None:
-        assert isinstance(PLUGIN_REGISTRY, dict)
-
-    def test_all_expected_commands_registered(self) -> None:
-        expected = {"up", "down", "migrate", "status", "serve"}
-        assert expected == set(PLUGIN_REGISTRY.keys())
-
-    def test_all_plugins_have_description(self) -> None:
-        for name, plugin in PLUGIN_REGISTRY.items():
-            assert hasattr(plugin, "description"), f"{name} missing description"
-            assert plugin.description, f"{name} has empty description"
-
-    def test_all_plugins_have_register_method(self) -> None:
-        for name, plugin in PLUGIN_REGISTRY.items():
-            assert hasattr(plugin, "register"), f"{name} missing register()"
-
-    def test_all_plugins_have_run_method(self) -> None:
-        for name, plugin in PLUGIN_REGISTRY.items():
-            assert hasattr(plugin, "run"), f"{name} missing run()"

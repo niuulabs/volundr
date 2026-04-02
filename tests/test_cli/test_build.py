@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+from typer.testing import CliRunner
+
 from cli.build import (
     DEFAULT_BINARY_NAME,
     DEFAULT_ENTRY_POINT,
     INCLUDE_PACKAGE_DATA,
     INCLUDE_PACKAGES,
     NOFOLLOW_IMPORTS,
+    build_cli,
     build_command,
-    main,
     platform_suffix,
 )
+
+runner = CliRunner()
 
 
 class TestPlatformSuffix:
@@ -93,12 +97,12 @@ class TestMainDryRun:
     """Tests for the build script's main() in dry-run mode."""
 
     def test_dry_run_returns_zero(self):
-        rc = main(["--dry-run"])
-        assert rc == 0
+        result = runner.invoke(build_cli, ["--dry-run"])
+        assert result.exit_code == 0
 
     def test_dry_run_with_custom_name(self):
-        rc = main(["--dry-run", "--name", "niuu-agent"])
-        assert rc == 0
+        result = runner.invoke(build_cli, ["--dry-run", "--name", "niuu-agent"])
+        assert result.exit_code == 0
 
 
 class TestConstants:
