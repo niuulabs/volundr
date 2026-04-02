@@ -22,7 +22,7 @@ export class ApiTrackerBrowserService implements ITrackerBrowserService {
     return api.get<TrackerIssue[]>(`/projects/${projectId}/issues${query}`);
   }
 
-  async importProject(projectId: string, repos: string[]): Promise<Saga> {
-    return api.post<Saga>('/import', { project_id: projectId, repos });
+  async importProject(projectId: string, repos: string[], baseBranch?: string): Promise<Saga> {
+    return api.post<Saga>('/import', { project_id: projectId, repos, base_branch: baseBranch });
   }
 }
