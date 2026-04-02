@@ -27,9 +27,14 @@ if TYPE_CHECKING:
 
 def _build_preflight_config(settings: CLISettings) -> PreflightConfig:
     """Build a PreflightConfig from CLISettings."""
+    ports = [settings.server.port]
+    for plugin_cfg in settings.plugins.extra:
+        plugin_port = plugin_cfg.get("port")
+        if isinstance(plugin_port, int) and plugin_port not in ports:
+            ports.append(plugin_port)
     return PreflightConfig(
         claude_binary=settings.pod_manager.claude_binary,
-        ports=[settings.server.port],
+        ports=ports,
         workspaces_dir=settings.pod_manager.workspaces_dir,
         database_mode=settings.database.mode,
         database_dsn=settings.database.dsn,

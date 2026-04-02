@@ -171,7 +171,7 @@ def check_database(config: PreflightConfig) -> PreflightResult:
     )
 
 
-def check_git(config: PreflightConfig) -> PreflightResult:
+def check_git() -> PreflightResult:
     """Verify git is installed. Warn if gh is missing."""
     git_path = shutil.which("git")
     if not git_path:
@@ -240,7 +240,7 @@ def run_preflight_checks(config: PreflightConfig) -> list[PreflightResult]:
     results.extend(check_ports(config))
     results.append(check_workspace_dir(config))
     results.append(check_database(config))
-    results.append(check_git(config))
+    results.append(check_git())
     results.append(check_disk_space(config))
     return results
 

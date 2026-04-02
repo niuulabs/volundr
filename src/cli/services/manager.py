@@ -203,9 +203,17 @@ class ServiceManager:
                 raise StartupError(name, "health check failed")
 
     async def stop_all(self) -> None:
-        """Stop services in reverse dependency order."""
-        order = list(reversed(self.resolve_start_order()))
-        for name in order:
+        """Stop services in reverse order of what was actually started."""
+        order = self._start_order if self._start_order else self.resolve_start_order()
+        await self._stop_services(list(reversed(order)))
+
+    async def _rollback(self, started: list[str]) -> None:
+        """Stop already-started services in reverse order after a failure."""
+        await self._stop_services(list(reversed(started)))
+
+    async def _stop_services(self, names: list[str]) -> None:
+        """Stop the given services in the order provided."""
+        for name in names:
             status = self._services.get(name)
             if not status or not status.service:
                 continue
@@ -215,21 +223,6 @@ class ServiceManager:
                 await status.service.stop()
             except Exception:
                 logger.exception("error stopping service: %s", name)
-            status.state = ServiceState.STOPPED
-            self._notify(name, ServiceState.STOPPED)
-
-    async def _rollback(self, started: list[str]) -> None:
-        """Stop already-started services in reverse order after a failure."""
-        for name in reversed(started):
-            status = self._services.get(name)
-            if not status or not status.service:
-                continue
-            status.state = ServiceState.STOPPING
-            self._notify(name, ServiceState.STOPPING)
-            try:
-                await status.service.stop()
-            except Exception:
-                logger.exception("error during rollback for service: %s", name)
             status.state = ServiceState.STOPPED
             self._notify(name, ServiceState.STOPPED)
 

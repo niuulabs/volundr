@@ -48,6 +48,46 @@ class TestBuildPreflightConfig:
         assert config.workspaces_dir == "~/.niuu/workspaces"
         assert config.database_mode == "embedded"
 
+    def test_collects_plugin_ports(self) -> None:
+        settings = CLISettings(
+            plugins={
+                "enabled": {},
+                "extra": [
+                    {"adapter": "some.Plugin", "port": 8081},
+                    {"adapter": "other.Plugin", "port": 9100},
+                ],
+            },
+        )
+        config = _build_preflight_config(settings)
+        assert 8080 in config.ports
+        assert 8081 in config.ports
+        assert 9100 in config.ports
+
+    def test_deduplicates_server_port_in_plugins(self) -> None:
+        settings = CLISettings(
+            plugins={
+                "enabled": {},
+                "extra": [
+                    {"adapter": "some.Plugin", "port": 8080},
+                ],
+            },
+        )
+        config = _build_preflight_config(settings)
+        assert config.ports == [8080]
+
+    def test_ignores_non_int_ports(self) -> None:
+        settings = CLISettings(
+            plugins={
+                "enabled": {},
+                "extra": [
+                    {"adapter": "some.Plugin", "port": "not-a-port"},
+                    {"adapter": "other.Plugin"},
+                ],
+            },
+        )
+        config = _build_preflight_config(settings)
+        assert config.ports == [8080]
+
 
 class TestStartup:
     async def test_startup_with_preflight_pass(self) -> None:

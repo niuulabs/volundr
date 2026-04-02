@@ -76,24 +76,18 @@ class TestConfigCommand:
 
 
 class TestUpDownCommands:
-    def test_up_skip_preflight(self) -> None:
-        """Up with --skip-preflight starts services (no blocking signal wait in test)."""
-        from unittest.mock import patch
-
-        # Patch _run in up to just do startup without waiting for signal
+    def test_down_stops_services(self) -> None:
         app, _, _ = _build_test_app()
-        with (
-            patch("cli.commands.core._startup") as mock_startup,
-            patch("cli.commands.core._shutdown") as mock_shutdown,
-        ):
-            mock_startup.return_value = None
-            mock_shutdown.return_value = None
-            # The up command uses asyncio loop internally; just test down
-            result = runner.invoke(app, ["down"])
-            assert result.exit_code == 0
+        result = runner.invoke(app, ["down"])
+        assert result.exit_code == 0
+        assert "stopped" in result.output.lower()
 
-    def test_down(self) -> None:
-        app, _, _ = _build_test_app()
+    def test_down_with_plugins(self) -> None:
+        from tests.test_cli.conftest import StubService
+
+        svc = StubService()
+        plugins = [FakePlugin(name="a", service=svc)]
+        app, _, _ = _build_test_app(plugins=plugins)
         result = runner.invoke(app, ["down"])
         assert result.exit_code == 0
         assert "stopped" in result.output.lower()

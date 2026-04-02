@@ -133,6 +133,22 @@ class TestServiceLifecycle:
         assert svc_b.started is True
         assert svc_c.started is False
 
+    async def test_stop_all_after_only_stops_started_only(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        """stop_all after start_all(only=...) only stops what was actually started."""
+        svc_a = StubService()
+        svc_b = StubService()
+        svc_c = StubService()
+        registry.register(FakePlugin(name="a", service=svc_a))
+        registry.register(FakePlugin(name="b", deps=["a"], service=svc_b))
+        registry.register(FakePlugin(name="c", service=svc_c))
+        await manager.start_all(only="b")
+        await manager.stop_all()
+        assert svc_a.stopped is True
+        assert svc_b.stopped is True
+        assert svc_c.stopped is False
+
     async def test_plugin_without_service(
         self, registry: PluginRegistry, manager: ServiceManager
     ) -> None:

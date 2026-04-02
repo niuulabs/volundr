@@ -162,7 +162,7 @@ class TestCheckDatabase:
 class TestCheckGit:
     def test_git_and_gh_found(self) -> None:
         with patch("cli.services.preflight.shutil.which", side_effect=lambda x: f"/usr/bin/{x}"):
-            result = check_git(PreflightConfig())
+            result = check_git()
         assert result.passed is True
         assert "git and gh" in result.message
 
@@ -173,14 +173,14 @@ class TestCheckGit:
             return None
 
         with patch("cli.services.preflight.shutil.which", side_effect=which_side_effect):
-            result = check_git(PreflightConfig())
+            result = check_git()
         assert result.passed is True
         assert result.warn_only is True
         assert "gh" in result.message
 
     def test_git_not_found(self) -> None:
         with patch("cli.services.preflight.shutil.which", return_value=None):
-            result = check_git(PreflightConfig())
+            result = check_git()
         assert result.passed is False
         assert "not installed" in result.message
 
