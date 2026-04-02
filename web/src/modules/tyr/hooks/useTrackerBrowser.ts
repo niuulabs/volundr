@@ -141,7 +141,8 @@ export function useTrackerBrowser(): UseTrackerBrowserResult {
     try {
       await trackerService.importProject(
         selectedProject.id,
-        selectedRepos.map(r => r.repoId)
+        selectedRepos.map(r => r.repoId),
+        selectedRepos[0]?.branch
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
