@@ -203,6 +203,30 @@ class TestGetFileDiff:
         resp = client.get(f"/api/v1/volundr/sessions/{session.id}/diff")
         assert resp.status_code == 422  # missing required query param
 
+    def test_rejects_path_traversal(self, mock_git_workspace, mock_session_repo, sessions_dir):
+        session = _make_session()
+        _create_workspace(sessions_dir, session.id)
+        mock_session_repo.get.return_value = session
+        client = _make_client(mock_git_workspace, mock_session_repo, str(sessions_dir))
+        resp = client.get(
+            f"/api/v1/volundr/sessions/{session.id}/diff",
+            params={"path": "../../etc/passwd"},
+        )
+        assert resp.status_code == 400
+        assert "must not contain '..'" in resp.json()["detail"]
+
+    def test_rejects_flag_in_base_branch(self, mock_git_workspace, mock_session_repo, sessions_dir):
+        session = _make_session()
+        _create_workspace(sessions_dir, session.id)
+        mock_session_repo.get.return_value = session
+        client = _make_client(mock_git_workspace, mock_session_repo, str(sessions_dir))
+        resp = client.get(
+            f"/api/v1/volundr/sessions/{session.id}/diff",
+            params={"path": "file.py", "base_branch": "--exec=malicious"},
+        )
+        assert resp.status_code == 400
+        assert "must not start with '-'" in resp.json()["detail"]
+
 
 class TestGetCommits:
     """Tests for GET /api/v1/volundr/sessions/{id}/commits."""
@@ -242,6 +266,18 @@ class TestGetCommits:
         mock_git_workspace.commit_log.assert_called_once()
         call_kwargs = mock_git_workspace.commit_log.call_args
         assert call_kwargs[1]["since"] == "2025-01-01" or call_kwargs[0][1] == "2025-01-01"
+
+    def test_rejects_flag_in_since(self, mock_git_workspace, mock_session_repo, sessions_dir):
+        session = _make_session()
+        _create_workspace(sessions_dir, session.id)
+        mock_session_repo.get.return_value = session
+        client = _make_client(mock_git_workspace, mock_session_repo, str(sessions_dir))
+        resp = client.get(
+            f"/api/v1/volundr/sessions/{session.id}/commits",
+            params={"since": "--exec=bad"},
+        )
+        assert resp.status_code == 400
+        assert "must not start with '-'" in resp.json()["detail"]
 
     def test_returns_empty_commits(self, mock_git_workspace, mock_session_repo, sessions_dir):
         session = _make_session()

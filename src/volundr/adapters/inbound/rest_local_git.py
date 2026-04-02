@@ -84,6 +84,26 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
+def _validate_path(value: str) -> str:
+    """Reject path traversal sequences for defense in depth."""
+    if ".." in value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path must not contain '..' sequences.",
+        )
+    return value
+
+
+def _validate_no_flag(value: str, name: str) -> str:
+    """Reject values starting with '-' to prevent option injection."""
+    if value.startswith("-"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{name} must not start with '-'.",
+        )
+    return value
+
+
 def _resolve_workspace(session_id: UUID, sessions_base: str) -> Path:
     """Resolve the workspace directory for a session.
 
@@ -188,6 +208,8 @@ def create_local_git_router(
         ),
     ) -> FileDiffResponse:
         """Return the unified diff for a single file in the session workspace."""
+        _validate_path(path)
+        _validate_no_flag(base_branch, "base_branch")
         session = await session_repository.get(session_id)
         if session is None:
             raise HTTPException(
@@ -213,6 +235,8 @@ def create_local_git_router(
         ),
     ) -> CommitLogResponse:
         """Return the recent commit log for the session workspace."""
+        if since is not None:
+            _validate_no_flag(since, "since")
         session = await session_repository.get(session_id)
         if session is None:
             raise HTTPException(

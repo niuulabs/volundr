@@ -16,17 +16,14 @@ from volundr.domain.ports import GitWorkspacePort
 
 logger = logging.getLogger(__name__)
 
-# Maximum time (seconds) a subprocess may run before being killed.
-SUBPROCESS_TIMEOUT = 30
-
-# Delimiter used by git log --pretty=format
-_LOG_DELIM = "|"
+# Null byte delimiter for git log — cannot appear in commit messages.
+_LOG_DELIM = "\x00"
 
 
 async def _run(
     *cmd: str,
     cwd: str,
-    timeout: float = SUBPROCESS_TIMEOUT,
+    timeout: float,
 ) -> tuple[int, str, str]:
     """Run a subprocess and return (returncode, stdout, stderr)."""
     proc = await asyncio.create_subprocess_exec(
@@ -76,7 +73,7 @@ def parse_numstat(raw: str) -> list[dict[str, str | int]]:
 
 
 def parse_log(raw: str) -> list[dict[str, str]]:
-    """Parse ``git log --pretty=format:%h|%s|%H`` output."""
+    """Parse ``git log --pretty=format:%h\\x00%s\\x00%H`` output."""
     results: list[dict[str, str]] = []
     for line in raw.strip().splitlines():
         if not line.strip():
@@ -123,6 +120,9 @@ def parse_pr_view(raw: str) -> dict[str, Any] | None:
 class LocalGitService(GitWorkspacePort):
     """GitWorkspacePort implementation that shells out to git/gh CLIs."""
 
+    def __init__(self, subprocess_timeout: float = 30.0) -> None:
+        self._timeout = subprocess_timeout
+
     async def diff_files(self, workspace_dir: str) -> list[dict[str, str | int]]:
         rc, stdout, stderr = await _run(
             "git",
@@ -130,6 +130,7 @@ class LocalGitService(GitWorkspacePort):
             "HEAD",
             "--numstat",
             cwd=workspace_dir,
+            timeout=self._timeout,
         )
         if rc != 0:
             logger.warning("git diff --numstat failed (rc=%d): %s", rc, stderr)
@@ -149,6 +150,7 @@ class LocalGitService(GitWorkspacePort):
             "--",
             path,
             cwd=workspace_dir,
+            timeout=self._timeout,
         )
         if rc != 0:
             logger.warning("git diff failed for %s (rc=%d): %s", path, rc, stderr)
@@ -163,7 +165,7 @@ class LocalGitService(GitWorkspacePort):
         cmd = ["git", "log", f"--pretty=format:%h{_LOG_DELIM}%s{_LOG_DELIM}%H"]
         if since:
             cmd.append(f"--since={since}")
-        rc, stdout, stderr = await _run(*cmd, cwd=workspace_dir)
+        rc, stdout, stderr = await _run(*cmd, cwd=workspace_dir, timeout=self._timeout)
         if rc != 0:
             logger.warning("git log failed (rc=%d): %s", rc, stderr)
             return []
@@ -177,6 +179,7 @@ class LocalGitService(GitWorkspacePort):
             "--json",
             "number,url,state,mergeable,statusCheckRollup",
             cwd=workspace_dir,
+            timeout=self._timeout,
         )
         if rc != 0:
             # gh not installed or no PR — graceful None
@@ -191,6 +194,7 @@ class LocalGitService(GitWorkspacePort):
             "--abbrev-ref",
             "HEAD",
             cwd=workspace_dir,
+            timeout=self._timeout,
         )
         if rc != 0:
             logger.warning("git rev-parse failed (rc=%d): %s", rc, stderr)

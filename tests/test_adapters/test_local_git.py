@@ -67,8 +67,8 @@ class TestParseLog:
 
     def test_simple_log(self):
         raw = (
-            "abc1234|feat: add feature|abc1234567890abcdef1234567890abcdef12345678\n"
-            "def5678|fix: bug fix|def5678901234abcdef5678901234abcdef56789012\n"
+            "abc1234\x00feat: add feature\x00abc1234567890abcdef1234567890abcdef12345678\n"
+            "def5678\x00fix: bug fix\x00def5678901234abcdef5678901234abcdef56789012\n"
         )
         result = parse_log(raw)
         assert len(result) == 2
@@ -84,16 +84,15 @@ class TestParseLog:
         assert parse_log("\n\n") == []
 
     def test_message_with_pipe(self):
-        """Pipe in commit message should not break parsing (only first two splits)."""
-        raw = "abc|feat: some | thing|abc123fullhash"
+        """Pipe characters in commit messages are preserved correctly."""
+        raw = "abc\x00feat: some | thing\x00abc123fullhash"
         result = parse_log(raw)
         assert len(result) == 1
-        assert result[0]["message"] == "feat: some "
-        # The rest after second | goes into hash
-        assert result[0]["hash"] == " thing|abc123fullhash"
+        assert result[0]["message"] == "feat: some | thing"
+        assert result[0]["hash"] == "abc123fullhash"
 
     def test_malformed_line_skipped(self):
-        raw = "only_one_field\nabc|msg|hash123\n"
+        raw = "only_one_field\nabc\x00msg\x00hash123\n"
         result = parse_log(raw)
         assert len(result) == 1
         assert result[0]["short_hash"] == "abc"
@@ -238,7 +237,7 @@ class TestLocalGitServiceCommitLog:
     @pytest.mark.asyncio
     async def test_returns_parsed_commits(self):
         service = LocalGitService()
-        raw = "abc|feat: add|abc123full\ndef|fix: bug|def456full\n"
+        raw = "abc\x00feat: add\x00abc123full\ndef\x00fix: bug\x00def456full\n"
         with patch(
             "volundr.adapters.outbound.local_git._run",
             new_callable=AsyncMock,

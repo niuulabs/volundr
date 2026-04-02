@@ -661,7 +661,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from volundr.adapters.inbound.rest_local_git import create_local_git_router
             from volundr.adapters.outbound.local_git import LocalGitService
 
-            local_git_service = LocalGitService()
+            local_git_service = LocalGitService(
+                subprocess_timeout=settings.local_git.subprocess_timeout,
+            )
             local_git_router = create_local_git_router(
                 local_git_service,
                 session_repository=repository,
