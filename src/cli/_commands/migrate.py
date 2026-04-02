@@ -1,0 +1,28 @@
+"""``niuu migrate`` — run database migrations."""
+
+from __future__ import annotations
+
+import argparse
+
+from cli.resources import migration_dir
+
+
+def execute(args: argparse.Namespace) -> int:
+    """Apply SQL migrations from embedded files."""
+    target = args.target
+    try:
+        mig_dir = migration_dir("volundr")
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    sql_files = sorted(mig_dir.glob("*.up.sql"))
+    if not sql_files:
+        print("No migration files found.")
+        return 1
+
+    print(f"Found {len(sql_files)} migrations (target={target})")
+    for f in sql_files:
+        print(f"  {f.name}")
+    # TODO: execute migrations against database
+    return 0
