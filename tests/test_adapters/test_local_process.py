@@ -1009,7 +1009,7 @@ class TestStatePersistence:
         )
         assert len(mgr._processes) == 0
 
-    def test_persist_state_on_start(
+    async def test_persist_state_on_start(
         self,
         manager: LocalProcessPodManager,
         git_session: Session,
@@ -1017,15 +1017,12 @@ class TestStatePersistence:
         tmp_state_file: Path,
     ) -> None:
         """State file is updated after start."""
+        with (
+            _mock_provision(manager),
+            _mock_spawn(manager),
+        ):
+            await manager.start(git_session, default_spec)
 
-        async def _run() -> None:
-            with (
-                _mock_provision(manager),
-                _mock_spawn(manager),
-            ):
-                await manager.start(git_session, default_spec)
-
-        asyncio.get_event_loop().run_until_complete(_run())
         assert tmp_state_file.exists()
         data = json.loads(tmp_state_file.read_text())
         assert str(git_session.id) in data
