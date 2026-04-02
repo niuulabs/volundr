@@ -18,6 +18,7 @@ from niuu.domain.models import IntegrationType, Principal
 from tyr.adapters.inbound.auth import extract_bearer_token, extract_principal
 from tyr.api.tracker import resolve_trackers
 from tyr.domain.models import RaidStatus, TrackerIssue
+from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerPort
 from tyr.ports.volundr import SpawnRequest, VolundrFactory, VolundrPort
@@ -129,6 +130,13 @@ async def resolve_volundr_factory() -> VolundrFactory:
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Volundr factory not configured",
+    )
+
+
+async def resolve_dispatcher_repo() -> DispatcherRepository:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Dispatcher repository not configured",
     )
 
 
@@ -321,8 +329,12 @@ def create_dispatch_router() -> APIRouter:
         adapters: list[TrackerPort] = Depends(resolve_trackers),
         volundr: VolundrPort = Depends(resolve_volundr),
         volundr_factory: VolundrFactory = Depends(resolve_volundr_factory),
+        dispatcher_repo: DispatcherRepository = Depends(resolve_dispatcher_repo),
     ) -> list[DispatchResult]:
         """Approve and dispatch selected issues — spawns Volundr sessions."""
+        # Ensure dispatcher state exists so the activity subscriber picks up this owner
+        await dispatcher_repo.get_or_create(principal.user_id)
+
         auth_token = extract_bearer_token(request)
 
         # Merge with server defaults
