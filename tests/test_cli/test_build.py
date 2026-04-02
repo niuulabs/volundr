@@ -42,9 +42,9 @@ class TestBuildCommand:
         cmd = build_command()
         assert "--onefile" in cmd
 
-    def test_standalone_flag(self):
+    def test_no_redundant_standalone_flag(self):
         cmd = build_command()
-        assert "--standalone" in cmd
+        assert "--standalone" not in cmd
 
     def test_follow_imports_flag(self):
         cmd = build_command()

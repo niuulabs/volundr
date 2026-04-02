@@ -71,12 +71,6 @@ jobs:
       - name: Build binary
         run: make build-cli
 
-      - name: Rename binary
-        run: |
-          SUFFIX="${{ matrix.os }}-${{ matrix.arch }}"
-          # Nuitka names it niuu-{os}-{arch}, just verify
-          ls -lh dist/
-
       - name: Smoke test
         run: |
           BINARY=$(find dist/ -name "niuu-*" -type f | head -1)

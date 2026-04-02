@@ -57,9 +57,16 @@ fi
 
 # ---- 3. Startup time ----------------------------------------------------
 echo "[3] Startup time"
-START_NS=$(date +%s%N 2>/dev/null || python3 -c "import time; print(int(time.time_ns()))")
+_now_ns() {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        python3 -c "import time; print(int(time.time_ns()))"
+    else
+        date +%s%N
+    fi
+}
+START_NS=$(_now_ns)
 "${BINARY}" --version > /dev/null 2>&1 || true
-END_NS=$(date +%s%N 2>/dev/null || python3 -c "import time; print(int(time.time_ns()))")
+END_NS=$(_now_ns)
 ELAPSED_MS=$(( (END_NS - START_NS) / 1000000 ))
 
 if [[ "${ELAPSED_MS}" -le "${MAX_STARTUP_MS}" ]]; then

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import platform
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -93,7 +94,6 @@ def build_command(
         "-m",
         "nuitka",
         "--onefile",
-        "--standalone",
         "--follow-imports",
         f"--output-dir={output_dir}",
         f"--output-filename={binary_name}-{platform_suffix()}",
@@ -149,11 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.dry_run:
-        print(" ".join(cmd))
+        print(shlex.join(cmd))
         return 0
 
     print(f"Building {args.name} binary …")
-    print(f"Command: {' '.join(cmd)}")
+    print(f"Command: {shlex.join(cmd)}")
     result = subprocess.run(cmd, check=False)
     return result.returncode
 

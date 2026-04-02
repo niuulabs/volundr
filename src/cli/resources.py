@@ -17,8 +17,9 @@ def web_dist_dir() -> Path:
     Falls back to the repository ``web/dist`` when running from source.
     """
     pkg_dir = importlib.resources.files("cli") / "web" / "dist"
-    if _resource_path(pkg_dir).is_dir():
-        return _resource_path(pkg_dir)
+    pkg_path = _resource_path(pkg_dir)
+    if pkg_path.is_dir():
+        return pkg_path
 
     # Fallback: repo-relative for development
     repo_web = Path(__file__).resolve().parents[2] / "web" / "dist"
