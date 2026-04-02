@@ -1,16 +1,27 @@
 """VolundrPlugin — registers Volundr as a niuu CLI plugin.
 
-Provides session/chronicle commands, the Volundr API service,
+Provides the ``sessions`` top-level command group, the Volundr API service,
 and TUI pages for session management.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import typer
 
-from niuu.ports.plugin import ServicePlugin
+from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin
+
+
+class _VolundrService(Service):
+    """Stub Volundr service (replaced by real implementation at runtime)."""
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+    async def health_check(self) -> bool:
+        return True
 
 
 class VolundrPlugin(ServicePlugin):
@@ -24,18 +35,51 @@ class VolundrPlugin(ServicePlugin):
     def description(self) -> str:
         return "AI-native development platform — sessions, chronicles, workspaces"
 
-    def depends_on(self) -> Sequence[str]:
-        return []
+    def register_service(self) -> ServiceDefinition:
+        return ServiceDefinition(
+            name="volundr",
+            description="AI-native development platform",
+            factory=_VolundrService,
+            default_enabled=True,
+            depends_on=["postgres"],
+            default_port=8080,
+        )
+
+    def create_service(self) -> Service:
+        return self.register_service().factory()
 
     def register_commands(self, app: typer.Typer) -> None:
-        """Register volundr-specific CLI commands."""
+        """Mount workflow commands directly on the main app."""
+        sessions = typer.Typer(
+            name="sessions",
+            help="Manage coding sessions.",
+            no_args_is_help=True,
+        )
 
-        @app.command()
-        def sessions() -> None:
-            """List active Volundr sessions."""
-            typer.echo("Volundr sessions (stub)")
+        @sessions.command()
+        def list() -> None:
+            """List active sessions."""
+            typer.echo("Sessions: (stub)")
 
-        @app.command()
-        def chronicles() -> None:
-            """List chronicles."""
-            typer.echo("Volundr chronicles (stub)")
+        @sessions.command()
+        def create(
+            name: str = typer.Argument(help="Session name"),
+        ) -> None:
+            """Create a new session."""
+            typer.echo(f"Creating session '{name}'... (stub)")
+
+        @sessions.command()
+        def stop(
+            name: str = typer.Argument(help="Session name"),
+        ) -> None:
+            """Stop a running session."""
+            typer.echo(f"Stopping session '{name}'... (stub)")
+
+        @sessions.command()
+        def delete(
+            name: str = typer.Argument(help="Session name"),
+        ) -> None:
+            """Delete a session."""
+            typer.echo(f"Deleting session '{name}'... (stub)")
+
+        app.add_typer(sessions, name="sessions")

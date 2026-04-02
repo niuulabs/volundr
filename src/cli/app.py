@@ -1,7 +1,25 @@
 """Typer app factory — discovers plugins and mounts commands.
 
-The CLI never hardcodes knowledge of any service. Plugins bring their
-own commands, services, API clients, and TUI pages.
+New command tree (NIU-405):
+
+  Platform:
+    platform up|down|status|init    — lifecycle (dynamic service flags)
+
+  Workflow (registered by plugins at top level):
+    sessions list|create|stop|delete
+    sagas    list|create|dispatch
+    raids    active|approve|reject|retry
+
+  Identity:
+    login / logout / whoami
+
+  Configuration:
+    config  show|set
+    context list|use|add|delete
+
+  Other:
+    tui
+    version
 """
 
 from __future__ import annotations
@@ -34,7 +52,7 @@ def build_app(
         registry.discover_config(settings.plugins.extra)
         registry.apply_config(settings.plugins.enabled)
 
-    from cli.commands.core import _print_status
+    from cli.commands.platform import _print_status
 
     manager = ServiceManager(
         registry=registry,
@@ -46,12 +64,15 @@ def build_app(
 
     app = typer.Typer(
         name="niuu",
-        help="Niuu — unified CLI for the Niuu platform.",
+        help="The Niuu platform CLI.",
         no_args_is_help=True,
         invoke_without_command=True,
+        rich_markup_mode=None,
     )
 
-    # Version callback
+    # ------------------------------------------------------------------ #
+    # --version / -V flag                                                  #
+    # ------------------------------------------------------------------ #
     def _version_callback(value: bool) -> None:
         if value:
             typer.echo(f"niuu {settings.version}")
@@ -68,17 +89,52 @@ def build_app(
             is_eager=True,
         ),
     ) -> None:
-        """Niuu — unified CLI for the Niuu platform."""
+        """The Niuu platform CLI."""
 
-    # Register core commands
-    from cli.commands.core import create_core_commands
+    # ------------------------------------------------------------------ #
+    # Platform lifecycle                                                   #
+    # ------------------------------------------------------------------ #
+    from cli.commands.platform import create_platform_commands
 
-    core = create_core_commands(registry, settings, manager)
-    for cmd_info in core.registered_commands:
-        if cmd_info.callback:
-            app.command(name=cmd_info.name)(cmd_info.callback)
+    app.add_typer(create_platform_commands(registry, settings, manager), name="platform")
 
-    # Register TUI command
+    # ------------------------------------------------------------------ #
+    # version                                                              #
+    # ------------------------------------------------------------------ #
+    @app.command()
+    def version() -> None:
+        """Print the niuu CLI version."""
+        typer.echo(f"niuu {settings.version}")
+
+    # ------------------------------------------------------------------ #
+    # Identity                                                             #
+    # ------------------------------------------------------------------ #
+    @app.command()
+    def login() -> None:
+        """Authenticate with the Niuu platform."""
+        typer.echo("Opening browser for authentication...")
+
+    @app.command()
+    def logout() -> None:
+        """Clear stored credentials."""
+        typer.echo("Logged out.")
+
+    @app.command()
+    def whoami() -> None:
+        """Show the currently authenticated user."""
+        typer.echo("Not authenticated. Run 'niuu login' first.")
+
+    # ------------------------------------------------------------------ #
+    # Configuration                                                        #
+    # ------------------------------------------------------------------ #
+    from cli.commands.core import create_config_commands, create_context_commands
+
+    app.add_typer(create_config_commands(registry, settings), name="config")
+    app.add_typer(create_context_commands(settings), name="context")
+
+    # ------------------------------------------------------------------ #
+    # TUI                                                                  #
+    # ------------------------------------------------------------------ #
     @app.command()
     def tui() -> None:
         """Launch the interactive TUI."""
@@ -87,13 +143,13 @@ def build_app(
         tui_app = build_tui(registry=registry, theme=settings.tui.theme)
         tui_app.run()
 
-    # Register plugin commands
+    # ------------------------------------------------------------------ #
+    # Plugin workflow commands (top-level, registered by each plugin)     #
+    # Plugins call app.add_typer(...) directly on the main app.           #
+    # ------------------------------------------------------------------ #
     for name, plugin in registry.plugins.items():
         try:
-            plugin_app = typer.Typer(help=plugin.description)
-            plugin.register_commands(plugin_app)
-            if plugin_app.registered_commands:
-                app.add_typer(plugin_app, name=name)
+            plugin.register_commands(app)
         except Exception:
             logger.exception("failed to register commands for plugin: %s", name)
 

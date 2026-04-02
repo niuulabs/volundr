@@ -85,6 +85,37 @@ class TestDependencyResolution:
         order = manager.resolve_start_order()
         assert order == ["b"]
 
+    def test_enabled_services_filters_and_includes_deps(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        registry.register(FakePlugin(name="a"))
+        registry.register(FakePlugin(name="b", deps=["a"]))
+        registry.register(FakePlugin(name="c"))
+        # Request only "b" via enabled_services — should pull in "a" as dep
+        order = manager.resolve_start_order(enabled_services={"b"})
+        assert "a" in order
+        assert "b" in order
+        assert "c" not in order
+
+    def test_enabled_services_multiple(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        registry.register(FakePlugin(name="a"))
+        registry.register(FakePlugin(name="b", deps=["a"]))
+        registry.register(FakePlugin(name="c"))
+        order = manager.resolve_start_order(enabled_services={"b", "c"})
+        assert "a" in order
+        assert "b" in order
+        assert "c" in order
+
+    def test_enabled_services_empty_set_starts_nothing(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        registry.register(FakePlugin(name="a"))
+        registry.register(FakePlugin(name="b"))
+        order = manager.resolve_start_order(enabled_services=set())
+        assert order == []
+
 
 class TestServiceLifecycle:
     """Tests for start/stop and health checks."""
@@ -132,6 +163,20 @@ class TestServiceLifecycle:
         assert svc_a.started is True
         assert svc_b.started is True
         assert svc_c.started is False
+
+    async def test_start_with_enabled_services(
+        self, registry: PluginRegistry, manager: ServiceManager
+    ) -> None:
+        svc_a = StubService()
+        svc_b = StubService()
+        svc_c = StubService()
+        registry.register(FakePlugin(name="a", service=svc_a))
+        registry.register(FakePlugin(name="b", deps=["a"], service=svc_b))
+        registry.register(FakePlugin(name="c", service=svc_c))
+        await manager.start_all(enabled_services={"b"})
+        assert svc_a.started is True  # pulled in as dep of b
+        assert svc_b.started is True
+        assert svc_c.started is False  # not in enabled_services
 
     async def test_stop_all_after_only_stops_started_only(
         self, registry: PluginRegistry, manager: ServiceManager
