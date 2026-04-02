@@ -411,6 +411,20 @@ class TestAllowedMountPrefixes:
         )
         assert mgr._is_allowed_mount(Path("/etc/secrets")) is False
 
+    def test_prefix_traversal_rejected(
+        self,
+        tmp_workspaces: Path,
+        tmp_state_file: Path,
+    ) -> None:
+        """Path with prefix-similar name is rejected (no traversal)."""
+        mgr = LocalProcessPodManager(
+            workspaces_dir=str(tmp_workspaces),
+            state_file=str(tmp_state_file),
+            allowed_mount_prefixes=["/home/user/projects"],
+        )
+        # This path starts with the prefix string but is a sibling dir
+        assert mgr._is_allowed_mount(Path("/home/user/projects-evil/malicious")) is False
+
 
 # ------------------------------------------------------------------
 # Git clone tests
@@ -454,7 +468,42 @@ class TestGitClone:
         args = clone_call[0]
         assert "git" in args
         assert "clone" in args
-        assert "x-access-token:tok123@github.com" in args[4]
+        assert "--no-single-branch" in args
+        assert "x-access-token:tok123@github.com" in args[5]
+
+    async def test_clone_failure_sanitizes_token(
+        self,
+        manager: LocalProcessPodManager,
+    ) -> None:
+        """Token is stripped from git clone error messages."""
+        source = GitSource(
+            repo="https://github.com/org/repo",
+        )
+        workspace = manager._workspaces_dir / "token-leak"
+        workspace.mkdir(parents=True)
+        spec = SessionSpec(
+            values={"git_token": "ghp_SECRET"},
+            pod_spec=PodSpecAdditions(),
+        )
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        stderr_msg = (
+            b"fatal: could not read from https://x-access-token:ghp_SECRET@github.com/org/repo"
+        )
+        mock_proc.communicate = AsyncMock(
+            return_value=(b"", stderr_msg),
+        )
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=mock_proc,
+        ):
+            with pytest.raises(RuntimeError, match="Git clone failed") as exc:
+                await manager._clone_repo(source, workspace, spec)
+
+        assert "ghp_SECRET" not in str(exc.value)
+        assert "***" in str(exc.value)
 
     async def test_clone_failure_raises(
         self,
@@ -573,6 +622,38 @@ class TestProcessSpawning:
         assert "--sdk-url" in call_args
         sdk_url_idx = call_args.index("--sdk-url")
         assert f"ws://127.0.0.1:9100/ws/cli/{git_session.id}" in call_args[sdk_url_idx + 1]
+
+    async def test_spawn_closes_log_file(
+        self,
+        manager: LocalProcessPodManager,
+        git_session: Session,
+        default_spec: SessionSpec,
+        tmp_workspaces: Path,
+    ) -> None:
+        """Log file handle is closed after subprocess is spawned."""
+        workspace = tmp_workspaces / str(git_session.id)
+        workspace.mkdir(parents=True)
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 42
+        mock_file = MagicMock()
+
+        with (
+            patch.object(
+                manager,
+                "_resolve_claude_binary",
+                return_value="/usr/bin/fake-claude",
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ),
+            patch("pathlib.Path.open", return_value=mock_file),
+        ):
+            await manager._spawn_claude(git_session, default_spec, workspace, 9100)
+
+        mock_file.close.assert_called_once()
 
     def test_build_env_includes_api_key(self) -> None:
         """Environment includes ANTHROPIC_API_KEY when provided."""

@@ -362,6 +362,7 @@ class LocalProcessPodManager(PodManager):
             "clone",
             "--depth",
             "1",
+            "--no-single-branch",
             clone_url,
             str(workspace / "repo"),
             stdout=asyncio.subprocess.PIPE,
@@ -370,7 +371,9 @@ class LocalProcessPodManager(PodManager):
         _, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            raise RuntimeError(f"Git clone failed: {stderr.decode(errors='replace')}")
+            error_msg = stderr.decode(errors="replace")
+            error_msg = re.sub(r"://[^@]+@", "://***@", error_msg)
+            raise RuntimeError(f"Git clone failed: {error_msg}")
 
         repo_dir = workspace / "repo"
         branch = source.branch
@@ -425,7 +428,7 @@ class LocalProcessPodManager(PodManager):
 
         resolved = path.resolve()
         return any(
-            str(resolved).startswith(str(Path(prefix).resolve()))
+            resolved.is_relative_to(Path(prefix).resolve())
             for prefix in self._allowed_mount_prefixes
         )
 
@@ -474,14 +477,16 @@ class LocalProcessPodManager(PodManager):
         log_path = workspace / ".forge-claude.log"
 
         log_file = log_path.open("w", encoding="utf-8")
-
-        process = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=log_file,
-            stderr=log_file,
-            cwd=str(workspace),
-            env=env,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=log_file,
+                stderr=log_file,
+                cwd=str(workspace),
+                env=env,
+            )
+        finally:
+            log_file.close()
 
         logger.info(
             "Spawned Claude process pid=%d port=%d session=%s",
