@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from typer.testing import CliRunner
 
 from cli.app import build_app
@@ -26,47 +24,46 @@ class TestCLIEntryPoint:
         assert result.exit_code == 0
         assert "niuu" in result.output
 
-    def test_all_commands_registered(self) -> None:
+    def test_all_expected_commands_registered(self) -> None:
         result = runner.invoke(_app(), ["--help"])
         assert result.exit_code == 0
-        for cmd in ("up", "down", "status", "config", "version", "migrate", "serve"):
-            assert cmd in result.output
+        for cmd in ("platform", "config", "context", "version", "login", "logout", "whoami", "tui"):
+            assert cmd in result.output, f"expected {cmd!r} in help output"
 
-    def test_up_command(self) -> None:
-        result = runner.invoke(_app(), ["up"])
+    def test_old_commands_gone(self) -> None:
+        """Commands removed in NIU-405 must no longer exist at top level."""
+        result = runner.invoke(_app(), ["--help"])
+        for cmd in ("up", "down", "status", "migrate", "serve"):
+            assert cmd not in result.output.split(), f"unexpected {cmd!r} at top level"
+
+    def test_platform_up_command_exists(self) -> None:
+        result = runner.invoke(_app(), ["platform", "up", "--help"])
         assert result.exit_code == 0
 
-    def test_down_command(self) -> None:
-        result = runner.invoke(_app(), ["down"])
+    def test_platform_down_command(self) -> None:
+        result = runner.invoke(_app(), ["platform", "down"])
         assert result.exit_code == 0
 
-    def test_status_command(self) -> None:
-        result = runner.invoke(_app(), ["status"])
+    def test_platform_status_command(self) -> None:
+        result = runner.invoke(_app(), ["platform", "status"])
         assert result.exit_code == 0
 
-    def test_serve_dispatches(self) -> None:
-        with patch("cli._commands.serve.execute", return_value=0) as mock_exec:
-            result = runner.invoke(_app(), ["serve"])
+    def test_platform_init_command(self) -> None:
+        result = runner.invoke(_app(), ["platform", "init"])
         assert result.exit_code == 0
-        mock_exec.assert_called_once()
 
-    def test_migrate_dispatches(self) -> None:
-        with patch("cli._commands.migrate.execute", return_value=0) as mock_exec:
-            result = runner.invoke(_app(), ["migrate"])
+    def test_version_command(self) -> None:
+        result = runner.invoke(_app(), ["version"])
         assert result.exit_code == 0
-        mock_exec.assert_called_once()
+        assert "0.1.0" in result.output
 
-    def test_migrate_accepts_target(self) -> None:
-        with patch("cli._commands.migrate.execute", return_value=0) as mock_exec:
-            result = runner.invoke(_app(), ["migrate", "--target", "000005"])
+    def test_config_show_command(self) -> None:
+        result = runner.invoke(_app(), ["config", "show"])
         assert result.exit_code == 0
-        mock_exec.assert_called_once_with(target="000005")
 
-    def test_serve_accepts_port(self) -> None:
-        with patch("cli._commands.serve.execute", return_value=0) as mock_exec:
-            result = runner.invoke(_app(), ["serve", "--port", "8080"])
+    def test_login_command(self) -> None:
+        result = runner.invoke(_app(), ["login"])
         assert result.exit_code == 0
-        mock_exec.assert_called_once_with(port=8080)
 
     def test_unknown_command_fails(self) -> None:
         result = runner.invoke(_app(), ["nonexistent"])

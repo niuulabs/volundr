@@ -22,6 +22,19 @@ CONFIG_PATHS = [
 ]
 
 
+class PerServiceConfig(BaseModel):
+    """Per-service enabled/port overrides."""
+
+    enabled: bool | None = Field(
+        default=None,
+        description="Override whether this service is enabled. None = use plugin default.",
+    )
+    port: int | None = Field(
+        default=None,
+        description="Override the listen port. None = use plugin default.",
+    )
+
+
 class PluginConfig(BaseModel):
     """Per-plugin enable/disable configuration."""
 
@@ -128,6 +141,10 @@ class CLISettings(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
     plugins: PluginConfig = Field(default_factory=PluginConfig)
     services: ServiceConfig = Field(default_factory=ServiceConfig)
+    service_overrides: dict[str, PerServiceConfig] = Field(
+        default_factory=dict,
+        description="Per-service enabled/port overrides keyed by service name.",
+    )
     tui: TUIConfig = Field(default_factory=TUIConfig)
     context: str = Field(
         default="local",

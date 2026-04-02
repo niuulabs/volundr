@@ -1,16 +1,27 @@
 """TyrPlugin — registers Tyr as a niuu CLI plugin.
 
-Provides saga/dispatch commands, the Tyr coordinator service,
-and TUI pages for saga management.
+Provides ``sagas`` and ``raids`` top-level command groups, the Tyr
+coordinator service, and TUI pages for saga management.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import typer
 
-from niuu.ports.plugin import ServicePlugin
+from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin
+
+
+class _TyrService(Service):
+    """Stub Tyr service (replaced by real implementation at runtime)."""
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+    async def health_check(self) -> bool:
+        return True
 
 
 class TyrPlugin(ServicePlugin):
@@ -24,18 +35,77 @@ class TyrPlugin(ServicePlugin):
     def description(self) -> str:
         return "Autonomous saga coordinator — reviews, dispatch, raids"
 
-    def depends_on(self) -> Sequence[str]:
-        return ["volundr"]
+    def register_service(self) -> ServiceDefinition:
+        return ServiceDefinition(
+            name="tyr",
+            description="Autonomous saga coordinator",
+            factory=_TyrService,
+            default_enabled=True,
+            depends_on=["postgres", "volundr"],
+            default_port=8081,
+        )
+
+    def create_service(self) -> Service:
+        return self.register_service().factory()
 
     def register_commands(self, app: typer.Typer) -> None:
-        """Register tyr-specific CLI commands."""
+        """Mount workflow commands directly on the main app."""
+        sagas = typer.Typer(
+            name="sagas",
+            help="Manage sagas.",
+            no_args_is_help=True,
+        )
 
-        @app.command()
-        def sagas() -> None:
-            """List active Tyr sagas."""
-            typer.echo("Tyr sagas (stub)")
+        @sagas.command()
+        def list() -> None:
+            """List active sagas."""
+            typer.echo("Sagas: (stub)")
 
-        @app.command()
-        def dispatch() -> None:
-            """Show dispatch status."""
-            typer.echo("Tyr dispatch (stub)")
+        @sagas.command()
+        def create(
+            name: str = typer.Argument(help="Saga name"),
+        ) -> None:
+            """Create a new saga."""
+            typer.echo(f"Creating saga '{name}'... (stub)")
+
+        @sagas.command()
+        def dispatch(
+            name: str = typer.Argument(help="Saga name"),
+        ) -> None:
+            """Dispatch a saga."""
+            typer.echo(f"Dispatching saga '{name}'... (stub)")
+
+        raids = typer.Typer(
+            name="raids",
+            help="Manage raids.",
+            no_args_is_help=True,
+        )
+
+        @raids.command()
+        def active() -> None:
+            """List active raids."""
+            typer.echo("Active raids: (stub)")
+
+        @raids.command()
+        def approve(
+            raid_id: str = typer.Argument(help="Raid ID"),
+        ) -> None:
+            """Approve a pending raid."""
+            typer.echo(f"Approved raid {raid_id}. (stub)")
+
+        @raids.command()
+        def reject(
+            raid_id: str = typer.Argument(help="Raid ID"),
+        ) -> None:
+            """Reject a pending raid."""
+            typer.echo(f"Rejected raid {raid_id}. (stub)")
+
+        @raids.command()
+        def retry(
+            raid_id: str = typer.Argument(help="Raid ID"),
+        ) -> None:
+            """Retry a failed raid."""
+            typer.echo(f"Retrying raid {raid_id}. (stub)")
+
+        app.add_typer(sagas, name="sagas")
+        app.add_typer(raids, name="raids")

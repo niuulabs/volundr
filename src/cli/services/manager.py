@@ -88,10 +88,22 @@ class ServiceManager:
         if self._on_status_change:
             self._on_status_change(name, state)
 
-    def resolve_start_order(self, only: str | None = None) -> list[str]:
+    def resolve_start_order(
+        self,
+        only: str | None = None,
+        enabled_services: set[str] | None = None,
+    ) -> list[str]:
         """Resolve topological start order for enabled plugins.
 
-        If only is provided, returns only that service + its dependencies.
+        Parameters
+        ----------
+        only:
+            If provided, starts only this single service and its dependencies.
+            Mutually exclusive with ``enabled_services``.
+        enabled_services:
+            If provided, starts exactly these services plus their transitive
+            dependencies. Takes precedence over ``only``.
+
         Raises CircularDependencyError if a cycle is detected.
         """
         plugins = self._registry.plugins
@@ -100,7 +112,12 @@ class ServiceManager:
             deps = [d for d in plugin.depends_on() if d in plugins]
             graph[name] = deps
 
-        if only:
+        if enabled_services is not None:
+            needed: set[str] = set()
+            for svc_name in enabled_services:
+                needed.update(self._collect_deps(svc_name, graph))
+            graph = {k: v for k, v in graph.items() if k in needed}
+        elif only:
             needed = self._collect_deps(only, graph)
             graph = {k: v for k, v in graph.items() if k in needed}
 
@@ -154,13 +171,26 @@ class ServiceManager:
 
         return result
 
-    async def start_all(self, only: str | None = None, rollback_on_failure: bool = True) -> None:
+    async def start_all(
+        self,
+        only: str | None = None,
+        enabled_services: set[str] | None = None,
+        rollback_on_failure: bool = True,
+    ) -> None:
         """Start services in dependency order.
 
-        If rollback_on_failure is True and a service fails to become healthy,
-        all previously started services are stopped in reverse order.
+        Parameters
+        ----------
+        only:
+            Start only this single service and its dependencies.
+        enabled_services:
+            Start exactly these services plus their transitive dependencies.
+            Takes precedence over ``only``.
+        rollback_on_failure:
+            If True and a service fails to become healthy, all previously
+            started services are stopped in reverse order.
         """
-        order = self.resolve_start_order(only=only)
+        order = self.resolve_start_order(only=only, enabled_services=enabled_services)
         self._start_order = order
         plugins = self._registry.plugins
         started: list[str] = []

@@ -1,4 +1,4 @@
-"""Tests for cli.commands.core — up, down, status, config commands."""
+"""Tests for cli.commands.core and cli.commands.platform helpers."""
 
 from __future__ import annotations
 
@@ -7,9 +7,30 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import click.exceptions
 import pytest
 
-from cli.commands.core import _build_preflight_config, _print_status, _shutdown, _startup
-from cli.config import CLISettings
+from cli.commands.platform import (
+    _build_preflight_config,
+    _print_status,
+    _resolve_enabled_services,
+    _shutdown,
+    _startup,
+)
+from cli.config import CLISettings, PerServiceConfig
 from cli.services.manager import ServiceState, StartupError
+from niuu.ports.plugin import ServiceDefinition
+
+
+def _stub_service_def(
+    name: str,
+    default_enabled: bool = True,
+    depends_on: list[str] | None = None,
+) -> ServiceDefinition:
+    return ServiceDefinition(
+        name=name,
+        description=f"{name} service",
+        factory=MagicMock,
+        default_enabled=default_enabled,
+        depends_on=depends_on or [],
+    )
 
 
 class TestPrintStatus:
@@ -89,6 +110,80 @@ class TestBuildPreflightConfig:
         assert config.ports == [8080]
 
 
+class TestResolveEnabledServices:
+    def test_uses_plugin_defaults(self) -> None:
+        service_defs = {
+            "volundr": _stub_service_def("volundr", default_enabled=True),
+            "tyr": _stub_service_def("tyr", default_enabled=True),
+            "skuld": _stub_service_def("skuld", default_enabled=False),
+        }
+        enabled = _resolve_enabled_services(service_defs, CLISettings(), False, {})
+        assert "volundr" in enabled
+        assert "tyr" in enabled
+        assert "skuld" not in enabled
+
+    def test_config_override_enables(self) -> None:
+        service_defs = {
+            "skuld": _stub_service_def("skuld", default_enabled=False),
+        }
+        settings = CLISettings(
+            service_overrides={"skuld": PerServiceConfig(enabled=True)},
+        )
+        enabled = _resolve_enabled_services(service_defs, settings, False, {})
+        assert "skuld" in enabled
+
+    def test_config_override_disables(self) -> None:
+        service_defs = {
+            "volundr": _stub_service_def("volundr", default_enabled=True),
+        }
+        settings = CLISettings(
+            service_overrides={"volundr": PerServiceConfig(enabled=False)},
+        )
+        enabled = _resolve_enabled_services(service_defs, settings, False, {})
+        assert "volundr" not in enabled
+
+    def test_cli_flag_true_overrides_config(self) -> None:
+        service_defs = {
+            "skuld": _stub_service_def("skuld", default_enabled=False),
+        }
+        settings = CLISettings(
+            service_overrides={"skuld": PerServiceConfig(enabled=False)},
+        )
+        enabled = _resolve_enabled_services(service_defs, settings, False, {"skuld": True})
+        assert "skuld" in enabled
+
+    def test_cli_flag_false_overrides_config(self) -> None:
+        service_defs = {
+            "tyr": _stub_service_def("tyr", default_enabled=True),
+        }
+        enabled = _resolve_enabled_services(service_defs, CLISettings(), False, {"tyr": False})
+        assert "tyr" not in enabled
+
+    def test_cli_flag_none_does_not_override(self) -> None:
+        service_defs = {
+            "volundr": _stub_service_def("volundr", default_enabled=True),
+        }
+        enabled = _resolve_enabled_services(service_defs, CLISettings(), False, {"volundr": None})
+        assert "volundr" in enabled
+
+    def test_start_all_enables_everything(self) -> None:
+        service_defs = {
+            "volundr": _stub_service_def("volundr", default_enabled=True),
+            "skuld": _stub_service_def("skuld", default_enabled=False),
+        }
+        enabled = _resolve_enabled_services(service_defs, CLISettings(), True, {})
+        assert "volundr" in enabled
+        assert "skuld" in enabled
+
+    def test_start_all_ignores_no_flags(self) -> None:
+        service_defs = {
+            "tyr": _stub_service_def("tyr", default_enabled=True),
+        }
+        # --all overrides even --no-tyr
+        enabled = _resolve_enabled_services(service_defs, CLISettings(), True, {"tyr": False})
+        assert "tyr" in enabled
+
+
 class TestStartup:
     async def test_startup_with_preflight_pass(self) -> None:
         manager = MagicMock()
@@ -98,13 +193,13 @@ class TestStartup:
         passing_results = [MagicMock(passed=True, warn_only=False, name="test", message="ok")]
         with (
             patch(
-                "cli.commands.core.run_preflight_checks",
+                "cli.commands.platform.run_preflight_checks",
                 return_value=passing_results,
             ),
-            patch("cli.commands.core.has_failures", return_value=False),
-            patch("cli.commands.core.format_results", return_value="all ok"),
+            patch("cli.commands.platform.has_failures", return_value=False),
+            patch("cli.commands.platform.format_results", return_value="all ok"),
         ):
-            await _startup(manager, settings, only=None, skip_preflight=False)
+            await _startup(manager, settings, enabled_services=None, skip_preflight=False)
         manager.start_all.assert_awaited_once()
 
     async def test_startup_with_preflight_fail(self) -> None:
@@ -115,14 +210,14 @@ class TestStartup:
         failing_results = [MagicMock(passed=False, warn_only=False, name="test", message="bad")]
         with (
             patch(
-                "cli.commands.core.run_preflight_checks",
+                "cli.commands.platform.run_preflight_checks",
                 return_value=failing_results,
             ),
-            patch("cli.commands.core.has_failures", return_value=True),
-            patch("cli.commands.core.format_results", return_value="FAIL"),
+            patch("cli.commands.platform.has_failures", return_value=True),
+            patch("cli.commands.platform.format_results", return_value="FAIL"),
             pytest.raises(click.exceptions.Exit),
         ):
-            await _startup(manager, settings, only=None, skip_preflight=False)
+            await _startup(manager, settings, enabled_services=None, skip_preflight=False)
         manager.start_all.assert_not_awaited()
 
     async def test_startup_skip_preflight(self) -> None:
@@ -130,8 +225,8 @@ class TestStartup:
         manager.start_all = AsyncMock()
         settings = CLISettings()
 
-        with patch("cli.commands.core.run_preflight_checks") as mock_preflight:
-            await _startup(manager, settings, only=None, skip_preflight=True)
+        with patch("cli.commands.platform.run_preflight_checks") as mock_preflight:
+            await _startup(manager, settings, enabled_services=None, skip_preflight=True)
         mock_preflight.assert_not_called()
         manager.start_all.assert_awaited_once()
 
@@ -141,15 +236,18 @@ class TestStartup:
         settings = CLISettings()
 
         with pytest.raises(click.exceptions.Exit):
-            await _startup(manager, settings, only=None, skip_preflight=True)
+            await _startup(manager, settings, enabled_services=None, skip_preflight=True)
 
-    async def test_startup_only_parameter(self) -> None:
+    async def test_startup_enabled_services_forwarded(self) -> None:
         manager = MagicMock()
         manager.start_all = AsyncMock()
         settings = CLISettings()
+        enabled = {"volundr", "tyr"}
 
-        await _startup(manager, settings, only="volundr", skip_preflight=True)
-        manager.start_all.assert_awaited_once_with(only="volundr", rollback_on_failure=True)
+        await _startup(manager, settings, enabled_services=enabled, skip_preflight=True)
+        manager.start_all.assert_awaited_once_with(
+            enabled_services=enabled, rollback_on_failure=True
+        )
 
 
 class TestShutdown:
