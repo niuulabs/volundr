@@ -27,7 +27,6 @@ var rootCmd = &cobra.Command{
 It provides access to all platform tools through namespaced subcommands:
 
   niuu volundr ...   Manage the Volundr development stack
-  niuu tyr ...       Tyr saga coordinator (coming soon)
 
 Shared commands (auth, config, context) are top-level:
 
@@ -66,7 +65,6 @@ func init() {
 
 	// Tool namespaces.
 	rootCmd.AddCommand(volundrCmd)
-	rootCmd.AddCommand(tyrCmd)
 
 	// Shared top-level commands.
 	rootCmd.AddCommand(versionCmd)

@@ -1,5 +1,5 @@
 // Package tracker provides a tracker integration abstraction and
-// a Linear implementation for tyr-mini.
+// a Linear implementation for issue search in Forge.
 package tracker
 
 // Project represents an external tracker project (Linear project).

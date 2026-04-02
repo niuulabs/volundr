@@ -148,29 +148,6 @@ func runInit(_ *cobra.Command, _ []string) error {
 		cfg.Database.Mode = dbMode
 	}
 
-	// Prompt for Tyr-mini (saga coordinator).
-	tyrDefault := "N"
-	if cfg.Volundr.Tyr.Enabled {
-		tyrDefault = "Y"
-	}
-	fmt.Printf("Enable Tyr saga coordinator? [y/N] (%s): ", tyrDefault)
-	tyrAnswer, _ := reader.ReadString('\n')
-	tyrAnswer = strings.TrimSpace(strings.ToLower(tyrAnswer))
-	if tyrAnswer == "" {
-		if cfg.Volundr.Tyr.Enabled {
-			tyrAnswer = "y"
-		} else {
-			tyrAnswer = "n"
-		}
-	}
-	if tyrAnswer == "y" || tyrAnswer == "yes" {
-		cfg.Volundr.Tyr.Enabled = true
-		fmt.Println("  Tyr-mini will run alongside Forge (uses embedded PostgreSQL)")
-	} else {
-		cfg.Volundr.Tyr.Enabled = false
-	}
-	fmt.Println()
-
 	if cfg.Database.Mode == "external" {
 		fmt.Printf("Database host (%s): ", defaultStr(cfg.Database.Host, "none"))
 		host, _ := reader.ReadString('\n')

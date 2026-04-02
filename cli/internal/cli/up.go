@@ -15,7 +15,6 @@ import (
 
 	"github.com/niuulabs/volundr/cli/internal/config"
 	"github.com/niuulabs/volundr/cli/internal/forge"
-	"github.com/niuulabs/volundr/cli/internal/postgres"
 	"github.com/niuulabs/volundr/cli/internal/preflight"
 	"github.com/niuulabs/volundr/cli/internal/runtime"
 )
@@ -93,19 +92,6 @@ func runUp(_ *cobra.Command, _ []string) error {
 func runMiniMode(cfg *config.Config) error {
 	if err := runUpPreflightChecks(cfg); err != nil {
 		return err
-	}
-
-	// Start embedded PostgreSQL if tyr-mini is enabled.
-	if cfg.Volundr.Tyr.Enabled {
-		pg := postgres.New(cfg)
-		fmt.Println("Starting embedded PostgreSQL for tyr-mini...")
-		if err := pg.Start(context.Background()); err != nil {
-			return fmt.Errorf("start embedded postgres: %w", err)
-		}
-		defer func() {
-			fmt.Println("Stopping embedded PostgreSQL...")
-			_ = pg.Stop()
-		}()
 	}
 
 	forgeCfg, err := buildForgeConfig(cfg)
@@ -250,16 +236,9 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 	// Anthropic key from the top-level config.
 	forgeCfg.Anthropic.APIKey = cfg.Anthropic.APIKey
 
-	// Tyr-mini settings.
-	forgeCfg.Tyr.Enabled = cfg.Volundr.Tyr.Enabled
-	if cfg.Volundr.Tyr.Enabled {
-		forgeCfg.Tyr.DatabaseDSN = cfg.DSN()
-	}
-	forgeCfg.Tyr.LinearAPIKey = cfg.Linear.APIKey
-	forgeCfg.Tyr.LinearTeamID = cfg.Linear.TeamID
-	forgeCfg.Tyr.DefaultSystemPrompt = cfg.Volundr.Tyr.DefaultSystemPrompt
-	forgeCfg.Tyr.ReviewerSystemPrompt = cfg.Volundr.Tyr.ReviewerSystemPrompt
-	forgeCfg.Tyr.ReviewerModel = cfg.Volundr.Tyr.ReviewerModel
+	// Linear tracker settings for issue search.
+	forgeCfg.LinearAPIKey = cfg.Linear.APIKey
+	forgeCfg.LinearTeamID = cfg.Linear.TeamID
 
 	// GitHub instances for repo listing.
 	for _, inst := range cfg.Git.GitHub.Instances {
@@ -272,8 +251,8 @@ func buildForgeConfig(cfg *config.Config) (*forge.Config, error) {
 		})
 	}
 	// Also check env var as fallback.
-	if forgeCfg.Tyr.LinearAPIKey == "" {
-		forgeCfg.Tyr.LinearAPIKey = os.Getenv("LINEAR_API_KEY")
+	if forgeCfg.LinearAPIKey == "" {
+		forgeCfg.LinearAPIKey = os.Getenv("LINEAR_API_KEY")
 	}
 
 	// Local mounts and AI models.

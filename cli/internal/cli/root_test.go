@@ -14,7 +14,6 @@ func TestRootCmd_HasSubcommands(t *testing.T) {
 	// Top-level commands under niuu.
 	expected := map[string]bool{
 		"volundr": false,
-		"tyr":     false,
 		"version": false,
 		"tui":     false,
 		"config":  false,
@@ -206,28 +205,9 @@ func TestConfigCmd_HasSubcommands(t *testing.T) {
 	}
 }
 
-func TestTyrCmd_Properties(t *testing.T) {
-	if tyrCmd.Use != "tyr" {
-		t.Errorf("expected Use %q, got %q", "tyr", tyrCmd.Use)
-	}
-	if tyrCmd.Short == "" {
-		t.Error("expected non-empty Short description")
-	}
-}
-
 func TestRootCmd_UseName(t *testing.T) {
 	if rootCmd.Use != "niuu" {
 		t.Errorf("expected root command Use %q, got %q", "niuu", rootCmd.Use)
-	}
-}
-
-func TestExecute_Tyr(t *testing.T) {
-	// tyr subcommand prints info and returns nil.
-	rootCmd.SetArgs([]string{"tyr"})
-	defer rootCmd.SetArgs(nil)
-	if err := Execute(); err != nil {
-		t.Fatalf("Execute tyr: %v", err)
-		return
 	}
 }
 
