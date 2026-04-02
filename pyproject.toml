@@ -39,6 +39,9 @@ cli = [
     "typer>=0.12",
     "textual>=0.79",
     "nuitka>=2.1",
+    "pgserver>=0.1",
+    "ordered-set>=4.1",
+    "patchelf>=0.14; sys_platform == 'linux'",
 ]
 dev = [
     "pytest>=8.0",
@@ -52,7 +55,7 @@ dev = [
 ]
 
 [project.scripts]
-niuu = "cli.__main__:main"
+niuu = "cli.main:main"
 volundr = "volundr.main:main"
 skuld = "skuld.broker:main"
 bifrost = "volundr.bifrost.__main__:main"

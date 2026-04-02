@@ -1,13 +1,5 @@
-"""Allow running niuu CLI as ``python -m cli``."""
+"""Allow running as ``python -m cli``."""
 
-from cli.app import build_app
+from cli.main import main
 
-
-def main() -> None:
-    """Entry point for the niuu CLI."""
-    app = build_app()
-    app()
-
-
-if __name__ == "__main__":
-    main()
+raise SystemExit(main())
