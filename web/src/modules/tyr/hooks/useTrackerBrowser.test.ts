@@ -209,7 +209,7 @@ describe('useTrackerBrowser', () => {
     });
     expect(trackerService.importProject).toHaveBeenCalledWith('p-1', [
       'https://github.com/org/repo',
-    ]);
+    ], 'main');
   });
 
   it('should noop import when no project selected', async () => {
