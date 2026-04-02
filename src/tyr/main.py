@@ -32,6 +32,7 @@ from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
 from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
+from tyr.api.dispatch import resolve_dispatcher_repo as dispatch_resolve_dispatcher_repo
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
 from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
@@ -189,6 +190,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return dispatcher_repo
 
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
+            app.dependency_overrides[dispatch_resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
             # Wire Volundr adapter — per-user resolution via factory,
             # falling back to the global URL when no per-user connection exists.
