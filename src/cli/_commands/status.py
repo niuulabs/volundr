@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import argparse
 
-
-def execute(args: argparse.Namespace) -> int:  # noqa: ARG001
+def execute() -> int:
     """Print status of Niuu platform services."""
     print("Niuu platform status:")
     print("  volundr: unknown")

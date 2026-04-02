@@ -66,4 +66,22 @@ def create_core_commands(
         """Print the niuu CLI version."""
         typer.echo(f"niuu {settings.version}")
 
+    @app.command()
+    def migrate(
+        target: str = typer.Option("latest", help="Migration target version"),
+    ) -> None:
+        """Run database migrations."""
+        from cli._commands.migrate import execute
+
+        execute(target=target)
+
+    @app.command()
+    def serve(
+        port: int = typer.Option(5174, help="Port (default: 5174)"),
+    ) -> None:
+        """Serve the Niuu web UI."""
+        from cli._commands.serve import execute
+
+        execute(port=port)
+
     return app

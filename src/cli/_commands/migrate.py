@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import argparse
-
 from cli.resources import migration_dir
 
 
-def execute(args: argparse.Namespace) -> int:
+def execute(target: str = "latest") -> int:
     """Apply SQL migrations from embedded files."""
-    target = args.target
     try:
         mig_dir = migration_dir("volundr")
     except FileNotFoundError as exc:
