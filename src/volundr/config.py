@@ -33,6 +33,15 @@ CONFIG_PATHS = [
 ]
 
 
+class LocalGitConfig(BaseModel):
+    """Configuration for local git workspace operations."""
+
+    subprocess_timeout: float = Field(
+        default=30.0,
+        description="Maximum time in seconds a git/gh subprocess may run before being killed.",
+    )
+
+
 class LocalMountsConfig(BaseModel):
     """Configuration for local filesystem mount support."""
 
@@ -1081,6 +1090,7 @@ class Settings(BaseSettings):
     integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)
     provisioning: ProvisioningConfig = Field(default_factory=ProvisioningConfig)
+    local_git: LocalGitConfig = Field(default_factory=LocalGitConfig)
     local_mounts: LocalMountsConfig = Field(default_factory=LocalMountsConfig)
     session_contributors: list[SessionContributorConfig] = Field(default_factory=list)
     models: list[AIModelConfig] = Field(default_factory=list)

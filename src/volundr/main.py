@@ -657,6 +657,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             git_router = create_git_router(git_workflow_service)
             app.include_router(git_router)
 
+            # Local git workspace endpoints (mini/local mode)
+            from volundr.adapters.inbound.rest_local_git import create_local_git_router
+            from volundr.adapters.outbound.local_git import LocalGitService
+
+            local_git_service = LocalGitService(
+                subprocess_timeout=settings.local_git.subprocess_timeout,
+            )
+            local_git_router = create_local_git_router(
+                local_git_service,
+                session_repository=repository,
+            )
+            app.include_router(local_git_router)
+            app.state.local_git_service = local_git_service
+
             # Tenant and identity management
             tenants_router = create_tenants_router(tenant_service)
             app.include_router(tenants_router)
