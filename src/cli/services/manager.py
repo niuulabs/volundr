@@ -2,12 +2,14 @@
 
 Topological sort for start order, reverse for shutdown.
 Health checks with backoff before declaring ready.
+On failure: rollback already-started services in reverse order.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -31,6 +33,18 @@ class CircularDependencyError(Exception):
     """Raised when a circular dependency is detected in the plugin graph."""
 
 
+class StartupError(Exception):
+    """Raised when a service fails to start or become healthy."""
+
+    def __init__(self, service_name: str, message: str) -> None:
+        self.service_name = service_name
+        super().__init__(f"service '{service_name}' failed to start: {message}")
+
+
+# Callback signature: (service_name, state) -> None
+StatusCallback = Callable[[str, ServiceState], None]
+
+
 @dataclass
 class ServiceStatus:
     """Status of a single managed service."""
@@ -49,17 +63,30 @@ class ServiceManager:
         health_check_interval: float = 2.0,
         health_check_timeout: float = 30.0,
         health_check_max_retries: int = 15,
+        on_status_change: StatusCallback | None = None,
     ) -> None:
         self._registry = registry
         self._health_check_interval = health_check_interval
         self._health_check_timeout = health_check_timeout
         self._health_check_max_retries = health_check_max_retries
         self._services: dict[str, ServiceStatus] = {}
+        self._start_order: list[str] = []
+        self._on_status_change = on_status_change
 
     @property
     def services(self) -> dict[str, ServiceStatus]:
         """Return current service statuses."""
         return dict(self._services)
+
+    @property
+    def start_order(self) -> list[str]:
+        """Return the last resolved start order."""
+        return list(self._start_order)
+
+    def _notify(self, name: str, state: ServiceState) -> None:
+        """Notify the status callback if set."""
+        if self._on_status_change:
+            self._on_status_change(name, state)
 
     def resolve_start_order(self, only: str | None = None) -> list[str]:
         """Resolve topological start order for enabled plugins.
@@ -94,7 +121,6 @@ class ServiceManager:
 
     def _topological_sort(self, graph: dict[str, list[str]]) -> list[str]:
         """Kahn's algorithm for topological sort. Detects cycles."""
-        # Build adjacency for "dep -> dependent"
         adj: dict[str, list[str]] = {n: [] for n in graph}
         for node, deps in graph.items():
             for dep in deps:
@@ -102,7 +128,6 @@ class ServiceManager:
                     adj[dep] = []
                 adj[dep].append(node)
 
-        # Recompute in-degree from adjacency
         in_deg: dict[str, int] = {n: 0 for n in adj}
         for node, deps in graph.items():
             in_deg[node] = len(deps)
@@ -129,10 +154,16 @@ class ServiceManager:
 
         return result
 
-    async def start_all(self, only: str | None = None) -> None:
-        """Start services in dependency order."""
+    async def start_all(self, only: str | None = None, rollback_on_failure: bool = True) -> None:
+        """Start services in dependency order.
+
+        If rollback_on_failure is True and a service fails to become healthy,
+        all previously started services are stopped in reverse order.
+        """
         order = self.resolve_start_order(only=only)
+        self._start_order = order
         plugins = self._registry.plugins
+        started: list[str] = []
 
         for name in order:
             plugin = plugins.get(name)
@@ -141,28 +172,59 @@ class ServiceManager:
             service = plugin.create_service()
             if not service:
                 self._services[name] = ServiceStatus(name=name, state=ServiceState.HEALTHY)
+                self._notify(name, ServiceState.HEALTHY)
+                started.append(name)
                 continue
 
             status = ServiceStatus(name=name, state=ServiceState.STARTING, service=service)
             self._services[name] = status
+            self._notify(name, ServiceState.STARTING)
 
-            await service.start()
+            try:
+                await service.start()
+            except Exception as exc:
+                status.state = ServiceState.UNHEALTHY
+                self._notify(name, ServiceState.UNHEALTHY)
+                if rollback_on_failure:
+                    await self._rollback(started)
+                raise StartupError(name, str(exc)) from exc
+
             healthy = await self._wait_healthy(name, service)
-            status.state = ServiceState.HEALTHY if healthy else ServiceState.UNHEALTHY
+            if healthy:
+                status.state = ServiceState.HEALTHY
+                self._notify(name, ServiceState.HEALTHY)
+                started.append(name)
+                continue
+
+            status.state = ServiceState.UNHEALTHY
+            self._notify(name, ServiceState.UNHEALTHY)
+            if rollback_on_failure:
+                await self._rollback(started)
+                raise StartupError(name, "health check failed")
 
     async def stop_all(self) -> None:
-        """Stop services in reverse dependency order."""
-        order = list(reversed(self.resolve_start_order()))
-        for name in order:
+        """Stop services in reverse order of what was actually started."""
+        order = self._start_order if self._start_order else self.resolve_start_order()
+        await self._stop_services(list(reversed(order)))
+
+    async def _rollback(self, started: list[str]) -> None:
+        """Stop already-started services in reverse order after a failure."""
+        await self._stop_services(list(reversed(started)))
+
+    async def _stop_services(self, names: list[str]) -> None:
+        """Stop the given services in the order provided."""
+        for name in names:
             status = self._services.get(name)
             if not status or not status.service:
                 continue
             status.state = ServiceState.STOPPING
+            self._notify(name, ServiceState.STOPPING)
             try:
                 await status.service.stop()
             except Exception:
                 logger.exception("error stopping service: %s", name)
             status.state = ServiceState.STOPPED
+            self._notify(name, ServiceState.STOPPED)
 
     async def _wait_healthy(self, name: str, service: Service) -> bool:
         """Poll health check until healthy, timeout, or max retries."""

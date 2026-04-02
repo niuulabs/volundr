@@ -34,11 +34,14 @@ def build_app(
         registry.discover_config(settings.plugins.extra)
         registry.apply_config(settings.plugins.enabled)
 
+    from cli.commands.core import _print_status
+
     manager = ServiceManager(
         registry=registry,
         health_check_interval=settings.services.health_check_interval_seconds,
         health_check_timeout=settings.services.health_check_timeout_seconds,
         health_check_max_retries=settings.services.health_check_max_retries,
+        on_status_change=_print_status,
     )
 
     app = typer.Typer(

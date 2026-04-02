@@ -76,14 +76,18 @@ class TestConfigCommand:
 
 
 class TestUpDownCommands:
-    def test_up(self) -> None:
+    def test_down_stops_services(self) -> None:
         app, _, _ = _build_test_app()
-        result = runner.invoke(app, ["up"])
+        result = runner.invoke(app, ["down"])
         assert result.exit_code == 0
-        assert "started" in result.output.lower()
+        assert "stopped" in result.output.lower()
 
-    def test_down(self) -> None:
-        app, _, _ = _build_test_app()
+    def test_down_with_plugins(self) -> None:
+        from tests.test_cli.conftest import StubService
+
+        svc = StubService()
+        plugins = [FakePlugin(name="a", service=svc)]
+        app, _, _ = _build_test_app(plugins=plugins)
         result = runner.invoke(app, ["down"])
         assert result.exit_code == 0
         assert "stopped" in result.output.lower()
