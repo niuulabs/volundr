@@ -16,11 +16,11 @@ func TestRunInit_WithModeFlag(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe stdin with answers: API key, db mode, tyr, github access
+	// Pipe stdin with answers: API key, db mode, github access
 	input := strings.Join([]string{
 		"test-api-key", // Anthropic API key
 		"",             // Database mode (default: embedded)
-		"",             // Enable Tyr? (default: N)
+
 		"n",            // Configure GitHub? No
 	}, "\n") + "\n"
 
@@ -98,7 +98,7 @@ func TestRunInit_ExistingConfig_Overwrite(t *testing.T) {
 		"y", // Overwrite? Yes
 		"",  // API key (empty)
 		"",  // Database mode (default)
-		"",  // Enable Tyr? (default: N)
+
 		"n", // Configure GitHub? No
 	}, "\n") + "\n"
 
@@ -124,11 +124,11 @@ func TestRunInit_WithExternalDB(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: API key, external db, tyr, db params, no github.
+	// Pipe answers: API key, external db, db params, no github.
 	input := strings.Join([]string{
 		"test-api-key",   // Anthropic API key
 		"external",       // Database mode
-		"",               // Enable Tyr? (default: N)
+
 		"db.example.com", // DB host
 		"5432",           // DB port
 		"testuser",       // DB user
@@ -158,11 +158,11 @@ func TestRunInit_WithGitHub(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: API key, embedded db, tyr, github config.
+	// Pipe answers: API key, embedded db, github config.
 	input := strings.Join([]string{
 		"test-api-key", // Anthropic API key
 		"",             // Database mode (default embedded)
-		"",             // Enable Tyr? (default: N)
+
 		"y",            // Configure GitHub? Yes
 		"GITHUB_TOKEN", // GitHub token (env var)
 		"org1, org2",   // GitHub orgs
@@ -191,11 +191,11 @@ func TestRunInit_WithGitHub_DirectToken(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: API key, embedded db, tyr, github config with direct token.
+	// Pipe answers: API key, embedded db, github config with direct token.
 	input := strings.Join([]string{
 		"test-api-key",           // Anthropic API key
 		"",                       // Database mode (default embedded)
-		"",                       // Enable Tyr? (default: N)
+
 		"y",                      // Configure GitHub? Yes
 		"ghp_directtoken123",     // GitHub token (direct, not env var)
 		"",                       // GitHub orgs (empty)
@@ -224,12 +224,12 @@ func TestRunInit_ListenAll(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: listen=all, API key, db mode, tyr, no github.
+	// Pipe answers: listen=all, API key, db mode, no github.
 	input := strings.Join([]string{
 		"all",          // Listen on all interfaces
 		"test-api-key", // Anthropic API key
 		"",             // Database mode (default embedded)
-		"",             // Enable Tyr? (default: N)
+
 		"n",            // Configure GitHub? No
 	}, "\n") + "\n"
 
@@ -254,12 +254,12 @@ func TestRunInit_ListenCustomIP(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: listen=custom IP, API key, db mode, tyr, no github.
+	// Pipe answers: listen=custom IP, API key, db mode, no github.
 	input := strings.Join([]string{
 		"192.168.1.100", // Custom listen address
 		"test-api-key",  // Anthropic API key
 		"",              // Database mode (default embedded)
-		"",              // Enable Tyr? (default: N)
+
 		"n",             // Configure GitHub? No
 	}, "\n") + "\n"
 
@@ -284,12 +284,12 @@ func TestRunInit_ExternalDB_CustomPort(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: listen, API key, external db with custom port, tyr, no github.
+	// Pipe answers: listen, API key, external db with custom port, no github.
 	input := strings.Join([]string{
 		"",             // Listen (default localhost)
 		"test-api-key", // Anthropic API key
 		"external",     // Database mode
-		"",             // Enable Tyr? (default: N)
+
 		"localhost",    // DB host
 		"",             // DB port (empty = default 5432)
 		"user",         // DB user
@@ -319,7 +319,7 @@ func TestRunInit_GitHubWithDefaultCloneToken(t *testing.T) {
 	initModeFlag = "mini"
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: listen, API key, db, tyr, github with direct token and default clone token.
+	// Pipe answers: listen, API key, db, github with direct token and default clone token.
 	input := strings.Join([]string{
 		"",                   // Listen (default localhost)
 		"test-api-key",       // Anthropic API key
@@ -380,7 +380,7 @@ func TestRunInit_PrefillFromExistingConfig(t *testing.T) {
 		"",  // Listen (keep 0.0.0.0)
 		"",  // API key (keep existing)
 		"",  // Database mode (keep embedded)
-		"",  // Enable Tyr? (default: N)
+
 		"",  // GitHub (keep Y default)
 		"",  // GitHub token (keep existing)
 		"",  // GitHub orgs (keep existing)
@@ -458,7 +458,7 @@ func TestRunInit_PrefillOverrideValues(t *testing.T) {
 		"all",               // Listen (change to all interfaces)
 		"sk-new-key",        // New API key
 		"",                  // Database mode (keep embedded)
-		"",                  // Enable Tyr? (default: N)
+
 		"y",                 // Configure GitHub? Yes
 		"NEW_TOKEN_ENV",     // New token (env var)
 		"neworg1, neworg2",  // New orgs
@@ -534,7 +534,7 @@ func TestRunInit_PrefillExternalDB(t *testing.T) {
 		"",  // Listen (keep default)
 		"",  // API key (keep empty)
 		"",  // Database mode (keep external)
-		"",  // Enable Tyr? (default: N)
+
 		"",  // DB host (keep existing)
 		"",  // DB port (keep existing)
 		"",  // DB user (keep existing)
@@ -604,12 +604,12 @@ func TestRunInit_InteractiveMode(t *testing.T) {
 	initModeFlag = ""
 	defer func() { initModeFlag = oldFlag }()
 
-	// Pipe answers: mode, API key, db mode, tyr, no github.
+	// Pipe answers: mode, API key, db mode, no github.
 	input := strings.Join([]string{
 		"mini",         // Mode (interactive prompt)
 		"test-api-key", // Anthropic API key
 		"",             // Database mode (default embedded)
-		"",             // Enable Tyr? (default: N)
+
 		"n",            // Configure GitHub? No
 	}, "\n") + "\n"
 

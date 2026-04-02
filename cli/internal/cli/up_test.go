@@ -278,7 +278,6 @@ func TestBuildForgeConfig_AllOptionalFields(t *testing.T) {
 	cfg.Volundr.Forge.SDKPortStart = 9000
 	cfg.Volundr.Forge.Xcode.SearchPaths = []string{"/Applications/Xcode.app"}
 	cfg.Volundr.Forge.Xcode.DefaultVersion = "15.0"
-	cfg.Volundr.Tyr.Enabled = true
 	cfg.Volundr.Web = false
 	cfg.Database.Port = 5432
 	cfg.Database.User = "volundr"
@@ -305,12 +304,6 @@ func TestBuildForgeConfig_AllOptionalFields(t *testing.T) {
 	}
 	if forgeCfg.Forge.Xcode.DefaultVersion != "15.0" {
 		t.Errorf("expected xcode default version '15.0', got %q", forgeCfg.Forge.Xcode.DefaultVersion)
-	}
-	if !forgeCfg.Tyr.Enabled {
-		t.Error("expected tyr enabled")
-	}
-	if forgeCfg.Tyr.DatabaseDSN == "" {
-		t.Error("expected non-empty tyr database DSN")
 	}
 	if forgeCfg.Web {
 		t.Error("expected web disabled")
