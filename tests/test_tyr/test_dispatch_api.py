@@ -20,6 +20,7 @@ from tyr.api.dispatch import (
     _resolve_target_adapter,
     _slugify,
     create_dispatch_router,
+    resolve_dispatcher_repo,
     resolve_saga_repo,
     resolve_volundr,
     resolve_volundr_factory,
@@ -28,12 +29,14 @@ from tyr.api.tracker import resolve_trackers
 from tyr.config import AIModelConfig, AuthConfig, Settings
 from tyr.config import DispatchConfig as DispatchCfg
 from tyr.domain.models import (
+    DispatcherState,
     Saga,
     SagaStatus,
     TrackerIssue,
     TrackerMilestone,
     TrackerProject,
 )
+from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
 
 from .test_tracker_api import MockSagaRepo, MockTracker
@@ -152,6 +155,26 @@ class MockVolundrFactory:
         if self._adapters:
             return self._adapters[0]
         return None
+
+
+class MockDispatcherRepo(DispatcherRepository):
+    """In-memory mock for DispatcherRepository."""
+
+    async def get_or_create(self, owner_id: str) -> DispatcherState:
+        return DispatcherState(
+            id=uuid4(),
+            owner_id=owner_id,
+            running=False,
+            threshold=0.5,
+            max_concurrent_raids=3,
+            updated_at=datetime.now(UTC),
+        )
+
+    async def update(self, owner_id: str, **fields: object) -> DispatcherState:
+        return await self.get_or_create(owner_id)
+
+    async def list_active_owner_ids(self) -> list[str]:
+        return []
 
 
 # -------------------------------------------------------------------
@@ -274,11 +297,17 @@ def mock_factory() -> MockVolundrFactory:
 
 
 @pytest.fixture
+def mock_dispatcher_repo() -> MockDispatcherRepo:
+    return MockDispatcherRepo()
+
+
+@pytest.fixture
 def client(
     mock_tracker: MockTracker,
     mock_volundr: MockVolundr,
     saga_repo: MockSagaRepo,
     mock_factory: MockVolundrFactory,
+    mock_dispatcher_repo: MockDispatcherRepo,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(create_dispatch_router())
@@ -287,6 +316,7 @@ def client(
     app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
     app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
     app.dependency_overrides[resolve_volundr_factory] = lambda: mock_factory
+    app.dependency_overrides[resolve_dispatcher_repo] = lambda: mock_dispatcher_repo
     return TestClient(app)
 
 
@@ -714,6 +744,7 @@ class TestApproveDispatch:
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
         app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        app.dependency_overrides[resolve_dispatcher_repo] = lambda: MockDispatcherRepo()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -748,6 +779,7 @@ class TestApproveDispatch:
         app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
         app.dependency_overrides[resolve_volundr] = lambda: volundr
         app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        app.dependency_overrides[resolve_dispatcher_repo] = lambda: MockDispatcherRepo()
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)

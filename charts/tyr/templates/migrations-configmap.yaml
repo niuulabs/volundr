@@ -381,4 +381,14 @@ data:
     ALTER TABLE raids DROP COLUMN IF EXISTS reviewer_session_id;
     ALTER TABLE raid_progress DROP COLUMN IF EXISTS review_round;
     ALTER TABLE raid_progress DROP COLUMN IF EXISTS reviewer_session_id;
+
+  000019_saga_feature_branch.up.sql: |
+    -- Add feature_branch column (was in early dev schema but never migrated)
+    ALTER TABLE sagas ADD COLUMN IF NOT EXISTS feature_branch TEXT NOT NULL DEFAULT '';
+    -- Change base_branch default from 'main' to 'dev'
+    ALTER TABLE sagas ALTER COLUMN base_branch SET DEFAULT 'dev';
+
+  000019_saga_feature_branch.down.sql: |
+    ALTER TABLE sagas ALTER COLUMN base_branch SET DEFAULT 'main';
+    ALTER TABLE sagas DROP COLUMN IF EXISTS feature_branch;
 {{- end }}

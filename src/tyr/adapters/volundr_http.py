@@ -245,13 +245,26 @@ class VolundrHTTPAdapter(VolundrPort):
             return resp.json()
 
     async def get_last_assistant_message(self, session_id: str) -> str:
-        """Fetch the last assistant message from the session's conversation history."""
+        """Fetch the most recent assistant message containing a JSON assessment.
+
+        Scans the last 3 assistant messages for a JSON block with a
+        ``confidence`` key (the reviewer's final output).  Falls back to
+        the very last assistant message if no JSON assessment is found.
+        """
         data = await self.get_conversation(session_id)
         turns = data.get("turns", [])
-        for turn in reversed(turns):
-            if turn.get("role") == "assistant":
-                return turn.get("content", "")
-        raise ValueError(f"No assistant message found in conversation for session {session_id}")
+        assistant_turns = [t for t in turns if t.get("role") == "assistant"]
+        if not assistant_turns:
+            raise ValueError(f"No assistant message found in conversation for session {session_id}")
+
+        # Scan last 3 assistant messages for the JSON assessment
+        for turn in reversed(assistant_turns[-3:]):
+            content = turn.get("content", "")
+            if '"confidence"' in content:
+                return content
+
+        # Fall back to the very last assistant message
+        return assistant_turns[-1].get("content", "")
 
     async def subscribe_activity(self) -> AsyncGenerator[ActivityEvent, None]:
         """Subscribe to the Volundr SSE stream and yield activity + session lifecycle events."""
