@@ -36,6 +36,7 @@ encryption = [
     "cryptography>=42.0",
 ]
 cli = [
+    "typer>=0.12",
     "textual>=0.79",
     "nuitka>=2.1",
 ]
@@ -47,13 +48,19 @@ dev = [
     "respx>=0.21",
     "cryptography>=42.0",
     "textual>=0.79",
+    "typer>=0.12",
 ]
 
 [project.scripts]
+niuu = "cli.__main__:main"
 volundr = "volundr.main:main"
 skuld = "skuld.broker:main"
 bifrost = "volundr.bifrost.__main__:main"
 tyr = "tyr.main:main"
+
+[project.entry-points."niuu.plugins"]
+volundr = "volundr.plugin:VolundrPlugin"
+tyr = "tyr.plugin:TyrPlugin"
 
 [project.urls]
 Homepage = "https://github.com/niuulabs/volundr"
@@ -66,7 +73,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/niuu", "src/volundr", "src/tyr", "src/skuld"]
+packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
