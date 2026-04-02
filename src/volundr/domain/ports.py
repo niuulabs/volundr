@@ -1173,6 +1173,75 @@ class ResourceProvider(ABC):
         """
 
 
+class GitWorkspacePort(ABC):
+    """Port for local git operations on session workspace directories.
+
+    Provides git commands that run directly on the filesystem (not via
+    a git provider API). Used in mini/local mode where workspaces are
+    accessible on the host. K8s mode may provide a remote variant that
+    executes commands inside pods.
+    """
+
+    @abstractmethod
+    async def diff_files(self, workspace_dir: str) -> list[dict[str, str | int]]:
+        """Return changed files with addition/deletion stats.
+
+        Runs ``git diff HEAD --numstat`` in the workspace directory.
+
+        Returns:
+            List of dicts with keys: path, additions, deletions.
+        """
+
+    @abstractmethod
+    async def file_diff(
+        self,
+        workspace_dir: str,
+        path: str,
+        base_branch: str = "main",
+    ) -> str | None:
+        """Return unified diff for a single file.
+
+        Runs ``git diff <base_branch>...HEAD -- <path>`` in the workspace.
+
+        Returns:
+            Unified diff string, or None if the file has no diff.
+        """
+
+    @abstractmethod
+    async def commit_log(
+        self,
+        workspace_dir: str,
+        since: str | None = None,
+    ) -> list[dict[str, str]]:
+        """Return recent commits.
+
+        Runs ``git log`` in the workspace directory.
+
+        Returns:
+            List of dicts with keys: hash, short_hash, message.
+        """
+
+    @abstractmethod
+    async def pr_status(
+        self,
+        workspace_dir: str,
+    ) -> dict[str, Any] | None:
+        """Return PR status for the current branch via ``gh pr view``.
+
+        Returns:
+            Dict with keys: number, url, state, mergeable, checks.
+            None if no PR exists or ``gh`` is not installed.
+        """
+
+    @abstractmethod
+    async def current_branch(self, workspace_dir: str) -> str | None:
+        """Return the current branch name.
+
+        Returns:
+            Branch name string, or None on error.
+        """
+
+
 # PATRepository — re-exported from shared niuu module
 from niuu.ports.pat_repository import PATRepository  # noqa: F401, E402
 
