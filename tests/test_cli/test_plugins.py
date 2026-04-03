@@ -68,9 +68,7 @@ class TestVolundrPlugin:
 
     @respx.mock
     def test_sessions_list_command(self) -> None:
-        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(return_value=httpx.Response(200, json=[]))
         plugin = VolundrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)
@@ -146,9 +144,7 @@ class TestTyrPlugin:
 
     @respx.mock
     def test_sagas_list_command(self) -> None:
-        respx.get(f"{BASE}/api/v1/tyr/sagas").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        respx.get(f"{BASE}/api/v1/tyr/sagas").mock(return_value=httpx.Response(200, json=[]))
         plugin = TyrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)
@@ -157,9 +153,7 @@ class TestTyrPlugin:
 
     @respx.mock
     def test_raids_active_command(self) -> None:
-        respx.get(f"{BASE}/api/v1/tyr/raids/active").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        respx.get(f"{BASE}/api/v1/tyr/raids/active").mock(return_value=httpx.Response(200, json=[]))
         plugin = TyrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)

@@ -59,9 +59,7 @@ class TestSessionsList:
 
     @respx.mock
     def test_list_empty(self) -> None:
-        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(return_value=httpx.Response(200, json=[]))
         result = runner.invoke(_make_app(), ["sessions", "list"])
         assert result.exit_code == 0
         assert "No active sessions" in result.output

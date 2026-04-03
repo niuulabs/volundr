@@ -48,9 +48,7 @@ class TestSagasList:
     @respx.mock
     def test_list_json(self) -> None:
         data = [{"id": "sg1", "name": "refactor-auth"}]
-        respx.get(f"{BASE}/api/v1/tyr/sagas").mock(
-            return_value=httpx.Response(200, json=data)
-        )
+        respx.get(f"{BASE}/api/v1/tyr/sagas").mock(return_value=httpx.Response(200, json=data))
         result = runner.invoke(_make_app(), ["sagas", "list", "--json"])
         assert result.exit_code == 0
         parsed = json.loads(result.output)
@@ -58,9 +56,7 @@ class TestSagasList:
 
     @respx.mock
     def test_list_empty(self) -> None:
-        respx.get(f"{BASE}/api/v1/tyr/sagas").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        respx.get(f"{BASE}/api/v1/tyr/sagas").mock(return_value=httpx.Response(200, json=[]))
         result = runner.invoke(_make_app(), ["sagas", "list"])
         assert result.exit_code == 0
         assert "No active sagas" in result.output
@@ -184,9 +180,7 @@ class TestRaidsActive:
 
     @respx.mock
     def test_active_empty(self) -> None:
-        respx.get(f"{BASE}/api/v1/tyr/raids/active").mock(
-            return_value=httpx.Response(200, json=[])
-        )
+        respx.get(f"{BASE}/api/v1/tyr/raids/active").mock(return_value=httpx.Response(200, json=[]))
         result = runner.invoke(_make_app(), ["raids", "active"])
         assert result.exit_code == 0
         assert "No active raids" in result.output
