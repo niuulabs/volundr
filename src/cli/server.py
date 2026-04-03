@@ -128,8 +128,6 @@ class RootServer(Service):
         @asynccontextmanager
         async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Run each sub-app's lifespan so they set up DB pools, etc.
-            from starlette.routing import Router
-
             exit_stacks: list[tuple[str, AsyncGenerator]] = []
             for name, sub_app in sub_apps:
                 lf = sub_app.router.lifespan_context
@@ -183,8 +181,9 @@ class RootServer(Service):
 
         # Web UI — SPA with fallback to index.html for deep routes
         try:
-            from cli.resources import web_dist_dir
             from starlette.staticfiles import StaticFiles
+
+            from cli.resources import web_dist_dir
 
             dist = web_dist_dir()
             root.mount("/assets", StaticFiles(directory=str(dist / "assets")), name="web-assets")

@@ -31,7 +31,7 @@ from pathlib import Path
 import click
 import typer
 
-from cli.config import CLISettings, DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE
+from cli.config import CLISettings
 from cli.registry import PluginRegistry
 from cli.services.manager import ServiceManager
 
