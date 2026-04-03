@@ -77,6 +77,12 @@ class TestSagasList:
             result = runner.invoke(_make_app(), ["sagas", "list"])
             assert result.exit_code == 1
 
+    def test_list_timeout(self) -> None:
+        with respx.mock:
+            respx.get(f"{BASE}/api/v1/tyr/sagas").mock(side_effect=httpx.ReadTimeout("timed out"))
+            result = runner.invoke(_make_app(), ["sagas", "list"])
+            assert result.exit_code == 1
+
 
 # ── sagas create ─────────────────────────────────────────────────── #
 

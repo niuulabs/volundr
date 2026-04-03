@@ -10,6 +10,8 @@ import json
 import sys
 from typing import Any
 
+import httpx
+import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -67,3 +69,19 @@ def format_api_error(status_code: int, detail: str) -> str:
             return f"Not found: {detail}"
         case _:
             return f"API error {status_code}: {detail}"
+
+
+def handle_api_error(exc: httpx.HTTPStatusError) -> None:
+    """Extract detail from an HTTP error response, print it, and exit."""
+    try:
+        detail = exc.response.json().get("detail", exc.response.text)
+    except (json.JSONDecodeError, ValueError):
+        detail = exc.response.text
+    print_error(format_api_error(exc.response.status_code, str(detail)))
+    raise typer.Exit(1)
+
+
+def handle_transport_error(service_name: str) -> None:
+    """Print a connection/transport error panel and exit."""
+    print_error(f"Could not connect to {service_name}. Is the platform running?")
+    raise typer.Exit(1)

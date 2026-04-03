@@ -88,6 +88,14 @@ class TestSessionsList:
             result = runner.invoke(_make_app(), ["sessions", "list"])
             assert result.exit_code == 1
 
+    def test_list_timeout(self) -> None:
+        with respx.mock:
+            respx.get(f"{BASE}/api/v1/volundr/sessions").mock(
+                side_effect=httpx.ReadTimeout("timed out")
+            )
+            result = runner.invoke(_make_app(), ["sessions", "list"])
+            assert result.exit_code == 1
+
 
 # ── sessions create ──────────────────────────────────────────────── #
 

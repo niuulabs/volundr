@@ -5,7 +5,19 @@ from __future__ import annotations
 from io import StringIO
 from unittest.mock import patch
 
-from niuu.cli_output import format_api_error, print_error, print_json, print_success, print_table
+import httpx
+import pytest
+import typer
+
+from niuu.cli_output import (
+    format_api_error,
+    handle_api_error,
+    handle_transport_error,
+    print_error,
+    print_json,
+    print_success,
+    print_table,
+)
 
 
 class TestPrintTable:
@@ -81,3 +93,27 @@ class TestFormatApiError:
     def test_500(self) -> None:
         msg = format_api_error(500, "internal")
         assert "500" in msg
+
+
+class TestHandleApiError:
+    def test_exits_with_code_1(self) -> None:
+        request = httpx.Request("GET", "http://test/api")
+        response = httpx.Response(401, json={"detail": "bad token"}, request=request)
+        exc = httpx.HTTPStatusError("err", request=request, response=response)
+        with pytest.raises(typer.Exit) as exit_info:
+            handle_api_error(exc)
+        assert exit_info.value.exit_code == 1
+
+    def test_handles_non_json_response(self) -> None:
+        request = httpx.Request("GET", "http://test/api")
+        response = httpx.Response(500, text="plain error", request=request)
+        exc = httpx.HTTPStatusError("err", request=request, response=response)
+        with pytest.raises(typer.Exit):
+            handle_api_error(exc)
+
+
+class TestHandleTransportError:
+    def test_exits_with_code_1(self) -> None:
+        with pytest.raises(typer.Exit) as exit_info:
+            handle_transport_error("Volundr")
+        assert exit_info.value.exit_code == 1
