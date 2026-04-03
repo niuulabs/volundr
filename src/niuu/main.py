@@ -20,16 +20,16 @@ logger = logging.getLogger(__name__)
 def _load_git_config() -> GitConfig:
     """Load git configuration from the shared YAML config.
 
-    Re-uses Volundr's Settings loader since the git section is common.
-    Falls back to an empty GitConfig if Volundr settings are unavailable.
+    Uses NiuuSettings to read the ``git:`` section from the same YAML
+    config files that Volundr uses, without importing volundr.
     """
     try:
-        from volundr.config import Settings
+        from niuu.config import NiuuSettings
 
-        settings = Settings()
-        return GitConfig(github=settings.git.github, gitlab=settings.git.gitlab)
+        settings = NiuuSettings()
+        return settings.git
     except Exception:
-        logger.debug("Could not load Volundr settings for git config, using defaults")
+        logger.debug("Could not load niuu settings for git config, using defaults")
         return GitConfig()
 
 

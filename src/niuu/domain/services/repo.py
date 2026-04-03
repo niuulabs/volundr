@@ -14,7 +14,7 @@ from niuu.domain.models import (
 
 if TYPE_CHECKING:
     from niuu.adapters.outbound.git_registry import GitProviderRegistry
-    from volundr.domain.services.user_integration import UserIntegrationService
+    from niuu.ports.user_integration import UserIntegrationPort
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class RepoService:
     def __init__(
         self,
         git_registry: GitProviderRegistry,
-        user_integration: UserIntegrationService | None = None,
+        user_integration: UserIntegrationPort | None = None,
     ):
         self._git_registry = git_registry
         self._user_integration = user_integration
