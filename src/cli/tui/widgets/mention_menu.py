@@ -11,6 +11,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from cli.tui.theme import ACCENT_AMBER, TEXT_MUTED
+
 MAX_VISIBLE_ITEMS = 10
 
 
@@ -155,7 +157,7 @@ class MentionMenu(Widget):
 
         items = self.filtered
         if not items:
-            container.mount(Static("[#71717a]No matches[/]", classes="mention-more"))
+            container.mount(Static("[{TEXT_MUTED}]No matches[/]", classes="mention-more"))
             return
 
         # Window around selected item.
@@ -171,7 +173,7 @@ class MentionMenu(Widget):
         for i in range(start, end):
             item = items[i]
             icon = f"{item.icon} " if item.icon else ""
-            detail = f" [#71717a]{item.detail}[/]" if item.detail else ""
+            detail = f" [{TEXT_MUTED}]{item.detail}[/]" if item.detail else ""
             classes = "mention-item selected" if i == self.selected else "mention-item"
             container.mount(Static(f"{icon}{item.label}{detail}", classes=classes))
 

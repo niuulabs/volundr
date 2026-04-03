@@ -7,7 +7,9 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Static
 
-DEFAULT_METRIC_COLOR = "#06b6d4"
+from cli.tui.theme import ACCENT_CYAN, TEXT_MUTED
+
+DEFAULT_METRIC_COLOR = ACCENT_CYAN
 
 
 class MetricCard(Widget):
@@ -61,7 +63,7 @@ class MetricCard(Widget):
             f"[bold {self._color}]{icon_part}{self._value}[/]",
             id="metric-icon-value",
         )
-        yield Static(f"[#71717a]{self._label}[/]", id="metric-label")
+        yield Static(f"[{TEXT_MUTED}]{self._label}[/]", id="metric-label")
 
     def set_value(self, value: str) -> None:
         self._value = value

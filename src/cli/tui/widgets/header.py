@@ -10,6 +10,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from cli.tui.mode import MODE_COLORS_HEX, InputMode
+from cli.tui.theme import ACCENT_AMBER, ACCENT_EMERALD, ACCENT_RED
 
 
 class ConnectionState(StrEnum):
@@ -21,9 +22,9 @@ class ConnectionState(StrEnum):
 
 
 _CONNECTION_INDICATORS: dict[ConnectionState, tuple[str, str]] = {
-    ConnectionState.CONNECTING: ("◌", "#f59e0b"),
-    ConnectionState.CONNECTED: ("●", "#10b981"),
-    ConnectionState.DISCONNECTED: ("●", "#ef4444"),
+    ConnectionState.CONNECTING: ("◌", ACCENT_AMBER),
+    ConnectionState.CONNECTED: ("●", ACCENT_EMERALD),
+    ConnectionState.DISCONNECTED: ("●", ACCENT_RED),
 }
 
 
@@ -75,7 +76,7 @@ class NiuuHeader(Widget):
         url_display = self.server_url.removeprefix("https://").removeprefix("http://")
         url_part = f" [{dot_color}]{url_display}[/]" if url_display else ""
 
-        return f"[bold #f59e0b]⚒[/] [bold]Niuu[/] {mode_label}  {status}{url_part}"
+        return f"[bold {ACCENT_AMBER}]⚒[/] [bold]Niuu[/] {mode_label}  {status}{url_part}"
 
     def watch_mode(self) -> None:
         self._refresh_bar()

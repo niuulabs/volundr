@@ -9,6 +9,8 @@ from textual.containers import Center, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from cli.tui.theme import ACCENT_AMBER, TEXT_MUTED, TEXT_SECONDARY
+
 
 @dataclass(frozen=True)
 class KeyBinding:
@@ -115,8 +117,8 @@ class HelpOverlay(ModalScreen[None]):
             if binding.section:
                 rows.append(Static(f"── {binding.section} ──", classes="help-section"))
                 continue
-            key_col = f"[bold #f59e0b]{binding.key:>14}[/]"
-            rows.append(Static(f"{key_col}  [#a1a1aa]{binding.description}[/]", classes="help-row"))
+            key_col = f"[bold {ACCENT_AMBER}]{binding.key:>14}[/]"
+            rows.append(Static(f"{key_col}  [{TEXT_SECONDARY}]{binding.description}[/]", classes="help-row"))
         return rows
 
     def action_dismiss(self) -> None:

@@ -11,6 +11,8 @@ from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Input, Static
 
+from cli.tui.theme import ACCENT_AMBER, ACCENT_CYAN, ACCENT_EMERALD, TEXT_MUTED
+
 MAX_VISIBLE_RESULTS = 10
 
 
@@ -23,9 +25,9 @@ class PaletteItemType(StrEnum):
 
 
 _TYPE_COLORS: dict[PaletteItemType, str] = {
-    PaletteItemType.SESSION: "#10b981",
-    PaletteItemType.PAGE: "#06b6d4",
-    PaletteItemType.ACTION: "#f59e0b",
+    PaletteItemType.SESSION: ACCENT_EMERALD,
+    PaletteItemType.PAGE: ACCENT_CYAN,
+    PaletteItemType.ACTION: ACCENT_AMBER,
 }
 
 
@@ -163,7 +165,7 @@ class CommandPalette(ModalScreen[PaletteItem | None]):
                 )
             icon = f"{item.icon} " if item.icon else ""
             color = _TYPE_COLORS[item.item_type]
-            desc = f" [#71717a]{item.description}[/]" if item.description else ""
+            desc = f" [{TEXT_MUTED}]{item.description}[/]" if item.description else ""
             classes = "palette-item selected" if i == self._cursor else "palette-item"
             container.mount(Static(f"[{color}]{icon}{item.label}[/]{desc}", classes=classes))
 

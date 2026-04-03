@@ -10,6 +10,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from cli.tui.mode import InputMode
+from cli.tui.theme import ACCENT_AMBER, TEXT_MUTED
 
 
 @dataclass(frozen=True)
@@ -104,8 +105,8 @@ class NiuuFooter(Widget):
     def _render_hints(self) -> str:
         parts: list[str] = []
         for hint in self._active_hints():
-            parts.append(f" [bold #f59e0b]{hint.key}[/] {hint.description} ")
-        return "[#71717a]│[/]".join(parts)
+            parts.append(f" [bold {ACCENT_AMBER}]{hint.key}[/] {hint.description} ")
+        return f"[{TEXT_MUTED}]│[/]".join(parts)
 
     def _refresh(self) -> None:
         try:

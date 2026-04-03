@@ -6,21 +6,30 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+from cli.tui.theme import (
+    ACCENT_AMBER,
+    ACCENT_CYAN,
+    ACCENT_EMERALD,
+    ACCENT_PURPLE,
+    ACCENT_RED,
+    TEXT_MUTED,
+)
+
 # Status → (dot character, color hex).
 _STATUS_MAP: dict[str, tuple[str, str]] = {
-    "running": ("●", "#10b981"),
-    "connected": ("●", "#10b981"),
-    "starting": ("◐", "#f59e0b"),
-    "provisioning": ("◐", "#f59e0b"),
-    "stopped": ("○", "#71717a"),
-    "disconnected": ("○", "#71717a"),
-    "error": ("●", "#ef4444"),
-    "failed": ("●", "#ef4444"),
-    "completed": ("●", "#06b6d4"),
-    "pending": ("◌", "#a855f7"),
+    "running": ("●", ACCENT_EMERALD),
+    "connected": ("●", ACCENT_EMERALD),
+    "starting": ("◐", ACCENT_AMBER),
+    "provisioning": ("◐", ACCENT_AMBER),
+    "stopped": ("○", TEXT_MUTED),
+    "disconnected": ("○", TEXT_MUTED),
+    "error": ("●", ACCENT_RED),
+    "failed": ("●", ACCENT_RED),
+    "completed": ("●", ACCENT_CYAN),
+    "pending": ("◌", ACCENT_PURPLE),
 }
 
-_DEFAULT_INDICATOR: tuple[str, str] = ("○", "#71717a")
+_DEFAULT_INDICATOR: tuple[str, str] = ("○", TEXT_MUTED)
 
 
 class StatusBadge(Widget):

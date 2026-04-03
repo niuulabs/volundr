@@ -7,7 +7,7 @@ from cli.tui.widgets.help_overlay import HelpOverlay, KeyBinding
 from cli.tui.widgets.mention_menu import MentionItem, MentionMenu
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
 from cli.tui.widgets.modal import NiuuModal
-from cli.tui.widgets.sidebar import NiuuSidebar
+from cli.tui.widgets.sidebar import NiuuSidebar, SidebarPage
 from cli.tui.widgets.status_badge import StatusBadge
 from cli.tui.widgets.tabs import NiuuTabs
 
@@ -23,6 +23,7 @@ __all__ = [
     "NiuuHeader",
     "NiuuModal",
     "NiuuSidebar",
+    "SidebarPage",
     "NiuuTabs",
     "HelpOverlay",
     "PaletteItem",

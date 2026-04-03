@@ -8,6 +8,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from cli.tui.theme import ACCENT_AMBER, BORDER, TEXT_MUTED
+
 
 class NiuuTabs(Widget):
     """Horizontal tab bar. Active tab = amber + bold + underline."""
@@ -68,10 +70,10 @@ class NiuuTabs(Widget):
         parts: list[str] = []
         for i, label in enumerate(self._items):
             if i == self.active_tab:
-                parts.append(f"[bold underline #f59e0b] {label} [/]")
+                parts.append(f"[bold underline {ACCENT_AMBER}] {label} [/]")
             else:
-                parts.append(f"[#71717a] {label} [/]")
-        return " [#3f3f46]│[/] ".join(parts)
+                parts.append(f"[{TEXT_MUTED}] {label} [/]")
+        return f" [{BORDER}]│[/] ".join(parts)
 
     def _refresh(self) -> None:
         try:
