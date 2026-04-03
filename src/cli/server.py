@@ -34,12 +34,10 @@ logger = logging.getLogger(__name__)
 # Maps plugin name → API path prefixes that Starlette Mount uses to route.
 # The prefix is stripped by Mount, then restored by _PrefixRestoreApp
 # so the sub-app's own routers (which include the prefix) still match.
-#
-# Volundr also hosts /api/v1/niuu (shared repos endpoint) until niuu is
-# extracted into its own service — see TODO in volundr/main.py.
 _PLUGIN_API_PREFIXES: dict[str, list[str]] = {
-    "volundr": ["/api/v1/volundr", "/api/v1/niuu"],
+    "volundr": ["/api/v1/volundr"],
     "tyr": ["/api/v1/tyr"],
+    "niuu": ["/api/v1/niuu"],
 }
 
 

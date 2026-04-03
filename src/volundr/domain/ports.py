@@ -14,11 +14,15 @@ from typing import Any
 from uuid import UUID
 
 from niuu.ports.credentials import CredentialStorePort  # noqa: F401
-from niuu.ports.git import GitProvider as _NiuuGitProvider  # noqa: F401
+from niuu.ports.git import (
+    GitAuthError,  # noqa: F401
+    GitProvider,  # noqa: F401
+    GitRepoNotFoundError,  # noqa: F401
+    GitWorkflowProvider,  # noqa: F401
+)
 from niuu.ports.integrations import IntegrationRepository  # noqa: F401
 from volundr.domain.models import (
     Chronicle,
-    CIStatus,
     ClusterResourceInfo,
     CredentialMapping,
     ForgeProfile,
@@ -31,10 +35,8 @@ from volundr.domain.models import (
     Principal,
     ProjectMapping,
     PromptScope,
-    PullRequest,
     PVCRef,
     RealtimeEvent,
-    RepoInfo,
     SavedPrompt,
     SecretInfo,
     SecretMountSpec,
@@ -278,70 +280,9 @@ class PricingProvider(ABC):
         """
 
 
-class GitProvider(_NiuuGitProvider):
-    """Extended git provider port with Volundr-specific operations.
 
-    Inherits read-only operations (list_repos, list_branches, provider_type,
-    name, base_url) from niuu's GitProvider and adds Volundr-specific methods
-    for repo validation, parsing, and URL generation.
-    """
-
-    @property
-    @abstractmethod
-    def orgs(self) -> tuple[str, ...]:
-        """Return the configured organizations/groups for this provider."""
-
-    @abstractmethod
-    def supports(self, repo_url: str) -> bool:
-        """Check if this provider can handle the given repository URL.
-
-        Args:
-            repo_url: Repository URL or shorthand (e.g., 'github.com/org/repo').
-
-        Returns:
-            True if this provider can handle the URL.
-        """
-
-    @abstractmethod
-    async def validate_repo(self, repo_url: str) -> bool:
-        """Validate that a repository exists and is accessible.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            True if the repository exists and is accessible.
-        """
-
-    @abstractmethod
-    def parse_repo(self, repo_url: str) -> RepoInfo | None:
-        """Parse a repository URL into structured information.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            RepoInfo if the URL can be parsed, None otherwise.
-        """
-
-    @abstractmethod
-    def get_clone_url(self, repo_url: str) -> str | None:
-        """Get an authenticated clone URL for a repository.
-
-        Args:
-            repo_url: Repository URL or shorthand.
-
-        Returns:
-            Authenticated clone URL, or None if not supported.
-        """
-
-
-class GitAuthError(Exception):
-    """Raised when git provider authentication fails."""
-
-
-class GitRepoNotFoundError(Exception):
-    """Raised when a git repository is not found."""
+# GitProvider, GitWorkflowProvider, GitAuthError, GitRepoNotFoundError
+# are re-exported from niuu.ports.git at the top of this file.
 
 
 class EventBroadcaster(ABC):
@@ -493,108 +434,6 @@ class SessionEventRepository(ABC):
         """Delete all events for a session. Returns count deleted."""
 
 
-class GitWorkflowProvider(ABC):
-    """Port for git workflow operations (branches, PRs, CI status).
-
-    Extends the basic GitProvider with write operations for PR-based
-    workflows. GitHub/GitLab are the source of truth — no local state.
-    """
-
-    @abstractmethod
-    async def create_branch(
-        self,
-        repo_url: str,
-        branch_name: str,
-        from_branch: str = "main",
-    ) -> bool:
-        """Create a new branch from an existing branch.
-
-        Args:
-            repo_url: Repository URL.
-            branch_name: Name for the new branch.
-            from_branch: Branch to create from.
-
-        Returns:
-            True if created successfully.
-        """
-
-    @abstractmethod
-    async def create_pull_request(
-        self,
-        repo_url: str,
-        title: str,
-        description: str,
-        source_branch: str,
-        target_branch: str,
-        labels: list[str] | None = None,
-    ) -> PullRequest:
-        """Create a pull request / merge request.
-
-        Args:
-            repo_url: Repository URL.
-            title: PR title.
-            description: PR body/description.
-            source_branch: Source branch.
-            target_branch: Target branch.
-            labels: Optional labels to add.
-
-        Returns:
-            The created PullRequest.
-        """
-
-    @abstractmethod
-    async def get_pull_request(self, repo_url: str, pr_number: int) -> PullRequest | None:
-        """Get a pull request by number.
-
-        Args:
-            repo_url: Repository URL.
-            pr_number: PR number.
-
-        Returns:
-            PullRequest if found, None otherwise.
-        """
-
-    @abstractmethod
-    async def list_pull_requests(self, repo_url: str, status: str = "open") -> list[PullRequest]:
-        """List pull requests for a repository.
-
-        Args:
-            repo_url: Repository URL.
-            status: Filter by status (open, closed, all).
-
-        Returns:
-            List of matching pull requests.
-        """
-
-    @abstractmethod
-    async def merge_pull_request(
-        self,
-        repo_url: str,
-        pr_number: int,
-        merge_method: str = "squash",
-    ) -> bool:
-        """Merge a pull request.
-
-        Args:
-            repo_url: Repository URL.
-            pr_number: PR number.
-            merge_method: Merge method (merge, squash, rebase).
-
-        Returns:
-            True if merged successfully.
-        """
-
-    @abstractmethod
-    async def get_ci_status(self, repo_url: str, branch: str) -> CIStatus:
-        """Get the CI status for a branch.
-
-        Args:
-            repo_url: Repository URL.
-            branch: Branch name.
-
-        Returns:
-            The CI status.
-        """
 
 
 class SavedPromptRepository(ABC):
