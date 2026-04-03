@@ -222,36 +222,22 @@ def _build_up_callback(
 
         enabled = _resolve_enabled_services(service_defs, settings, start_all, svc_flags)
 
-        loop = asyncio.new_event_loop()
-        shutdown_event = asyncio.Event()
-
-        def _handle_signal(signum: int, frame: object) -> None:
-            typer.echo("\nReceived shutdown signal...")
-            loop.call_soon_threadsafe(shutdown_event.set)
-
-        # Use OS-level signal handlers (not event-loop-level) so they
-        # fire reliably even under `uv run` or other wrappers.
-        prev_int = signal.signal(signal.SIGINT, _handle_signal)
-        prev_term = signal.signal(signal.SIGTERM, _handle_signal)
-
         async def _run() -> None:
             await _startup(manager, settings, enabled, skip_preflight)
-            await shutdown_event.wait()
+
+            # Wait forever until cancelled by KeyboardInterrupt
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                pass
+
             await _shutdown(manager)
 
         try:
-            loop.run_until_complete(_run())
+            asyncio.run(_run())
         except KeyboardInterrupt:
             typer.echo("\nReceived shutdown signal...")
-            loop.run_until_complete(_shutdown(manager))
-        except SystemExit:
-            raise
-        except Exception:
-            loop.run_until_complete(_shutdown(manager))
-        finally:
-            signal.signal(signal.SIGINT, prev_int)
-            signal.signal(signal.SIGTERM, prev_term)
-            loop.close()
+            asyncio.run(_shutdown(manager))
         typer.echo("All services stopped. Goodbye.")
 
     # Build dynamic signature: skip_preflight, all, then one bool | None per service.

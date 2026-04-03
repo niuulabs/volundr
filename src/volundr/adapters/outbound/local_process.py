@@ -508,6 +508,11 @@ class LocalProcessPodManager(PodManager):
         env["SKULD__SKIP_PERMISSIONS"] = "true"
         env["SKULD__PERSISTENCE_MOUNT_PATH"] = str(self._workspaces_dir)
 
+        # Volundr API URL so Skuld can post chronicles/timeline events back
+        server_host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1")
+        server_port = os.environ.get("NIUU_SERVER_PORT", "8080")
+        env["SKULD__VOLUNDR_API_URL"] = f"http://{server_host}:{server_port}"
+
         system_prompt = spec.values.get("system_prompt", "")
         initial_prompt = spec.values.get("initial_prompt", "")
         if system_prompt:

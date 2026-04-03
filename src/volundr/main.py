@@ -685,7 +685,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(admin_settings_router)
 
             # Feature module system (config-driven, DB-persisted toggles)
-            feature_service = FeatureService(pool, settings.features)
+            # In mini mode, disable modules that require container infrastructure
+            feature_configs = list(settings.features)
+            if settings.local_mounts.mini_mode:
+                _mini_disabled = {"terminal", "code"}
+                for fc in feature_configs:
+                    if fc.key in _mini_disabled:
+                        fc.default_enabled = False
+            feature_service = FeatureService(pool, feature_configs)
             features_router = create_features_router(feature_service)
             app.include_router(features_router)
             app.state.feature_service = feature_service

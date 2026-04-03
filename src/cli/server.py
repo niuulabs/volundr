@@ -291,20 +291,25 @@ class RootServer(Service):
             }
             body = await request.body()
 
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.request(
-                    method=request.method,
-                    url=url,
-                    params=params,
-                    headers=headers,
-                    content=body if body else None,
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.request(
+                        method=request.method,
+                        url=url,
+                        params=params,
+                        headers=headers,
+                        content=body if body else None,
+                    )
+                return Response(
+                    content=resp.content,
+                    status_code=resp.status_code,
+                    headers=dict(resp.headers),
                 )
-
-            return Response(
-                content=resp.content,
-                status_code=resp.status_code,
-                headers=dict(resp.headers),
-            )
+            except httpx.ConnectError:
+                return JSONResponse(
+                    {"detail": "Skuld broker not ready"},
+                    status_code=502,
+                )
 
         @root.get("/s/{session_id}/health", include_in_schema=False)
         async def skuld_health_proxy(request: Request, session_id: str) -> Response:
@@ -315,14 +320,19 @@ class RootServer(Service):
 
             import httpx
 
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"http://127.0.0.1:{port}/health")
-
-            return Response(
-                content=resp.content,
-                status_code=resp.status_code,
-                headers=dict(resp.headers),
-            )
+            try:
+                async with httpx.AsyncClient(timeout=5) as client:
+                    resp = await client.get(f"http://127.0.0.1:{port}/health")
+                return Response(
+                    content=resp.content,
+                    status_code=resp.status_code,
+                    headers=dict(resp.headers),
+                )
+            except httpx.ConnectError:
+                return JSONResponse(
+                    {"detail": "Skuld broker not ready"},
+                    status_code=502,
+                )
 
         # Runtime config for the web UI SPA
         @root.get("/config.json")
