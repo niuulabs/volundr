@@ -935,7 +935,7 @@ class TestListClusters:
         connections = [
             IntegrationConnection(
                 id="conn-1",
-                owner_id="default",
+                owner_id="dev-user",
                 integration_type=IntegrationType.CODE_FORGE,
                 adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
                 credential_name="pat-a",
@@ -946,7 +946,7 @@ class TestListClusters:
             ),
             IntegrationConnection(
                 id="conn-2",
-                owner_id="default",
+                owner_id="dev-user",
                 integration_type=IntegrationType.CODE_FORGE,
                 adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
                 credential_name="pat-b",
@@ -987,7 +987,7 @@ class TestListClusters:
         connections = [
             IntegrationConnection(
                 id="conn-x",
-                owner_id="default",
+                owner_id="dev-user",
                 integration_type=IntegrationType.CODE_FORGE,
                 adapter="tyr.adapters.volundr_http.VolundrHTTPAdapter",
                 credential_name="pat-x",
