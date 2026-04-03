@@ -23,8 +23,8 @@ from volundr.tui.settings import SettingsPage
 from volundr.tui.terminal import TerminalPage
 
 
-class _VolundrService(Service):
-    """Stub Volundr service (replaced by real implementation at runtime)."""
+class _VolundrStub(Service):
+    """Stub — actual server is managed by the CLI root server."""
 
     async def start(self) -> None:
         pass
@@ -51,7 +51,7 @@ class VolundrPlugin(ServicePlugin):
         return ServiceDefinition(
             name="volundr",
             description="AI-native development platform",
-            factory=_VolundrService,
+            factory=lambda: _VolundrStub(),
             default_enabled=True,
             depends_on=["postgres"],
             default_port=8080,
@@ -59,6 +59,11 @@ class VolundrPlugin(ServicePlugin):
 
     def create_service(self) -> Service:
         return self.register_service().factory()
+
+    def create_api_app(self) -> Any:
+        from volundr.main import create_app
+
+        return create_app()
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Volundr")

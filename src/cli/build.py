@@ -49,6 +49,7 @@ INCLUDE_PACKAGES = [
 
 # Package data to bundle (CSS, SQL, PostgreSQL binaries, etc.)
 INCLUDE_PACKAGE_DATA = [
+    "cli",
     "pgserver",
     "rich",
     "textual",
@@ -114,11 +115,57 @@ def build_command(
         if src_dir.is_dir() and any(src_dir.iterdir()):
             cmd.append(f"--include-data-dir={src_dir}={dest}")
 
+    # pgserver bundles native PostgreSQL binaries and shared libraries.
+    # Nuitka's --include-package-data skips .dylib/.so files, so we
+    # include the entire pgserver directory tree explicitly.
+    try:
+        import pgserver
+
+        pg_root = Path(pgserver.__file__).parent
+        for path in pg_root.rglob("*"):
+            if not path.is_file():
+                continue
+            if path.suffix in (".py", ".pyc", ".pyi"):
+                continue  # already handled by --include-package
+            rel = path.relative_to(pg_root)
+            # Skip if already included by --include-package-data
+            # (non-binary files are handled there)
+            if path.suffix in (".dylib", ".so", ".a"):
+                cmd.append(f"--include-data-files={path}=pgserver/{rel}")
+    except ImportError:
+        pass
+
     nofollow = ",".join(NOFOLLOW_IMPORTS)
     cmd.append(f"--nofollow-import-to={nofollow}")
 
     cmd.append(entry_point)
     return cmd
+
+
+def _copy_pgserver_dylibs(output_dir: str) -> None:
+    """Copy pgserver's .dylibs directory into the standalone dist.
+
+    Nuitka's --include-package-data skips hidden directories (those starting
+    with '.'), but pgserver's PostgreSQL binaries reference dylibs via
+    @loader_path relative paths into .dylibs/. Copy them manually.
+    """
+    import shutil
+
+    dist_dir = Path(output_dir) / "__main__.dist"
+    target = dist_dir / "pgserver" / ".dylibs"
+    if target.exists():
+        return
+
+    # Find source .dylibs in the venv
+    try:
+        import pgserver
+
+        src = Path(pgserver.__file__).parent / ".dylibs"
+        if src.is_dir():
+            shutil.copytree(src, target)
+            typer.echo(f"Copied pgserver .dylibs → {target}")
+    except (ImportError, FileNotFoundError):
+        typer.echo("Warning: could not copy pgserver .dylibs")
 
 
 build_cli = typer.Typer()
@@ -143,7 +190,13 @@ def main(
     typer.echo(f"Building {name} binary …")
     typer.echo(f"Command: {shlex.join(cmd)}")
     result = subprocess.run(cmd, check=False)
-    raise typer.Exit(result.returncode)
+    if result.returncode != 0:
+        raise typer.Exit(result.returncode)
+
+    # Copy pgserver .dylibs (hidden dir filtered by Nuitka --include-package-data)
+    _copy_pgserver_dylibs(output_dir)
+
+    raise typer.Exit(0)
 
 
 if __name__ == "__main__":

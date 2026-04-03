@@ -49,6 +49,10 @@ class LocalMountsConfig(BaseModel):
         default=False,
         description="Enable local path mounts as session workspace sources.",
     )
+    mini_mode: bool = Field(
+        default=False,
+        description="Running in mini/local mode (CLI). Enables local-only UI features.",
+    )
     allow_root_mount: bool = Field(
         default=False,
         description="Allow mounting the root filesystem (/). Requires enabled=true.",

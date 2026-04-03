@@ -110,6 +110,15 @@ class ServicePlugin(ABC):
     def register_commands(self, app: typer.Typer) -> None:
         """Register CLI commands on the given Typer app."""
 
+    def create_api_app(self) -> Any:
+        """Create a FastAPI/ASGI sub-application for this plugin.
+
+        Returned app is mounted into the root server. Routes should use
+        their own ``/api/v1/<plugin>/`` prefix to avoid collisions.
+        Return None if this plugin does not expose HTTP endpoints.
+        """
+        return None
+
     def create_api_client(self) -> Any:
         """Create an async API client for this service, or None."""
         return None

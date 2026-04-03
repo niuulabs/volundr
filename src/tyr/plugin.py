@@ -16,7 +16,11 @@ from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin
 
 
 class _TyrService(Service):
-    """Stub Tyr service (replaced by real implementation at runtime)."""
+    """Tyr lifecycle managed by the Volundr unified server.
+
+    Tyr is mounted into the Volundr FastAPI app on the same port,
+    so this service only tracks that Volundr has started.
+    """
 
     async def start(self) -> None:
         pass
@@ -46,11 +50,15 @@ class TyrPlugin(ServicePlugin):
             factory=_TyrService,
             default_enabled=True,
             depends_on=["postgres", "volundr"],
-            default_port=8081,
         )
 
     def create_service(self) -> Service:
         return self.register_service().factory()
+
+    def create_api_app(self) -> Any:
+        from tyr.main import create_app
+
+        return create_app()
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Tyr")

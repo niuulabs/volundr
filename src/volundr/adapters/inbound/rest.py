@@ -888,6 +888,7 @@ def create_router(
         return {
             "local_mounts_enabled": settings.local_mounts.enabled,
             "file_manager_enabled": admin.get("storage", {}).get("file_manager_enabled", True),
+            "mini_mode": settings.local_mounts.mini_mode,
         }
 
     @router.get("/auth/config", tags=["Auth"])

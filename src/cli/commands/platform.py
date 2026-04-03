@@ -126,7 +126,7 @@ async def _startup(
     enabled_services: set[str] | None,
     skip_preflight: bool,
 ) -> None:
-    """Run preflight checks and start services."""
+    """Run preflight checks, start infrastructure, then the root server."""
     if not skip_preflight:
         typer.echo("Running preflight checks...")
         config = _build_preflight_config(settings)
@@ -145,16 +145,46 @@ async def _startup(
         typer.echo(f"\nStartup failed: {exc}")
         raise typer.Exit(1) from None
 
+    # Start the unified root server (all plugin APIs + web UI on one port)
+    from cli.server import RootServer
+
     host = settings.server.host
     port = settings.server.port
-    typer.echo(f"\nReady! All services running on http://{host}:{port}")
-    typer.echo(f"  Volundr API: http://{host}:{port}/api/v1/")
-    typer.echo(f"  Web UI:      http://{host}:{port}/")
+    root_server = RootServer(
+        registry=manager._registry,
+        host=host,
+        port=port,
+    )
+    manager._root_server = root_server  # type: ignore[attr-defined]
+
+    typer.echo("  Starting API server...", nl=False)
+    await root_server.start()
+
+    # Wait for the server to become healthy
+    for _ in range(15):
+        if await root_server.health_check():
+            break
+        await asyncio.sleep(0.5)
+
+    if await root_server.health_check():
+        typer.echo(" ok")
+    else:
+        typer.echo(" FAILED")
+        raise typer.Exit(1)
+
+    typer.echo(f"\nReady! Platform running on http://{host}:{port}")
+    typer.echo(f"  API:    http://{host}:{port}/api/v1/")
+    typer.echo(f"  Web UI: http://{host}:{port}/")
 
 
 async def _shutdown(manager: ServiceManager) -> None:
     """Stop all services gracefully."""
     typer.echo("Stopping services...")
+    root_server = getattr(manager, "_root_server", None)
+    if root_server:
+        typer.echo("  Stopping API server...", nl=False)
+        await root_server.stop()
+        typer.echo(" done")
     await manager.stop_all()
 
 
@@ -172,6 +202,14 @@ def _build_up_callback(
 
     def up(**kwargs: bool | None) -> None:
         """Start platform services."""
+        import os
+
+        # In mini mode, enable local mounts and mini_mode feature flag
+        # so Volundr's Settings picks them up via env vars.
+        if settings.mode == "mini":
+            os.environ.setdefault("LOCAL_MOUNTS__ENABLED", "true")
+            os.environ.setdefault("LOCAL_MOUNTS__MINI_MODE", "true")
+
         skip_preflight: bool = bool(kwargs.pop("skip_preflight", False))
         start_all: bool = bool(kwargs.pop("all", False))
         svc_flags: dict[str, bool | None] = dict(kwargs)

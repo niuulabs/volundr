@@ -65,8 +65,8 @@ class PgserverEmbeddedDatabase(EmbeddedDatabasePort):
         pg = await loop.run_in_executor(None, lambda: pgserver.get_server(Path(data_dir)))
         self._pg_instance = pg
 
-        dsn: str = pg.postmaster.dsn
-        info = self._parse_dsn(dsn)
+        uri: str = pg.get_uri()
+        info = self._parse_uri(uri)
         self._connection_info = info
 
         try:
@@ -77,15 +77,10 @@ class PgserverEmbeddedDatabase(EmbeddedDatabasePort):
             ) from exc
 
         self._conn = await asyncio.wait_for(
-            asyncpg.connect(
-                host=info.host,
-                port=info.port,
-                database=info.dbname,
-                user=info.user,
-            ),
+            asyncpg.connect(dsn=uri),
             timeout=self._startup_timeout_s,
         )
-        logger.info("Embedded PG started — %s:%s/%s", info.host, info.port, info.dbname)
+        logger.info("Embedded PG started — %s", uri)
         return info
 
     async def execute(self, sql: str, *args: object) -> list[dict]:
@@ -127,23 +122,23 @@ class PgserverEmbeddedDatabase(EmbeddedDatabasePort):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_dsn(dsn: str) -> ConnectionInfo:
-        """Parse a libpq-style DSN into ConnectionInfo.
+    def _parse_uri(uri: str) -> ConnectionInfo:
+        """Parse a PostgreSQL URI into ConnectionInfo.
 
-        pgserver returns DSNs like:
-            ``host=/tmp/pgdata/.s.PGSQL.5432 dbname=postgres user=postgres``
+        pgserver returns URIs like:
+            ``postgresql://postgres:@/postgres?host=/tmp/pgdata``
         or TCP-style:
-            ``host=localhost port=5432 dbname=postgres user=postgres``
+            ``postgresql://postgres:@localhost:5432/postgres``
         """
-        parts: dict[str, str] = {}
-        for token in dsn.split():
-            if "=" in token:
-                key, _, value = token.partition("=")
-                parts[key] = value
+        from urllib.parse import parse_qs, urlparse
 
-        return ConnectionInfo(
-            host=parts.get("host", "localhost"),
-            port=int(parts.get("port", "5432")),
-            dbname=parts.get("dbname", "postgres"),
-            user=parts.get("user", "postgres"),
-        )
+        parsed = urlparse(uri)
+        qs = parse_qs(parsed.query)
+
+        # Unix socket: host is in query params
+        host = qs.get("host", [parsed.hostname or "localhost"])[0]
+        port = parsed.port or 5432
+        dbname = (parsed.path or "/postgres").lstrip("/") or "postgres"
+        user = parsed.username or "postgres"
+
+        return ConnectionInfo(host=host, port=port, dbname=dbname, user=user)
