@@ -12,14 +12,20 @@ from cli.services.preflight import (
     PreflightResult,
     check_api_key,
     check_claude_binary,
+    check_cluster_connectivity,
     check_database,
     check_disk_space,
     check_git,
+    check_k3d,
+    check_kubeconfig,
+    check_kubectl,
+    check_namespace,
     check_port_available,
     check_ports,
     check_workspace_dir,
     format_results,
     has_failures,
+    run_cluster_preflight_checks,
     run_preflight_checks,
 )
 
@@ -264,3 +270,228 @@ class TestRunPreflightChecks:
         assert "test1" in output
         assert "test2" in output
         assert "test3" in output
+
+    def test_cluster_mode_runs_cluster_checks(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """In cluster mode, cluster-specific checks run instead of mini checks."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-validkey12345")
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(
+            mode="cluster",
+            kubeconfig=str(kubeconfig),
+            namespace="test-ns",
+            ports=[8080],
+        )
+        with (
+            patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"),
+            patch("cli.services.preflight.socket.socket") as mock_sock,
+            patch("cli.services.preflight.subprocess.run") as mock_run,
+        ):
+            mock_instance = mock_sock.return_value.__enter__.return_value
+            mock_instance.connect_ex.return_value = 1
+            mock_run.return_value = type(
+                "Result", (), {"returncode": 0, "stdout": "ok", "stderr": ""}
+            )()
+            results = run_preflight_checks(config)
+
+        names = [r.name for r in results]
+        assert "kubectl" in names
+        assert "kubeconfig" in names
+        assert "namespace" in names
+        # Should NOT include mini-specific checks
+        assert "claude binary" not in names
+        assert "workspace dir" not in names
+
+    def test_mini_mode_runs_mini_checks(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """In mini mode, mini-specific checks run (default behavior)."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-validkey12345")
+        config = PreflightConfig(
+            mode="mini",
+            workspaces_dir=str(tmp_path),
+            ports=[8080],
+        )
+        with (
+            patch("cli.services.preflight.shutil.which", return_value="/usr/bin/claude"),
+            patch("cli.services.preflight.socket.socket") as mock_sock,
+        ):
+            mock_instance = mock_sock.return_value.__enter__.return_value
+            mock_instance.connect_ex.return_value = 1
+            results = run_preflight_checks(config)
+
+        names = [r.name for r in results]
+        assert "claude binary" in names
+        assert "workspace dir" in names
+        # Should NOT include cluster-specific checks
+        assert "kubectl" not in names
+        assert "kubeconfig" not in names
+
+
+class TestCheckKubectl:
+    def test_found(self) -> None:
+        with patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"):
+            result = check_kubectl()
+        assert result.passed is True
+        assert "/usr/bin/kubectl" in result.message
+
+    def test_not_found(self) -> None:
+        with patch("cli.services.preflight.shutil.which", return_value=None):
+            result = check_kubectl()
+        assert result.passed is False
+        assert "not found" in result.message
+
+
+class TestCheckKubeconfig:
+    def test_exists_and_readable(self, tmp_path: Path) -> None:
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(kubeconfig=str(kubeconfig))
+        result = check_kubeconfig(config)
+        assert result.passed is True
+
+    def test_not_found(self, tmp_path: Path) -> None:
+        config = PreflightConfig(kubeconfig=str(tmp_path / "nonexistent"))
+        result = check_kubeconfig(config)
+        assert result.passed is False
+        assert "not found" in result.message
+
+    def test_not_readable(self, tmp_path: Path) -> None:
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(kubeconfig=str(kubeconfig))
+        with patch("cli.services.preflight.os.access", return_value=False):
+            result = check_kubeconfig(config)
+        assert result.passed is False
+        assert "not readable" in result.message
+
+
+class TestCheckK3d:
+    def test_found(self) -> None:
+        with patch("cli.services.preflight.shutil.which", return_value="/usr/bin/k3d"):
+            result = check_k3d()
+        assert result.passed is True
+        assert "k3d found" in result.message
+
+    def test_not_found_warns(self) -> None:
+        with patch("cli.services.preflight.shutil.which", return_value=None):
+            result = check_k3d()
+        assert result.passed is True
+        assert result.warn_only is True
+
+
+class TestCheckNamespace:
+    def test_configured(self) -> None:
+        config = PreflightConfig(namespace="volundr")
+        result = check_namespace(config)
+        assert result.passed is True
+        assert "volundr" in result.message
+
+    def test_empty(self) -> None:
+        config = PreflightConfig(namespace="")
+        result = check_namespace(config)
+        assert result.passed is False
+        assert "not configured" in result.message
+
+
+class TestCheckClusterConnectivity:
+    def test_reachable(self, tmp_path: Path) -> None:
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(kubeconfig=str(kubeconfig))
+        with (
+            patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"),
+            patch("cli.services.preflight.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = type(
+                "Result", (), {"returncode": 0, "stdout": "ok", "stderr": ""}
+            )()
+            result = check_cluster_connectivity(config)
+        assert result.passed is True
+        assert "reachable" in result.message
+
+    def test_unreachable(self, tmp_path: Path) -> None:
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(kubeconfig=str(kubeconfig))
+        with (
+            patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"),
+            patch("cli.services.preflight.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = type(
+                "Result",
+                (),
+                {"returncode": 1, "stdout": "", "stderr": "connection refused"},
+            )()
+            result = check_cluster_connectivity(config)
+        assert result.passed is False
+        assert "Cannot connect" in result.message
+
+    def test_timeout(self, tmp_path: Path) -> None:
+        import subprocess
+
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(kubeconfig=str(kubeconfig), cluster_connect_timeout=5)
+        with (
+            patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"),
+            patch(
+                "cli.services.preflight.subprocess.run",
+                side_effect=subprocess.TimeoutExpired("kubectl", 5),
+            ),
+        ):
+            result = check_cluster_connectivity(config)
+        assert result.passed is False
+        assert "timed out" in result.message
+        assert "5s" in result.message
+
+    def test_no_kubectl(self) -> None:
+        config = PreflightConfig()
+        with patch("cli.services.preflight.shutil.which", return_value=None):
+            result = check_cluster_connectivity(config)
+        assert result.passed is False
+        assert "kubectl not available" in result.message
+
+    def test_os_error(self, tmp_path: Path) -> None:
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(kubeconfig=str(kubeconfig))
+        with (
+            patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"),
+            patch(
+                "cli.services.preflight.subprocess.run",
+                side_effect=OSError("exec failed"),
+            ),
+        ):
+            result = check_cluster_connectivity(config)
+        assert result.passed is False
+        assert "Failed to run" in result.message
+
+
+class TestRunClusterPreflightChecks:
+    def test_all_cluster_checks_run(self, tmp_path: Path) -> None:
+        kubeconfig = tmp_path / "kubeconfig"
+        kubeconfig.write_text("apiVersion: v1\n")
+        config = PreflightConfig(
+            mode="cluster",
+            kubeconfig=str(kubeconfig),
+            namespace="test-ns",
+        )
+        with (
+            patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"),
+            patch("cli.services.preflight.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = type(
+                "Result", (), {"returncode": 0, "stdout": "ok", "stderr": ""}
+            )()
+            results = run_cluster_preflight_checks(config)
+
+        names = [r.name for r in results]
+        assert "kubectl" in names
+        assert "kubeconfig" in names
+        assert "k3d" in names
+        assert "namespace" in names
+        assert "cluster connectivity" in names
+        assert len(results) == 5
