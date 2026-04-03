@@ -47,8 +47,8 @@ class TrackerAdapterFactory:
         for conn in connections:
             if not conn.enabled:
                 continue
-            # Only load adapters from tyr's package
-            if not conn.adapter.startswith("tyr."):
+            # Skip adapters from other services (e.g. volundr's LinearAdapter)
+            if conn.adapter.startswith("volundr."):
                 continue
             try:
                 cred = await self._credential_store.get_value(

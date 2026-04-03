@@ -417,7 +417,11 @@ class Session(BaseModel):
 
     def can_stop(self) -> bool:
         """Check if session can be stopped."""
-        return self.status in (SessionStatus.RUNNING, SessionStatus.PROVISIONING)
+        return self.status in (
+            SessionStatus.STARTING,
+            SessionStatus.RUNNING,
+            SessionStatus.PROVISIONING,
+        )
 
     def with_status(self, status: SessionStatus) -> Session:
         """Return a copy with updated status and timestamp."""
