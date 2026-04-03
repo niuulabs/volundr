@@ -240,36 +240,43 @@ jobs:
   # CLI binaries
   # ---------------------------------------------------------------------------
   build-cli:
-    name: Build CLI (${{ matrix.goos }}/${{ matrix.goarch }})
+    name: "Build CLI (${{ matrix.os }}/${{ matrix.arch }})"
     needs: [version]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       id-token: write
     strategy:
       matrix:
         include:
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
+          - os: darwin
+            arch: arm64
+            runner: macos-14
+          - os: darwin
+            arch: amd64
+            runner: macos-13
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Harden runner
+        if: runner.os == 'Linux'
         uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@bd01e18f51369d5a26f1651c3cb1f8f230db3c41 # v6
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          version: "latest"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
 
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -278,31 +285,17 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build frontend
-        run: |
-          cd web && npm ci --ignore-scripts && npm run build
-          cd ..
-          rm -rf cli/internal/web/dist
-          cp -r web/dist cli/internal/web/dist
+      - name: Install dependencies
+        run: uv sync --python 3.12 --extra cli --extra dev
 
-      - name: Build CLI
-        working-directory: cli
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
-        run: |
-          VERSION="${{ needs.version.outputs.version }}"
-          BINARY="niuu-${{ matrix.goos }}-${{ matrix.goarch }}"
-          go build -tags embed_web \
-            -ldflags "-s -w -X github.com/niuulabs/volundr/cli/internal/cli.Version=${VERSION}" \
-            -o "dist/${BINARY}" ./cmd/niuu
+      - name: Build
+        run: make build
 
       - name: Upload artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
-          name: niuu-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: cli/dist/niuu-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: niuu-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/niuu-${{ matrix.os }}-${{ matrix.arch }}
 
   # ---------------------------------------------------------------------------
   # Helm charts
