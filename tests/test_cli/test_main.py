@@ -49,7 +49,16 @@ class TestCLIEntryPoint:
         assert result.exit_code == 0
 
     def test_platform_init_command(self) -> None:
-        result = runner.invoke(_app(), ["platform", "init"])
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch("cli.commands.platform.typer.prompt", return_value="1"),
+                patch("cli.commands.platform.Path.home", return_value=Path(tmp_dir)),
+            ):
+                result = runner.invoke(_app(), ["platform", "init"])
         assert result.exit_code == 0
 
     def test_version_command(self) -> None:

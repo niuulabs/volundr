@@ -62,24 +62,43 @@ class DatabaseConfig(BaseModel):
 
 
 class PodManagerConfig(BaseModel):
-    """Pod manager configuration for mini mode."""
+    """Pod manager configuration — dynamic adapter pattern.
+
+    The ``adapter`` key specifies the fully-qualified class path.
+    All remaining keys are forwarded as ``**kwargs`` to the adapter constructor.
+    Mini mode defaults are kept for backwards compatibility; cluster mode
+    overrides them via the YAML config file.
+    """
+
+    model_config = {"extra": "allow"}
 
     adapter: str = Field(
         default="volundr.adapters.outbound.local_process.LocalProcessPodManager",
         description="Fully-qualified class path for the pod manager adapter.",
     )
+    # Mini-mode defaults (ignored by DirectK8sPodManager via **_extra)
     workspaces_dir: str = Field(
         default="~/.niuu/workspaces",
-        description="Directory for session workspaces.",
+        description="Directory for session workspaces (mini mode).",
     )
     claude_binary: str = Field(
         default="claude",
-        description="Path or name of the claude binary.",
+        description="Path or name of the claude binary (mini mode).",
     )
     max_concurrent: int = Field(
         default=4,
         description="Maximum concurrent sessions.",
     )
+
+    def adapter_kwargs(self) -> dict[str, Any]:
+        """Return kwargs to pass to the adapter constructor.
+
+        Excludes ``adapter`` (the class path) and returns everything else,
+        including extra fields from the YAML config.
+        """
+        data = self.model_dump()
+        data.pop("adapter", None)
+        return data
 
 
 class ServerConfig(BaseModel):

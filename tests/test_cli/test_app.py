@@ -58,10 +58,19 @@ class TestPlatformCommands:
         assert "stopped" in result.output.lower()
 
     def test_platform_init(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
         app, _, _ = _build_test_app()
-        result = runner.invoke(app, ["platform", "init"])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch("cli.commands.platform.typer.prompt", return_value="1"),
+                patch("cli.commands.platform.Path.home", return_value=Path(tmp_dir)),
+            ):
+                result = runner.invoke(app, ["platform", "init"])
         assert result.exit_code == 0
-        assert "setup" in result.output.lower()
+        assert "setup complete" in result.output.lower()
 
     def test_platform_up_help(self) -> None:
         app, _, _ = _build_test_app()
