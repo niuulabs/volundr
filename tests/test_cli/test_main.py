@@ -70,9 +70,10 @@ class TestCLIEntryPoint:
         result = runner.invoke(_app(), ["config", "show"])
         assert result.exit_code == 0
 
-    def test_login_command(self) -> None:
+    def test_login_command_requires_issuer(self) -> None:
         result = runner.invoke(_app(), ["login"])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        assert "issuer" in result.output.lower()
 
     def test_unknown_command_fails(self) -> None:
         result = runner.invoke(_app(), ["nonexistent"])
