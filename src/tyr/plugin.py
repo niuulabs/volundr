@@ -6,8 +6,12 @@ coordinator service, and TUI pages for saga management.
 
 from __future__ import annotations
 
+from typing import Any
+
 import typer
 
+from niuu.cli_api_client import CLIAPIClient
+from niuu.cli_output import print_json, print_success, print_table
 from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin
 
 
@@ -48,32 +52,90 @@ class TyrPlugin(ServicePlugin):
     def create_service(self) -> Service:
         return self.register_service().factory()
 
+    def create_api_client(self) -> Any:
+        return CLIAPIClient(base_url="http://localhost:8080", service_name="Tyr")
+
     def register_commands(self, app: typer.Typer) -> None:
         """Mount workflow commands directly on the main app."""
+        plugin = self
+
+        # ── Sagas ──────────────────────────────────────────────────── #
+
         sagas = typer.Typer(
             name="sagas",
             help="Manage sagas.",
             no_args_is_help=True,
         )
 
-        @sagas.command()
-        def list() -> None:
+        @sagas.command("list")
+        def list_sagas(
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
+        ) -> None:
             """List active sagas."""
-            typer.echo("Sagas: (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("GET", "/api/v1/tyr/sagas")
+            data = resp.json()
+
+            if json_output:
+                print_json(data)
+                return
+
+            if not data:
+                typer.echo("No active sagas.")
+                return
+
+            print_table(
+                columns=[
+                    ("id", "ID"),
+                    ("name", "Name"),
+                    ("status", "Status"),
+                    ("progress", "Progress"),
+                    ("raid_count", "Raids"),
+                ],
+                rows=data,
+            )
 
         @sagas.command()
         def create(
             name: str = typer.Argument(help="Saga name"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
             """Create a new saga."""
-            typer.echo(f"Creating saga '{name}'... (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit(
+                "POST",
+                "/api/v1/tyr/sagas/commit",
+                json_body={"name": name},
+            )
+            data = resp.json()
+
+            if json_output:
+                print_json(data)
+                return
+
+            print_success(f"Saga created: {data.get('id', 'unknown')}")
 
         @sagas.command()
         def dispatch(
-            name: str = typer.Argument(help="Saga name"),
+            saga_id: str = typer.Argument(help="Saga ID"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
-            """Dispatch a saga."""
-            typer.echo(f"Dispatching saga '{name}'... (stub)")
+            """Dispatch a saga for execution."""
+            client = plugin.create_api_client()
+            resp = client.request_or_exit(
+                "POST",
+                "/api/v1/tyr/dispatch/approve",
+                json_body={"saga_id": saga_id},
+            )
+            data = resp.json()
+
+            if json_output:
+                print_json(data)
+                return
+
+            print_success(f"Saga {saga_id} dispatched.")
+
+        # ── Raids ──────────────────────────────────────────────────── #
 
         raids = typer.Typer(
             name="raids",
@@ -82,30 +144,77 @@ class TyrPlugin(ServicePlugin):
         )
 
         @raids.command()
-        def active() -> None:
+        def active(
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
+        ) -> None:
             """List active raids."""
-            typer.echo("Active raids: (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("GET", "/api/v1/tyr/raids/active")
+            data = resp.json()
+
+            if json_output:
+                print_json(data)
+                return
+
+            if not data:
+                typer.echo("No active raids.")
+                return
+
+            print_table(
+                columns=[
+                    ("id", "ID"),
+                    ("name", "Name"),
+                    ("status", "Status"),
+                    ("confidence", "Confidence"),
+                    ("session", "Session"),
+                ],
+                rows=data,
+            )
 
         @raids.command()
         def approve(
             raid_id: str = typer.Argument(help="Raid ID"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
             """Approve a pending raid."""
-            typer.echo(f"Approved raid {raid_id}. (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("POST", f"/api/v1/tyr/raids/{raid_id}/approve")
+
+            if json_output:
+                print_json(resp.json() if resp.text else {"status": "approved"})
+                return
+
+            print_success(f"Raid {raid_id} approved.")
 
         @raids.command()
         def reject(
             raid_id: str = typer.Argument(help="Raid ID"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
             """Reject a pending raid."""
-            typer.echo(f"Rejected raid {raid_id}. (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("POST", f"/api/v1/tyr/raids/{raid_id}/reject")
+
+            if json_output:
+                print_json(resp.json() if resp.text else {"status": "rejected"})
+                return
+
+            print_success(f"Raid {raid_id} rejected.")
 
         @raids.command()
         def retry(
             raid_id: str = typer.Argument(help="Raid ID"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
             """Retry a failed raid."""
-            typer.echo(f"Retrying raid {raid_id}. (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("POST", f"/api/v1/tyr/raids/{raid_id}/retry")
+
+            if json_output:
+                print_json(resp.json() if resp.text else {"status": "retrying"})
+                return
+
+            print_success(f"Raid {raid_id} retry initiated.")
 
         app.add_typer(sagas, name="sagas")
         app.add_typer(raids, name="raids")

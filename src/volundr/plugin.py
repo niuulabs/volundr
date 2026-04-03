@@ -6,8 +6,12 @@ and TUI pages for session management.
 
 from __future__ import annotations
 
+from typing import Any
+
 import typer
 
+from niuu.cli_api_client import CLIAPIClient
+from niuu.cli_output import print_json, print_success, print_table
 from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin
 
 
@@ -48,38 +52,96 @@ class VolundrPlugin(ServicePlugin):
     def create_service(self) -> Service:
         return self.register_service().factory()
 
+    def create_api_client(self) -> Any:
+        return CLIAPIClient(base_url="http://localhost:8080", service_name="Volundr")
+
     def register_commands(self, app: typer.Typer) -> None:
         """Mount workflow commands directly on the main app."""
+        plugin = self
+
         sessions = typer.Typer(
             name="sessions",
             help="Manage coding sessions.",
             no_args_is_help=True,
         )
 
-        @sessions.command()
-        def list() -> None:
+        @sessions.command("list")
+        def list_sessions(
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
+        ) -> None:
             """List active sessions."""
-            typer.echo("Sessions: (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("GET", "/api/v1/volundr/sessions")
+            data = resp.json()
+
+            if json_output:
+                print_json(data)
+                return
+
+            if not data:
+                typer.echo("No active sessions.")
+                return
+
+            print_table(
+                columns=[
+                    ("id", "ID"),
+                    ("name", "Name"),
+                    ("status", "Status"),
+                    ("model", "Model"),
+                    ("tokens", "Tokens"),
+                    ("created_at", "Created"),
+                ],
+                rows=data,
+            )
 
         @sessions.command()
         def create(
             name: str = typer.Argument(help="Session name"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
             """Create a new session."""
-            typer.echo(f"Creating session '{name}'... (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit(
+                "POST",
+                "/api/v1/volundr/sessions",
+                json_body={"name": name},
+            )
+            data = resp.json()
+
+            if json_output:
+                print_json(data)
+                return
+
+            print_success(f"Session created: {data.get('id', 'unknown')}")
 
         @sessions.command()
         def stop(
-            name: str = typer.Argument(help="Session name"),
+            session_id: str = typer.Argument(help="Session ID"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
             """Stop a running session."""
-            typer.echo(f"Stopping session '{name}'... (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("POST", f"/api/v1/volundr/sessions/{session_id}/stop")
+
+            if json_output:
+                print_json(resp.json() if resp.text else {"status": "stopped"})
+                return
+
+            print_success(f"Session {session_id} stopped.")
 
         @sessions.command()
         def delete(
-            name: str = typer.Argument(help="Session name"),
+            session_id: str = typer.Argument(help="Session ID"),
+            json_output: bool = typer.Option(False, "--json", help="Output raw JSON."),
         ) -> None:
             """Delete a session."""
-            typer.echo(f"Deleting session '{name}'... (stub)")
+            client = plugin.create_api_client()
+            resp = client.request_or_exit("DELETE", f"/api/v1/volundr/sessions/{session_id}")
+
+            if json_output:
+                print_json(resp.json() if resp.text else {"status": "deleted"})
+                return
+
+            print_success(f"Session {session_id} deleted.")
 
         app.add_typer(sessions, name="sessions")

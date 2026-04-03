@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import httpx
+import respx
 import typer
 from typer.testing import CliRunner
 
@@ -11,6 +13,7 @@ from tyr.plugin import TyrPlugin
 from volundr.plugin import VolundrPlugin
 
 runner = CliRunner()
+BASE = "http://localhost:8080"
 
 
 class TestVolundrPlugin:
@@ -63,23 +66,30 @@ class TestVolundrPlugin:
         group_names = [g.name for g in app.registered_groups]
         assert "sessions" in group_names
 
+    @respx.mock
     def test_sessions_list_command(self) -> None:
+        respx.get(f"{BASE}/api/v1/volundr/sessions").mock(return_value=httpx.Response(200, json=[]))
         plugin = VolundrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)
         result = runner.invoke(app, ["sessions", "list"])
         assert result.exit_code == 0
 
+    @respx.mock
     def test_sessions_create_command(self) -> None:
+        respx.post(f"{BASE}/api/v1/volundr/sessions").mock(
+            return_value=httpx.Response(201, json={"id": "s1", "name": "my-session"})
+        )
         plugin = VolundrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)
         result = runner.invoke(app, ["sessions", "create", "my-session"])
         assert result.exit_code == 0
 
-    def test_default_api_client_is_none(self) -> None:
+    def test_api_client_returns_instance(self) -> None:
         plugin = VolundrPlugin()
-        assert plugin.create_api_client() is None
+        client = plugin.create_api_client()
+        assert client is not None
 
     def test_default_tui_pages_empty(self) -> None:
         plugin = VolundrPlugin()
@@ -132,19 +142,28 @@ class TestTyrPlugin:
         group_names = [g.name for g in app.registered_groups]
         assert "raids" in group_names
 
+    @respx.mock
     def test_sagas_list_command(self) -> None:
+        respx.get(f"{BASE}/api/v1/tyr/sagas").mock(return_value=httpx.Response(200, json=[]))
         plugin = TyrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)
         result = runner.invoke(app, ["sagas", "list"])
         assert result.exit_code == 0
 
+    @respx.mock
     def test_raids_active_command(self) -> None:
+        respx.get(f"{BASE}/api/v1/tyr/raids/active").mock(return_value=httpx.Response(200, json=[]))
         plugin = TyrPlugin()
         app = typer.Typer(no_args_is_help=False)
         plugin.register_commands(app)
         result = runner.invoke(app, ["raids", "active"])
         assert result.exit_code == 0
+
+    def test_api_client_returns_instance(self) -> None:
+        plugin = TyrPlugin()
+        client = plugin.create_api_client()
+        assert client is not None
 
 
 class TestPluginDiscovery:
