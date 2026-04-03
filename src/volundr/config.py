@@ -14,7 +14,6 @@ All configuration MUST flow through the Settings class.
 """
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +24,14 @@ from pydantic_settings import (
     SettingsConfigDict,
     YamlConfigSettingsSource,
 )
+
+from niuu.config import (
+    GitHubConfig,  # noqa: F401
+    GitHubInstance,  # noqa: F401
+    GitLabConfig,  # noqa: F401
+    GitLabInstance,  # noqa: F401
+)
+
 
 # Config file search paths (in order of priority).
 # NIUU_CONFIG env var (set by the CLI --config flag) takes precedence.
@@ -149,108 +156,6 @@ class PodManagerConfig(BaseModel):
         default_factory=dict,
         description="Mapping of kwarg names to env var names holding secret values.",
     )
-
-
-@dataclass(frozen=True)
-class GitHubInstance:
-    """Configuration for a single GitHub instance."""
-
-    name: str
-    base_url: str
-    token: str | None = None
-    orgs: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class GitLabInstance:
-    """Configuration for a single GitLab instance."""
-
-    name: str
-    base_url: str
-    token: str | None = None
-    orgs: tuple[str, ...] = ()
-
-
-class GitHubConfig(BaseModel):
-    """GitHub provider configuration."""
-
-    enabled: bool = Field(default=False)
-    token: str | None = Field(default=None)
-    base_url: str = Field(default="https://api.github.com")
-    instances: list[dict[str, Any]] = Field(default_factory=list)
-
-    def get_instances(self) -> list[GitHubInstance]:
-        """Get all configured GitHub instances.
-
-        Token resolution order per instance:
-        1. Explicit ``token`` field in the instance dict
-        2. Environment variable named by ``token_env`` (set by Helm from per-instance secrets)
-        3. Top-level ``self.token`` (from ``GIT__GITHUB__TOKEN`` env var)
-        """
-        result: list[GitHubInstance] = []
-
-        for item in self.instances:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name", "")
-            base_url = item.get("base_url", "")
-            if not name or not base_url:
-                continue
-            token = item.get("token")
-            if not token:
-                token_env = item.get("token_env")
-                if token_env:
-                    token = os.environ.get(token_env)
-            if not token:
-                token = self.token
-            orgs = tuple(item.get("orgs", []))
-            result.append(GitHubInstance(name, base_url, token, orgs))
-
-        if not result and (self.enabled or self.token):
-            result.append(GitHubInstance("GitHub", self.base_url, self.token))
-
-        return result
-
-
-class GitLabConfig(BaseModel):
-    """GitLab provider configuration."""
-
-    enabled: bool = Field(default=False)
-    token: str | None = Field(default=None)
-    base_url: str = Field(default="https://gitlab.com")
-    instances: list[dict[str, Any]] = Field(default_factory=list)
-
-    def get_instances(self) -> list[GitLabInstance]:
-        """Get all configured GitLab instances.
-
-        Token resolution order per instance:
-        1. Explicit ``token`` field in the instance dict
-        2. Environment variable named by ``token_env`` (set by Helm from per-instance secrets)
-        3. Top-level ``self.token`` (from ``GIT__GITLAB__TOKEN`` env var)
-        """
-        result: list[GitLabInstance] = []
-
-        for item in self.instances:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name", "")
-            base_url = item.get("base_url", "")
-            if not name or not base_url:
-                continue
-            token = item.get("token")
-            if not token:
-                token_env = item.get("token_env")
-                if token_env:
-                    token = os.environ.get(token_env)
-            if not token:
-                token = self.token
-            orgs = tuple(item.get("orgs", []))
-            result.append(GitLabInstance(name, base_url, token, orgs))
-
-        if not result and (self.enabled or self.token):
-            result.append(GitLabInstance("GitLab", self.base_url, self.token))
-
-        return result
 
 
 class MCPServerEntry(BaseModel):
@@ -1043,7 +948,7 @@ class LinearConfig(BaseModel):
 
 
 class GitConfig(BaseModel):
-    """Git provider configuration."""
+    """Git provider configuration (extends niuu.config.GitConfig with Volundr-specific fields)."""
 
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     gitlab: GitLabConfig = Field(default_factory=GitLabConfig)

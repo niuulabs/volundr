@@ -34,12 +34,10 @@ logger = logging.getLogger(__name__)
 # Maps plugin name → API path prefixes that Starlette Mount uses to route.
 # The prefix is stripped by Mount, then restored by _PrefixRestoreApp
 # so the sub-app's own routers (which include the prefix) still match.
-#
-# Volundr also hosts /api/v1/niuu (shared repos endpoint) until niuu is
-# extracted into its own service — see TODO in volundr/main.py.
 _PLUGIN_API_PREFIXES: dict[str, list[str]] = {
-    "volundr": ["/api/v1/volundr", "/api/v1/niuu"],
+    "volundr": ["/api/v1/volundr"],
     "tyr": ["/api/v1/tyr"],
+    "niuu": ["/api/v1/niuu"],
 }
 
 
@@ -130,8 +128,6 @@ class RootServer(Service):
         @asynccontextmanager
         async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Run each sub-app's lifespan so they set up DB pools, etc.
-            from starlette.routing import Router
-
             exit_stacks: list[tuple[str, AsyncGenerator]] = []
             for name, sub_app in sub_apps:
                 lf = sub_app.router.lifespan_context
@@ -185,8 +181,9 @@ class RootServer(Service):
 
         # Web UI — SPA with fallback to index.html for deep routes
         try:
-            from cli.resources import web_dist_dir
             from starlette.staticfiles import StaticFiles
+
+            from cli.resources import web_dist_dir
 
             dist = web_dist_dir()
             root.mount("/assets", StaticFiles(directory=str(dist / "assets")), name="web-assets")
