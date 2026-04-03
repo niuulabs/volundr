@@ -112,38 +112,42 @@ find "$INSTALL_PREFIX/lib" -name '*.a' -delete 2>/dev/null || true
 if [ "$(uname -s)" = "Darwin" ]; then
     echo "Fixing macOS dylib install names for relocatability..."
 
+    _rewrite_refs() {
+        # Usage: _rewrite_refs <binary> <replacement_prefix>
+        # Rewrites references to $INSTALL_PREFIX/lib/* using install_name_tool.
+        local target="$1" prefix="$2"
+        local refs
+        refs="$(otool -L "$target" 2>/dev/null | grep "$INSTALL_PREFIX/lib" | awk '{print $1}' || true)"
+        [ -z "$refs" ] && return 0
+        while IFS= read -r ref; do
+            local base
+            base="$(basename "$ref")"
+            install_name_tool -change "$ref" "${prefix}${base}" "$target" 2>/dev/null || true
+        done <<< "$refs"
+    }
+
     # Fix library install names to use @loader_path
     for dylib in "$INSTALL_PREFIX/lib"/*.dylib; do
         [ -f "$dylib" ] || continue
-        basename_lib="$(basename "$dylib")"
-        install_name_tool -id "@loader_path/$basename_lib" "$dylib" 2>/dev/null || true
+        install_name_tool -id "@loader_path/$(basename "$dylib")" "$dylib" 2>/dev/null || true
     done
 
-    # Fix references in binaries to point to @loader_path/../lib/
+    # Fix references in binaries to point to @executable_path/../lib/
     for bin in "$INSTALL_PREFIX/bin"/*; do
         [ -f "$bin" ] || continue
-        otool -L "$bin" 2>/dev/null | grep "$INSTALL_PREFIX/lib" | awk '{print $1}' | while read -r ref; do
-            basename_lib="$(basename "$ref")"
-            install_name_tool -change "$ref" "@executable_path/../lib/$basename_lib" "$bin" 2>/dev/null || true
-        done
+        _rewrite_refs "$bin" "@executable_path/../lib/"
     done
 
     # Fix inter-library references
     for dylib in "$INSTALL_PREFIX/lib"/*.dylib; do
         [ -f "$dylib" ] || continue
-        otool -L "$dylib" 2>/dev/null | grep "$INSTALL_PREFIX/lib" | awk '{print $1}' | while read -r ref; do
-            basename_lib="$(basename "$ref")"
-            install_name_tool -change "$ref" "@loader_path/$basename_lib" "$dylib" 2>/dev/null || true
-        done
+        _rewrite_refs "$dylib" "@loader_path/"
     done
 
     # Fix extension modules in lib/postgresql/
     for ext in "$INSTALL_PREFIX/lib/postgresql"/*.dylib; do
         [ -f "$ext" ] || continue
-        otool -L "$ext" 2>/dev/null | grep "$INSTALL_PREFIX/lib" | awk '{print $1}' | while read -r ref; do
-            basename_lib="$(basename "$ref")"
-            install_name_tool -change "$ref" "@loader_path/../$basename_lib" "$ext" 2>/dev/null || true
-        done
+        _rewrite_refs "$ext" "@loader_path/../"
     done
 fi
 

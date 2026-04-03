@@ -356,3 +356,191 @@ class TestConstructor:
         db = EmbeddedPostgresDatabase(startup_timeout_s=60, cleanup_timeout_s=20)
         assert db._startup_timeout_s == 60
         assert db._cleanup_timeout_s == 20
+
+
+# ---------------------------------------------------------------------------
+# Low-level command tests (mocked subprocess)
+# ---------------------------------------------------------------------------
+
+
+class TestRunInitdb:
+    def test_initdb_success(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = tmp_path / "pgdata"
+
+        with patch(
+            "niuu.adapters.embedded_postgres.subprocess.run",
+            return_value=MagicMock(returncode=0, stderr=""),
+        ) as mock_run:
+            db._run_initdb()
+
+        args = mock_run.call_args[0][0]
+        assert str(args[0]).endswith("initdb")
+        assert "--auth=trust" in args
+        assert "--encoding=utf8" in args
+
+    def test_initdb_failure_raises(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = tmp_path / "pgdata"
+
+        with patch(
+            "niuu.adapters.embedded_postgres.subprocess.run",
+            return_value=MagicMock(returncode=1, stderr="initdb: error"),
+        ):
+            with pytest.raises(RuntimeError, match="initdb failed"):
+                db._run_initdb()
+
+
+class TestStartServer:
+    def test_start_success(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir.parent / "lib").mkdir()
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = tmp_path / "pgdata"
+        db._socket_dir = tmp_path
+
+        with patch(
+            "niuu.adapters.embedded_postgres.subprocess.run",
+            return_value=MagicMock(returncode=0, stderr=""),
+        ) as mock_run:
+            db._start_server()
+
+        args = mock_run.call_args[0][0]
+        assert str(args[0]).endswith("pg_ctl")
+        assert "start" in args
+
+    def test_start_failure_raises(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir.parent / "lib").mkdir()
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = tmp_path / "pgdata"
+        db._socket_dir = tmp_path
+
+        with patch(
+            "niuu.adapters.embedded_postgres.subprocess.run",
+            return_value=MagicMock(returncode=1, stderr="pg_ctl: error"),
+        ):
+            with pytest.raises(RuntimeError, match="pg_ctl start failed"):
+                db._start_server()
+
+    def test_start_sets_library_path(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir.parent / "lib").mkdir()
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = tmp_path / "pgdata"
+        db._socket_dir = tmp_path
+
+        with patch(
+            "niuu.adapters.embedded_postgres.subprocess.run",
+            return_value=MagicMock(returncode=0, stderr=""),
+        ) as mock_run:
+            db._start_server()
+
+        env = mock_run.call_args[1]["env"]
+        lib_dir = str(bin_dir.parent / "lib")
+        # One of these should contain the lib dir
+        lib_path = env.get("LD_LIBRARY_PATH", "") + env.get("DYLD_LIBRARY_PATH", "")
+        assert lib_dir in lib_path
+
+
+class TestStopServer:
+    def test_stop_noop_when_not_started(self) -> None:
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = None
+        db._data_dir = None
+        # Should not raise
+        db._stop_server()
+
+    def test_stop_success(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir.parent / "lib").mkdir()
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = tmp_path / "pgdata"
+
+        with patch(
+            "niuu.adapters.embedded_postgres.subprocess.run",
+            return_value=MagicMock(returncode=0, stderr=""),
+        ) as mock_run:
+            db._stop_server()
+
+        args = mock_run.call_args[0][0]
+        assert "stop" in args
+
+    def test_stop_failure_tries_kill(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir.parent / "lib").mkdir()
+
+        data_dir = tmp_path / "pgdata"
+        data_dir.mkdir()
+        pid_file = data_dir / "postmaster.pid"
+        pid_file.write_text("99999\n/some/path\n")
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = data_dir
+
+        with (
+            patch(
+                "niuu.adapters.embedded_postgres.subprocess.run",
+                return_value=MagicMock(returncode=1, stderr="already stopped"),
+            ),
+            patch("niuu.adapters.embedded_postgres.os.kill") as mock_kill,
+        ):
+            db._stop_server()  # should not raise
+
+        mock_kill.assert_called_once_with(99999, 15)
+
+    def test_stop_failure_handles_missing_pid_file(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir.parent / "lib").mkdir()
+
+        db = EmbeddedPostgresDatabase()
+        db._bin_dir = bin_dir
+        db._data_dir = tmp_path / "pgdata"  # no postmaster.pid
+
+        with patch(
+            "niuu.adapters.embedded_postgres.subprocess.run",
+            return_value=MagicMock(returncode=1, stderr="error"),
+        ):
+            db._stop_server()  # should not raise
+
+
+class TestPgBinDir:
+    """Test the public pg_bin_dir() accessor."""
+
+    def test_returns_path_when_found(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "postgres").touch()
+        with patch("niuu.adapters.embedded_postgres._find_pg_bin_dir", return_value=bin_dir):
+            from niuu.adapters.embedded_postgres import pg_bin_dir
+
+            assert pg_bin_dir() == bin_dir
+
+    def test_returns_none_when_not_found(self) -> None:
+        with patch("niuu.adapters.embedded_postgres._find_pg_bin_dir", return_value=None):
+            from niuu.adapters.embedded_postgres import pg_bin_dir
+
+            assert pg_bin_dir() is None
