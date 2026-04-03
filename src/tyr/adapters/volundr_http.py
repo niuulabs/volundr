@@ -21,7 +21,7 @@ class VolundrHTTPAdapter(VolundrPort):
         self,
         base_url: str,
         api_key: str | None = None,
-        timeout: float = 120.0,
+        timeout: float = 30.0,
         name: str = "",
     ) -> None:
         self._base_url = base_url.rstrip("/")

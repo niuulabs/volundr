@@ -529,7 +529,12 @@ class SessionService:
         system_prompt: str = "",
         initial_prompt: str = "",
     ) -> Session:
-        """Start a session's pods via the contributor pipeline."""
+        """Start a session — returns immediately, provisions in background.
+
+        Matches the Go CLI pattern: HTTP response returns with status
+        "starting" before any git clone or process spawn happens.
+        The background task transitions through provisioning → running.
+        """
         session = await self._repository.get(session_id)
         if session is None:
             raise SessionNotFoundError(session_id)
@@ -539,12 +544,57 @@ class SessionService:
         if not session.can_start():
             raise SessionStateError(session_id, "start", session.status)
 
-        starting = session.with_status(SessionStatus.STARTING)
+        # Set chat_endpoint eagerly — URL is deterministic from session ID
+        import os
+
+        host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1")
+        port = os.environ.get("NIUU_SERVER_PORT", "8080")
+        chat_endpoint = f"ws://{host}:{port}/s/{session_id}/session"
+
+        starting = (
+            session.with_status(SessionStatus.STARTING)
+            .with_endpoints(chat_endpoint, None)
+        )
         await self._repository.update(starting)
 
         if self._broadcaster is not None:
             await self._broadcaster.publish_session_updated(starting)
 
+        # Launch provisioning in background — don't block the HTTP response
+        task = asyncio.create_task(
+            self._provision_background(
+                starting,
+                principal=principal,
+                template_name=template_name,
+                profile_name=profile_name,
+                terminal_restricted=terminal_restricted,
+                credential_names=credential_names,
+                integration_ids=integration_ids,
+                resource_config=resource_config,
+                system_prompt=system_prompt,
+                initial_prompt=initial_prompt,
+            ),
+            name=f"provision-{session_id}",
+        )
+        self._provisioning_tasks[session_id] = task
+        task.add_done_callback(lambda t: self._provisioning_tasks.pop(session_id, None))
+
+        return starting
+
+    async def _provision_background(
+        self,
+        session: Session,
+        principal: "Principal | None" = None,
+        template_name: str | None = None,
+        profile_name: str | None = None,
+        terminal_restricted: bool = False,
+        credential_names: list[str] | None = None,
+        integration_ids: list[str] | None = None,
+        resource_config: dict | None = None,
+        system_prompt: str = "",
+        initial_prompt: str = "",
+    ) -> None:
+        """Background task: run contributor pipeline, start pods, update status."""
         try:
             result = await self._start_with_pipeline(
                 session,
@@ -560,8 +610,11 @@ class SessionService:
             )
 
             provisioning = (
-                starting.with_status(SessionStatus.PROVISIONING)
-                .with_endpoints(result.chat_endpoint, result.code_endpoint)
+                session.with_status(SessionStatus.PROVISIONING)
+                .with_endpoints(
+                    result.chat_endpoint or session.chat_endpoint,
+                    result.code_endpoint,
+                )
                 .with_pod_name(result.pod_name)
             )
             final = await self._repository.update(provisioning)
@@ -569,20 +622,20 @@ class SessionService:
             if self._broadcaster is not None:
                 await self._broadcaster.publish_session_updated(final)
 
-            # Launch background readiness poller
-            task = asyncio.create_task(self._poll_readiness(final))
-            self._provisioning_tasks[final.id] = task
-            task.add_done_callback(lambda t: self._provisioning_tasks.pop(final.id, None))
+            # Launch readiness poller
+            poll_task = asyncio.create_task(self._poll_readiness(final))
+            self._provisioning_tasks[final.id] = poll_task
+            poll_task.add_done_callback(
+                lambda t: self._provisioning_tasks.pop(final.id, None)
+            )
 
-            return final
         except Exception as e:
-            failed = starting.with_status(SessionStatus.FAILED).with_error(str(e))
+            logger.error("Provisioning failed for session %s: %s", session.id, e)
+            failed = session.with_status(SessionStatus.FAILED).with_error(str(e))
             await self._repository.update(failed)
 
             if self._broadcaster is not None:
                 await self._broadcaster.publish_session_updated(failed)
-
-            raise
 
     async def _start_with_pipeline(
         self,
