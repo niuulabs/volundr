@@ -11,9 +11,10 @@ from cli.tui.app import NiuuTUI
 from cli.tui.widgets.metric_card import MetricCard
 from cli.tui.widgets.tabs import NiuuTabs
 from niuu.ports.plugin import TUIPageSpec
+from tyr.tui._helpers import format_confidence, format_confidence_history
 from tyr.tui.pages.dispatch import ActivityEntry, DispatchPage, QueueItem
 from tyr.tui.pages.raids import RaidRow, RaidsPage
-from tyr.tui.pages.review import ReviewPage, ReviewRow
+from tyr.tui.pages.review import _CONFIDENCE_HIGH, _CONFIDENCE_MED, ReviewPage, ReviewRow
 from tyr.tui.pages.sagas import SagaRow, SagasPage
 
 # ── Fixtures ─────────────────────────────────────────────────
@@ -77,6 +78,49 @@ def _mock_client(
     client.post.return_value = resp
     client.delete.return_value = resp
     return client
+
+
+# ── Helpers tests ─────────────────────────────────────────────
+
+
+class TestHelpers:
+    def test_format_confidence_float(self) -> None:
+        assert format_confidence(0.85) == "85%"
+
+    def test_format_confidence_zero(self) -> None:
+        assert format_confidence(0.0) == "0%"
+
+    def test_format_confidence_one(self) -> None:
+        assert format_confidence(1.0) == "100%"
+
+    def test_format_confidence_non_float(self) -> None:
+        assert format_confidence("N/A") == "N/A"
+
+    def test_format_confidence_int(self) -> None:
+        assert format_confidence(85) == "85"
+
+    def test_format_confidence_history_empty(self) -> None:
+        assert format_confidence_history([], "#71717a") == ""
+
+    def test_format_confidence_history_single(self) -> None:
+        result = format_confidence_history([{"delta": 0.1}], "#71717a")
+        assert "delta" in result
+        assert "+10%" in result
+
+    def test_format_confidence_history_negative(self) -> None:
+        result = format_confidence_history([{"delta": -0.05}], "#71717a")
+        assert "-5%" in result
+
+    def test_format_confidence_history_limits_to_5(self) -> None:
+        history = [{"delta": 0.01 * i} for i in range(10)]
+        result = format_confidence_history(history, "#71717a")
+        # Should only include last 5
+        assert "+5%" in result
+        assert "+9%" in result
+
+    def test_confidence_thresholds_are_sensible(self) -> None:
+        assert _CONFIDENCE_HIGH > _CONFIDENCE_MED
+        assert _CONFIDENCE_MED > 0
 
 
 # ── SagaRow tests ─────────────────────────────────────────────
@@ -426,6 +470,28 @@ class TestDispatchPage:
         page.clear_selection()
         assert len(page.selected_ids) == 0
 
+    def test_search_queue(self) -> None:
+        pending = [_raid("alpha-raid", "PENDING"), _raid("beta-raid", "PENDING")]
+        page = DispatchPage()
+        page._pending_raids = pending
+        page._search_query = "alpha"
+        assert len(page.filtered_pending_raids) == 1
+        assert page.filtered_pending_raids[0]["name"] == "alpha-raid"
+
+    def test_search_queue_no_match(self) -> None:
+        pending = [_raid("alpha-raid", "PENDING")]
+        page = DispatchPage()
+        page._pending_raids = pending
+        page._search_query = "nonexistent"
+        assert len(page.filtered_pending_raids) == 0
+
+    def test_search_queue_empty_query(self) -> None:
+        pending = [_raid("alpha-raid", "PENDING"), _raid("beta-raid", "PENDING")]
+        page = DispatchPage()
+        page._pending_raids = pending
+        page._search_query = ""
+        assert len(page.filtered_pending_raids) == 2
+
     def test_dispatch_selected_with_client(self) -> None:
         client = _mock_client({"status": "dispatched"})
         page = DispatchPage(client=client)
@@ -446,6 +512,15 @@ class TestDispatchPage:
         page._selected_ids = {"r1", "r2"}
         page.dispatch_selected()
         assert len(page._selected_ids) == 0
+
+    def test_dispatch_selected_uses_raid_endpoint(self) -> None:
+        client = _mock_client({"status": "dispatched"})
+        page = DispatchPage(client=client)
+        page._selected_ids = {"raid-42"}
+        page.dispatch_selected()
+        client.post.assert_called_once_with(
+            "/api/v1/tyr/raids/raid-42/dispatch",
+        )
 
     def test_tab_selection(self) -> None:
         page = DispatchPage()
@@ -563,6 +638,33 @@ class TestReviewPage:
         raids = [_raid("r1", "REVIEW"), _raid("r2", "ESCALATED")]
         page.load_data(raids)
         assert len(page.raids) == 2
+
+    def test_search_reviews(self) -> None:
+        raids = [_raid("auth-review", "REVIEW"), _raid("db-review", "REVIEW")]
+        page = ReviewPage()
+        page._raids = raids
+        page._search_query = "auth"
+        assert len(page.filtered_raids) == 1
+        assert page.filtered_raids[0]["name"] == "auth-review"
+
+    def test_search_reviews_no_match(self) -> None:
+        raids = [_raid("auth-review", "REVIEW")]
+        page = ReviewPage()
+        page._raids = raids
+        page._search_query = "nonexistent"
+        assert len(page.filtered_raids) == 0
+
+    def test_search_combined_with_tab(self) -> None:
+        raids = [
+            _raid("auth-review", "REVIEW"),
+            _raid("auth-escalated", "ESCALATED"),
+        ]
+        page = ReviewPage()
+        page._raids = raids
+        page._filter_tab = "In Review"
+        page._search_query = "auth"
+        assert len(page.filtered_raids) == 1
+        assert page.filtered_raids[0]["name"] == "auth-review"
 
     def test_empty_data(self) -> None:
         page = ReviewPage()

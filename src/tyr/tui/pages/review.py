@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import Input, Static
 
 from cli.tui.theme import (
     ACCENT_AMBER,
@@ -23,11 +23,16 @@ from cli.tui.theme import (
 )
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
 from cli.tui.widgets.tabs import NiuuTabs
+from tyr.tui._helpers import format_confidence, format_confidence_history
 
 if TYPE_CHECKING:
     from niuu.cli_api_client import CLIAPIClient
 
 _REVIEW_TABS = ["All", "In Review", "Auto-approved", "Escalated"]
+
+# Confidence color thresholds.
+_CONFIDENCE_HIGH = 0.8
+_CONFIDENCE_MED = 0.5
 
 
 class ReviewRow(Widget):
@@ -60,12 +65,12 @@ class ReviewRow(Widget):
         status = raid.get("status", "REVIEW")
         auto_approved = raid.get("auto_approved", False)
 
-        conf_pct = f"{confidence * 100:.0f}%" if isinstance(confidence, float) else str(confidence)
+        conf_pct = format_confidence(confidence)
 
         # Confidence color based on threshold.
-        if confidence >= 0.8:
+        if confidence >= _CONFIDENCE_HIGH:
             conf_color = ACCENT_EMERALD
-        elif confidence >= 0.5:
+        elif confidence >= _CONFIDENCE_MED:
             conf_color = ACCENT_AMBER
         else:
             conf_color = ACCENT_RED
@@ -78,12 +83,10 @@ class ReviewRow(Widget):
         else:
             status_color = ACCENT_PURPLE
 
-        # Confidence history.
-        history = raid.get("confidence_history", [])
-        history_str = ""
-        if history:
-            deltas = [f"{e.get('delta', 0):+.0%}" for e in history[-5:]]
-            history_str = f"  [{TEXT_MUTED}]Δ {' '.join(deltas)}[/]"
+        history_str = format_confidence_history(
+            raid.get("confidence_history", []),
+            TEXT_MUTED,
+        )
 
         yield Static(
             f"[bold {TEXT_PRIMARY}]{name}[/]  "
@@ -127,6 +130,7 @@ class ReviewPage(Widget):
         self._client = client
         self._raids: list[dict[str, Any]] = []
         self._filter_tab: str = "All"
+        self._search_query: str = ""
 
     @property
     def raids(self) -> list[dict[str, Any]]:
@@ -148,11 +152,15 @@ class ReviewPage(Widget):
                 result = [r for r in result if r.get("status") == "ESCALATED"]
             case _:
                 pass
+        if self._search_query:
+            q = self._search_query.lower()
+            result = [r for r in result if q in r.get("name", "").lower()]
         return result
 
     def compose(self) -> ComposeResult:
         yield NiuuTabs(items=_REVIEW_TABS, id="review-tabs")
         yield MetricRow(id="review-metrics")
+        yield Input(placeholder="Search reviews...", id="review-search")
         yield VerticalScroll(id="review-list")
 
     def on_mount(self) -> None:
@@ -255,3 +263,8 @@ class ReviewPage(Widget):
     def on_niuu_tabs_tab_selected(self, message: NiuuTabs.TabSelected) -> None:
         self._filter_tab = message.label
         self._render_list()
+
+    def on_input_changed(self, message: Input.Changed) -> None:
+        if message.input.id == "review-search":
+            self._search_query = message.value
+            self._render_list()

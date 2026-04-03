@@ -25,6 +25,7 @@ from cli.tui.theme import (
 )
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
 from cli.tui.widgets.tabs import NiuuTabs
+from tyr.tui._helpers import format_confidence, format_confidence_history
 
 if TYPE_CHECKING:
     from niuu.cli_api_client import CLIAPIClient
@@ -74,14 +75,11 @@ class RaidRow(Widget):
         retry_count = raid.get("retry_count", 0)
 
         color = _RAID_STATUS_COLORS.get(status, TEXT_MUTED)
-        conf_pct = f"{confidence * 100:.0f}%" if isinstance(confidence, float) else str(confidence)
-
-        # Confidence history summary.
-        history = raid.get("confidence_history", [])
-        history_str = ""
-        if history:
-            deltas = [f"{e.get('delta', 0):+.0%}" for e in history[-5:]]
-            history_str = f"  [{TEXT_MUTED}]Δ {' '.join(deltas)}[/]"
+        conf_pct = format_confidence(confidence)
+        history_str = format_confidence_history(
+            raid.get("confidence_history", []),
+            TEXT_MUTED,
+        )
 
         retry_str = f"  [{TEXT_MUTED}]retries: {retry_count}[/]" if retry_count else ""
 

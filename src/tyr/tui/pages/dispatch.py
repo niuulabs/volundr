@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import Input, Static
 
 from cli.tui.theme import (
     ACCENT_AMBER,
@@ -23,6 +23,7 @@ from cli.tui.theme import (
 )
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
 from cli.tui.widgets.tabs import NiuuTabs
+from tyr.tui._helpers import format_confidence
 
 if TYPE_CHECKING:
     from niuu.cli_api_client import CLIAPIClient
@@ -67,7 +68,7 @@ class QueueItem(Widget):
         name = raid.get("name", "Unknown")
         raid_id = str(raid.get("id", ""))[:8]
         confidence = raid.get("confidence", 0.0)
-        conf_pct = f"{confidence * 100:.0f}%" if isinstance(confidence, float) else str(confidence)
+        conf_pct = format_confidence(confidence)
 
         check = "☑" if self._selected else "☐"
         check_color = ACCENT_EMERALD if self._selected else TEXT_MUTED
@@ -160,6 +161,7 @@ class DispatchPage(Widget):
         self._activity_log: list[dict[str, Any]] = []
         self._selected_ids: set[str] = set()
         self._active_tab: str = "Queue"
+        self._search_query: str = ""
         self._dispatch_config: dict[str, Any] = {
             "max_concurrent": 3,
             "threshold": 0.7,
@@ -181,9 +183,18 @@ class DispatchPage(Widget):
     def dispatch_config(self) -> dict[str, Any]:
         return dict(self._dispatch_config)
 
+    @property
+    def filtered_pending_raids(self) -> list[dict[str, Any]]:
+        """Return pending raids filtered by search query."""
+        if not self._search_query:
+            return self._pending_raids
+        q = self._search_query.lower()
+        return [r for r in self._pending_raids if q in r.get("name", "").lower()]
+
     def compose(self) -> ComposeResult:
         yield NiuuTabs(items=_DISPATCH_TABS, id="dispatch-tabs")
         yield MetricRow(id="dispatch-metrics")
+        yield Input(placeholder="Search queue...", id="dispatch-search")
         yield Static(self._render_config(), id="dispatch-config")
         yield VerticalScroll(id="dispatch-content")
 
@@ -296,8 +307,14 @@ class DispatchPage(Widget):
         else:
             self._render_activity(container)
 
+    def on_input_changed(self, message: Input.Changed) -> None:
+        if message.input.id == "dispatch-search":
+            self._search_query = message.value
+            self._render_content()
+
     def _render_queue(self, container: VerticalScroll) -> None:
-        if not self._pending_raids:
+        filtered = self.filtered_pending_raids
+        if not filtered:
             container.mount(
                 Static(
                     f"[{TEXT_MUTED}]No pending raids in queue.[/]",
@@ -305,7 +322,7 @@ class DispatchPage(Widget):
             )
             return
 
-        for raid in self._pending_raids:
+        for raid in filtered:
             raid_id = str(raid.get("id", ""))
             selected = raid_id in self._selected_ids
             container.mount(QueueItem(raid, selected=selected))
@@ -355,8 +372,7 @@ class DispatchPage(Widget):
         for raid_id in list(self._selected_ids):
             try:
                 resp = self._client.post(
-                    "/api/v1/tyr/dispatch/approve",
-                    json_body={"saga_id": raid_id},
+                    f"/api/v1/tyr/raids/{raid_id}/dispatch",
                 )
                 resp.raise_for_status()
                 dispatched.append(raid_id)

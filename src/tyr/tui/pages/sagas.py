@@ -22,6 +22,7 @@ from cli.tui.theme import (
 )
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
 from cli.tui.widgets.tabs import NiuuTabs
+from tyr.tui._helpers import format_confidence
 
 if TYPE_CHECKING:
     from niuu.cli_api_client import CLIAPIClient
@@ -77,7 +78,7 @@ class SagaRow(Widget):
         saga_id = str(saga.get("id", ""))[:8]
 
         color = _STATUS_COLORS.get(status, TEXT_MUTED)
-        conf_pct = f"{confidence * 100:.0f}%" if isinstance(confidence, float) else str(confidence)
+        conf_pct = format_confidence(confidence)
 
         yield Static(
             f"[bold {TEXT_PRIMARY}]{name}[/]  "
