@@ -26,11 +26,19 @@ from __future__ import annotations
 
 import logging
 
+import click
 import typer
 
 from cli.config import CLISettings
 from cli.registry import PluginRegistry
 from cli.services.manager import ServiceManager
+
+
+class _SortedGroup(typer.core.TyperGroup):
+    """TyperGroup that lists commands in alphabetical order."""
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        return sorted(super().list_commands(ctx))
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +76,7 @@ def build_app(
         no_args_is_help=True,
         invoke_without_command=True,
         rich_markup_mode=None,
+        cls=_SortedGroup,
     )
 
     # ------------------------------------------------------------------ #
@@ -92,23 +101,15 @@ def build_app(
         """The Niuu platform CLI."""
 
     # ------------------------------------------------------------------ #
-    # Platform lifecycle                                                   #
+    # Commands are registered in alphabetical order so that --help        #
+    # output is sorted.                                                   #
     # ------------------------------------------------------------------ #
+    from cli.commands.core import create_config_commands, create_context_commands
     from cli.commands.platform import create_platform_commands
 
-    app.add_typer(create_platform_commands(registry, settings, manager), name="platform")
+    app.add_typer(create_config_commands(registry, settings), name="config")
+    app.add_typer(create_context_commands(settings), name="context")
 
-    # ------------------------------------------------------------------ #
-    # version                                                              #
-    # ------------------------------------------------------------------ #
-    @app.command()
-    def version() -> None:
-        """Print the niuu CLI version."""
-        typer.echo(f"niuu {settings.version}")
-
-    # ------------------------------------------------------------------ #
-    # Identity                                                             #
-    # ------------------------------------------------------------------ #
     @app.command()
     def login() -> None:
         """Authenticate with the Niuu platform."""
@@ -119,22 +120,15 @@ def build_app(
         """Clear stored credentials."""
         typer.echo("Logged out.")
 
-    @app.command()
-    def whoami() -> None:
-        """Show the currently authenticated user."""
-        typer.echo("Not authenticated. Run 'niuu login' first.")
+    app.add_typer(create_platform_commands(registry, settings, manager), name="platform")
 
-    # ------------------------------------------------------------------ #
-    # Configuration                                                        #
-    # ------------------------------------------------------------------ #
-    from cli.commands.core import create_config_commands, create_context_commands
+    # Plugin workflow commands (top-level, registered by each plugin)
+    for name, plugin in sorted(registry.plugins.items()):
+        try:
+            plugin.register_commands(app)
+        except Exception:
+            logger.exception("failed to register commands for plugin: %s", name)
 
-    app.add_typer(create_config_commands(registry, settings), name="config")
-    app.add_typer(create_context_commands(settings), name="context")
-
-    # ------------------------------------------------------------------ #
-    # TUI                                                                  #
-    # ------------------------------------------------------------------ #
     @app.command()
     def tui() -> None:
         """Launch the interactive TUI."""
@@ -143,14 +137,14 @@ def build_app(
         tui_app = build_tui(registry=registry, theme=settings.tui.theme)
         tui_app.run()
 
-    # ------------------------------------------------------------------ #
-    # Plugin workflow commands (top-level, registered by each plugin)     #
-    # Plugins call app.add_typer(...) directly on the main app.           #
-    # ------------------------------------------------------------------ #
-    for name, plugin in registry.plugins.items():
-        try:
-            plugin.register_commands(app)
-        except Exception:
-            logger.exception("failed to register commands for plugin: %s", name)
+    @app.command()
+    def version() -> None:
+        """Print the niuu CLI version."""
+        typer.echo(f"niuu {settings.version}")
+
+    @app.command()
+    def whoami() -> None:
+        """Show the currently authenticated user."""
+        typer.echo("Not authenticated. Run 'niuu login' first.")
 
     return app

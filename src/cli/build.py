@@ -43,11 +43,14 @@ INCLUDE_PACKAGES = [
     "pydantic_core",
     "anyio",
     "websockets",
+    # Rich unicode data modules are dynamically imported by version string
+    "rich._unicode_data",
 ]
 
 # Package data to bundle (CSS, SQL, PostgreSQL binaries, etc.)
 INCLUDE_PACKAGE_DATA = [
     "pgserver",
+    "rich",
     "textual",
 ]
 
