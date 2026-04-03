@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 import signal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -150,6 +151,11 @@ async def _startup(
 
     host = settings.server.host
     port = settings.server.port
+
+    # Expose server address so pod manager can construct chat_endpoint URLs
+    os.environ["NIUU_SERVER_HOST"] = host
+    os.environ["NIUU_SERVER_PORT"] = str(port)
+
     root_server = RootServer(
         registry=manager._registry,
         host=host,
@@ -401,5 +407,12 @@ def create_platform_commands(
         config_path.write_text(yaml.safe_dump(config_data, default_flow_style=False))
         typer.echo(f"\n  Config written to {config_path}")
         typer.echo(f"\nSetup complete ({mode} mode). Run 'niuu platform up' to start.")
+
+    @platform_app.command(hidden=True)
+    def skuld() -> None:
+        """Run a Skuld broker instance (internal, one per session)."""
+        from skuld.broker import main as skuld_main
+
+        skuld_main()
 
     return platform_app

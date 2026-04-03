@@ -202,8 +202,13 @@ class LocalProcessPodManager(PodManager):
         self._port_allocator = SdkPortAllocator(start_port=sdk_port_start)
         self._processes: dict[str, ProcessInfo] = {}
         self._monitors: dict[str, asyncio.Task] = {}
+        self._skuld_registry: object | None = None  # Set via set_skuld_registry()
 
         self._load_state()
+
+    def set_skuld_registry(self, registry: object) -> None:
+        """Inject the SkuldPortRegistry for proxy routing."""
+        self._skuld_registry = registry
 
     # ------------------------------------------------------------------
     # PodManager interface
@@ -233,10 +238,14 @@ class LocalProcessPodManager(PodManager):
         self._persist_state()
 
         try:
-            pid = await self._spawn_claude(session, spec, workspace, port)
+            pid = await self._spawn_skuld(session, spec, workspace, port)
             info.pid = pid
             info.state = ProcessState.RUNNING
             self._persist_state()
+
+            # Register with Skuld port registry for proxy routing
+            if self._skuld_registry is not None:
+                self._skuld_registry.register(session_id, port)
 
             monitor = asyncio.create_task(
                 self._monitor_process(session_id, pid),
@@ -250,7 +259,10 @@ class LocalProcessPodManager(PodManager):
             self._persist_state()
             raise
 
-        chat_endpoint = f"ws://127.0.0.1:{port}/ws/cli/{session_id}"
+        # Chat endpoint routes through the root server's proxy
+        server_host = os.environ.get("NIUU_SERVER_HOST", "127.0.0.1")
+        server_port = os.environ.get("NIUU_SERVER_PORT", "8080")
+        chat_endpoint = f"ws://{server_host}:{server_port}/s/{session_id}/session"
         code_endpoint = f"file://{workspace}"
         pod_name = f"local-{session_id[:8]}"
 
@@ -261,7 +273,7 @@ class LocalProcessPodManager(PodManager):
         )
 
     async def stop(self, session: Session) -> bool:
-        """Stop the Claude process for a session."""
+        """Stop the Skuld process for a session."""
         session_id = str(session.id)
         info = self._processes.get(session_id)
 
@@ -280,6 +292,9 @@ class LocalProcessPodManager(PodManager):
 
         if info.port is not None:
             self._port_allocator.release(info.port)
+
+        if self._skuld_registry is not None:
+            self._skuld_registry.unregister(session_id)
 
         info.state = ProcessState.STOPPED
         self._persist_state()
@@ -462,34 +477,50 @@ class LocalProcessPodManager(PodManager):
     # Process spawning & monitoring
     # ------------------------------------------------------------------
 
-    async def _spawn_claude(
+    async def _spawn_skuld(
         self,
         session: Session,
         spec: SessionSpec,
         workspace: Path,
         port: int,
     ) -> int:
-        """Spawn a Claude Code subprocess.
+        """Spawn a Skuld broker subprocess that internally manages Claude.
 
         Returns:
-            The PID of the spawned process.
+            The PID of the spawned Skuld process.
         """
-        binary = self._resolve_claude_binary()
         session_id = str(session.id)
 
-        args = [
-            binary,
-            "--sdk-url",
-            f"ws://127.0.0.1:{port}/ws/cli/{session_id}",
-        ]
+        # Resolve the command to run Skuld.
+        # From the compiled binary: use the same binary with "platform skuld"
+        # From source: use "python -m skuld"
+        skuld_cmd = self._resolve_skuld_command()
 
+        # Configure Skuld via env vars
         env = self._build_env(spec, workspace)
-        log_path = workspace / ".forge-claude.log"
+        env["SKULD__SESSION__ID"] = session_id
+        env["SKULD__SESSION__NAME"] = session.name
+        env["SKULD__SESSION__MODEL"] = session.model or spec.model or "claude-sonnet-4-6"
+        env["SKULD__SESSION__WORKSPACE_DIR"] = str(workspace)
+        env["SKULD__HOST"] = "127.0.0.1"
+        env["SKULD__PORT"] = str(port)
+        env["SKULD__TRANSPORT"] = "sdk"
+        env["SKULD__SKIP_PERMISSIONS"] = "true"
+        env["SKULD__PERSISTENCE_MOUNT_PATH"] = str(self._workspaces_dir)
 
+        if spec.system_prompt:
+            env["SKULD__SESSION__SYSTEM_PROMPT"] = spec.system_prompt
+        if spec.initial_prompt:
+            env["SKULD__SESSION__INITIAL_PROMPT"] = spec.initial_prompt
+
+        # Pass through the claude binary location
+        env["SKULD__CLI_BINARY"] = self._resolve_claude_binary()
+
+        log_path = workspace / ".skuld.log"
         log_file = log_path.open("w", encoding="utf-8")
         try:
             process = await asyncio.create_subprocess_exec(
-                *args,
+                *skuld_cmd,
                 stdout=log_file,
                 stderr=log_file,
                 cwd=str(workspace),
@@ -499,12 +530,27 @@ class LocalProcessPodManager(PodManager):
             log_file.close()
 
         logger.info(
-            "Spawned Claude process pid=%d port=%d session=%s",
+            "Spawned Skuld process pid=%d port=%d session=%s",
             process.pid,
             port,
             session_id,
         )
         return process.pid
+
+    def _resolve_skuld_command(self) -> list[str]:
+        """Resolve the command to run a Skuld subprocess.
+
+        From the compiled binary: reuse the same binary with 'platform skuld'.
+        From source: use 'python -m skuld'.
+        """
+        import sys
+
+        # Check if we're running from a Nuitka-compiled binary
+        if getattr(sys, "frozen", False) or "__compiled__" in dir():
+            return [sys.executable, "platform", "skuld"]
+
+        # Running from source
+        return [sys.executable, "-m", "skuld"]
 
     def _resolve_claude_binary(self) -> str:
         """Resolve the path to the claude binary."""

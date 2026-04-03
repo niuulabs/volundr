@@ -467,6 +467,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             stats_repository = PostgresStatsRepository(pool)
             token_tracker = PostgresTokenTracker(pool)
             pod_manager = _create_pod_manager(settings)
+
+            # Inject Skuld port registry for mini mode proxy routing
+            try:
+                from cli.server import get_skuld_registry
+
+                skuld_reg = get_skuld_registry()
+                if skuld_reg is not None and hasattr(pod_manager, "set_skuld_registry"):
+                    pod_manager.set_skuld_registry(skuld_reg)
+            except ImportError:
+                pass  # Not running via CLI
+
             gateway_adapter = _create_gateway_adapter(settings)
             pricing_provider = HardcodedPricingProvider(settings.models or None)
             git_registry = create_git_registry(settings.git)

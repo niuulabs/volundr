@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, WebSocket
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from niuu.ports.plugin import Service
@@ -30,6 +31,39 @@ if TYPE_CHECKING:
     from niuu.ports.embedded_database import EmbeddedDatabasePort
 
 logger = logging.getLogger(__name__)
+
+
+class SkuldPortRegistry:
+    """Maps session IDs to their Skuld subprocess ports.
+
+    Shared between the root server (for proxy routing) and the pod manager
+    (for registering/unregistering sessions).
+
+    Module-level instance accessible via ``get_skuld_registry()`` so
+    the Volundr sub-app lifespan can inject it into the pod manager.
+    """
+
+    def __init__(self) -> None:
+        self._ports: dict[str, int] = {}
+
+    def register(self, session_id: str, port: int) -> None:
+        self._ports[session_id] = port
+
+    def unregister(self, session_id: str) -> None:
+        self._ports.pop(session_id, None)
+
+    def get_port(self, session_id: str) -> int | None:
+        return self._ports.get(session_id)
+
+
+# Module-level singleton so the Volundr sub-app can access it.
+_skuld_registry: SkuldPortRegistry | None = None
+
+
+def get_skuld_registry() -> SkuldPortRegistry | None:
+    """Return the active SkuldPortRegistry, if any."""
+    return _skuld_registry
+
 
 # Maps plugin name → API path prefixes that Starlette Mount uses to route.
 # The prefix is stripped by Mount, then restored by _PrefixRestoreApp
@@ -82,6 +116,9 @@ class RootServer(Service):
         self._server: uvicorn.Server | None = None
         self._task: asyncio.Task[None] | None = None
         self._embedded_db: EmbeddedDatabasePort | None = None
+        global _skuld_registry  # noqa: PLW0603
+        self.skuld_registry = SkuldPortRegistry()
+        _skuld_registry = self.skuld_registry
 
     async def _start_embedded_db(self) -> None:
         """Start embedded PostgreSQL and set env vars for sub-apps."""
@@ -171,6 +208,121 @@ class RootServer(Service):
                 wrapped = _PrefixRestoreApp(sub_app, prefix)
                 root.mount(prefix, wrapped, name=f"{name}-{prefix.rsplit('/', 1)[-1]}")
             logger.info("Mounted %s API at %s", name, ", ".join(prefixes))
+
+        # ------------------------------------------------------------- #
+        # Skuld session proxy — WS and HTTP forwarded to per-session    #
+        # Skuld subprocesses.                                           #
+        # ------------------------------------------------------------- #
+        skuld_reg = self.skuld_registry
+
+        @root.websocket("/s/{session_id}/session")
+        async def skuld_ws_proxy(
+            websocket: WebSocket,  # noqa: F811
+            session_id: str,
+        ) -> None:
+            """Proxy browser WebSocket to the Skuld subprocess."""
+            port = skuld_reg.get_port(session_id)
+            if port is None:
+                await websocket.close(code=4004, reason="Session not found")
+                return
+
+            await websocket.accept()
+            import websockets.asyncio.client as ws_client
+
+            try:
+                async with ws_client.connect(
+                    f"ws://127.0.0.1:{port}/session",
+                    additional_headers={
+                        k.decode(): v.decode()
+                        for k, v in websocket.headers.raw
+                        if k.decode().lower() in ("authorization", "cookie", "x-auth-user-id")
+                    },
+                ) as skuld_ws:
+                    # Pipe messages bidirectionally
+                    async def browser_to_skuld() -> None:
+                        try:
+                            async for msg in websocket.iter_text():
+                                await skuld_ws.send(msg)
+                        except Exception:
+                            pass
+
+                    async def skuld_to_browser() -> None:
+                        try:
+                            async for msg in skuld_ws:
+                                await websocket.send_text(str(msg))
+                        except Exception:
+                            pass
+
+                    done, pending = await asyncio.wait(
+                        [
+                            asyncio.create_task(browser_to_skuld()),
+                            asyncio.create_task(skuld_to_browser()),
+                        ],
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for t in pending:
+                        t.cancel()
+            except Exception:
+                logger.debug("Skuld WS proxy ended for session %s", session_id)
+            finally:
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+
+        @root.api_route(
+            "/s/{session_id}/api/{path:path}",
+            methods=["GET", "POST", "PUT", "DELETE"],
+            include_in_schema=False,
+        )
+        async def skuld_http_proxy(request: Request, session_id: str, path: str) -> Response:
+            """Proxy HTTP requests to the Skuld subprocess."""
+            port = skuld_reg.get_port(session_id)
+            if port is None:
+                return JSONResponse({"detail": "Session not found"}, status_code=404)
+
+            import httpx
+
+            url = f"http://127.0.0.1:{port}/api/{path}"
+            params = dict(request.query_params)
+            headers = {
+                k: v for k, v in request.headers.items()
+                if k.lower() not in ("host", "content-length", "transfer-encoding")
+            }
+            body = await request.body()
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.request(
+                    method=request.method,
+                    url=url,
+                    params=params,
+                    headers=headers,
+                    content=body if body else None,
+                )
+
+            return Response(
+                content=resp.content,
+                status_code=resp.status_code,
+                headers=dict(resp.headers),
+            )
+
+        @root.get("/s/{session_id}/health", include_in_schema=False)
+        async def skuld_health_proxy(request: Request, session_id: str) -> Response:
+            """Proxy health check to the Skuld subprocess."""
+            port = skuld_reg.get_port(session_id)
+            if port is None:
+                return JSONResponse({"detail": "Session not found"}, status_code=404)
+
+            import httpx
+
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"http://127.0.0.1:{port}/health")
+
+            return Response(
+                content=resp.content,
+                status_code=resp.status_code,
+                headers=dict(resp.headers),
+            )
 
         # Runtime config for the web UI SPA
         @root.get("/config.json")
