@@ -259,6 +259,12 @@ def _create_contributors(
     if lm.enabled:
         logger.info("Session contributor: local_mount (enabled)")
 
+    # Always wire the prompt contributor so system_prompt/initial_prompt
+    # from the launch request (or dispatch) are injected into the spec.
+    from volundr.adapters.outbound.contributors.prompt import PromptContributor
+
+    contributors.append(PromptContributor())
+
     return contributors
 
 
