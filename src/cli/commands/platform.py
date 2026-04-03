@@ -210,6 +210,10 @@ def _build_up_callback(
         """Start platform services."""
         import os
 
+        # Set Anthropic API key from config if not already in env
+        if settings.anthropic.api_key:
+            os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic.api_key)
+
         # In mini mode, enable local mounts and mini_mode feature flag.
         if settings.mode == "mini":
             os.environ.setdefault("LOCAL_MOUNTS__ENABLED", "true")
@@ -217,7 +221,11 @@ def _build_up_callback(
 
         skip_preflight: bool = bool(kwargs.pop("skip_preflight", False))
         start_all: bool = bool(kwargs.pop("all", False))
+        no_web: bool = bool(kwargs.pop("no_web", False))
         svc_flags: dict[str, bool | None] = dict(kwargs)
+
+        if no_web:
+            os.environ["NIUU_NO_WEB"] = "true"
 
         enabled = _resolve_enabled_services(service_defs, settings, start_all, svc_flags)
 
@@ -251,6 +259,12 @@ def _build_up_callback(
         ),
         inspect.Parameter(
             "all",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default=False,
+            annotation=bool,
+        ),
+        inspect.Parameter(
+            "no_web",
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=False,
             annotation=bool,

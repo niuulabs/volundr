@@ -342,6 +342,10 @@ class RootServer(Service):
             }
 
         # Web UI — SPA with fallback to index.html for deep routes
+        if os.environ.get("NIUU_NO_WEB") == "true":
+            logger.info("Web UI disabled (--no-web)")
+            return root
+
         try:
             from starlette.staticfiles import StaticFiles
 

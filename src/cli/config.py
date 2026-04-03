@@ -97,6 +97,10 @@ class PodManagerConfig(BaseModel):
         default=4,
         description="Maximum concurrent sessions.",
     )
+    sdk_port_start: int = Field(
+        default=9100,
+        description="Starting port for Skuld/SDK WebSocket allocation.",
+    )
 
     def adapter_kwargs(self) -> dict[str, Any]:
         """Return kwargs to pass to the adapter constructor.
@@ -107,6 +111,16 @@ class PodManagerConfig(BaseModel):
         data = self.model_dump()
         data.pop("adapter", None)
         return data
+
+
+class AnthropicConfig(BaseModel):
+    """Anthropic API configuration."""
+
+    api_key: str = Field(default="", description="Anthropic API key.")
+    api_key_env: str = Field(
+        default="ANTHROPIC_API_KEY",
+        description="Environment variable name for the API key (fallback).",
+    )
 
 
 class ServerConfig(BaseModel):
@@ -178,6 +192,7 @@ class CLISettings(BaseSettings):
         default="mini",
         description="Operating mode: 'mini' (local) or 'cluster'.",
     )
+    anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     pod_manager: PodManagerConfig = Field(default_factory=PodManagerConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)

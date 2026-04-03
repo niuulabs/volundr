@@ -177,6 +177,51 @@ def check_database(config: PreflightConfig) -> PreflightResult:
     )
 
 
+def check_xcode() -> PreflightResult:
+    """Check Xcode command line tools on macOS. Skip on other platforms."""
+    import platform as _platform
+
+    if _platform.system() != "Darwin":
+        return PreflightResult(name="xcode", passed=True, message="Not macOS — skipped.")
+
+    xcode_select = shutil.which("xcode-select")
+    if not xcode_select:
+        return PreflightResult(
+            name="xcode",
+            passed=True,
+            warn_only=True,
+            message="xcode-select not found — git operations may fail.",
+        )
+
+    try:
+        result = subprocess.run(
+            ["xcode-select", "-p"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return PreflightResult(
+                name="xcode",
+                passed=True,
+                warn_only=True,
+                message="Xcode command line tools not installed. "
+                "Run: xcode-select --install",
+            )
+        return PreflightResult(
+            name="xcode",
+            passed=True,
+            message=f"Xcode CLT: {result.stdout.strip()}",
+        )
+    except Exception:
+        return PreflightResult(
+            name="xcode",
+            passed=True,
+            warn_only=True,
+            message="Could not check Xcode status.",
+        )
+
+
 def check_git() -> PreflightResult:
     """Verify git is installed. Warn if gh is missing."""
     git_path = shutil.which("git")
@@ -388,6 +433,7 @@ def run_preflight_checks(config: PreflightConfig) -> list[PreflightResult]:
     results.append(check_workspace_dir(config))
     results.append(check_database(config))
     results.append(check_git())
+    results.append(check_xcode())
     results.append(check_disk_space(config))
     return results
 
