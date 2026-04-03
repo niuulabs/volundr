@@ -508,10 +508,12 @@ class LocalProcessPodManager(PodManager):
         env["SKULD__SKIP_PERMISSIONS"] = "true"
         env["SKULD__PERSISTENCE_MOUNT_PATH"] = str(self._workspaces_dir)
 
-        if spec.system_prompt:
-            env["SKULD__SESSION__SYSTEM_PROMPT"] = spec.system_prompt
-        if spec.initial_prompt:
-            env["SKULD__SESSION__INITIAL_PROMPT"] = spec.initial_prompt
+        system_prompt = spec.values.get("system_prompt", "")
+        initial_prompt = spec.values.get("initial_prompt", "")
+        if system_prompt:
+            env["SKULD__SESSION__SYSTEM_PROMPT"] = system_prompt
+        if initial_prompt:
+            env["SKULD__SESSION__INITIAL_PROMPT"] = initial_prompt
 
         # Pass through the claude binary location
         env["SKULD__CLI_BINARY"] = self._resolve_claude_binary()
