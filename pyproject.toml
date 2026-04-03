@@ -62,6 +62,7 @@ bifrost = "volundr.bifrost.__main__:main"
 tyr = "tyr.main:main"
 
 [project.entry-points."niuu.plugins"]
+niuu = "niuu.plugin:NiuuPlugin"
 volundr = "volundr.plugin:VolundrPlugin"
 tyr = "tyr.plugin:TyrPlugin"
 
