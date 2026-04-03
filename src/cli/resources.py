@@ -38,6 +38,16 @@ def migration_dir(variant: str = "volundr") -> Path:
     variant:
         ``"volundr"`` (default) for main migrations, ``"tyr"`` for Tyr.
     """
+    # Prefer repo-relative migrations (source of truth when running from source)
+    if variant == "tyr":
+        repo_dir = Path(__file__).resolve().parents[2] / "migrations" / "tyr"
+    else:
+        repo_dir = Path(__file__).resolve().parents[2] / "migrations"
+
+    if repo_dir.is_dir():
+        return repo_dir
+
+    # Fallback: bundled package data (Nuitka binary)
     if variant == "tyr":
         pkg_dir = importlib.resources.files("cli") / "migrations" / "tyr"
     else:
@@ -46,15 +56,6 @@ def migration_dir(variant: str = "volundr") -> Path:
     resolved = _resource_path(pkg_dir)
     if resolved.is_dir():
         return resolved
-
-    # Fallback: repo-relative
-    if variant == "tyr":
-        repo_dir = Path(__file__).resolve().parents[2] / "migrations" / "tyr"
-    else:
-        repo_dir = Path(__file__).resolve().parents[2] / "migrations"
-
-    if repo_dir.is_dir():
-        return repo_dir
 
     msg = f"Migration files not found for variant={variant!r}"
     raise FileNotFoundError(msg)

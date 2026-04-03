@@ -66,7 +66,7 @@ class LoggingConfig(BaseModel):
 class VolundrConfig(BaseModel):
     """Volundr API connection configuration."""
 
-    url: str = Field(default="http://localhost:8000")
+    url: str = Field(default="http://localhost:8080")
 
 
 class CredentialStoreConfig(BaseModel):
