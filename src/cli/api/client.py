@@ -11,7 +11,6 @@ import httpx
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT_SECONDS = 30.0
-SSE_KEEPALIVE_COMMENT = ": keepalive"
 
 
 class APIClient:
@@ -115,13 +114,29 @@ class APIClient:
         return await self.request("DELETE", path, timeout=timeout)
 
     async def stream_sse(self, path: str) -> AsyncGenerator[tuple[str, str], None]:
-        """Yield ``(event_type, data)`` tuples from an SSE endpoint."""
+        """Yield ``(event_type, data)`` tuples from an SSE endpoint.
+
+        On a 401 the client attempts a single token refresh and reconnects.
+        SSE keepalive comments (lines starting with ``:``) are silently dropped.
+        """
         url = f"{self._base_url}{path}"
         async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream("GET", url, headers=self._headers()) as resp:
-                resp.raise_for_status()
+            resp = await client.send(
+                client.build_request("GET", url, headers=self._headers()),
+                stream=True,
+            )
+            if resp.status_code == 401 and await self._maybe_refresh():
+                await resp.aclose()
+                resp = await client.send(
+                    client.build_request("GET", url, headers=self._headers()),
+                    stream=True,
+                )
+            resp.raise_for_status()
+            try:
                 event_type = ""
                 async for line in resp.aiter_lines():
+                    if line.startswith(":"):
+                        continue
                     if line.startswith("event:"):
                         event_type = line[len("event:") :].strip()
                     elif line.startswith("data:"):
@@ -130,3 +145,5 @@ class APIClient:
                         event_type = ""
                     elif line == "":
                         event_type = ""
+            finally:
+                await resp.aclose()

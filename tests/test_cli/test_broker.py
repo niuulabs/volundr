@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from cli.broker.broker import SessionBroker
+from cli.broker.broker import MAX_HISTORY_TURNS, SessionBroker
 
 
 class FakeWebSocket:
@@ -276,6 +276,17 @@ class TestSessionBrokerConversationHistory:
         history = broker.conversation_history()
         assert len(history["turns"]) == 1
         assert history["turns"][0]["content"] == "first message"
+        await broker.stop()
+
+    async def test_history_capped_at_max(self, broker: SessionBroker) -> None:
+        ws = FakeWebSocket()
+        await broker.add_browser(ws)
+        for i in range(MAX_HISTORY_TURNS + 50):
+            await broker.handle_browser_message({"type": "user", "content": f"msg-{i}"})
+        history = broker.conversation_history()
+        assert len(history["turns"]) == MAX_HISTORY_TURNS
+        # Oldest messages should have been trimmed — the last message should be the newest.
+        assert history["turns"][-1]["content"] == f"msg-{MAX_HISTORY_TURNS + 49}"
         await broker.stop()
 
 

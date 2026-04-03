@@ -92,7 +92,8 @@ class OIDCClient:
         callback_received = Event()
         result: dict[str, str] = {}
 
-        handler_factory = _make_callback_handler(callback_received, result)
+        expected_state = secrets.token_urlsafe(32)
+        handler_factory = _make_callback_handler(callback_received, result, expected_state)
         server = HTTPServer((LOCAL_CALLBACK_HOST, 0), handler_factory)
         port = server.server_address[1]
         redirect_uri = f"http://{LOCAL_CALLBACK_HOST}:{port}/callback"
@@ -109,7 +110,7 @@ class OIDCClient:
                     "scope": self._scopes,
                     "code_challenge": challenge,
                     "code_challenge_method": "S256",
-                    "state": secrets.token_urlsafe(32),
+                    "state": expected_state,
                 }
             )
             auth_url = f"{authorization_endpoint}?{auth_params}"
@@ -239,6 +240,7 @@ class OIDCClient:
 def _make_callback_handler(
     callback_received: Event,
     result: dict[str, str],
+    expected_state: str,
 ) -> type[BaseHTTPRequestHandler]:
     """Create an HTTP request handler that captures the OIDC callback."""
 
@@ -246,6 +248,22 @@ def _make_callback_handler(
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
+
+            # Validate state to prevent CSRF.
+            returned_state = params.get("state", [""])[0]
+            if returned_state != expected_state:
+                result["error"] = "state_mismatch"
+                result["error_description"] = "OIDC state parameter does not match"
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html")
+                self.end_headers()
+                body = (
+                    "<html><body><h1>Authentication failed</h1>"
+                    "<p>State mismatch — possible CSRF attack.</p></body></html>"
+                )
+                self.wfile.write(body.encode())
+                callback_received.set()
+                return
 
             if "code" in params:
                 result["code"] = params["code"][0]

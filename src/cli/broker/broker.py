@@ -20,6 +20,7 @@ from cli.broker.transport import Transport
 logger = logging.getLogger(__name__)
 
 BROWSER_SEND_BUFFER = 256
+MAX_HISTORY_TURNS = 500
 
 CONTROL_MSG_TYPES = frozenset(
     {
@@ -62,7 +63,7 @@ class BrowserConnection:
                 data = await self.queue.get()
                 await self.ws.send_text(data.decode())
         except Exception:
-            pass
+            logger.debug("write loop ended", exc_info=True)
 
     async def send(self, payload: bytes) -> None:
         try:
@@ -337,3 +338,5 @@ class SessionBroker:
             metadata=metadata or {},
         )
         self._history.append(turn)
+        if len(self._history) > MAX_HISTORY_TURNS:
+            self._history = self._history[-MAX_HISTORY_TURNS:]

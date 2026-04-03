@@ -129,3 +129,45 @@ class TestAPIClientSSE:
         assert len(events) == 2
         assert events[0] == ("session_activity", '{"session_id": "s1"}')
         assert events[1] == ("keepalive", "{}")
+
+    async def test_stream_sse_filters_keepalive_comments(self) -> None:
+        sse_body = ": keepalive\nevent: update\ndata: ok\n\n: another comment\n"
+        client = APIClient(base_url=BASE, access_token="t")
+        with respx.mock:
+            respx.get(f"{BASE}/stream").mock(return_value=httpx.Response(200, text=sse_body))
+            events = []
+            async for event_type, data in client.stream_sse("/stream"):
+                events.append((event_type, data))
+
+        assert len(events) == 1
+        assert events[0] == ("update", "ok")
+
+    async def test_stream_sse_retries_on_401(self) -> None:
+        sse_body = "event: ping\ndata: pong\n\n"
+
+        async def refresh_fn() -> str:
+            return "refreshed-token"
+
+        client = APIClient(base_url=BASE, access_token="old", refresh_token_fn=refresh_fn)
+        with respx.mock:
+            route = respx.get(f"{BASE}/sse")
+            route.side_effect = [
+                httpx.Response(401),
+                httpx.Response(200, text=sse_body),
+            ]
+            events = []
+            async for event_type, data in client.stream_sse("/sse"):
+                events.append((event_type, data))
+
+        assert len(events) == 1
+        assert events[0] == ("ping", "pong")
+
+    async def test_stream_sse_no_refresh_raises_on_401(self) -> None:
+        import pytest
+
+        client = APIClient(base_url=BASE, access_token="old")
+        with respx.mock:
+            respx.get(f"{BASE}/sse").mock(return_value=httpx.Response(401))
+            with pytest.raises(httpx.HTTPStatusError):
+                async for _ in client.stream_sse("/sse"):
+                    pass
