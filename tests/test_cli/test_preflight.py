@@ -434,17 +434,18 @@ class TestCheckClusterConnectivity:
 
         kubeconfig = tmp_path / "kubeconfig"
         kubeconfig.write_text("apiVersion: v1\n")
-        config = PreflightConfig(kubeconfig=str(kubeconfig))
+        config = PreflightConfig(kubeconfig=str(kubeconfig), cluster_connect_timeout=5)
         with (
             patch("cli.services.preflight.shutil.which", return_value="/usr/bin/kubectl"),
             patch(
                 "cli.services.preflight.subprocess.run",
-                side_effect=subprocess.TimeoutExpired("kubectl", 10),
+                side_effect=subprocess.TimeoutExpired("kubectl", 5),
             ),
         ):
             result = check_cluster_connectivity(config)
         assert result.passed is False
         assert "timed out" in result.message
+        assert "5s" in result.message
 
     def test_no_kubectl(self) -> None:
         config = PreflightConfig()

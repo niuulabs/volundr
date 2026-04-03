@@ -51,6 +51,7 @@ class PreflightConfig:
     mode: str = "mini"
     kubeconfig: str = "~/.kube/config"
     namespace: str = "volundr"
+    cluster_connect_timeout: int = 10
 
 
 def check_claude_binary(config: PreflightConfig) -> PreflightResult:
@@ -322,7 +323,7 @@ def check_cluster_connectivity(config: PreflightConfig) -> PreflightResult:
             cmd,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=config.cluster_connect_timeout,
         )
         if result.returncode != 0:
             return PreflightResult(
@@ -334,7 +335,7 @@ def check_cluster_connectivity(config: PreflightConfig) -> PreflightResult:
         return PreflightResult(
             name="cluster connectivity",
             passed=False,
-            message="Cluster connection timed out after 10s.",
+            message=f"Cluster connection timed out after {config.cluster_connect_timeout}s.",
         )
     except OSError as exc:
         return PreflightResult(

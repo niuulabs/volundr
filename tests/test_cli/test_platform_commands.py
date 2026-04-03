@@ -332,6 +332,85 @@ class TestBuildInitConfig:
         assert "direct_k8s" in config["pod_manager"]["adapter"]
         assert config["pod_manager"]["namespace"] == "volundr"
 
+    def test_cluster_config_uses_pinned_image_version(self) -> None:
+        """skuld_image must use a pinned version, not :latest."""
+        config = _build_init_config("cluster")
+        skuld_image = config["pod_manager"]["skuld_image"]
+        assert ":latest" not in skuld_image
+        assert ":" in skuld_image  # has a version tag
+
+
+class TestInitOverwriteProtection:
+    def test_aborts_when_config_exists_and_user_declines(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        platform, *_ = self._make_platform()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            config_path = tmp / ".niuu" / "config.yaml"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text("mode: mini\n")
+            with (
+                patch("cli.commands.platform.Path.home", return_value=tmp),
+                patch("cli.commands.platform.typer.confirm", return_value=False),
+            ):
+                result = runner.invoke(platform, ["init"])
+            assert result.exit_code == 0
+            assert "preserved" in result.output.lower()
+            # Original content must be untouched
+            assert config_path.read_text() == "mode: mini\n"
+
+    def test_overwrites_when_config_exists_and_user_confirms(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        platform, *_ = self._make_platform()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            config_path = tmp / ".niuu" / "config.yaml"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text("mode: mini\n")
+            with (
+                patch("cli.commands.platform.Path.home", return_value=tmp),
+                patch("cli.commands.platform.typer.confirm", return_value=True),
+                patch("cli.commands.platform.typer.prompt", return_value="1"),
+            ):
+                result = runner.invoke(platform, ["init"])
+            assert result.exit_code == 0
+            assert "setup complete" in result.output.lower()
+            # Config was rewritten
+            assert config_path.read_text() != "mode: mini\n"
+
+    def test_writes_without_prompt_when_no_existing_config(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        platform, *_ = self._make_platform()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch("cli.commands.platform.Path.home", return_value=Path(tmp_dir)),
+                patch("cli.commands.platform.typer.prompt", return_value="1"),
+            ):
+                result = runner.invoke(platform, ["init"])
+            assert result.exit_code == 0
+            assert "setup complete" in result.output.lower()
+
+    def _make_platform(self) -> tuple:
+        registry = PluginRegistry()
+        settings = CLISettings()
+        manager = ServiceManager(
+            registry=registry,
+            health_check_interval=0.01,
+            health_check_timeout=0.5,
+            health_check_max_retries=1,
+        )
+        platform = create_platform_commands(registry, settings, manager)
+        return platform, registry, settings, manager
+
 
 class TestPromptModeSelection:
     def test_default_returns_mini(self) -> None:

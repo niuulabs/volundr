@@ -245,7 +245,7 @@ CLUSTER_POD_MANAGER_DEFAULTS: dict[str, Any] = {
     "adapter": CLUSTER_POD_MANAGER_ADAPTER,
     "namespace": "volundr",
     "kubeconfig": "~/.kube/config",
-    "skuld_image": "ghcr.io/niuulabs/skuld:latest",
+    "skuld_image": "ghcr.io/niuulabs/skuld:0.2.0",
     "db_host": "host.k3d.internal",
     "ingress_class": "traefik",
 }
@@ -337,12 +337,21 @@ def create_platform_commands(
         """Run the first-time setup wizard."""
         typer.echo("Running first-time setup...\n")
 
-        mode = _prompt_mode_selection()
-        config_data = _build_init_config(mode)
-
         config_dir = Path.home() / ".niuu"
         config_dir.mkdir(parents=True, exist_ok=True)
         config_path = config_dir / "config.yaml"
+
+        if config_path.exists():
+            overwrite = typer.confirm(
+                f"Config already exists at {config_path}. Overwrite?",
+                default=False,
+            )
+            if not overwrite:
+                typer.echo("Aborted — existing config preserved.")
+                raise typer.Exit(0)
+
+        mode = _prompt_mode_selection()
+        config_data = _build_init_config(mode)
 
         import yaml
 
