@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import socket
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -46,6 +47,10 @@ class PreflightConfig:
     min_disk_space_bytes: int = MIN_DISK_SPACE_BYTES
     database_mode: str = "embedded"
     database_dsn: str = ""
+    # Cluster mode fields
+    mode: str = "mini"
+    kubeconfig: str = "~/.kube/config"
+    namespace: str = "volundr"
 
 
 def check_claude_binary(config: PreflightConfig) -> PreflightResult:
@@ -228,13 +233,154 @@ def check_disk_space(config: PreflightConfig) -> PreflightResult:
     )
 
 
+def check_kubectl() -> PreflightResult:
+    """Verify kubectl is available in PATH."""
+    resolved = shutil.which("kubectl")
+    if not resolved:
+        return PreflightResult(
+            name="kubectl",
+            passed=False,
+            message="kubectl not found in PATH. Install it: https://kubernetes.io/docs/tasks/tools/",
+        )
+    return PreflightResult(
+        name="kubectl",
+        passed=True,
+        message=f"kubectl found: {resolved}",
+    )
+
+
+def check_kubeconfig(config: PreflightConfig) -> PreflightResult:
+    """Verify kubeconfig file exists and is readable."""
+    kubeconfig_path = Path(config.kubeconfig).expanduser()
+    if not kubeconfig_path.exists():
+        return PreflightResult(
+            name="kubeconfig",
+            passed=False,
+            message=f"kubeconfig not found at '{kubeconfig_path}'. "
+            "Set kubeconfig in config or check your cluster setup.",
+        )
+    if not os.access(kubeconfig_path, os.R_OK):
+        return PreflightResult(
+            name="kubeconfig",
+            passed=False,
+            message=f"kubeconfig at '{kubeconfig_path}' is not readable.",
+        )
+    return PreflightResult(
+        name="kubeconfig",
+        passed=True,
+        message=f"kubeconfig found: {kubeconfig_path}",
+    )
+
+
+def check_k3d() -> PreflightResult:
+    """Check k3d availability — warn-only if missing."""
+    resolved = shutil.which("k3d")
+    if not resolved:
+        return PreflightResult(
+            name="k3d",
+            passed=True,
+            warn_only=True,
+            message="k3d not found in PATH. Not required unless using k3d clusters.",
+        )
+    return PreflightResult(
+        name="k3d",
+        passed=True,
+        message=f"k3d found: {resolved}",
+    )
+
+
+def check_namespace(config: PreflightConfig) -> PreflightResult:
+    """Check that the target namespace is configured."""
+    if not config.namespace:
+        return PreflightResult(
+            name="namespace",
+            passed=False,
+            message="Target namespace is not configured. Set namespace in pod_manager config.",
+        )
+    return PreflightResult(
+        name="namespace",
+        passed=True,
+        message=f"Target namespace: {config.namespace}",
+    )
+
+
+def check_cluster_connectivity(config: PreflightConfig) -> PreflightResult:
+    """Verify cluster is reachable by running kubectl cluster-info."""
+    kubectl = shutil.which("kubectl")
+    if not kubectl:
+        return PreflightResult(
+            name="cluster connectivity",
+            passed=False,
+            message="kubectl not available — cannot verify cluster connectivity.",
+        )
+    kubeconfig_path = Path(config.kubeconfig).expanduser()
+    cmd = [kubectl, "cluster-info"]
+    if kubeconfig_path.exists():
+        cmd.extend(["--kubeconfig", str(kubeconfig_path)])
+    try:
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return PreflightResult(
+                name="cluster connectivity",
+                passed=False,
+                message=f"Cannot connect to cluster: {result.stderr.strip()}",
+            )
+    except subprocess.TimeoutExpired:
+        return PreflightResult(
+            name="cluster connectivity",
+            passed=False,
+            message="Cluster connection timed out after 10s.",
+        )
+    except OSError as exc:
+        return PreflightResult(
+            name="cluster connectivity",
+            passed=False,
+            message=f"Failed to run kubectl: {exc}",
+        )
+    return PreflightResult(
+        name="cluster connectivity",
+        passed=True,
+        message="Cluster is reachable.",
+    )
+
+
+def run_cluster_preflight_checks(config: PreflightConfig) -> list[PreflightResult]:
+    """Run cluster-specific preflight checks."""
+    results: list[PreflightResult] = []
+    results.append(check_kubectl())
+    results.append(check_kubeconfig(config))
+    results.append(check_k3d())
+    results.append(check_namespace(config))
+    results.append(check_cluster_connectivity(config))
+    return results
+
+
 def run_preflight_checks(config: PreflightConfig) -> list[PreflightResult]:
     """Run all preflight checks and return results.
 
     Checks are run sequentially. All results are collected regardless
     of pass/fail so the caller can decide how to handle them.
+
+    In cluster mode, mini-specific checks (claude binary, workspace dir) are
+    replaced with cluster-specific checks (kubectl, kubeconfig, namespace).
     """
     results: list[PreflightResult] = []
+
+    if config.mode == "cluster":
+        results.extend(run_cluster_preflight_checks(config))
+        results.append(check_api_key(config))
+        results.extend(check_ports(config))
+        results.append(check_database(config))
+        results.append(check_git())
+        results.append(check_disk_space(config))
+        return results
+
+    # Mini mode (default)
     results.append(check_claude_binary(config))
     results.append(check_api_key(config))
     results.extend(check_ports(config))

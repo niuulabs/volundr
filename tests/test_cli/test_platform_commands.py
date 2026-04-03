@@ -7,12 +7,15 @@ from unittest.mock import MagicMock
 from typer.testing import CliRunner
 
 from cli.commands.platform import (
+    _build_init_config,
+    _build_preflight_config,
     _build_up_callback,
     _collect_service_definitions,
+    _prompt_mode_selection,
     _resolve_enabled_services,
     create_platform_commands,
 )
-from cli.config import CLISettings, PerServiceConfig
+from cli.config import CLISettings, PerServiceConfig, PodManagerConfig
 from cli.registry import PluginRegistry
 from cli.services.manager import ServiceManager
 from niuu.ports.plugin import ServiceDefinition
@@ -217,10 +220,19 @@ class TestCreatePlatformCommands:
         assert "stopped" in result.output.lower()
 
     def test_platform_init_command(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
         platform, *_ = self._make_platform()
-        result = runner.invoke(platform, ["init"])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch("cli.commands.platform.typer.prompt", return_value="1"),
+                patch("cli.commands.platform.Path.home", return_value=Path(tmp_dir)),
+            ):
+                result = runner.invoke(platform, ["init"])
         assert result.exit_code == 0
-        assert "setup" in result.output.lower()
+        assert "setup complete" in result.output.lower()
 
     def test_platform_status_no_services(self) -> None:
         platform, *_ = self._make_platform()
@@ -265,3 +277,176 @@ class TestDependencyResolutionViaEnabledServices:
         assert "volundr" in order
         assert "tyr" in order
         assert order.index("volundr") < order.index("tyr")
+
+
+class TestBuildPreflightConfig:
+    def test_mini_mode_defaults(self) -> None:
+        settings = CLISettings()
+        config = _build_preflight_config(settings)
+        assert config.mode == "mini"
+        assert config.claude_binary == "claude"
+        assert config.workspaces_dir == "~/.niuu/workspaces"
+
+    def test_cluster_mode_from_settings(self) -> None:
+        settings = CLISettings(
+            mode="cluster",
+            pod_manager=PodManagerConfig(
+                adapter="volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
+                namespace="test-ns",
+                kubeconfig="/tmp/kubeconfig",
+            ),
+        )
+        config = _build_preflight_config(settings)
+        assert config.mode == "cluster"
+        assert config.namespace == "test-ns"
+        assert config.kubeconfig == "/tmp/kubeconfig"
+
+    def test_cluster_mode_extra_fields_forwarded(self) -> None:
+        """Extra fields on PodManagerConfig are available via adapter_kwargs."""
+        settings = CLISettings(
+            mode="cluster",
+            pod_manager=PodManagerConfig(
+                adapter="volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
+                namespace="custom",
+                kubeconfig="~/.kube/custom",
+            ),
+        )
+        config = _build_preflight_config(settings)
+        assert config.namespace == "custom"
+        assert config.kubeconfig == "~/.kube/custom"
+
+
+class TestBuildInitConfig:
+    def test_mini_config(self) -> None:
+        config = _build_init_config("mini")
+        assert config["mode"] == "mini"
+        assert "local_process" in config["pod_manager"]["adapter"]
+
+    def test_cluster_config(self) -> None:
+        config = _build_init_config("cluster")
+        assert config["mode"] == "cluster"
+        assert "direct_k8s" in config["pod_manager"]["adapter"]
+        assert config["pod_manager"]["namespace"] == "volundr"
+
+
+class TestPromptModeSelection:
+    def test_default_returns_mini(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cli.commands.platform.typer.prompt", return_value="1"):
+            mode = _prompt_mode_selection()
+        assert mode == "mini"
+
+    def test_choice_2_returns_cluster(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cli.commands.platform.typer.prompt", return_value="2"):
+            mode = _prompt_mode_selection()
+        assert mode == "cluster"
+
+    def test_choice_cluster_string_returns_cluster(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cli.commands.platform.typer.prompt", return_value="cluster"):
+            mode = _prompt_mode_selection()
+        assert mode == "cluster"
+
+    def test_garbage_returns_mini(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cli.commands.platform.typer.prompt", return_value="xyz"):
+            mode = _prompt_mode_selection()
+        assert mode == "mini"
+
+
+class TestPodManagerConfigAdapterKwargs:
+    def test_mini_defaults(self) -> None:
+        config = PodManagerConfig()
+        kwargs = config.adapter_kwargs()
+        assert "adapter" not in kwargs
+        assert kwargs["workspaces_dir"] == "~/.niuu/workspaces"
+        assert kwargs["claude_binary"] == "claude"
+
+    def test_cluster_extra_fields(self) -> None:
+        config = PodManagerConfig(
+            adapter="volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
+            namespace="volundr",
+            kubeconfig="~/.kube/config",
+            ingress_class="traefik",
+        )
+        kwargs = config.adapter_kwargs()
+        assert "adapter" not in kwargs
+        assert kwargs["namespace"] == "volundr"
+        assert kwargs["kubeconfig"] == "~/.kube/config"
+        assert kwargs["ingress_class"] == "traefik"
+
+
+class TestConfigModeSwitching:
+    def test_mini_mode_loads_local_process(self) -> None:
+        """mode=mini uses LocalProcessPodManager adapter by default."""
+        settings = CLISettings(mode="mini")
+        assert "local_process" in settings.pod_manager.adapter
+
+    def test_cluster_mode_adapter(self) -> None:
+        """mode=cluster with explicit adapter loads DirectK8sPodManager."""
+        settings = CLISettings(
+            mode="cluster",
+            pod_manager=PodManagerConfig(
+                adapter="volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
+            ),
+        )
+        assert "DirectK8sPodManager" in settings.pod_manager.adapter
+        assert settings.mode == "cluster"
+
+
+class TestPlatformStatusClusterInfo:
+    def _make_platform(self, mode: str = "mini", plugins: list | None = None) -> tuple:
+        registry = PluginRegistry()
+        for p in plugins or []:
+            registry.register(p)
+        pod_manager_kwargs = {}
+        if mode == "cluster":
+            pod_manager_kwargs = {
+                "adapter": "volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager",
+                "namespace": "test-ns",
+                "kubeconfig": "/tmp/kube",
+            }
+        settings = CLISettings(
+            mode=mode,
+            pod_manager=(
+                PodManagerConfig(**pod_manager_kwargs) if pod_manager_kwargs else PodManagerConfig()
+            ),
+        )
+        manager = ServiceManager(
+            registry=registry,
+            health_check_interval=0.01,
+            health_check_timeout=0.5,
+            health_check_max_retries=1,
+        )
+        platform = create_platform_commands(registry, settings, manager)
+        return platform, registry, settings, manager
+
+    def test_status_shows_mode(self) -> None:
+        platform, *_ = self._make_platform()
+        result = runner.invoke(platform, ["status"])
+        assert result.exit_code == 0
+        assert "Mode: mini" in result.output
+
+    def test_status_shows_cluster_info(self) -> None:
+        platform, *_ = self._make_platform(mode="cluster")
+        result = runner.invoke(platform, ["status"])
+        assert result.exit_code == 0
+        assert "Mode: cluster" in result.output
+        assert "Namespace: test-ns" in result.output
+        assert "Kubeconfig: /tmp/kube" in result.output
+
+    def test_status_shows_pod_manager_name(self) -> None:
+        platform, *_ = self._make_platform(mode="cluster")
+        result = runner.invoke(platform, ["status"])
+        assert "DirectK8sPodManager" in result.output
+
+    def test_status_mini_no_cluster_info(self) -> None:
+        platform, *_ = self._make_platform(mode="mini")
+        result = runner.invoke(platform, ["status"])
+        assert "Namespace:" not in result.output
+        assert "Kubeconfig:" not in result.output

@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import signal
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import typer
 
@@ -36,12 +37,17 @@ def _build_preflight_config(settings: CLISettings) -> PreflightConfig:
         plugin_port = plugin_cfg.get("port")
         if isinstance(plugin_port, int) and plugin_port not in ports:
             ports.append(plugin_port)
+
+    kwargs = settings.pod_manager.adapter_kwargs()
     return PreflightConfig(
-        claude_binary=settings.pod_manager.claude_binary,
+        claude_binary=kwargs.get("claude_binary", "claude"),
         ports=ports,
-        workspaces_dir=settings.pod_manager.workspaces_dir,
+        workspaces_dir=kwargs.get("workspaces_dir", "~/.niuu/workspaces"),
         database_mode=settings.database.mode,
         database_dsn=settings.database.dsn,
+        mode=settings.mode,
+        kubeconfig=kwargs.get("kubeconfig", "~/.kube/config"),
+        namespace=kwargs.get("namespace", "volundr"),
     )
 
 
@@ -232,6 +238,49 @@ def _build_up_callback(
     return up
 
 
+MINI_POD_MANAGER_ADAPTER = "volundr.adapters.outbound.local_process.LocalProcessPodManager"
+CLUSTER_POD_MANAGER_ADAPTER = "volundr.adapters.outbound.direct_k8s_pod_manager.DirectK8sPodManager"
+
+CLUSTER_POD_MANAGER_DEFAULTS: dict[str, Any] = {
+    "adapter": CLUSTER_POD_MANAGER_ADAPTER,
+    "namespace": "volundr",
+    "kubeconfig": "~/.kube/config",
+    "skuld_image": "ghcr.io/niuulabs/skuld:latest",
+    "db_host": "host.k3d.internal",
+    "ingress_class": "traefik",
+}
+
+MINI_POD_MANAGER_DEFAULTS: dict[str, Any] = {
+    "adapter": MINI_POD_MANAGER_ADAPTER,
+    "workspaces_dir": "~/.niuu/workspaces",
+    "claude_binary": "claude",
+}
+
+
+def _prompt_mode_selection() -> str:
+    """Prompt the user for mini or cluster mode."""
+    typer.echo("Select operating mode:")
+    typer.echo("  [1] mini   — local processes, no cluster needed (default)")
+    typer.echo("  [2] cluster — session pods run in k3d/k3s cluster")
+    choice = typer.prompt("Choice", default="1", show_default=False)
+    if choice.strip() in ("2", "cluster"):
+        return "cluster"
+    return "mini"
+
+
+def _build_init_config(mode: str) -> dict[str, Any]:
+    """Build the initial config dict for the selected mode."""
+    if mode == "cluster":
+        return {
+            "mode": "cluster",
+            "pod_manager": dict(CLUSTER_POD_MANAGER_DEFAULTS),
+        }
+    return {
+        "mode": "mini",
+        "pod_manager": dict(MINI_POD_MANAGER_DEFAULTS),
+    }
+
+
 def create_platform_commands(
     registry: PluginRegistry,
     settings: CLISettings,
@@ -261,10 +310,22 @@ def create_platform_commands(
     @platform_app.command()
     def status() -> None:
         """Show health of all registered services."""
+        typer.echo(f"Mode: {settings.mode}")
+        typer.echo(f"Pod manager: {settings.pod_manager.adapter.rsplit('.', 1)[-1]}")
+        typer.echo()
+
+        if settings.mode == "cluster":
+            kwargs = settings.pod_manager.adapter_kwargs()
+            typer.echo("Cluster info:")
+            typer.echo(f"  Namespace: {kwargs.get('namespace', 'volundr')}")
+            typer.echo(f"  Kubeconfig: {kwargs.get('kubeconfig', '~/.kube/config')}")
+            typer.echo()
+
         plugins = registry.plugins
         if not plugins:
             typer.echo("No services registered.")
             return
+        typer.echo("Services:")
         for svc_name in sorted(service_defs.keys()):
             svc_status = manager.services.get(svc_name)
             state = svc_status.state.value if svc_status else "not started"
@@ -274,9 +335,19 @@ def create_platform_commands(
     @platform_app.command()
     def init() -> None:
         """Run the first-time setup wizard."""
-        typer.echo("Running first-time setup...")
-        typer.echo("  Checking prerequisites... ok")
-        typer.echo("  Creating ~/.niuu/config.yaml... ok")
-        typer.echo("\nSetup complete. Run 'niuu platform up' to start the platform.")
+        typer.echo("Running first-time setup...\n")
+
+        mode = _prompt_mode_selection()
+        config_data = _build_init_config(mode)
+
+        config_dir = Path.home() / ".niuu"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / "config.yaml"
+
+        import yaml
+
+        config_path.write_text(yaml.safe_dump(config_data, default_flow_style=False))
+        typer.echo(f"\n  Config written to {config_path}")
+        typer.echo(f"\nSetup complete ({mode} mode). Run 'niuu platform up' to start.")
 
     return platform_app
