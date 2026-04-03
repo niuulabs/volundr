@@ -2,9 +2,9 @@
 
 Four modes control which keybindings are active:
 
-* NORMAL  — navigation (j/k, 1-7, ?, q, etc.)
-* INSERT  — text input captured; only Alt+N and Esc pass through
-* SEARCH  — filter/search active; / activates, Esc exits
+* NORMAL  — navigation (1-7, ?, q, [, etc.)
+* INSERT  — text input captured; most global keys suppressed
+* SEARCH  — filter/search active; / toggles, Esc exits
 * COMMAND — command palette open; Ctrl+K activates
 """
 
