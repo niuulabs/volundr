@@ -1,6 +1,6 @@
 """Zinc theme constants for the Niuu TUI.
 
-Exact color parity with the Go Bubble Tea TUI and the web UI.
+Exact color parity with the Go Bubble Tea TUI and the web UI (tokens.css).
 All widgets import from here — never hardcode colors.
 """
 
