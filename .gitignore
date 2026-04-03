@@ -225,8 +225,6 @@ package-lock.json
 uv.lock
 
 .old
-cli/coverage.out
-cli/coverage_test.out
 docs/site/openapi.json
 
 # Devrunner local services
@@ -236,3 +234,4 @@ docs/site/openapi.json
 charts/*/charts/
 charts/*/Chart.lock
 *.tgz
+coverage.json

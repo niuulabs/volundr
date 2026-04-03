@@ -12,6 +12,7 @@ Environment variable override format:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -23,10 +24,20 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-CONFIG_PATHS = [
-    Path("./tyr.yaml"),
-    Path("/etc/tyr/config.yaml"),
-]
+
+# Config file search paths (in order of priority).
+# NIUU_CONFIG env var (set by the CLI --config flag) takes precedence.
+def _config_paths() -> list[Path]:
+    env = os.environ.get("NIUU_CONFIG")
+    if env:
+        return [Path(env)]
+    return [
+        Path("./tyr.yaml"),
+        Path("/etc/tyr/config.yaml"),
+    ]
+
+
+CONFIG_PATHS = _config_paths()
 
 
 class DatabaseConfig(BaseModel):
@@ -56,7 +67,7 @@ class LoggingConfig(BaseModel):
 class VolundrConfig(BaseModel):
     """Volundr API connection configuration."""
 
-    url: str = Field(default="http://localhost:8000")
+    url: str = Field(default="http://localhost:8080")
 
 
 class CredentialStoreConfig(BaseModel):
@@ -453,6 +464,10 @@ class AuthConfig(BaseModel):
             "identity. Must be False in production."
         ),
     )
+    default_user_id: str = Field(
+        default="dev-user",
+        description="User ID for anonymous dev mode fallback.",
+    )
 
 
 class TelegramConfig(BaseModel):
@@ -502,6 +517,18 @@ class LLMConfig(BaseModel):
             "When empty, the built-in DECOMPOSITION_PROMPT in bifrost.py is used."
         ),
     )
+
+
+class LinearConfig(BaseModel):
+    """Linear tracker configuration for mini/local mode.
+
+    When api_key is set, a Linear integration is auto-seeded on startup
+    so the tracker factory can resolve it without manual UI setup.
+    Matches the Go CLI's ``linear:`` config block.
+    """
+
+    api_key: str = Field(default="", description="Linear API key.")
+    team_id: str = Field(default="", description="Optional Linear team ID filter.")
 
 
 class TrackerConfig(BaseModel):
@@ -606,6 +633,7 @@ class Settings(BaseSettings):
         yaml_file=CONFIG_PATHS,
         yaml_file_encoding="utf-8",
         env_nested_delimiter="__",
+        extra="ignore",
     )
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -619,6 +647,7 @@ class Settings(BaseSettings):
         ]
     )
     git: GitConfig = Field(default_factory=GitConfig)
+    linear: LinearConfig = Field(default_factory=LinearConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)

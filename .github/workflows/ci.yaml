@@ -23,7 +23,6 @@ jobs:
     outputs:
       python: ${{ steps.override.outputs.python }}
       web: ${{ steps.override.outputs.web }}
-      go: ${{ steps.override.outputs.go }}
       helm: ${{ steps.override.outputs.helm }}
       container-names: ${{ steps.override.outputs.names }}
       has_containers: ${{ steps.override.outputs.any }}
@@ -48,8 +47,6 @@ jobs:
       #         - 'uv.lock'
       #       web:
       #         - 'web/**'
-      #       go:
-      #         - 'cli/**'
       #       helm:
       #         - 'charts/**'
       #       container-python:
@@ -90,7 +87,6 @@ jobs:
         run: |
           echo "python=true" >> $GITHUB_OUTPUT
           echo "web=true" >> $GITHUB_OUTPUT
-          echo "go=true" >> $GITHUB_OUTPUT
           echo "helm=true" >> $GITHUB_OUTPUT
           echo 'names=["volundr","skuld","skuld-codex","devrunner","volundr-web","vscode-reh","tyr"]' >> $GITHUB_OUTPUT
           echo "any=true" >> $GITHUB_OUTPUT
@@ -156,7 +152,8 @@ jobs:
       - name: Run tests with coverage
         run: |
           uv run pytest tests/ --ignore=tests/test_tyr -v --tb=short \
-            --cov=src/volundr \
+            --override-ini="addopts=" \
+            --cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-fail-under=85
@@ -307,117 +304,6 @@ jobs:
           cd /tmp && sha256sum -c codecov.SHA256SUM
           chmod +x /tmp/codecov
           /tmp/codecov -f web/coverage/lcov.info -F web -t "${CODECOV_TOKEN}"
-
-  # ---------------------------------------------------------------------------
-  # Go CLI
-  # ---------------------------------------------------------------------------
-  go-lint:
-    name: "Go: Lint"
-    needs: changes
-    if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cli
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
-        with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
-
-      - name: Install golangci-lint
-        run: |
-          GOLANGCI_VERSION="2.11.4"
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/2691aacde61559ce53cfda05513ee7c70677ea31/install.sh | sh -s -- -b /usr/local/bin "v${GOLANGCI_VERSION}"
-          golangci-lint version
-
-      - name: Run golangci-lint
-        working-directory: cli
-        run: golangci-lint run
-
-  go-test:
-    name: "Go: Test"
-    needs: changes
-    if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cli
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
-        with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
-
-      - name: Run tests with coverage
-        run: go test ./... -v -count=1 -coverprofile=coverage.out
-
-      - name: Enforce minimum coverage (85%)
-        run: |
-          total=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
-          echo "Total coverage: ${total}%"
-          threshold=85.0
-          if awk "BEGIN {exit !($total < $threshold)}"; then
-            echo "::error::Coverage ${total}% is below minimum threshold of ${threshold}%"
-            exit 1
-          fi
-
-      - name: Upload coverage to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          CODECOV_VERSION="v0.8.0"
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
-          cd /tmp && sha256sum -c codecov.SHA256SUM
-          chmod +x /tmp/codecov
-          /tmp/codecov -f cli/coverage.out -F cli -t "${CODECOV_TOKEN}"
-
-  go-build:
-    name: "Go: Build"
-    needs: changes
-    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
-        with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Build with embedded frontend
-        working-directory: cli
-        run: make build
 
   # ---------------------------------------------------------------------------
   # Helm

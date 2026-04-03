@@ -25,10 +25,20 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-CONFIG_PATHS = [
-    Path("./config.yaml"),
-    Path("/etc/skuld/config.yaml"),
-]
+
+# Config file search paths (in order of priority).
+# NIUU_CONFIG env var (set by the CLI --config flag) takes precedence.
+def _config_paths() -> list[Path]:
+    env = os.environ.get("NIUU_CONFIG")
+    if env:
+        return [Path(env)]
+    return [
+        Path("./config.yaml"),
+        Path("/etc/skuld/config.yaml"),
+    ]
+
+
+CONFIG_PATHS = _config_paths()
 
 
 class TelegramConfig(BaseModel):
@@ -79,6 +89,7 @@ class SkuldSettings(BaseSettings):
         yaml_file_encoding="utf-8",
         env_prefix="SKULD__",
         env_nested_delimiter="__",
+        extra="ignore",
     )
 
     session: SkuldSessionConfig = Field(default_factory=SkuldSessionConfig)
