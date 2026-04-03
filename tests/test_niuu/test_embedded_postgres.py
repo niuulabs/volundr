@@ -35,34 +35,35 @@ class TestEmbeddedDatabasePort:
 # ---------------------------------------------------------------------------
 
 
-class TestParseDsn:
-    """Test _parse_dsn covers the DSN variants pgserver produces."""
+class TestParseUri:
+    """Test _parse_uri covers the URI variants pgserver produces."""
 
-    def test_tcp_dsn(self):
-        dsn = "host=127.0.0.1 port=5433 dbname=mydb user=myuser"
-        info = PgserverEmbeddedDatabase._parse_dsn(dsn)
+    def test_tcp_uri(self):
+        uri = "postgresql://myuser:@127.0.0.1:5433/mydb"
+        info = PgserverEmbeddedDatabase._parse_uri(uri)
         assert info.host == "127.0.0.1"
         assert info.port == 5433
         assert info.dbname == "mydb"
         assert info.user == "myuser"
 
-    def test_unix_socket_dsn(self):
-        dsn = "host=/tmp/pg_data/.s.PGSQL.5432 dbname=postgres user=postgres"
-        info = PgserverEmbeddedDatabase._parse_dsn(dsn)
-        assert info.host == "/tmp/pg_data/.s.PGSQL.5432"
+    def test_unix_socket_uri(self):
+        uri = "postgresql://postgres:@/postgres?host=/tmp/pg_data"
+        info = PgserverEmbeddedDatabase._parse_uri(uri)
+        assert info.host == "/tmp/pg_data"
         assert info.port == 5432  # default when not specified
         assert info.dbname == "postgres"
         assert info.user == "postgres"
 
-    def test_minimal_dsn_uses_defaults(self):
-        dsn = "dbname=test"
-        info = PgserverEmbeddedDatabase._parse_dsn(dsn)
+    def test_minimal_uri_uses_defaults(self):
+        uri = "postgresql:///test"
+        info = PgserverEmbeddedDatabase._parse_uri(uri)
         assert info.host == "localhost"
         assert info.port == 5432
-        assert info.user == "postgres"
+        assert info.dbname == "test"
 
-    def test_empty_dsn_uses_all_defaults(self):
-        info = PgserverEmbeddedDatabase._parse_dsn("")
+    def test_empty_uri_uses_all_defaults(self):
+        uri = "postgresql:///"
+        info = PgserverEmbeddedDatabase._parse_uri(uri)
         assert info.host == "localhost"
         assert info.port == 5432
         assert info.dbname == "postgres"
@@ -75,9 +76,9 @@ class TestParseDsn:
 
 
 def _make_mock_pg():
-    """Create a mock pgserver instance with a DSN."""
+    """Create a mock pgserver instance with a URI."""
     pg = MagicMock()
-    pg.postmaster.dsn = "host=127.0.0.1 port=5433 dbname=postgres user=postgres"
+    pg.get_uri.return_value = "postgresql://postgres:@127.0.0.1:5433/postgres"
     pg.cleanup = MagicMock()
     return pg
 

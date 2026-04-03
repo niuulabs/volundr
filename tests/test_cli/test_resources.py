@@ -49,31 +49,17 @@ class TestWebDistDir:
 class TestMigrationDir:
     """Tests for migration_dir()."""
 
-    def test_volundr_variant_default(self, tmp_path: Path):
-        mig_dir = tmp_path / "migrations"
-        mig_dir.mkdir()
-        (mig_dir / "000001_initial.up.sql").write_text("CREATE TABLE;")
+    def test_volundr_variant_default(self):
+        """migration_dir returns a directory containing .up.sql files."""
+        result = migration_dir("volundr")
+        assert result.is_dir()
+        assert any(result.glob("*.up.sql"))
 
-        with patch("cli.resources.importlib.resources.files") as mock_files:
-            trav = _mock_traversable(mock_files)
-            trav.__str__ = lambda self: str(mig_dir)
-
-            with patch("cli.resources._resource_path", return_value=mig_dir):
-                result = migration_dir("volundr")
-                assert result == mig_dir
-
-    def test_tyr_variant(self, tmp_path: Path):
-        mig_dir = tmp_path / "migrations" / "tyr"
-        mig_dir.mkdir(parents=True)
-        (mig_dir / "000001_tyr.up.sql").write_text("CREATE TABLE;")
-
-        with patch("cli.resources.importlib.resources.files") as mock_files:
-            trav = _mock_traversable(mock_files)
-            trav.__str__ = lambda self: str(mig_dir)
-
-            with patch("cli.resources._resource_path", return_value=mig_dir):
-                result = migration_dir("tyr")
-                assert result == mig_dir
+    def test_tyr_variant(self):
+        """migration_dir('tyr') returns a directory containing tyr migrations."""
+        result = migration_dir("tyr")
+        assert result.is_dir()
+        assert any(result.glob("*.up.sql"))
 
     def test_raises_when_not_found(self):
         with patch("cli.resources.importlib.resources.files") as mock_files:

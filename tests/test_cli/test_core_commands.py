@@ -254,5 +254,6 @@ class TestShutdown:
     async def test_shutdown_calls_stop_all(self) -> None:
         manager = MagicMock()
         manager.stop_all = AsyncMock()
+        manager._root_server = None  # No root server in test
         await _shutdown(manager)
         manager.stop_all.assert_awaited_once()
