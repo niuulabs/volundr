@@ -81,12 +81,14 @@ class ProcessInfo:
     @staticmethod
     def from_dict(data: dict[str, Any]) -> ProcessInfo:
         """Deserialize from dict."""
+        # session_id may be stored as "session_id" (Python) or "id" (Go legacy)
+        session_id = data.get("session_id") or data.get("id", "")
         return ProcessInfo(
-            session_id=data["session_id"],
+            session_id=session_id,
             pid=data.get("pid"),
             port=data.get("port"),
-            workspace=data.get("workspace", ""),
-            state=ProcessState(data.get("state", "stopped")),
+            workspace=data.get("workspace", data.get("workspace_dir", "")),
+            state=ProcessState(data.get("state", data.get("status", "stopped"))),
             error=data.get("error"),
         )
 

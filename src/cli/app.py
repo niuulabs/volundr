@@ -25,11 +25,13 @@ New command tree (NIU-405):
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 
 import click
 import typer
 
-from cli.config import CLISettings
+from cli.config import CLISettings, DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE
 from cli.registry import PluginRegistry
 from cli.services.manager import ServiceManager
 
@@ -81,12 +83,22 @@ def build_app(
     )
 
     # ------------------------------------------------------------------ #
-    # --version / -V flag                                                  #
+    # Global flags                                                         #
     # ------------------------------------------------------------------ #
     def _version_callback(value: bool) -> None:
         if value:
             typer.echo(f"niuu {settings.version}")
             raise typer.Exit()
+
+    def _home_callback(value: str) -> None:
+        if value:
+            os.environ["NIUU_HOME"] = value
+            config_path = str(Path(value) / "config.yaml")
+            os.environ["NIUU_CONFIG"] = config_path
+
+    def _config_callback(value: str) -> None:
+        if value:
+            os.environ["NIUU_CONFIG"] = value
 
     @app.callback()
     def main(
@@ -96,6 +108,21 @@ def build_app(
             "-V",
             help="Print version and exit.",
             callback=_version_callback,
+            is_eager=True,
+        ),
+        home: str = typer.Option(
+            "",
+            "--home",
+            help="Config directory (default: ~/.niuu, env NIUU_HOME).",
+            callback=_home_callback,
+            is_eager=True,
+            envvar="NIUU_HOME",
+        ),
+        config: str = typer.Option(
+            "",
+            "--config",
+            help="Config file path (default: ~/.niuu/config.yaml).",
+            callback=_config_callback,
             is_eager=True,
         ),
     ) -> None:

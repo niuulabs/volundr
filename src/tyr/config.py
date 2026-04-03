@@ -12,6 +12,7 @@ Environment variable override format:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -23,10 +24,19 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-CONFIG_PATHS = [
-    Path("./tyr.yaml"),
-    Path("/etc/tyr/config.yaml"),
-]
+# Config file search paths (in order of priority).
+# NIUU_CONFIG env var (set by the CLI --config flag) takes precedence.
+def _config_paths() -> list[Path]:
+    env = os.environ.get("NIUU_CONFIG")
+    if env:
+        return [Path(env)]
+    return [
+        Path("./tyr.yaml"),
+        Path("/etc/tyr/config.yaml"),
+    ]
+
+
+CONFIG_PATHS = _config_paths()
 
 
 class DatabaseConfig(BaseModel):
@@ -606,6 +616,7 @@ class Settings(BaseSettings):
         yaml_file=CONFIG_PATHS,
         yaml_file_encoding="utf-8",
         env_nested_delimiter="__",
+        extra="ignore",
     )
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

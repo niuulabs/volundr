@@ -16,10 +16,18 @@ from pydantic_settings import (
 DEFAULT_CONFIG_DIR = Path.home() / ".niuu"
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
 
-CONFIG_PATHS = [
-    DEFAULT_CONFIG_FILE,
-    Path("/etc/niuu/config.yaml"),
-]
+
+def config_paths() -> list[Path]:
+    """Resolve config file paths. NIUU_CONFIG env var takes precedence."""
+    import os
+
+    env = os.environ.get("NIUU_CONFIG")
+    if env:
+        return [Path(env)]
+    return [
+        DEFAULT_CONFIG_FILE,
+        Path("/etc/niuu/config.yaml"),
+    ]
 
 
 class PerServiceConfig(BaseModel):
@@ -146,10 +154,25 @@ class CLISettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="NIUU_",
         env_nested_delimiter="__",
-        yaml_file=[str(p) for p in CONFIG_PATHS],
         yaml_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        **kwargs: Any,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Resolve config paths at instantiation time (after --config callback)
+        return (
+            kwargs["init_settings"],
+            kwargs["env_settings"],
+            YamlConfigSettingsSource(
+                settings_cls,
+                yaml_file=[str(p) for p in config_paths()],
+            ),
+        )
 
     mode: str = Field(
         default="mini",

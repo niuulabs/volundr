@@ -31,16 +31,16 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Maps plugin name → API path prefix that Starlette Mount uses to route.
+# Maps plugin name → API path prefixes that Starlette Mount uses to route.
 # The prefix is stripped by Mount, then restored by _PrefixRestoreApp
 # so the sub-app's own routers (which include the prefix) still match.
-_PLUGIN_API_PREFIX: dict[str, str] = {
-    "volundr": "/api/v1/volundr",
-    "tyr": "/api/v1/tyr",
+#
+# Volundr also hosts /api/v1/niuu (shared repos endpoint) until niuu is
+# extracted into its own service — see TODO in volundr/main.py.
+_PLUGIN_API_PREFIXES: dict[str, list[str]] = {
+    "volundr": ["/api/v1/volundr", "/api/v1/niuu"],
+    "tyr": ["/api/v1/tyr"],
 }
-
-# Shared niuu routes live under this prefix.
-_NIUU_PREFIX = "/api/v1/niuu"
 
 
 class _PrefixRestoreApp:
@@ -117,8 +117,7 @@ class RootServer(Service):
 
         # Collect sub-apps before creating root (need them for lifespan)
         for name, plugin in sorted(self._registry.plugins.items()):
-            prefix = _PLUGIN_API_PREFIX.get(name)
-            if not prefix:
+            if name not in _PLUGIN_API_PREFIXES:
                 continue
             try:
                 sub_app = plugin.create_api_app()
@@ -166,12 +165,16 @@ class RootServer(Service):
         async def health() -> dict[str, str]:
             return {"status": "ok"}
 
-        # Mount each plugin's API app at its prefix.
+        # Mount each plugin's API app at its prefixes.
         for name, sub_app in sub_apps:
-            prefix = _PLUGIN_API_PREFIX[name]
-            wrapped = _PrefixRestoreApp(sub_app, prefix)
-            root.mount(prefix, wrapped, name=f"{name}-api")
-            logger.info("Mounted %s API at %s", name, prefix)
+            prefixes = _PLUGIN_API_PREFIXES.get(name, [])
+            if not prefixes:
+                logger.debug("No API prefix configured for plugin: %s", name)
+                continue
+            for prefix in prefixes:
+                wrapped = _PrefixRestoreApp(sub_app, prefix)
+                root.mount(prefix, wrapped, name=f"{name}-{prefix.rsplit('/', 1)[-1]}")
+            logger.info("Mounted %s API at %s", name, ", ".join(prefixes))
 
         # Runtime config for the web UI SPA
         @root.get("/config.json")
