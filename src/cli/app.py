@@ -40,6 +40,7 @@ class _SortedGroup(typer.core.TyperGroup):
     def list_commands(self, ctx: click.Context) -> list[str]:
         return sorted(super().list_commands(ctx))
 
+
 logger = logging.getLogger(__name__)
 
 
