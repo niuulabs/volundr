@@ -220,12 +220,14 @@ class TerminalPage(Widget):
     def action_next_tab(self) -> None:
         if self._tabs:
             self.active_tab = (self.active_tab + 1) % len(self._tabs)
+            self._scroll_offset = 0
             self._refresh_tab_bar()
             self._refresh_view()
 
     def action_prev_tab(self) -> None:
         if self._tabs:
             self.active_tab = (self.active_tab - 1) % len(self._tabs)
+            self._scroll_offset = 0
             self._refresh_tab_bar()
             self._refresh_view()
 

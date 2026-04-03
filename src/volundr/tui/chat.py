@@ -20,6 +20,7 @@ from cli.tui.theme import (
     TEXT_MUTED,
 )
 from cli.tui.widgets.mention_menu import MentionItem, MentionMenu
+from volundr.tui._utils import format_count
 
 SLASH_COMMANDS: list[MentionItem] = [
     MentionItem(label="help", value="/help ", detail="Show help", icon="▶", category="command"),
@@ -248,7 +249,7 @@ class ChatPage(Widget):
 
     def _metrics_text(self) -> str:
         return (
-            f"[{TEXT_MUTED}]Tokens:[/] [{ACCENT_AMBER}]{_format_count(self._total_tokens)}[/]"
+            f"[{TEXT_MUTED}]Tokens:[/] [{ACCENT_AMBER}]{format_count(self._total_tokens)}[/]"
             f"  [{TEXT_MUTED}]Cost:[/] [{ACCENT_AMBER}]${self._total_cost:.4f}[/]"
         )
 
@@ -315,11 +316,3 @@ class ChatPage(Widget):
         if trigger_char in text:
             prefix = text[: text.rfind(trigger_char)]
             inp.value = prefix + event.item.value
-
-
-def _format_count(n: int) -> str:
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}K"
-    return str(n)

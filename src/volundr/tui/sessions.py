@@ -17,24 +17,16 @@ from cli.tui.theme import (
     ACCENT_CYAN,
     ACCENT_EMERALD,
     ACCENT_PURPLE,
-    ACCENT_RED,
     TEXT_MUTED,
     TEXT_PRIMARY,
 )
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
+from cli.tui.widgets.status_badge import _DEFAULT_INDICATOR, _STATUS_MAP
 from cli.tui.widgets.tabs import NiuuTabs
+from volundr.tui._utils import format_count
 
 SESSION_FILTERS = ("All", "Running", "Stopped", "Error")
 FILTER_STATUS_MAP = {"All": None, "Running": "running", "Stopped": "stopped", "Error": "error"}
-
-
-def _format_tokens(tokens: int) -> str:
-    """Format a token count with K/M suffixes."""
-    if tokens >= 1_000_000:
-        return f"{tokens / 1_000_000:.1f}M"
-    if tokens >= 1_000:
-        return f"{tokens / 1_000:.1f}K"
-    return str(tokens)
 
 
 @dataclass
@@ -146,7 +138,7 @@ class SessionRow(Widget):
         )
         repo_part = f"[{ACCENT_CYAN}]{s.repo}[/]" if s.repo else ""
         branch_part = f"[{TEXT_MUTED}]{s.branch}[/]" if s.branch else ""
-        tokens_part = f"[{TEXT_MUTED}]{_format_tokens(s.tokens_used)} tokens[/]"
+        tokens_part = f"[{TEXT_MUTED}]{format_count(s.tokens_used)} tokens[/]"
         line2 = f"     {repo_part}  {branch_part}  {tokens_part}"
         yield Static(line1, classes="sr-line1")
         yield Static(line2, classes="sr-line2")
@@ -154,19 +146,7 @@ class SessionRow(Widget):
 
 def _status_dot(status: str) -> tuple[str, str]:
     """Return (dot char, color hex) for a status string."""
-    match status:
-        case "running":
-            return ("●", ACCENT_EMERALD)
-        case "stopped":
-            return ("○", TEXT_MUTED)
-        case "error" | "failed":
-            return ("●", ACCENT_RED)
-        case "completed":
-            return ("●", ACCENT_CYAN)
-        case "starting" | "provisioning":
-            return ("◐", ACCENT_AMBER)
-        case _:
-            return ("○", TEXT_MUTED)
+    return _STATUS_MAP.get(status, _DEFAULT_INDICATOR)
 
 
 class SessionsPage(Widget):
@@ -292,7 +272,7 @@ class SessionsPage(Widget):
         row.mount(MetricCard("Total", str(len(self._all_sessions)), icon="◉", color=ACCENT_AMBER))
         row.mount(MetricCard("Running", str(running), icon="▶", color=ACCENT_EMERALD))
         row.mount(MetricCard("Stopped", str(stopped), icon="■", color=TEXT_MUTED))
-        row.mount(MetricCard("Tokens", _format_tokens(total_tokens), icon="◈", color=ACCENT_AMBER))
+        row.mount(MetricCard("Tokens", format_count(total_tokens), icon="◈", color=ACCENT_AMBER))
 
     # ── Tab selection ────────────────────────────────────────
 

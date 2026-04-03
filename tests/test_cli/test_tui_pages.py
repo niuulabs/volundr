@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 
+from volundr.tui._utils import format_count
 from volundr.tui.admin import (
     AdminPage,
     StatsData,
     Tenant,
     UserInfo,
-    _format_tokens,
     _render_bar,
     _user_status_style,
 )
@@ -18,7 +18,6 @@ from volundr.tui.chat import (
     ChatMessage,
     ChatPage,
     MessageBubble,
-    _format_count,
     _role_color,
     _role_icon,
 )
@@ -44,9 +43,6 @@ from volundr.tui.sessions import (
     SessionsPage,
     _demo_sessions,
     _session_matches_search,
-)
-from volundr.tui.sessions import (
-    _format_tokens as sess_format_tokens,
 )
 from volundr.tui.settings import (
     IntegrationEntry,
@@ -172,10 +168,10 @@ class TestSessionsPage:
         assert len(demos) >= 5
         assert all(isinstance(s, SessionData) for s in demos)
 
-    def test_format_tokens(self) -> None:
-        assert sess_format_tokens(500) == "500"
-        assert sess_format_tokens(1_500) == "1.5K"
-        assert sess_format_tokens(2_500_000) == "2.5M"
+    def test_format_count(self) -> None:
+        assert format_count(500) == "500"
+        assert format_count(1_500) == "1.5K"
+        assert format_count(2_500_000) == "2.5M"
 
     def test_session_matches_search(self) -> None:
         s = SessionData(name="feat/auth", repo="niuu/volundr", model="sonnet", context_key="prod")
@@ -284,11 +280,6 @@ class TestChatPage:
         assert _role_icon("user") == "◆"
         assert _role_icon("assistant") == "◈"
         assert _role_icon("system") == "◉"
-
-    def test_format_count(self) -> None:
-        assert _format_count(500) == "500"
-        assert _format_count(1_500) == "1.5K"
-        assert _format_count(2_500_000) == "2.5M"
 
     def test_slash_commands(self) -> None:
         assert len(SLASH_COMMANDS) == 8
@@ -478,6 +469,15 @@ class TestDiffsPage:
         assert "+" in _colorize_diff_line("+added")
         assert "-" in _colorize_diff_line("-removed")
         assert "@@" in _colorize_diff_line("@@hunk@@")
+
+    def test_colorize_diff_line_escapes_markup(self) -> None:
+        result = _colorize_diff_line("+line with [bold]markup[/bold]")
+        # Rich markup chars should be escaped so they render as literal text
+        assert "\\[bold]" in result or "[bold]" not in result.split("[/]")[0].split("]", 2)[-1]
+        # Simpler check: the escaped line shouldn't contain unescaped [bold]
+        from rich.markup import escape
+
+        assert escape("[bold]markup[/bold]") in result
 
     async def test_diffs_page_renders(self) -> None:
         app = PageTestApp(DiffsPage, files=_sample_diffs())
@@ -724,11 +724,6 @@ class TestSettingsPage:
 
 
 class TestAdminPage:
-    def test_format_tokens_admin(self) -> None:
-        assert _format_tokens(999) == "999"
-        assert _format_tokens(1_500) == "1.5K"
-        assert _format_tokens(2_000_000) == "2.0M"
-
     def test_render_bar(self) -> None:
         bar = _render_bar(50, 100, width=10)
         assert "█" in bar

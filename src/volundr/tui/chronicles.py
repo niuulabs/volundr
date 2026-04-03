@@ -23,6 +23,7 @@ from cli.tui.theme import (
 )
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
 from cli.tui.widgets.tabs import NiuuTabs
+from volundr.tui._utils import format_count
 
 CHRONICLE_FILTERS = ("All", "Session", "Message", "File", "Git", "Terminal", "Error")
 FILTER_TYPE_MAP = {
@@ -55,14 +56,6 @@ def _format_elapsed(seconds: int) -> str:
         return f"{m}m{s:02d}s"
     h, m = divmod(m, 60)
     return f"{h}h{m:02d}m"
-
-
-def _format_tokens(tokens: int) -> str:
-    if tokens >= 1_000_000:
-        return f"{tokens / 1_000_000:.1f}M"
-    if tokens >= 1_000:
-        return f"{tokens / 1_000:.1f}K"
-    return str(tokens)
 
 
 @dataclass
@@ -111,7 +104,7 @@ class TimelineEntry(Widget):
         # Metadata line
         meta_parts: list[str] = []
         if e.tokens > 0:
-            meta_parts.append(f"◈ {_format_tokens(e.tokens)} tokens")
+            meta_parts.append(f"◈ {format_count(e.tokens)} tokens")
         if e.action:
             meta_parts.append(e.action)
         if e.insertions > 0 or e.deletions > 0:

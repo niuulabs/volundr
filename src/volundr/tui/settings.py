@@ -293,8 +293,23 @@ class SettingsPage(Widget):
         if self.cursor > 0:
             self.cursor -= 1
 
+    def _max_cursor(self) -> int:
+        """Return the maximum valid cursor index for the current section."""
+        match self.section:
+            case 0:
+                return 3  # Connection: 4 rows
+            case 1:
+                return 5 if self._profile else 0  # Profile: 6 rows
+            case 2:
+                return max(0, len(self._integrations) - 1)
+            case 3:
+                return 3  # Appearance: 4 rows
+            case _:
+                return 0
+
     def action_cursor_down(self) -> None:
-        self.cursor += 1
+        if self.cursor < self._max_cursor():
+            self.cursor += 1
 
     def action_cursor_top(self) -> None:
         self.cursor = 0

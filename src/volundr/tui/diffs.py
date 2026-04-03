@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
@@ -52,13 +53,14 @@ def _truncate_path(path: str, max_len: int) -> str:
 
 def _colorize_diff_line(line: str) -> str:
     """Apply syntax coloring to a single diff line."""
+    escaped = escape(line)
     if line.startswith("+"):
-        return f"[{ACCENT_EMERALD}]{line}[/]"
+        return f"[{ACCENT_EMERALD}]{escaped}[/]"
     if line.startswith("-"):
-        return f"[{ACCENT_RED}]{line}[/]"
+        return f"[{ACCENT_RED}]{escaped}[/]"
     if line.startswith("@@"):
-        return f"[{ACCENT_CYAN}]{line}[/]"
-    return f"[{TEXT_SECONDARY}]{line}[/]"
+        return f"[{ACCENT_CYAN}]{escaped}[/]"
+    return f"[{TEXT_SECONDARY}]{escaped}[/]"
 
 
 class FileTreeItem(Widget):

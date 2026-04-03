@@ -25,16 +25,9 @@ from cli.tui.theme import (
 )
 from cli.tui.widgets.metric_card import MetricCard, MetricRow
 from cli.tui.widgets.tabs import NiuuTabs
+from volundr.tui._utils import format_count
 
 ADMIN_TABS = ("Users", "Tenants", "Stats")
-
-
-def _format_tokens(tokens: int) -> str:
-    if tokens >= 1_000_000:
-        return f"{tokens / 1_000_000:.1f}M"
-    if tokens >= 1_000:
-        return f"{tokens / 1_000:.1f}K"
-    return str(tokens)
 
 
 def _render_bar(value: int, maximum: int, width: int = 25) -> str:
@@ -232,7 +225,7 @@ class AdminPage(Widget):
         row.mount(
             MetricCard(
                 "Tokens Today",
-                _format_tokens(s.tokens_today),
+                format_count(s.tokens_today),
                 icon="◈",
                 color=ACCENT_PURPLE,
             )
@@ -249,14 +242,14 @@ class AdminPage(Widget):
         container.mount(
             Static(
                 f"  [{TEXT_SECONDARY}]{'Local Tokens:':>16}[/]  "
-                f"[bold {ACCENT_EMERALD}]{_format_tokens(s.local_tokens)}[/]  "
+                f"[bold {ACCENT_EMERALD}]{format_count(s.local_tokens)}[/]  "
                 f"{_render_bar(local_pct, 100)}"
             )
         )
         container.mount(
             Static(
                 f"  [{TEXT_SECONDARY}]{'Cloud Tokens:':>16}[/]  "
-                f"[bold {ACCENT_CYAN}]{_format_tokens(s.cloud_tokens)}[/]  "
+                f"[bold {ACCENT_CYAN}]{format_count(s.cloud_tokens)}[/]  "
                 f"{_render_bar(cloud_pct, 100)}"
             )
         )
@@ -311,18 +304,25 @@ class AdminPage(Widget):
         if self.cursor > 0:
             self.cursor -= 1
 
+    def _max_cursor(self) -> int:
+        """Return the maximum valid cursor index for the current tab."""
+        match self.tab_index:
+            case 0:
+                return max(0, len(self._filtered_users()) - 1)
+            case 1:
+                return max(0, len(self._filtered_tenants()) - 1)
+            case _:
+                return 0
+
     def action_cursor_down(self) -> None:
-        self.cursor += 1
+        if self.cursor < self._max_cursor():
+            self.cursor += 1
 
     def action_cursor_top(self) -> None:
         self.cursor = 0
 
     def action_cursor_bottom(self) -> None:
-        match self.tab_index:
-            case 0:
-                self.cursor = max(0, len(self._filtered_users()) - 1)
-            case 1:
-                self.cursor = max(0, len(self._filtered_tenants()) - 1)
+        self.cursor = self._max_cursor()
 
     def action_refresh(self) -> None:
         self._rebuild_content()
