@@ -11,6 +11,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from cli.tui.theme import ACCENT_AMBER, BG_SECONDARY, BG_TERTIARY, BORDER, TEXT_MUTED
+
 MAX_VISIBLE_ITEMS = 10
 
 
@@ -33,31 +35,31 @@ def _fuzzy_contains(query: str, text: str) -> bool:
 class MentionMenu(Widget):
     """Autocomplete dropdown showing up to 10 items with wrap-around selection."""
 
-    DEFAULT_CSS = """
-    MentionMenu {
+    DEFAULT_CSS = f"""
+    MentionMenu {{
         display: none;
         width: 50;
         max-height: 14;
-        background: #18181b;
-        border: round #3f3f46;
+        background: {BG_SECONDARY};
+        border: round {BORDER};
         padding: 0 1;
         layer: autocomplete;
-    }
-    MentionMenu.active {
+    }}
+    MentionMenu.active {{
         display: block;
-    }
-    MentionMenu .mention-item {
+    }}
+    MentionMenu .mention-item {{
         height: 1;
         padding: 0 1;
-    }
-    MentionMenu .mention-item.selected {
-        background: #27272a;
-        color: #f59e0b;
-    }
-    MentionMenu .mention-more {
-        color: #71717a;
+    }}
+    MentionMenu .mention-item.selected {{
+        background: {BG_TERTIARY};
+        color: {ACCENT_AMBER};
+    }}
+    MentionMenu .mention-more {{
+        color: {TEXT_MUTED};
         height: 1;
-    }
+    }}
     """
 
     active: reactive[bool] = reactive(False)
@@ -155,7 +157,7 @@ class MentionMenu(Widget):
 
         items = self.filtered
         if not items:
-            container.mount(Static("[#71717a]No matches[/]", classes="mention-more"))
+            container.mount(Static(f"[{TEXT_MUTED}]No matches[/]", classes="mention-more"))
             return
 
         # Window around selected item.
@@ -171,7 +173,7 @@ class MentionMenu(Widget):
         for i in range(start, end):
             item = items[i]
             icon = f"{item.icon} " if item.icon else ""
-            detail = f" [#71717a]{item.detail}[/]" if item.detail else ""
+            detail = f" [{TEXT_MUTED}]{item.detail}[/]" if item.detail else ""
             classes = "mention-item selected" if i == self.selected else "mention-item"
             container.mount(Static(f"{icon}{item.label}{detail}", classes=classes))
 

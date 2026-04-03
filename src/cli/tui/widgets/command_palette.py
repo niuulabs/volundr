@@ -11,6 +11,16 @@ from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Input, Static
 
+from cli.tui.theme import (
+    ACCENT_AMBER,
+    ACCENT_CYAN,
+    ACCENT_EMERALD,
+    ACCENT_PURPLE,
+    BG_SECONDARY,
+    BG_TERTIARY,
+    TEXT_MUTED,
+)
+
 MAX_VISIBLE_RESULTS = 10
 
 
@@ -23,9 +33,9 @@ class PaletteItemType(StrEnum):
 
 
 _TYPE_COLORS: dict[PaletteItemType, str] = {
-    PaletteItemType.SESSION: "#10b981",
-    PaletteItemType.PAGE: "#06b6d4",
-    PaletteItemType.ACTION: "#f59e0b",
+    PaletteItemType.SESSION: ACCENT_EMERALD,
+    PaletteItemType.PAGE: ACCENT_CYAN,
+    PaletteItemType.ACTION: ACCENT_AMBER,
 }
 
 
@@ -54,38 +64,38 @@ def _fuzzy_match(query: str, text: str) -> bool:
 class CommandPalette(ModalScreen[PaletteItem | None]):
     """Ctrl+K command palette with fuzzy search."""
 
-    DEFAULT_CSS = """
-    CommandPalette {
+    DEFAULT_CSS = f"""
+    CommandPalette {{
         align: center top;
         padding-top: 3;
-    }
-    CommandPalette #palette-container {
+    }}
+    CommandPalette #palette-container {{
         width: 60;
         max-height: 70%;
-        background: #18181b;
-        border: round #a855f7;
+        background: {BG_SECONDARY};
+        border: round {ACCENT_PURPLE};
         padding: 1 2;
-    }
-    CommandPalette #palette-input {
+    }}
+    CommandPalette #palette-input {{
         margin-bottom: 1;
-    }
-    CommandPalette .palette-section-header {
-        color: #71717a;
+    }}
+    CommandPalette .palette-section-header {{
+        color: {TEXT_MUTED};
         text-style: bold;
         height: 1;
         margin-top: 1;
-    }
-    CommandPalette .palette-item {
+    }}
+    CommandPalette .palette-item {{
         height: 1;
         padding: 0 1;
-    }
-    CommandPalette .palette-item.selected {
-        background: #27272a;
-    }
-    CommandPalette #palette-more {
-        color: #71717a;
+    }}
+    CommandPalette .palette-item.selected {{
+        background: {BG_TERTIARY};
+    }}
+    CommandPalette #palette-more {{
+        color: {TEXT_MUTED};
         height: 1;
-    }
+    }}
     """
 
     BINDINGS = [
@@ -163,7 +173,7 @@ class CommandPalette(ModalScreen[PaletteItem | None]):
                 )
             icon = f"{item.icon} " if item.icon else ""
             color = _TYPE_COLORS[item.item_type]
-            desc = f" [#71717a]{item.description}[/]" if item.description else ""
+            desc = f" [{TEXT_MUTED}]{item.description}[/]" if item.description else ""
             classes = "palette-item selected" if i == self._cursor else "palette-item"
             container.mount(Static(f"[{color}]{icon}{item.label}[/]{desc}", classes=classes))
 

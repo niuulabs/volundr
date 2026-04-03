@@ -33,12 +33,9 @@ class NiuuTUI(App[str]):
 
     TITLE = "Niuu"
     SUB_TITLE = "Platform Control"
+    CSS_PATH = "theme.tcss"
 
     CSS = """
-    Screen {
-        background: #09090b;
-        color: #fafafa;
-    }
     #content {
         width: 1fr;
         height: 1fr;
@@ -133,7 +130,7 @@ class NiuuTUI(App[str]):
 
         # SEARCH/COMMAND: allow escape-like actions.
         if self.mode in (InputMode.SEARCH, InputMode.COMMAND):
-            search_allowed = {"enter_search", "open_palette", "toggle_help"}
+            search_allowed = {"enter_search", "toggle_help"}
             return action in search_allowed or None
 
         return True

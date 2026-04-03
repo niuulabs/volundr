@@ -10,6 +10,13 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from cli.tui.mode import MODE_COLORS_HEX, InputMode
+from cli.tui.theme import (
+    ACCENT_AMBER,
+    ACCENT_EMERALD,
+    ACCENT_RED,
+    BG_SECONDARY,
+    TEXT_PRIMARY,
+)
 
 
 class ConnectionState(StrEnum):
@@ -21,26 +28,26 @@ class ConnectionState(StrEnum):
 
 
 _CONNECTION_INDICATORS: dict[ConnectionState, tuple[str, str]] = {
-    ConnectionState.CONNECTING: ("◌", "#f59e0b"),
-    ConnectionState.CONNECTED: ("●", "#10b981"),
-    ConnectionState.DISCONNECTED: ("●", "#ef4444"),
+    ConnectionState.CONNECTING: ("◌", ACCENT_AMBER),
+    ConnectionState.CONNECTED: ("●", ACCENT_EMERALD),
+    ConnectionState.DISCONNECTED: ("●", ACCENT_RED),
 }
 
 
 class NiuuHeader(Widget):
     """Top bar: hammer icon + 'Niuu' + mode badge + connection dot + server URL."""
 
-    DEFAULT_CSS = """
-    NiuuHeader {
+    DEFAULT_CSS = f"""
+    NiuuHeader {{
         dock: top;
         height: 1;
-        background: #18181b;
-        color: #fafafa;
-    }
-    NiuuHeader .header-content {
+        background: {BG_SECONDARY};
+        color: {TEXT_PRIMARY};
+    }}
+    NiuuHeader .header-content {{
         width: 1fr;
         height: 1;
-    }
+    }}
     """
 
     mode: reactive[InputMode] = reactive(InputMode.NORMAL)
@@ -75,7 +82,7 @@ class NiuuHeader(Widget):
         url_display = self.server_url.removeprefix("https://").removeprefix("http://")
         url_part = f" [{dot_color}]{url_display}[/]" if url_display else ""
 
-        return f"[bold #f59e0b]⚒[/] [bold]Niuu[/] {mode_label}  {status}{url_part}"
+        return f"[bold {ACCENT_AMBER}]⚒[/] [bold]Niuu[/] {mode_label}  {status}{url_part}"
 
     def watch_mode(self) -> None:
         self._refresh_bar()

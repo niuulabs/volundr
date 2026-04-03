@@ -10,6 +10,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from cli.tui.mode import InputMode
+from cli.tui.theme import ACCENT_AMBER, BG_SECONDARY, TEXT_MUTED
 
 
 @dataclass(frozen=True)
@@ -58,17 +59,17 @@ _MODE_HINTS: dict[InputMode, list[KeyHint]] = {
 class NiuuFooter(Widget):
     """Bottom bar showing context-sensitive keybinding hints."""
 
-    DEFAULT_CSS = """
-    NiuuFooter {
+    DEFAULT_CSS = f"""
+    NiuuFooter {{
         dock: bottom;
         height: 1;
-        background: #18181b;
-        color: #71717a;
-    }
-    NiuuFooter #footer-hints {
+        background: {BG_SECONDARY};
+        color: {TEXT_MUTED};
+    }}
+    NiuuFooter #footer-hints {{
         width: 1fr;
         height: 1;
-    }
+    }}
     """
 
     mode: reactive[InputMode] = reactive(InputMode.NORMAL)
@@ -104,8 +105,8 @@ class NiuuFooter(Widget):
     def _render_hints(self) -> str:
         parts: list[str] = []
         for hint in self._active_hints():
-            parts.append(f" [bold #f59e0b]{hint.key}[/] {hint.description} ")
-        return "[#71717a]│[/]".join(parts)
+            parts.append(f" [bold {ACCENT_AMBER}]{hint.key}[/] {hint.description} ")
+        return f"[{TEXT_MUTED}]│[/]".join(parts)
 
     def _refresh(self) -> None:
         try:

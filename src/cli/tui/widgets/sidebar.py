@@ -11,6 +11,15 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from cli.tui.theme import (
+    ACCENT_AMBER,
+    BG_SECONDARY,
+    BG_TERTIARY,
+    BORDER_SUBTLE,
+    TEXT_MUTED,
+    TEXT_SECONDARY,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -31,32 +40,32 @@ class SidebarPage:
 class NiuuSidebar(Widget):
     """Navigation sidebar: 24ch expanded, 5ch collapsed."""
 
-    DEFAULT_CSS = """
-    NiuuSidebar {
+    DEFAULT_CSS = f"""
+    NiuuSidebar {{
         dock: left;
         width: 24;
-        background: #18181b;
-        border-right: solid #27272a;
+        background: {BG_SECONDARY};
+        border-right: solid {BORDER_SUBTLE};
         padding: 1 0;
-    }
-    NiuuSidebar.collapsed {
+    }}
+    NiuuSidebar.collapsed {{
         width: 5;
-    }
-    NiuuSidebar .sidebar-item {
+    }}
+    NiuuSidebar .sidebar-item {{
         padding: 0 1;
-        color: #a1a1aa;
+        color: {TEXT_SECONDARY};
         height: 1;
-    }
-    NiuuSidebar .sidebar-item.active {
-        color: #f59e0b;
-        background: #27272a;
+    }}
+    NiuuSidebar .sidebar-item.active {{
+        color: {ACCENT_AMBER};
+        background: {BG_TERTIARY};
         text-style: bold;
-    }
-    NiuuSidebar .sidebar-hint {
-        color: #71717a;
+    }}
+    NiuuSidebar .sidebar-hint {{
+        color: {TEXT_MUTED};
         padding: 0 1;
         height: 1;
-    }
+    }}
     """
 
     collapsed: reactive[bool] = reactive(False)

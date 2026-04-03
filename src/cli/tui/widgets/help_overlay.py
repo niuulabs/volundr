@@ -9,6 +9,14 @@ from textual.containers import Center, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from cli.tui.theme import (
+    ACCENT_AMBER,
+    ACCENT_PURPLE,
+    BG_SECONDARY,
+    TEXT_MUTED,
+    TEXT_SECONDARY,
+)
+
 
 @dataclass(frozen=True)
 class KeyBinding:
@@ -47,39 +55,39 @@ DEFAULT_BINDINGS: list[KeyBinding] = [
 class HelpOverlay(ModalScreen[None]):
     """Full-screen modal showing keybinding reference."""
 
-    DEFAULT_CSS = """
-    HelpOverlay {
+    DEFAULT_CSS = f"""
+    HelpOverlay {{
         align: center middle;
-    }
-    HelpOverlay #help-container {
+    }}
+    HelpOverlay #help-container {{
         width: 54;
         max-height: 80%;
-        background: #18181b;
-        border: round #f59e0b;
+        background: {BG_SECONDARY};
+        border: round {ACCENT_AMBER};
         padding: 1 2;
-    }
-    HelpOverlay #help-title {
+    }}
+    HelpOverlay #help-title {{
         text-align: center;
         text-style: bold;
-        color: #f59e0b;
+        color: {ACCENT_AMBER};
         height: 1;
         margin-bottom: 1;
-    }
-    HelpOverlay .help-section {
-        color: #a855f7;
+    }}
+    HelpOverlay .help-section {{
+        color: {ACCENT_PURPLE};
         text-style: bold;
         height: 1;
         margin-top: 1;
-    }
-    HelpOverlay .help-row {
+    }}
+    HelpOverlay .help-row {{
         height: 1;
-    }
-    HelpOverlay .help-close-hint {
+    }}
+    HelpOverlay .help-close-hint {{
         text-align: center;
-        color: #71717a;
+        color: {TEXT_MUTED};
         height: 1;
         margin-top: 1;
-    }
+    }}
     """
 
     BINDINGS = [
@@ -115,8 +123,9 @@ class HelpOverlay(ModalScreen[None]):
             if binding.section:
                 rows.append(Static(f"── {binding.section} ──", classes="help-section"))
                 continue
-            key_col = f"[bold #f59e0b]{binding.key:>14}[/]"
-            rows.append(Static(f"{key_col}  [#a1a1aa]{binding.description}[/]", classes="help-row"))
+            key_col = f"[bold {ACCENT_AMBER}]{binding.key:>14}[/]"
+            desc = f"[{TEXT_SECONDARY}]{binding.description}[/]"
+            rows.append(Static(f"{key_col}  {desc}", classes="help-row"))
         return rows
 
     def action_dismiss(self) -> None:

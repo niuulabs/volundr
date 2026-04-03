@@ -8,6 +8,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from cli.tui.theme import ACCENT_AMBER, BG_SECONDARY, TEXT_PRIMARY
+
 
 class NiuuModal(Widget):
     """Generic centered modal dialog.
@@ -15,33 +17,33 @@ class NiuuModal(Widget):
     Set ``visible`` reactive to show/hide.
     """
 
-    DEFAULT_CSS = """
-    NiuuModal {
+    DEFAULT_CSS = f"""
+    NiuuModal {{
         align: center middle;
         display: none;
-    }
-    NiuuModal.visible {
+    }}
+    NiuuModal.visible {{
         display: block;
         layer: modal;
-    }
-    NiuuModal #modal-container {
+    }}
+    NiuuModal #modal-container {{
         width: 60;
         max-height: 20;
-        background: #18181b;
-        border: round #f59e0b;
+        background: {BG_SECONDARY};
+        border: round {ACCENT_AMBER};
         padding: 1 2;
-    }
-    NiuuModal #modal-title {
+    }}
+    NiuuModal #modal-title {{
         text-align: center;
         text-style: bold;
-        color: #f59e0b;
+        color: {ACCENT_AMBER};
         height: 1;
         margin-bottom: 1;
-    }
-    NiuuModal #modal-body {
+    }}
+    NiuuModal #modal-body {{
         height: auto;
-        color: #fafafa;
-    }
+        color: {TEXT_PRIMARY};
+    }}
     """
 
     is_visible: reactive[bool] = reactive(False)
