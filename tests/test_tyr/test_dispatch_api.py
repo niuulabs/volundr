@@ -29,6 +29,7 @@ from tyr.api.tracker import resolve_trackers
 from tyr.config import AIModelConfig, AuthConfig, Settings
 from tyr.config import DispatchConfig as DispatchCfg
 from tyr.domain.models import (
+    DispatcherState,
     Saga,
     SagaStatus,
     TrackerIssue,
@@ -157,21 +158,19 @@ class MockVolundrFactory:
 
 
 class MockDispatcherRepo(DispatcherRepository):
-    """In-memory mock for dispatcher state persistence."""
+    """In-memory mock for DispatcherRepository."""
 
-    async def get_or_create(self, owner_id: str):  # noqa: ANN201
-        from tyr.domain.models import DispatcherState
-
+    async def get_or_create(self, owner_id: str) -> DispatcherState:
         return DispatcherState(
             id=uuid4(),
             owner_id=owner_id,
-            running=True,
-            threshold=0.8,
-            max_concurrent_raids=4,
+            running=False,
+            threshold=0.5,
+            max_concurrent_raids=3,
             updated_at=datetime.now(UTC),
         )
 
-    async def update(self, owner_id: str, **fields: object):  # noqa: ANN201
+    async def update(self, owner_id: str, **fields: object) -> DispatcherState:
         return await self.get_or_create(owner_id)
 
     async def list_active_owner_ids(self) -> list[str]:
