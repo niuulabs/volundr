@@ -61,7 +61,7 @@ class DatabaseConfig(BaseModel):
 
     mode: str = Field(
         default="embedded",
-        description="Database mode: 'embedded' (pgserver) or 'external'.",
+        description="Database mode: 'embedded' (bundled PostgreSQL) or 'external'.",
     )
     dsn: str = Field(
         default="",

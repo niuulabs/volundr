@@ -40,7 +40,6 @@ cli = [
     "typer>=0.12",
     "textual>=0.79",
     "nuitka>=2.1",
-    "pgserver>=0.1",
     "ordered-set>=4.1",
     "patchelf>=0.14; sys_platform == 'linux'",
 ]

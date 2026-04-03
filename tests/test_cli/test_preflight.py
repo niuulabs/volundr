@@ -136,19 +136,22 @@ class TestCheckWorkspaceDir:
 
 
 class TestCheckDatabase:
-    def test_embedded_with_pgserver(self) -> None:
+    def test_embedded_with_binaries(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "postgres").touch()
         config = PreflightConfig(database_mode="embedded")
-        with patch.dict("sys.modules", {"pgserver": type("module", (), {})}):
+        with patch("niuu.adapters.embedded_postgres.pg_bin_dir", return_value=bin_dir):
             result = check_database(config)
         assert result.passed is True
-        assert "pgserver" in result.message
+        assert "available" in result.message
 
-    def test_embedded_without_pgserver(self) -> None:
+    def test_embedded_without_binaries(self) -> None:
         config = PreflightConfig(database_mode="embedded")
-        with patch("builtins.__import__", side_effect=ImportError("no pgserver")):
+        with patch("niuu.adapters.embedded_postgres.pg_bin_dir", return_value=None):
             result = check_database(config)
         assert result.passed is False
-        assert "pgserver" in result.message
+        assert "not found" in result.message
 
     def test_external_with_dsn(self) -> None:
         config = PreflightConfig(

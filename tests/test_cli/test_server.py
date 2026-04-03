@@ -580,7 +580,7 @@ class TestRootServerStartEmbeddedDb:
         ))
 
         with patch(
-            "niuu.adapters.pgserver_embedded.PgserverEmbeddedDatabase",
+            "niuu.adapters.embedded_postgres.EmbeddedPostgresDatabase",
             return_value=mock_db,
         ):
             await server._start_embedded_db()

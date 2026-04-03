@@ -1,9 +1,10 @@
 # Niuu single-binary build pipeline
 #
 # Targets:
-#   make build-web   — build React SPA, copy into src/cli/web/dist/
-#   make build-cli   — Nuitka --onefile compilation → dist/niuu
-#   make build       — both (build-web → build-cli)
+#   make build-web      — build React SPA, copy into src/cli/web/dist/
+#   make build-postgres — compile PostgreSQL + pgvector from source
+#   make build-cli      — Nuitka --onefile compilation → dist/niuu
+#   make build          — all of the above
 #
 # Parameters (for future binary targets):
 #   BINARY_NAME  — output binary name       (default: niuu)
@@ -18,12 +19,18 @@ MIG_DIR      := migrations
 MIG_DEST     := src/cli/migrations/volundr
 TYR_MIG_DEST := src/cli/migrations/tyr
 
-.PHONY: build build-web build-cli copy-migrations clean lint test verify
+# PostgreSQL build — versions read from the single source of truth
+PG_VERSIONS_PY := src/niuu/pg_versions.py
+POSTGRES_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); print(POSTGRES_VERSION)")
+PGVECTOR_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); print(PGVECTOR_VERSION)")
+PGINSTALL_DIR    := build/pginstall
+
+.PHONY: build build-web build-postgres build-cli copy-migrations clean lint test verify
 
 # --------------------------------------------------------------------------
-# Full build: web assets → migrations → Nuitka binary
+# Full build: web assets → migrations → PostgreSQL → Nuitka binary
 # --------------------------------------------------------------------------
-build: build-web copy-migrations build-cli
+build: build-web copy-migrations build-postgres build-cli
 
 # --------------------------------------------------------------------------
 # Web UI: npm build + copy dist/ into the cli package data directory
@@ -32,6 +39,15 @@ build-web:
 	cd $(WEB_DIR) && npm ci --ignore-scripts && npm run build
 	rm -rf $(WEB_DEST)
 	cp -r $(WEB_DIR)/dist $(WEB_DEST)
+
+# --------------------------------------------------------------------------
+# PostgreSQL + pgvector: compile from source into build/pginstall/
+# --------------------------------------------------------------------------
+build-postgres:
+	POSTGRES_VERSION=$(POSTGRES_VERSION) \
+	PGVECTOR_VERSION=$(PGVECTOR_VERSION) \
+	INSTALL_PREFIX=$(PGINSTALL_DIR) \
+	scripts/build_postgres.sh
 
 # --------------------------------------------------------------------------
 # Migrations: copy SQL files into the cli package data directory
@@ -69,3 +85,4 @@ verify: lint test
 clean:
 	rm -rf $(OUTPUT_DIR) $(WEB_DEST) build/ *.build/ *.dist/ *.onefile-build/
 	rm -rf $(MIG_DEST)/*.sql $(TYR_MIG_DEST)/*.sql
+	rm -rf $(PGINSTALL_DIR)

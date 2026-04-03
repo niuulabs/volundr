@@ -5,7 +5,7 @@ Sub-apps are mounted at their API prefix (e.g. ``/api/v1/volundr``) using a
 prefix-preserving mount so the sub-app sees the full original path.  This
 lets each sub-app keep its own lifespan, dependency overrides, and app.state.
 
-The embedded PostgreSQL (pgserver) is started before the sub-apps so their
+The embedded PostgreSQL is started before the sub-apps so their
 lifespan handlers can connect to the database.
 
 The web UI is mounted last as a catch-all SPA fallback.
@@ -122,10 +122,10 @@ class RootServer(Service):
 
     async def _start_embedded_db(self) -> None:
         """Start embedded PostgreSQL and set env vars for sub-apps."""
-        from niuu.adapters.pgserver_embedded import PgserverEmbeddedDatabase
+        from niuu.adapters.embedded_postgres import EmbeddedPostgresDatabase
 
         data_dir = str(Path.home() / ".niuu" / "pgdata")
-        db = PgserverEmbeddedDatabase()
+        db = EmbeddedPostgresDatabase()
         info = await db.start(data_dir)
         self._embedded_db = db
 
@@ -140,7 +140,9 @@ class RootServer(Service):
 
         logger.info(
             "Embedded PostgreSQL ready at %s:%s/%s",
-            info.host, info.port, info.dbname,
+            info.host,
+            info.port,
+            info.dbname,
         )
 
     def _build_app(self) -> FastAPI:
@@ -286,7 +288,8 @@ class RootServer(Service):
             url = f"http://127.0.0.1:{port}/api/{path}"
             params = dict(request.query_params)
             headers = {
-                k: v for k, v in request.headers.items()
+                k: v
+                for k, v in request.headers.items()
                 if k.lower() not in ("host", "content-length", "transfer-encoding")
             }
             body = await request.body()
@@ -361,6 +364,7 @@ class RootServer(Service):
 
             favicon_path = dist / "favicon.svg"
             if favicon_path.exists():
+
                 @root.get("/favicon.svg", include_in_schema=False)
                 @root.get("/favicon.ico", include_in_schema=False)
                 async def favicon() -> FileResponse:
@@ -410,8 +414,10 @@ class RootServer(Service):
 
             info = self._embedded_db._connection_info
             conn = await asyncpg.connect(
-                host=info.host, port=info.port,
-                user=info.user, database=info.dbname,
+                host=info.host,
+                port=info.port,
+                user=info.user,
+                database=info.dbname,
             )
             try:
                 for variant in ("volundr", "tyr"):

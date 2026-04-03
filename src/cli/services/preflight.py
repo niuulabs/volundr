@@ -149,20 +149,20 @@ def check_workspace_dir(config: PreflightConfig) -> PreflightResult:
 def check_database(config: PreflightConfig) -> PreflightResult:
     """Verify database availability based on mode."""
     if config.database_mode == "embedded":
-        try:
-            import pgserver  # noqa: F401
+        from niuu.adapters.embedded_postgres import pg_bin_dir
 
+        bin_dir = pg_bin_dir()
+        if bin_dir is not None and (bin_dir / "postgres").exists():
             return PreflightResult(
                 name="database",
                 passed=True,
-                message="pgserver available for embedded PostgreSQL.",
+                message=f"Embedded PostgreSQL binaries available at {bin_dir}.",
             )
-        except ImportError:
-            return PreflightResult(
-                name="database",
-                passed=False,
-                message="pgserver not installed. Install it with: pip install pgserver",
-            )
+        return PreflightResult(
+            name="database",
+            passed=False,
+            message="Embedded PostgreSQL binaries not found. Rebuild with: make build-postgres",
+        )
     # external mode — just check DSN is set
     if not config.database_dsn:
         return PreflightResult(
@@ -205,8 +205,7 @@ def check_xcode() -> PreflightResult:
                 name="xcode",
                 passed=True,
                 warn_only=True,
-                message="Xcode command line tools not installed. "
-                "Run: xcode-select --install",
+                message="Xcode command line tools not installed. Run: xcode-select --install",
             )
         return PreflightResult(
             name="xcode",
