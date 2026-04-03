@@ -6,13 +6,21 @@ and TUI pages for session management.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import typer
 
 from niuu.cli_api_client import CLIAPIClient
 from niuu.cli_output import print_json, print_success, print_table
-from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin
+from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin, TUIPageSpec
+from volundr.tui.admin import AdminPage
+from volundr.tui.chat import ChatPage
+from volundr.tui.chronicles import ChroniclesPage
+from volundr.tui.diffs import DiffsPage
+from volundr.tui.sessions import SessionsPage
+from volundr.tui.settings import SettingsPage
+from volundr.tui.terminal import TerminalPage
 
 
 class _VolundrService(Service):
@@ -54,6 +62,17 @@ class VolundrPlugin(ServicePlugin):
 
     def create_api_client(self) -> Any:
         return CLIAPIClient(base_url="http://localhost:8080", service_name="Volundr")
+
+    def tui_pages(self) -> Sequence[TUIPageSpec]:
+        return [
+            TUIPageSpec(name="Sessions", icon="◉", widget_class=SessionsPage),
+            TUIPageSpec(name="Chat", icon="◈", widget_class=ChatPage),
+            TUIPageSpec(name="Terminal", icon="▸", widget_class=TerminalPage),
+            TUIPageSpec(name="Diffs", icon="◧", widget_class=DiffsPage),
+            TUIPageSpec(name="Chronicles", icon="◷", widget_class=ChroniclesPage),
+            TUIPageSpec(name="Settings", icon="◎", widget_class=SettingsPage),
+            TUIPageSpec(name="Admin", icon="◈", widget_class=AdminPage),
+        ]
 
     def register_commands(self, app: typer.Typer) -> None:
         """Mount workflow commands directly on the main app."""

@@ -62,9 +62,9 @@ class StatusBadge(Widget):
         self._refresh()
 
     def compose(self) -> ComposeResult:
-        yield Static(self._render(), id="badge-label")
+        yield Static(self._render_badge(), id="badge-label")
 
-    def _render(self) -> str:
+    def _render_badge(self) -> str:
         dot, color = _STATUS_MAP.get(self._status, _DEFAULT_INDICATOR)
         return f"[{color}]{dot}[/] [{color}]{self._status}[/]"
 
@@ -73,4 +73,4 @@ class StatusBadge(Widget):
             label = self.query_one("#badge-label", Static)
         except Exception:
             return
-        label.update(self._render())
+        label.update(self._render_badge())
