@@ -219,21 +219,26 @@ def _build_up_callback(
         loop = asyncio.new_event_loop()
         shutdown_event = asyncio.Event()
 
+        def _handle_signal() -> None:
+            typer.echo("\nReceived shutdown signal...")
+            shutdown_event.set()
+
+        # Register signal handlers before entering the event loop
+        # so they're active even during startup
+        loop.add_signal_handler(signal.SIGINT, _handle_signal)
+        loop.add_signal_handler(signal.SIGTERM, _handle_signal)
+
         async def _run() -> None:
             await _startup(manager, settings, enabled, skip_preflight)
-
-            def _handle_signal() -> None:
-                typer.echo("\nReceived shutdown signal...")
-                shutdown_event.set()
-
-            loop.add_signal_handler(signal.SIGINT, _handle_signal)
-            loop.add_signal_handler(signal.SIGTERM, _handle_signal)
-
             await shutdown_event.wait()
             await _shutdown(manager)
 
         try:
             loop.run_until_complete(_run())
+        except KeyboardInterrupt:
+            # Fallback for environments where signal handlers don't fire
+            typer.echo("\nReceived shutdown signal...")
+            loop.run_until_complete(_shutdown(manager))
         except SystemExit:
             raise
         except Exception:

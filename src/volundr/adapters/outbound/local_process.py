@@ -338,12 +338,20 @@ class LocalProcessPodManager(PodManager):
         spec: SessionSpec,
     ) -> Path:
         """Create workspace directory and set up source code."""
+        if isinstance(session.source, LocalMountSource) and session.source.local_path:
+            # Mini/local mode: use the directory directly (matches Go CLI behavior)
+            workspace = Path(session.source.local_path)
+            if not workspace.is_dir():
+                raise RuntimeError(f"local path {workspace!r} is not a directory")
+            self._write_claude_md(workspace, spec)
+            return workspace
+
         workspace = self._workspaces_dir / str(session.id)
         workspace.mkdir(parents=True, exist_ok=True)
 
         if isinstance(session.source, GitSource) and session.source.repo:
             await self._clone_repo(session.source, workspace, spec)
-        elif isinstance(session.source, LocalMountSource):
+        elif isinstance(session.source, LocalMountSource) and session.source.paths:
             self._setup_local_mounts(session.source, workspace)
 
         self._write_claude_md(workspace, spec)

@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from niuu.domain.models import (  # noqa: F401
     GitProviderType,
@@ -249,17 +249,32 @@ class MountMapping(BaseModel):
 
 
 class LocalMountSource(BaseModel):
-    """Local filesystem mount workspace source."""
+    """Local filesystem mount workspace source.
+
+    In mini/local mode, only ``local_path`` is needed — the CLI runs
+    Claude directly in that directory.  In cluster mode, ``paths``
+    provides host-to-container volume mappings.
+    """
 
     type: Literal["local_mount"] = "local_mount"
+    local_path: str = Field(
+        default="",
+        description="Absolute path to use as workspace directly (mini/local mode)",
+    )
     paths: list[MountMapping] = Field(
-        min_length=1,
-        description="Host-to-container path mappings for the workspace",
+        default_factory=list,
+        description="Host-to-container path mappings for the workspace (cluster mode)",
     )
     node_selector: dict[str, str] = Field(
         default_factory=dict,
         description="Kubernetes node selector labels to schedule on a specific node",
     )
+
+    @model_validator(mode="after")
+    def _require_path_or_paths(self) -> LocalMountSource:
+        if not self.local_path and not self.paths:
+            raise ValueError("Either local_path or paths must be provided")
+        return self
 
     model_config = {"frozen": False}
 
