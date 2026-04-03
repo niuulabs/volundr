@@ -91,7 +91,8 @@ class ChronicleService:
         if isinstance(session.source, LocalMountSource) and session.source.local_path:
             local_path = session.source.local_path
             git_info = _detect_git_info(local_path)
-            project = git_info.get("project") or local_path.rstrip("/").split("/")[-1] or session.name
+            dir_name = local_path.rstrip("/").split("/")[-1]
+            project = git_info.get("project") or dir_name or session.name
             repo = git_info.get("remote") or local_path
             branch = git_info.get("branch") or "local"
         else:

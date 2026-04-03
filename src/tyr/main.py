@@ -30,7 +30,6 @@ from tyr.adapters.postgres_notification_subscriptions import (
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
-from tyr.adapters.volundr_http import VolundrHTTPAdapter
 from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
 from tyr.api.dispatch import resolve_dispatcher_repo as dispatch_resolve_dispatcher_repo
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
@@ -94,8 +93,8 @@ def _configure_logging(settings: Settings) -> None:
 
 
 async def _seed_linear_integration(
-    integration_repo: "IntegrationRepository",
-    credential_store: "CredentialStorePort",
+    integration_repo: PostgresIntegrationRepository,
+    credential_store: object,
     api_key: str,
     team_id: str = "",
     adapter_class: str = "tyr.adapters.linear.LinearTrackerAdapter",

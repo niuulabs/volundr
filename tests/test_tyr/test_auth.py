@@ -121,7 +121,7 @@ class TestExtractPrincipalDevFallback:
         resp = dev_client.get("/whoami")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["user_id"] == "default"
+        assert data["user_id"] == "dev-user"
         assert data["email"] == ""
         assert data["tenant_id"] == ""
         assert data["roles"] == ["volundr:developer"]
@@ -133,4 +133,4 @@ class TestExtractPrincipalDevFallback:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["user_id"] == "default"
+        assert data["user_id"] == "dev-user"

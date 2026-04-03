@@ -24,6 +24,7 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
+
 # Config file search paths (in order of priority).
 # NIUU_CONFIG env var (set by the CLI --config flag) takes precedence.
 def _config_paths() -> list[Path]:

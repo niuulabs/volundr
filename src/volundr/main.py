@@ -354,8 +354,8 @@ def _create_otel_providers(otel_cfg):  # pragma: no cover
 
 
 async def _seed_linear_integration(
-    integration_repo: "IntegrationRepository",
-    credential_store: "CredentialStorePort",
+    integration_repo: object,
+    credential_store: object,
     api_key: str,
 ) -> None:
     """Seed Linear integration from config into the DB.

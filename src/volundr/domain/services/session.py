@@ -584,7 +584,7 @@ class SessionService:
     async def _provision_background(
         self,
         session: Session,
-        principal: "Principal | None" = None,
+        principal: Principal | None = None,
         template_name: str | None = None,
         profile_name: str | None = None,
         terminal_restricted: bool = False,

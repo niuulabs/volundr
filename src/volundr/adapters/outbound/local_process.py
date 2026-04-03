@@ -501,7 +501,7 @@ class LocalProcessPodManager(PodManager):
         env = self._build_env(spec, workspace)
         env["SKULD__SESSION__ID"] = session_id
         env["SKULD__SESSION__NAME"] = session.name
-        env["SKULD__SESSION__MODEL"] = session.model or spec.model or "claude-sonnet-4-6"
+        env["SKULD__SESSION__MODEL"] = session.model or spec.values.get("model", "claude-sonnet-4-6")
         env["SKULD__SESSION__WORKSPACE_DIR"] = str(workspace)
         env["SKULD__HOST"] = "127.0.0.1"
         env["SKULD__PORT"] = str(port)
