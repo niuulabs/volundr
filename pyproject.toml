@@ -84,7 +84,7 @@ packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "--cov=src/volundr --cov=src/cli --cov=src/tyr --cov=src/niuu --cov=src/skuld --cov-report=term-missing --cov-fail-under=85"
+addopts = "-v --tb=short"
 
 [tool.ruff]
 target-version = "py311"

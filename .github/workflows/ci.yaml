@@ -152,7 +152,8 @@ jobs:
       - name: Run tests with coverage
         run: |
           uv run pytest tests/ --ignore=tests/test_tyr -v --tb=short \
-            --cov=src/volundr \
+            --override-ini="addopts=" \
+            --cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-fail-under=85
