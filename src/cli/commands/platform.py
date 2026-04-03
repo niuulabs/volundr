@@ -210,12 +210,10 @@ def _build_up_callback(
         """Start platform services."""
         import os
 
-        # In mini mode, enable local mounts, mini_mode feature flag,
-        # and anonymous dev auth so the UI works without an IDP.
+        # In mini mode, enable local mounts and mini_mode feature flag.
         if settings.mode == "mini":
             os.environ.setdefault("LOCAL_MOUNTS__ENABLED", "true")
             os.environ.setdefault("LOCAL_MOUNTS__MINI_MODE", "true")
-            os.environ.setdefault("AUTH__ALLOW_ANONYMOUS_DEV", "true")
 
         skip_preflight: bool = bool(kwargs.pop("skip_preflight", False))
         start_all: bool = bool(kwargs.pop("all", False))
