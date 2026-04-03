@@ -463,6 +463,10 @@ class AuthConfig(BaseModel):
             "identity. Must be False in production."
         ),
     )
+    default_user_id: str = Field(
+        default="dev-user",
+        description="User ID for anonymous dev mode fallback.",
+    )
 
 
 class TelegramConfig(BaseModel):
@@ -512,6 +516,18 @@ class LLMConfig(BaseModel):
             "When empty, the built-in DECOMPOSITION_PROMPT in bifrost.py is used."
         ),
     )
+
+
+class LinearConfig(BaseModel):
+    """Linear tracker configuration for mini/local mode.
+
+    When api_key is set, a Linear integration is auto-seeded on startup
+    so the tracker factory can resolve it without manual UI setup.
+    Matches the Go CLI's ``linear:`` config block.
+    """
+
+    api_key: str = Field(default="", description="Linear API key.")
+    team_id: str = Field(default="", description="Optional Linear team ID filter.")
 
 
 class TrackerConfig(BaseModel):
@@ -630,6 +646,7 @@ class Settings(BaseSettings):
         ]
     )
     git: GitConfig = Field(default_factory=GitConfig)
+    linear: LinearConfig = Field(default_factory=LinearConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     dispatch: DispatchConfig = Field(default_factory=DispatchConfig)

@@ -27,7 +27,6 @@ from volundr.adapters.inbound.rest_prompts import create_prompts_router
 from volundr.adapters.inbound.rest_resources import create_resources_router
 from volundr.adapters.inbound.rest_secrets import create_secrets_router
 from volundr.adapters.inbound.rest_tenants import create_tenants_router
-from volundr.adapters.inbound.rest_tracker import create_tracker_router
 from volundr.adapters.outbound.broadcaster import InMemoryEventBroadcaster
 from volundr.adapters.outbound.config_mcp_servers import ConfigMCPServerProvider
 from volundr.adapters.outbound.config_profiles import ConfigProfileProvider
@@ -58,7 +57,6 @@ from volundr.domain.services import (
     StatsService,
     TenantService,
     TokenService,
-    TrackerService,
 )
 from volundr.domain.services.event_ingestion import EventIngestionService
 from volundr.domain.services.feature import FeatureService
@@ -349,6 +347,47 @@ def _create_otel_providers(otel_cfg):  # pragma: no cover
     return tracer_provider, meter_provider
 
 
+async def _seed_linear_integration(
+    integration_repo: "IntegrationRepository",
+    credential_store: "CredentialStorePort",
+    api_key: str,
+) -> None:
+    """Seed Linear integration from config into the DB.
+
+    Idempotent — uses a fixed ID so repeated calls update the same row.
+    This lets the integration-based /issues/search endpoint find Linear
+    without manual UI setup.
+    """
+    from datetime import UTC, datetime
+
+    from niuu.domain.models import IntegrationConnection, IntegrationType, SecretType
+
+    owner_id = "dev-user"
+    cred_name = "linear-config"
+
+    await credential_store.store(
+        owner_type="user",
+        owner_id=owner_id,
+        name=cred_name,
+        secret_type=SecretType.API_KEY,
+        data={"api_key": api_key},
+    )
+
+    connection = IntegrationConnection(
+        id="f976d725-2a19-558a-a2d0-99258577f615",
+        owner_id=owner_id,
+        integration_type=IntegrationType.ISSUE_TRACKER,
+        adapter="volundr.adapters.outbound.linear.LinearAdapter",
+        credential_name=cred_name,
+        config={},
+        enabled=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        slug="linear",
+    )
+    await integration_repo.save_connection(connection)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -514,8 +553,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             integration_repo = PostgresIntegrationRepository(pool)
 
             # User integration service — ephemeral per-user provider factory.
-            # Created early so session contributors can use it.
-            # Issue providers are wired later when linear_adapter is available.
             from volundr.domain.services.user_integration import UserIntegrationService
 
             user_integration_service = UserIntegrationService(
@@ -716,26 +753,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             tracker_factory = TrackerFactory(credential_store)
 
-            # Issue tracker integration (Linear, Jira, etc.)
-            tracker_service = None
-            linear_adapter = None
+            # Seed Linear integration from config so the integration-based
+            # endpoints (/issues/search) find it in the DB.
             if settings.linear.enabled and settings.linear.api_key:
-                from volundr.adapters.outbound.linear import LinearAdapter
-                from volundr.adapters.outbound.postgres_mappings import (
-                    PostgresMappingRepository,
+                await _seed_linear_integration(
+                    integration_repo, credential_store,
+                    api_key=settings.linear.api_key,
                 )
-
-                linear_adapter = LinearAdapter(api_key=settings.linear.api_key)
-                mapping_repository = PostgresMappingRepository(pool)
-                tracker_service = TrackerService(
-                    linear_adapter,
-                    mapping_repository,
-                    integration_repo=integration_repo,
-                    tracker_factory=tracker_factory,
-                )
-                tracker_router = create_tracker_router(tracker_service)
-                app.include_router(tracker_router)
-                logger.info("Issue tracker integration enabled (provider=linear)")
+                logger.info("Linear integration seeded from config")
 
             # Integration management endpoints
             integrations_router = create_integrations_router(
@@ -762,9 +787,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.include_router(issues_router)
 
-            # Wire shared issue providers now that linear_adapter is available
-            if linear_adapter:
-                user_integration_service.add_shared_issue_provider(linear_adapter)
             app.state.user_integration_service = user_integration_service
 
             # Event pipeline: sinks + ingestion service + REST endpoints
@@ -846,7 +868,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.template_service = template_service
             app.state.git_workflow_service = git_workflow_service
             app.state.event_ingestion = event_ingestion
-            app.state.tracker_service = tracker_service
+            app.state.tracker_service = None  # Deprecated: use integration-based /issues/
             app.state.tenant_service = tenant_service
             app.state.gateway = gateway_adapter
             app.state.user_repository = user_repository
@@ -871,8 +893,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 except asyncio.CancelledError:
                     pass  # Expected: task cancellation during shutdown
                 await event_ingestion.close_all()
-                if linear_adapter is not None:
-                    await linear_adapter.close()
                 await pod_manager.close()
                 if hasattr(gateway_adapter, "close"):
                     await gateway_adapter.close()

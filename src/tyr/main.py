@@ -93,6 +93,51 @@ def _configure_logging(settings: Settings) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+async def _seed_linear_integration(
+    integration_repo: "IntegrationRepository",
+    credential_store: "CredentialStorePort",
+    api_key: str,
+    team_id: str = "",
+    adapter_class: str = "tyr.adapters.linear.LinearTrackerAdapter",
+) -> None:
+    """Seed Linear integration from config into the DB.
+
+    Idempotent — uses a fixed ID so repeated calls update the same row.
+    """
+    from datetime import UTC, datetime
+
+    from niuu.domain.models import IntegrationConnection, IntegrationType, SecretType
+
+    owner_id = "dev-user"
+    cred_name = "linear-config"
+
+    await credential_store.store(
+        owner_type="user",
+        owner_id=owner_id,
+        name=cred_name,
+        secret_type=SecretType.API_KEY,
+        data={"api_key": api_key},
+    )
+
+    config: dict = {}
+    if team_id:
+        config["team_id"] = team_id
+
+    connection = IntegrationConnection(
+        id="6a397506-ccc6-5f89-be1e-47108ad702c8",
+        owner_id=owner_id,
+        integration_type=IntegrationType.ISSUE_TRACKER,
+        adapter=adapter_class,
+        credential_name=cred_name,
+        config=config,
+        enabled=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        slug="linear",
+    )
+    await integration_repo.save_connection(connection)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     if settings is None:
@@ -156,6 +201,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.tracker_factory = TrackerAdapterFactory(
                 integration_repo, credential_store, pool=pool
             )
+
+            # Seed Linear integration from config so the tracker factory
+            # finds it in the DB (same seed as Volundr).
+            if settings.linear.api_key:
+                await _seed_linear_integration(
+                    integration_repo, credential_store,
+                    api_key=settings.linear.api_key,
+                    team_id=settings.linear.team_id,
+                    adapter_class="tyr.adapters.linear.LinearTrackerAdapter",
+                )
+                logger.info("Linear integration seeded from config")
 
             # Override the tracker resolver dependency with factory delegation
             from tyr.adapters.inbound.auth import extract_principal
