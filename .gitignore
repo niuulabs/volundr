@@ -234,3 +234,4 @@ docs/site/openapi.json
 charts/*/charts/
 charts/*/Chart.lock
 *.tgz
+coverage.json
