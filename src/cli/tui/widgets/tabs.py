@@ -52,7 +52,7 @@ class NiuuTabs(Widget):
         return list(self._items)
 
     def compose(self) -> ComposeResult:
-        yield Static(self._render(), id="tabs-bar")
+        yield Static(self._render_tabs(), id="tabs-bar")
 
     def set_items(self, items: list[str]) -> None:
         self._items = list(items)
@@ -66,7 +66,7 @@ class NiuuTabs(Widget):
     def watch_active_tab(self) -> None:
         self._refresh()
 
-    def _render(self) -> str:
+    def _render_tabs(self) -> str:
         parts: list[str] = []
         for i, label in enumerate(self._items):
             if i == self.active_tab:
@@ -80,4 +80,4 @@ class NiuuTabs(Widget):
             bar = self.query_one("#tabs-bar", Static)
         except Exception:
             return
-        bar.update(self._render())
+        bar.update(self._render_tabs())

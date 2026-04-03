@@ -11,7 +11,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
-from cli.tui.theme import ACCENT_AMBER, TEXT_MUTED
+from cli.tui.theme import TEXT_MUTED
 
 MAX_VISIBLE_ITEMS = 10
 

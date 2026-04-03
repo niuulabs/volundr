@@ -224,12 +224,23 @@ class NiuuTUI(App[str]):
     # ── Sidebar message handling ─────────────────────────────
 
     def on_niuu_sidebar_page_selected(self, message: NiuuSidebar.PageSelected) -> None:
-        # Future: switch content area to the selected page's widget.
+        """Switch content area to the selected page widget."""
         try:
-            welcome = self.query_one("#welcome", Static)
-            welcome.update(f"[bold]{message.page.icon} {message.page.name}[/]")
+            content = self.query_one("#content", Vertical)
         except Exception:
-            pass
+            return
+        content.remove_children()
+        idx = message.page_index if hasattr(message, "page_index") else -1
+        # Find the matching page spec by name.
+        for i, spec in enumerate(self._pages):
+            if spec.name == message.page.name:
+                idx = i
+                break
+        if 0 <= idx < len(self._pages):
+            page_widget = self._pages[idx].widget_class(id=f"page-{idx}")
+            content.mount(page_widget)
+        else:
+            content.mount(Static(f"[bold]{message.page.icon} {message.page.name}[/]", id="welcome"))
 
 
 def build_tui(

@@ -91,9 +91,13 @@ class TestVolundrPlugin:
         client = plugin.create_api_client()
         assert client is not None
 
-    def test_default_tui_pages_empty(self) -> None:
+    def test_tui_pages_registered(self) -> None:
         plugin = VolundrPlugin()
-        assert plugin.tui_pages() == []
+        pages = plugin.tui_pages()
+        assert len(pages) == 7
+        names = [p.name for p in pages]
+        assert "Sessions" in names
+        assert "Chat" in names
 
 
 class TestTyrPlugin:

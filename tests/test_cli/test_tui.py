@@ -475,7 +475,7 @@ class TestNiuuTabs:
 
     def test_tabs_render_content(self) -> None:
         tabs = NiuuTabs(items=["A", "B"])
-        rendered = tabs._render()
+        rendered = tabs._render_tabs()
         assert "A" in rendered
         assert "B" in rendered
 
@@ -514,19 +514,19 @@ class TestStatusBadge:
 
     def test_render_running(self) -> None:
         badge = StatusBadge("running")
-        rendered = badge._render()
+        rendered = badge._render_badge()
         assert "●" in rendered
         assert "running" in rendered
         assert "#10b981" in rendered
 
     def test_render_error(self) -> None:
         badge = StatusBadge("error")
-        rendered = badge._render()
+        rendered = badge._render_badge()
         assert "#ef4444" in rendered
 
     def test_render_default(self) -> None:
         badge = StatusBadge("unknown")
-        rendered = badge._render()
+        rendered = badge._render_badge()
         assert "○" in rendered
 
 
