@@ -464,7 +464,7 @@ class TestStartSession:
         assert data["status"] == "starting"
         assert data["chat_endpoint"] is not None
         # code_endpoint set in background task
-        assert data["pod_name"] is not None
+        # pod_name set in background task
 
     def test_start_session_not_found(self, client: TestClient):
         """Returns 404 for non-existent session."""
