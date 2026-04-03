@@ -6,13 +6,16 @@ coordinator service, and TUI pages for saga management.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import typer
 
 from niuu.cli_api_client import CLIAPIClient
 from niuu.cli_output import print_json, print_success, print_table
-from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin
+from niuu.ports.plugin import Service, ServiceDefinition, ServicePlugin, TUIPageSpec
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class _TyrService(Service):
@@ -218,3 +221,17 @@ class TyrPlugin(ServicePlugin):
 
         app.add_typer(sagas, name="sagas")
         app.add_typer(raids, name="raids")
+
+    def tui_pages(self) -> Sequence[TUIPageSpec]:
+        """Return TUI page specs for the Textual app."""
+        from tyr.tui.pages.dispatch import DispatchPage
+        from tyr.tui.pages.raids import RaidsPage
+        from tyr.tui.pages.review import ReviewPage
+        from tyr.tui.pages.sagas import SagasPage
+
+        return [
+            TUIPageSpec(name="Sagas", icon="⚡", widget_class=SagasPage),
+            TUIPageSpec(name="Raids", icon="⚔", widget_class=RaidsPage),
+            TUIPageSpec(name="Dispatch", icon="🚀", widget_class=DispatchPage),
+            TUIPageSpec(name="Review", icon="👁", widget_class=ReviewPage),
+        ]
