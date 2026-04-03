@@ -195,9 +195,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.credential_store = credential_store
 
             # Wire adapter factories (used by autonomous dispatcher)
-            app.state.volundr_factory = VolundrAdapterFactory(
-                integration_repo, credential_store
-            )
+            if settings.auth.allow_anonymous_dev:
+                from tyr.adapters.volundr_factory import LocalVolundrAdapterFactory
+
+                app.state.volundr_factory = LocalVolundrAdapterFactory(
+                    url=settings.volundr.url,
+                )
+                logger.info("Volundr factory: local (no PAT required)")
+            else:
+                app.state.volundr_factory = VolundrAdapterFactory(
+                    integration_repo, credential_store
+                )
             app.state.tracker_factory = TrackerAdapterFactory(
                 integration_repo, credential_store, pool=pool
             )
@@ -248,16 +256,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
             app.dependency_overrides[dispatch_resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
-            # Wire Volundr adapter — per-user resolution via factory,
-            # falling back to the global URL when no per-user connection exists.
-            fallback_volundr = VolundrHTTPAdapter(settings.volundr.url, name="default")
-            app.state.volundr = fallback_volundr
-
+            # Wire Volundr adapter — per-user resolution via factory.
             async def _resolve_volundr_per_user(
                 principal: Principal = Depends(extract_principal),
             ) -> VolundrPort:
                 adapter = await app.state.volundr_factory.primary_for_owner(principal.user_id)
-                return adapter or fallback_volundr
+                if adapter is None:
+                    from fastapi import HTTPException
+
+                    raise HTTPException(
+                        status_code=503,
+                        detail="No Volundr adapter available — configure a CODE_FORGE integration",
+                    )
+                return adapter
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr_per_user
             app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr_per_user
