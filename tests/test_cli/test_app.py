@@ -124,10 +124,11 @@ class TestContextCommand:
 
 
 class TestIdentityCommands:
-    def test_login(self) -> None:
+    def test_login_requires_issuer(self) -> None:
         app, _, _ = _build_test_app()
         result = runner.invoke(app, ["login"])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        assert "issuer" in result.output.lower()
 
     def test_logout(self) -> None:
         app, _, _ = _build_test_app()
@@ -135,10 +136,11 @@ class TestIdentityCommands:
         assert result.exit_code == 0
         assert "logged out" in result.output.lower()
 
-    def test_whoami(self) -> None:
+    def test_whoami_not_authenticated(self) -> None:
         app, _, _ = _build_test_app()
         result = runner.invoke(app, ["whoami"])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        assert "not authenticated" in result.output.lower()
 
 
 class TestPluginWorkflowCommands:
