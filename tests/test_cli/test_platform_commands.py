@@ -254,12 +254,16 @@ class TestCreatePlatformCommands:
         assert "volundr" in result.output
 
     def test_platform_up_all_flag_in_help(self) -> None:
+        import re
+
         platform, *_ = self._make_platform()
         result = runner.invoke(platform, ["up", "--help"])
         assert result.exit_code == 0
+        # Strip ANSI codes before checking — Rich/Typer may inject escape sequences
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
         # Must be --all, not --start-all
-        assert "--all" in result.output
-        assert "--start-all" not in result.output
+        assert "--all" in plain
+        assert "--start-all" not in plain
 
 
 class TestDependencyResolutionViaEnabledServices:
