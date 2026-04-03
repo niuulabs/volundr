@@ -40,6 +40,7 @@ class _SortedGroup(typer.core.TyperGroup):
     def list_commands(self, ctx: click.Context) -> list[str]:
         return sorted(super().list_commands(ctx))
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,13 +112,44 @@ def build_app(
     app.add_typer(create_context_commands(settings), name="context")
 
     @app.command()
-    def login() -> None:
+    def login(
+        issuer: str = typer.Option(
+            "",
+            "--issuer",
+            "-i",
+            help="OIDC issuer URL.",
+            envvar="NIUU_OIDC_ISSUER",
+        ),
+        client_id: str = typer.Option(
+            "niuu-cli",
+            "--client-id",
+            help="OIDC client ID.",
+            envvar="NIUU_OIDC_CLIENT_ID",
+        ),
+    ) -> None:
         """Authenticate with the Niuu platform."""
+        if not issuer:
+            typer.echo("Error: --issuer is required (or set NIUU_OIDC_ISSUER).")
+            raise typer.Exit(1)
+        import asyncio
+
+        from cli.auth.oidc import OIDCClient
+
+        oidc = OIDCClient(issuer=issuer, client_id=client_id)
         typer.echo("Opening browser for authentication...")
+        try:
+            tokens = asyncio.get_event_loop().run_until_complete(oidc.login())
+            typer.echo(f"Authenticated successfully (token type: {tokens.token_type}).")
+        except Exception as exc:
+            typer.echo(f"Authentication failed: {exc}")
+            raise typer.Exit(1) from None
 
     @app.command()
     def logout() -> None:
         """Clear stored credentials."""
+        from cli.auth.credentials import CredentialStore
+
+        CredentialStore().clear()
         typer.echo("Logged out.")
 
     app.add_typer(create_platform_commands(registry, settings, manager), name="platform")
@@ -145,6 +177,19 @@ def build_app(
     @app.command()
     def whoami() -> None:
         """Show the currently authenticated user."""
-        typer.echo("Not authenticated. Run 'niuu login' first.")
+        from cli.auth.oidc import OIDCClient
+
+        oidc = OIDCClient(issuer="", client_id="")
+        claims = oidc.whoami()
+        if not claims:
+            typer.echo("Not authenticated. Run 'niuu login' first.")
+            raise typer.Exit(1)
+        name = claims.get("name", claims.get("preferred_username", "unknown"))
+        email = claims.get("email", "")
+        sub = claims.get("sub", "")
+        typer.echo(f"User:  {name}")
+        if email:
+            typer.echo(f"Email: {email}")
+        typer.echo(f"Sub:   {sub}")
 
     return app
