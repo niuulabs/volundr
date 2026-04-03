@@ -460,8 +460,9 @@ class LocalProcessPodManager(PodManager):
     @staticmethod
     def _write_claude_md(workspace: Path, spec: SessionSpec) -> None:
         """Write CLAUDE.md with system prompt and session config."""
-        system_prompt = spec.values.get("system_prompt", "")
-        initial_prompt = spec.values.get("initial_prompt", "")
+        session_vals = spec.values.get("session", {})
+        system_prompt = session_vals.get("systemPrompt", "")
+        initial_prompt = session_vals.get("initialPrompt", "")
 
         parts: list[str] = []
         if system_prompt:
@@ -513,8 +514,9 @@ class LocalProcessPodManager(PodManager):
         server_port = os.environ.get("NIUU_SERVER_PORT", "8080")
         env["SKULD__VOLUNDR_API_URL"] = f"http://{server_host}:{server_port}"
 
-        system_prompt = spec.values.get("system_prompt", "")
-        initial_prompt = spec.values.get("initial_prompt", "")
+        session_vals = spec.values.get("session", {})
+        system_prompt = session_vals.get("systemPrompt", "")
+        initial_prompt = session_vals.get("initialPrompt", "")
         if system_prompt:
             env["SKULD__SESSION__SYSTEM_PROMPT"] = system_prompt
         if initial_prompt:
