@@ -247,6 +247,7 @@ jobs:
       contents: read
       id-token: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: darwin

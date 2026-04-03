@@ -14,7 +14,8 @@ set -euo pipefail
 : "${PGVECTOR_VERSION:?PGVECTOR_VERSION is required}"
 : "${INSTALL_PREFIX:?INSTALL_PREFIX is required}"
 
-INSTALL_PREFIX="$(cd "$(dirname "$INSTALL_PREFIX")" && pwd)/$(basename "$INSTALL_PREFIX")"
+mkdir -p "$INSTALL_PREFIX"
+INSTALL_PREFIX="$(cd "$INSTALL_PREFIX" && pwd)"
 BUILD_DIR="${BUILD_DIR:-build/pg_build}"
 NPROC="${NPROC:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 
