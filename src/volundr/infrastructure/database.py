@@ -12,8 +12,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     model VARCHAR(100) NOT NULL,
-    repo VARCHAR(500) NOT NULL,
-    branch VARCHAR(255) NOT NULL,
+    source JSONB NOT NULL DEFAULT '{"type": "git", "repo": "", "branch": "main"}'::jsonb,
     status VARCHAR(20) NOT NULL DEFAULT 'created',
     chat_endpoint TEXT,
     code_endpoint TEXT,
@@ -23,7 +22,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     message_count INTEGER NOT NULL DEFAULT 0,
     tokens_used INTEGER NOT NULL DEFAULT 0,
     pod_name VARCHAR(255),
-    error TEXT
+    error TEXT,
+    tracker_issue_id TEXT,
+    issue_tracker_url TEXT,
+    preset_id TEXT,
+    archived_at TIMESTAMP WITH TIME ZONE
 );
 """
 
