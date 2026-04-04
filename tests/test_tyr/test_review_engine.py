@@ -589,6 +589,30 @@ class TestAutoApprove:
 
         state_event = next(e for e in events if e.event == "raid.state_changed")
         assert state_event.data["action"] == "auto_approved"
+        assert state_event.data["saga_tracker_id"] == "proj-1"
+
+    @pytest.mark.asyncio
+    async def test_auto_approve_event_no_saga(self) -> None:
+        """raid.state_changed omits saga_tracker_id when saga is not found."""
+        engine, repo, git, bus = _make_engine()
+        raid = _make_raid(confidence=0.5)
+        repo.raids[raid.tracker_id] = raid
+        repo.saga = None
+        repo.phase = _make_phase()
+        repo._all_merged = False
+
+        _setup_passing_pr(git, raid.pr_id)
+        git.changed_files[raid.pr_id] = ["src/main.py"]
+
+        q = bus.subscribe()
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        events = []
+        while not q.empty():
+            events.append(await q.get())
+
+        state_event = next(e for e in events if e.event == "raid.state_changed")
+        assert "saga_tracker_id" not in state_event.data
 
     @pytest.mark.asyncio
     async def test_auto_approve_records_confidence_events(self) -> None:
@@ -918,6 +942,12 @@ class TestPhaseGate:
         assert len(phase_events) == 1
         assert phase_events[0].data["phase_id"] == phase2.tracker_id
         assert phase_events[0].data["owner_id"] == OWNER_ID
+        assert phase_events[0].data["saga_id"] == repo.saga.tracker_id
+
+        # Also verify raid.state_changed includes saga_tracker_id
+        state_events = [e for e in events if e.event == "raid.state_changed"]
+        assert len(state_events) == 1
+        assert state_events[0].data["saga_tracker_id"] == repo.saga.tracker_id
 
     @pytest.mark.asyncio
     async def test_no_phase_gate_when_raids_remain(self) -> None:

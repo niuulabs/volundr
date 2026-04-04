@@ -35,6 +35,7 @@ from tyr.domain.models import (
     PRStatus,
     Raid,
     RaidStatus,
+    Saga,
     validate_transition,
 )
 from tyr.domain.services.reviewer_session import (
@@ -696,10 +697,16 @@ class ReviewEngine:
             await self._attach_review_transcript(tracker, tracker_id, owner_id, raid)
             await self._stop_session(owner_id, raid.reviewer_session_id, "reviewer session")
 
-        # Phase gate check
-        phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
+        # Look up saga once — used by both phase gate and event emission
+        saga = await tracker.get_saga_for_raid(tracker_id)
 
-        await self._emit_state_changed(updated, owner_id=owner_id, action="auto_approved")
+        # Phase gate check
+        phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id, saga=saga)
+
+        saga_tid = saga.tracker_id if saga else None
+        await self._emit_state_changed(
+            updated, owner_id=owner_id, action="auto_approved", saga_tracker_id=saga_tid
+        )
 
         return ReviewDecision(
             raid=updated,
@@ -908,7 +915,14 @@ class ReviewEngine:
 
     # -- Phase gate --
 
-    async def _check_phase_gate(self, tracker: TrackerPort, tracker_id: str, owner_id: str) -> bool:
+    async def _check_phase_gate(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        *,
+        saga: Saga | None = None,
+    ) -> bool:
         """Check if all raids in the phase are merged, and unlock next phase if so."""
         phase = await tracker.get_phase_for_raid(tracker_id)
         if phase is None:
@@ -920,7 +934,8 @@ class ReviewEngine:
         logger.info("Phase gate unlocked — all raids merged in phase %s", phase.tracker_id)
 
         # Unlock the next phase
-        saga = await tracker.get_saga_for_raid(tracker_id)
+        if saga is None:
+            saga = await tracker.get_saga_for_raid(tracker_id)
         if saga is None:
             return True
 
@@ -955,20 +970,30 @@ class ReviewEngine:
 
     # -- Event emission --
 
-    async def _emit_state_changed(self, raid: Raid, *, owner_id: str, action: str) -> None:
+    async def _emit_state_changed(
+        self,
+        raid: Raid,
+        *,
+        owner_id: str,
+        action: str,
+        saga_tracker_id: str | None = None,
+    ) -> None:
         if self._event_bus is None:
             return
+        data: dict[str, object] = {
+            "raid_id": str(raid.id),
+            "status": raid.status.value,
+            "confidence": raid.confidence,
+            "action": action,
+            "tracker_id": raid.tracker_id,
+        }
+        if saga_tracker_id is not None:
+            data["saga_tracker_id"] = saga_tracker_id
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
                 owner_id=owner_id,
-                data={
-                    "raid_id": str(raid.id),
-                    "status": raid.status.value,
-                    "confidence": raid.confidence,
-                    "action": action,
-                    "tracker_id": raid.tracker_id,
-                },
+                data=data,
             )
         )
 

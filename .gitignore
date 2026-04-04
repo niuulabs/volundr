@@ -235,3 +235,5 @@ charts/*/charts/
 charts/*/Chart.lock
 *.tgz
 coverage.json
+.skuld/
+
