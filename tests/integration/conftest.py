@@ -75,7 +75,7 @@ async def db_pool() -> asyncpg.Pool:
 # ---------------------------------------------------------------------------
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def txn_pool(db_pool: asyncpg.Pool) -> TransactionalPool:
     """Acquire a connection, start a transaction, and wrap it.
 

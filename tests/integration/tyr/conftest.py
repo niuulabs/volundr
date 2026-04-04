@@ -210,7 +210,7 @@ class StubEventBus(EventBusPort):
 # ---------------------------------------------------------------------------
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
     """Create a Tyr FastAPI app with real DB repos and stubbed external adapters."""
     from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
@@ -301,7 +301,7 @@ async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
     return app
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def tyr_client(tyr_app):  # noqa: ANN001
     """HTTP client that talks to the test Tyr app."""
     async with AsyncClient(
