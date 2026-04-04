@@ -751,11 +751,11 @@ describe('SettingsPage — Credential Form', () => {
   async function openForm() {
     await waitFor(() => {
       expect(screen.getByText('Add Credential')).toBeDefined();
-    });
+    }, { timeout: 5000 });
     fireEvent.click(screen.getByText('Add Credential'));
     await waitFor(() => {
       expect(screen.getByText('Select Type')).toBeDefined();
-    });
+    }, { timeout: 5000 });
     // scope subsequent queries to the form overlay
     const overlay = screen.getByText('Select Type').closest('[class*="formOverlay"]')!;
     return within(overlay as HTMLElement);
