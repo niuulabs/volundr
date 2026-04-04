@@ -1,36 +1,44 @@
 """Volundr-specific integration test fixtures.
 
-Provides ``volundr_app`` and ``volundr_client`` fixtures that stand up the
-full FastAPI application backed by the transactional pool from the shared
-conftest.  The ``database_pool`` context manager is monkeypatched so the
-app lifespan re-uses the per-test wrapped connection instead of creating
-its own pool.
+Provides ``volundr_app`` and ``volundr_client`` fixtures that stand up a
+minimal FastAPI application with the specific routers under test, wired to
+the transactional pool from the shared conftest.
 
-httpx.ASGITransport does NOT send ASGI lifespan events, so we invoke
-the lifespan context manager explicitly before handing the app to the
-test client.
+Unlike the full ``create_app()`` lifespan (which starts background tasks,
+spawns pods, etc.), this fixture manually constructs only the services and
+routers needed for testing sessions, stats, prompts, and auth.
 """
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import httpx
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
 
-from volundr.config import (
-    DatabaseConfig,
-    IdentityConfig,
-    PodManagerConfig,
-    ProvisioningConfig,
-    Settings,
-)
+from volundr.adapters.inbound.rest import create_router as create_session_router
+from volundr.adapters.inbound.rest_prompts import create_prompts_router
+from volundr.adapters.outbound.broadcaster import InMemoryEventBroadcaster
+from volundr.adapters.outbound.identity import EnvoyHeaderIdentityAdapter
+from volundr.adapters.outbound.postgres import PostgresSessionRepository
+from volundr.adapters.outbound.postgres_prompts import PostgresPromptRepository
+from volundr.adapters.outbound.postgres_stats import PostgresStatsRepository
+from volundr.adapters.outbound.postgres_tenants import PostgresTenantRepository
+from volundr.adapters.outbound.postgres_tokens import PostgresTokenTracker
+from volundr.adapters.outbound.postgres_users import PostgresUserRepository
+from volundr.adapters.outbound.pricing import HardcodedPricingProvider
 from volundr.domain.models import Session, SessionSpec, SessionStatus
 from volundr.domain.ports import PodManager, PodStartResult
-from volundr.main import create_app
+from volundr.domain.services import (
+    PromptService,
+    SessionService,
+    StatsService,
+    TenantService,
+    TokenService,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -66,54 +74,62 @@ async def volundr_app(
     txn_pool: TransactionalPool,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """Create a Volundr FastAPI app, run the lifespan, and yield.
+    """Build a minimal FastAPI app with session/stats/prompt routers."""
+    app = FastAPI()
 
-    The lifespan registers routers, so it must run before requests.
-    """
-    settings = Settings(
-        database=DatabaseConfig(
-            host="localhost",
-            port=5432,
-            user="volundr_test",
-            password="volundr_test",
-            name="volundr_test",
-        ),
-        identity=IdentityConfig(
-            adapter="volundr.adapters.outbound.identity.EnvoyHeaderIdentityAdapter",
-        ),
-        pod_manager=PodManagerConfig(
-            adapter="volundr.adapters.outbound.local_process.LocalProcessPodManager",
-        ),
-        provisioning=ProvisioningConfig(
-            timeout_seconds=2.0,
-            initial_delay_seconds=0.0,
-        ),
+    # Repositories backed by the transactional pool
+    session_repo = PostgresSessionRepository(txn_pool)
+    stats_repo = PostgresStatsRepository(txn_pool)
+    token_tracker = PostgresTokenTracker(txn_pool)
+    prompt_repo = PostgresPromptRepository(txn_pool)
+    user_repo = PostgresUserRepository(txn_pool)
+    tenant_repo = PostgresTenantRepository(txn_pool)
+
+    # Identity adapter: reads x-auth-* headers
+    identity = EnvoyHeaderIdentityAdapter(user_repository=user_repo)
+    app.state.identity = identity
+    app.state.settings = type("S", (), {"local_mounts": type("L", (), {"mini_mode": False})()})()
+    app.state.admin_settings = {"storage": {"home_enabled": True}}
+
+    # Ensure the default tenant exists
+    tenant_service = TenantService(tenant_repo, user_repo)
+    await tenant_service.ensure_default_tenant()
+
+    # Services
+    broadcaster = InMemoryEventBroadcaster()
+    pricing = HardcodedPricingProvider()
+    pod_manager = NoOpPodManager()
+
+    session_service = SessionService(
+        session_repo,
+        pod_manager,
+        broadcaster=broadcaster,
+        provisioning_timeout=2.0,
+        provisioning_initial_delay=0.0,
     )
+    stats_service = StatsService(stats_repo)
+    token_service = TokenService(token_tracker, session_repo, pricing, broadcaster=broadcaster)
+    prompt_service = PromptService(prompt_repo)
 
-    pool_ref = [txn_pool]
-
-    @asynccontextmanager
-    async def _patched_database_pool(config=None):
-        yield pool_ref[0]
-
-    monkeypatch.setattr(
-        "volundr.infrastructure.database.database_pool",
-        _patched_database_pool,
+    # Routers
+    session_router = create_session_router(
+        session_service,
+        stats_service,
+        token_service,
+        pricing,
+        broadcaster=broadcaster,
     )
-    monkeypatch.setattr(
-        "volundr.main.database_pool",
-        _patched_database_pool,
-    )
-    monkeypatch.setattr(
-        "volundr.main._create_pod_manager",
-        lambda settings: NoOpPodManager(),
-    )
+    app.include_router(session_router)
 
-    app = create_app(settings)
+    prompts_router = create_prompts_router(prompt_service)
+    app.include_router(prompts_router)
 
-    # Manually invoke the ASGI lifespan so all routers are registered.
-    async with app.router.lifespan_context(app):
-        yield app
+    # Health endpoint (outside lifespan, like production)
+    @app.get("/health")
+    async def health_check() -> dict[str, str]:
+        return {"status": "healthy"}
+
+    yield app
 
 
 @pytest_asyncio.fixture
