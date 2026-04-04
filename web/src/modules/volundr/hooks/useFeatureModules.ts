@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, lazy } from 'react';
 import type { ComponentType } from 'react';
-import type { IVolundrService } from '@/modules/volundr/ports';
-import type { FeatureScope, FeatureModule, UserFeaturePreference } from '@/modules/volundr/models';
+import type {
+  IFeatureCatalogService,
+  FeatureScope,
+  FeatureModule,
+  UserFeaturePreference,
+} from '@/modules/shared/ports/feature-catalog.port';
 import type { SectionDefinition } from '@/modules/volundr/components/SectionLayout';
 import { getModule } from '@/modules/registry';
 import { resolveIcon } from '@/modules/icons';
@@ -38,7 +42,7 @@ interface UseFeatureModulesResult {
  */
 export function useFeatureModules(
   scope: FeatureScope,
-  service: IVolundrService
+  service: IFeatureCatalogService
 ): UseFeatureModulesResult {
   const [features, setFeatures] = useState<FeatureModule[]>([]);
   const [preferences, setPreferences] = useState<UserFeaturePreference[]>([]);

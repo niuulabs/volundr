@@ -55,14 +55,6 @@ registerModuleDefinition({
   ],
   // Uncomment to add settings/admin sections:
   // sections: [],
-  // Uncomment to add a dev-proxy entry:
-  // proxies: [
-  //   {
-  //     path: '/api/v1/$NAME',
-  //     targetEnvVar: 'VITE_${NAME^^}_API_TARGET',
-  //     defaultTarget: 'http://localhost:8082',
-  //   },
-  // ],
 });
 EOF
 

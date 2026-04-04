@@ -41,7 +41,7 @@ Based on the user's description (`$ARGUMENTS`), plan:
 1. **What pages does this module need?** — Single page or multi-page with layout?
 2. **What domain models does it have?** — Define TypeScript interfaces in `models/`
 3. **What API endpoints does it call?** — Define the service port interface
-4. **Does it need its own backend proxy?** — If the backend runs on a different port, add a proxy entry to `register.ts` AND to `web/src/modules/proxy-manifest.ts`
+4. **Does it need its own backend proxy?** — If the backend runs on a different port, add a proxy entry to `web/src/modules/proxy-manifest.ts`
 5. **Does it contribute settings or admin sections?** — Add them to the `sections` array in `register.ts`
 
 ## Step 4: Implement
@@ -73,7 +73,7 @@ Configure the full module definition:
 - Choose an appropriate icon from `lucide-react`
 - Define all routes (with layout if multi-page)
 - Add settings/admin sections if needed
-- Add proxy entries if this module has its own backend
+- If this module has its own backend, add a proxy entry to `web/src/modules/proxy-manifest.ts`
 
 ### 4g. Store (if needed)
 Set up Zustand store for module-specific UI state. Keep it module-scoped — do not create global state.
@@ -94,5 +94,5 @@ After implementation:
 
 - **Module boundaries**: This module MUST NOT import from `volundr/` or `tyr/`. Shared code lives in `modules/shared/`. See `.claude/rules/module-boundaries.md`.
 - **No edits to App.tsx**: Routes are auto-generated from `register.ts`. If you're editing App.tsx, you're doing it wrong.
-- **No edits to vite.config.ts**: Proxy config comes from `proxy-manifest.ts`.
+- **No edits to vite.config.ts**: Proxy config comes from `web/src/modules/proxy-manifest.ts`.
 - **Identity**: Use `useAppIdentity()` from `@/contexts/useAppIdentity` — never import `volundrService` for identity checks.

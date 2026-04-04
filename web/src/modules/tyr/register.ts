@@ -51,11 +51,4 @@ registerModuleDefinition({
         })),
     },
   ],
-  proxies: [
-    {
-      path: '/api/v1/tyr',
-      targetEnvVar: 'VITE_TYR_API_TARGET',
-      defaultTarget: 'http://localhost:8081',
-    },
-  ],
 });

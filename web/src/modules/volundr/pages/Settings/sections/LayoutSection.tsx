@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
-import type { UserFeaturePreference } from '@/modules/volundr/models';
-import { volundrService } from '@/modules/volundr/adapters';
+import type { UserFeaturePreference } from '@/modules/shared/ports/feature-catalog.port';
+import { featureCatalogService } from '@/modules/shared/adapters/feature-catalog.adapter';
 import { resolveIcon } from '@/modules/icons';
 import { cn } from '@/utils/classnames';
 import styles from './LayoutSection.module.css';
@@ -24,8 +24,8 @@ export function LayoutSection() {
     setLoading(true);
     try {
       const [features, prefs] = await Promise.all([
-        volundrService.getFeatureModules('session'),
-        volundrService.getUserFeaturePreferences(),
+        featureCatalogService.getFeatureModules('session'),
+        featureCatalogService.getUserFeaturePreferences(),
       ]);
 
       const prefMap = new Map(prefs.map(p => [p.featureKey, p]));
@@ -93,7 +93,7 @@ export function LayoutSection() {
         visible: item.visible,
         sortOrder: item.sortOrder,
       }));
-      await volundrService.updateUserFeaturePreferences(prefs);
+      await featureCatalogService.updateUserFeaturePreferences(prefs);
       setDirty(false);
     } finally {
       setSaving(false);

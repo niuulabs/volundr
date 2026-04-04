@@ -55,6 +55,15 @@ export type {
   VolundrPreset,
 } from '@/modules/volundr/models/volundr.model';
 
+// Shared identity
+export { IdentityProvider } from '@/contexts/IdentityContext';
+export { useAppIdentity } from '@/contexts/useAppIdentity';
+export type { AppIdentity, IIdentityService } from '@/modules/shared/ports/identity.port';
+
+// Module system
+export { registerModuleDefinition, getModuleDefinitions } from '@/modules/shared/registry';
+export type { ModuleDefinition, ModuleRoute, ModuleSection } from '@/modules/shared/registry';
+
 // Ports (interfaces)
 export type { IVolundrService } from '@/modules/volundr/ports/volundr.port';
 

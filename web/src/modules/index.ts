@@ -1,8 +1,8 @@
 /**
  * Module registrations — imports all module register files at startup.
  *
- * Each module declares its own routes, sections, and proxies in its
- * register.ts file via `registerModuleDefinition()`. To add a new module,
+ * Each module declares its own routes and sections in its register.ts
+ * file via `registerModuleDefinition()`. To add a new module,
  * add one import line here.
  */
 import './volundr/register';
@@ -17,5 +17,5 @@ export {
   getModuleDefinition,
 } from './shared/registry';
 export type { ModuleEntry, ProductModule } from './shared/registry';
-export type { ModuleDefinition, ModuleRoute, ModuleSection, ModuleProxy } from './shared/registry';
+export type { ModuleDefinition, ModuleRoute, ModuleSection } from './shared/registry';
 export { resolveIcon } from './shared/registry';

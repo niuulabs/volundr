@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { FeatureModule, FeatureScope } from '@/modules/volundr/models';
-import { volundrService } from '@/modules/volundr/adapters';
+import type { FeatureModule, FeatureScope } from '@/modules/shared/ports/feature-catalog.port';
+import { featureCatalogService } from '@/modules/shared/adapters/feature-catalog.adapter';
 import { resolveIcon } from '@/modules/icons';
 import { cn } from '@/utils/classnames';
 import styles from './FeatureManagementSection.module.css';
@@ -14,7 +14,7 @@ export function FeatureManagementSection() {
   const loadFeatures = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await volundrService.getFeatureModules();
+      const data = await featureCatalogService.getFeatureModules();
       setFeatures(data);
     } finally {
       setLoading(false);
@@ -28,7 +28,7 @@ export function FeatureManagementSection() {
   const handleToggle = useCallback(async (key: string, currentEnabled: boolean) => {
     setToggling(key);
     try {
-      const updated = await volundrService.toggleFeature(key, !currentEnabled);
+      const updated = await featureCatalogService.toggleFeature(key, !currentEnabled);
       setFeatures(prev => prev.map(f => (f.key === key ? updated : f)));
     } finally {
       setToggling(null);
