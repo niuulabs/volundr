@@ -464,6 +464,139 @@ jobs:
           helm lint charts/niuu/
 
   # ---------------------------------------------------------------------------
+  # Helm — smoke test (kind cluster)
+  # ---------------------------------------------------------------------------
+  helm-smoke-test:
+    name: "Helm: Smoke Test"
+    needs: [changes, merge-container-manifests]
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Helm
+        run: |
+          HELM_VERSION="3.14.0"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Create kind cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          cluster_name: ci-test
+
+      - name: Install Postgres in cluster
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm install pg bitnami/postgresql \
+            --set auth.postgresPassword=test \
+            --set auth.database=volundr \
+            --set primary.persistence.enabled=false \
+            --wait --timeout 120s
+
+      - name: Create Tyr database
+        run: |
+          kubectl run pg-init --rm -i --restart=Never \
+            --image=bitnami/postgresql \
+            --env=PGPASSWORD=test \
+            -- psql -h pg-postgresql -U postgres -c "CREATE DATABASE tyr;"
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load PR container images into kind
+        run: |
+          PR_TAG="pr-${{ github.event.number }}"
+          for CONTAINER in volundr tyr skuld; do
+            IMAGE="ghcr.io/${{ github.repository_owner }}/${CONTAINER}:${PR_TAG}"
+            docker pull "${IMAGE}"
+            kind load docker-image "${IMAGE}" --name ci-test
+          done
+
+      - name: Install Volundr chart
+        run: |
+          helm install volundr charts/volundr/ \
+            -f charts/volundr/ci-values.yaml \
+            --set image.tag="pr-${{ github.event.number }}" \
+            --wait --timeout 120s
+
+      - name: Install Tyr chart
+        run: |
+          helm install tyr charts/tyr/ \
+            -f charts/tyr/ci-values.yaml \
+            --set image.tag="pr-${{ github.event.number }}" \
+            --wait --timeout 120s
+
+      - name: Install Skuld chart
+        run: |
+          helm install skuld charts/skuld/ \
+            -f charts/skuld/ci-values.yaml \
+            --set image.tag="pr-${{ github.event.number }}" \
+            --wait --timeout 120s
+
+      - name: Verify Volundr pods are ready
+        run: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=volundr --timeout=60s
+
+      - name: Verify Tyr pods are ready
+        run: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=tyr --timeout=60s
+
+      - name: Verify Skuld pods are ready
+        run: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=skuld --timeout=60s
+
+      - name: Health check Volundr
+        run: |
+          kubectl port-forward svc/volundr 8080:80 &
+          PF_PID=$!
+          sleep 3
+          curl -sf http://localhost:8080/health
+          kill $PF_PID || true
+
+      - name: Health check Tyr
+        run: |
+          kubectl port-forward svc/tyr 8081:80 &
+          PF_PID=$!
+          sleep 3
+          curl -sf http://localhost:8081/health
+          kill $PF_PID || true
+
+      - name: Verify Kubernetes resources
+        run: |
+          echo "--- ConfigMaps ---"
+          kubectl get configmaps -l app.kubernetes.io/managed-by=Helm
+          echo "--- Secrets ---"
+          kubectl get secrets -l app.kubernetes.io/managed-by=Helm
+          echo "--- ServiceAccounts ---"
+          kubectl get serviceaccounts -l app.kubernetes.io/managed-by=Helm
+          echo "--- Services ---"
+          kubectl get services
+          echo "--- Pods ---"
+          kubectl get pods -o wide
+
+      - name: Dump pod logs on failure
+        if: failure()
+        run: |
+          echo "=== Volundr logs ==="
+          kubectl logs -l app.kubernetes.io/name=volundr --tail=50 || true
+          echo "=== Tyr logs ==="
+          kubectl logs -l app.kubernetes.io/name=tyr --tail=50 || true
+          echo "=== Skuld logs ==="
+          kubectl logs -l app.kubernetes.io/name=skuld --all-containers --tail=50 || true
+          echo "=== Events ==="
+          kubectl get events --sort-by=.lastTimestamp | tail -30 || true
+
+  # ---------------------------------------------------------------------------
   # Containers — build per platform natively, then merge manifests
   # ---------------------------------------------------------------------------
   build-container-image:

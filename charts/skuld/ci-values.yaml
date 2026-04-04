@@ -1,0 +1,83 @@
+# CI smoke-test values — minimal config for kind cluster validation.
+# Used by the helm-smoke-test CI job to verify charts install and pods start.
+#
+# Skuld is a session broker deployed per-session by Volundr's pod manager.
+# For the smoke test we deploy a single standalone instance to validate
+# the chart templates render and pods can start.
+
+session:
+  id: "ci-smoke-test"
+  name: "CI Smoke Test"
+  model: "claude-sonnet-4-6"
+  systemPrompt: ""
+  initialPrompt: ""
+
+image:
+  repository: ghcr.io/niuulabs/skuld
+  tag: ""  # overridden by CI to use PR-tagged image
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "50m"
+  limits:
+    memory: "256Mi"
+    cpu: "500m"
+
+nginx:
+  image:
+    repository: nginx
+    tag: "alpine"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "10m"
+    limits:
+      memory: "64Mi"
+      cpu: "50m"
+
+reh:
+  enabled: false
+
+localServices:
+  enabled: false
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+
+persistence:
+  enabled: false
+
+homeVolume:
+  enabled: false
+
+git:
+  repoUrl: ""
+
+broker:
+  cliType: claude
+  transport: sdk
+  skipPermissions: true
+
+volundr:
+  apiUrl: ""
+
+envSecrets: []
+envVars: []
+
+envoy:
+  enabled: false
+
+gateway:
+  enabled: false
+
+securityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  fsGroup: 0

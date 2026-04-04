@@ -1,0 +1,161 @@
+# CI smoke-test values — minimal config for kind cluster validation.
+# Used by the helm-smoke-test CI job to verify charts install and pods start.
+
+replicaCount: 1
+revisionHistoryLimit: 1
+
+image:
+  registry: ghcr.io
+  repository: niuulabs/volundr
+  tag: ""  # overridden by CI to use PR-tagged image
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  automount: true
+
+rbac:
+  create: true
+  clusterWide: false
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+
+storage:
+  sessions:
+    enabled: false
+  home:
+    enabled: false
+
+database:
+  name: volundr
+  createSecret: true
+  username: volundr
+  password: volundr
+  minPoolSize: 1
+  maxPoolSize: 2
+  external:
+    enabled: true
+    host: pg-postgresql.default.svc.cluster.local
+    port: 5432
+
+podManager:
+  adapter: "volundr.adapters.outbound.flux.FluxPodManager"
+  kwargs:
+    namespace: "default"
+    chart_name: "skuld"
+    chart_version: "0.1.0"
+    source_ref_kind: "HelmRepository"
+    source_ref_name: "skuld"
+    base_domain: "ci.localhost"
+    chat_scheme: "ws"
+    code_scheme: "http"
+    chat_path: "/session"
+    code_path: "/"
+
+identity:
+  adapter: "volundr.adapters.outbound.identity.AllowAllIdentityAdapter"
+  kwargs: {}
+
+authorization:
+  adapter: "volundr.adapters.outbound.authorization.AllowAllAuthorizationAdapter"
+  kwargs: {}
+
+credentialStore:
+  adapter: "niuu.adapters.memory_credential_store.MemoryCredentialStore"
+  kwargs: {}
+
+storageAdapter:
+  adapter: "volundr.adapters.outbound.k8s_storage.InMemoryStorageAdapter"
+  kwargs: {}
+
+resourceProvider:
+  adapter: "volundr.adapters.outbound.static_resource_provider.StaticResourceProvider"
+  kwargs: {}
+
+secretInjection:
+  adapter: "volundr.adapters.outbound.memory_secret_injection.InMemorySecretInjectionAdapter"
+  kwargs: {}
+
+gateway:
+  adapter: "volundr.adapters.outbound.k8s_gateway.InMemoryGatewayAdapter"
+  kwargs: {}
+
+sessionContributors: []
+
+envoy:
+  enabled: false
+
+config:
+  logLevel: info
+  logFormat: json
+  host: "0.0.0.0"
+  workers: 1
+  sessionTimeout: "3600"
+  maxSessionsPerUser: "5"
+  corsOrigins: "*"
+  corsAllowCredentials: "true"
+
+existingSecrets:
+  anthropic: ""
+
+git:
+  validateOnCreate: false
+  github:
+    enabled: false
+  gitlab:
+    enabled: false
+
+chronicle:
+  autoCreateOnStop: false
+
+profiles: []
+templates: []
+
+migrations:
+  enabled: false
+
+livenessProbe:
+  enabled: true
+  path: "/health"
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  path: "/health"
+  initialDelaySeconds: 3
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  path: "/health"
+  initialDelaySeconds: 2
+  periodSeconds: 2
+  timeoutSeconds: 3
+  failureThreshold: 15
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+web:
+  enabled: false
