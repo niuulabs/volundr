@@ -449,7 +449,7 @@ broker:
   skipPermissions: true
 
 image:
-  repository: ghcr.io/niuulabs/skuld-codex
+  repository: ghcr.io/niuulabs/skuld
   tag: "latest"
 
 homeVolume:
