@@ -63,3 +63,4 @@ describe('CollapsibleSection', () => {
     expect(screen.getByText('A test description')).toBeInTheDocument();
   });
 });
+
