@@ -4,7 +4,13 @@ import asyncio
 import json
 import logging
 
-from skuld.transports import CLITransport, _drain_stream, _filter_event, _stop_process
+from skuld.transports import (
+    CLITransport,
+    TransportCapabilities,
+    _drain_stream,
+    _filter_event,
+    _stop_process,
+)
 
 logger = logging.getLogger("skuld.transport")
 
@@ -102,6 +108,10 @@ class SubprocessTransport(CLITransport):
             if not stderr_task.done():
                 stderr_task.cancel()
             self._process = None
+
+    @property
+    def capabilities(self) -> TransportCapabilities:
+        return TransportCapabilities(session_resume=True)
 
     @property
     def session_id(self) -> str | None:

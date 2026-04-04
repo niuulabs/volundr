@@ -38,7 +38,7 @@ class CodexSubprocessTransport(CLITransport):
     Authentication: set OPENAI_API_KEY in the environment.
 
     Codex does not implement the Claude SDK WebSocket protocol, so
-    supports_cli_websocket returns False and the /ws/cli endpoint is not used.
+    capabilities.cli_websocket is False and the /ws/cli endpoint is not used.
 
     Events emitted by Codex are normalized to the same format the broker
     expects so the rest of the pipeline (browser rendering, artifact tracking,

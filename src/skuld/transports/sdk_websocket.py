@@ -8,7 +8,13 @@ import uuid
 
 from fastapi import WebSocket
 
-from skuld.transports import CLITransport, _drain_stream, _filter_event, _stop_process
+from skuld.transports import (
+    CLITransport,
+    TransportCapabilities,
+    _drain_stream,
+    _filter_event,
+    _stop_process,
+)
 
 logger = logging.getLogger("skuld.transport")
 
@@ -421,5 +427,17 @@ class SdkWebSocketTransport(CLITransport):
         return self._skills
 
     @property
-    def supports_cli_websocket(self) -> bool:
-        return True
+    def capabilities(self) -> TransportCapabilities:
+        return TransportCapabilities(
+            cli_websocket=True,
+            session_resume=True,
+            interrupt=True,
+            set_model=True,
+            set_thinking_tokens=True,
+            set_permission_mode=True,
+            rewind_files=True,
+            mcp_set_servers=True,
+            permission_requests=True,
+            slash_commands=True,
+            skills=True,
+        )

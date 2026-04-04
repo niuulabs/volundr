@@ -1486,7 +1486,7 @@ class Broker:
             type(self._transport).__name__ if self._transport else None,
         )
 
-        if not self._transport or not self._transport.supports_cli_websocket:
+        if not self._transport or not self._transport.capabilities.cli_websocket:
             logger.warning(
                 "CLI WebSocket received but transport %s does not support SDK WebSocket protocol",
                 type(self._transport).__name__ if self._transport else "None",

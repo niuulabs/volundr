@@ -11,10 +11,31 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
 logger = logging.getLogger("skuld.transport")
 
 EventCallback = Callable[[dict], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class TransportCapabilities:
+    """Declares what a transport supports.
+
+    All fields default to False so new transports are safe-by-default.
+    """
+
+    cli_websocket: bool = False
+    session_resume: bool = False
+    interrupt: bool = False
+    set_model: bool = False
+    set_thinking_tokens: bool = False
+    set_permission_mode: bool = False
+    rewind_files: bool = False
+    mcp_set_servers: bool = False
+    permission_requests: bool = False
+    slash_commands: bool = False
+    skills: bool = False
 
 
 class CLITransport(ABC):
@@ -77,13 +98,13 @@ class CLITransport(ABC):
         """Whether the transport is connected and operational."""
 
     @property
-    def supports_cli_websocket(self) -> bool:
-        """Whether this transport uses the Claude SDK WebSocket protocol.
+    def capabilities(self) -> TransportCapabilities:
+        """Declare what this transport supports.
 
-        Only SdkWebSocketTransport returns True. All other transports
-        communicate via subprocess stdio and return False.
+        Returns all-False defaults — safe for new transports.
+        Subclasses override to advertise their capabilities.
         """
-        return False
+        return TransportCapabilities()
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +186,7 @@ __all__ = [
     "EventCallback",
     "SdkWebSocketTransport",
     "SubprocessTransport",
+    "TransportCapabilities",
     "_CODEX_TOOL_MAP",
     "_drain_stream",
     "_filter_event",
