@@ -206,13 +206,20 @@ class StubEventBus(EventBusPort):
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# App factory helper
 # ---------------------------------------------------------------------------
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
-    """Create a Tyr FastAPI app with real DB repos and stubbed external adapters."""
+def create_tyr_test_app(
+    settings: Any,
+    pool: Any,
+    event_bus: EventBusPort,
+) -> Any:
+    """Build a Tyr FastAPI app with real DB repos and the given event bus.
+
+    Shared by ``tyr_app`` (uses StubEventBus) and SSE-specific fixtures
+    (uses InMemoryEventBus).
+    """
     from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
     from tyr.adapters.postgres_sagas import PostgresSagaRepository
     from tyr.api.dispatch import resolve_dispatcher_repo as dispatch_resolve_dispatcher_repo
@@ -230,7 +237,7 @@ async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
     from tyr.api.tracker import resolve_trackers
     from tyr.main import create_app
 
-    app = create_app(tyr_settings)
+    app = create_app(settings)
 
     # Replace the heavy lifespan with a no-op so we control wiring.
     @asynccontextmanager
@@ -240,8 +247,8 @@ async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
     app.router.lifespan_context = _test_lifespan
 
     # Real repos backed by the transactional pool
-    saga_repo = PostgresSagaRepository(txn_pool)
-    dispatcher_repo = PostgresDispatcherRepository(txn_pool)
+    saga_repo = PostgresSagaRepository(pool)
+    dispatcher_repo = PostgresDispatcherRepository(pool)
 
     # Stubs for external adapters
     stub_tracker = StubTracker()
@@ -249,7 +256,6 @@ async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
     stub_git.create_branch = AsyncMock(return_value=None)
     stub_llm = AsyncMock()
     stub_volundr = AsyncMock()
-    stub_event_bus = StubEventBus()
 
     # -- Wire dependency overrides ----------------------------------------
 
@@ -275,7 +281,7 @@ async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
         return stub_git
 
     async def _event_bus():  # noqa: ANN202
-        return stub_event_bus
+        return event_bus
 
     app.dependency_overrides[resolve_saga_repo] = _saga_repo
     app.dependency_overrides[dispatch_resolve_saga_repo] = _saga_repo
@@ -294,11 +300,22 @@ async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
     app.dependency_overrides[dispatcher_resolve_event_bus] = _event_bus
 
     # Expose on app.state for test assertions
-    app.state.settings = tyr_settings
-    app.state.pool = txn_pool
+    app.state.settings = settings
+    app.state.pool = pool
     app.state.stub_tracker = stub_tracker
 
     return app
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def tyr_app(tyr_settings, txn_pool):  # noqa: ANN001
+    """Create a Tyr FastAPI app with real DB repos and stubbed external adapters."""
+    return create_tyr_test_app(tyr_settings, txn_pool, StubEventBus())
 
 
 @pytest_asyncio.fixture(loop_scope="session")
