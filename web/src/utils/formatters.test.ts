@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  formatBytes,
   formatNumber,
   formatTokens,
   formatPercent,
@@ -11,6 +12,40 @@ import {
 } from './formatters';
 
 describe('formatters', () => {
+  describe('formatBytes', () => {
+    it('returns "0 B" for zero', () => {
+      expect(formatBytes(0)).toBe('0 B');
+    });
+
+    it('formats bytes', () => {
+      expect(formatBytes(500)).toBe('500 B');
+    });
+
+    it('formats kilobytes', () => {
+      expect(formatBytes(1024)).toBe('1.0 KB');
+    });
+
+    it('formats megabytes', () => {
+      expect(formatBytes(1_048_576)).toBe('1.0 MB');
+    });
+
+    it('formats gigabytes', () => {
+      expect(formatBytes(1_073_741_824)).toBe('1.0 GB');
+    });
+
+    it('formats terabytes', () => {
+      expect(formatBytes(2_000_000_000_000)).toBe('1.8 TB');
+    });
+
+    it('uses one decimal place for values under 10', () => {
+      expect(formatBytes(5_000_000_000)).toBe('4.7 GB');
+    });
+
+    it('uses zero decimal places for values 10 and over', () => {
+      expect(formatBytes(15_000_000_000)).toBe('14 GB');
+    });
+  });
+
   describe('formatNumber', () => {
     it('formats millions with M suffix', () => {
       expect(formatNumber(1_000_000)).toBe('1.0M');
