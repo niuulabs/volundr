@@ -5,6 +5,10 @@ full FastAPI application backed by the transactional pool from the shared
 conftest.  The ``database_pool`` context manager is monkeypatched so the
 app lifespan re-uses the per-test wrapped connection instead of creating
 its own pool.
+
+httpx.ASGITransport does NOT send ASGI lifespan events, so we invoke
+the lifespan context manager explicitly before handing the app to the
+test client.
 """
 
 from __future__ import annotations
@@ -62,7 +66,10 @@ async def volundr_app(
     txn_pool: TransactionalPool,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """Create a fully-wired Volundr FastAPI app backed by the txn pool."""
+    """Create a Volundr FastAPI app, run the lifespan, and yield.
+
+    The lifespan registers routers, so it must run before requests.
+    """
     settings = Settings(
         database=DatabaseConfig(
             host="localhost",
@@ -97,14 +104,16 @@ async def volundr_app(
         "volundr.main.database_pool",
         _patched_database_pool,
     )
-    # Replace the pod manager factory so no real processes are spawned.
     monkeypatch.setattr(
         "volundr.main._create_pod_manager",
         lambda settings: NoOpPodManager(),
     )
 
     app = create_app(settings)
-    return app
+
+    # Manually invoke the ASGI lifespan so all routers are registered.
+    async with app.router.lifespan_context(app):
+        yield app
 
 
 @pytest_asyncio.fixture
