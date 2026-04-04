@@ -425,7 +425,12 @@ export interface WorkloadConfig {
   [key: string]: string | number | boolean | undefined;
 }
 
-export type CliTool = 'claude' | 'codex';
+export type CliTool = string;
+
+export const CLI_TOOL_LABELS: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+};
 
 export interface TerminalSidecarConfig {
   enabled: boolean;

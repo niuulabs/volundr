@@ -7,15 +7,50 @@ vi.mock('@/modules/shared/hooks/useSkuldChat', () => ({
 }));
 
 import { useSkuldChat } from '@/modules/shared/hooks/useSkuldChat';
-import type { SkuldChatMessage, PermissionRequest } from '@/modules/shared/hooks/useSkuldChat';
+import type {
+  SkuldChatMessage,
+  PermissionRequest,
+  TransportCapabilities,
+} from '@/modules/shared/hooks/useSkuldChat';
 import { SessionChat } from './SessionChat';
+
+const NO_CAPABILITIES: TransportCapabilities = {
+  cli_websocket: false,
+  session_resume: false,
+  interrupt: false,
+  set_model: false,
+  set_thinking_tokens: false,
+  set_permission_mode: false,
+  rewind_files: false,
+  mcp_set_servers: false,
+  permission_requests: false,
+  slash_commands: false,
+  skills: false,
+};
+
+const ALL_CAPABILITIES: TransportCapabilities = {
+  cli_websocket: true,
+  session_resume: true,
+  interrupt: true,
+  set_model: true,
+  set_thinking_tokens: true,
+  set_permission_mode: true,
+  rewind_files: true,
+  mcp_set_servers: true,
+  permission_requests: true,
+  slash_commands: true,
+  skills: true,
+};
 
 function mockSkuldChat(overrides: Partial<ReturnType<typeof useSkuldChat>> = {}) {
   const defaults: ReturnType<typeof useSkuldChat> = {
     messages: [],
     connected: false,
     isRunning: false,
+    historyLoaded: true,
     pendingPermissions: [],
+    availableCommands: [],
+    capabilities: ALL_CAPABILITIES,
     sendMessage: vi.fn(),
     respondToPermission: vi.fn(),
     sendInterrupt: vi.fn(),
@@ -495,5 +530,85 @@ describe('SessionChat', () => {
     render(<SessionChat url="wss://test/session" onMessageCountChange={onMessageCountChange} />);
 
     expect(onMessageCountChange).toHaveBeenCalled();
+  });
+
+  // ── Capability gating ───────────────────────────────────────
+
+  it('hides model switch when capabilities.set_model is false', () => {
+    mockSkuldChat({
+      connected: true,
+      capabilities: { ...ALL_CAPABILITIES, set_model: false },
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('model-switch-toggle')).not.toBeInTheDocument();
+  });
+
+  it('shows model switch when capabilities.set_model is true', () => {
+    mockSkuldChat({
+      connected: true,
+      capabilities: { ...ALL_CAPABILITIES, set_model: true },
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.getByTestId('model-switch-toggle')).toBeInTheDocument();
+  });
+
+  it('hides thinking budget when capabilities.set_thinking_tokens is false', () => {
+    mockSkuldChat({
+      connected: true,
+      capabilities: { ...ALL_CAPABILITIES, set_thinking_tokens: false },
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('thinking-budget-toggle')).not.toBeInTheDocument();
+  });
+
+  it('hides rewind button when capabilities.rewind_files is false', () => {
+    mockSkuldChat({
+      connected: true,
+      capabilities: { ...ALL_CAPABILITIES, rewind_files: false },
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('rewind-files')).not.toBeInTheDocument();
+  });
+
+  it('disables stop button when capabilities.interrupt is false', () => {
+    mockSkuldChat({
+      connected: true,
+      isRunning: true,
+      capabilities: { ...ALL_CAPABILITIES, interrupt: false },
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    const stopBtn = screen.getByTestId('stop-btn');
+    expect(stopBtn).toBeDisabled();
+    expect(stopBtn).toHaveAttribute('title', 'Interrupt not supported by this transport');
+  });
+
+  it('enables stop button when capabilities.interrupt is true', () => {
+    mockSkuldChat({
+      connected: true,
+      isRunning: true,
+      capabilities: { ...ALL_CAPABILITIES, interrupt: true },
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    const stopBtn = screen.getByTestId('stop-btn');
+    expect(stopBtn).not.toBeDisabled();
+    expect(stopBtn).toHaveAttribute('title', 'Stop generation');
+  });
+
+  it('hides all controls with no capabilities (all false)', () => {
+    mockSkuldChat({
+      connected: true,
+      capabilities: NO_CAPABILITIES,
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.queryByTestId('model-switch-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('thinking-budget-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rewind-files')).not.toBeInTheDocument();
   });
 });
