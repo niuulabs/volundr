@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     tracker_issue_id TEXT,
     issue_tracker_url TEXT,
     preset_id TEXT,
-    archived_at TIMESTAMP WITH TIME ZONE
+    archived_at TIMESTAMP WITH TIME ZONE,
+    activity_state TEXT DEFAULT 'idle',
+    activity_metadata JSONB DEFAULT '{}'
 );
 """
 
@@ -34,6 +36,7 @@ CREATE_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON sessions(last_active);
+CREATE INDEX IF NOT EXISTS idx_sessions_archived_at ON sessions(archived_at);
 """
 
 TOKEN_USAGE_TABLE_SQL = """
@@ -198,6 +201,174 @@ CREATE INDEX IF NOT EXISTS idx_sessions_owner_id ON sessions(owner_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_tenant_id ON sessions(tenant_id);
 """
 
+SAVED_PROMPTS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS saved_prompts (
+    id              UUID PRIMARY KEY,
+    name            VARCHAR(255) NOT NULL,
+    content         TEXT NOT NULL,
+    scope           VARCHAR(20) NOT NULL DEFAULT 'global',
+    project_repo    VARCHAR(500),
+    tags            TEXT[] NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+"""
+
+SAVED_PROMPTS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_saved_prompts_scope ON saved_prompts(scope);
+CREATE INDEX IF NOT EXISTS idx_saved_prompts_project_repo ON saved_prompts(project_repo);
+CREATE INDEX IF NOT EXISTS idx_saved_prompts_tags ON saved_prompts USING GIN(tags);
+"""
+
+PROJECT_MAPPINGS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS project_mappings (
+    id              UUID PRIMARY KEY,
+    repo_url        VARCHAR(500) NOT NULL,
+    project_id      VARCHAR(255) NOT NULL,
+    project_name    VARCHAR(255) NOT NULL DEFAULT '',
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+"""
+
+PROJECT_MAPPINGS_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_project_mappings_repo_url ON project_mappings(repo_url);
+CREATE INDEX IF NOT EXISTS idx_project_mappings_project_id ON project_mappings(project_id);
+"""
+
+VOLUNDR_PRESETS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS volundr_presets (
+    id                UUID PRIMARY KEY,
+    name              VARCHAR(255) NOT NULL,
+    description       TEXT NOT NULL DEFAULT '',
+    is_default        BOOLEAN NOT NULL DEFAULT FALSE,
+    cli_tool          VARCHAR(100) NOT NULL DEFAULT '',
+    workload_type     VARCHAR(100) NOT NULL DEFAULT 'session',
+    model             VARCHAR(100),
+    system_prompt     TEXT,
+    resource_config   JSONB NOT NULL DEFAULT '{}',
+    mcp_servers       JSONB NOT NULL DEFAULT '[]',
+    terminal_sidecar  JSONB NOT NULL DEFAULT '{}',
+    skills            JSONB NOT NULL DEFAULT '[]',
+    rules             JSONB NOT NULL DEFAULT '[]',
+    env_vars          JSONB NOT NULL DEFAULT '{}',
+    env_secret_refs   JSONB NOT NULL DEFAULT '[]',
+    workload_config   JSONB NOT NULL DEFAULT '{}',
+    source            JSONB,
+    integration_ids   JSONB NOT NULL DEFAULT '[]',
+    setup_scripts     JSONB NOT NULL DEFAULT '[]',
+    created_at        TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+"""
+
+VOLUNDR_PRESETS_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_volundr_presets_name ON volundr_presets(name);
+CREATE INDEX IF NOT EXISTS idx_volundr_presets_cli_tool ON volundr_presets(cli_tool);
+CREATE INDEX IF NOT EXISTS idx_volundr_presets_is_default ON volundr_presets(is_default);
+"""
+
+CREDENTIAL_METADATA_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS credential_metadata (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(253) NOT NULL,
+    secret_type VARCHAR(50) NOT NULL,
+    keys TEXT[] NOT NULL DEFAULT '{}',
+    metadata JSONB NOT NULL DEFAULT '{}',
+    owner_id VARCHAR(255) NOT NULL,
+    owner_type VARCHAR(50) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(owner_type, owner_id, name)
+);
+"""
+
+CREDENTIAL_METADATA_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_credential_metadata_owner
+    ON credential_metadata(owner_type, owner_id);
+"""
+
+INTEGRATION_CONNECTIONS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS integration_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id VARCHAR(255) NOT NULL,
+    integration_type VARCHAR(50) NOT NULL,
+    adapter VARCHAR(500) NOT NULL,
+    credential_name VARCHAR(253) NOT NULL,
+    slug VARCHAR(100) NOT NULL DEFAULT '',
+    config JSONB NOT NULL DEFAULT '{}',
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
+INTEGRATION_CONNECTIONS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_integration_connections_owner
+    ON integration_connections(owner_id, integration_type);
+"""
+
+WORKSPACES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS workspaces (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id      UUID NOT NULL REFERENCES sessions(id),
+    user_id         TEXT NOT NULL REFERENCES users(id),
+    tenant_id       TEXT NOT NULL REFERENCES tenants(id),
+    pvc_name        TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'active',
+    size_gb         INT NOT NULL DEFAULT 1,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    archived_at     TIMESTAMP WITH TIME ZONE,
+    deleted_at      TIMESTAMP WITH TIME ZONE
+);
+"""
+
+WORKSPACES_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_workspaces_session_id ON workspaces(session_id);
+CREATE INDEX IF NOT EXISTS idx_workspaces_user_id ON workspaces(user_id);
+CREATE INDEX IF NOT EXISTS idx_workspaces_tenant_id ON workspaces(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_workspaces_status ON workspaces(status);
+"""
+
+FEATURE_TOGGLES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS feature_toggles (
+    feature_key     TEXT PRIMARY KEY,
+    enabled         BOOLEAN NOT NULL DEFAULT true,
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+"""
+
+USER_FEATURE_PREFERENCES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS user_feature_preferences (
+    user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    feature_key     TEXT NOT NULL,
+    visible         BOOLEAN NOT NULL DEFAULT true,
+    sort_order      INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, feature_key)
+);
+"""
+
+USER_FEATURE_PREFERENCES_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_user_feature_prefs_user
+    ON user_feature_preferences(user_id);
+"""
+
+PERSONAL_ACCESS_TOKENS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS personal_access_tokens (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id     TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name         TEXT        NOT NULL,
+    token_hash   TEXT        NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at   TIMESTAMPTZ,
+    last_used_at TIMESTAMPTZ
+);
+"""
+
+PERSONAL_ACCESS_TOKENS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_pats_owner_id ON personal_access_tokens(owner_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pats_owner_name ON personal_access_tokens(owner_id, name);
+"""
+
 
 async def create_pool(config: DatabaseConfig) -> asyncpg.Pool:
     """Create an asyncpg connection pool."""
@@ -238,6 +409,24 @@ async def init_db(pool: asyncpg.Pool) -> None:
         await conn.execute(TENANT_MEMBERSHIPS_INDEX_SQL)
         await conn.execute(SESSIONS_IDENTITY_COLUMNS_SQL)
         await conn.execute(SESSIONS_IDENTITY_INDEX_SQL)
+        # Additional tables from migrations
+        await conn.execute(SAVED_PROMPTS_TABLE_SQL)
+        await conn.execute(SAVED_PROMPTS_INDEX_SQL)
+        await conn.execute(PROJECT_MAPPINGS_TABLE_SQL)
+        await conn.execute(PROJECT_MAPPINGS_INDEX_SQL)
+        await conn.execute(VOLUNDR_PRESETS_TABLE_SQL)
+        await conn.execute(VOLUNDR_PRESETS_INDEX_SQL)
+        await conn.execute(CREDENTIAL_METADATA_TABLE_SQL)
+        await conn.execute(CREDENTIAL_METADATA_INDEX_SQL)
+        await conn.execute(INTEGRATION_CONNECTIONS_TABLE_SQL)
+        await conn.execute(INTEGRATION_CONNECTIONS_INDEX_SQL)
+        await conn.execute(WORKSPACES_TABLE_SQL)
+        await conn.execute(WORKSPACES_INDEX_SQL)
+        await conn.execute(FEATURE_TOGGLES_TABLE_SQL)
+        await conn.execute(USER_FEATURE_PREFERENCES_TABLE_SQL)
+        await conn.execute(USER_FEATURE_PREFERENCES_INDEX_SQL)
+        await conn.execute(PERSONAL_ACCESS_TOKENS_TABLE_SQL)
+        await conn.execute(PERSONAL_ACCESS_TOKENS_INDEX_SQL)
 
 
 @asynccontextmanager
