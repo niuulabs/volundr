@@ -79,9 +79,9 @@ class TestValuesDefaults:
         assert defaults["image"]["repository"] == "ghcr.io/niuulabs/skuld"
 
     def test_skuld_codex_defaults_image_repository(self, values_yaml):
-        """Test skuld-codex uses a separate skuld-codex image."""
+        """Test skuld-codex uses the merged skuld image."""
         defaults = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]
-        assert defaults["image"]["repository"] == "ghcr.io/niuulabs/skuld-codex"
+        assert defaults["image"]["repository"] == "ghcr.io/niuulabs/skuld"
 
     def test_skuld_claude_helm_repo_configured(self, values_yaml):
         """Test skuld-claude helm repo is configured for OCI."""
