@@ -42,7 +42,9 @@ _DB_USER = os.environ.get("TEST_DATABASE_USER", "volundr_test")
 _DB_PASSWORD = os.environ.get("TEST_DATABASE_PASSWORD", "volundr_test")
 _DB_NAME = os.environ.get("TEST_DATABASE_NAME", "volundr_test")
 
-_MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_MIGRATIONS_DIR = _REPO_ROOT / "migrations"
+_TYR_MIGRATIONS_DIR = _REPO_ROOT / "migrations" / "tyr"
 
 # ---------------------------------------------------------------------------
 # Session-scoped real pool (migrations applied once)
@@ -64,6 +66,8 @@ async def db_pool() -> asyncpg.Pool:
     assert pool is not None
 
     await apply_migrations(pool, _MIGRATIONS_DIR)
+    if _TYR_MIGRATIONS_DIR.is_dir():
+        await apply_migrations(pool, _TYR_MIGRATIONS_DIR)
 
     yield pool
 
