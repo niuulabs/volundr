@@ -594,7 +594,7 @@ class TestAutoApprove:
     @pytest.mark.asyncio
     async def test_auto_approve_event_no_saga(self) -> None:
         """raid.state_changed omits saga_tracker_id when saga is not found."""
-        engine, repo, git, bus = _make_engine()
+        engine, repo, git, bus, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = None
