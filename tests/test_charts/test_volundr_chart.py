@@ -144,6 +144,20 @@ class TestValuesDefaults:
         broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
         assert broker["transport"] == "subprocess"
 
+    def test_skuld_codex_broker_transport_adapter(self, values_yaml):
+        """Test skuld-codex broker has correct transportAdapter class path."""
+        broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
+        assert broker["transportAdapter"] == (
+            "skuld.transports.codex.CodexSubprocessTransport"
+        )
+
+    def test_both_session_defs_use_same_image_repo(self, values_yaml):
+        """Test skuld-claude and skuld-codex reference the same image repo."""
+        defs = values_yaml["sessionDefinitions"]
+        claude_repo = defs["skuldClaude"]["defaults"]["image"]["repository"]
+        codex_repo = defs["skuldCodex"]["defaults"]["image"]["repository"]
+        assert claude_repo == codex_repo == "ghcr.io/niuulabs/skuld"
+
     def test_pod_manager_default_chart_name_is_skuld(self, values_yaml):
         """Test podManager default chart_name is skuld."""
         assert values_yaml["podManager"]["kwargs"]["chart_name"] == "skuld"

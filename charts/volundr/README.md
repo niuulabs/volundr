@@ -652,6 +652,7 @@ Session definitions are Kubernetes custom resources that describe how session po
 | `sessionDefinitions.skuldCodex.defaults.session.model` | string | `"o4-mini"` | Default Codex model |
 | `sessionDefinitions.skuldCodex.defaults.broker.cliType` | string | `"codex"` | AI CLI backend |
 | `sessionDefinitions.skuldCodex.defaults.broker.transport` | string | `"subprocess"` | Codex always uses subprocess transport |
+| `sessionDefinitions.skuldCodex.defaults.broker.transportAdapter` | string | `"skuld.transports.codex.CodexSubprocessTransport"` | Fully-qualified transport adapter class path |
 | `sessionDefinitions.skuldCodex.defaults.broker.skipPermissions` | bool | `true` | Skip tool permission prompts (`--full-auto` for Codex) |
 | `sessionDefinitions.skuldCodex.defaults.image.repository` | string | `"ghcr.io/niuulabs/skuld"` | Session image repository |
 | `sessionDefinitions.skuldCodex.defaults.image.tag` | string | `"latest"` | Session image tag |
