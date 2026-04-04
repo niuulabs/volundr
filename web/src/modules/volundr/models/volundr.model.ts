@@ -139,6 +139,11 @@ export interface VolundrUser {
   createdAt?: string;
 }
 
+/**
+ * Volundr-specific identity. Extends the shared AppIdentity so it can
+ * be used interchangeably with the shared identity system.
+ */
+export { type AppIdentity } from '@/modules/shared/ports/identity.port';
 export interface VolundrIdentity {
   userId: string;
   email: string;

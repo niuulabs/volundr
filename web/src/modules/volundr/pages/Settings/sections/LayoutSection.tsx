@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import type { UserFeaturePreference } from '@/modules/volundr/models';
-import type { IVolundrService } from '@/modules/volundr/ports';
+import { volundrService } from '@/modules/volundr/adapters';
 import { resolveIcon } from '@/modules/icons';
 import { cn } from '@/utils/classnames';
 import styles from './LayoutSection.module.css';
@@ -14,11 +14,7 @@ interface LayoutItem {
   sortOrder: number;
 }
 
-interface LayoutSectionProps {
-  service: IVolundrService;
-}
-
-export function LayoutSection({ service }: LayoutSectionProps) {
+export function LayoutSection() {
   const [items, setItems] = useState<LayoutItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,8 +24,8 @@ export function LayoutSection({ service }: LayoutSectionProps) {
     setLoading(true);
     try {
       const [features, prefs] = await Promise.all([
-        service.getFeatureModules('session'),
-        service.getUserFeaturePreferences(),
+        volundrService.getFeatureModules('session'),
+        volundrService.getUserFeaturePreferences(),
       ]);
 
       const prefMap = new Map(prefs.map(p => [p.featureKey, p]));
@@ -56,7 +52,7 @@ export function LayoutSection({ service }: LayoutSectionProps) {
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -97,12 +93,12 @@ export function LayoutSection({ service }: LayoutSectionProps) {
         visible: item.visible,
         sortOrder: item.sortOrder,
       }));
-      await service.updateUserFeaturePreferences(prefs);
+      await volundrService.updateUserFeaturePreferences(prefs);
       setDirty(false);
     } finally {
       setSaving(false);
     }
-  }, [service, items]);
+  }, [items]);
 
   const handleReset = useCallback(() => {
     loadData();

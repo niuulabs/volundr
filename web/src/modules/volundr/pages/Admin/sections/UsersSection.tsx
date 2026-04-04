@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, RefreshCw, Users } from 'lucide-react';
 import type { VolundrProvisioningResult, VolundrUser } from '@/modules/volundr/models';
-import type { IVolundrService } from '@/modules/volundr/ports';
+import { volundrService } from '@/modules/volundr/adapters';
 import { cn } from '@/utils/classnames';
 import styles from './UsersSection.module.css';
 
@@ -16,11 +16,7 @@ function formatDate(iso: string | undefined): string {
   });
 }
 
-interface UsersSectionProps {
-  service: IVolundrService;
-}
-
-export function UsersSection({ service }: UsersSectionProps) {
+export function UsersSection() {
   const [users, setUsers] = useState<VolundrUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -35,7 +31,7 @@ export function UsersSection({ service }: UsersSectionProps) {
     async function load() {
       setLoading(true);
       try {
-        const data = await service.listUsers();
+        const data = await volundrService.listUsers();
         if (!cancelled) {
           setUsers(data);
         }
@@ -50,7 +46,7 @@ export function UsersSection({ service }: UsersSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [service]);
+  }, []);
 
   const filtered = useMemo(() => {
     if (!search.trim()) {
@@ -66,18 +62,15 @@ export function UsersSection({ service }: UsersSectionProps) {
     );
   }, [users, search]);
 
-  const handleReprovision = useCallback(
-    async (userId: string) => {
-      setReprovisioningUserId(userId);
-      try {
-        const result = await service.reprovisionUser(userId);
-        setReprovisionResult(prev => ({ ...prev, [userId]: result }));
-      } finally {
-        setReprovisioningUserId(null);
-      }
-    },
-    [service]
-  );
+  const handleReprovision = useCallback(async (userId: string) => {
+    setReprovisioningUserId(userId);
+    try {
+      const result = await volundrService.reprovisionUser(userId);
+      setReprovisionResult(prev => ({ ...prev, [userId]: result }));
+    } finally {
+      setReprovisioningUserId(null);
+    }
+  }, []);
 
   if (loading) {
     return <div className={styles.loadingSpinner}>Loading users...</div>;

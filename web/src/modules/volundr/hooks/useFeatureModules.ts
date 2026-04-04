@@ -7,9 +7,9 @@ import { getModule } from '@/modules/registry';
 import { resolveIcon } from '@/modules/icons';
 
 // Cache lazy components so React.lazy is only called once per module key
-const lazyCache = new Map<string, ComponentType<{ service: IVolundrService }>>();
+const lazyCache = new Map<string, ComponentType>();
 
-function getLazyComponent(key: string): ComponentType<{ service: IVolundrService }> | undefined {
+function getLazyComponent(key: string): ComponentType | undefined {
   if (lazyCache.has(key)) {
     return lazyCache.get(key)!;
   }

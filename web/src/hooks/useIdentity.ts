@@ -9,6 +9,11 @@ export interface UseIdentityResult {
   error: string | null;
 }
 
+/**
+ * @deprecated Use `useAppIdentity()` from `@/contexts/IdentityContext` instead.
+ * This hook is coupled to IVolundrService — the shared context-based hook
+ * works with any module and does not require a service parameter.
+ */
 export function useIdentity(service: IVolundrService): UseIdentityResult {
   const [identity, setIdentity] = useState<VolundrIdentity | null>(null);
   const [loading, setLoading] = useState(true);
