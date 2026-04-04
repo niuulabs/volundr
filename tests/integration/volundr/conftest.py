@@ -173,6 +173,9 @@ async def volundr_app(
     prompts_router = create_prompts_router(prompt_service)
     app.include_router(prompts_router)
 
+    # Expose broadcaster for SSE integration tests
+    app.state.broadcaster = broadcaster
+
     # Health endpoint (outside lifespan, like production)
     @app.get("/health")
     async def health_check() -> dict[str, str]:
