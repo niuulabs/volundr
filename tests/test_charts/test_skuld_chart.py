@@ -166,10 +166,8 @@ class TestConfigMapTemplate:
         """Test configmap legacy cli_type reads from broker.cliType."""
         assert ".Values.broker.cliType" in configmap_yaml
 
-    def test_legacy_codex_cli_type_produces_valid_configmap(self, configmap_yaml):
-        """Test legacy broker.cliType field is templated with a default fallback."""
-        # The configmap template uses `| default "claude"`, so even if
-        # cliType is set to "codex" the template renders without error.
+    def test_configmap_cli_type_has_default_fallback(self, configmap_yaml):
+        """Test configmap cli_type template has a default fallback value."""
         assert 'default "claude"' in configmap_yaml
 
     def test_configmap_has_service_auth_fields(self, configmap_yaml):
