@@ -21,6 +21,17 @@ vi.mock('@/modules/volundr/adapters', () => ({
   },
 }));
 
+vi.mock('@/modules/shared/adapters/feature-catalog.adapter', () => ({
+  get featureCatalogService() {
+    return {
+      getFeatureModules: mockServiceRef.current.getFeatureModules,
+      getUserFeaturePreferences: mockServiceRef.current.getUserFeaturePreferences,
+      toggleFeature: mockServiceRef.current.toggleFeature,
+      updateUserFeaturePreferences: mockServiceRef.current.updateUserFeaturePreferences,
+    };
+  },
+}));
+
 const mockCatalog: CatalogEntry[] = [
   {
     slug: 'linear',
