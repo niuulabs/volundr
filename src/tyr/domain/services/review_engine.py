@@ -220,9 +220,7 @@ class ReviewEngine:
                     tracker, tracker_id, owner_id, raid, score
                 )
             elif raid.review_round >= self._cfg.max_review_rounds:
-                decision = await self._handle_escalation(
-                    tracker, tracker_id, owner_id, raid, score
-                )
+                decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
             else:
                 # Low confidence but approved — let the loop continue
                 new_round = raid.review_round + 1
@@ -230,13 +228,17 @@ class ReviewEngine:
                 self._reviewer_sessions[session_id] = (tracker_id, owner_id)
                 logger.info(
                     "Reviewer approved but low confidence (%.2f < %.2f) — round %d/%d, continuing",
-                    result.confidence, self._cfg.auto_approve_threshold,
-                    new_round, self._cfg.max_review_rounds,
+                    result.confidence,
+                    self._cfg.auto_approve_threshold,
+                    new_round,
+                    self._cfg.max_review_rounds,
                 )
                 return
             logger.info(
                 "Post-reviewer decision for %s: %s (reason=%s)",
-                tracker_id, decision.action, decision.reason,
+                tracker_id,
+                decision.action,
+                decision.reason,
             )
             return
 
@@ -249,18 +251,22 @@ class ReviewEngine:
         if new_round >= self._cfg.max_review_rounds:
             # Max rounds exhausted — escalate
             self._reviewer_sessions.pop(session_id, None)
-            decision = await self._handle_escalation(
-                tracker, tracker_id, owner_id, raid, score
-            )
+            decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
             logger.info(
                 "Max review rounds (%d) reached for %s — %s (reason=%s)",
-                self._cfg.max_review_rounds, tracker_id, decision.action, decision.reason,
+                self._cfg.max_review_rounds,
+                tracker_id,
+                decision.action,
+                decision.reason,
             )
             return
 
         logger.info(
             "Review round %d/%d for %s: %d issues, reviewer driving loop",
-            new_round, self._cfg.max_review_rounds, tracker_id, len(result.findings),
+            new_round,
+            self._cfg.max_review_rounds,
+            tracker_id,
+            len(result.findings),
         )
 
     async def start(self) -> None:
@@ -679,9 +685,7 @@ class ReviewEngine:
             await tracker.close_raid(tracker_id)
             logger.info("Closed tracker issue %s (Done)", tracker_id)
         except Exception:
-            logger.error(
-                "FAILED to close tracker issue %s after merge", tracker_id, exc_info=True
-            )
+            logger.error("FAILED to close tracker issue %s after merge", tracker_id, exc_info=True)
 
         # Attach review transcript as a comment on the Linear issue
         if raid.reviewer_session_id:
@@ -691,7 +695,13 @@ class ReviewEngine:
         # Phase gate check
         phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
 
-        await self._emit_state_changed(updated, owner_id=owner_id, action="auto_approved")
+        # Look up saga context for the event payload
+        saga = await tracker.get_saga_for_raid(tracker_id)
+        saga_tid = saga.tracker_id if saga else None
+
+        await self._emit_state_changed(
+            updated, owner_id=owner_id, action="auto_approved", saga_tracker_id=saga_tid
+        )
 
         return ReviewDecision(
             raid=updated,
@@ -728,12 +738,11 @@ class ReviewEngine:
                 lines.append("---")
                 lines.append("")
             title = f"Review Transcript — {raid.name}"
-            await tracker.attach_issue_document(
-                tracker_id, title, "\n".join(lines)
-            )
+            await tracker.attach_issue_document(tracker_id, title, "\n".join(lines))
             logger.info(
                 "Attached review transcript (%d turns) to %s",
-                len(turns), tracker_id,
+                len(turns),
+                tracker_id,
             )
         except Exception:
             logger.warning(
@@ -749,9 +758,7 @@ class ReviewEngine:
             await adapters[0].stop_session(reviewer_session_id)
             logger.info("Stopped reviewer session %s", reviewer_session_id)
         except Exception:
-            logger.warning(
-                "Failed to stop reviewer session %s", reviewer_session_id, exc_info=True
-            )
+            logger.warning("Failed to stop reviewer session %s", reviewer_session_id, exc_info=True)
 
     async def _handle_ci_failure(
         self,
@@ -940,20 +947,30 @@ class ReviewEngine:
 
     # -- Event emission --
 
-    async def _emit_state_changed(self, raid: Raid, *, owner_id: str, action: str) -> None:
+    async def _emit_state_changed(
+        self,
+        raid: Raid,
+        *,
+        owner_id: str,
+        action: str,
+        saga_tracker_id: str | None = None,
+    ) -> None:
         if self._event_bus is None:
             return
+        data: dict[str, object] = {
+            "raid_id": str(raid.id),
+            "status": raid.status.value,
+            "confidence": raid.confidence,
+            "action": action,
+            "tracker_id": raid.tracker_id,
+        }
+        if saga_tracker_id is not None:
+            data["saga_tracker_id"] = saga_tracker_id
         await self._event_bus.emit(
             TyrEvent(
                 event="raid.state_changed",
                 owner_id=owner_id,
-                data={
-                    "raid_id": str(raid.id),
-                    "status": raid.status.value,
-                    "confidence": raid.confidence,
-                    "action": action,
-                    "tracker_id": raid.tracker_id,
-                },
+                data=data,
             )
         )
 
