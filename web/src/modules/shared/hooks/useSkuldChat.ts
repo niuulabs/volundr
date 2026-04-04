@@ -69,6 +69,7 @@ interface CliStreamEvent {
 }
 
 export interface TransportCapabilities {
+  readonly send_message: boolean;
   readonly cli_websocket: boolean;
   readonly session_resume: boolean;
   readonly interrupt: boolean;
@@ -83,6 +84,7 @@ export interface TransportCapabilities {
 }
 
 export const DEFAULT_CAPABILITIES: TransportCapabilities = {
+  send_message: true,
   cli_websocket: false,
   session_resume: false,
   interrupt: false,
@@ -752,6 +754,7 @@ export function useSkuldChat(
         if (eventType === 'capabilities') {
           const caps = event as unknown as Record<string, unknown>;
           setCapabilities({
+            send_message: caps.send_message !== false,
             cli_websocket: caps.cli_websocket === true,
             session_resume: caps.session_resume === true,
             interrupt: caps.interrupt === true,

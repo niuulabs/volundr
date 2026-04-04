@@ -15,6 +15,7 @@ import type {
 import { SessionChat } from './SessionChat';
 
 const NO_CAPABILITIES: TransportCapabilities = {
+  send_message: true,
   cli_websocket: false,
   session_resume: false,
   interrupt: false,
@@ -29,6 +30,7 @@ const NO_CAPABILITIES: TransportCapabilities = {
 };
 
 const ALL_CAPABILITIES: TransportCapabilities = {
+  send_message: true,
   cli_websocket: true,
   session_resume: true,
   interrupt: true,
@@ -610,5 +612,20 @@ describe('SessionChat', () => {
     expect(screen.queryByTestId('model-switch-toggle')).not.toBeInTheDocument();
     expect(screen.queryByTestId('thinking-budget-toggle')).not.toBeInTheDocument();
     expect(screen.queryByTestId('rewind-files')).not.toBeInTheDocument();
+  });
+
+  it('shows all controls when full capabilities reported', () => {
+    mockSkuldChat({
+      connected: true,
+      isRunning: true,
+      capabilities: ALL_CAPABILITIES,
+    });
+    render(<SessionChat url="wss://test/session" />);
+
+    expect(screen.getByTestId('model-switch-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('thinking-budget-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('rewind-files')).toBeInTheDocument();
+    const stopBtn = screen.getByTestId('stop-btn');
+    expect(stopBtn).not.toBeDisabled();
   });
 });
