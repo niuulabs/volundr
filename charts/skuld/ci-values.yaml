@@ -7,7 +7,7 @@
 
 session:
   id: "ci-smoke-test"
-  name: "CI Smoke Test"
+  name: "ci-smoke-test"
   model: "claude-sonnet-4-6"
   systemPrompt: ""
   initialPrompt: ""
