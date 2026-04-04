@@ -93,6 +93,7 @@ class StubTracker(TrackerPort):
         self.phases: list[Phase] = []
         self._all_merged: bool = False
         self.phase_status_updates: list[tuple[str, PhaseStatus]] = []
+        self.attached_documents: list[tuple[str, str, str]] = []
 
     # -- CRUD: create entities --
 
@@ -113,6 +114,10 @@ class StubTracker(TrackerPort):
 
     async def close_raid(self, raid_id: str) -> None:
         pass
+
+    async def attach_issue_document(self, issue_id: str, title: str, content: str) -> str:
+        self.attached_documents.append((issue_id, title, content))
+        return "doc-stub"
 
     # -- Read: fetch domain entities by tracker ID --
 
@@ -1358,7 +1363,7 @@ class TestWorkingSessionCleanup:
 
     @pytest.mark.asyncio
     async def test_merged_attaches_working_transcript(self) -> None:
-        """MERGED should attach the working session transcript."""
+        """MERGED should attach the working session transcript to the tracker."""
         volundr = StubVolundr()
         engine, repo, git, _, _ = _make_engine(volundr=volundr)
         raid = _make_raid(confidence=0.5)
@@ -1371,12 +1376,11 @@ class TestWorkingSessionCleanup:
 
         await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        # get_conversation is called for the working session transcript
-        assert raid.session_id in volundr.stopped_sessions
+        assert any("Working Session Transcript" in title for _, title, _ in repo.attached_documents)
 
     @pytest.mark.asyncio
     async def test_failed_attaches_working_transcript(self) -> None:
-        """FAILED should attach the working session transcript."""
+        """FAILED should attach the working session transcript to the tracker."""
         volundr = StubVolundr()
         config = _default_config(max_retries=3)
         engine, repo, git, _, _ = _make_engine(config=config, volundr=volundr)
@@ -1387,7 +1391,7 @@ class TestWorkingSessionCleanup:
 
         await engine.evaluate(raid.tracker_id, OWNER_ID)
 
-        assert raid.session_id in volundr.stopped_sessions
+        assert any("Working Session Transcript" in title for _, title, _ in repo.attached_documents)
 
     @pytest.mark.asyncio
     async def test_escalated_attaches_working_transcript(self) -> None:
@@ -1404,5 +1408,6 @@ class TestWorkingSessionCleanup:
         result = await engine.evaluate(raid.tracker_id, OWNER_ID)
 
         assert result.action == "escalated"
+        assert any("Working Session Transcript" in title for _, title, _ in repo.attached_documents)
         # Session should NOT be stopped for escalation
         assert raid.session_id not in volundr.stopped_sessions

@@ -691,10 +691,10 @@ class ReviewEngine:
         # Attach transcripts and stop sessions
         if raid.session_id:
             await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_working_session(owner_id, raid.session_id)
+            await self._stop_session(owner_id, raid.session_id, "working session")
         if raid.reviewer_session_id:
             await self._attach_review_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_reviewer_session(owner_id, raid.reviewer_session_id)
+            await self._stop_session(owner_id, raid.reviewer_session_id, "reviewer session")
 
         # Phase gate check
         phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
@@ -726,16 +726,16 @@ class ReviewEngine:
             raid_name=raid.name,
         )
 
-    async def _stop_reviewer_session(self, owner_id: str, reviewer_session_id: str) -> None:
-        """Stop the reviewer session after review is complete."""
+    async def _stop_session(self, owner_id: str, session_id: str, label: str = "session") -> None:
+        """Stop a Volundr session after terminal state."""
         try:
             adapters = await self._volundr_factory.for_owner(owner_id)
             if not adapters:
                 return
-            await adapters[0].stop_session(reviewer_session_id)
-            logger.info("Stopped reviewer session %s", reviewer_session_id)
+            await adapters[0].stop_session(session_id)
+            logger.info("Stopped %s %s", label, session_id)
         except Exception:
-            logger.warning("Failed to stop reviewer session %s", reviewer_session_id, exc_info=True)
+            logger.warning("Failed to stop %s %s", label, session_id, exc_info=True)
 
     async def _attach_working_transcript(
         self,
@@ -754,17 +754,6 @@ class ReviewEngine:
             title_prefix="Working Session Transcript",
             raid_name=raid.name,
         )
-
-    async def _stop_working_session(self, owner_id: str, session_id: str) -> None:
-        """Stop the working session after terminal state is reached."""
-        try:
-            adapters = await self._volundr_factory.for_owner(owner_id)
-            if not adapters:
-                return
-            await adapters[0].stop_session(session_id)
-            logger.info("Stopped working session %s", session_id)
-        except Exception:
-            logger.warning("Failed to stop working session %s", session_id, exc_info=True)
 
     async def _handle_ci_failure(
         self,
@@ -793,7 +782,7 @@ class ReviewEngine:
 
         if raid.session_id:
             await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_working_session(owner_id, raid.session_id)
+            await self._stop_session(owner_id, raid.session_id, "working session")
 
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
@@ -827,7 +816,7 @@ class ReviewEngine:
 
         if raid.session_id:
             await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_working_session(owner_id, raid.session_id)
+            await self._stop_session(owner_id, raid.session_id, "working session")
 
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
