@@ -6,8 +6,10 @@ auto-continue and future consumers without an HTTP request context.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import string
+from collections import defaultdict
 from dataclasses import dataclass
 
 from tyr.domain.models import RaidStatus, Saga, TrackerIssue
@@ -181,6 +183,7 @@ class DispatchService:
         self._saga_repo = saga_repo
         self._dispatcher_repo = dispatcher_repo
         self._config = config
+        self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def find_ready_issues(
         self,
@@ -324,6 +327,52 @@ class DispatchService:
             results.append(result)
 
         return results
+
+    async def try_auto_continue(
+        self,
+        owner_id: str,
+        saga_tracker_id: str,
+    ) -> list[DispatchResult]:
+        """Dispatch newly unblocked issues if auto_continue is enabled.
+
+        Called after a raid merges or a phase gate is unlocked. Uses a
+        per-owner lock to prevent double-dispatch from concurrent merge
+        events.
+        """
+        async with self._locks[owner_id]:
+            state = await self._dispatcher_repo.get_or_create(owner_id)
+            if not state.running or not state.auto_continue:
+                return []
+
+            adapters = await self._tracker_factory.for_owner(owner_id)
+            if not adapters:
+                return []
+
+            running_raids = await adapters[0].list_raids_by_status(RaidStatus.RUNNING)
+            available_slots = state.max_concurrent_raids - len(running_raids)
+            if available_slots <= 0:
+                return []
+
+            ready = await self.find_ready_issues(owner_id, saga_tracker_id=saga_tracker_id)
+            if not ready:
+                return []
+
+            items = [
+                DispatchItem(
+                    saga_id=q.saga_id,
+                    issue_id=q.issue_id,
+                    repo=q.repos[0] if q.repos else "",
+                )
+                for q in ready[:available_slots]
+            ]
+            results = await self.dispatch_issues(owner_id, items)
+            logger.info(
+                "Auto-continue dispatched %d issue(s) for owner %s (saga=%s)",
+                len(results),
+                owner_id[:8],
+                saga_tracker_id,
+            )
+            return results
 
     # -------------------------------------------------------------------
     # Private helpers

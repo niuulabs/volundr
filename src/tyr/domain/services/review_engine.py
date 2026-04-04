@@ -38,6 +38,7 @@ from tyr.domain.models import (
     Saga,
     validate_transition,
 )
+from tyr.domain.services.dispatch_service import DispatchService
 from tyr.domain.services.reviewer_session import (
     ReviewerSessionService,
     parse_reviewer_response,
@@ -132,6 +133,7 @@ class ReviewEngine:
         reviewer_service: ReviewerSessionService | None = None,
         integration_repo: IntegrationRepository | None = None,
         dispatcher_repo: DispatcherRepository | None = None,
+        dispatch_service: DispatchService | None = None,
     ) -> None:
         self._tracker_factory = tracker_factory
         self._volundr_factory = volundr_factory
@@ -141,6 +143,7 @@ class ReviewEngine:
         self._reviewer = reviewer_service
         self._integration_repo = integration_repo
         self._dispatcher_repo = dispatcher_repo
+        self._dispatch_service = dispatch_service
         self._task: asyncio.Task[None] | None = None
         self._processed: set[str] = set()
         # Maps reviewer_session_id → (raid_tracker_id, owner_id)
@@ -708,6 +711,10 @@ class ReviewEngine:
             updated, owner_id=owner_id, action="auto_approved", saga_tracker_id=saga_tid
         )
 
+        # Trigger auto-continue after merge (and after phase unlock)
+        if saga_tid:
+            await self._try_auto_continue(owner_id, saga_tid)
+
         return ReviewDecision(
             raid=updated,
             action="auto_approved",
@@ -966,7 +973,26 @@ class ReviewEngine:
                     )
                 )
 
+            # Phase unlock may unblock new issues — trigger auto-continue
+            await self._try_auto_continue(owner_id, saga.tracker_id)
+
         return True
+
+    # -- Auto-continue --
+
+    async def _try_auto_continue(self, owner_id: str, saga_tracker_id: str) -> None:
+        """Delegate auto-continue to DispatchService if available."""
+        if self._dispatch_service is None:
+            return
+        try:
+            await self._dispatch_service.try_auto_continue(owner_id, saga_tracker_id)
+        except Exception:
+            logger.warning(
+                "Auto-continue failed for owner %s (saga=%s)",
+                owner_id[:8],
+                saga_tracker_id,
+                exc_info=True,
+            )
 
     # -- Event emission --
 
