@@ -1,8 +1,6 @@
-import type { IVolundrService } from '@/modules/volundr/ports';
 import { tyrIntegrationService } from '@/modules/tyr/adapters';
 import { TyrSettings } from './TyrSettings';
 
-// Wrapper typed for the module registry; internally uses tyrIntegrationService
-export function TyrConnectionsWrapper(_props: { service: IVolundrService }) {
+export function TyrConnectionsWrapper() {
   return <TyrSettings service={tyrIntegrationService} />;
 }

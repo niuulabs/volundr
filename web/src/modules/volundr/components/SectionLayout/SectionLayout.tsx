@@ -1,13 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import type { IVolundrService } from '@/modules/volundr/ports';
 import styles from './SectionLayout.module.css';
 
 export interface SectionDefinition {
   key: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  component: React.ComponentType<{ service: IVolundrService }>;
+  component: React.ComponentType;
 }
 
 interface SectionLayoutProps {
@@ -15,7 +14,6 @@ interface SectionLayoutProps {
   sections: SectionDefinition[];
   activeSection: string;
   onSectionChange: (key: string) => void;
-  service: IVolundrService;
 }
 
 export function SectionLayout({
@@ -23,7 +21,6 @@ export function SectionLayout({
   sections,
   activeSection,
   onSectionChange,
-  service,
 }: SectionLayoutProps) {
   const navigate = useNavigate();
 
@@ -60,9 +57,7 @@ export function SectionLayout({
         </nav>
       </aside>
 
-      <main className={styles.content}>
-        {ActiveComponent && <ActiveComponent service={service} />}
-      </main>
+      <main className={styles.content}>{ActiveComponent && <ActiveComponent />}</main>
     </div>
   );
 }

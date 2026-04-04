@@ -1,15 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { FeatureModule, FeatureScope } from '@/modules/volundr/models';
-import type { IVolundrService } from '@/modules/volundr/ports';
+import type { FeatureModule, FeatureScope } from '@/modules/shared/ports/feature-catalog.port';
+import { featureCatalogService } from '@/modules/shared/adapters/feature-catalog.adapter';
 import { resolveIcon } from '@/modules/icons';
 import { cn } from '@/utils/classnames';
 import styles from './FeatureManagementSection.module.css';
 
-interface FeatureManagementSectionProps {
-  service: IVolundrService;
-}
-
-export function FeatureManagementSection({ service }: FeatureManagementSectionProps) {
+export function FeatureManagementSection() {
   const [features, setFeatures] = useState<FeatureModule[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
@@ -18,29 +14,26 @@ export function FeatureManagementSection({ service }: FeatureManagementSectionPr
   const loadFeatures = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await service.getFeatureModules();
+      const data = await featureCatalogService.getFeatureModules();
       setFeatures(data);
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, []);
 
   useEffect(() => {
     loadFeatures();
   }, [loadFeatures]);
 
-  const handleToggle = useCallback(
-    async (key: string, currentEnabled: boolean) => {
-      setToggling(key);
-      try {
-        const updated = await service.toggleFeature(key, !currentEnabled);
-        setFeatures(prev => prev.map(f => (f.key === key ? updated : f)));
-      } finally {
-        setToggling(null);
-      }
-    },
-    [service]
-  );
+  const handleToggle = useCallback(async (key: string, currentEnabled: boolean) => {
+    setToggling(key);
+    try {
+      const updated = await featureCatalogService.toggleFeature(key, !currentEnabled);
+      setFeatures(prev => prev.map(f => (f.key === key ? updated : f)));
+    } finally {
+      setToggling(null);
+    }
+  }, []);
 
   const filtered = scopeFilter === 'all' ? features : features.filter(f => f.scope === scopeFilter);
 

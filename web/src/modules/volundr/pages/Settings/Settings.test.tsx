@@ -13,6 +13,25 @@ import type {
 // Ensure module registry is populated
 import '@/modules';
 
+const mockServiceRef = { current: {} as IVolundrService };
+
+vi.mock('@/modules/volundr/adapters', () => ({
+  get volundrService() {
+    return mockServiceRef.current;
+  },
+}));
+
+vi.mock('@/modules/shared/adapters/feature-catalog.adapter', () => ({
+  get featureCatalogService() {
+    return {
+      getFeatureModules: mockServiceRef.current.getFeatureModules,
+      getUserFeaturePreferences: mockServiceRef.current.getUserFeaturePreferences,
+      toggleFeature: mockServiceRef.current.toggleFeature,
+      updateUserFeaturePreferences: mockServiceRef.current.updateUserFeaturePreferences,
+    };
+  },
+}));
+
 const mockCatalog: CatalogEntry[] = [
   {
     slug: 'linear',
@@ -186,9 +205,10 @@ function createMockService(overrides?: Partial<IVolundrService>): IVolundrServic
 }
 
 function renderSettings(service: IVolundrService) {
+  mockServiceRef.current = service;
   return render(
     <MemoryRouter>
-      <SettingsPage service={service} />
+      <SettingsPage />
     </MemoryRouter>
   );
 }

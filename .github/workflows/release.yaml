@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         platform: [amd64, arm64]
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr, niuu]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -102,7 +102,7 @@ jobs:
       id-token: write
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr, niuu]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -183,7 +183,7 @@ jobs:
       packages: read
     strategy:
       matrix:
-        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr]
+        container: [volundr, skuld, skuld-codex, devrunner, volundr-web, vscode-reh, tyr, niuu]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -350,6 +350,10 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" charts/skuld-planner/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/skuld-planner/Chart.yaml
 
+          # Update niuu-shared chart
+          sed -i "s/^version:.*/version: $VERSION/" charts/niuu-shared/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu-shared/Chart.yaml
+
           # Update niuu umbrella chart
           sed -i "s/^version:.*/version: $VERSION/" charts/niuu/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu/Chart.yaml
@@ -363,6 +367,7 @@ jobs:
           helm package charts/skuld-planner -d .helm-packages/
           helm package charts/volundr -d .helm-packages/
           helm package charts/tyr -d .helm-packages/
+          helm package charts/niuu-shared -d .helm-packages/
           helm dependency build charts/niuu
           helm package charts/niuu -d .helm-packages/
 
@@ -379,7 +384,8 @@ jobs:
           helm push .helm-packages/skuld-planner-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/volundr-*.tgz ${{ env.CHART_REPO }}
           helm push .helm-packages/tyr-*.tgz ${{ env.CHART_REPO }}
-          helm push .helm-packages/niuu-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-shared-*.tgz ${{ env.CHART_REPO }}
+          helm push .helm-packages/niuu-0*.tgz ${{ env.CHART_REPO }}
 
   # ---------------------------------------------------------------------------
   # npm package

@@ -8,7 +8,7 @@ import type {
 import { cn } from '@/utils';
 import { IntegrationCard } from '@/modules/volundr/components/IntegrationCard';
 import { CredentialForm as IntegrationCredentialForm } from '@/modules/volundr/components/CredentialForm';
-import type { IVolundrService } from '@/modules/volundr/ports';
+import { volundrService } from '@/modules/volundr/adapters';
 import { getAccessToken } from '@/modules/volundr/adapters/api/client';
 import styles from '../Settings.module.css';
 
@@ -27,11 +27,7 @@ const INTEGRATION_TYPE_FILTERS = [
 /* IntegrationsSection                                                 */
 /* ------------------------------------------------------------------ */
 
-interface IntegrationsSectionProps {
-  service: IVolundrService;
-}
-
-export function IntegrationsSection({ service }: IntegrationsSectionProps) {
+export function IntegrationsSection() {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [connections, setConnections] = useState<IntegrationConnection[]>([]);
   const [integrationsLoading, setIntegrationsLoading] = useState(true);
@@ -44,15 +40,15 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
     setIntegrationsLoading(true);
     try {
       const [catalogData, connectionsData] = await Promise.all([
-        service.getIntegrationCatalog(),
-        service.getIntegrations(),
+        volundrService.getIntegrationCatalog(),
+        volundrService.getIntegrations(),
       ]);
       setCatalog(catalogData);
       setConnections(connectionsData);
     } finally {
       setIntegrationsLoading(false);
     }
-  }, [service]);
+  }, []);
 
   useEffect(() => {
     loadIntegrations();
@@ -104,20 +100,17 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
 
   const handleIntegrationDisconnect = useCallback(
     async (connectionId: string) => {
-      await service.deleteIntegration(connectionId);
+      await volundrService.deleteIntegration(connectionId);
       await loadIntegrations();
     },
-    [service, loadIntegrations]
+    [loadIntegrations]
   );
 
-  const handleIntegrationTest = useCallback(
-    async (connectionId: string) => {
-      const result = await service.testIntegration(connectionId);
-      setTestResult(result);
-      setTimeout(() => setTestResult(null), 5000);
-    },
-    [service]
-  );
+  const handleIntegrationTest = useCallback(async (connectionId: string) => {
+    const result = await volundrService.testIntegration(connectionId);
+    setTestResult(result);
+    setTimeout(() => setTestResult(null), 5000);
+  }, []);
 
   const inferSecretType = (integrationType: string): string => {
     if (integrationType === 'source_control') {
@@ -137,7 +130,7 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
       }
 
       try {
-        await service.createCredential({
+        await volundrService.createCredential({
           name: credentialName,
           secretType: inferSecretType(
             connectingEntry.integration_type
@@ -145,7 +138,7 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
           data: credentials,
         });
 
-        await service.createIntegration({
+        await volundrService.createIntegration({
           integrationType: connectingEntry.integration_type,
           adapter: connectingEntry.adapter,
           credentialName,
@@ -160,7 +153,7 @@ export function IntegrationsSection({ service }: IntegrationsSectionProps) {
         setIntegrationFormError(err instanceof Error ? err.message : 'Failed to connect');
       }
     },
-    [connectingEntry, service, loadIntegrations]
+    [connectingEntry, loadIntegrations]
   );
 
   const filteredCatalog =

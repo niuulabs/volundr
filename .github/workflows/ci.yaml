@@ -88,7 +88,7 @@ jobs:
           echo "python=true" >> $GITHUB_OUTPUT
           echo "web=true" >> $GITHUB_OUTPUT
           echo "helm=true" >> $GITHUB_OUTPUT
-          echo 'names=["volundr","skuld","skuld-codex","devrunner","volundr-web","vscode-reh","tyr"]' >> $GITHUB_OUTPUT
+          echo 'names=["volundr","skuld","skuld-codex","devrunner","volundr-web","vscode-reh","tyr","niuu"]' >> $GITHUB_OUTPUT
           echo "any=true" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------
@@ -342,6 +342,9 @@ jobs:
       - name: Lint skuld-planner chart
         run: helm lint charts/skuld-planner/
 
+      - name: Lint niuu-shared chart
+        run: helm lint charts/niuu-shared/
+
       - name: Lint niuu umbrella chart
         run: |
           helm dependency build charts/niuu
@@ -475,6 +478,9 @@ jobs:
           sed -i "s/^version:.*/version: $VERSION/" charts/tyr/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/tyr/Chart.yaml
 
+          sed -i "s/^version:.*/version: $VERSION/" charts/niuu-shared/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu-shared/Chart.yaml
+
           sed -i "s/^version:.*/version: $VERSION/" charts/niuu/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/niuu/Chart.yaml
 
@@ -483,6 +489,7 @@ jobs:
           helm package charts/skuld -d .helm-packages/
           helm package charts/volundr -d .helm-packages/
           helm package charts/tyr -d .helm-packages/
+          helm package charts/niuu-shared -d .helm-packages/
           helm dependency build charts/niuu
           helm package charts/niuu -d .helm-packages/
 
@@ -498,7 +505,8 @@ jobs:
           helm push .helm-packages/skuld-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
           helm push .helm-packages/volundr-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
           helm push .helm-packages/tyr-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
-          helm push .helm-packages/niuu-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+          helm push .helm-packages/niuu-shared-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+          helm push .helm-packages/niuu-0*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
   # ---------------------------------------------------------------------------
   # Security — container vulnerability scanning (Grype)

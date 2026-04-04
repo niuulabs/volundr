@@ -78,3 +78,6 @@ def create_app(git_config: GitConfig | None = None) -> FastAPI:
         return {"status": "healthy"}
 
     return app
+
+
+app = create_app()
