@@ -48,6 +48,9 @@ export default defineConfig({
         'src/modules/tyr/adapters/api/tracker.ts',
         // Port interface — no executable logic
         'src/modules/shared/ports/**',
+        // React context default values — no testable logic
+        'src/auth/AuthContext.ts',
+        'src/contexts/**',
       ],
       thresholds: {
         statements: 85,
