@@ -83,7 +83,10 @@ packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not integration'"
+markers = [
+    "integration: tests that require a real PostgreSQL database",
+]
 
 [tool.ruff]
 target-version = "py311"
