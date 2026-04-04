@@ -49,7 +49,7 @@ _MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
 # ---------------------------------------------------------------------------
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def db_pool() -> asyncpg.Pool:
     """Create a real asyncpg pool and apply migrations once per session."""
     pool = await asyncpg.create_pool(
