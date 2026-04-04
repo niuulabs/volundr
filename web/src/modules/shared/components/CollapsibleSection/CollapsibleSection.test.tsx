@@ -51,7 +51,7 @@ describe('CollapsibleSection', () => {
     render(
       <CollapsibleSection {...defaultProps}>
         <span>Child content</span>
-      </CollapsibleSection>,
+      </CollapsibleSection>
     );
 
     expect(screen.getByText('Child content')).toBeInTheDocument();
@@ -63,4 +63,3 @@ describe('CollapsibleSection', () => {
     expect(screen.getByText('A test description')).toBeInTheDocument();
   });
 });
-
