@@ -20,6 +20,7 @@ from tyr.api.dispatch import (
     _resolve_target_adapter,
     _slugify,
     create_dispatch_router,
+    resolve_dispatch_service,
     resolve_dispatcher_repo,
     resolve_saga_repo,
     resolve_volundr,
@@ -35,6 +36,12 @@ from tyr.domain.models import (
     TrackerIssue,
     TrackerMilestone,
     TrackerProject,
+)
+from tyr.domain.services.dispatch_service import (
+    DispatchConfig as ServiceDispatchConfig,
+)
+from tyr.domain.services.dispatch_service import (
+    DispatchService,
 )
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
@@ -155,6 +162,16 @@ class MockVolundrFactory:
         if self._adapters:
             return self._adapters[0]
         return None
+
+
+class MockTrackerFactory:
+    """Stub TrackerFactory that returns a configurable list of adapters."""
+
+    def __init__(self, adapters: list | None = None) -> None:
+        self._adapters = adapters or []
+
+    async def for_owner(self, owner_id: str) -> list:
+        return list(self._adapters)
 
 
 class MockDispatcherRepo(DispatcherRepository):
@@ -285,20 +302,63 @@ def saga_repo() -> MockSagaRepo:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=datetime.now(UTC),
-        base_branch="dev",
+            base_branch="dev",
         )
     )
     return repo
 
 
 @pytest.fixture
-def mock_factory() -> MockVolundrFactory:
-    return MockVolundrFactory()
+def mock_factory(mock_volundr: MockVolundr) -> MockVolundrFactory:
+    return MockVolundrFactory(adapters=[mock_volundr])
 
 
 @pytest.fixture
 def mock_dispatcher_repo() -> MockDispatcherRepo:
     return MockDispatcherRepo()
+
+
+def _make_dispatch_service(
+    tracker: MockTracker,
+    volundr_factory: MockVolundrFactory,
+    saga_repo: MockSagaRepo,
+    dispatcher_repo: MockDispatcherRepo,
+    settings: Settings | None = None,
+) -> DispatchService:
+    settings = settings or _make_settings()
+    return DispatchService(
+        tracker_factory=MockTrackerFactory([tracker]),
+        volundr_factory=volundr_factory,
+        saga_repo=saga_repo,
+        dispatcher_repo=dispatcher_repo,
+        config=ServiceDispatchConfig(
+            default_system_prompt=settings.dispatch.default_system_prompt,
+            default_model=settings.dispatch.default_model,
+            dispatch_prompt_template=settings.dispatch.dispatch_prompt_template,
+        ),
+    )
+
+
+def _make_test_app(
+    tracker: MockTracker,
+    saga_repo: MockSagaRepo,
+    volundr: MockVolundr,
+    volundr_factory: MockVolundrFactory,
+    dispatcher_repo: MockDispatcherRepo,
+    settings: Settings | None = None,
+) -> FastAPI:
+    settings = settings or _make_settings()
+    app = FastAPI()
+    app.include_router(create_dispatch_router())
+    app.state.settings = settings
+    svc = _make_dispatch_service(tracker, volundr_factory, saga_repo, dispatcher_repo, settings)
+    app.dependency_overrides[resolve_trackers] = lambda: [tracker]
+    app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
+    app.dependency_overrides[resolve_volundr] = lambda: volundr
+    app.dependency_overrides[resolve_volundr_factory] = lambda: volundr_factory
+    app.dependency_overrides[resolve_dispatcher_repo] = lambda: dispatcher_repo
+    app.dependency_overrides[resolve_dispatch_service] = lambda: svc
+    return app
 
 
 @pytest.fixture
@@ -309,14 +369,7 @@ def client(
     mock_factory: MockVolundrFactory,
     mock_dispatcher_repo: MockDispatcherRepo,
 ) -> TestClient:
-    app = FastAPI()
-    app.include_router(create_dispatch_router())
-    app.state.settings = _make_settings()
-    app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
-    app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-    app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-    app.dependency_overrides[resolve_volundr_factory] = lambda: mock_factory
-    app.dependency_overrides[resolve_dispatcher_repo] = lambda: mock_dispatcher_repo
+    app = _make_test_app(mock_tracker, saga_repo, mock_volundr, mock_factory, mock_dispatcher_repo)
     return TestClient(app)
 
 
@@ -512,13 +565,8 @@ class TestGetQueue:
                 tracker_issue_id="ALPHA-1",
             ),
         ]
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
-        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        factory = MockVolundrFactory(adapters=[volundr])
+        app = _make_test_app(mock_tracker, saga_repo, volundr, factory, MockDispatcherRepo())
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -534,13 +582,8 @@ class TestGetQueue:
         mock_volundr: MockVolundr,
     ):
         mock_tracker._blocked = {"ALPHA-1"}
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
-        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        factory = MockVolundrFactory(adapters=[mock_volundr])
+        app = _make_test_app(mock_tracker, saga_repo, mock_volundr, factory, MockDispatcherRepo())
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -554,13 +597,10 @@ class TestGetQueue:
         mock_tracker: MockTracker,
         mock_volundr: MockVolundr,
     ):
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
-        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
-        app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        factory = MockVolundrFactory(adapters=[mock_volundr])
+        app = _make_test_app(
+            mock_tracker, MockSagaRepo(), mock_volundr, factory, MockDispatcherRepo()
+        )
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -573,13 +613,8 @@ class TestGetQueue:
         saga_repo: MockSagaRepo,
     ):
         volundr = MockVolundr()
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
-        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        factory = MockVolundrFactory(adapters=[volundr])
+        app = _make_test_app(mock_tracker, saga_repo, volundr, factory, MockDispatcherRepo())
         client = TestClient(app)
 
         resp = client.get(
@@ -610,13 +645,9 @@ class TestGetQueue:
             async def get_project_full(self, project_id):
                 raise ConnectionError("down")
 
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: [FailingTracker()]
-        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_volundr] = lambda: mock_volundr
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        tracker = FailingTracker()
+        factory = MockVolundrFactory(adapters=[mock_volundr])
+        app = _make_test_app(tracker, saga_repo, mock_volundr, factory, MockDispatcherRepo())
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/queue")
@@ -736,15 +767,8 @@ class TestApproveDispatch:
     ):
         volundr = MockVolundr()
         volundr.fail_spawn = True
-
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
-        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
-        app.dependency_overrides[resolve_dispatcher_repo] = lambda: MockDispatcherRepo()
+        factory = MockVolundrFactory(adapters=[volundr])
+        app = _make_test_app(mock_tracker, saga_repo, volundr, factory, MockDispatcherRepo())
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -772,14 +796,8 @@ class TestApproveDispatch:
         mock_tracker: MockTracker,
     ):
         volundr = MockVolundr()
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: [mock_tracker]
-        app.dependency_overrides[resolve_saga_repo] = lambda: saga_repo
-        app.dependency_overrides[resolve_volundr] = lambda: volundr
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
-        app.dependency_overrides[resolve_dispatcher_repo] = lambda: MockDispatcherRepo()
+        factory = MockVolundrFactory(adapters=[volundr])
+        app = _make_test_app(mock_tracker, saga_repo, volundr, factory, MockDispatcherRepo())
         client = TestClient(app)
 
         saga_id = str(saga_repo.sagas[0].id)
@@ -915,13 +933,9 @@ class TestResolveTargetAdapter:
 
 class TestListClusters:
     def test_returns_empty_when_no_integration_repo(self):
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
-        app.dependency_overrides[resolve_trackers] = lambda: []
-        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
-        app.dependency_overrides[resolve_volundr] = lambda: MockVolundr()
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
+        volundr = MockVolundr()
+        factory = MockVolundrFactory(adapters=[volundr])
+        app = _make_test_app(MockTracker(), MockSagaRepo(), volundr, factory, MockDispatcherRepo())
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/clusters")
@@ -958,14 +972,10 @@ class TestListClusters:
         ]
         integration_repo = StubIntegrationRepo(connections=connections)
 
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
+        volundr = MockVolundr()
+        factory = MockVolundrFactory(adapters=[volundr])
+        app = _make_test_app(MockTracker(), MockSagaRepo(), volundr, factory, MockDispatcherRepo())
         app.state.integration_repo = integration_repo
-        app.dependency_overrides[resolve_trackers] = lambda: []
-        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
-        app.dependency_overrides[resolve_volundr] = lambda: MockVolundr()
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/clusters")
@@ -999,14 +1009,10 @@ class TestListClusters:
         ]
         integration_repo = StubIntegrationRepo(connections=connections)
 
-        app = FastAPI()
-        app.include_router(create_dispatch_router())
-        app.state.settings = _make_settings()
+        volundr = MockVolundr()
+        factory = MockVolundrFactory(adapters=[volundr])
+        app = _make_test_app(MockTracker(), MockSagaRepo(), volundr, factory, MockDispatcherRepo())
         app.state.integration_repo = integration_repo
-        app.dependency_overrides[resolve_trackers] = lambda: []
-        app.dependency_overrides[resolve_saga_repo] = lambda: MockSagaRepo()
-        app.dependency_overrides[resolve_volundr] = lambda: MockVolundr()
-        app.dependency_overrides[resolve_volundr_factory] = lambda: MockVolundrFactory()
         client = TestClient(app)
 
         resp = client.get("/api/v1/tyr/dispatch/clusters")
