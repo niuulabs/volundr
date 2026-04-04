@@ -104,8 +104,8 @@ async def test_create_session_invalid_name(volundr_client, auth_headers):
 
 async def test_session_owner_filtering(volundr_client, auth_headers):
     """Session created by user A should not appear in user B's list."""
-    headers_a = auth_headers("owner-a", "a@test.com", "tenant-iso", ["volundr:developer"])
-    headers_b = auth_headers("owner-b", "b@test.com", "tenant-iso", ["volundr:developer"])
+    headers_a = auth_headers("owner-a", "a@test.com", "default", ["volundr:developer"])
+    headers_b = auth_headers("owner-b", "b@test.com", "default", ["volundr:developer"])
 
     create_resp = await _create_session(volundr_client, headers_a, name="integ-owner")
     assert create_resp.status_code == 201, create_resp.text
