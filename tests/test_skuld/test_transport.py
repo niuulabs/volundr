@@ -6,15 +6,106 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from skuld.transport import (
+from skuld.transports import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
+    TransportCapabilities,
     _drain_stream,
     _filter_event,
     _map_codex_tool,
     _stop_process,
 )
+
+# ---------------------------------------------------------------------------
+# TransportCapabilities
+# ---------------------------------------------------------------------------
+
+
+class TestTransportCapabilities:
+    """Tests for TransportCapabilities dataclass and per-transport values."""
+
+    def test_default_capabilities_all_false(self):
+        """Default TransportCapabilities() has all fields False."""
+        caps = TransportCapabilities()
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
+
+    def test_subprocess_transport_capabilities(self, tmp_path):
+        """SubprocessTransport has session_resume=True, rest False."""
+        transport = SubprocessTransport(str(tmp_path))
+        caps = transport.capabilities
+        assert caps.session_resume is True
+        assert caps.cli_websocket is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
+
+    def test_sdk_websocket_transport_capabilities(self, tmp_path):
+        """SdkWebSocketTransport has all capabilities True."""
+        transport = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="test",
+        )
+        caps = transport.capabilities
+        assert caps.cli_websocket is True
+        assert caps.session_resume is True
+        assert caps.interrupt is True
+        assert caps.set_model is True
+        assert caps.set_thinking_tokens is True
+        assert caps.set_permission_mode is True
+        assert caps.rewind_files is True
+        assert caps.mcp_set_servers is True
+        assert caps.permission_requests is True
+        assert caps.slash_commands is True
+        assert caps.skills is True
+
+    def test_codex_subprocess_transport_capabilities(self, tmp_path):
+        """CodexSubprocessTransport has all capabilities False."""
+        transport = CodexSubprocessTransport(str(tmp_path))
+        caps = transport.capabilities
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
+
+    def test_capabilities_is_frozen(self):
+        """TransportCapabilities is immutable (frozen dataclass)."""
+        caps = TransportCapabilities()
+        with pytest.raises(AttributeError):
+            caps.cli_websocket = True  # type: ignore[misc]
+
+    def test_capabilities_partial_override(self):
+        """Individual fields can be set at construction time."""
+        caps = TransportCapabilities(interrupt=True, set_model=True)
+        assert caps.interrupt is True
+        assert caps.set_model is True
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
+
 
 # ---------------------------------------------------------------------------
 # _filter_event
@@ -741,7 +832,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_send_control_response_noop_on_base_class(self):
         """Base CLITransport.send_control_response is a no-op."""
-        from skuld.transport import SubprocessTransport
+        from skuld.transports import SubprocessTransport
 
         t = SubprocessTransport("/tmp")
         # Should not raise
@@ -814,7 +905,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_send_control_noop_on_base_class(self):
         """Base CLITransport.send_control is a no-op."""
-        from skuld.transport import SubprocessTransport
+        from skuld.transports import SubprocessTransport
 
         t = SubprocessTransport("/tmp")
         # Should not raise
@@ -1079,6 +1170,15 @@ class TestCodexSubprocessTransport:
         caps = transport.capabilities
         assert caps.cli_websocket is False
         assert caps.session_resume is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
 
     @pytest.mark.asyncio
     async def test_start_is_noop(self, transport):
