@@ -6,7 +6,6 @@ import type {
   PermissionBehavior,
   ContentBlock,
   AttachmentMeta,
-  TransportCapabilities,
 } from '@/modules/shared/hooks/useSkuldChat';
 import { cn } from '@/utils';
 import { UserMessage, AssistantMessage, StreamingMessage, SystemMessage } from './ChatMessages';
