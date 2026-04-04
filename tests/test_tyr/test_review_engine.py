@@ -586,28 +586,6 @@ class TestAutoApprove:
         assert state_event.data["saga_tracker_id"] == "proj-1"
 
     @pytest.mark.asyncio
-    async def test_auto_approve_event_includes_saga_tracker_id(self) -> None:
-        """raid.state_changed from auto-approve must include saga_tracker_id."""
-        engine, repo, git, bus = _make_engine()
-        raid = _make_raid(confidence=0.5)
-        repo.raids[raid.tracker_id] = raid
-        repo.saga = _make_saga()
-        repo.phase = _make_phase()
-
-        _setup_passing_pr(git, raid.pr_id)
-        git.changed_files[raid.pr_id] = ["src/main.py"]
-
-        q = bus.subscribe()
-        await engine.evaluate(raid.tracker_id, OWNER_ID)
-
-        events = []
-        while not q.empty():
-            events.append(await q.get())
-
-        state_event = next(e for e in events if e.event == "raid.state_changed")
-        assert state_event.data["saga_tracker_id"] == repo.saga.tracker_id
-
-    @pytest.mark.asyncio
     async def test_auto_approve_event_no_saga(self) -> None:
         """raid.state_changed omits saga_tracker_id when saga is not found."""
         engine, repo, git, bus = _make_engine()

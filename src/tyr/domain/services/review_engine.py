@@ -35,6 +35,7 @@ from tyr.domain.models import (
     PRStatus,
     Raid,
     RaidStatus,
+    Saga,
     validate_transition,
 )
 from tyr.domain.services.reviewer_session import (
@@ -693,13 +694,13 @@ class ReviewEngine:
             await self._attach_review_transcript(tracker, tracker_id, owner_id, raid)
             await self._stop_reviewer_session(owner_id, raid.reviewer_session_id)
 
-        # Phase gate check
-        phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id)
-
-        # Look up saga context for the event payload
+        # Look up saga once — used by both phase gate and event emission
         saga = await tracker.get_saga_for_raid(tracker_id)
-        saga_tid = saga.tracker_id if saga else None
 
+        # Phase gate check
+        phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id, saga=saga)
+
+        saga_tid = saga.tracker_id if saga else None
         await self._emit_state_changed(
             updated, owner_id=owner_id, action="auto_approved", saga_tracker_id=saga_tid
         )
@@ -880,7 +881,14 @@ class ReviewEngine:
 
     # -- Phase gate --
 
-    async def _check_phase_gate(self, tracker: TrackerPort, tracker_id: str, owner_id: str) -> bool:
+    async def _check_phase_gate(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        *,
+        saga: Saga | None = None,
+    ) -> bool:
         """Check if all raids in the phase are merged, and unlock next phase if so."""
         phase = await tracker.get_phase_for_raid(tracker_id)
         if phase is None:
@@ -892,7 +900,8 @@ class ReviewEngine:
         logger.info("Phase gate unlocked — all raids merged in phase %s", phase.tracker_id)
 
         # Unlock the next phase
-        saga = await tracker.get_saga_for_raid(tracker_id)
+        if saga is None:
+            saga = await tracker.get_saga_for_raid(tracker_id)
         if saga is None:
             return True
 
