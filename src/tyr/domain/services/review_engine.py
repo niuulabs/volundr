@@ -688,7 +688,10 @@ class ReviewEngine:
         except Exception:
             logger.error("FAILED to close tracker issue %s after merge", tracker_id, exc_info=True)
 
-        # Attach review transcript as a comment on the Linear issue
+        # Attach transcripts and stop sessions
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+            await self._stop_working_session(owner_id, raid.session_id)
         if raid.reviewer_session_id:
             await self._attach_review_transcript(tracker, tracker_id, owner_id, raid)
             await self._stop_reviewer_session(owner_id, raid.reviewer_session_id)
@@ -734,6 +737,35 @@ class ReviewEngine:
         except Exception:
             logger.warning("Failed to stop reviewer session %s", reviewer_session_id, exc_info=True)
 
+    async def _attach_working_transcript(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+    ) -> None:
+        """Fetch the working session conversation and attach as a document."""
+        await attach_session_transcript(
+            volundr_factory=self._volundr_factory,
+            tracker=tracker,
+            tracker_id=tracker_id,
+            owner_id=owner_id,
+            session_id=raid.session_id,
+            title_prefix="Working Session Transcript",
+            raid_name=raid.name,
+        )
+
+    async def _stop_working_session(self, owner_id: str, session_id: str) -> None:
+        """Stop the working session after terminal state is reached."""
+        try:
+            adapters = await self._volundr_factory.for_owner(owner_id)
+            if not adapters:
+                return
+            await adapters[0].stop_session(session_id)
+            logger.info("Stopped working session %s", session_id)
+        except Exception:
+            logger.warning("Failed to stop working session %s", session_id, exc_info=True)
+
     async def _handle_ci_failure(
         self,
         tracker: TrackerPort,
@@ -758,6 +790,10 @@ class ReviewEngine:
         updated = await tracker.update_raid_progress(
             tracker_id, status=RaidStatus.FAILED, reason="CI failed, retries exhausted"
         )
+
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+            await self._stop_working_session(owner_id, raid.session_id)
 
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
@@ -789,6 +825,10 @@ class ReviewEngine:
             tracker_id, status=RaidStatus.FAILED, reason="PR conflicts, retries exhausted"
         )
 
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+            await self._stop_working_session(owner_id, raid.session_id)
+
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
             raid=updated,
@@ -807,6 +847,11 @@ class ReviewEngine:
         """Confidence too low or conditions not met — escalate to human review."""
         validate_transition(raid.status, RaidStatus.ESCALATED)
         updated = await tracker.update_raid_progress(tracker_id, status=RaidStatus.ESCALATED)
+
+        # Snapshot the working transcript but keep the session alive for human review
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+
         await self._emit_state_changed(updated, owner_id=owner_id, action="escalated")
         return ReviewDecision(
             raid=updated,
