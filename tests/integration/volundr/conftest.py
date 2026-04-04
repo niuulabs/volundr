@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -23,12 +24,37 @@ from volundr.config import (
     ProvisioningConfig,
     Settings,
 )
+from volundr.domain.models import Session, SessionSpec, SessionStatus
+from volundr.domain.ports import PodManager, PodStartResult
 from volundr.main import create_app
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from tests.integration.pool_wrapper import TransactionalPool
+
+
+class NoOpPodManager(PodManager):
+    """Stub pod manager that returns immediately without spawning anything."""
+
+    async def start(self, session: Session, spec: SessionSpec) -> PodStartResult:
+        return PodStartResult(
+            chat_endpoint=f"ws://test:0/s/{session.id}/session",
+            code_endpoint=None,
+            pod_name=f"test-{uuid4().hex[:8]}",
+        )
+
+    async def stop(self, session: Session) -> bool:
+        return True
+
+    async def status(self, session: Session) -> SessionStatus:
+        return SessionStatus.STOPPED
+
+    async def wait_for_ready(self, session: Session, timeout: float) -> SessionStatus:
+        return SessionStatus.RUNNING
+
+    async def close(self) -> None:
+        pass
 
 
 @pytest_asyncio.fixture
@@ -70,6 +96,11 @@ async def volundr_app(
     monkeypatch.setattr(
         "volundr.main.database_pool",
         _patched_database_pool,
+    )
+    # Replace the pod manager factory so no real processes are spawned.
+    monkeypatch.setattr(
+        "volundr.main._create_pod_manager",
+        lambda settings: NoOpPodManager(),
     )
 
     app = create_app(settings)
