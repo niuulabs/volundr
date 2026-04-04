@@ -30,7 +30,12 @@ from tyr.adapters.postgres_notification_subscriptions import (
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
-from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
+from tyr.api.dispatch import (
+    create_dispatch_router,
+    resolve_dispatch_service,
+    resolve_volundr,
+    resolve_volundr_factory,
+)
 from tyr.api.dispatch import resolve_dispatcher_repo as dispatch_resolve_dispatcher_repo
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
@@ -46,6 +51,12 @@ from tyr.api.sagas import resolve_volundr as sagas_resolve_volundr
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
+from tyr.domain.services.dispatch_service import (
+    DispatchConfig as DispatchServiceConfig,
+)
+from tyr.domain.services.dispatch_service import (
+    DispatchService,
+)
 from tyr.domain.services.notification import NotificationService
 from tyr.domain.services.review_engine import ReviewEngine
 from tyr.domain.services.reviewer_session import ReviewerSessionService
@@ -83,7 +94,9 @@ def _configure_logging(settings: Settings) -> None:
     logging.getLogger().setLevel(level)
 
     logging.getLogger(__name__).info(
-        "Logging configured: level=%s, format=%s", level_name, log_format,
+        "Logging configured: level=%s, format=%s",
+        level_name,
+        log_format,
     )
 
     # Silence noisy loggers
@@ -213,7 +226,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # finds it in the DB (same seed as Volundr).
             if settings.linear.api_key:
                 await _seed_linear_integration(
-                    integration_repo, credential_store,
+                    integration_repo,
+                    credential_store,
                     api_key=settings.linear.api_key,
                     team_id=settings.linear.team_id,
                     adapter_class="tyr.adapters.linear.LinearTrackerAdapter",
@@ -254,6 +268,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
             app.dependency_overrides[dispatch_resolve_dispatcher_repo] = _resolve_dispatcher_repo
+
+            # Wire DispatchService
+            dispatch_svc = DispatchService(
+                tracker_factory=app.state.tracker_factory,
+                volundr_factory=app.state.volundr_factory,
+                saga_repo=saga_repo,
+                dispatcher_repo=dispatcher_repo,
+                config=DispatchServiceConfig(
+                    default_system_prompt=settings.dispatch.default_system_prompt,
+                    default_model=settings.dispatch.default_model,
+                    dispatch_prompt_template=settings.dispatch.dispatch_prompt_template,
+                ),
+            )
+            app.state.dispatch_service = dispatch_svc
+
+            async def _resolve_dispatch_service() -> DispatchService:
+                return dispatch_svc
+
+            app.dependency_overrides[resolve_dispatch_service] = _resolve_dispatch_service
 
             # Wire Volundr adapter — per-user resolution via factory.
             async def _resolve_volundr_per_user(
@@ -404,6 +437,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event_bus=event_bus,
                 reviewer_service=reviewer_service,
                 dispatcher_repo=dispatcher_repo,
+                dispatch_service=dispatch_svc,
             )
             app.state.review_engine = review_engine
             await review_engine.start()

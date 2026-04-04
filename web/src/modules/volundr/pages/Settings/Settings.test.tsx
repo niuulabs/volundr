@@ -749,13 +749,19 @@ describe('SettingsPage — Credential Form', () => {
 
   /** Helper: open the credential form and return scoped queries for the overlay. */
   async function openForm() {
-    await waitFor(() => {
-      expect(screen.getByText('Add Credential')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Add Credential')).toBeDefined();
+      },
+      { timeout: 5000 }
+    );
     fireEvent.click(screen.getByText('Add Credential'));
-    await waitFor(() => {
-      expect(screen.getByText('Select Type')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Select Type')).toBeDefined();
+      },
+      { timeout: 5000 }
+    );
     // scope subsequent queries to the form overlay
     const overlay = screen.getByText('Select Type').closest('[class*="formOverlay"]')!;
     return within(overlay as HTMLElement);

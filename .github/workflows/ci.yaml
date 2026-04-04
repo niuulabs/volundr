@@ -150,7 +150,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          uv run pytest tests/ --ignore=tests/test_tyr -v --tb=short \
+          uv run pytest tests/ --ignore=tests/test_tyr --ignore=tests/integration -v --tb=short \
             --override-ini="addopts=" \
             --cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld \
             --cov-report=term-missing \
@@ -225,6 +225,216 @@ jobs:
              [[ "${{ needs.python-test-tyr.result }}" == "failure" ]]; then
             exit 1
           fi
+
+  # ---------------------------------------------------------------------------
+  # Python integration tests (real PostgreSQL)
+  # ---------------------------------------------------------------------------
+  python-integration-test-volundr:
+    name: "Python: Integration Test Volundr"
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/volundr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  python-integration-test-tyr:
+    name: "Python: Integration Test Tyr"
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/tyr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  # Rollup gate — branch ruleset requires "Python: Integration Test"
+  python-integration-test:
+    name: "Python: Integration Test"
+    needs: [python-integration-test-volundr, python-integration-test-tyr]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.python-integration-test-volundr.result }}" == "failure" ]] || \
+             [[ "${{ needs.python-integration-test-tyr.result }}" == "failure" ]]; then
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # End-to-end tests (Playwright against real backend + frontend)
+  # ---------------------------------------------------------------------------
+  e2e-test:
+    name: "E2E: Playwright"
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install Python dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: Start backend
+        env:
+          DATABASE__HOST: localhost
+          DATABASE__PORT: "5432"
+          DATABASE__USER: volundr_test
+          DATABASE__PASSWORD: volundr_test
+          DATABASE__NAME: volundr_test
+        run: |
+          uv run uvicorn volundr.main:app --port 8080 &
+
+      - name: Start frontend
+        run: |
+          npm run dev -- --port 5174 &
+        working-directory: web
+
+      - name: Wait for servers
+        run: |
+          timeout 30 bash -c '
+            until curl -sf http://localhost:8080/health > /dev/null 2>&1; do
+              sleep 1
+            done
+          '
+          timeout 30 bash -c '
+            until curl -sf http://localhost:5174 > /dev/null 2>&1; do
+              sleep 1
+            done
+          '
+          echo "Both servers are ready"
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        working-directory: web
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
 
   # ---------------------------------------------------------------------------
   # Web
@@ -348,6 +558,139 @@ jobs:
         run: |
           helm dependency build charts/niuu
           helm lint charts/niuu/
+
+  # ---------------------------------------------------------------------------
+  # Helm — smoke test (kind cluster)
+  # ---------------------------------------------------------------------------
+  helm-smoke-test:
+    name: "Helm: Smoke Test"
+    needs: [changes, merge-container-manifests]
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Helm
+        run: |
+          HELM_VERSION="3.14.0"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Create kind cluster
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        with:
+          cluster_name: ci-test
+
+      - name: Install Postgres in cluster
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm install pg bitnami/postgresql \
+            --set auth.postgresPassword=test \
+            --set auth.database=volundr \
+            --set primary.persistence.enabled=false \
+            --set primary.initdb.scripts."init\.sql"="CREATE DATABASE tyr;" \
+            --wait --timeout 120s
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load PR container images into kind
+        run: |
+          PR_TAG="pr-${{ github.event.number }}"
+          for CONTAINER in volundr tyr skuld; do
+            IMAGE="ghcr.io/${{ github.repository_owner }}/${CONTAINER}:${PR_TAG}"
+            if docker pull "${IMAGE}"; then
+              kind load docker-image "${IMAGE}" --name ci-test
+            else
+              echo "::warning::Could not pull ${IMAGE} — chart will use image pull from registry"
+            fi
+          done
+
+      - name: Install Volundr chart
+        run: |
+          helm install volundr charts/volundr/ \
+            -f charts/volundr/ci-values.yaml \
+            --set image.tag="pr-${{ github.event.number }}" \
+            --wait --timeout 120s
+
+      - name: Install Tyr chart
+        run: |
+          helm install tyr charts/tyr/ \
+            -f charts/tyr/ci-values.yaml \
+            --set image.tag="pr-${{ github.event.number }}" \
+            --wait --timeout 120s
+
+      - name: Install Skuld chart
+        run: |
+          helm install skuld charts/skuld/ \
+            -f charts/skuld/ci-values.yaml \
+            --set image.tag="pr-${{ github.event.number }}" \
+            --wait --timeout 120s
+
+      - name: Verify Volundr pods are ready
+        run: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=volundr --timeout=60s
+
+      - name: Verify Tyr pods are ready
+        run: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=tyr --timeout=60s
+
+      - name: Verify Skuld pods are ready
+        run: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=skuld --timeout=60s
+
+      - name: Health check Volundr
+        run: |
+          kubectl port-forward svc/volundr 8080:80 &
+          PF_PID=$!
+          sleep 3
+          curl -sf http://localhost:8080/health
+          kill $PF_PID || true
+
+      - name: Health check Tyr
+        run: |
+          kubectl port-forward svc/tyr 8081:80 &
+          PF_PID=$!
+          sleep 3
+          curl -sf http://localhost:8081/health
+          kill $PF_PID || true
+
+      - name: Verify Kubernetes resources
+        run: |
+          echo "--- ConfigMaps ---"
+          kubectl get configmaps -l app.kubernetes.io/managed-by=Helm
+          echo "--- Secrets ---"
+          kubectl get secrets -l app.kubernetes.io/managed-by=Helm
+          echo "--- ServiceAccounts ---"
+          kubectl get serviceaccounts -l app.kubernetes.io/managed-by=Helm
+          echo "--- Services ---"
+          kubectl get services
+          echo "--- Pods ---"
+          kubectl get pods -o wide
+
+      - name: Dump pod logs on failure
+        if: failure()
+        run: |
+          echo "=== Volundr logs ==="
+          kubectl logs -l app.kubernetes.io/name=volundr --tail=50 || true
+          echo "=== Tyr logs ==="
+          kubectl logs -l app.kubernetes.io/name=tyr --tail=50 || true
+          echo "=== Skuld logs ==="
+          kubectl logs -l app.kubernetes.io/name=skuld --all-containers --tail=50 || true
+          echo "=== Events ==="
+          kubectl get events --sort-by=.lastTimestamp | tail -30 || true
 
   # ---------------------------------------------------------------------------
   # Containers — build per platform natively, then merge manifests

@@ -13,7 +13,7 @@ import {
 
 describe('formatters', () => {
   describe('formatBytes', () => {
-    it('returns "0 B" for zero', () => {
+    it('returns "0 B" for zero bytes', () => {
       expect(formatBytes(0)).toBe('0 B');
     });
 
@@ -41,8 +41,8 @@ describe('formatters', () => {
       expect(formatBytes(5_000_000_000)).toBe('4.7 GB');
     });
 
-    it('uses zero decimal places for values 10 and over', () => {
-      expect(formatBytes(15_000_000_000)).toBe('14 GB');
+    it('uses 0 decimal places for values >= 10', () => {
+      expect(formatBytes(12_000_000)).toBe('11 MB');
     });
   });
 

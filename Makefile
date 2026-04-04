@@ -25,7 +25,8 @@ POSTGRES_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); 
 PGVECTOR_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); print(PGVECTOR_VERSION)")
 PGINSTALL_DIR    := build/pginstall
 
-.PHONY: build build-web build-postgres build-cli copy-migrations clean lint test verify
+.PHONY: build build-web build-postgres build-cli copy-migrations clean lint test verify \
+       test-integration test-integration-volundr test-integration-tyr test-e2e test-e2e-ui test-all
 
 # --------------------------------------------------------------------------
 # Full build: web assets → migrations → PostgreSQL → Nuitka binary
@@ -78,6 +79,26 @@ test:
 	uv run pytest tests/ -v --tb=short
 
 verify: lint test
+
+# --------------------------------------------------------------------------
+# Integration & E2E tests
+# --------------------------------------------------------------------------
+test-integration:
+	uv run pytest tests/integration/ -v --tb=short -m integration
+
+test-integration-volundr:
+	uv run pytest tests/integration/volundr/ -v --tb=short -m integration
+
+test-integration-tyr:
+	uv run pytest tests/integration/tyr/ -v --tb=short -m integration
+
+test-e2e:
+	cd $(WEB_DIR) && npm run test:e2e
+
+test-e2e-ui:
+	cd $(WEB_DIR) && npm run test:e2e -- --ui
+
+test-all: test test-integration test-e2e
 
 # --------------------------------------------------------------------------
 # Cleanup

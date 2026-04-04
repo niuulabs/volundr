@@ -153,4 +153,23 @@ describe('Sidebar', () => {
 
     expect(screen.getByLabelText('Main navigation')).toBeInTheDocument();
   });
+
+  it('hides modules when user lacks required role', () => {
+    (getModuleDefinitions as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        key: 'restricted',
+        label: 'Restricted',
+        icon: Hammer,
+        basePath: '/restricted',
+        requiredRoles: ['admin'],
+        routes: [],
+        load: vi.fn(),
+      },
+    ]);
+
+    renderSidebar();
+
+    const links = screen.getAllByRole('link');
+    expect(links.find(l => l.getAttribute('data-tooltip') === 'Restricted')).toBeUndefined();
+  });
 });

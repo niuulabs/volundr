@@ -95,13 +95,13 @@ describe('getSourceLabel', () => {
     expect(getSourceLabel(localPath)).toBe('my-app');
   });
 
-  it('falls back to full local_path when directory name is empty', () => {
-    const rootPath: LocalMountSource = {
+  it('returns full local_path when path is root "/"', () => {
+    const localPath: LocalMountSource = {
       type: 'local_mount',
       local_path: '/',
       paths: [],
     };
-    expect(getSourceLabel(rootPath)).toBe('/');
+    expect(getSourceLabel(localPath)).toBe('/');
   });
 
   it('returns "0 local mounts" for empty paths without local_path', () => {
