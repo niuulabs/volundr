@@ -26,7 +26,6 @@ vi.mock('@/modules/tyr/hooks/useDispatcher', () => ({
   })),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { useDispatcher } = await import('@/modules/tyr/hooks/useDispatcher');
 
 beforeEach(() => {
