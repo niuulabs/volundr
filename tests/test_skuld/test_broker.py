@@ -406,6 +406,78 @@ class TestDispatchBrowserMessage:
         # Should not raise
         await test_broker._dispatch_browser_message({"content": "hello"})
 
+    @pytest.mark.asyncio
+    async def test_dispatch_guard_blocks_unsupported_control(self, test_broker):
+        """Unsupported control messages are rejected with an error to sender_ws."""
+        test_broker._transport.capabilities = TransportCapabilities()  # all False
+        sender_ws = AsyncMock()
+
+        await test_broker._dispatch_browser_message({"type": "interrupt"}, sender_ws=sender_ws)
+
+        # Control should NOT be forwarded
+        test_broker._transport.send_control.assert_not_called()
+        # Error should be sent back to the sender
+        sender_ws.send_json.assert_called_once()
+        sent = sender_ws.send_json.call_args[0][0]
+        assert sent["type"] == "error"
+        assert "interrupt" in sent["content"]
+        assert "not supported" in sent["content"]
+
+    @pytest.mark.asyncio
+    async def test_dispatch_guard_blocks_all_guarded_controls(self, test_broker):
+        """All six guarded control types are blocked when capabilities are False."""
+        test_broker._transport.capabilities = TransportCapabilities()  # all False
+        guarded = [
+            "interrupt",
+            "set_model",
+            "set_max_thinking_tokens",
+            "set_permission_mode",
+            "rewind_files",
+            "mcp_set_servers",
+        ]
+        for msg_type in guarded:
+            sender_ws = AsyncMock()
+            await test_broker._dispatch_browser_message({"type": msg_type}, sender_ws=sender_ws)
+            sender_ws.send_json.assert_called_once()
+            sent = sender_ws.send_json.call_args[0][0]
+            assert sent["type"] == "error"
+            assert msg_type in sent["content"]
+
+        test_broker._transport.send_control.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_guard_allows_supported_control(self, test_broker):
+        """Supported control messages pass through the guard."""
+        test_broker._transport.capabilities = TransportCapabilities(interrupt=True)
+
+        await test_broker._dispatch_browser_message({"type": "interrupt"})
+
+        test_broker._transport.send_control.assert_called_once_with("interrupt")
+
+    @pytest.mark.asyncio
+    async def test_dispatch_guard_no_sender_ws_still_blocks(self, test_broker):
+        """Unsupported control is blocked even without sender_ws (no crash)."""
+        test_broker._transport.capabilities = TransportCapabilities()  # all False
+
+        await test_broker._dispatch_browser_message({"type": "interrupt"})
+
+        test_broker._transport.send_control.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_permission_response_not_guarded(self, test_broker):
+        """permission_response is not in the guard map and always passes."""
+        test_broker._transport.capabilities = TransportCapabilities()  # all False
+
+        await test_broker._dispatch_browser_message(
+            {
+                "type": "permission_response",
+                "request_id": "req-1",
+                "behavior": "allow",
+                "updated_input": {},
+            }
+        )
+        test_broker._transport.send_control_response.assert_called_once()
+
 
 class TestFastAPIEndpoints:
     """Tests for FastAPI endpoints."""
@@ -456,6 +528,29 @@ class TestFastAPIEndpoints:
         assert data["returned"] >= 1
         msgs = [e["message"] for e in data["lines"]]
         assert "hello from test" in msgs
+
+    def test_capabilities_endpoint_returns_transport_caps(self, client):
+        """GET /api/capabilities returns transport capabilities as JSON."""
+        mock_transport = MagicMock()
+        mock_transport.capabilities = TransportCapabilities(
+            interrupt=True, set_model=True, cli_websocket=True
+        )
+        broker._transport = mock_transport
+
+        response = client.get("/api/capabilities")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["interrupt"] is True
+        assert data["set_model"] is True
+        assert data["cli_websocket"] is True
+        assert data["rewind_files"] is False
+        broker._transport = None
+
+    def test_capabilities_endpoint_503_no_transport(self, client):
+        """GET /api/capabilities returns 503 when transport not initialized."""
+        broker._transport = None
+        response = client.get("/api/capabilities")
+        assert response.status_code == 503
 
     def test_logs_endpoint_level_filter(self, client):
         _log_buffer.clear()
@@ -989,6 +1084,7 @@ class TestHandleWebSocket:
         """Browser connects, receives welcome, sends message, then disconnects."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities()
         test_broker._transport = mock_transport
 
         mock_ws = AsyncMock()
@@ -1004,10 +1100,40 @@ class TestHandleWebSocket:
         mock_transport.send_message.assert_called_once_with("hello")
 
     @pytest.mark.asyncio
+    async def test_handle_websocket_sends_capabilities(self, test_broker):
+        """Browser receives a capabilities message after welcome, before history."""
+        mock_transport = AsyncMock()
+        mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities(interrupt=True, set_model=True)
+        test_broker._transport = mock_transport
+
+        mock_ws = AsyncMock()
+        mock_ws.receive_json = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await test_broker.handle_websocket(mock_ws)
+
+        # Collect all sent messages
+        calls = [c[0][0] for c in mock_ws.send_json.call_args_list]
+        # Find capabilities message
+        caps_msgs = [c for c in calls if c.get("type") == "capabilities"]
+        assert len(caps_msgs) == 1
+        caps = caps_msgs[0]
+        assert caps["interrupt"] is True
+        assert caps["set_model"] is True
+        assert caps["rewind_files"] is False
+
+        # Capabilities should come after welcome (system) message
+        types = [c.get("type") for c in calls]
+        system_idx = types.index("system")
+        caps_idx = types.index("capabilities")
+        assert caps_idx > system_idx
+
+    @pytest.mark.asyncio
     async def test_handle_websocket_starts_transport(self, test_broker):
         """Transport.start() is called when transport is not alive."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = False
+        mock_transport.capabilities = TransportCapabilities()
         test_broker._transport = mock_transport
 
         mock_ws = AsyncMock()
@@ -1022,6 +1148,7 @@ class TestHandleWebSocket:
         """Errors during dispatch are sent as error events to the browser."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities()
         mock_transport.send_message.side_effect = RuntimeError("CLI error")
         test_broker._transport = mock_transport
 
@@ -1042,6 +1169,7 @@ class TestHandleWebSocket:
         """Unexpected exceptions are caught and cleaned up."""
         mock_transport = AsyncMock()
         mock_transport.is_alive = True
+        mock_transport.capabilities = TransportCapabilities()
         test_broker._transport = mock_transport
 
         mock_ws = AsyncMock()

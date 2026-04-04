@@ -846,7 +846,22 @@ class Broker:
                     )
                 )
 
-    async def _dispatch_browser_message(self, data: dict) -> None:
+    # Maps control message types to the TransportCapabilities field that
+    # must be True for the control to be forwarded.
+    _CONTROL_CAPABILITY_MAP: dict[str, str] = {
+        "interrupt": "interrupt",
+        "set_model": "set_model",
+        "set_max_thinking_tokens": "set_thinking_tokens",
+        "set_permission_mode": "set_permission_mode",
+        "rewind_files": "rewind_files",
+        "mcp_set_servers": "mcp_set_servers",
+    }
+
+    async def _dispatch_browser_message(
+        self,
+        data: dict,
+        sender_ws: WebSocket | None = None,
+    ) -> None:
         """Route a browser WebSocket message to the appropriate handler."""
         if not self._transport:
             logger.warning("_dispatch_browser_message: transport is None, dropping message")
@@ -858,6 +873,15 @@ class Broker:
             msg_type,
             self._transport.is_alive,
         )
+
+        # Guard: reject control messages the transport does not support.
+        cap_field = self._CONTROL_CAPABILITY_MAP.get(msg_type or "")
+        if cap_field and not getattr(self._transport.capabilities, cap_field):
+            error_msg = f"{msg_type} not supported by this transport"
+            logger.warning("_dispatch_browser_message: %s", error_msg)
+            if sender_ws:
+                await sender_ws.send_json({"type": "error", "content": error_msg})
+            return
 
         match msg_type:
             # Phase 2: permission response from browser
@@ -1434,6 +1458,13 @@ class Broker:
             )
             logger.debug("handle_websocket: welcome message sent")
 
+            # Send transport capabilities so the frontend knows which
+            # controls to render.
+            if self._transport:
+                caps = {"type": "capabilities", **asdict(self._transport.capabilities)}
+                await websocket.send_json(caps)
+                logger.debug("handle_websocket: capabilities sent")
+
             # Replay conversation history so late-joining browsers see
             # earlier messages (including the initial prompt)
             if self._conversation_turns:
@@ -1456,7 +1487,7 @@ class Broker:
                     json.dumps(data)[:500],
                 )
                 try:
-                    await self._dispatch_browser_message(data)
+                    await self._dispatch_browser_message(data, sender_ws=websocket)
                 except Exception as e:
                     logger.exception("Error processing browser message: %s", data)
                     await websocket.send_json({"type": "error", "content": str(e)})
@@ -1617,6 +1648,17 @@ async def get_conversation_history() -> dict:
         "is_active": is_active,
         "last_activity": last_activity,
     }
+
+
+# --- Capabilities API ---
+
+
+@app.get("/api/capabilities")
+async def get_capabilities() -> dict:
+    """Return transport capabilities so the frontend knows which controls to render."""
+    if not broker._transport:
+        raise HTTPException(status_code=503, detail="Transport not initialized")
+    return asdict(broker._transport.capabilities)
 
 
 # --- Service Management API ---
