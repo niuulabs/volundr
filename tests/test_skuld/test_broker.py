@@ -16,7 +16,7 @@ from skuld.broker import (
     broker,
 )
 from skuld.config import SkuldSettings
-from skuld.transport import (
+from skuld.transports import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
@@ -105,6 +105,44 @@ class TestBroker:
         transport = b._create_transport()
         assert isinstance(transport, SdkWebSocketTransport)
         assert transport._model == "claude-opus-4-20250514"
+
+    def test_create_transport_dynamic_import(self, tmp_path):
+        """Dynamic transport factory uses importlib to load the configured adapter."""
+        settings = SkuldSettings(
+            transport_adapter="skuld.transports.subprocess.SubprocessTransport",
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+        )
+        b = Broker(settings=settings)
+
+        with patch("skuld.broker.import_class") as mock_import:
+            mock_import.return_value = SubprocessTransport
+            transport = b._create_transport()
+
+        mock_import.assert_called_once_with("skuld.transports.subprocess.SubprocessTransport")
+        assert isinstance(transport, SubprocessTransport)
+
+    def test_create_transport_invalid_adapter_path(self, tmp_path):
+        """Invalid adapter path (no dot) raises ValueError."""
+        settings = SkuldSettings(
+            transport_adapter="BadPath",
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+        )
+        b = Broker(settings=settings)
+
+        with pytest.raises(ValueError, match="must be a fully-qualified"):
+            b._create_transport()
+
+    def test_create_transport_import_error(self, tmp_path):
+        """ImportError from dynamic import is wrapped in ValueError."""
+        settings = SkuldSettings(
+            transport_adapter="nonexistent.module.Transport",
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+        )
+        b = Broker(settings=settings)
+
+        with patch("skuld.broker.import_class", side_effect=ImportError("no module")):
+            with pytest.raises(ValueError, match="Cannot load transport adapter"):
+                b._create_transport()
 
     @pytest.mark.asyncio
     async def test_startup_creates_workspace(self, test_broker, tmp_path):

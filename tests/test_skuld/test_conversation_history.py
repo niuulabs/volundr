@@ -15,7 +15,7 @@ from skuld.broker import (
     broker,
 )
 from skuld.config import SkuldSettings
-from skuld.transport import TransportCapabilities
+from skuld.transports import TransportCapabilities
 
 
 class TestConversationTurn:
