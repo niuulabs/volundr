@@ -41,6 +41,7 @@ from tyr.domain.services.reviewer_session import (
     ReviewerSessionService,
     parse_reviewer_response,
 )
+from tyr.domain.services.session_transcript import attach_session_transcript
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
@@ -718,36 +719,15 @@ class ReviewEngine:
         raid: Raid,
     ) -> None:
         """Fetch the reviewer's full conversation and attach as a document."""
-        try:
-            adapters = await self._volundr_factory.for_owner(owner_id)
-            if not adapters:
-                logger.warning(
-                    "No Volundr adapter for owner %s — cannot fetch transcript",
-                    owner_id[:8],
-                )
-                return
-            conversation = await adapters[0].get_conversation(raid.reviewer_session_id)
-            turns = conversation.get("turns", [])
-            lines = ["# Review Transcript", ""]
-            for turn in turns:
-                role = turn.get("role", "unknown").capitalize()
-                content = turn.get("content", "")
-                lines.append(f"### {role}")
-                lines.append(content)
-                lines.append("")
-                lines.append("---")
-                lines.append("")
-            title = f"Review Transcript — {raid.name}"
-            await tracker.attach_issue_document(tracker_id, title, "\n".join(lines))
-            logger.info(
-                "Attached review transcript (%d turns) to %s",
-                len(turns),
-                tracker_id,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to attach review transcript for raid %s", tracker_id, exc_info=True
-            )
+        await attach_session_transcript(
+            volundr_factory=self._volundr_factory,
+            tracker=tracker,
+            tracker_id=tracker_id,
+            owner_id=owner_id,
+            session_id=raid.reviewer_session_id,
+            title_prefix="Review Transcript",
+            raid_name=raid.name,
+        )
 
     async def _stop_reviewer_session(self, owner_id: str, reviewer_session_id: str) -> None:
         """Stop the reviewer session after review is complete."""

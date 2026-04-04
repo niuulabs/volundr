@@ -192,9 +192,7 @@ def _build_prompt(
             "raid_branch": raid_branch,
         }
         used_fields = {
-            fname
-            for _, fname, _, _ in string.Formatter().parse(template)
-            if fname is not None
+            fname for _, fname, _, _ in string.Formatter().parse(template) if fname is not None
         }
         return template.format(**{k: v for k, v in available.items() if k in used_fields})
 
@@ -273,19 +271,16 @@ def create_dispatch_router() -> APIRouter:
 
                     # Build milestone lookup and dependency filter
                     milestone_names = {m.id: m.name for m in milestones}
-                    if hasattr(adapter, "get_blocked_identifiers"):
-                        try:
-                            blocked_identifiers = await adapter.get_blocked_identifiers(
-                                saga.tracker_id,
-                            )
-                        except Exception:
-                            logger.warning(
-                                "Failed to fetch blocked identifiers for saga %s,"
-                                " skipping dependency filter",
-                                saga.id,
-                            )
-                            blocked_identifiers = set()
-                    else:
+                    try:
+                        blocked_identifiers = await adapter.get_blocked_identifiers(
+                            saga.tracker_id,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to fetch blocked identifiers for saga %s,"
+                            " skipping dependency filter",
+                            saga.id,
+                        )
                         blocked_identifiers = set()
 
                     for issue in issues:
@@ -420,7 +415,9 @@ def create_dispatch_router() -> APIRouter:
                         tracker_issue_url=issue.url,
                         system_prompt=effective_prompt,
                         initial_prompt=_build_prompt(
-                            issue, item.repo, saga.feature_branch,
+                            issue,
+                            item.repo,
+                            saga.feature_branch,
                             template=settings.dispatch.dispatch_prompt_template,
                         ),
                         integration_ids=integration_ids,
@@ -430,7 +427,8 @@ def create_dispatch_router() -> APIRouter:
                 # Record raid progress and set tracker issue to In Progress
                 logger.info(
                     "Dispatch: updating %d tracker adapters for issue %s",
-                    len(adapters), issue.id,
+                    len(adapters),
+                    issue.id,
                 )
                 for adapter in adapters:
                     adapter_name = type(adapter).__name__
@@ -444,18 +442,22 @@ def create_dispatch_router() -> APIRouter:
                     )
                     logger.info(
                         "Dispatch: %s.update_raid_progress OK for %s",
-                        adapter_name, issue.id,
+                        adapter_name,
+                        issue.id,
                     )
                     try:
                         await adapter.update_raid_state(issue.id, RaidStatus.RUNNING)
                         logger.info(
                             "Dispatch: %s.update_raid_state OK for %s → In Progress",
-                            adapter_name, issue.id,
+                            adapter_name,
+                            issue.id,
                         )
                     except Exception:
                         logger.error(
                             "FAILED: %s.update_raid_state for %s",
-                            adapter_name, issue.id, exc_info=True,
+                            adapter_name,
+                            issue.id,
+                            exc_info=True,
                         )
 
                 results.append(
