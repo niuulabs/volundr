@@ -42,6 +42,10 @@ export default defineConfig({
         'src/modules/tyr/pages/ImportView/**',
         // Volundr API adapter — integration layer, tested via adapter tests
         'src/modules/volundr/adapters/api/volundr.adapter.ts',
+        // Mock adapters — test doubles, not production code
+        'src/modules/tyr/adapters/mock/**',
+        // Tyr tracker API adapter — integration layer
+        'src/modules/tyr/adapters/api/tracker.ts',
       ],
       thresholds: {
         statements: 85,
