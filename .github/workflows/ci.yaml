@@ -341,6 +341,96 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # End-to-end tests (Playwright against real backend + frontend)
+  # ---------------------------------------------------------------------------
+  e2e-test:
+    name: "E2E: Playwright"
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install Python dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: Start backend server
+        env:
+          DATABASE__HOST: localhost
+          DATABASE__PORT: "5432"
+          DATABASE__USER: volundr_test
+          DATABASE__PASSWORD: volundr_test
+          DATABASE__NAME: volundr_test
+        run: |
+          uv run uvicorn volundr.main:app --host 0.0.0.0 --port 8080 &
+          echo "Backend PID: $!"
+
+      - name: Wait for backend health check
+        run: |
+          timeout 30 bash -c '
+            until curl -sf http://localhost:8080/health > /dev/null 2>&1; do
+              sleep 1
+            done
+          '
+          echo "Backend is healthy"
+
+      - name: Run Playwright tests
+        env:
+          CI: "true"
+        run: npx playwright test
+        working-directory: web
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
   # Web
   # ---------------------------------------------------------------------------
   web-lint:
