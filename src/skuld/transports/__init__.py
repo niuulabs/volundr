@@ -23,8 +23,11 @@ class TransportCapabilities:
     """Declares what a transport supports.
 
     All fields default to False so new transports are safe-by-default.
+    ``send_message`` defaults to True because every transport can receive
+    user messages.
     """
 
+    send_message: bool = True
     cli_websocket: bool = False
     session_resume: bool = False
     interrupt: bool = False

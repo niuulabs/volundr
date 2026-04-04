@@ -1975,13 +1975,24 @@ describe('useSkuldChat', () => {
 
   // ── Capabilities ────────────────────────────────────────────
 
-  it('starts with DEFAULT_CAPABILITIES (all false)', () => {
+  it('starts with DEFAULT_CAPABILITIES (all false except send_message)', () => {
     setupMock();
     const { result } = renderHook(() => useSkuldChat('wss://test/session'));
 
     expect(result.current.capabilities).toEqual(DEFAULT_CAPABILITIES);
+    expect(result.current.capabilities.send_message).toBe(true);
     expect(result.current.capabilities.interrupt).toBe(false);
     expect(result.current.capabilities.set_model).toBe(false);
+  });
+
+  it('includes capabilities in hook return value', () => {
+    setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+    expect(result.current).toHaveProperty('capabilities');
+    expect(result.current.capabilities).toBeDefined();
+    expect(typeof result.current.capabilities.send_message).toBe('boolean');
+    expect(typeof result.current.capabilities.interrupt).toBe('boolean');
   });
 
   it('updates capabilities when capabilities event is received', () => {
