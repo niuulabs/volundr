@@ -1075,8 +1075,10 @@ class TestCodexSubprocessTransport:
         assert transport.last_result is None
         assert transport.is_alive is False
 
-    def test_supports_cli_websocket_is_false(self, transport):
-        assert transport.supports_cli_websocket is False
+    def test_capabilities_all_false(self, transport):
+        caps = transport.capabilities
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
 
     @pytest.mark.asyncio
     async def test_start_is_noop(self, transport):

@@ -20,6 +20,7 @@ from skuld.transport import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
+    TransportCapabilities,
 )
 
 
@@ -1055,7 +1056,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_wrong_transport(self, test_broker):
         """Rejects CLI WS when transport does not support SDK WebSocket."""
         mock_transport = AsyncMock(spec=SubprocessTransport)
-        mock_transport.supports_cli_websocket = False
+        mock_transport.capabilities = TransportCapabilities(session_resume=True)
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 
@@ -1068,7 +1069,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_codex_rejected(self, test_broker):
         """Rejects CLI WS for Codex transport (subprocess only)."""
         mock_transport = AsyncMock(spec=CodexSubprocessTransport)
-        mock_transport.supports_cli_websocket = False
+        mock_transport.capabilities = TransportCapabilities()
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 
@@ -1081,7 +1082,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_session_mismatch(self, test_broker):
         """Rejects CLI WS when session ID doesn't match."""
         mock_transport = AsyncMock(spec=SdkWebSocketTransport)
-        mock_transport.supports_cli_websocket = True
+        mock_transport.capabilities = TransportCapabilities(cli_websocket=True)
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 
@@ -1094,7 +1095,7 @@ class TestHandleWebSocket:
     async def test_handle_cli_websocket_success(self, test_broker):
         """CLI WS attaches to transport and waits for disconnect."""
         mock_transport = AsyncMock(spec=SdkWebSocketTransport)
-        mock_transport.supports_cli_websocket = True
+        mock_transport.capabilities = TransportCapabilities(cli_websocket=True)
         test_broker._transport = mock_transport
         mock_ws = AsyncMock()
 
