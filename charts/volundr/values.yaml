@@ -941,7 +941,7 @@ sessionDefinitions:
         # -- Codex always uses subprocess transport
         transport: subprocess
         # -- Fully-qualified transport adapter class path
-        transportAdapter: "skuld.transports.codex_subprocess.CodexSubprocessTransport"
+        transportAdapter: "skuld.transports.codex.CodexSubprocessTransport"
         # -- Skip tool permission prompts (--full-auto for Codex)
         skipPermissions: true
         agentTeams: false

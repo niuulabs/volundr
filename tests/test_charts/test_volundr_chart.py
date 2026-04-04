@@ -148,7 +148,7 @@ class TestValuesDefaults:
         """Test skuld-codex broker has correct transportAdapter class path."""
         broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
         assert broker["transportAdapter"] == (
-            "skuld.transports.codex_subprocess.CodexSubprocessTransport"
+            "skuld.transports.codex.CodexSubprocessTransport"
         )
 
     def test_both_session_defs_use_same_image_repo(self, values_yaml):
