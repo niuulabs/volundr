@@ -95,6 +95,9 @@ class SkuldSettings(BaseSettings):
     session: SkuldSessionConfig = Field(default_factory=SkuldSessionConfig)
     cli_type: str = Field(default="claude")  # "claude" | "codex"
     transport: str = Field(default="sdk")  # claude only: "sdk" | "subprocess"
+    transport_adapter: str = Field(
+        default="skuld.transports.sdk_websocket.SdkWebSocketTransport",
+    )
     skip_permissions: bool = Field(default=True)
     agent_teams: bool = Field(default=False)
     host: str = Field(default="0.0.0.0")
@@ -174,6 +177,26 @@ class SkuldSettings(BaseSettings):
             val = os.environ.get("SERVICE_TENANT_ID")
             if val:
                 self.service_tenant_id = val
+
+        return self
+
+    @model_validator(mode="after")
+    def _resolve_transport_adapter(self) -> "SkuldSettings":
+        """Map legacy cli_type/transport fields to transport_adapter.
+
+        Only overrides transport_adapter when it still holds the default value,
+        so an explicit transport_adapter always takes precedence.
+        """
+        default_adapter = "skuld.transports.sdk_websocket.SdkWebSocketTransport"
+        if self.transport_adapter != default_adapter:
+            return self
+
+        if self.cli_type == "codex":
+            self.transport_adapter = "skuld.transports.codex.CodexSubprocessTransport"
+            return self
+
+        if self.transport == "subprocess":
+            self.transport_adapter = "skuld.transports.subprocess.SubprocessTransport"
 
         return self
 
