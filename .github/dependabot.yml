@@ -35,12 +35,6 @@ updates:
       interval: weekly
 
   - package-ecosystem: docker
-    directory: /containers/skuld-codex
-    target-branch: dev
-    schedule:
-      interval: weekly
-
-  - package-ecosystem: docker
     directory: /containers/devrunner
     target-branch: dev
     schedule:

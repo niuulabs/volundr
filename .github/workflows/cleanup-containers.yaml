@@ -19,7 +19,6 @@ jobs:
         container:
           - volundr
           - skuld
-          - skuld-codex
           - devrunner
           - volundr-web
           - vscode-reh

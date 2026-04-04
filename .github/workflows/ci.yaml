@@ -54,7 +54,6 @@ jobs:
       #         - 'pyproject.toml'
       #         - 'containers/volundr/**'
       #         - 'containers/skuld/**'
-      #         - 'containers/skuld-codex/**'
       #       container-web:
       #         - 'web/**'
       #         - 'containers/volundr-web/**'
@@ -67,7 +66,7 @@ jobs:
       #   run: |
       #     NAMES="[]"
       #     if [ "${{ steps.filter.outputs.container-python }}" = "true" ]; then
-      #       NAMES=$(echo "$NAMES" | jq -c '. + ["volundr","skuld","skuld-codex"]')
+      #       NAMES=$(echo "$NAMES" | jq -c '. + ["volundr","skuld"]')
       #     fi
       #     if [ "${{ steps.filter.outputs.container-web }}" = "true" ]; then
       #       NAMES=$(echo "$NAMES" | jq -c '. + ["volundr-web"]')
@@ -88,7 +87,7 @@ jobs:
           echo "python=true" >> $GITHUB_OUTPUT
           echo "web=true" >> $GITHUB_OUTPUT
           echo "helm=true" >> $GITHUB_OUTPUT
-          echo 'names=["volundr","skuld","skuld-codex","devrunner","volundr-web","vscode-reh","tyr","niuu"]' >> $GITHUB_OUTPUT
+          echo 'names=["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu"]' >> $GITHUB_OUTPUT
           echo "any=true" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------------------------

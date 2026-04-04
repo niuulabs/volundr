@@ -912,8 +912,8 @@ sessionDefinitions:
       volundr:
         apiUrl: ""
 
-  # Skuld-Codex session definition (OpenAI Codex with embedded VS Code editor)
-  # Uses the same skuld chart as skuld-claude, parameterised for Codex.
+  # Skuld-Codex session definition (OpenAI Codex)
+  # Uses the merged skuld image (ships both Claude Code and Codex CLIs).
   skuldCodex:
     # -- Enable skuld-codex session definition (disabled by default)
     enabled: false
@@ -945,7 +945,7 @@ sessionDefinitions:
         agentTeams: false
 
       image:
-        repository: ghcr.io/niuulabs/skuld-codex
+        repository: ghcr.io/niuulabs/skuld
         tag: "latest"
 
       resources:
