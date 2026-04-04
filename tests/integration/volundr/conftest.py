@@ -14,11 +14,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+import asyncpg
 import httpx
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 
+from tests.integration.pool_wrapper import TransactionalPool
 from volundr.adapters.inbound.rest import create_router as create_session_router
 from volundr.adapters.inbound.rest_prompts import create_prompts_router
 from volundr.adapters.outbound.broadcaster import InMemoryEventBroadcaster
@@ -42,8 +43,6 @@ from volundr.domain.services import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
-
-    from tests.integration.pool_wrapper import TransactionalPool
 
 
 class NoOpPodManager(PodManager):
@@ -69,10 +68,23 @@ class NoOpPodManager(PodManager):
         pass
 
 
-@pytest_asyncio.fixture
+# Override the shared txn_pool fixture so it runs on the session event loop,
+# matching the loop_scope="session" used by db_pool and our test marks.
+@pytest_asyncio.fixture(loop_scope="session")
+async def txn_pool(db_pool: asyncpg.Pool) -> TransactionalPool:
+    """Per-test transactional wrapper running on the session event loop."""
+    conn = await db_pool.acquire()
+    txn = conn.transaction()
+    await txn.start()
+    wrapper = TransactionalPool(conn)
+    yield wrapper
+    await txn.rollback()
+    await db_pool.release(conn)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def volundr_app(
     txn_pool: TransactionalPool,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     """Build a minimal FastAPI app with session/stats/prompt routers."""
     app = FastAPI()
@@ -132,7 +144,7 @@ async def volundr_app(
     yield app
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def volundr_client(
     volundr_app,
 ) -> AsyncIterator[httpx.AsyncClient]:
