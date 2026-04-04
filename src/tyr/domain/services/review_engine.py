@@ -689,17 +689,19 @@ class ReviewEngine:
         except Exception:
             logger.error("FAILED to close tracker issue %s after merge", tracker_id, exc_info=True)
 
-        # Attach review transcript as a comment on the Linear issue
+        # Attach transcripts and stop sessions
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+            await self._stop_session(owner_id, raid.session_id, "working session")
         if raid.reviewer_session_id:
             await self._attach_review_transcript(tracker, tracker_id, owner_id, raid)
-            await self._stop_reviewer_session(owner_id, raid.reviewer_session_id)
+            await self._stop_session(owner_id, raid.reviewer_session_id, "reviewer session")
 
         # Look up saga once — used by both phase gate and event emission
         saga = await tracker.get_saga_for_raid(tracker_id)
 
         # Phase gate check
         phase_gate_unlocked = await self._check_phase_gate(tracker, tracker_id, owner_id, saga=saga)
-
         saga_tid = saga.tracker_id if saga else None
         await self._emit_state_changed(
             updated, owner_id=owner_id, action="auto_approved", saga_tracker_id=saga_tid
@@ -730,16 +732,34 @@ class ReviewEngine:
             raid_name=raid.name,
         )
 
-    async def _stop_reviewer_session(self, owner_id: str, reviewer_session_id: str) -> None:
-        """Stop the reviewer session after review is complete."""
+    async def _stop_session(self, owner_id: str, session_id: str, label: str = "session") -> None:
+        """Stop a Volundr session after terminal state."""
         try:
             adapters = await self._volundr_factory.for_owner(owner_id)
             if not adapters:
                 return
-            await adapters[0].stop_session(reviewer_session_id)
-            logger.info("Stopped reviewer session %s", reviewer_session_id)
+            await adapters[0].stop_session(session_id)
+            logger.info("Stopped %s %s", label, session_id)
         except Exception:
-            logger.warning("Failed to stop reviewer session %s", reviewer_session_id, exc_info=True)
+            logger.warning("Failed to stop %s %s", label, session_id, exc_info=True)
+
+    async def _attach_working_transcript(
+        self,
+        tracker: TrackerPort,
+        tracker_id: str,
+        owner_id: str,
+        raid: Raid,
+    ) -> None:
+        """Fetch the working session conversation and attach as a document."""
+        await attach_session_transcript(
+            volundr_factory=self._volundr_factory,
+            tracker=tracker,
+            tracker_id=tracker_id,
+            owner_id=owner_id,
+            session_id=raid.session_id,
+            title_prefix="Working Session Transcript",
+            raid_name=raid.name,
+        )
 
     async def _handle_ci_failure(
         self,
@@ -765,6 +785,10 @@ class ReviewEngine:
         updated = await tracker.update_raid_progress(
             tracker_id, status=RaidStatus.FAILED, reason="CI failed, retries exhausted"
         )
+
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+            await self._stop_session(owner_id, raid.session_id, "working session")
 
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
@@ -796,6 +820,10 @@ class ReviewEngine:
             tracker_id, status=RaidStatus.FAILED, reason="PR conflicts, retries exhausted"
         )
 
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+            await self._stop_session(owner_id, raid.session_id, "working session")
+
         await self._emit_state_changed(updated, owner_id=owner_id, action="failed")
         return ReviewDecision(
             raid=updated,
@@ -814,6 +842,11 @@ class ReviewEngine:
         """Confidence too low or conditions not met — escalate to human review."""
         validate_transition(raid.status, RaidStatus.ESCALATED)
         updated = await tracker.update_raid_progress(tracker_id, status=RaidStatus.ESCALATED)
+
+        # Snapshot the working transcript but keep the session alive for human review
+        if raid.session_id:
+            await self._attach_working_transcript(tracker, tracker_id, owner_id, raid)
+
         await self._emit_state_changed(updated, owner_id=owner_id, action="escalated")
         return ReviewDecision(
             raid=updated,
