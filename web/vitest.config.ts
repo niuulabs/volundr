@@ -20,6 +20,7 @@ export default defineConfig({
         'src/vite-env.d.ts',
         '**/*.d.ts',
         '**/*.config.*',
+        '**/*.module.css',
         '**/index.ts',
         '**/register.ts',
         'src/modules/icons.ts',
