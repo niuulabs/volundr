@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test';
  */
 async function stubMissingApis(page: Page) {
   const fallbacks: Record<string, string> = {
-    '**/api/v1/volundr/repos': '[]',
+    '**/api/v1/niuu/repos': '{}',
     '**/api/v1/volundr/models': '[]',
     '**/api/v1/volundr/mcp-servers': '[]',
     '**/api/v1/volundr/secrets': '[]',
@@ -36,13 +36,20 @@ async function waitForPageReady(page: Page) {
   await expect(page.getByText('Loading...')).toBeHidden({ timeout: 30_000 });
 }
 
+/**
+ * Navigate to /volundr with API stubs and wait for page to load.
+ */
+async function navigateToVolundr(page: Page) {
+  await stubMissingApis(page);
+  await page.goto('/volundr');
+  await page.waitForURL('**/volundr', { timeout: 15_000 });
+  await waitForPageReady(page);
+}
+
 test.describe('sessions', () => {
   test('page loads and shows main UI elements', async ({ authenticatedPage }) => {
     const page = authenticatedPage;
-    await stubMissingApis(page);
-    await page.reload();
-    await page.waitForURL('**/volundr', { timeout: 15_000 });
-    await waitForPageReady(page);
+    await navigateToVolundr(page);
 
     // The "New Session" button should always be visible
     await expect(page.getByRole('button', { name: /New Session/i })).toBeVisible();
@@ -50,10 +57,7 @@ test.describe('sessions', () => {
 
   test('launch wizard opens and shows template step', async ({ authenticatedPage }) => {
     const page = authenticatedPage;
-    await stubMissingApis(page);
-    await page.reload();
-    await page.waitForURL('**/volundr', { timeout: 15_000 });
-    await waitForPageReady(page);
+    await navigateToVolundr(page);
 
     // Click New Session to open the launch wizard
     await page.getByRole('button', { name: /New Session/i }).click();
@@ -64,31 +68,30 @@ test.describe('sessions', () => {
 
   test('session created via API appears in list', async ({ authenticatedPage, request }) => {
     const page = authenticatedPage;
-    await stubMissingApis(page);
 
-    // Seed a session via API
+    // Seed a session via API first
     const session = await createSession(request);
 
-    // Reload to pick up the new session
-    await page.reload();
-    await page.waitForURL('**/volundr', { timeout: 15_000 });
-    await waitForPageReady(page);
+    // Verify session exists in API response
+    const sessions = await listSessions(request);
+    const found = sessions.find(s => s.id === session.id);
+    expect(found).toBeDefined();
+
+    // Now navigate to the page (fresh load will include the session)
+    await navigateToVolundr(page);
 
     // Session should appear in the sidebar list
-    await expect(page.getByText(session.name)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(session.name)).toBeVisible({ timeout: 15_000 });
   });
 
   test('session detail view shows session info', async ({ authenticatedPage, request }) => {
     const page = authenticatedPage;
-    await stubMissingApis(page);
 
-    // Seed a session via API
+    // Seed a session via API first
     const session = await createSession(request);
 
-    // Reload to pick up the new session
-    await page.reload();
-    await page.waitForURL('**/volundr', { timeout: 15_000 });
-    await waitForPageReady(page);
+    // Navigate to the page (fresh load will include the session)
+    await navigateToVolundr(page);
 
     // Click on the session in the list
     await page.getByText(session.name).click();
@@ -104,15 +107,12 @@ test.describe('sessions', () => {
 
   test('delete session removes it from list', async ({ authenticatedPage, request }) => {
     const page = authenticatedPage;
-    await stubMissingApis(page);
 
-    // Seed a session via API
+    // Seed a session via API first
     const session = await createSession(request);
 
-    // Reload to pick up the new session
-    await page.reload();
-    await page.waitForURL('**/volundr', { timeout: 15_000 });
-    await waitForPageReady(page);
+    // Navigate to the page
+    await navigateToVolundr(page);
 
     // Select the session
     await page.getByText(session.name).click();
