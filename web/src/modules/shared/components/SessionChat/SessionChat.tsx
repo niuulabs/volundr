@@ -367,7 +367,7 @@ export function SessionChat({
         )}
       </div>
 
-      {showModelInput && connected && (
+      {showModelInput && connected && capabilities.set_model && (
         <div className={styles.modelInputBar} data-testid="model-input-bar">
           <input
             type="text"

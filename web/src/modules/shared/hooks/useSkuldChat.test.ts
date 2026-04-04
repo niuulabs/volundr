@@ -1968,11 +1968,7 @@ describe('useSkuldChat', () => {
     const { result } = renderHook(() => useSkuldChat('wss://test/session'));
 
     act(() => handlers.onOpen?.());
-    act(() =>
-      handlers.onMessage?.(
-        JSON.stringify({ type: 'user_confirmed' })
-      )
-    );
+    act(() => handlers.onMessage?.(JSON.stringify({ type: 'user_confirmed' })));
 
     expect(result.current.messages).toEqual([]);
   });

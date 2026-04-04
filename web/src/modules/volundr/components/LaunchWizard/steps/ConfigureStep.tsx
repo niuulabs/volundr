@@ -103,8 +103,16 @@ function workspaceLabel(ws: VolundrWorkspace): string {
 }
 
 const CLI_TOOLS: { value: CliTool; label: string; description: string }[] = [
-  { value: 'claude', label: CLI_TOOL_LABELS['claude'] ?? 'claude', description: 'Anthropic Claude CLI agent' },
-  { value: 'codex', label: CLI_TOOL_LABELS['codex'] ?? 'codex', description: 'OpenAI Codex CLI agent' },
+  {
+    value: 'claude',
+    label: CLI_TOOL_LABELS['claude'] ?? 'claude',
+    description: 'Anthropic Claude CLI agent',
+  },
+  {
+    value: 'codex',
+    label: CLI_TOOL_LABELS['codex'] ?? 'codex',
+    description: 'OpenAI Codex CLI agent',
+  },
 ];
 
 const PROVIDER_LABELS: Record<RepoProvider, string> = {
