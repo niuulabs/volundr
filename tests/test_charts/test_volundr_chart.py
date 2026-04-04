@@ -135,9 +135,16 @@ class TestValuesDefaults:
         assert broker["cliType"] == "claude"
 
     def test_skuld_codex_broker_cli_type(self, values_yaml):
-        """Test skuld-codex broker cliType is codex."""
+        """Test skuld-codex broker cliType is codex (backward compat)."""
         broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
         assert broker["cliType"] == "codex"
+
+    def test_skuld_codex_uses_same_image_repo_as_claude(self, values_yaml):
+        """Test skuldCodex image repo matches skuldClaude (single merged image)."""
+        defs = values_yaml["sessionDefinitions"]
+        claude_repo = defs["skuldClaude"]["defaults"]["image"]["repository"]
+        codex_repo = defs["skuldCodex"]["defaults"]["image"]["repository"]
+        assert codex_repo == claude_repo
 
     def test_skuld_codex_broker_transport_is_subprocess(self, values_yaml):
         """Test skuld-codex broker uses subprocess transport."""
@@ -147,9 +154,7 @@ class TestValuesDefaults:
     def test_skuld_codex_broker_transport_adapter(self, values_yaml):
         """Test skuld-codex broker has correct transportAdapter class path."""
         broker = values_yaml["sessionDefinitions"]["skuldCodex"]["defaults"]["broker"]
-        assert broker["transportAdapter"] == (
-            "skuld.transports.codex.CodexSubprocessTransport"
-        )
+        assert broker["transportAdapter"] == ("skuld.transports.codex.CodexSubprocessTransport")
 
     def test_both_session_defs_use_same_image_repo(self, values_yaml):
         """Test skuld-claude and skuld-codex reference the same image repo."""
