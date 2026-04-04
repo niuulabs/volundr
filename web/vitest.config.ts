@@ -46,6 +46,8 @@ export default defineConfig({
         'src/modules/tyr/adapters/mock/**',
         // Tyr tracker API adapter — integration layer
         'src/modules/tyr/adapters/api/tracker.ts',
+        // Port interface — no executable logic
+        'src/modules/shared/ports/**',
       ],
       thresholds: {
         statements: 85,
