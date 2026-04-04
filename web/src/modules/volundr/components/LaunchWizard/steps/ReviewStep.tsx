@@ -15,6 +15,7 @@ import {
   HardDrive,
 } from 'lucide-react';
 import type { VolundrModel, VolundrRepo } from '@/modules/volundr/models';
+import { CLI_TOOL_LABELS } from '@/modules/volundr/models';
 import { TrackerIssueBadge } from '@/modules/volundr/components/molecules/TrackerIssueBadge';
 import type { WizardState } from '../LaunchWizard';
 import styles from './ReviewStep.module.css';
@@ -85,7 +86,7 @@ export function ReviewStep({ state, repos, models }: ReviewStepProps) {
           <div className={styles.summaryRow}>
             <span className={styles.summaryLabel}>CLI Tool</span>
             <span className={styles.summaryValue}>
-              {state.template.cliTool === 'claude' ? 'Claude Code' : 'Codex'}
+              {CLI_TOOL_LABELS[state.template.cliTool] ?? state.template.cliTool}
             </span>
           </div>
           {state.trackerIssue && (

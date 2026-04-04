@@ -129,6 +129,17 @@ describe('ReviewStep', () => {
       expect(screen.getByText('Codex')).toBeInTheDocument();
     });
 
+    it('falls back to raw cliTool string for unknown tool', () => {
+      renderStep({
+        state: buildState({
+          template: { ...baseTemplate, cliTool: 'custom-agent' },
+        }),
+      });
+
+      expect(screen.getByText('CLI Tool')).toBeInTheDocument();
+      expect(screen.getByText('custom-agent')).toBeInTheDocument();
+    });
+
     it('shows tracker issue badge when set', () => {
       renderStep({
         state: buildState({

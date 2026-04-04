@@ -233,3 +233,78 @@ class TestSkuldSettings:
 
         s = SkuldSettings()
         assert s.session.system_prompt == "prefixed"
+
+
+class TestTransportAdapter:
+    """Tests for the transport_adapter config field and legacy migration."""
+
+    def test_default_resolves_to_sdk_websocket(self, monkeypatch):
+        """Default config resolves to SdkWebSocketTransport."""
+        for var in ["CLI_TYPE", "SKULD__CLI_TYPE", "SKULD__TRANSPORT"]:
+            monkeypatch.delenv(var, raising=False)
+
+        s = SkuldSettings()
+        assert s.transport_adapter == "skuld.transports.sdk_websocket.SdkWebSocketTransport"
+
+    def test_cli_type_codex_resolves_to_codex_transport(self, monkeypatch):
+        """cli_type=codex maps to CodexSubprocessTransport."""
+        monkeypatch.setenv("SKULD__CLI_TYPE", "codex")
+
+        s = SkuldSettings()
+        assert s.transport_adapter == "skuld.transports.codex.CodexSubprocessTransport"
+
+    def test_transport_subprocess_resolves(self, monkeypatch):
+        """transport=subprocess maps to SubprocessTransport."""
+        monkeypatch.setenv("SKULD__TRANSPORT", "subprocess")
+
+        s = SkuldSettings()
+        assert s.transport_adapter == "skuld.transports.subprocess.SubprocessTransport"
+
+    def test_explicit_transport_adapter_takes_precedence(self, monkeypatch):
+        """Explicit transport_adapter overrides legacy fields."""
+        monkeypatch.setenv("SKULD__CLI_TYPE", "codex")
+        monkeypatch.setenv(
+            "SKULD__TRANSPORT_ADAPTER",
+            "my.custom.Transport",
+        )
+
+        s = SkuldSettings()
+        assert s.transport_adapter == "my.custom.Transport"
+
+    def test_legacy_cli_type_env_var_resolves(self, monkeypatch):
+        """Legacy CLI_TYPE env var still maps to transport_adapter."""
+        for var in ["SKULD__CLI_TYPE", "SKULD__TRANSPORT"]:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("CLI_TYPE", "codex")
+
+        s = SkuldSettings()
+        assert s.transport_adapter == "skuld.transports.codex.CodexSubprocessTransport"
+
+    def test_codex_takes_precedence_over_subprocess(self, monkeypatch):
+        """When both cli_type=codex and transport=subprocess, codex wins."""
+        monkeypatch.setenv("SKULD__CLI_TYPE", "codex")
+        monkeypatch.setenv("SKULD__TRANSPORT", "subprocess")
+
+        s = SkuldSettings()
+        assert s.transport_adapter == "skuld.transports.codex.CodexSubprocessTransport"
+
+    def test_init_kwarg_transport_adapter(self):
+        """Constructor kwarg for transport_adapter takes precedence."""
+        s = SkuldSettings(
+            cli_type="codex",
+            transport_adapter="my.override.Transport",
+        )
+        assert s.transport_adapter == "my.override.Transport"
+
+    def test_yaml_transport_adapter(self, tmp_path, monkeypatch):
+        """YAML transport_adapter field is loaded correctly."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            "transport_adapter: skuld.transports.subprocess.SubprocessTransport\n"
+        )
+        for var in ["SKULD__TRANSPORT_ADAPTER", "SKULD__CLI_TYPE", "CLI_TYPE"]:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setitem(SkuldSettings.model_config, "yaml_file", [config_file])
+
+        s = SkuldSettings()
+        assert s.transport_adapter == "skuld.transports.subprocess.SubprocessTransport"

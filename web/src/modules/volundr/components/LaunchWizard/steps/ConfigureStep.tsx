@@ -37,6 +37,7 @@ import type {
   IntegrationConnection,
   ClusterResourceInfo,
 } from '@/modules/volundr/models';
+import { CLI_TOOL_LABELS } from '@/modules/volundr/models';
 import type { SourceType } from '../LaunchWizard';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import { TrackerIssueSearch } from '@/modules/volundr/components/molecules/TrackerIssueSearch';
@@ -102,8 +103,16 @@ function workspaceLabel(ws: VolundrWorkspace): string {
 }
 
 const CLI_TOOLS: { value: CliTool; label: string; description: string }[] = [
-  { value: 'claude', label: 'Claude Code', description: 'Anthropic Claude CLI agent' },
-  { value: 'codex', label: 'Codex', description: 'OpenAI Codex CLI agent' },
+  {
+    value: 'claude',
+    label: CLI_TOOL_LABELS['claude'] ?? 'claude',
+    description: 'Anthropic Claude CLI agent',
+  },
+  {
+    value: 'codex',
+    label: CLI_TOOL_LABELS['codex'] ?? 'codex',
+    description: 'OpenAI Codex CLI agent',
+  },
 ];
 
 const PROVIDER_LABELS: Record<RepoProvider, string> = {

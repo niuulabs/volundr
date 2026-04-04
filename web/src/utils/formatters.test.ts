@@ -37,6 +37,10 @@ describe('formatters', () => {
       expect(formatBytes(2_000_000_000_000)).toBe('1.8 TB');
     });
 
+    it('uses one decimal place for values under 10', () => {
+      expect(formatBytes(5_000_000_000)).toBe('4.7 GB');
+    });
+
     it('uses 0 decimal places for values >= 10', () => {
       expect(formatBytes(12_000_000)).toBe('11 MB');
     });

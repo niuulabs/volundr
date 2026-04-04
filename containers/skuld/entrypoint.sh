@@ -2,7 +2,7 @@
 set -e
 
 # Skuld Entrypoint Script
-# Prepares the workspace and starts the broker service
+# Prepares the workspace and starts the broker service (Claude Code + Codex)
 
 echo "==== Skuld Entrypoint ===="
 echo "Session ID: ${SESSION_ID:-unknown}"
@@ -20,6 +20,12 @@ mkdir -p "$WORKSPACE_DIR"
 if [ -n "$ANTHROPIC_API_KEY" ]; then
     echo "Using Anthropic API"
     export ANTHROPIC_API_KEY
+fi
+
+# OpenAI API key (for Codex CLI)
+if [ -n "$OPENAI_API_KEY" ]; then
+    echo "Using OpenAI API"
+    export OPENAI_API_KEY
 fi
 
 # Ollama or compatible API
