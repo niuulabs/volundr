@@ -183,6 +183,7 @@ class MockDispatcherRepo(DispatcherRepository):
             running=False,
             threshold=0.5,
             max_concurrent_raids=3,
+            auto_continue=False,
             updated_at=datetime.now(UTC),
         )
 

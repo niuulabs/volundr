@@ -266,12 +266,14 @@ class TestDispatcherState:
             running=True,
             threshold=0.7,
             max_concurrent_raids=3,
+            auto_continue=False,
             updated_at=NOW,
         )
         assert state.running is True
         assert state.threshold == 0.7
         assert state.owner_id == "user-1"
         assert state.max_concurrent_raids == 3
+        assert state.auto_continue is False
 
 
 class TestSessionInfo:

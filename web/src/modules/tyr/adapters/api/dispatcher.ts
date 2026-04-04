@@ -17,6 +17,10 @@ export class ApiDispatcherService implements IDispatcherService {
     await api.patch('', { threshold });
   }
 
+  async setAutoContinue(autoContinue: boolean): Promise<void> {
+    await api.patch('', { auto_continue: autoContinue });
+  }
+
   async getLog(): Promise<string[]> {
     return [];
   }
