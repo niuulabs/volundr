@@ -7,7 +7,6 @@ from httpx import AsyncClient
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_health_endpoint(tyr_client: AsyncClient) -> None:
     """GET /health returns 200 with status ok."""
     resp = await tyr_client.get("/health")

@@ -11,7 +11,6 @@ from httpx import AsyncClient
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_raid_summary_empty(tyr_client: AsyncClient) -> None:
     """GET /api/v1/tyr/raids/summary returns zero counts when no raids exist."""
     resp = await tyr_client.get("/api/v1/tyr/raids/summary")
@@ -24,7 +23,6 @@ async def test_raid_summary_empty(tyr_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_raid_summary_after_commit(tyr_client: AsyncClient) -> None:
     """Commit a saga with raids, then GET /summary and verify PENDING count."""
     payload = {

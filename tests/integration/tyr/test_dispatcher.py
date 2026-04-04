@@ -11,7 +11,6 @@ from httpx import AsyncClient
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_get_dispatcher_state(tyr_client: AsyncClient) -> None:
     """GET /api/v1/tyr/dispatcher creates a default state and returns it."""
     resp = await tyr_client.get("/api/v1/tyr/dispatcher")
@@ -26,7 +25,6 @@ async def test_get_dispatcher_state(tyr_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_patch_dispatcher_state(tyr_client: AsyncClient) -> None:
     """PATCH /api/v1/tyr/dispatcher updates fields and returns new state."""
     # Ensure a default row exists first

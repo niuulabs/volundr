@@ -11,7 +11,6 @@ from httpx import AsyncClient
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_create_saga(tyr_client: AsyncClient) -> None:
     """POST /api/v1/tyr/sagas/commit persists a saga with phases and raids."""
     payload = {
@@ -52,7 +51,6 @@ async def test_create_saga(tyr_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_list_sagas(tyr_client: AsyncClient) -> None:
     """Create two sagas, GET /api/v1/tyr/sagas, assert both returned."""
     for slug in ("saga-a", "saga-b"):
@@ -79,7 +77,6 @@ async def test_list_sagas(tyr_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_get_saga_with_phases_and_raids(tyr_client: AsyncClient) -> None:
     """Commit a saga with nested phases/raids, then GET detail and verify structure."""
     payload = {
@@ -129,7 +126,6 @@ async def test_get_saga_with_phases_and_raids(tyr_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_get_saga_not_found(tyr_client: AsyncClient) -> None:
     """GET /api/v1/tyr/sagas/{id} returns 404 for non-existent saga."""
     fake_id = "00000000-0000-0000-0000-000000000000"
@@ -138,7 +134,6 @@ async def test_get_saga_not_found(tyr_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_duplicate_slug_rejected(tyr_client: AsyncClient) -> None:
     """POST /api/v1/tyr/sagas/commit returns 409 for duplicate slug."""
     payload = {
@@ -158,7 +153,6 @@ async def test_duplicate_slug_rejected(tyr_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio(loop_scope="session")
 async def test_delete_saga(tyr_client: AsyncClient) -> None:
     """Create a saga, delete it, verify it's gone."""
     payload = {
