@@ -12,7 +12,7 @@ routers needed for testing sessions, stats, prompts, and auth.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 import httpx
@@ -44,6 +44,8 @@ from volundr.domain.services import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from niuu.domain.models import Principal
+
 
 class NoOpPodManager(PodManager):
     """Stub pod manager that returns immediately without spawning anything."""
@@ -66,6 +68,41 @@ class NoOpPodManager(PodManager):
 
     async def close(self) -> None:
         pass
+
+
+class SyncSessionService(SessionService):
+    """SessionService that does NOT spawn background provisioning tasks.
+
+    The real ``start_session`` fires ``asyncio.create_task`` for background
+    provisioning, which accesses the DB concurrently on the same single-
+    connection ``TransactionalPool``.  asyncpg connections are not safe for
+    concurrent use, so we override ``start_session`` to transition the
+    session status synchronously within the request.
+    """
+
+    async def start_session(
+        self,
+        session_id: UUID,
+        profile_name: str | None = None,
+        template_name: str | None = None,
+        principal: Principal | None = None,
+        terminal_restricted: bool = False,
+        credential_names: list[str] | None = None,
+        integration_ids: list[str] | None = None,
+        resource_config: dict | None = None,
+        system_prompt: str = "",
+        initial_prompt: str = "",
+    ) -> Session:
+        """Start a session synchronously — no background tasks."""
+        session = await self._repository.get(session_id)
+        if session is None:
+            from volundr.domain.services.session import SessionNotFoundError
+
+            raise SessionNotFoundError(session_id)
+
+        starting = session.with_status(SessionStatus.STARTING)
+        await self._repository.update(starting)
+        return starting
 
 
 # Override the shared txn_pool fixture so it runs on the session event loop,
@@ -107,12 +144,12 @@ async def volundr_app(
     tenant_service = TenantService(tenant_repo, user_repo)
     await tenant_service.ensure_default_tenant()
 
-    # Services
+    # Services — use SyncSessionService to avoid background task hangs
     broadcaster = InMemoryEventBroadcaster()
     pricing = HardcodedPricingProvider()
     pod_manager = NoOpPodManager()
 
-    session_service = SessionService(
+    session_service = SyncSessionService(
         session_repo,
         pod_manager,
         broadcaster=broadcaster,
