@@ -29,6 +29,10 @@ class VolundrHTTPAdapter(VolundrPort):
         self._timeout = timeout
         self._name = name
 
+    @property
+    def name(self) -> str:
+        return self._name
+
     def _headers(self, auth_token: str | None = None) -> dict[str, str]:
         token = auth_token or self._api_key
         if token:
