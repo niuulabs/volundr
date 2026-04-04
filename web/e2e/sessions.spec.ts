@@ -1,18 +1,32 @@
 import { test, expect } from './fixtures';
-import { createSession, deleteSession, uniqueSessionName } from './helpers/api';
+import { createSession, uniqueSessionName } from './helpers/api';
+import type { Page } from '@playwright/test';
+
+/**
+ * Wait for the Volundr page to finish loading data.
+ * The page shows "Loading..." until stats are fetched from the API.
+ */
+async function waitForPageReady(page: Page) {
+  // Wait for the loading text to disappear (data fetched successfully)
+  await expect(page.getByText('Loading...')).toBeHidden({ timeout: 30_000 });
+}
 
 test.describe('sessions', () => {
   test('session list loads and shows empty state', async ({ authenticatedPage }) => {
     const page = authenticatedPage;
 
     await expect(page).toHaveURL(/\/volundr/);
+    await waitForPageReady(page);
+
     await expect(page.getByText('Select a session to view details')).toBeVisible();
     await expect(page.getByRole('button', { name: /New Session/i })).toBeVisible();
   });
 
-  test('create session flow', async ({ authenticatedPage, request }) => {
+  test('create session flow', async ({ authenticatedPage }) => {
     const page = authenticatedPage;
     const sessionName = uniqueSessionName('e2e-create');
+
+    await waitForPageReady(page);
 
     // Open the launch wizard
     await page.getByRole('button', { name: /New Session/i }).click();
@@ -26,7 +40,7 @@ test.describe('sessions', () => {
     await expect(nameInput).toBeVisible();
     await nameInput.fill(sessionName);
 
-    // Select source type: Local Mount (default may be git, toggle to local)
+    // Select source type: Local Mount
     const localMountButton = page.getByRole('button', { name: /Local Mount/i });
     if (await localMountButton.isVisible()) {
       await localMountButton.click();
@@ -45,7 +59,6 @@ test.describe('sessions', () => {
       .locator('select')
       .filter({ has: page.locator('option', { hasText: 'Select model...' }) });
     if (await modelSelect.isVisible()) {
-      // Pick the first non-empty option
       const options = modelSelect.locator('option');
       const count = await options.count();
       for (let i = 0; i < count; i++) {
@@ -77,6 +90,7 @@ test.describe('sessions', () => {
     // Reload to pick up the new session from SSE
     await page.reload();
     await page.waitForURL('**/volundr', { timeout: 15_000 });
+    await waitForPageReady(page);
 
     // Click on the session in the list
     await page.getByText(session.name).click();
@@ -99,6 +113,7 @@ test.describe('sessions', () => {
     // Reload to pick up the new session
     await page.reload();
     await page.waitForURL('**/volundr', { timeout: 15_000 });
+    await waitForPageReady(page);
 
     // Select the session
     await page.getByText(session.name).click();
