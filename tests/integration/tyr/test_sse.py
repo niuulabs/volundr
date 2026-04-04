@@ -14,16 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import socket
-from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock
 
-import httpx
 import pytest
 import pytest_asyncio
-import uvicorn
 
-from tests.integration.tyr.conftest import StubTracker
+from tests.integration.helpers.sse import SSE_TIMEOUT, collect_sse, start_server
+from tests.integration.tyr.conftest import create_tyr_test_app
 from tyr.adapters.memory_event_bus import InMemoryEventBus
 from tyr.ports.event_bus import TyrEvent
 
@@ -33,82 +29,6 @@ pytestmark = [
 ]
 
 SSE_URL = "/api/v1/tyr/events"
-
-# Timeout for SSE event collection (seconds)
-SSE_TIMEOUT = 5
-
-
-def _parse_sse_events(raw: str) -> list[dict[str, str]]:
-    """Parse raw SSE text into a list of field dicts."""
-    events: list[dict[str, str]] = []
-    for block in raw.split("\n\n"):
-        block = block.strip()
-        if not block:
-            continue
-        # Skip SSE comment lines (keepalive)
-        if block.startswith(":"):
-            continue
-        fields: dict[str, str] = {}
-        for line in block.split("\n"):
-            if ": " in line:
-                key, value = line.split(": ", 1)
-                fields[key] = value
-        if fields:
-            events.append(fields)
-    return events
-
-
-def _free_port() -> int:
-    """Find an available TCP port on localhost."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-async def _collect_sse(
-    base_url: str,
-    path: str,
-    n: int = 1,
-) -> list[dict[str, str]]:
-    """Connect to a real HTTP SSE endpoint and collect *n* events."""
-    collected: list[dict[str, str]] = []
-
-    async with httpx.AsyncClient() as client:
-        async with client.stream(
-            "GET",
-            f"{base_url}{path}",
-            timeout=SSE_TIMEOUT,
-        ) as response:
-            buffer = ""
-            async for chunk in response.aiter_text():
-                buffer += chunk
-                while "\n\n" in buffer:
-                    raw, buffer = buffer.split("\n\n", 1)
-                    parsed = _parse_sse_events(raw + "\n\n")
-                    collected.extend(parsed)
-                    if len(collected) >= n:
-                        return collected
-    return collected
-
-
-async def _start_server(app: object) -> tuple[uvicorn.Server, str]:
-    """Start a uvicorn server and return (server, base_url)."""
-    port = _free_port()
-    config = uvicorn.Config(
-        app,
-        host="127.0.0.1",
-        port=port,
-        log_level="warning",
-    )
-    server = uvicorn.Server(config)
-    asyncio.create_task(server.serve())
-
-    for _ in range(100):
-        if server.started:
-            break
-        await asyncio.sleep(0.05)
-
-    return server, f"http://127.0.0.1:{port}"
 
 
 # ------------------------------------------------------------------
@@ -125,81 +45,7 @@ async def sse_event_bus() -> InMemoryEventBus:
 @pytest_asyncio.fixture(loop_scope="session")
 async def sse_tyr_app(tyr_settings, txn_pool, sse_event_bus):  # noqa: ANN001
     """Tyr app wired with a real InMemoryEventBus for SSE testing."""
-    from tyr.adapters.postgres_dispatcher import PostgresDispatcherRepository
-    from tyr.adapters.postgres_sagas import PostgresSagaRepository
-    from tyr.api.dispatch import resolve_dispatcher_repo as dispatch_resolve_dispatcher_repo
-    from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
-    from tyr.api.dispatch import resolve_volundr
-    from tyr.api.dispatcher import resolve_dispatcher_repo
-    from tyr.api.dispatcher import resolve_event_bus as dispatcher_resolve_event_bus
-    from tyr.api.events import resolve_event_bus
-    from tyr.api.raids import resolve_git, resolve_raid_repo
-    from tyr.api.raids import resolve_tracker as resolve_raids_tracker
-    from tyr.api.raids import resolve_volundr as resolve_raids_volundr
-    from tyr.api.sagas import resolve_git as sagas_resolve_git
-    from tyr.api.sagas import resolve_llm, resolve_saga_repo
-    from tyr.api.sagas import resolve_volundr as sagas_resolve_volundr
-    from tyr.api.tracker import resolve_trackers
-    from tyr.main import create_app
-
-    app = create_app(tyr_settings)
-
-    @asynccontextmanager
-    async def _test_lifespan(_app):  # noqa: ANN001
-        yield
-
-    app.router.lifespan_context = _test_lifespan
-
-    saga_repo = PostgresSagaRepository(txn_pool)
-    dispatcher_repo = PostgresDispatcherRepository(txn_pool)
-
-    stub_tracker = StubTracker()
-    stub_git = AsyncMock()
-    stub_git.create_branch = AsyncMock(return_value=None)
-    stub_llm = AsyncMock()
-    stub_volundr = AsyncMock()
-
-    async def _saga_repo():  # noqa: ANN202
-        return saga_repo
-
-    async def _dispatcher_repo():  # noqa: ANN202
-        return dispatcher_repo
-
-    async def _tracker():  # noqa: ANN202
-        return stub_tracker
-
-    async def _trackers():  # noqa: ANN202
-        return [stub_tracker]
-
-    async def _volundr():  # noqa: ANN202
-        return stub_volundr
-
-    async def _llm():  # noqa: ANN202
-        return stub_llm
-
-    async def _git():  # noqa: ANN202
-        return stub_git
-
-    async def _event_bus():  # noqa: ANN202
-        return sse_event_bus
-
-    app.dependency_overrides[resolve_saga_repo] = _saga_repo
-    app.dependency_overrides[dispatch_resolve_saga_repo] = _saga_repo
-    app.dependency_overrides[resolve_raid_repo] = _saga_repo
-    app.dependency_overrides[resolve_dispatcher_repo] = _dispatcher_repo
-    app.dependency_overrides[dispatch_resolve_dispatcher_repo] = _dispatcher_repo
-    app.dependency_overrides[resolve_trackers] = _trackers
-    app.dependency_overrides[resolve_raids_tracker] = _tracker
-    app.dependency_overrides[resolve_llm] = _llm
-    app.dependency_overrides[resolve_git] = _git
-    app.dependency_overrides[sagas_resolve_git] = _git
-    app.dependency_overrides[resolve_volundr] = _volundr
-    app.dependency_overrides[resolve_raids_volundr] = _volundr
-    app.dependency_overrides[sagas_resolve_volundr] = _volundr
-    app.dependency_overrides[resolve_event_bus] = _event_bus
-    app.dependency_overrides[dispatcher_resolve_event_bus] = _event_bus
-
-    return app
+    return create_tyr_test_app(tyr_settings, txn_pool, sse_event_bus)
 
 
 # ------------------------------------------------------------------
@@ -222,11 +68,11 @@ async def test_tyr_sse_connects(
     )
     await sse_event_bus.emit(snapshot_event)
 
-    server, base_url = await _start_server(sse_tyr_app)
+    server, base_url = await start_server(sse_tyr_app)
 
     try:
         events = await asyncio.wait_for(
-            _collect_sse(base_url, SSE_URL, n=1),
+            collect_sse(base_url, SSE_URL, n=1),
             timeout=SSE_TIMEOUT,
         )
 
@@ -245,7 +91,7 @@ async def test_tyr_sse_receives_saga_event(
     sse_event_bus: InMemoryEventBus,
 ) -> None:
     """Connect SSE, emit a saga event, verify it arrives via the stream."""
-    server, base_url = await _start_server(sse_tyr_app)
+    server, base_url = await start_server(sse_tyr_app)
 
     try:
         saga_event = TyrEvent(
@@ -260,7 +106,7 @@ async def test_tyr_sse_receives_saga_event(
         emit_task = asyncio.create_task(_emit_event())
 
         events = await asyncio.wait_for(
-            _collect_sse(base_url, SSE_URL, n=1),
+            collect_sse(base_url, SSE_URL, n=1),
             timeout=SSE_TIMEOUT,
         )
         await emit_task
