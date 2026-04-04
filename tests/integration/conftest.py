@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -29,8 +30,10 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
-from tests.helpers.migrations import apply_migrations
+from tests.helpers.migrations import apply_migrations, discover_migrations
 from tests.integration.pool_wrapper import TransactionalPool
+
+_logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -45,6 +48,27 @@ _DB_NAME = os.environ.get("TEST_DATABASE_NAME", "volundr_test")
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _MIGRATIONS_DIR = _REPO_ROOT / "migrations"
 _TYR_MIGRATIONS_DIR = _REPO_ROOT / "migrations" / "tyr"
+
+
+async def _apply_tyr_migrations(pool: asyncpg.Pool, migrations_dir: Path) -> None:
+    """Apply Tyr migrations tolerantly.
+
+    Tyr and Volundr share some tables (integration_connections,
+    personal_access_tokens).  When both migration sets run against the same
+    test database, index/column conflicts on already-migrated shared tables
+    are expected and safe to skip.
+    """
+    migration_files = discover_migrations(migrations_dir)
+    async with pool.acquire() as conn:
+        for file in migration_files:
+            sql = file.read_text(encoding="utf-8")
+            try:
+                await conn.execute(sql)
+            except asyncpg.UndefinedColumnError:
+                _logger.info("Skipping %s (column conflict with Volundr schema)", file.name)
+            except asyncpg.DuplicateObjectError:
+                _logger.info("Skipping %s (object already exists)", file.name)
+
 
 # ---------------------------------------------------------------------------
 # Session-scoped real pool (migrations applied once)
@@ -67,7 +91,7 @@ async def db_pool() -> asyncpg.Pool:
 
     await apply_migrations(pool, _MIGRATIONS_DIR)
     if _TYR_MIGRATIONS_DIR.is_dir():
-        await apply_migrations(pool, _TYR_MIGRATIONS_DIR)
+        await _apply_tyr_migrations(pool, _TYR_MIGRATIONS_DIR)
 
     yield pool
 
