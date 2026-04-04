@@ -15,10 +15,6 @@ from fastapi.testclient import TestClient
 
 from niuu.domain.models import IntegrationConnection, IntegrationType
 from tyr.api.dispatch import (
-    _build_prompt,
-    _is_ready,
-    _resolve_target_adapter,
-    _slugify,
     create_dispatch_router,
     resolve_dispatch_service,
     resolve_dispatcher_repo,
@@ -42,6 +38,9 @@ from tyr.domain.services.dispatch_service import (
 )
 from tyr.domain.services.dispatch_service import (
     DispatchService,
+    build_prompt,
+    is_ready,
+    resolve_target_adapter,
 )
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.volundr import SpawnRequest, VolundrPort, VolundrSession
@@ -387,7 +386,7 @@ class TestIsReady:
             description="",
             status="Todo",
         )
-        assert _is_ready(issue, set(), set()) is True
+        assert is_ready(issue, set(), set()) is True
 
     def test_ready_backlog(self):
         issue = TrackerIssue(
@@ -397,7 +396,7 @@ class TestIsReady:
             description="",
             status="Backlog",
         )
-        assert _is_ready(issue, set(), set()) is True
+        assert is_ready(issue, set(), set()) is True
 
     def test_ready_triage(self):
         issue = TrackerIssue(
@@ -407,7 +406,7 @@ class TestIsReady:
             description="",
             status="Triage",
         )
-        assert _is_ready(issue, set(), set()) is True
+        assert is_ready(issue, set(), set()) is True
 
     def test_not_ready_in_progress(self):
         issue = TrackerIssue(
@@ -417,7 +416,7 @@ class TestIsReady:
             description="",
             status="In Progress",
         )
-        assert _is_ready(issue, set(), set()) is False
+        assert is_ready(issue, set(), set()) is False
 
     def test_not_ready_active_session(self):
         issue = TrackerIssue(
@@ -427,7 +426,7 @@ class TestIsReady:
             description="",
             status="Todo",
         )
-        assert _is_ready(issue, {"X-1"}, set()) is False
+        assert is_ready(issue, {"X-1"}, set()) is False
 
     def test_not_ready_blocked(self):
         issue = TrackerIssue(
@@ -437,22 +436,7 @@ class TestIsReady:
             description="",
             status="Todo",
         )
-        assert _is_ready(issue, set(), {"X-1"}) is False
-
-
-class TestSlugify:
-    def test_simple(self):
-        assert _slugify("Hello World") == "hello-world"
-
-    def test_special_chars(self):
-        assert _slugify("Fix: bug #123!") == "fix-bug-123"
-
-    def test_truncates_long(self):
-        long_text = "a" * 60
-        assert len(_slugify(long_text)) <= 40
-
-    def test_strips_leading_trailing_dashes(self):
-        assert _slugify("--hello--") == "hello"
+        assert is_ready(issue, set(), {"X-1"}) is False
 
 
 class TestBuildPrompt:
@@ -465,7 +449,7 @@ class TestBuildPrompt:
             status="Todo",
             url="https://example.com/X-1",
         )
-        prompt = _build_prompt(issue, "org/repo", "feat/alpha")
+        prompt = build_prompt(issue, "org/repo", "feat/alpha")
         assert "X-1" in prompt
         assert "Setup CI" in prompt
         assert "Configure pipelines" in prompt
@@ -480,7 +464,7 @@ class TestBuildPrompt:
             description="",
             status="Todo",
         )
-        prompt = _build_prompt(issue, "org/repo", "main")
+        prompt = build_prompt(issue, "org/repo", "main")
         assert "X-2" in prompt
         assert "No desc" in prompt
 
@@ -492,7 +476,7 @@ class TestBuildPrompt:
             description="Do stuff",
             status="Todo",
         )
-        prompt = _build_prompt(issue, "org/repo", "feat/test")
+        prompt = build_prompt(issue, "org/repo", "feat/test")
         assert "feat/test" in prompt
         assert "x-3" in prompt
         assert "org/repo" in prompt
@@ -509,7 +493,7 @@ class TestBuildPrompt:
             "Task: {identifier} — {title}\n{description}\n"
             "Branch: {raid_branch}\nPR target: {feature_branch}"
         )
-        prompt = _build_prompt(issue, "org/repo", "feat/saga", template=template)
+        prompt = build_prompt(issue, "org/repo", "feat/saga", template=template)
         assert "NIU-42" in prompt
         assert "Add auth" in prompt
         assert "Implement OAuth" in prompt
@@ -903,26 +887,26 @@ class TestApproveDispatch:
 class TestResolveTargetAdapter:
     def test_no_connection_id_returns_fallback(self):
         fallback = MockVolundr()
-        result = _resolve_target_adapter(None, {}, fallback)
+        result = resolve_target_adapter(None, {}, fallback)
         assert result is fallback
 
     def test_empty_connection_id_returns_fallback(self):
         fallback = MockVolundr()
-        result = _resolve_target_adapter("", {}, fallback)
+        result = resolve_target_adapter("", {}, fallback)
         assert result is fallback
 
     def test_matching_connection_id_returns_adapter(self):
         fallback = MockVolundr()
         target = MockVolundr()
         adapters = {"cluster-a": target}
-        result = _resolve_target_adapter("cluster-a", adapters, fallback)
+        result = resolve_target_adapter("cluster-a", adapters, fallback)
         assert result is target
 
     def test_unknown_connection_id_returns_fallback(self):
         fallback = MockVolundr()
         target = MockVolundr()
         adapters = {"cluster-a": target}
-        result = _resolve_target_adapter("cluster-b", adapters, fallback)
+        result = resolve_target_adapter("cluster-b", adapters, fallback)
         assert result is fallback
 
 

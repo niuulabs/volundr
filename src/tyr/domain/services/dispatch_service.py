@@ -7,7 +7,6 @@ auto-continue and future consumers without an HTTP request context.
 from __future__ import annotations
 
 import logging
-import re
 import string
 from dataclasses import dataclass
 
@@ -25,6 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _READY_STATUSES = {"todo", "backlog", "triage"}
+_ACTIVE_SESSION_STATUSES = {"running", "starting", "creating"}
 
 
 @dataclass(frozen=True)
@@ -87,12 +87,6 @@ def is_ready(
     if issue.identifier in blocked_identifiers:
         return False
     return True
-
-
-def slugify(text: str) -> str:
-    slug = text.lower()
-    slug = re.sub(r"[^a-z0-9]+", "-", slug)
-    return slug.strip("-")[:40]
 
 
 def build_prompt(
@@ -164,6 +158,7 @@ class DispatchConfig:
     default_system_prompt: str = ""
     default_model: str = "claude-sonnet-4-6"
     dispatch_prompt_template: str = ""
+    max_cached_issues: int = 10_000
 
 
 class DispatchService:
@@ -209,11 +204,10 @@ class DispatchService:
 
         # Get active sessions to exclude already-running issues
         sessions = await volundr.list_sessions(auth_token=auth_token)
-        active_statuses = {"running", "starting", "creating"}
         active_issue_ids = {
             s.tracker_issue_id
             for s in sessions
-            if s.tracker_issue_id and s.status in active_statuses
+            if s.tracker_issue_id and s.status in _ACTIVE_SESSION_STATUSES
         }
 
         queue: list[QueueItem] = []
@@ -292,13 +286,13 @@ class DispatchService:
         all_volundr = await self._volundr_factory.for_owner(owner_id)
         adapter_by_name: dict[str, VolundrPort] = {}
         for a in all_volundr:
-            if hasattr(a, "_name"):
-                adapter_by_name[getattr(a, "_name")] = a
+            if a.name:
+                adapter_by_name[a.name] = a
 
         # Build lookups
         sagas = await self._saga_repo.list_sagas(owner_id=owner_id)
         saga_map = {str(s.id): s for s in sagas}
-        issue_cache = await self._build_issue_cache(adapters, sagas)
+        issue_cache = await self._build_issue_cache(adapters, sagas, self._config.max_cached_issues)
 
         results: list[DispatchResult] = []
         for item in items:
@@ -376,10 +370,9 @@ class DispatchService:
 
     @staticmethod
     async def _build_issue_cache(
-        adapters: list[TrackerPort], sagas: list[Saga]
+        adapters: list[TrackerPort], sagas: list[Saga], max_cached_issues: int
     ) -> dict[str, TrackerIssue]:
         """Build a lookup of issue details for prompt generation."""
-        max_cached_issues = 10_000
         issue_cache: dict[str, TrackerIssue] = {}
         for saga in sagas:
             for adapter in adapters:

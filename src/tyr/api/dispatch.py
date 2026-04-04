@@ -21,10 +21,6 @@ from tyr.domain.services.dispatch_service import (
 )
 from tyr.domain.services.dispatch_service import (
     DispatchService,
-    build_prompt,
-    is_ready,
-    resolve_target_adapter,
-    slugify,
 )
 from tyr.domain.services.dispatch_service import (
     QueueItem as ServiceQueueItem,
@@ -34,12 +30,6 @@ from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.volundr import VolundrFactory, VolundrPort
 
 logger = logging.getLogger(__name__)
-
-# Re-export helpers so existing imports from tyr.api.dispatch keep working.
-_is_ready = is_ready
-_slugify = slugify
-_build_prompt = build_prompt
-_resolve_target_adapter = resolve_target_adapter
 
 
 # ---------------------------------------------------------------------------

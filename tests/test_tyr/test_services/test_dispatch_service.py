@@ -25,7 +25,6 @@ from tyr.domain.services.dispatch_service import (
     build_prompt,
     is_ready,
     resolve_target_adapter,
-    slugify,
 )
 
 from ..test_dispatch_api import (
@@ -195,20 +194,6 @@ class TestIsReady:
     def test_not_ready_blocked(self):
         issue = TrackerIssue(id="1", identifier="X-1", title="t", description="", status="Todo")
         assert is_ready(issue, set(), {"X-1"}) is False
-
-
-class TestSlugify:
-    def test_simple(self):
-        assert slugify("Hello World") == "hello-world"
-
-    def test_special_chars(self):
-        assert slugify("Fix: bug #123!") == "fix-bug-123"
-
-    def test_truncates_long(self):
-        assert len(slugify("a" * 60)) <= 40
-
-    def test_strips_leading_trailing_dashes(self):
-        assert slugify("--hello--") == "hello"
 
 
 class TestBuildPrompt:
