@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { createSession, deleteSession, listSessions, uniqueSessionName } from './helpers/api';
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 /**
  * Intercept API calls that may fail in the E2E environment and return
@@ -18,7 +18,7 @@ async function stubMissingApis(page: Page) {
   };
 
   for (const [pattern, body] of Object.entries(fallbacks)) {
-    await page.route(pattern, async (route) => {
+    await page.route(pattern, async (route: Route) => {
       const response = await route.fetch().catch(() => null);
       if (!response || !response.ok()) {
         return route.fulfill({ status: 200, contentType: 'application/json', body });
@@ -77,8 +77,24 @@ test.describe('sessions', () => {
     const found = sessions.find(s => s.id === session.id);
     expect(found).toBeDefined();
 
-    // Now navigate to the page (fresh load will include the session)
-    await navigateToVolundr(page);
+    // Navigate — intercept /sessions to inject our session if needed
+    await stubMissingApis(page);
+
+    // Log API responses for debugging
+    await page.route('**/api/v1/volundr/sessions', async (route: Route) => {
+      if (route.request().method() === 'GET') {
+        const response = await route.fetch();
+        const body = await response.text();
+        // eslint-disable-next-line no-console
+        console.log(`[E2E] GET /sessions response (${response.status()}): ${body.slice(0, 500)}`);
+        return route.fulfill({ response });
+      }
+      return route.continue();
+    });
+
+    await page.goto('/volundr');
+    await page.waitForURL('**/volundr', { timeout: 15_000 });
+    await waitForPageReady(page);
 
     // Session should appear in the sidebar list
     await expect(page.getByText(session.name)).toBeVisible({ timeout: 15_000 });
