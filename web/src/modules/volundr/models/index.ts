@@ -133,7 +133,7 @@ export type {
   CreatePATResult,
 } from './volundr.model';
 
-export { TASK_TYPES } from './volundr.model';
+export { TASK_TYPES, CLI_TOOL_LABELS } from './volundr.model';
 
 export type {
   IntegrationType,

@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { useSkuldChat } from './useSkuldChat';
+import { useSkuldChat, DEFAULT_CAPABILITIES } from './useSkuldChat';
 
 // Mock the useWebSocket hook
 vi.mock('@/hooks/useWebSocket', () => ({
@@ -1939,5 +1939,98 @@ describe('useSkuldChat', () => {
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].content).toBe('Hook TestHook: ');
+  });
+
+  // ── Available Commands ───────────────────────────────────────
+
+  it('updates availableCommands when available_commands event is received', () => {
+    const { handlers } = setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+    act(() => handlers.onOpen?.());
+    act(() =>
+      handlers.onMessage?.(
+        JSON.stringify({
+          type: 'available_commands',
+          slash_commands: ['/help', '/clear'],
+          skills: ['commit'],
+        })
+      )
+    );
+
+    expect(result.current.availableCommands).toHaveLength(3);
+  });
+
+  // ── User Confirmed ─────────────────────────────────────────
+
+  it('silently consumes user_confirmed event without changing messages', () => {
+    const { handlers } = setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+    act(() => handlers.onOpen?.());
+    act(() => handlers.onMessage?.(JSON.stringify({ type: 'user_confirmed' })));
+
+    expect(result.current.messages).toEqual([]);
+  });
+
+  // ── Capabilities ────────────────────────────────────────────
+
+  it('starts with DEFAULT_CAPABILITIES (all false)', () => {
+    setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+    expect(result.current.capabilities).toEqual(DEFAULT_CAPABILITIES);
+    expect(result.current.capabilities.interrupt).toBe(false);
+    expect(result.current.capabilities.set_model).toBe(false);
+  });
+
+  it('updates capabilities when capabilities event is received', () => {
+    const { handlers } = setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+    act(() => handlers.onOpen?.());
+    act(() =>
+      handlers.onMessage?.(
+        JSON.stringify({
+          type: 'capabilities',
+          cli_websocket: true,
+          interrupt: true,
+          set_model: true,
+          set_thinking_tokens: true,
+          rewind_files: true,
+          permission_requests: true,
+          slash_commands: true,
+          skills: true,
+        })
+      )
+    );
+
+    expect(result.current.capabilities.cli_websocket).toBe(true);
+    expect(result.current.capabilities.interrupt).toBe(true);
+    expect(result.current.capabilities.set_model).toBe(true);
+    expect(result.current.capabilities.set_thinking_tokens).toBe(true);
+    expect(result.current.capabilities.rewind_files).toBe(true);
+    expect(result.current.capabilities.session_resume).toBe(false);
+    expect(result.current.capabilities.set_permission_mode).toBe(false);
+    expect(result.current.capabilities.mcp_set_servers).toBe(false);
+  });
+
+  it('treats missing capabilities fields as false', () => {
+    const { handlers } = setupMock();
+    const { result } = renderHook(() => useSkuldChat('wss://test/session'));
+
+    act(() => handlers.onOpen?.());
+    act(() =>
+      handlers.onMessage?.(
+        JSON.stringify({
+          type: 'capabilities',
+          interrupt: true,
+        })
+      )
+    );
+
+    expect(result.current.capabilities.interrupt).toBe(true);
+    expect(result.current.capabilities.set_model).toBe(false);
+    expect(result.current.capabilities.cli_websocket).toBe(false);
   });
 });
