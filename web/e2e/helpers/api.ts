@@ -97,19 +97,3 @@ export async function listSessions(
 
   return response.json();
 }
-
-/**
- * Fetch available models from the backend.
- */
-export async function listModels(
-  request: APIRequestContext,
-): Promise<Record<string, unknown>> {
-  const response = await request.get(`${API_BASE}/models`);
-
-  if (!response.ok()) {
-    const body = await response.text();
-    throw new Error(`Failed to list models (${response.status()}): ${body}`);
-  }
-
-  return response.json();
-}
