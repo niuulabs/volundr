@@ -93,6 +93,7 @@ class StubTracker(TrackerPort):
         self.phases: list[Phase] = []
         self._all_merged: bool = False
         self.phase_status_updates: list[tuple[str, PhaseStatus]] = []
+        self.attached_documents: list[tuple[str, str, str]] = []
 
     # -- CRUD: create entities --
 
@@ -113,6 +114,10 @@ class StubTracker(TrackerPort):
 
     async def close_raid(self, raid_id: str) -> None:
         pass
+
+    async def attach_issue_document(self, issue_id: str, title: str, content: str) -> str:
+        self.attached_documents.append((issue_id, title, content))
+        return "doc-stub"
 
     # -- Read: fetch domain entities by tracker ID --
 
@@ -281,6 +286,7 @@ class StubVolundr(VolundrPort):
 
     def __init__(self) -> None:
         self.messages: list[tuple[str, str]] = []
+        self.stopped_sessions: list[str] = []
         self.fail_send: bool = False
 
     async def spawn_session(
@@ -310,7 +316,7 @@ class StubVolundr(VolundrPort):
         self.messages.append((session_id, message))
 
     async def stop_session(self, session_id, *, auth_token=None):
-        pass
+        self.stopped_sessions.append(session_id)
 
     async def list_integration_ids(self, *, auth_token=None) -> list[str]:
         return []
@@ -422,7 +428,7 @@ def _make_engine(
     config: ReviewConfig | None = None,
     event_bus: InMemoryEventBus | None = None,
     volundr: StubVolundr | None = None,
-) -> tuple[ReviewEngine, StubTracker, StubGit, InMemoryEventBus]:
+) -> tuple[ReviewEngine, StubTracker, StubGit, InMemoryEventBus, StubVolundr]:
     r = tracker or StubTracker()
     g = git or StubGit()
     e = event_bus or InMemoryEventBus()
@@ -443,7 +449,7 @@ def _make_engine(
         review_config=c,
         event_bus=e,
     )
-    return engine, r, g, e
+    return engine, r, g, e, v
 
 
 def _setup_passing_pr(git: StubGit, pr_id: str) -> None:
@@ -526,7 +532,7 @@ class TestAutoApprove:
     @pytest.mark.asyncio
     async def test_auto_approve_high_confidence(self) -> None:
         """Raid with high confidence, passing CI, and mergeable PR is auto-approved."""
-        engine, repo, git, bus = _make_engine()
+        engine, repo, git, bus, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -544,7 +550,7 @@ class TestAutoApprove:
     @pytest.mark.asyncio
     async def test_auto_approve_does_not_merge_branch(self) -> None:
         """Auto-approve should NOT merge the branch — the reviewer session does it."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -561,7 +567,7 @@ class TestAutoApprove:
     @pytest.mark.asyncio
     async def test_auto_approve_emits_events(self) -> None:
         """Auto-approve should emit raid.state_changed and confidence.updated events."""
-        engine, repo, git, bus = _make_engine()
+        engine, repo, git, bus, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -587,7 +593,7 @@ class TestAutoApprove:
     @pytest.mark.asyncio
     async def test_auto_approve_records_confidence_events(self) -> None:
         """Auto-approve should record CI_PASS and AUTO_APPROVED confidence events."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -606,7 +612,7 @@ class TestAutoApprove:
     @pytest.mark.asyncio
     async def test_merge_failure_does_not_block_approval(self) -> None:
         """If branch merge fails, the raid should still transition to MERGED."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -631,7 +637,7 @@ class TestCIFailure:
     @pytest.mark.asyncio
     async def test_ci_failure_auto_retry(self) -> None:
         """CI failure with retries remaining should auto-retry (REVIEW → PENDING)."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(retry_count=0)
         repo.raids[raid.tracker_id] = raid
 
@@ -647,7 +653,7 @@ class TestCIFailure:
     async def test_ci_failure_retries_exhausted(self) -> None:
         """CI failure with no retries left should transition to FAILED."""
         config = _default_config(max_retries=3)
-        engine, repo, git, _ = _make_engine(config=config)
+        engine, repo, git, _, _ = _make_engine(config=config)
         raid = _make_raid(retry_count=3)
         repo.raids[raid.tracker_id] = raid
 
@@ -661,7 +667,7 @@ class TestCIFailure:
     @pytest.mark.asyncio
     async def test_ci_failure_emits_ci_fail_event(self) -> None:
         """CI failure should record a CI_FAIL confidence event."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid()
         repo.raids[raid.tracker_id] = raid
 
@@ -683,7 +689,7 @@ class TestPRConflicts:
     @pytest.mark.asyncio
     async def test_conflict_auto_retry(self) -> None:
         """PR with conflicts and retries remaining should auto-retry."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(retry_count=0)
         repo.raids[raid.tracker_id] = raid
 
@@ -698,7 +704,7 @@ class TestPRConflicts:
     async def test_conflict_retries_exhausted(self) -> None:
         """PR with conflicts and no retries left should fail."""
         config = _default_config(max_retries=2)
-        engine, repo, git, _ = _make_engine(config=config)
+        engine, repo, git, _, _ = _make_engine(config=config)
         raid = _make_raid(retry_count=2)
         repo.raids[raid.tracker_id] = raid
 
@@ -712,7 +718,7 @@ class TestPRConflicts:
     @pytest.mark.asyncio
     async def test_conflict_records_pr_conflict_event(self) -> None:
         """PR conflict should record a PR_CONFLICT confidence event."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid()
         repo.raids[raid.tracker_id] = raid
 
@@ -734,7 +740,7 @@ class TestScopeBreach:
     @pytest.mark.asyncio
     async def test_scope_breach_lowers_confidence(self) -> None:
         """Scope breach should apply a negative confidence delta."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(
             declared_files=["src/main.py"],
         )
@@ -760,7 +766,7 @@ class TestScopeBreach:
     @pytest.mark.asyncio
     async def test_no_scope_breach_within_threshold(self) -> None:
         """No scope breach when undeclared files are within threshold."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(
             declared_files=["src/main.py", "src/b.py", "src/c.py"],
         )
@@ -789,7 +795,7 @@ class TestEscalation:
     async def test_low_confidence_escalates(self) -> None:
         """Confidence below threshold should escalate to human review."""
         config = _default_config(auto_approve_threshold=0.95)
-        engine, repo, git, _ = _make_engine(config=config)
+        engine, repo, git, _, _ = _make_engine(config=config)
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
 
@@ -805,7 +811,7 @@ class TestEscalation:
     @pytest.mark.asyncio
     async def test_no_pr_escalates(self) -> None:
         """Raid without a PR ID should escalate to human review."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(pr_id=None, confidence=0.9)
         repo.raids[raid.tracker_id] = raid
 
@@ -816,7 +822,7 @@ class TestEscalation:
     @pytest.mark.asyncio
     async def test_pr_status_fetch_failure_escalates(self) -> None:
         """If PR status cannot be fetched, escalate to human review."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.9)
         repo.raids[raid.tracker_id] = raid
         git.fail_pr_status = True
@@ -835,7 +841,7 @@ class TestRetryPenalty:
     @pytest.mark.asyncio
     async def test_retry_count_applies_penalty(self) -> None:
         """Previous retries should apply a cumulative confidence penalty."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5, retry_count=2)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -855,7 +861,7 @@ class TestRetryPenalty:
     @pytest.mark.asyncio
     async def test_zero_retries_no_penalty(self) -> None:
         """First attempt should not apply a retry penalty."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5, retry_count=0)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -880,7 +886,7 @@ class TestPhaseGate:
     @pytest.mark.asyncio
     async def test_phase_gate_unlocked(self) -> None:
         """When all raids in a phase are merged, the next phase is unlocked."""
-        engine, repo, git, bus = _make_engine()
+        engine, repo, git, bus, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -916,7 +922,7 @@ class TestPhaseGate:
     @pytest.mark.asyncio
     async def test_no_phase_gate_when_raids_remain(self) -> None:
         """Phase gate should not unlock when not all raids are merged."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -934,7 +940,7 @@ class TestPhaseGate:
     @pytest.mark.asyncio
     async def test_no_next_phase(self) -> None:
         """Phase gate unlocked but no next phase — should return True without error."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -960,14 +966,14 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_raid_not_found(self) -> None:
         """Evaluating a non-existent raid should raise ValueError."""
-        engine, _, _, _ = _make_engine()
+        engine, _, _, _, _ = _make_engine()
         with pytest.raises(ValueError, match="Raid not found"):
             await engine.evaluate("NIU-NONEXISTENT", OWNER_ID)
 
     @pytest.mark.asyncio
     async def test_wrong_state(self) -> None:
         """Evaluating a raid not in REVIEW should raise ValueError."""
-        engine, repo, _, _ = _make_engine()
+        engine, repo, _, _, _ = _make_engine()
         raid = _make_raid(status=RaidStatus.RUNNING)
         repo.raids[raid.tracker_id] = raid
 
@@ -977,7 +983,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_changed_files_failure_does_not_block(self) -> None:
         """If fetching changed files fails, review should still proceed."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -1029,7 +1035,7 @@ class TestEventDrivenReview:
 
         from tyr.ports.event_bus import TyrEvent
 
-        engine, repo, git, bus = _make_engine()
+        engine, repo, git, bus, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -1070,7 +1076,7 @@ class TestEventDrivenReview:
 
         from tyr.ports.event_bus import TyrEvent
 
-        engine, repo, git, bus = _make_engine()
+        engine, repo, git, bus, _ = _make_engine()
         raid = _make_raid(confidence=0.5, status=RaidStatus.RUNNING)
         repo.raids[raid.tracker_id] = raid
 
@@ -1104,7 +1110,7 @@ class TestEventDrivenReview:
 
         from tyr.ports.event_bus import TyrEvent
 
-        engine, repo, git, bus = _make_engine()
+        engine, repo, git, bus, _ = _make_engine()
         # No raid in repo — will cause ValueError("Raid not found")
 
         await engine.start()
@@ -1159,7 +1165,7 @@ class TestMergeableSignal:
     @pytest.mark.asyncio
     async def test_mergeable_records_pr_mergeable_event(self) -> None:
         """Mergeable PR should record PR_MERGEABLE, not CI_PASS."""
-        engine, repo, git, _ = _make_engine()
+        engine, repo, git, _, _ = _make_engine()
         raid = _make_raid(confidence=0.5)
         repo.raids[raid.tracker_id] = raid
         repo.saga = _make_saga()
@@ -1188,7 +1194,7 @@ class TestSessionFeedback:
     async def test_retry_sends_message_to_session(self) -> None:
         """Auto-retry should send failure context to the session."""
         volundr = StubVolundr()
-        engine, repo, git, _ = _make_engine(volundr=volundr)
+        engine, repo, git, _, _ = _make_engine(volundr=volundr)
         raid = _make_raid(retry_count=0)
         repo.raids[raid.tracker_id] = raid
 
@@ -1206,7 +1212,7 @@ class TestSessionFeedback:
     async def test_retry_sends_conflict_message(self) -> None:
         """Auto-retry for PR conflicts should send conflict context."""
         volundr = StubVolundr()
-        engine, repo, git, _ = _make_engine(volundr=volundr)
+        engine, repo, git, _, _ = _make_engine(volundr=volundr)
         raid = _make_raid(retry_count=0)
         repo.raids[raid.tracker_id] = raid
 
@@ -1221,7 +1227,7 @@ class TestSessionFeedback:
     @pytest.mark.asyncio
     async def test_retry_without_volundr_does_not_fail(self) -> None:
         """Auto-retry without VolundrPort should still work."""
-        engine, repo, git, _ = _make_engine()  # no volundr
+        engine, repo, git, _, _ = _make_engine()  # no volundr
         raid = _make_raid(retry_count=0)
         repo.raids[raid.tracker_id] = raid
 
@@ -1236,7 +1242,7 @@ class TestSessionFeedback:
         """If sending the message fails, retry should still proceed."""
         volundr = StubVolundr()
         volundr.fail_send = True
-        engine, repo, git, _ = _make_engine(volundr=volundr)
+        engine, repo, git, _, _ = _make_engine(volundr=volundr)
         raid = _make_raid(retry_count=0)
         repo.raids[raid.tracker_id] = raid
 
@@ -1251,7 +1257,7 @@ class TestSessionFeedback:
     async def test_retry_no_session_id_skips_message(self) -> None:
         """If the raid has no session_id, skip sending the message."""
         volundr = StubVolundr()
-        engine, repo, git, _ = _make_engine(volundr=volundr)
+        engine, repo, git, _, _ = _make_engine(volundr=volundr)
         raid = _make_raid(retry_count=0)
         # Clear session_id
         raid = Raid(
@@ -1282,3 +1288,126 @@ class TestSessionFeedback:
 
         assert result.action == "retried"
         assert len(volundr.messages) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: Working session cleanup on terminal states (NIU-471)
+# ---------------------------------------------------------------------------
+
+
+class TestWorkingSessionCleanup:
+    """Verify working session transcript attachment and stop on terminal states."""
+
+    @pytest.mark.asyncio
+    async def test_merged_stops_working_session(self) -> None:
+        """MERGED should stop the working session."""
+        volundr = StubVolundr()
+        engine, repo, git, _, _ = _make_engine(volundr=volundr)
+        raid = _make_raid(confidence=0.5)
+        repo.raids[raid.tracker_id] = raid
+        repo.saga = _make_saga()
+        repo.phase = _make_phase()
+
+        _setup_passing_pr(git, raid.pr_id)
+        git.changed_files[raid.pr_id] = ["src/main.py", "tests/test_main.py"]
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        assert raid.session_id in volundr.stopped_sessions
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_exhausted_stops_working_session(self) -> None:
+        """FAILED (CI retries exhausted) should stop the working session."""
+        volundr = StubVolundr()
+        config = _default_config(max_retries=3)
+        engine, repo, git, _, _ = _make_engine(config=config, volundr=volundr)
+        raid = _make_raid(retry_count=3)
+        repo.raids[raid.tracker_id] = raid
+
+        _setup_failing_pr(git, raid.pr_id)
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        assert raid.session_id in volundr.stopped_sessions
+
+    @pytest.mark.asyncio
+    async def test_conflict_exhausted_stops_working_session(self) -> None:
+        """FAILED (conflict retries exhausted) should stop the working session."""
+        volundr = StubVolundr()
+        config = _default_config(max_retries=2)
+        engine, repo, git, _, _ = _make_engine(config=config, volundr=volundr)
+        raid = _make_raid(retry_count=2)
+        repo.raids[raid.tracker_id] = raid
+
+        _setup_conflicted_pr(git, raid.pr_id)
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        assert raid.session_id in volundr.stopped_sessions
+
+    @pytest.mark.asyncio
+    async def test_escalated_does_not_stop_working_session(self) -> None:
+        """ESCALATED should NOT stop the working session."""
+        volundr = StubVolundr()
+        config = _default_config(auto_approve_threshold=0.95)
+        engine, repo, git, _, _ = _make_engine(config=config, volundr=volundr)
+        raid = _make_raid(confidence=0.5)
+        repo.raids[raid.tracker_id] = raid
+
+        _setup_passing_pr(git, raid.pr_id)
+        git.changed_files[raid.pr_id] = ["src/main.py"]
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        assert raid.session_id not in volundr.stopped_sessions
+
+    @pytest.mark.asyncio
+    async def test_merged_attaches_working_transcript(self) -> None:
+        """MERGED should attach the working session transcript to the tracker."""
+        volundr = StubVolundr()
+        engine, repo, git, _, _ = _make_engine(volundr=volundr)
+        raid = _make_raid(confidence=0.5)
+        repo.raids[raid.tracker_id] = raid
+        repo.saga = _make_saga()
+        repo.phase = _make_phase()
+
+        _setup_passing_pr(git, raid.pr_id)
+        git.changed_files[raid.pr_id] = ["src/main.py", "tests/test_main.py"]
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        assert any("Working Session Transcript" in title for _, title, _ in repo.attached_documents)
+
+    @pytest.mark.asyncio
+    async def test_failed_attaches_working_transcript(self) -> None:
+        """FAILED should attach the working session transcript to the tracker."""
+        volundr = StubVolundr()
+        config = _default_config(max_retries=3)
+        engine, repo, git, _, _ = _make_engine(config=config, volundr=volundr)
+        raid = _make_raid(retry_count=3)
+        repo.raids[raid.tracker_id] = raid
+
+        _setup_failing_pr(git, raid.pr_id)
+
+        await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        assert any("Working Session Transcript" in title for _, title, _ in repo.attached_documents)
+
+    @pytest.mark.asyncio
+    async def test_escalated_attaches_working_transcript(self) -> None:
+        """ESCALATED should attach the working session transcript as a snapshot."""
+        volundr = StubVolundr()
+        config = _default_config(auto_approve_threshold=0.95)
+        engine, repo, git, _, _ = _make_engine(config=config, volundr=volundr)
+        raid = _make_raid(confidence=0.5)
+        repo.raids[raid.tracker_id] = raid
+
+        _setup_passing_pr(git, raid.pr_id)
+        git.changed_files[raid.pr_id] = ["src/main.py"]
+
+        result = await engine.evaluate(raid.tracker_id, OWNER_ID)
+
+        assert result.action == "escalated"
+        assert any("Working Session Transcript" in title for _, title, _ in repo.attached_documents)
+        # Session should NOT be stopped for escalation
+        assert raid.session_id not in volundr.stopped_sessions
