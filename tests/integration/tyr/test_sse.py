@@ -4,19 +4,24 @@ Verifies that ``GET /api/v1/tyr/events`` delivers real-time Server-Sent
 Events when domain actions occur.  Uses a real ``InMemoryEventBus``
 instead of the no-op ``StubEventBus`` so that emitted events actually
 fan out to SSE subscribers.
+
+Uses a real HTTP server (uvicorn) because httpx's ``ASGITransport``
+buffers the entire response body before returning, which deadlocks with
+infinite SSE generators.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import socket
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport
+import uvicorn
 
 from tests.integration.tyr.conftest import StubTracker
 from tyr.adapters.memory_event_bus import InMemoryEventBus
@@ -51,6 +56,59 @@ def _parse_sse_events(raw: str) -> list[dict[str, str]]:
         if fields:
             events.append(fields)
     return events
+
+
+def _free_port() -> int:
+    """Find an available TCP port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+async def _collect_sse(
+    base_url: str,
+    path: str,
+    n: int = 1,
+) -> list[dict[str, str]]:
+    """Connect to a real HTTP SSE endpoint and collect *n* events."""
+    collected: list[dict[str, str]] = []
+
+    async with httpx.AsyncClient() as client:
+        async with client.stream(
+            "GET",
+            f"{base_url}{path}",
+            timeout=SSE_TIMEOUT,
+        ) as response:
+            buffer = ""
+            async for chunk in response.aiter_text():
+                buffer += chunk
+                while "\n\n" in buffer:
+                    raw, buffer = buffer.split("\n\n", 1)
+                    parsed = _parse_sse_events(raw + "\n\n")
+                    collected.extend(parsed)
+                    if len(collected) >= n:
+                        return collected
+    return collected
+
+
+async def _start_server(app: object) -> tuple[uvicorn.Server, str]:
+    """Start a uvicorn server and return (server, base_url)."""
+    port = _free_port()
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+    )
+    server = uvicorn.Server(config)
+    asyncio.create_task(server.serve())
+
+    for _ in range(100):
+        if server.started:
+            break
+        await asyncio.sleep(0.05)
+
+    return server, f"http://127.0.0.1:{port}"
 
 
 # ------------------------------------------------------------------
@@ -144,29 +202,6 @@ async def sse_tyr_app(tyr_settings, txn_pool, sse_event_bus):  # noqa: ANN001
     return app
 
 
-async def _collect_sse(
-    app: object,
-    n: int = 1,
-    timeout: float = SSE_TIMEOUT,
-) -> list[dict[str, str]]:
-    """Open a fresh SSE connection and collect *n* events."""
-    collected: list[dict[str, str]] = []
-    transport = ASGITransport(app=app)  # type: ignore[arg-type]
-
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        async with client.stream("GET", SSE_URL) as response:
-            buffer = ""
-            async for chunk in response.aiter_text():
-                buffer += chunk
-                while "\n\n" in buffer:
-                    raw, buffer = buffer.split("\n\n", 1)
-                    parsed = _parse_sse_events(raw + "\n\n")
-                    collected.extend(parsed)
-                    if len(collected) >= n:
-                        return collected
-    return collected
-
-
 # ------------------------------------------------------------------
 # Tests
 # ------------------------------------------------------------------
@@ -187,16 +222,22 @@ async def test_tyr_sse_connects(
     )
     await sse_event_bus.emit(snapshot_event)
 
-    events = await asyncio.wait_for(
-        _collect_sse(sse_tyr_app, n=1),
-        timeout=SSE_TIMEOUT,
-    )
+    server, base_url = await _start_server(sse_tyr_app)
 
-    assert len(events) >= 1
-    assert events[0]["event"] == "dispatcher.state"
-    data = json.loads(events[0]["data"])
-    assert data["status"] == "idle"
-    assert data["active_raids"] == 0
+    try:
+        events = await asyncio.wait_for(
+            _collect_sse(base_url, SSE_URL, n=1),
+            timeout=SSE_TIMEOUT,
+        )
+
+        assert len(events) >= 1
+        assert events[0]["event"] == "dispatcher.state"
+        data = json.loads(events[0]["data"])
+        assert data["status"] == "idle"
+        assert data["active_raids"] == 0
+    finally:
+        server.should_exit = True
+        await asyncio.sleep(0.1)
 
 
 async def test_tyr_sse_receives_saga_event(
@@ -204,28 +245,34 @@ async def test_tyr_sse_receives_saga_event(
     sse_event_bus: InMemoryEventBus,
 ) -> None:
     """Connect SSE, emit a saga event, verify it arrives via the stream."""
-    saga_event = TyrEvent(
-        event="saga.created",
-        data={"id": "saga-123", "name": "Auth Overhaul", "status": "ACTIVE"},
-    )
+    server, base_url = await _start_server(sse_tyr_app)
 
-    async def _emit_event() -> None:
-        await asyncio.sleep(0.15)
-        await sse_event_bus.emit(saga_event)
+    try:
+        saga_event = TyrEvent(
+            event="saga.created",
+            data={"id": "saga-123", "name": "Auth Overhaul", "status": "ACTIVE"},
+        )
 
-    emit_task = asyncio.create_task(_emit_event())
+        async def _emit_event() -> None:
+            await asyncio.sleep(0.3)
+            await sse_event_bus.emit(saga_event)
 
-    events = await asyncio.wait_for(
-        _collect_sse(sse_tyr_app, n=1),
-        timeout=SSE_TIMEOUT,
-    )
-    await emit_task
+        emit_task = asyncio.create_task(_emit_event())
 
-    assert len(events) >= 1
-    saga_events = [e for e in events if e["event"] == "saga.created"]
-    assert len(saga_events) >= 1
+        events = await asyncio.wait_for(
+            _collect_sse(base_url, SSE_URL, n=1),
+            timeout=SSE_TIMEOUT,
+        )
+        await emit_task
 
-    data = json.loads(saga_events[0]["data"])
-    assert data["id"] == "saga-123"
-    assert data["name"] == "Auth Overhaul"
-    assert data["status"] == "ACTIVE"
+        assert len(events) >= 1
+        saga_events = [e for e in events if e["event"] == "saga.created"]
+        assert len(saga_events) >= 1
+
+        data = json.loads(saga_events[0]["data"])
+        assert data["id"] == "saga-123"
+        assert data["name"] == "Auth Overhaul"
+        assert data["status"] == "ACTIVE"
+    finally:
+        server.should_exit = True
+        await asyncio.sleep(0.1)

@@ -2,15 +2,21 @@
 
 Verifies that ``GET /api/v1/volundr/sessions/stream`` delivers real-time
 Server-Sent Events when sessions are created or stats are broadcast.
+
+Uses a real HTTP server (uvicorn) because httpx's ``ASGITransport``
+buffers the entire response body before returning, which deadlocks with
+infinite SSE generators.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import socket
 
 import httpx
 import pytest
+import uvicorn
 
 from volundr.domain.models import EventType, RealtimeEvent
 
@@ -47,21 +53,29 @@ def _parse_sse_events(raw: str) -> list[dict[str, str]]:
     return events
 
 
+def _free_port() -> int:
+    """Find an available TCP port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 async def _collect_sse(
-    app: object,
+    base_url: str,
+    path: str,
     n: int = 1,
-    timeout: float = SSE_TIMEOUT,
+    headers: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
-    """Open a fresh SSE connection and collect *n* events.
-
-    Uses a dedicated ``httpx.AsyncClient`` to avoid interfering with the
-    session-scoped client used by other tests.
-    """
+    """Connect to a real HTTP SSE endpoint and collect *n* events."""
     collected: list[dict[str, str]] = []
-    transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
 
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        async with client.stream("GET", SSE_URL) as response:
+    async with httpx.AsyncClient() as client:
+        async with client.stream(
+            "GET",
+            f"{base_url}{path}",
+            headers=headers or {},
+            timeout=SSE_TIMEOUT,
+        ) as response:
             buffer = ""
             async for chunk in response.aiter_text():
                 buffer += chunk
@@ -72,6 +86,27 @@ async def _collect_sse(
                     if len(collected) >= n:
                         return collected
     return collected
+
+
+async def _start_server(app: object) -> tuple[uvicorn.Server, str]:
+    """Start a uvicorn server and return (server, base_url)."""
+    port = _free_port()
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+    )
+    server = uvicorn.Server(config)
+    asyncio.create_task(server.serve())
+
+    # Wait for server to start
+    for _ in range(100):
+        if server.started:
+            break
+        await asyncio.sleep(0.05)
+
+    return server, f"http://127.0.0.1:{port}"
 
 
 # ------------------------------------------------------------------
@@ -86,86 +121,119 @@ async def test_sse_stream_connects(volundr_app: object) -> None:
     then verifies response headers and that data is received.
     """
     broadcaster = volundr_app.state.broadcaster  # type: ignore[union-attr]
+    server, base_url = await _start_server(volundr_app)
 
-    async def _publish_heartbeat() -> None:
-        # Small delay so the subscriber is registered before we publish
+    try:
+
+        async def _publish_heartbeat() -> None:
+            await asyncio.sleep(0.3)
+            await broadcaster.publish_heartbeat()
+
+        publish_task = asyncio.create_task(_publish_heartbeat())
+
+        events = await asyncio.wait_for(
+            _collect_sse(base_url, SSE_URL, n=1),
+            timeout=SSE_TIMEOUT,
+        )
+        await publish_task
+
+        assert len(events) >= 1
+        assert events[0]["event"] == EventType.HEARTBEAT.value
+    finally:
+        server.should_exit = True
         await asyncio.sleep(0.1)
-        await broadcaster.publish_heartbeat()
-
-    publish_task = asyncio.create_task(_publish_heartbeat())
-
-    events = await asyncio.wait_for(_collect_sse(volundr_app, n=1), timeout=SSE_TIMEOUT)
-    await publish_task
-
-    assert len(events) >= 1
-    assert events[0]["event"] == EventType.HEARTBEAT.value
 
 
 async def test_sse_receives_session_created_event(
     volundr_app: object,
-    volundr_client: httpx.AsyncClient,
     auth_headers: object,
 ) -> None:
     """Connect SSE, create a session via POST, verify SESSION_CREATED event."""
     headers = auth_headers("sse-user", "sse@test.com", "default", ["volundr:admin"])  # type: ignore[operator]
+    server, base_url = await _start_server(volundr_app)
 
-    async def _create_session() -> None:
-        await asyncio.sleep(0.15)
-        payload = {
-            "name": "sse-test-session",
-            "model": "claude-sonnet-4-6",
-            "source": {"type": "git", "repo": "github.com/acme/demo", "branch": "main"},
-        }
-        resp = await volundr_client.post(f"{API}/sessions", json=payload, headers=headers)
-        assert resp.status_code == 201, resp.text
+    try:
 
-    create_task = asyncio.create_task(_create_session())
+        async def _create_session() -> None:
+            await asyncio.sleep(0.3)
+            payload = {
+                "name": "sse-test-session",
+                "model": "claude-sonnet-4-6",
+                "source": {
+                    "type": "git",
+                    "repo": "github.com/acme/demo",
+                    "branch": "main",
+                },
+            }
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{base_url}{API}/sessions",
+                    json=payload,
+                    headers=headers,
+                )
+                assert resp.status_code == 201, resp.text
 
-    events = await asyncio.wait_for(_collect_sse(volundr_app, n=1), timeout=SSE_TIMEOUT)
-    await create_task
+        create_task = asyncio.create_task(_create_session())
 
-    assert len(events) >= 1
-    session_events = [e for e in events if e["event"] == EventType.SESSION_CREATED.value]
-    assert len(session_events) >= 1
+        events = await asyncio.wait_for(
+            _collect_sse(base_url, SSE_URL, n=1),
+            timeout=SSE_TIMEOUT,
+        )
+        await create_task
 
-    data = json.loads(session_events[0]["data"])
-    assert data["name"] == "sse-test-session"
-    assert "id" in data
+        assert len(events) >= 1
+        session_events = [e for e in events if e["event"] == EventType.SESSION_CREATED.value]
+        assert len(session_events) >= 1
+
+        data = json.loads(session_events[0]["data"])
+        assert data["name"] == "sse-test-session"
+        assert "id" in data
+    finally:
+        server.should_exit = True
+        await asyncio.sleep(0.1)
 
 
 async def test_sse_receives_stats_update(volundr_app: object) -> None:
     """Publish a stats event through the broadcaster, verify SSE delivers it."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     broadcaster = volundr_app.state.broadcaster  # type: ignore[union-attr]
+    server, base_url = await _start_server(volundr_app)
 
-    stats_event = RealtimeEvent(
-        type=EventType.STATS_UPDATED,
-        data={
-            "active_sessions": 3,
-            "total_sessions": 10,
-            "tokens_today": 5000,
-            "local_tokens": 1000,
-            "cloud_tokens": 4000,
-            "cost_today": 1.25,
-        },
-        timestamp=datetime.utcnow(),
-    )
+    try:
+        stats_event = RealtimeEvent(
+            type=EventType.STATS_UPDATED,
+            data={
+                "active_sessions": 3,
+                "total_sessions": 10,
+                "tokens_today": 5000,
+                "local_tokens": 1000,
+                "cloud_tokens": 4000,
+                "cost_today": 1.25,
+            },
+            timestamp=datetime.now(UTC),
+        )
 
-    async def _publish_stats() -> None:
+        async def _publish_stats() -> None:
+            await asyncio.sleep(0.3)
+            await broadcaster.publish(stats_event)
+
+        publish_task = asyncio.create_task(_publish_stats())
+
+        events = await asyncio.wait_for(
+            _collect_sse(base_url, SSE_URL, n=1),
+            timeout=SSE_TIMEOUT,
+        )
+        await publish_task
+
+        assert len(events) >= 1
+        stats_events = [e for e in events if e["event"] == EventType.STATS_UPDATED.value]
+        assert len(stats_events) >= 1
+
+        data = json.loads(stats_events[0]["data"])
+        assert data["tokens_today"] == 5000
+        assert data["active_sessions"] == 3
+        assert data["cost_today"] == 1.25
+    finally:
+        server.should_exit = True
         await asyncio.sleep(0.1)
-        await broadcaster.publish(stats_event)
-
-    publish_task = asyncio.create_task(_publish_stats())
-
-    events = await asyncio.wait_for(_collect_sse(volundr_app, n=1), timeout=SSE_TIMEOUT)
-    await publish_task
-
-    assert len(events) >= 1
-    stats_events = [e for e in events if e["event"] == EventType.STATS_UPDATED.value]
-    assert len(stats_events) >= 1
-
-    data = json.loads(stats_events[0]["data"])
-    assert data["tokens_today"] == 5000
-    assert data["active_sessions"] == 3
-    assert data["cost_today"] == 1.25
