@@ -20,6 +20,7 @@ from volundr.config import (
     DatabaseConfig,
     IdentityConfig,
     PodManagerConfig,
+    ProvisioningConfig,
     Settings,
 )
 from volundr.main import create_app
@@ -48,7 +49,11 @@ async def volundr_app(
             adapter="volundr.adapters.outbound.identity.EnvoyHeaderIdentityAdapter",
         ),
         pod_manager=PodManagerConfig(
-            adapter="volundr.adapters.outbound.local_process.LocalProcessManager",
+            adapter="volundr.adapters.outbound.local_process.LocalProcessPodManager",
+        ),
+        provisioning=ProvisioningConfig(
+            timeout_seconds=2.0,
+            initial_delay_seconds=0.0,
         ),
     )
 

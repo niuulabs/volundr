@@ -39,7 +39,7 @@ async def test_create_session(volundr_client, auth_headers):
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["name"] == "integ-create"
-    assert body["status"] in ("created", "provisioning", "running", "failed")
+    assert body["status"] in ("created", "starting", "provisioning", "running", "failed")
     assert "id" in body
 
 
