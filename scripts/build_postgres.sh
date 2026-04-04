@@ -97,7 +97,10 @@ cd ..
 # Strip binaries and remove unnecessary files to reduce bundle size
 # -------------------------------------------------------------------------
 echo "Stripping binaries..."
-find "$INSTALL_PREFIX/bin" -type f -perm +111 -exec strip {} + 2>/dev/null || true
+# Strip all binaries EXCEPT postgres itself — extensions (dylibs) need the
+# postgres binary to export symbols like CurrentMemoryContext at dlopen time.
+find "$INSTALL_PREFIX/bin" -type f -perm +111 ! -name postgres -exec strip {} + 2>/dev/null || true
+strip -x "$INSTALL_PREFIX/bin/postgres" 2>/dev/null || true
 find "$INSTALL_PREFIX/lib" -type f \( -name '*.so' -o -name '*.dylib' \) -exec strip -x {} + 2>/dev/null || true
 
 # Remove files not needed at runtime
