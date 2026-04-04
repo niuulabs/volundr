@@ -41,6 +41,7 @@ from tyr.domain.services.reviewer_session import (
     ReviewerSessionService,
     parse_reviewer_response,
 )
+from tyr.domain.services.session_transcript import attach_session_transcript
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.event_bus import EventBusPort, TyrEvent
 from tyr.ports.git import GitPort
@@ -220,9 +221,7 @@ class ReviewEngine:
                     tracker, tracker_id, owner_id, raid, score
                 )
             elif raid.review_round >= self._cfg.max_review_rounds:
-                decision = await self._handle_escalation(
-                    tracker, tracker_id, owner_id, raid, score
-                )
+                decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
             else:
                 # Low confidence but approved — let the loop continue
                 new_round = raid.review_round + 1
@@ -230,13 +229,17 @@ class ReviewEngine:
                 self._reviewer_sessions[session_id] = (tracker_id, owner_id)
                 logger.info(
                     "Reviewer approved but low confidence (%.2f < %.2f) — round %d/%d, continuing",
-                    result.confidence, self._cfg.auto_approve_threshold,
-                    new_round, self._cfg.max_review_rounds,
+                    result.confidence,
+                    self._cfg.auto_approve_threshold,
+                    new_round,
+                    self._cfg.max_review_rounds,
                 )
                 return
             logger.info(
                 "Post-reviewer decision for %s: %s (reason=%s)",
-                tracker_id, decision.action, decision.reason,
+                tracker_id,
+                decision.action,
+                decision.reason,
             )
             return
 
@@ -249,18 +252,22 @@ class ReviewEngine:
         if new_round >= self._cfg.max_review_rounds:
             # Max rounds exhausted — escalate
             self._reviewer_sessions.pop(session_id, None)
-            decision = await self._handle_escalation(
-                tracker, tracker_id, owner_id, raid, score
-            )
+            decision = await self._handle_escalation(tracker, tracker_id, owner_id, raid, score)
             logger.info(
                 "Max review rounds (%d) reached for %s — %s (reason=%s)",
-                self._cfg.max_review_rounds, tracker_id, decision.action, decision.reason,
+                self._cfg.max_review_rounds,
+                tracker_id,
+                decision.action,
+                decision.reason,
             )
             return
 
         logger.info(
             "Review round %d/%d for %s: %d issues, reviewer driving loop",
-            new_round, self._cfg.max_review_rounds, tracker_id, len(result.findings),
+            new_round,
+            self._cfg.max_review_rounds,
+            tracker_id,
+            len(result.findings),
         )
 
     async def start(self) -> None:
@@ -679,9 +686,7 @@ class ReviewEngine:
             await tracker.close_raid(tracker_id)
             logger.info("Closed tracker issue %s (Done)", tracker_id)
         except Exception:
-            logger.error(
-                "FAILED to close tracker issue %s after merge", tracker_id, exc_info=True
-            )
+            logger.error("FAILED to close tracker issue %s after merge", tracker_id, exc_info=True)
 
         # Attach review transcript as a comment on the Linear issue
         if raid.reviewer_session_id:
@@ -708,37 +713,15 @@ class ReviewEngine:
         raid: Raid,
     ) -> None:
         """Fetch the reviewer's full conversation and attach as a document."""
-        try:
-            adapters = await self._volundr_factory.for_owner(owner_id)
-            if not adapters:
-                logger.warning(
-                    "No Volundr adapter for owner %s — cannot fetch transcript",
-                    owner_id[:8],
-                )
-                return
-            conversation = await adapters[0].get_conversation(raid.reviewer_session_id)
-            turns = conversation.get("turns", [])
-            lines = ["# Review Transcript", ""]
-            for turn in turns:
-                role = turn.get("role", "unknown").capitalize()
-                content = turn.get("content", "")
-                lines.append(f"### {role}")
-                lines.append(content)
-                lines.append("")
-                lines.append("---")
-                lines.append("")
-            title = f"Review Transcript — {raid.name}"
-            await tracker.attach_issue_document(
-                tracker_id, title, "\n".join(lines)
-            )
-            logger.info(
-                "Attached review transcript (%d turns) to %s",
-                len(turns), tracker_id,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to attach review transcript for raid %s", tracker_id, exc_info=True
-            )
+        await attach_session_transcript(
+            volundr_factory=self._volundr_factory,
+            tracker=tracker,
+            tracker_id=tracker_id,
+            owner_id=owner_id,
+            session_id=raid.reviewer_session_id,
+            title_prefix="Review Transcript",
+            raid_name=raid.name,
+        )
 
     async def _stop_reviewer_session(self, owner_id: str, reviewer_session_id: str) -> None:
         """Stop the reviewer session after review is complete."""
@@ -749,9 +732,7 @@ class ReviewEngine:
             await adapters[0].stop_session(reviewer_session_id)
             logger.info("Stopped reviewer session %s", reviewer_session_id)
         except Exception:
-            logger.warning(
-                "Failed to stop reviewer session %s", reviewer_session_id, exc_info=True
-            )
+            logger.warning("Failed to stop reviewer session %s", reviewer_session_id, exc_info=True)
 
     async def _handle_ci_failure(
         self,
