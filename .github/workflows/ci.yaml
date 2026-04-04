@@ -228,6 +228,119 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # Python integration tests (real PostgreSQL)
+  # ---------------------------------------------------------------------------
+  python-integration-test-volundr:
+    name: "Python: Integration Test Volundr"
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/volundr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  python-integration-test-tyr:
+    name: "Python: Integration Test Tyr"
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/tyr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  # Rollup gate — branch ruleset requires "Python: Integration Test"
+  python-integration-test:
+    name: "Python: Integration Test"
+    needs: [python-integration-test-volundr, python-integration-test-tyr]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.python-integration-test-volundr.result }}" == "failure" ]] || \
+             [[ "${{ needs.python-integration-test-tyr.result }}" == "failure" ]]; then
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
   # Web
   # ---------------------------------------------------------------------------
   web-lint:
