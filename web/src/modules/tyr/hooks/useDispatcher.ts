@@ -86,5 +86,15 @@ export function useDispatcher(): UseDispatcherResult {
     setState(updated);
   }, []);
 
-  return { state, log, loading, error, pause, resume, setThreshold, setAutoContinue, refresh: fetchState };
+  return {
+    state,
+    log,
+    loading,
+    error,
+    pause,
+    resume,
+    setThreshold,
+    setAutoContinue,
+    refresh: fetchState,
+  };
 }
