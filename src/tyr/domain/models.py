@@ -168,6 +168,7 @@ class DispatcherState:
     running: bool
     threshold: float
     max_concurrent_raids: int
+    auto_continue: bool
     updated_at: datetime
 
 
