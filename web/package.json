@@ -63,7 +63,7 @@
     }
   },
   "dependencies": {
-    "@codingame/monaco-vscode-accessibility-service-override": "^28.4.1",
+    "@codingame/monaco-vscode-accessibility-service-override": "^30.0.0",
     "@codingame/monaco-vscode-api": "^28.4.1",
     "@codingame/monaco-vscode-authentication-service-override": "^28.4.1",
     "@codingame/monaco-vscode-comments-service-override": "^28.4.1",
