@@ -8,7 +8,6 @@ Supports two transport modes (selected via config):
 import asyncio
 import base64
 import collections
-import importlib
 import inspect
 import json
 import logging
@@ -29,6 +28,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from niuu.domain.logging import LoggingConfig
+from niuu.utils import import_class
 from skuld.channels import (
     ChannelRegistry,
     TelegramChannel,
@@ -502,8 +502,7 @@ class Broker:
         adapter path by the config validator before this method is called.
         """
         adapter_path = self._settings.transport_adapter
-        module_path, _, class_name = adapter_path.rpartition(".")
-        if not module_path:
+        if "." not in adapter_path:
             raise ValueError(
                 f"Invalid transport_adapter '{adapter_path}': "
                 "must be a fully-qualified class path "
@@ -511,18 +510,14 @@ class Broker:
             )
 
         try:
-            module = importlib.import_module(module_path)
-        except ModuleNotFoundError as exc:
-            raise ValueError(f"Cannot import transport module '{module_path}': {exc}") from exc
-
-        cls = getattr(module, class_name, None)
-        if cls is None:
-            raise ValueError(f"Transport class '{class_name}' not found in module '{module_path}'")
+            cls = import_class(adapter_path)
+        except (ImportError, AttributeError) as exc:
+            raise ValueError(f"Cannot load transport adapter '{adapter_path}': {exc}") from exc
 
         kwargs = self._build_transport_kwargs()
         sig = inspect.signature(cls)
         filtered = {k: v for k, v in kwargs.items() if k in sig.parameters}
-        logger.info("Using %s (adapter: %s)", class_name, adapter_path)
+        logger.info("Using %s (adapter: %s)", cls.__name__, adapter_path)
         return cls(**filtered)
 
     async def startup(self) -> None:

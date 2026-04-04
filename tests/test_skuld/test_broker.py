@@ -267,23 +267,23 @@ class TestBroker:
         assert isinstance(transport, CodexSubprocessTransport)
 
     def test_create_transport_invalid_module(self, tmp_path):
-        """Non-existent module raises ValueError."""
+        """Non-existent module raises ValueError via ImportError."""
         settings = SkuldSettings(
             session={"id": "s1", "workspace_dir": str(tmp_path)},
         )
         settings.transport_adapter = "skuld.transports.nonexistent.FakeTransport"
         b = Broker(settings=settings)
-        with pytest.raises(ValueError, match="Cannot import transport module"):
+        with pytest.raises(ValueError, match="Cannot load transport adapter"):
             b._create_transport()
 
     def test_create_transport_invalid_class(self, tmp_path):
-        """Valid module but missing class raises ValueError."""
+        """Valid module but missing class raises ValueError via AttributeError."""
         settings = SkuldSettings(
             session={"id": "s1", "workspace_dir": str(tmp_path)},
         )
         settings.transport_adapter = "skuld.transports.codex.NonexistentTransport"
         b = Broker(settings=settings)
-        with pytest.raises(ValueError, match="not found in module"):
+        with pytest.raises(ValueError, match="Cannot load transport adapter"):
             b._create_transport()
 
     def test_create_transport_invalid_path_no_dot(self, tmp_path):
