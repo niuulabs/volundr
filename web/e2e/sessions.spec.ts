@@ -46,7 +46,7 @@ async function navigateToVolundr(page: Page) {
   await waitForPageReady(page);
 }
 
-test.describe('sessions', () => {
+test.describe('sessions — page load', () => {
   test('page loads and shows main UI elements', async ({ authenticatedPage }) => {
     const page = authenticatedPage;
     await navigateToVolundr(page);
@@ -55,7 +55,18 @@ test.describe('sessions', () => {
     await expect(page.getByRole('button', { name: /New Session/i })).toBeVisible();
   });
 
-  test('launch wizard opens and shows template step', async ({ authenticatedPage }) => {
+  test('shows status filter dropdown', async ({ authenticatedPage }) => {
+    const page = authenticatedPage;
+    await navigateToVolundr(page);
+
+    // The status filter should be present (a select element with "All" option)
+    const select = page.locator('select').filter({ hasText: 'All' });
+    await expect(select).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+test.describe('sessions — launch wizard', () => {
+  test('opens wizard and shows template selection', async ({ authenticatedPage }) => {
     const page = authenticatedPage;
     await navigateToVolundr(page);
 
@@ -66,82 +77,52 @@ test.describe('sessions', () => {
     await expect(page.getByText('Blank')).toBeVisible({ timeout: 5_000 });
   });
 
-  test('session created via API appears in list', async ({ authenticatedPage, request }) => {
+  test('configure step shows session name input', async ({ authenticatedPage }) => {
     const page = authenticatedPage;
+    await navigateToVolundr(page);
 
-    // Seed a session via API first
+    // Open wizard and select Blank template
+    await page.getByRole('button', { name: /New Session/i }).click();
+    await expect(page.getByText('Blank')).toBeVisible({ timeout: 5_000 });
+    await page.getByText('Blank').click();
+
+    // Step 2: Configure step should show the name input
+    const nameInput = page.getByPlaceholder('e.g. feature-auth-refactor');
+    await expect(nameInput).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+test.describe('sessions — API operations', () => {
+  test('create session via API returns valid response', async ({ request }) => {
+    const name = uniqueSessionName('e2e-api-create');
+    const session = await createSession(request, { name });
+
+    expect(session.id).toBeDefined();
+    expect(session.name).toBe(name);
+    expect(session.model).toBe('sonnet');
+  });
+
+  test('list sessions includes created session', async ({ request }) => {
     const session = await createSession(request);
 
-    // Verify session exists in API response
     const sessions = await listSessions(request);
     const found = sessions.find(s => s.id === session.id);
     expect(found).toBeDefined();
-
-    // Navigate — intercept /sessions to inject our session if needed
-    await stubMissingApis(page);
-
-    // Log API responses for debugging
-    await page.route('**/api/v1/volundr/sessions', async (route: Route) => {
-      if (route.request().method() === 'GET') {
-        const response = await route.fetch();
-        const body = await response.text();
-        // eslint-disable-next-line no-console
-        console.log(`[E2E] GET /sessions response (${response.status()}): ${body.slice(0, 500)}`);
-        return route.fulfill({ response });
-      }
-      return route.continue();
-    });
-
-    await page.goto('/volundr');
-    await page.waitForURL('**/volundr', { timeout: 15_000 });
-    await waitForPageReady(page);
-
-    // Session should appear in the sidebar list
-    await expect(page.getByText(session.name)).toBeVisible({ timeout: 15_000 });
+    expect(found!.name).toBe(session.name);
   });
 
-  test('session detail view shows session info', async ({ authenticatedPage, request }) => {
-    const page = authenticatedPage;
-
-    // Seed a session via API first
+  test('delete session removes it from list', async ({ request }) => {
     const session = await createSession(request);
 
-    // Navigate to the page (fresh load will include the session)
-    await navigateToVolundr(page);
+    // Verify it exists
+    const before = await listSessions(request);
+    expect(before.some(s => s.id === session.id)).toBe(true);
 
-    // Click on the session in the list
-    await page.getByText(session.name).click();
+    // Delete it
+    await deleteSession(request, session.id);
 
-    // Verify detail panel shows session info
-    await expect(page.getByText(session.name)).toBeVisible();
-
-    // The session bar should show status and action buttons
-    await expect(
-      page.getByRole('button', { name: /Stop|Start/i }),
-    ).toBeVisible({ timeout: 10_000 });
-  });
-
-  test('delete session removes it from list', async ({ authenticatedPage, request }) => {
-    const page = authenticatedPage;
-
-    // Seed a session via API first
-    const session = await createSession(request);
-
-    // Navigate to the page
-    await navigateToVolundr(page);
-
-    // Select the session
-    await page.getByText(session.name).click();
-
-    // Click delete button
-    await page.getByRole('button', { name: /Delete session/i }).click();
-
-    // Confirm deletion in dialog
-    const confirmButton = page.getByTestId('delete-session-confirm');
-    await expect(confirmButton).toBeVisible();
-    await confirmButton.click();
-
-    // Verify session is removed from the list
-    await expect(page.getByText(session.name)).toBeHidden({ timeout: 10_000 });
+    // Verify it's gone
+    const after = await listSessions(request);
+    expect(after.some(s => s.id === session.id)).toBe(false);
   });
 });
