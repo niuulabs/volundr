@@ -35,8 +35,8 @@ storage:
 database:
   name: volundr
   createSecret: true
-  username: volundr
-  password: volundr
+  username: postgres
+  password: test
   minPoolSize: 1
   maxPoolSize: 2
   external:

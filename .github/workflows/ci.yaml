@@ -500,14 +500,8 @@ jobs:
             --set auth.postgresPassword=test \
             --set auth.database=volundr \
             --set primary.persistence.enabled=false \
+            --set primary.initdb.scripts."init\.sql"="CREATE DATABASE tyr;" \
             --wait --timeout 120s
-
-      - name: Create Tyr database
-        run: |
-          kubectl run pg-init --rm -i --restart=Never \
-            --image=bitnami/postgresql \
-            --env=PGPASSWORD=test \
-            -- psql -h pg-postgresql -U postgres -c "CREATE DATABASE tyr;"
 
       - name: Log in to Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4

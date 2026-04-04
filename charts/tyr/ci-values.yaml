@@ -32,8 +32,8 @@ config:
 database:
   name: tyr
   createSecret: true
-  username: tyr
-  password: tyr
+  username: postgres
+  password: test
   minPoolSize: 1
   maxPoolSize: 2
   external:
