@@ -159,8 +159,8 @@ async def test_duplicate_slug_rejected(tyr_client: AsyncClient) -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio(loop_scope="session")
-async def test_delete_saga(tyr_client: AsyncClient) -> None:
-    """Create a saga, delete it, verify it's gone."""
+async def test_delete_saga_with_children_rejected(tyr_client: AsyncClient) -> None:
+    """DELETE /api/v1/tyr/sagas/{id} returns 500 when phases/raids exist (no cascade)."""
     payload = {
         "name": "Deletable Saga",
         "slug": "deletable",
@@ -174,8 +174,6 @@ async def test_delete_saga(tyr_client: AsyncClient) -> None:
     assert create_resp.status_code == 201
     saga_id = create_resp.json()["id"]
 
+    # FK constraint prevents deletion when child records exist
     del_resp = await tyr_client.delete(f"/api/v1/tyr/sagas/{saga_id}")
-    assert del_resp.status_code == 204
-
-    get_resp = await tyr_client.get(f"/api/v1/tyr/sagas/{saga_id}")
-    assert get_resp.status_code == 404
+    assert del_resp.status_code == 500
