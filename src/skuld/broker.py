@@ -8,6 +8,7 @@ Supports two transport modes (selected via config):
 import asyncio
 import base64
 import collections
+import inspect
 import json
 import logging
 import os
@@ -27,6 +28,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from niuu.domain.logging import LoggingConfig
+from niuu.utils import import_class
 from skuld.channels import (
     ChannelRegistry,
     TelegramChannel,
@@ -39,12 +41,7 @@ from skuld.service_manager import (
     ServiceManager,
     ServiceStatus,
 )
-from skuld.transport import (
-    CLITransport,
-    CodexSubprocessTransport,
-    SdkWebSocketTransport,
-    SubprocessTransport,
-)
+from skuld.transport import CLITransport
 
 # ---------------------------------------------------------------------------
 # In-memory log buffer (Part 2: Pod Log Retrieval)
@@ -484,43 +481,49 @@ class Broker:
         self._pending_assistant_parts = []
         self._pending_reasoning_text = ""
 
-    def _create_transport(self) -> CLITransport:
-        """Create the configured CLI transport.
+    def _build_transport_kwargs(self) -> dict:
+        """Return superset of kwargs that any transport constructor might need."""
+        return {
+            "workspace_dir": self.workspace_dir,
+            "model": self.model,
+            "sdk_port": self._settings.port,
+            "session_id": self.session_id,
+            "skip_permissions": self._settings.skip_permissions,
+            "agent_teams": self._settings.agent_teams,
+            "system_prompt": self._settings.session.system_prompt,
+            "initial_prompt": self._settings.session.initial_prompt,
+        }
 
-        Dispatch order:
-        1. cli_type selects the CLI backend ("claude" or "codex")
-        2. For Claude, transport selects the protocol ("sdk" or "subprocess")
+    def _create_transport(self) -> CLITransport:
+        """Create the configured CLI transport via dynamic import.
+
+        Uses ``transport_adapter`` from settings (a fully-qualified class path).
+        Legacy ``cli_type`` / ``transport`` fields are resolved to the correct
+        adapter path by the config validator before this method is called.
         """
-        match self._settings.cli_type:
-            case "codex":
-                logger.info("Using CodexSubprocessTransport (model: %s)", self.model)
-                return CodexSubprocessTransport(
-                    workspace_dir=self.workspace_dir,
-                    model=self.model,
-                )
-            case _:
-                # Default: Claude Code
-                match self._settings.transport:
-                    case "subprocess":
-                        logger.info("Using SubprocessTransport (Claude legacy)")
-                        return SubprocessTransport(self.workspace_dir)
-                    case _:
-                        logger.info("Using SdkWebSocketTransport (Claude SDK)")
-                        return SdkWebSocketTransport(
-                            workspace_dir=self.workspace_dir,
-                            sdk_port=self._settings.port,
-                            session_id=self.session_id,
-                            model=self.model,
-                            skip_permissions=self._settings.skip_permissions,
-                            agent_teams=self._settings.agent_teams,
-                            system_prompt=self._settings.session.system_prompt,
-                            initial_prompt=self._settings.session.initial_prompt,
-                        )
+        adapter_path = self._settings.transport_adapter
+        if "." not in adapter_path:
+            raise ValueError(
+                f"Invalid transport_adapter '{adapter_path}': "
+                "must be a fully-qualified class path "
+                "(e.g. 'skuld.transports.sdk_websocket.SdkWebSocketTransport')"
+            )
+
+        try:
+            cls = import_class(adapter_path)
+        except (ImportError, AttributeError) as exc:
+            raise ValueError(f"Cannot load transport adapter '{adapter_path}': {exc}") from exc
+
+        kwargs = self._build_transport_kwargs()
+        sig = inspect.signature(cls)
+        filtered = {k: v for k, v in kwargs.items() if k in sig.parameters}
+        logger.info("Using %s (adapter: %s)", cls.__name__, adapter_path)
+        return cls(**filtered)
 
     async def startup(self) -> None:
         """Initialize the broker on startup."""
         logger.info("Broker starting for session %s", self.session_id)
-        logger.info("Transport: %s", self._settings.transport)
+        logger.info("Transport adapter: %s", self._settings.transport_adapter)
 
         if self.volundr_api_url:
             logger.info("Token usage reporting enabled: %s", self.volundr_api_url)

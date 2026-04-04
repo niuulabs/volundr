@@ -254,6 +254,85 @@ class TestBroker:
         assert isinstance(transport, SdkWebSocketTransport)
         assert transport._agent_teams is True
 
+    # --- Dynamic transport adapter tests ---
+
+    def test_create_transport_explicit_adapter(self, tmp_path):
+        """Direct transport_adapter bypasses legacy field resolution."""
+        settings = SkuldSettings(
+            transport_adapter="skuld.transports.codex.CodexSubprocessTransport",
+            session={"id": "s1", "workspace_dir": str(tmp_path), "model": "o4-mini"},
+        )
+        b = Broker(settings=settings)
+        transport = b._create_transport()
+        assert isinstance(transport, CodexSubprocessTransport)
+
+    def test_create_transport_invalid_module(self, tmp_path):
+        """Non-existent module raises ValueError via ImportError."""
+        settings = SkuldSettings(
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+        )
+        settings.transport_adapter = "skuld.transports.nonexistent.FakeTransport"
+        b = Broker(settings=settings)
+        with pytest.raises(ValueError, match="Cannot load transport adapter"):
+            b._create_transport()
+
+    def test_create_transport_invalid_class(self, tmp_path):
+        """Valid module but missing class raises ValueError via AttributeError."""
+        settings = SkuldSettings(
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+        )
+        settings.transport_adapter = "skuld.transports.codex.NonexistentTransport"
+        b = Broker(settings=settings)
+        with pytest.raises(ValueError, match="Cannot load transport adapter"):
+            b._create_transport()
+
+    def test_create_transport_invalid_path_no_dot(self, tmp_path):
+        """Adapter path without a dot raises ValueError."""
+        settings = SkuldSettings(
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+        )
+        settings.transport_adapter = "NotAFullyQualifiedPath"
+        b = Broker(settings=settings)
+        with pytest.raises(ValueError, match="must be a fully-qualified class path"):
+            b._create_transport()
+
+    def test_build_transport_kwargs(self, tmp_path):
+        """_build_transport_kwargs returns expected superset of settings."""
+        settings = SkuldSettings(
+            session={
+                "id": "s1",
+                "workspace_dir": str(tmp_path),
+                "model": "opus",
+                "system_prompt": "be helpful",
+                "initial_prompt": "hello",
+            },
+            port=9999,
+            skip_permissions=False,
+            agent_teams=True,
+        )
+        b = Broker(settings=settings)
+        kwargs = b._build_transport_kwargs()
+        assert kwargs["workspace_dir"] == str(tmp_path)
+        assert kwargs["model"] == "opus"
+        assert kwargs["sdk_port"] == 9999
+        assert kwargs["session_id"] == "s1"
+        assert kwargs["skip_permissions"] is False
+        assert kwargs["agent_teams"] is True
+        assert kwargs["system_prompt"] == "be helpful"
+        assert kwargs["initial_prompt"] == "hello"
+
+    def test_create_transport_filters_kwargs(self, tmp_path):
+        """Only kwargs matching the constructor signature are passed."""
+        settings = SkuldSettings(
+            transport="subprocess",
+            session={"id": "s1", "workspace_dir": str(tmp_path)},
+        )
+        b = Broker(settings=settings)
+        transport = b._create_transport()
+        # SubprocessTransport only accepts workspace_dir
+        assert isinstance(transport, SubprocessTransport)
+        assert transport.workspace_dir == str(tmp_path)
+
 
 class TestDispatchBrowserMessage:
     """Tests for Broker._dispatch_browser_message (Phase 2/3/4)."""
