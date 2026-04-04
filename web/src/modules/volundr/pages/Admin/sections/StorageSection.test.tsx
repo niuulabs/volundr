@@ -4,6 +4,14 @@ import { StorageSection } from './StorageSection';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import type { VolundrWorkspace } from '@/modules/volundr/models';
 
+const mockServiceRef = { current: {} as IVolundrService };
+
+vi.mock('@/modules/volundr/adapters', () => ({
+  get volundrService() {
+    return mockServiceRef.current;
+  },
+}));
+
 const mockWorkspaces: VolundrWorkspace[] = [
   {
     id: 'ws-1',
@@ -72,7 +80,8 @@ describe('StorageSection', () => {
     service = createMockService({
       listAllWorkspaces: vi.fn().mockReturnValue(new Promise(() => {})),
     });
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
     expect(screen.getByText('Loading workspaces...')).toBeDefined();
   });
 
@@ -80,7 +89,8 @@ describe('StorageSection', () => {
     service = createMockService({
       listAllWorkspaces: vi.fn().mockResolvedValue([]),
     });
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('No workspaces match the current filters')).toBeDefined();
@@ -88,7 +98,8 @@ describe('StorageSection', () => {
   });
 
   it('renders workspace list with human-readable labels', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       // sessionName is used as label
@@ -108,7 +119,8 @@ describe('StorageSection', () => {
   });
 
   it('renders summary cards with correct counts', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -131,7 +143,8 @@ describe('StorageSection', () => {
   });
 
   it('supports multi-select and bulk delete', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -154,7 +167,8 @@ describe('StorageSection', () => {
   });
 
   it('select-all toggles all checkboxes', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -178,7 +192,8 @@ describe('StorageSection', () => {
   });
 
   it('shows delete confirmation dialog with readable name', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -195,7 +210,8 @@ describe('StorageSection', () => {
   });
 
   it('confirms delete and reloads', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -216,7 +232,8 @@ describe('StorageSection', () => {
   });
 
   it('cancels delete confirmation', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -231,7 +248,8 @@ describe('StorageSection', () => {
   });
 
   it('filters by status', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -249,7 +267,8 @@ describe('StorageSection', () => {
   });
 
   it('filters by user', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -266,7 +285,8 @@ describe('StorageSection', () => {
   });
 
   it('shows Restore button only for archived workspaces', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -277,7 +297,8 @@ describe('StorageSection', () => {
   });
 
   it('calls restoreWorkspace and reloads', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('other-repo / develop')).toBeDefined();
@@ -292,7 +313,8 @@ describe('StorageSection', () => {
   });
 
   it('renders admin settings toggles', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByText('Persistent home directories')).toBeDefined();
@@ -304,7 +326,8 @@ describe('StorageSection', () => {
   });
 
   it('toggles home directories setting', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByLabelText('Toggle persistent home directories')).toBeDefined();
@@ -320,7 +343,8 @@ describe('StorageSection', () => {
   });
 
   it('toggles file manager setting', async () => {
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       expect(screen.getByLabelText('Toggle file manager')).toBeDefined();
@@ -351,7 +375,8 @@ describe('StorageSection', () => {
     service = createMockService({
       listAllWorkspaces: vi.fn().mockResolvedValue(plainWorkspaces),
     });
-    render(<StorageSection service={service} />);
+    mockServiceRef.current = service;
+    render(<StorageSection />);
 
     await waitFor(() => {
       const pvcElements = screen.getAllByText('ws-pvc-plain');
