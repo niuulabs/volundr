@@ -27,8 +27,10 @@ class CommandIntent(StrEnum):
     WRITE = "write"
     DESTRUCTIVE = "destructive"
     NETWORK = "network"
+    PROCESS_MANAGEMENT = "process_management"
     PACKAGE_MANAGEMENT = "package_management"
     SYSTEM_ADMIN = "system_admin"
+    UNKNOWN = "unknown"
 
 
 # ---------------------------------------------------------------------------
