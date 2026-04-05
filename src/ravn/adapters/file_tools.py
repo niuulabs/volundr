@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import logging
 import re
 from pathlib import Path
@@ -21,6 +22,23 @@ logger = logging.getLogger(__name__)
 
 _PERMISSION_READ = "file:read"
 _PERMISSION_WRITE = "file:write"
+
+
+def _unified_diff(original: str, updated: str, path: str) -> str | None:
+    """Return a unified diff of *original* → *updated*, or None if identical."""
+    if original == updated:
+        return None
+    diff_lines = list(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            updated.splitlines(keepends=True),
+            fromfile=path,
+            tofile=path,
+        )
+    )
+    if not diff_lines:
+        return None
+    return "".join(diff_lines)
 
 
 class ReadFileTool(ToolPort):
@@ -149,6 +167,22 @@ class WriteFileTool(ToolPort):
     def required_permission(self) -> str:
         return _PERMISSION_WRITE
 
+    def diff_preview(self, input: dict) -> str | None:
+        path_str = input.get("path", "")
+        new_content = input.get("content", "")
+        try:
+            safe_path = resolve_safe(path_str, self._workspace)
+        except PathSecurityError:
+            return None
+        if not safe_path.exists() or not safe_path.is_file():
+            return None
+        try:
+            original = safe_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        rel = str(safe_path.relative_to(self._workspace))
+        return _unified_diff(original, new_content, rel)
+
     async def execute(self, input: dict) -> ToolResult:
         path_str = input.get("path", "")
         content = input.get("content", "")
@@ -235,6 +269,32 @@ class EditFileTool(ToolPort):
     @property
     def required_permission(self) -> str:
         return _PERMISSION_WRITE
+
+    def diff_preview(self, input: dict) -> str | None:
+        path_str = input.get("path", "")
+        old_string = input.get("old_string", "")
+        new_string = input.get("new_string", "")
+        replace_all = input.get("replace_all", False)
+        try:
+            safe_path = resolve_safe(path_str, self._workspace)
+        except PathSecurityError:
+            return None
+        if not safe_path.exists() or not safe_path.is_file():
+            return None
+        try:
+            original = safe_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        if old_string not in original:
+            return None
+        if not replace_all and original.count(old_string) > 1:
+            return None
+        if replace_all:
+            updated = original.replace(old_string, new_string)
+        else:
+            updated = original.replace(old_string, new_string, 1)
+        rel = str(safe_path.relative_to(self._workspace))
+        return _unified_diff(original, updated, rel)
 
     async def execute(self, input: dict) -> ToolResult:
         path_str = input.get("path", "")
