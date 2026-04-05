@@ -91,6 +91,8 @@ class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
     """
 
     def __init__(self, ring_buffer_depth: int = DEFAULT_RING_BUFFER_DEPTH) -> None:
+        if ring_buffer_depth < 1:
+            raise ValueError(f"ring_buffer_depth must be >= 1, got {ring_buffer_depth}")
         self._ring_buffer_depth = ring_buffer_depth
         self._subscriptions: list[_InProcessSubscription] = []
 

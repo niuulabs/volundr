@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 
+import pytest
+
 from sleipnir.adapters.in_process import DEFAULT_RING_BUFFER_DEPTH, InProcessBus
 from sleipnir.domain.events import SleipnirEvent
 from tests.test_sleipnir.conftest import make_event
@@ -278,7 +280,7 @@ async def test_ring_buffer_drops_oldest_on_overflow(caplog):
     assert bus._subscriptions[0]._queue.qsize() == 2
     items: list[str] = []
     q = bus._subscriptions[0]._queue
-    # Peek by draining to a list (without task_done so flush still works)
+    # Drain the queue to inspect remaining event IDs
     while not q.empty():
         items.append(q.get_nowait().event_id)
         q.task_done()
@@ -289,6 +291,16 @@ async def test_ring_buffer_drops_oldest_on_overflow(caplog):
 async def test_ring_buffer_depth_default():
     bus = InProcessBus()
     assert bus._ring_buffer_depth == DEFAULT_RING_BUFFER_DEPTH
+
+
+def test_ring_buffer_depth_zero_raises():
+    with pytest.raises(ValueError, match="ring_buffer_depth must be >= 1"):
+        InProcessBus(ring_buffer_depth=0)
+
+
+def test_ring_buffer_depth_negative_raises():
+    with pytest.raises(ValueError, match="ring_buffer_depth must be >= 1"):
+        InProcessBus(ring_buffer_depth=-5)
 
 
 async def test_ring_buffer_depth_custom():
