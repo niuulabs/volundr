@@ -254,5 +254,148 @@ def approvals_revoke(
         raise typer.Exit(1)
 
 
+gateway_app = typer.Typer(
+    name="ravn-gateway",
+    help="Start the Ravn Pi-mode gateway (Telegram polling + local HTTP).",
+    add_completion=False,
+)
+
+
+@gateway_app.command()
+def gateway(
+    telegram: bool = typer.Option(False, "--telegram", help="Enable Telegram polling channel."),
+    http: bool = typer.Option(False, "--http", help="Enable local HTTP channel."),
+    config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
+    persona: str = typer.Option(
+        "", "--persona", "-p", help="Persona name applied to all gateway sessions."
+    ),
+) -> None:
+    """Start the Ravn gateway (Telegram polling + local HTTP server).
+
+    Channels are enabled via flags or via the ``gateway:`` section of ravn.yaml.
+    The gateway runs as asyncio tasks — no separate process required.
+
+    Example config (ravn.yaml)::
+
+        gateway:
+          enabled: true
+          channels:
+            telegram:
+              enabled: true
+              token_env: TELEGRAM_BOT_TOKEN
+              allowed_chat_ids: [123456789]
+            http:
+              enabled: true
+              host: 0.0.0.0
+              port: 7477
+    """
+    import os
+
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
+    settings = Settings()
+    project_config = ProjectConfig.discover()
+    persona_config = _resolve_persona(persona, project_config)
+
+    # CLI flags override config file.
+    if telegram:
+        settings.gateway.channels.telegram.enabled = True
+    if http:
+        settings.gateway.channels.http.enabled = True
+
+    if (
+        not settings.gateway.channels.telegram.enabled
+        and not settings.gateway.channels.http.enabled
+    ):
+        typer.echo(
+            "No channels enabled. Use --telegram, --http, or set gateway.channels in config.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    asyncio.run(_run_gateway(settings, persona_config=persona_config))
+
+
+async def _run_gateway(
+    settings: Settings,
+    *,
+    persona_config: PersonaConfig | None = None,
+) -> None:
+    """Build and run the gateway until interrupted."""
+    from ravn.adapters.channels.gateway import RavnGateway
+    from ravn.adapters.channels.gateway_http import HttpGateway
+    from ravn.adapters.channels.gateway_telegram import TelegramGateway
+    from ravn.ports.channel import ChannelPort
+
+    api_key = settings.effective_api_key()
+    if not api_key:
+        typer.echo(
+            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    llm = AnthropicAdapter(
+        api_key=api_key,
+        base_url=settings.anthropic.base_url,
+        model=settings.agent.model,
+        max_tokens=settings.agent.max_tokens,
+        max_retries=settings.llm_adapter.max_retries,
+        retry_base_delay=settings.llm_adapter.retry_base_delay,
+        timeout=settings.llm_adapter.timeout,
+    )
+
+    system_prompt = settings.agent.system_prompt
+    max_iterations = settings.agent.max_iterations
+
+    if persona_config is not None:
+        if persona_config.system_prompt_template:
+            system_prompt = persona_config.system_prompt_template
+        if persona_config.iteration_budget:
+            max_iterations = persona_config.iteration_budget
+
+    def _agent_factory(channel: ChannelPort) -> RavnAgent:
+        return RavnAgent(
+            llm=llm,
+            tools=[],
+            channel=channel,
+            permission=AllowAllPermission(),
+            system_prompt=system_prompt,
+            model=settings.agent.model,
+            max_tokens=settings.agent.max_tokens,
+            max_iterations=max_iterations,
+        )
+
+    gw = RavnGateway(settings.gateway, _agent_factory)
+
+    tasks: list[asyncio.Task] = []
+
+    if settings.gateway.channels.telegram.enabled:
+        tg = TelegramGateway(settings.gateway.channels.telegram, gw)
+        tasks.append(asyncio.create_task(tg.run(), name="telegram"))
+
+    if settings.gateway.channels.http.enabled:
+        ht = HttpGateway(settings.gateway.channels.http, gw)
+        tasks.append(asyncio.create_task(ht.run(), name="http"))
+
+    typer.echo(f"Gateway started ({len(tasks)} channel(s) active). Press Ctrl+C to stop.")
+
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        pass
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 def main() -> None:
     app()
+
+
+def gateway_main() -> None:
+    gateway_app()

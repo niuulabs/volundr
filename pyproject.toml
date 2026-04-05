@@ -69,6 +69,7 @@ bifrost = "volundr.bifrost.__main__:main"
 tyr = "tyr.main:main"
 ravn = "ravn.cli.commands:app"
 ravn-approvals = "ravn.cli.commands:approvals_main"
+ravn-gateway = "ravn.cli.commands:gateway_main"
 
 [project.entry-points."niuu.plugins"]
 niuu = "niuu.plugin:NiuuPlugin"

@@ -575,7 +575,7 @@ async def test_bifrost_in_fallback_chain() -> None:
     from ravn.ports.llm import LLMPort
 
     class _StubLocal(LLMPort):
-        async def generate(self, messages, *, tools, system, model, max_tokens):
+        async def generate(self, messages, *, tools, system, model, max_tokens, thinking=None):
             from ravn.domain.models import LLMResponse, StopReason, TokenUsage
 
             return LLMResponse(
@@ -585,7 +585,7 @@ async def test_bifrost_in_fallback_chain() -> None:
                 usage=TokenUsage(input_tokens=1, output_tokens=1),
             )
 
-        async def stream(self, messages, *, tools, system, model, max_tokens):
+        async def stream(self, messages, *, tools, system, model, max_tokens, thinking=None):
             raise NotImplementedError
             yield  # make it an async generator
 
