@@ -177,3 +177,11 @@ FINISH_REASON_MAP: dict[str, str] = {
     "content_filter": "end_turn",
     "function_call": "tool_use",
 }
+
+# Mapping from Anthropic stop_reason → OpenAI finish_reason (inverse of FINISH_REASON_MAP).
+STOP_REASON_TO_OPENAI: dict[str, str] = {
+    "end_turn": "stop",
+    "tool_use": "tool_calls",
+    "max_tokens": "length",
+    "stop_sequence": "stop",
+}

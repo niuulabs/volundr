@@ -15,9 +15,11 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from bifrost.translation.models import (
+    STOP_REASON_TO_OPENAI,
     AnthropicRequest,
     AnthropicResponse,
     ContentBlock,
@@ -29,19 +31,9 @@ from bifrost.translation.models import (
     ToolChoiceTool,
     ToolDefinition,
     ToolResultBlock,
-    ToolUseBlock,
 )
-
-# ---------------------------------------------------------------------------
-# Stop-reason mapping (Anthropic → OpenAI)
-# ---------------------------------------------------------------------------
-
-STOP_REASON_TO_OPENAI: dict[str, str] = {
-    "end_turn": "stop",
-    "tool_use": "tool_calls",
-    "max_tokens": "length",
-    "stop_sequence": "stop",
-}
+from bifrost.translation.to_anthropic import _openai_tool_calls_to_blocks
+from bifrost.translation.to_openai import _extract_tool_calls
 
 # ---------------------------------------------------------------------------
 # OpenAI request Pydantic models
@@ -88,6 +80,22 @@ class OpenAIChatRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Error helper: produce OpenAI-shaped error responses
+# ---------------------------------------------------------------------------
+
+
+def openai_error_response(status: int, message: str, error_type: str) -> JSONResponse:
+    """Return a JSONResponse whose body matches the OpenAI error schema.
+
+    OpenAI SDK clients expect ``{"error": {"message": ..., "type": ..., ...}}``.
+    """
+    return JSONResponse(
+        status_code=status,
+        content={"error": {"message": message, "type": error_type, "param": None, "code": None}},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Request translation: OpenAI → Anthropic canonical
 # ---------------------------------------------------------------------------
 
@@ -105,14 +113,6 @@ def _extract_text_content(content: str | list[dict[str, Any]] | None) -> str:
     return "".join(parts)
 
 
-def _build_user_content(msg: _OpenAIMessage) -> str | list[ContentBlock]:
-    """Build Anthropic content for a user-role message."""
-    text = _extract_text_content(msg.content)
-    if not text:
-        return ""
-    return text
-
-
 def _build_assistant_content(msg: _OpenAIMessage) -> str | list[ContentBlock]:
     """Build Anthropic content for an assistant-role message."""
     text = _extract_text_content(msg.content)
@@ -128,20 +128,8 @@ def _build_assistant_content(msg: _OpenAIMessage) -> str | list[ContentBlock]:
     if text:
         blocks.append(TextBlock(text=text))
 
-    for tc in tool_calls:
-        fn = tc.function
-        arguments_raw = fn.get("arguments", "{}")
-        try:
-            tool_input = json.loads(arguments_raw)
-        except json.JSONDecodeError:
-            tool_input = {"raw": arguments_raw}
-        blocks.append(
-            ToolUseBlock(
-                id=tc.id,
-                name=fn.get("name", ""),
-                input=tool_input,
-            )
-        )
+    tool_call_dicts = [{"id": tc.id, "function": tc.function} for tc in tool_calls]
+    blocks.extend(_openai_tool_calls_to_blocks(tool_call_dicts))
 
     return blocks
 
@@ -198,8 +186,9 @@ def openai_request_to_anthropic(req: OpenAIChatRequest) -> AnthropicRequest:
             continue
 
         if msg.role == "user":
-            content = _build_user_content(msg)
-            anthropic_messages.append(Message(role="user", content=content))
+            anthropic_messages.append(
+                Message(role="user", content=_extract_text_content(msg.content))
+            )
             continue
 
         if msg.role == "assistant":
@@ -261,26 +250,14 @@ def anthropic_response_to_openai(response: AnthropicResponse) -> dict[str, Any]:
         A dict ready to be JSON-serialised and returned to the caller.
     """
     text_parts: list[str] = []
-    tool_calls: list[dict[str, Any]] = []
-
     for block in response.content:
         if isinstance(block, TextBlock):
             text_parts.append(block.text)
         elif isinstance(block, ThinkingBlock):
             text_parts.append(f"<thinking>{block.thinking}</thinking>")
-        elif isinstance(block, ToolUseBlock):
-            tool_calls.append(
-                {
-                    "id": block.id,
-                    "type": "function",
-                    "function": {
-                        "name": block.name,
-                        "arguments": json.dumps(block.input),
-                    },
-                }
-            )
 
     text = "".join(text_parts)
+    tool_calls = _extract_tool_calls(response.content)
     finish_reason = STOP_REASON_TO_OPENAI.get(response.stop_reason or "end_turn", "stop")
 
     message: dict[str, Any] = {"role": "assistant", "content": text or None}

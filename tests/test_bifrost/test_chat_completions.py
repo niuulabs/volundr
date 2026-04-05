@@ -14,6 +14,7 @@ from bifrost.inbound.chat_completions import (
     OpenAIChatRequest,
     anthropic_response_to_openai,
     anthropic_stream_to_openai,
+    openai_error_response,
     openai_request_to_anthropic,
 )
 from bifrost.translation.models import (
@@ -1057,3 +1058,70 @@ class TestChatCompletionsEndpoint:
         call_args = mock_complete.call_args
         anthropic_req = call_args[0][0]
         assert anthropic_req.temperature == 0.5
+
+    def test_invalid_body_has_openai_error_shape(self):
+        with self._client() as client:
+            resp = client.post(
+                "/v1/chat/completions",
+                json={"not_a_valid_field": True},
+            )
+        body = resp.json()
+        assert "error" in body
+        assert "message" in body["error"]
+        assert body["error"]["type"] == "invalid_request_error"
+        assert body["error"]["param"] is None
+        assert body["error"]["code"] is None
+
+    @patch("bifrost.router.ModelRouter.complete", new_callable=AsyncMock)
+    def test_router_error_has_openai_error_shape(self, mock_complete):
+        from bifrost.router import RouterError
+
+        mock_complete.side_effect = RouterError("all providers failed")
+        with self._client() as client:
+            resp = client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "gpt-4o",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                },
+            )
+        assert resp.status_code == 502
+        body = resp.json()
+        assert "error" in body
+        assert "all providers failed" in body["error"]["message"]
+        assert body["error"]["type"] == "server_error"
+
+    def test_unknown_model_error_has_openai_shape(self):
+        with self._client() as client:
+            resp = client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "no-such-model-xyz",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                },
+            )
+        assert resp.status_code == 502
+        body = resp.json()
+        assert "error" in body
+        assert body["error"]["type"] == "server_error"
+
+
+# ---------------------------------------------------------------------------
+# openai_error_response helper
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAIErrorResponse:
+    def test_status_code(self):
+        resp = openai_error_response(422, "bad input", "invalid_request_error")
+        assert resp.status_code == 422
+
+    def test_body_shape(self):
+        import json as _json
+
+        resp = openai_error_response(502, "upstream failed", "server_error")
+        body = _json.loads(resp.body)
+        assert body["error"]["message"] == "upstream failed"
+        assert body["error"]["type"] == "server_error"
+        assert body["error"]["param"] is None
+        assert body["error"]["code"] is None
