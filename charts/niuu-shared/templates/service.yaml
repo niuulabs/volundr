@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "niuu-shared.fullname" . }}
+  labels:
+    {{- include "niuu-shared.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port | default 80 }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "niuu-shared.selectorLabels" . | nindent 4 }}

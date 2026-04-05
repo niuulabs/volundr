@@ -93,7 +93,7 @@ class ConcreteTracker(TrackerPort):
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
-        base_branch="dev",
+            base_branch="dev",
         )
 
     async def get_phase(self, tracker_id: str) -> Phase:
@@ -222,7 +222,7 @@ class TestConcreteTracker:
             status=SagaStatus.ACTIVE,
             confidence=0.0,
             created_at=now,
-        base_branch="dev",
+            base_branch="dev",
         )
         result = await tracker.create_saga(saga)
         assert result == "saga-1"
@@ -241,3 +241,10 @@ class TestConcreteTracker:
         tracker = ConcreteTracker()
         issues = await tracker.list_issues("p-1", milestone_id="m-1")
         assert issues == []
+
+    async def test_get_blocked_identifiers_default(self):
+        """Default implementation returns empty set (no dependency tracking)."""
+        tracker = ConcreteTracker()
+        result = await tracker.get_blocked_identifiers("p-1")
+        assert result == set()
+        assert isinstance(result, set)

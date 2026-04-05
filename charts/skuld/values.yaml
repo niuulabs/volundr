@@ -237,11 +237,15 @@ git:
 
 # Broker configuration (Skuld application settings)
 broker:
-  # -- AI CLI backend: "claude" (Claude Code, default) or "codex" (OpenAI Codex)
+  # -- (DEPRECATED) AI CLI backend: "claude" (Claude Code, default) or "codex" (OpenAI Codex).
+  # Use broker.transportAdapter instead. Kept for backward compatibility during rollout.
   cliType: claude
-  # -- CLI transport mode for Claude: "sdk" (WebSocket, default) or "subprocess" (legacy)
-  # Ignored when cliType is "codex" (always uses subprocess)
+  # -- (DEPRECATED) CLI transport mode for Claude: "sdk" (WebSocket, default) or "subprocess" (legacy).
+  # Use broker.transportAdapter instead. Kept for backward compatibility during rollout.
   transport: sdk
+  # -- Fully-qualified class path of the transport adapter to use.
+  # Replaces broker.cliType + broker.transport with a single, extensible field.
+  transportAdapter: "skuld.transports.sdk_websocket.SdkWebSocketTransport"
   # -- Skip tool permission prompts (true = --dangerously-skip-permissions for Claude,
   # --full-auto for Codex)
   skipPermissions: true

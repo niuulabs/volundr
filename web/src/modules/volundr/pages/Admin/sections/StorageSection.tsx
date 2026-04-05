@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { HardDrive } from 'lucide-react';
 import type { VolundrWorkspace, WorkspaceStatus, AdminSettings } from '@/modules/volundr/models';
-import type { IVolundrService } from '@/modules/volundr/ports';
+import { volundrService } from '@/modules/volundr/adapters';
 import { cn } from '@/utils/classnames';
 import styles from './StorageSection.module.css';
 
@@ -25,11 +25,7 @@ function workspaceLabel(ws: VolundrWorkspace): string {
 
 type StatusFilter = 'all' | WorkspaceStatus;
 
-interface StorageSectionProps {
-  service: IVolundrService;
-}
-
-export function StorageSection({ service }: StorageSectionProps) {
+export function StorageSection() {
   const [workspaces, setWorkspaces] = useState<VolundrWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -43,21 +39,21 @@ export function StorageSection({ service }: StorageSectionProps) {
   const loadWorkspaces = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await service.listAllWorkspaces();
+      const data = await volundrService.listAllWorkspaces();
       setWorkspaces(data);
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, []);
 
   const loadSettings = useCallback(async () => {
     try {
-      const settings = await service.getAdminSettings();
+      const settings = await volundrService.getAdminSettings();
       setAdminSettings(settings);
     } catch {
       // Settings endpoint may not be available in all environments
     }
-  }, [service]);
+  }, []);
 
   useEffect(() => {
     loadWorkspaces();
@@ -70,7 +66,7 @@ export function StorageSection({ service }: StorageSectionProps) {
     }
     setSettingsToggling(true);
     try {
-      const updated = await service.updateAdminSettings({
+      const updated = await volundrService.updateAdminSettings({
         storage: {
           ...adminSettings.storage,
           homeEnabled: !adminSettings.storage.homeEnabled,
@@ -80,7 +76,7 @@ export function StorageSection({ service }: StorageSectionProps) {
     } finally {
       setSettingsToggling(false);
     }
-  }, [service, adminSettings]);
+  }, [adminSettings]);
 
   const handleToggleFileManager = useCallback(async () => {
     if (!adminSettings) {
@@ -88,7 +84,7 @@ export function StorageSection({ service }: StorageSectionProps) {
     }
     setSettingsToggling(true);
     try {
-      const updated = await service.updateAdminSettings({
+      const updated = await volundrService.updateAdminSettings({
         storage: {
           ...adminSettings.storage,
           fileManagerEnabled: !adminSettings.storage.fileManagerEnabled,
@@ -98,24 +94,24 @@ export function StorageSection({ service }: StorageSectionProps) {
     } finally {
       setSettingsToggling(false);
     }
-  }, [service, adminSettings]);
+  }, [adminSettings]);
 
   const handleRestore = useCallback(
     async (id: string) => {
-      await service.restoreWorkspace(id);
+      await volundrService.restoreWorkspace(id);
       await loadWorkspaces();
     },
-    [service, loadWorkspaces]
+    [loadWorkspaces]
   );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) {
       return;
     }
-    await service.deleteWorkspace(deleteTarget.sessionId);
+    await volundrService.deleteWorkspace(deleteTarget.sessionId);
     setDeleteTarget(null);
     await loadWorkspaces();
-  }, [deleteTarget, service, loadWorkspaces]);
+  }, [deleteTarget, loadWorkspaces]);
 
   const uniqueUsers = useMemo(() => [...new Set(workspaces.map(w => w.ownerId))], [workspaces]);
 
@@ -158,13 +154,13 @@ export function StorageSection({ service }: StorageSectionProps) {
     if (selectedIds.size === 0) return;
     setBulkDeleting(true);
     try {
-      await service.bulkDeleteWorkspaces(Array.from(selectedIds));
+      await volundrService.bulkDeleteWorkspaces(Array.from(selectedIds));
       setSelectedIds(new Set());
       await loadWorkspaces();
     } finally {
       setBulkDeleting(false);
     }
-  }, [selectedIds, service, loadWorkspaces]);
+  }, [selectedIds, loadWorkspaces]);
 
   const totalCount = workspaces.length;
   const activeCount = workspaces.filter(w => w.status === 'active').length;
