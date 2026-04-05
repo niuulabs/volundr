@@ -143,8 +143,9 @@ class TestBuildAgentNoApiKey:
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
-        settings = Settings()
-        with patch.object(settings, "effective_api_key", return_value=None):
+        # Patch class-level method to return falsy — instance call delegates to class
+        with patch.object(Settings, "effective_api_key", return_value=""):
+            settings = Settings()
             with pytest.raises(typer.Exit):
                 _build_agent(settings)
 
