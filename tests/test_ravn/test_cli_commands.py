@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from ravn.cli.commands import _print_usage, app
+from ravn.cli.commands import _chat, _print_usage, _run_turn, app, main
 from ravn.domain.models import (
     StreamEvent,
     StreamEventType,
     TokenUsage,
+    TurnResult,
 )
 
 runner = CliRunner()
@@ -129,17 +131,137 @@ class TestRunTurnErrorHandling:
 
     async def test_repl_continues_after_error(self) -> None:
         """In REPL mode (single_turn=False), an error prints but does not exit."""
+        import io
         from unittest.mock import AsyncMock
 
         from ravn.adapters.cli_channel import CliChannel
-        from ravn.cli.commands import _run_turn
 
         agent = MagicMock()
         agent.run_turn = AsyncMock(side_effect=RuntimeError("boom"))
-
-        import io
-
         channel = CliChannel(file=io.StringIO())
 
         # Must not raise SystemExit
         await _run_turn(agent, channel, "hi", show_usage=False, single_turn=False)
+
+    async def test_single_turn_exception_calls_sys_exit(self) -> None:
+        """In single_turn mode, an exception causes sys.exit(1)."""
+        import io
+        import sys
+        from unittest.mock import AsyncMock, patch
+
+        from ravn.adapters.cli_channel import CliChannel
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(side_effect=RuntimeError("fatal"))
+        channel = CliChannel(file=io.StringIO())
+
+        with (
+            patch("typer.echo"),
+            patch.object(sys, "exit") as mock_exit,
+        ):
+            await _run_turn(agent, channel, "hello", show_usage=False, single_turn=True)
+        mock_exit.assert_called_once_with(1)
+
+
+class TestConfigFlag:
+    def test_config_flag_sets_env_var(self, tmp_path) -> None:
+        """--config sets RAVN_CONFIG before constructing Settings."""
+        cfg = tmp_path / "custom.yaml"
+        cfg.write_text("agent:\n  model: claude-custom\n")
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_adapter = MagicMock()
+
+            async def _stream(*args, **kwargs) -> AsyncIterator[StreamEvent]:
+                yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="ok")
+                yield StreamEvent(
+                    type=StreamEventType.MESSAGE_DONE,
+                    usage=TokenUsage(input_tokens=5, output_tokens=3),
+                )
+
+            mock_adapter.stream = _stream
+            mock_cls.return_value = mock_adapter
+
+            result = runner.invoke(app, ["Hello!", "--config", str(cfg)])
+
+        assert result.exit_code == 0
+
+
+class TestReplMode:
+    async def test_repl_exits_on_eoferror(self) -> None:
+        """EOFError (Ctrl+D) exits the REPL loop cleanly."""
+        import io
+        from unittest.mock import AsyncMock
+
+        from ravn.adapters.cli_channel import CliChannel
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(
+            return_value=TurnResult(
+                response="hi",
+                tool_calls=[],
+                tool_results=[],
+                usage=TokenUsage(input_tokens=5, output_tokens=3),
+            )
+        )
+        channel = CliChannel(file=io.StringIO())
+
+        with patch("builtins.input", side_effect=EOFError):
+            await _chat(agent, channel, prompt="", show_usage=False)
+
+    async def test_repl_skips_empty_input(self) -> None:
+        """Empty lines in REPL are skipped without calling run_turn."""
+        import io
+        from unittest.mock import AsyncMock
+
+        from ravn.adapters.cli_channel import CliChannel
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(
+            return_value=TurnResult(
+                response="hi",
+                tool_calls=[],
+                tool_results=[],
+                usage=TokenUsage(input_tokens=5, output_tokens=3),
+            )
+        )
+        channel = CliChannel(file=io.StringIO())
+
+        with patch("builtins.input", side_effect=["", EOFError]):
+            await _chat(agent, channel, prompt="", show_usage=False)
+
+        agent.run_turn.assert_not_called()
+
+    async def test_repl_processes_message_then_exits(self) -> None:
+        """A single message is processed before EOFError exits the REPL."""
+        import io
+        from unittest.mock import AsyncMock
+
+        from ravn.adapters.cli_channel import CliChannel
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(
+            return_value=TurnResult(
+                response="Hello!",
+                tool_calls=[],
+                tool_results=[],
+                usage=TokenUsage(input_tokens=5, output_tokens=3),
+            )
+        )
+        channel = CliChannel(file=io.StringIO())
+
+        with patch("builtins.input", side_effect=["hi there", EOFError]):
+            await _chat(agent, channel, prompt="", show_usage=False)
+
+        agent.run_turn.assert_called_once_with("hi there")
+
+
+class TestMainEntryPoint:
+    def test_main_invokes_app(self) -> None:
+        """main() is the package entry point — it delegates to the Typer app."""
+        with patch("ravn.cli.commands.app") as mock_app:
+            main()
+            mock_app.assert_called_once()
