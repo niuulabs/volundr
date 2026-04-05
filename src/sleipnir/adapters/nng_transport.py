@@ -210,7 +210,7 @@ class NngPublisher(SleipnirPublisher):
                 )
                 await asyncio.sleep(self._bind_retry_delay_s)
         if self._registry is not None and self._service_id is not None:
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None, self._registry.register, self._service_id, self._address
             )
 
@@ -218,7 +218,7 @@ class NngPublisher(SleipnirPublisher):
         """Deregister from discovery (if configured), then close the PUB socket."""
         if self._registry is not None and self._service_id is not None:
             with suppress(Exception):
-                await asyncio.get_event_loop().run_in_executor(
+                await asyncio.get_running_loop().run_in_executor(
                     None, self._registry.deregister, self._service_id
                 )
         if self._socket is not None:
@@ -333,7 +333,7 @@ class NngSubscriber(SleipnirSubscriber):
         """
         if self._registry is None:
             return [self._address]
-        entries = await asyncio.get_event_loop().run_in_executor(None, self._registry.list_services)
+        entries = await asyncio.get_running_loop().run_in_executor(None, self._registry.list_services)
         if not entries:
             logger.debug("NngSubscriber: registry empty, falling back to %s", self._address)
             return [self._address]
