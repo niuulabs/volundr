@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import UTC, datetime
-from typing import Any
 
 import asyncpg
 
+from bifrost.adapters._pg_base import PostgresBase
+from bifrost.adapters._sql_helpers import build_where_with_range, to_utc
 from bifrost.ports.audit import AuditEvent, AuditPort
 
 logger = logging.getLogger(__name__)
@@ -61,10 +61,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 """
 
 
-def _ts(dt: datetime) -> datetime:
-    return dt.astimezone(UTC)
-
-
 def _row_to_event(row: asyncpg.Record) -> AuditEvent:
     raw_tags = row["tags"]
     tags: dict[str, str] = json.loads(raw_tags) if isinstance(raw_tags, str) else dict(raw_tags)
@@ -87,90 +83,34 @@ def _row_to_event(row: asyncpg.Record) -> AuditEvent:
     )
 
 
-def _build_where(
+def _filters(
     agent_id: str | None,
     tenant_id: str | None,
     model: str | None,
     outcome: str | None,
-    since: datetime | None,
-    until: datetime | None,
-    start_idx: int = 1,
-) -> tuple[str, list[Any]]:
-    clauses: list[str] = []
-    params: list[Any] = []
-    idx = start_idx
-
+) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
     if agent_id is not None:
-        clauses.append(f"agent_id = ${idx}")
-        params.append(agent_id)
-        idx += 1
+        pairs.append(("agent_id", agent_id))
     if tenant_id is not None:
-        clauses.append(f"tenant_id = ${idx}")
-        params.append(tenant_id)
-        idx += 1
+        pairs.append(("tenant_id", tenant_id))
     if model is not None:
-        clauses.append(f"model = ${idx}")
-        params.append(model)
-        idx += 1
+        pairs.append(("model", model))
     if outcome is not None:
-        clauses.append(f"outcome = ${idx}")
-        params.append(outcome)
-        idx += 1
-    if since is not None:
-        clauses.append(f"timestamp >= ${idx}")
-        params.append(_ts(since))
-        idx += 1
-    if until is not None:
-        clauses.append(f"timestamp <= ${idx}")
-        params.append(_ts(until))
-
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-    return where, params
+        pairs.append(("outcome", outcome))
+    return pairs
 
 
-class PostgresAuditAdapter(AuditPort):
+class PostgresAuditAdapter(PostgresBase, AuditPort):
     """asyncpg-backed PostgreSQL implementation of ``AuditPort``.
 
     Writes to the ``bifrost_audit`` table.  All writes are intended to
     be scheduled via ``asyncio.create_task`` at the call site so they do
     not add latency to the request path.
-
-    Args:
-        dsn:     PostgreSQL connection string.  When blank, falls back to
-                 the environment variable named by *dsn_env*.
-        dsn_env: Environment variable holding the DSN (default: ``DATABASE_URL``).
-        min_size: Minimum connection pool size.
-        max_size: Maximum connection pool size.
     """
 
-    def __init__(
-        self,
-        dsn: str = "",
-        dsn_env: str = "DATABASE_URL",
-        min_size: int = 1,
-        max_size: int = 10,
-    ) -> None:
-        self._dsn = dsn or os.environ.get(dsn_env, "")
-        self._min_size = min_size
-        self._max_size = max_size
-        self._pool: asyncpg.Pool | None = None
-
-    async def _get_pool(self) -> asyncpg.Pool:
-        if self._pool is None:
-            self._pool = await asyncpg.create_pool(
-                self._dsn,
-                min_size=self._min_size,
-                max_size=self._max_size,
-            )
-            async with self._pool.acquire() as conn:
-                await conn.execute(_CREATE_TABLE)
-                await conn.execute(_CREATE_INDEXES)
-        return self._pool
-
-    async def close(self) -> None:
-        if self._pool is not None:
-            await self._pool.close()
-            self._pool = None
+    _create_table_sql = _CREATE_TABLE
+    _create_indexes_sql = _CREATE_INDEXES
 
     # ------------------------------------------------------------------
     # Port implementation
@@ -180,30 +120,31 @@ class PostgresAuditAdapter(AuditPort):
         """Append *event* to ``bifrost_audit``.
 
         Schedule this via ``asyncio.create_task`` to avoid blocking
-        the request path::
-
-            asyncio.create_task(audit.log(event))
+        the request path.
         """
-        pool = await self._get_pool()
-        async with pool.acquire() as conn:
-            await conn.execute(
-                _INSERT,
-                event.request_id,
-                event.agent_id,
-                event.tenant_id,
-                event.session_id,
-                event.saga_id,
-                event.model,
-                event.provider,
-                event.outcome,
-                event.status_code,
-                event.rule_name,
-                event.rule_action,
-                json.dumps(event.tags),
-                event.error_message,
-                event.latency_ms,
-                _ts(event.timestamp),
-            )
+        try:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    _INSERT,
+                    event.request_id,
+                    event.agent_id,
+                    event.tenant_id,
+                    event.session_id,
+                    event.saga_id,
+                    event.model,
+                    event.provider,
+                    event.outcome,
+                    event.status_code,
+                    event.rule_name,
+                    event.rule_action,
+                    json.dumps(event.tags),
+                    event.error_message,
+                    event.latency_ms,
+                    to_utc(event.timestamp),
+                )
+        except Exception:
+            logger.exception("Failed to log audit event %s", event.request_id)
 
     async def query(
         self,
@@ -216,7 +157,9 @@ class PostgresAuditAdapter(AuditPort):
         until: datetime | None = None,
         limit: int = 1000,
     ) -> list[AuditEvent]:
-        where, params = _build_where(agent_id, tenant_id, model, outcome, since, until, start_idx=1)
+        where, params = build_where_with_range(
+            _filters(agent_id, tenant_id, model, outcome), since, until,
+        )
         limit_idx = len(params) + 1
         sql = f"""
             SELECT request_id, agent_id, tenant_id, session_id, saga_id,

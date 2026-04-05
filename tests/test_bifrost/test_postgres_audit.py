@@ -51,7 +51,7 @@ def _make_pool_mock():
     return pool, conn
 
 
-_PATCH_PATH = "bifrost.adapters.audit.postgres.asyncpg.create_pool"
+_PATCH_PATH = "bifrost.adapters._pg_base.asyncpg.create_pool"
 
 
 @pytest.fixture

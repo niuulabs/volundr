@@ -12,13 +12,14 @@ Connection string is resolved in priority order:
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import os
 from datetime import UTC, datetime
-from typing import Any
 
 import asyncpg
 
+from bifrost.adapters._pg_base import PostgresBase
+from bifrost.adapters._sql_helpers import build_where_with_range, to_utc
 from bifrost.ports.accounting import (
     AccountingPort,
     AccountingSummary,
@@ -67,10 +68,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 """
 
 
-def _ts(dt: datetime) -> datetime:
-    return dt.astimezone(UTC)
-
-
 def _row_to_record(row: asyncpg.Record) -> RequestRecord:
     return RequestRecord(
         request_id=row["request_id"],
@@ -92,119 +89,66 @@ def _row_to_record(row: asyncpg.Record) -> RequestRecord:
     )
 
 
-def _build_where(
+def _filters(
     agent_id: str | None,
     tenant_id: str | None,
     model: str | None,
-    since: datetime | None,
-    until: datetime | None,
-    start_idx: int = 1,
-) -> tuple[str, list[Any]]:
-    clauses: list[str] = []
-    params: list[Any] = []
-    idx = start_idx
-
+) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
     if agent_id is not None:
-        clauses.append(f"agent_id = ${idx}")
-        params.append(agent_id)
-        idx += 1
+        pairs.append(("agent_id", agent_id))
     if tenant_id is not None:
-        clauses.append(f"tenant_id = ${idx}")
-        params.append(tenant_id)
-        idx += 1
+        pairs.append(("tenant_id", tenant_id))
     if model is not None:
-        clauses.append(f"model = ${idx}")
-        params.append(model)
-        idx += 1
-    if since is not None:
-        clauses.append(f"timestamp >= ${idx}")
-        params.append(_ts(since))
-        idx += 1
-    if until is not None:
-        clauses.append(f"timestamp <= ${idx}")
-        params.append(_ts(until))
-
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-    return where, params
+        pairs.append(("model", model))
+    return pairs
 
 
-class PostgresAccountingAdapter(AccountingPort):
+class PostgresAccountingAdapter(PostgresBase, AccountingPort):
     """asyncpg-backed PostgreSQL implementation of ``AccountingPort``.
 
     Writes to the ``bifrost_requests`` table.  All writes are intended to
     be scheduled via ``asyncio.create_task`` at the call site so they do
     not add latency to the request path.
-
-    Args:
-        dsn:     PostgreSQL connection string.  When blank, falls back to
-                 the environment variable named by *dsn_env*.
-        dsn_env: Environment variable holding the DSN (default: ``DATABASE_URL``).
-        min_size: Minimum connection pool size.
-        max_size: Maximum connection pool size.
     """
 
-    def __init__(
-        self,
-        dsn: str = "",
-        dsn_env: str = "DATABASE_URL",
-        min_size: int = 1,
-        max_size: int = 10,
-    ) -> None:
-        self._dsn = dsn or os.environ.get(dsn_env, "")
-        self._min_size = min_size
-        self._max_size = max_size
-        self._pool: asyncpg.Pool | None = None
-
-    async def _get_pool(self) -> asyncpg.Pool:
-        if self._pool is None:
-            self._pool = await asyncpg.create_pool(
-                self._dsn,
-                min_size=self._min_size,
-                max_size=self._max_size,
-            )
-            async with self._pool.acquire() as conn:
-                await conn.execute(_CREATE_TABLE)
-                await conn.execute(_CREATE_INDEXES)
-        return self._pool
-
-    async def close(self) -> None:
-        if self._pool is not None:
-            await self._pool.close()
-            self._pool = None
+    _create_table_sql = _CREATE_TABLE
+    _create_indexes_sql = _CREATE_INDEXES
 
     # ------------------------------------------------------------------
     # Port implementation
     # ------------------------------------------------------------------
 
-    async def record(self, record: RequestRecord) -> None:
-        """Persist *record* to ``bifrost_requests``.
+    async def record(self, usage: RequestRecord) -> None:
+        """Persist *usage* to ``bifrost_requests``.
 
         Schedule this via ``asyncio.create_task`` to avoid blocking
-        the request path::
-
-            asyncio.create_task(accounting.record(rec))
+        the request path.
         """
-        pool = await self._get_pool()
-        async with pool.acquire() as conn:
-            await conn.execute(
-                _INSERT,
-                record.request_id,
-                record.agent_id,
-                record.tenant_id,
-                record.session_id,
-                record.saga_id,
-                record.model,
-                record.provider,
-                record.input_tokens,
-                record.output_tokens,
-                record.cache_read_tokens,
-                record.cache_write_tokens,
-                record.reasoning_tokens,
-                record.cost_usd,
-                record.latency_ms,
-                record.streaming,
-                _ts(record.timestamp),
-            )
+        try:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    _INSERT,
+                    usage.request_id,
+                    usage.agent_id,
+                    usage.tenant_id,
+                    usage.session_id,
+                    usage.saga_id,
+                    usage.model,
+                    usage.provider,
+                    usage.input_tokens,
+                    usage.output_tokens,
+                    usage.cache_read_tokens,
+                    usage.cache_write_tokens,
+                    usage.reasoning_tokens,
+                    usage.cost_usd,
+                    usage.latency_ms,
+                    usage.streaming,
+                    to_utc(usage.timestamp),
+                )
+        except Exception:
+            logger.exception("Failed to record accounting entry %s", usage.request_id)
 
     async def query(
         self,
@@ -216,7 +160,9 @@ class PostgresAccountingAdapter(AccountingPort):
         until: datetime | None = None,
         limit: int = 1000,
     ) -> list[RequestRecord]:
-        where, params = _build_where(agent_id, tenant_id, model, since, until, start_idx=1)
+        where, params = build_where_with_range(
+            _filters(agent_id, tenant_id, model), since, until,
+        )
         limit_idx = len(params) + 1
         sql = f"""
             SELECT request_id, agent_id, tenant_id, session_id, saga_id,
@@ -242,23 +188,28 @@ class PostgresAccountingAdapter(AccountingPort):
         since: datetime | None = None,
         until: datetime | None = None,
     ) -> AccountingSummary:
-        where, params = _build_where(agent_id, tenant_id, model, since, until, start_idx=1)
+        where, params = build_where_with_range(
+            _filters(agent_id, tenant_id, model), since, until,
+        )
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            totals = await conn.fetchrow(
-                f"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
-                f"FROM bifrost_requests {where}",
-                *params,
-            )
-            model_rows = await conn.fetch(
-                f"SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
-                f"FROM bifrost_requests {where} GROUP BY model",
-                *params,
-            )
-            provider_rows = await conn.fetch(
-                f"SELECT provider, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
-                f"FROM bifrost_requests {where} GROUP BY provider",
-                *params,
+            totals, model_rows, provider_rows = await asyncio.gather(
+                conn.fetchrow(
+                    f"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
+                    f"FROM bifrost_requests {where}",
+                    *params,
+                ),
+                conn.fetch(
+                    f"SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
+                    f"FROM bifrost_requests {where} GROUP BY model",
+                    *params,
+                ),
+                conn.fetch(
+                    f"SELECT provider, COUNT(*), SUM(input_tokens),"
+                    f" SUM(output_tokens), SUM(cost_usd) "
+                    f"FROM bifrost_requests {where} GROUP BY provider",
+                    *params,
+                ),
             )
 
         summary = AccountingSummary(
@@ -293,7 +244,9 @@ class PostgresAccountingAdapter(AccountingPort):
         since: datetime | None = None,
         until: datetime | None = None,
     ) -> list[AccountingTimeSeries]:
-        where, params = _build_where(agent_id, tenant_id, model, since, until, start_idx=1)
+        where, params = build_where_with_range(
+            _filters(agent_id, tenant_id, model), since, until,
+        )
         trunc = "hour" if granularity != "day" else "day"
         sql = f"""
             SELECT
