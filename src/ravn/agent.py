@@ -83,6 +83,11 @@ class RavnAgent:
         """Maximum tool-call iterations allowed per turn."""
         return self._max_iterations
 
+    @property
+    def llm_adapter_name(self) -> str:
+        """Class name of the active LLM adapter."""
+        return type(self._llm).__name__
+
     def _tool_defs(self) -> list[dict]:
         return [t.to_api_dict() for t in self._tools.values()]
 

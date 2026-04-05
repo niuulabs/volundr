@@ -66,7 +66,7 @@ def _make_slash_ctx(agent: RavnAgent, settings: Settings) -> SlashCommandContext
         session=agent.session,
         tools=agent.tools,
         max_iterations=agent.max_iterations,
-        llm_adapter_name=type(agent._llm).__name__,
+        llm_adapter_name=agent.llm_adapter_name,
         permission_mode=settings.permission.mode,
     )
 

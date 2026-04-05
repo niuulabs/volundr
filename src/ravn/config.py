@@ -378,6 +378,14 @@ class Settings(BaseSettings):
 # ---------------------------------------------------------------------------
 
 
+def _safe_int(val: object, default: int = 0) -> int:
+    """Convert *val* to int, returning *default* on ValueError/TypeError."""
+    try:
+        return int(val)  # type: ignore[arg-type]
+    except (ValueError, TypeError):
+        return default
+
+
 @dataclass
 class ProjectConfig:
     """Project-level configuration overlay parsed from a RAVN.md file.
@@ -446,7 +454,7 @@ class ProjectConfig:
             allowed_tools=list(raw.get("allowed_tools", [])),
             forbidden_tools=list(raw.get("forbidden_tools", [])),
             permission_mode=str(raw.get("permission_mode", "")),
-            iteration_budget=int(raw.get("iteration_budget", 0)),
+            iteration_budget=_safe_int(raw.get("iteration_budget", 0)),
             notes=str(raw.get("notes", "")),
         )
 

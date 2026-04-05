@@ -109,6 +109,10 @@ class TestProjectConfigFromText:
         cfg = ProjectConfig.from_text("# RAVN Project: x\n\n- just a list\n")
         assert cfg.persona == ""
 
+    def test_non_numeric_iteration_budget_returns_zero(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\niteration_budget: many\n")
+        assert cfg.iteration_budget == 0
+
 
 class TestProjectConfigLoad:
     def test_load_from_file(self, tmp_path: Path) -> None:
