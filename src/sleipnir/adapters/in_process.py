@@ -103,7 +103,18 @@ class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
             pass
 
     async def publish(self, event: SleipnirEvent) -> None:
-        """Place *event* on every matching subscriber queue."""
+        """Place *event* on every matching subscriber queue.
+
+        Events with ``ttl=0`` are expired on arrival and never delivered.
+        """
+        if event.ttl is not None and event.ttl <= 0:
+            logger.debug(
+                "Dropping expired event %s (%s): ttl=%d",
+                event.event_id,
+                event.event_type,
+                event.ttl,
+            )
+            return
         for sub in list(self._subscriptions):
             if not sub.active:
                 continue
