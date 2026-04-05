@@ -36,6 +36,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ravn.adapters.approval_memory import ApprovalMemory
+from ravn.adapters.bash_validator import (
+    _ALWAYS_BLOCKED,
+    _GIT_WRITE_SUBCOMMANDS,
+    _NETWORK_COMMANDS,
+    _PACKAGE_MGMT_COMMANDS,
+    _PATH_TRAVERSAL_PATTERNS,
+    _READ_ONLY_WHITELIST,
+    _SED_INPLACE_PATTERN,
+    _SYSTEM_ADMIN_COMMANDS,
+    _WRITE_COMMANDS,
+    unwrap_sudo,
+)
 from ravn.adapters.file_security import (
     _SYSTEM_PREFIXES,
     DEFAULT_BINARY_CHECK_BYTES,
@@ -57,209 +69,11 @@ from ravn.ports.permission import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Bash validation constants
+# Constants local to permission_enforcer (not shared with bash_validator)
 # ---------------------------------------------------------------------------
 
-# Commands considered safe for read-only operations.
-_READ_ONLY_WHITELIST: frozenset[str] = frozenset(
-    {
-        "cat",
-        "head",
-        "tail",
-        "less",
-        "more",
-        "grep",
-        "egrep",
-        "fgrep",
-        "rg",
-        "ripgrep",
-        "ls",
-        "ll",
-        "la",
-        "dir",
-        "find",
-        "locate",
-        "which",
-        "type",
-        "file",
-        "stat",
-        "wc",
-        "sort",
-        "uniq",
-        "diff",
-        "comm",
-        "echo",
-        "printf",
-        "pwd",
-        "date",
-        "whoami",
-        "id",
-        "env",
-        "printenv",
-        "uname",
-        "hostname",
-        "uptime",
-        "ps",
-        "top",
-        "htop",
-        "df",
-        "du",
-        "free",
-        "lsof",
-        "netstat",
-        "ss",
-        "ifconfig",
-        "ip",
-        # Git read operations
-        "git",
-    }
-)
-
-# Git subcommands that are read-only.
-_GIT_READ_SUBCOMMANDS: frozenset[str] = frozenset(
-    {
-        "status",
-        "log",
-        "diff",
-        "show",
-        "branch",
-        "tag",
-        "remote",
-        "fetch",
-        "ls-files",
-        "ls-tree",
-        "cat-file",
-        "rev-parse",
-        "rev-list",
-        "describe",
-        "shortlog",
-        "blame",
-        "help",
-        "version",
-    }
-)
-
-# Patterns that are ALWAYS blocked regardless of mode.
-_ALWAYS_BLOCKED_PATTERNS: list[re.Pattern[str]] = [
-    # Disk-level destruction
-    re.compile(r"\bmkfs\b"),
-    re.compile(r"\bdd\s+if="),
-    re.compile(r"\bshred\b"),
-    re.compile(r"\bwipefs\b"),
-    re.compile(r"\bfdisk\b"),
-    re.compile(r"\bparted\b"),
-    # Fork bomb
-    re.compile(r":\s*\(\s*\)\s*\{"),
-    # Recursive rm of root or critical paths
-    re.compile(r"\brm\s+.*-[a-zA-Z]*r[a-zA-Z]*\s+/\s*$"),
-    re.compile(r"\brm\s+.*-[a-zA-Z]*r[a-zA-Z]*\s+/\b"),
-    # Overwriting boot sectors
-    re.compile(r"\bdd\b.*\bof=/dev/(sd|hd|nvme|vd)"),
-    # Kernel module loading
-    re.compile(r"\binsmod\b"),
-    re.compile(r"\brmmod\b"),
-    re.compile(r"\bmodprobe\b"),
-    # Crontab replacement
-    re.compile(r"\bcrontab\s+-r\b"),
-    # Dangerous redirects to /dev
-    re.compile(r">\s*/dev/(sd|hd|nvme|vd|mem|kmem)"),
-    # History clearing
-    re.compile(r"\bhistory\s+-[cw]\b"),
-]
-
-# Network commands — need approval in non-full-access modes.
-_NETWORK_COMMANDS: frozenset[str] = frozenset(
-    {
-        "curl",
-        "wget",
-        "ssh",
-        "scp",
-        "sftp",
-        "rsync",
-        "nc",
-        "netcat",
-        "ncat",
-        "ftp",
-        "telnet",
-        "ping",
-        "traceroute",
-        "dig",
-        "nslookup",
-        "host",
-    }
-)
-
-# Package management commands.
-_PACKAGE_MGMT_COMMANDS: frozenset[str] = frozenset(
-    {
-        "apt",
-        "apt-get",
-        "dpkg",
-        "yum",
-        "dnf",
-        "rpm",
-        "zypper",
-        "pacman",
-        "brew",
-        "pip",
-        "pip3",
-        "pip3.12",
-        "npm",
-        "npx",
-        "yarn",
-        "pnpm",
-        "gem",
-        "cargo",
-        "go",
-        "conda",
-        "mamba",
-    }
-)
-
-# System-administration commands.
-_SYSTEM_ADMIN_COMMANDS: frozenset[str] = frozenset(
-    {
-        "systemctl",
-        "service",
-        "mount",
-        "umount",
-        "chown",
-        "chmod",
-        "chgrp",
-        "useradd",
-        "userdel",
-        "usermod",
-        "groupadd",
-        "groupdel",
-        "passwd",
-        "visudo",
-        "iptables",
-        "ufw",
-        "firewall-cmd",
-        "setenforce",
-        "aa-enforce",
-        "sysctl",
-        "ulimit",
-        "swapoff",
-        "swapon",
-        "reboot",
-        "shutdown",
-        "halt",
-        "poweroff",
-        "init",
-    }
-)
-
-# Path traversal patterns to detect in commands.
-_PATH_TRAVERSAL_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\.\./"),
-    re.compile(r"\$HOME\b"),
-    re.compile(r"~(?:/|$)"),
-    re.compile(r"\$\{?HOME\}?"),
-]
-
-# System paths that tools should never touch.
-# Extends file_security._SYSTEM_PREFIXES with additional executable/device paths.
+# System paths that tools should never touch (broader than the warn-only list
+# in bash_validator._SYSTEM_PATH_WARN_PREFIXES — these trigger hard Deny).
 _SYSTEM_PATH_PREFIXES: tuple[str, ...] = _SYSTEM_PREFIXES + (
     "/dev",
     "/bin",
@@ -267,61 +81,6 @@ _SYSTEM_PATH_PREFIXES: tuple[str, ...] = _SYSTEM_PREFIXES + (
     "/lib",
     "/lib64",
     "/root",
-)
-
-# sed in-place edit flag patterns.
-_SED_INPLACE_PATTERN = re.compile(r"\bsed\b.*\s-[a-zA-Z]*i[a-zA-Z]*\b")
-
-# Tools that perform write operations (non-git).
-_WRITE_COMMANDS: frozenset[str] = frozenset(
-    {
-        "cp",
-        "mv",
-        "mkdir",
-        "touch",
-        "tee",
-        "install",
-        "ln",
-        "truncate",
-        "sed",
-        "awk",
-        "perl",
-        "python",
-        "python3",
-        "python3.12",
-        "ruby",
-        "node",
-        "bash",
-        "sh",
-        "zsh",
-        "fish",
-        "ksh",
-    }
-)
-
-# Git subcommands that write state.
-_GIT_WRITE_SUBCOMMANDS: frozenset[str] = frozenset(
-    {
-        "add",
-        "commit",
-        "push",
-        "pull",
-        "merge",
-        "rebase",
-        "reset",
-        "restore",
-        "checkout",
-        "switch",
-        "apply",
-        "am",
-        "cherry-pick",
-        "revert",
-        "clean",
-        "init",
-        "clone",
-        "stash",
-        "config",
-    }
 )
 
 # Tool names that correspond to bash/shell execution.
@@ -413,12 +172,12 @@ class BashValidator:
         Returns Allow, Deny, or NeedsApproval.
         """
         # Stage 1: always-blocked destructive patterns
-        for pattern in _ALWAYS_BLOCKED_PATTERNS:
+        for pattern, label in _ALWAYS_BLOCKED:
             if pattern.search(command):
-                return Deny(f"command matches always-blocked pattern: {pattern.pattern!r}")
+                return Deny(f"command matches always-blocked pattern ({label})")
 
         # Stage 2: unwrap sudo recursively to find inner command
-        inner = self._unwrap_sudo(command)
+        inner = unwrap_sudo(command)
 
         # Stage 3: sed in-place editing
         if _SED_INPLACE_PATTERN.search(command):
@@ -440,25 +199,6 @@ class BashValidator:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _unwrap_sudo(self, command: str) -> str:
-        """Strip leading ``sudo [flags]`` tokens recursively."""
-        try:
-            tokens = shlex.split(command)
-        except ValueError:
-            return command
-
-        while tokens and tokens[0] == "sudo":
-            # Skip sudo flags like -u user, -E, -n, etc.
-            tokens = tokens[1:]
-            while tokens and tokens[0].startswith("-"):
-                # -u and similar flags take an argument
-                if tokens[0] in ("-u", "-g", "-H", "-R", "-T"):
-                    tokens = tokens[2:] if len(tokens) > 1 else []
-                else:
-                    tokens = tokens[1:]
-
-        return shlex.join(tokens) if tokens else command
-
     def _split_pipeline(self, command: str) -> list[str]:
         """Split a shell pipeline / compound command into individual commands."""
         # Split on |, &&, ||, ; to get individual commands
@@ -470,7 +210,7 @@ class BashValidator:
         try:
             tokens = shlex.split(command)
         except ValueError:
-            return CommandIntent.WRITE
+            return CommandIntent.UNKNOWN
 
         if not tokens:
             return CommandIntent.READ_ONLY
@@ -505,8 +245,7 @@ class BashValidator:
         if cmd in _READ_ONLY_WHITELIST:
             return CommandIntent.READ_ONLY
 
-        # Unknown command — conservatively treat as Write
-        return CommandIntent.WRITE
+        return CommandIntent.UNKNOWN
 
     def _highest_intent(self, intents: list[CommandIntent]) -> CommandIntent:
         """Return the highest-risk intent from a list."""
@@ -515,7 +254,9 @@ class BashValidator:
             CommandIntent.SYSTEM_ADMIN,
             CommandIntent.PACKAGE_MANAGEMENT,
             CommandIntent.NETWORK,
+            CommandIntent.PROCESS_MANAGEMENT,
             CommandIntent.WRITE,
+            CommandIntent.UNKNOWN,
             CommandIntent.READ_ONLY,
         ]
         for intent in priority:

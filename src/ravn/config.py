@@ -146,6 +146,13 @@ class TerminalToolConfig(BaseModel):
 class BashToolConfig(BaseModel):
     """Bash tool configuration (non-persistent, validation-gated execution)."""
 
+    mode: str = Field(
+        default="workspace_write",
+        description=(
+            "Permission mode for the bash tool. Mirrors PermissionConfig.mode. "
+            "Controls which commands are allowed, denied, or require approval."
+        ),
+    )
     timeout_seconds: float = Field(
         default=120.0,
         description="Seconds to wait for a bash command before timing out.",

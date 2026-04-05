@@ -62,6 +62,7 @@ class BashTool(ToolPort):
         workspace_root: Path | None = None,
     ) -> None:
         cfg = config or BashToolConfig()
+        self._mode = cfg.mode
         self._timeout = cfg.timeout_seconds
         self._max_output_bytes = cfg.max_output_bytes
         self._workspace_root: Path = workspace_root or (
@@ -113,7 +114,7 @@ class BashTool(ToolPort):
             return ToolResult(tool_call_id="", content="No command provided.", is_error=True)
 
         result = self._validator.validate(
-            command, mode="full_access", workspace_root=self._workspace_root
+            command, mode=self._mode, workspace_root=self._workspace_root
         )
 
         if not result.allowed:

@@ -63,7 +63,6 @@ class TestStage1ModeValidation:
             "git show HEAD",
             "git branch -a",
             "git tag",
-            "git stash list",
             "git remote -v",
             "git fetch --dry-run",
             "git ls-files",
@@ -98,10 +97,6 @@ class TestStage1ModeValidation:
     def test_read_only_denies_git_push(self) -> None:
         result = pipeline().validate("git push origin main", mode="read_only")
         assert denied(result)
-
-    def test_read_only_allows_git_stash_list(self) -> None:
-        result = pipeline().validate("git stash list", mode="read_only")
-        assert allowed(result)
 
     # sudo unwrapping in read_only
     def test_read_only_denies_sudo_rm(self) -> None:

@@ -1,23 +1,30 @@
 """Bash command validation pipeline — 5-stage security analysis.
 
-Each stage returns a :class:`StageAllow`, :class:`StageDeny`, or
-:class:`StageWarn`.  The pipeline runs stages in order:
+This module is the **single source of truth** for all bash-validation
+constants and helpers.  :mod:`ravn.adapters.permission_enforcer` imports
+directly from here; never define a constant in both places.
 
-1. Mode validation   — READ_ONLY whitelist; WORKSPACE_WRITE / PROMPT guards.
-2. Sed validation    — block ``sed -i`` (in-place) in READ_ONLY mode.
-3. Destructive check — always-blocked patterns (rm -rf /, mkfs, fork bombs …).
-4. Path validation   — warn on ``../``, ``~``, ``$HOME``, absolute paths
-                        outside the workspace.
-5. Intent class.     — tag the command with a :class:`CommandIntent`.
+Each pipeline stage returns a :class:`StageAllow`, :class:`StageDeny`, or
+:class:`StageWarn`.  Stages run in order; the first :class:`StageDeny`
+causes early exit.  :class:`StageWarn` results accumulate in
+:class:`PipelineResult` and are surfaced to the caller without blocking
+execution.
 
-Stages run in order; the first :class:`StageDeny` causes early exit.
-:class:`StageWarn` results are accumulated and surfaced in the
-:class:`PipelineResult`; they do NOT stop execution.
+Execution order (the spec numbers differ from runtime priority)
+---------------------------------------------------------------
+1. Destructive-pattern check  — always-blocked, mode-independent.
+2. Mode validation            — READ_ONLY whitelist; WORKSPACE_WRITE warns;
+                                FULL_ACCESS unrestricted; PROMPT warns.
+                                Recursive ``sudo`` unwrapping applied first.
+3. Sed in-place check         — ``sed -i`` denied in READ_ONLY, warned otherwise.
+4. Path validation            — warn on ``../``, ``~``, ``$HOME``, paths
+                                outside the workspace root.
+5. Intent classification      — tag with :class:`~ravn.ports.permission.CommandIntent`.
 
 Usage::
 
-    validator = BashValidationPipeline()
-    result = validator.validate("ls /tmp", mode="read_only")
+    pipeline = BashValidationPipeline()
+    result = pipeline.validate("ls /tmp", mode="read_only")
     if not result.allowed:
         raise PermissionError(result.deny_reason)
     for w in result.warnings:
@@ -76,37 +83,41 @@ class PipelineResult:
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# Shared constants — import these in permission_enforcer.py; never redefine
 # ---------------------------------------------------------------------------
 
 # Commands allowed in READ_ONLY mode (first token after sudo-unwrapping).
+# Kept in sync with permission_enforcer.BashValidator's whitelist logic.
 _READ_ONLY_WHITELIST: frozenset[str] = frozenset(
     {
+        "cat",
+        "head",
+        "tail",
+        "less",
+        "more",
         "grep",
         "egrep",
         "fgrep",
         "rg",
-        "cat",
+        "ripgrep",
         "ls",
         "ll",
         "la",
-        "head",
-        "tail",
-        "wc",
+        "dir",
         "find",
-        "stat",
-        "file",
+        "locate",
         "which",
         "type",
-        "pwd",
-        "echo",
-        "printf",
-        "diff",
+        "file",
+        "stat",
+        "wc",
         "sort",
         "uniq",
+        "diff",
         "comm",
-        "locate",
-        "dir",
+        "echo",
+        "printf",
+        "pwd",
         "date",
         "whoami",
         "id",
@@ -114,12 +125,26 @@ _READ_ONLY_WHITELIST: frozenset[str] = frozenset(
         "printenv",
         "uname",
         "hostname",
-        # git — subcommand checked separately
+        "uptime",
+        "ps",
+        "top",
+        "htop",
+        "df",
+        "du",
+        "free",
+        "lsof",
+        "netstat",
+        "ss",
+        "ifconfig",
+        "ip",
+        # git — subcommand is checked separately
         "git",
     }
 )
 
-# Git subcommands safe in READ_ONLY mode.
+# Git subcommands that are safe to run in READ_ONLY mode.
+# NOTE: ``stash`` is intentionally absent — git stash modifies the stash
+# ref and the working tree, so it is a write operation.
 _GIT_READ_SUBCOMMANDS: frozenset[str] = frozenset(
     {
         "status",
@@ -128,7 +153,6 @@ _GIT_READ_SUBCOMMANDS: frozenset[str] = frozenset(
         "show",
         "branch",
         "tag",
-        "stash",
         "remote",
         "fetch",
         "ls-files",
@@ -136,49 +160,74 @@ _GIT_READ_SUBCOMMANDS: frozenset[str] = frozenset(
         "cat-file",
         "rev-parse",
         "rev-list",
-        "blame",
         "describe",
         "shortlog",
+        "blame",
         "help",
         "version",
     }
 )
 
-# System paths that trigger warnings in WORKSPACE_WRITE mode.
-_SYSTEM_PATH_WARN_PREFIXES: tuple[str, ...] = (
-    "/etc",
-    "/usr",
-    "/var",
-    "/boot",
-    "/sys",
-    "/proc",
+# Git subcommands that mutate state (write operations).
+_GIT_WRITE_SUBCOMMANDS: frozenset[str] = frozenset(
+    {
+        "add",
+        "commit",
+        "push",
+        "pull",
+        "merge",
+        "rebase",
+        "reset",
+        "restore",
+        "checkout",
+        "switch",
+        "apply",
+        "am",
+        "cherry-pick",
+        "revert",
+        "clean",
+        "init",
+        "clone",
+        "stash",
+        "config",
+        "submodule",
+    }
 )
 
-# Patterns that are ALWAYS blocked regardless of mode.
+# Patterns that are ALWAYS blocked regardless of permission mode.
+# Each entry is (compiled_pattern, human_readable_label).
+# permission_enforcer.py iterates these via: ``for pattern, label in _ALWAYS_BLOCKED``
 _ALWAYS_BLOCKED: list[tuple[re.Pattern[str], str]] = [
+    # Recursive rm of root or critical paths
     (re.compile(r"\brm\s+.*-[a-zA-Z]*r[a-zA-Z]*\s+/\s*$"), "rm -rf / (root wipe)"),
     (re.compile(r"\brm\s+.*-[a-zA-Z]*r[a-zA-Z]*\s+/\b"), "rm -rf on critical path"),
+    # Filesystem / disk operations
     (re.compile(r"\bmkfs\b"), "mkfs (filesystem format)"),
     (re.compile(r"\bdd\s+if="), "dd if= (disk copy/wipe)"),
     (re.compile(r"\bdd\b.*\bof=/dev/(sd|hd|nvme|vd)"), "dd to block device"),
     (re.compile(r"\bchmod\s+-R\s+777\b"), "chmod -R 777 (world-writable)"),
-    (re.compile(r":\s*\(\s*\)\s*\{"), "fork bomb"),
     (re.compile(r"\bshred\b"), "shred (secure wipe)"),
     (re.compile(r"\bwipefs\b"), "wipefs (wipe filesystem signatures)"),
     (re.compile(r"\bfdisk\b"), "fdisk (partition editor)"),
     (re.compile(r"\bparted\b"), "parted (partition editor)"),
+    # Fork bomb
+    (re.compile(r":\s*\(\s*\)\s*\{"), "fork bomb"),
+    # Kernel module management
     (re.compile(r"\binsmod\b"), "insmod (kernel module load)"),
     (re.compile(r"\brmmod\b"), "rmmod (kernel module remove)"),
     (re.compile(r"\bmodprobe\b"), "modprobe (kernel module management)"),
+    # Crontab replacement
     (re.compile(r"\bcrontab\s+-r\b"), "crontab -r (crontab wipe)"),
+    # Dangerous redirects to block / memory devices
     (re.compile(r">\s*/dev/(sd|hd|nvme|vd|mem|kmem)"), "redirect to block device"),
+    # History tampering
     (re.compile(r"\bhistory\s+-[cw]\b"), "history clear/write"),
 ]
 
-# sed in-place flag pattern.
-_SED_INPLACE: re.Pattern[str] = re.compile(r"\bsed\b.*\s-[a-zA-Z]*i[a-zA-Z]*\b")
+# sed in-place edit flag pattern.
+_SED_INPLACE_PATTERN: re.Pattern[str] = re.compile(r"\bsed\b.*\s-[a-zA-Z]*i[a-zA-Z]*\b")
 
-# Path traversal / home-dir patterns — warn, not deny.
+# Path traversal / home-dir patterns with human-readable labels (for warnings).
 _PATH_WARN_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\.\./"), "path traversal: ../"),
     (re.compile(r"\$HOME\b"), "home-dir reference: $HOME"),
@@ -186,7 +235,10 @@ _PATH_WARN_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"~(?:/|$)"), "home-dir reference: ~/"),
 ]
 
-# Network commands.
+# Same patterns without labels — for use in BashValidator (Deny, not Warn).
+_PATH_TRAVERSAL_PATTERNS: list[re.Pattern[str]] = [pat for pat, _ in _PATH_WARN_PATTERNS]
+
+# Network-access commands.
 _NETWORK_COMMANDS: frozenset[str] = frozenset(
     {
         "curl",
@@ -208,7 +260,7 @@ _NETWORK_COMMANDS: frozenset[str] = frozenset(
     }
 )
 
-# Process-management commands.
+# Process-management commands (for intent classification only).
 _PROCESS_MGMT_COMMANDS: frozenset[str] = frozenset(
     {
         "kill",
@@ -230,7 +282,6 @@ _PROCESS_MGMT_COMMANDS: frozenset[str] = frozenset(
         "strace",
         "ltrace",
         "gdb",
-        "lsof",
     }
 )
 
@@ -263,7 +314,7 @@ _PACKAGE_MGMT_COMMANDS: frozenset[str] = frozenset(
     }
 )
 
-# System-admin commands.
+# System-administration commands.
 _SYSTEM_ADMIN_COMMANDS: frozenset[str] = frozenset(
     {
         "systemctl",
@@ -284,6 +335,7 @@ _SYSTEM_ADMIN_COMMANDS: frozenset[str] = frozenset(
         "ufw",
         "firewall-cmd",
         "setenforce",
+        "aa-enforce",
         "sysctl",
         "ulimit",
         "swapoff",
@@ -296,7 +348,7 @@ _SYSTEM_ADMIN_COMMANDS: frozenset[str] = frozenset(
     }
 )
 
-# Write-intent commands that aren't destructive.
+# Write-intent commands (not destructive).
 _WRITE_COMMANDS: frozenset[str] = frozenset(
     {
         "cp",
@@ -325,34 +377,48 @@ _WRITE_COMMANDS: frozenset[str] = frozenset(
     }
 )
 
-# Git subcommands that mutate state.
-_GIT_WRITE_SUBCOMMANDS: frozenset[str] = frozenset(
-    {
-        "add",
-        "commit",
-        "push",
-        "pull",
-        "merge",
-        "rebase",
-        "reset",
-        "restore",
-        "checkout",
-        "switch",
-        "apply",
-        "am",
-        "cherry-pick",
-        "revert",
-        "clean",
-        "init",
-        "clone",
-        "stash",
-        "config",
-        "submodule",
-    }
-)
-
 # Destructive (but not always-blocked) commands.
 _DESTRUCTIVE_COMMANDS: frozenset[str] = frozenset({"rm", "rmdir"})
+
+# System paths that trigger warnings in WORKSPACE_WRITE mode.
+_SYSTEM_PATH_WARN_PREFIXES: tuple[str, ...] = (
+    "/etc",
+    "/usr",
+    "/var",
+    "/boot",
+    "/sys",
+    "/proc",
+)
+
+
+# ---------------------------------------------------------------------------
+# Module-level sudo-unwrapping helper (importable by permission_enforcer.py)
+# ---------------------------------------------------------------------------
+
+
+def unwrap_sudo(command: str) -> str:
+    """Strip leading ``sudo [flags]`` tokens recursively.
+
+    Examples::
+
+        unwrap_sudo("sudo rm foo")         # → "rm foo"
+        unwrap_sudo("sudo -u root rm foo") # → "rm foo"
+        unwrap_sudo("sudo sudo grep x y")  # → "grep x y"
+    """
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return command
+
+    while tokens and tokens[0] == "sudo":
+        tokens = tokens[1:]
+        while tokens and tokens[0].startswith("-"):
+            if tokens[0] in ("-u", "-g", "-H", "-R", "-T"):
+                tokens = tokens[2:] if len(tokens) > 1 else []
+            else:
+                tokens = tokens[1:]
+
+    return shlex.join(tokens) if tokens else command
 
 
 # ---------------------------------------------------------------------------
@@ -375,20 +441,19 @@ class BashValidationPipeline:
         mode: str,
         workspace_root: Path | None = None,
     ) -> PipelineResult:
-        """Run all five validation stages and return a :class:`PipelineResult`.
+        """Run all validation stages and return a :class:`PipelineResult`.
 
         Args:
-            command:        The shell command string to validate.
-            mode:           Permission mode string (``"read_only"``,
+            command:        Shell command string to validate.
+            mode:           Permission mode (``"read_only"``,
                             ``"workspace_write"``, ``"full_access"``,
                             ``"prompt"``).
-            workspace_root: Optional workspace root used for Stage 4 path
-                            boundary checks.  Defaults to CWD when *None*.
+            workspace_root: Optional root used for Stage 4 boundary checks.
+                            Defaults to CWD when *None*.
         """
         warnings: list[str] = []
 
-        # Stage 3 runs first because it is unconditional ("always blocked regardless
-        # of mode").  The spec numbers it 3 but its semantics are higher priority.
+        # Stage 3 (destructive) runs first: unconditional, mode-independent.
         s3 = self._stage3_destructive(command)
         if isinstance(s3, StageDeny):
             return PipelineResult(
@@ -398,7 +463,7 @@ class BashValidationPipeline:
                 intent=CommandIntent.DESTRUCTIVE,
             )
 
-        # Stage 1 — mode validation (includes sudo unwrapping)
+        # Stage 1 — mode validation (sudo unwrapping applied inside)
         s1 = self._stage1_mode(command, mode)
         if isinstance(s1, StageDeny):
             return PipelineResult(
@@ -422,9 +487,8 @@ class BashValidationPipeline:
         if isinstance(s2, StageWarn):
             warnings.append(s2.message)
 
-        # Stage 4 — path validation (warns only)
-        for w in self._stage4_paths(command, workspace_root):
-            warnings.append(w)
+        # Stage 4 — path validation (warnings only, never blocks)
+        warnings.extend(self._stage4_paths(command, workspace_root))
 
         # Stage 5 — intent classification
         intent = self._stage5_classify(command)
@@ -441,7 +505,7 @@ class BashValidationPipeline:
     # ------------------------------------------------------------------
 
     def _stage1_mode(self, command: str, mode: str) -> StageResult:
-        inner = self._unwrap_sudo(command)
+        inner = unwrap_sudo(command)
 
         if mode in ("full_access", "allow_all"):
             return StageAllow()
@@ -461,7 +525,7 @@ class BashValidationPipeline:
         return StageDeny(f"unknown permission mode: {mode!r}")
 
     def _check_read_only_whitelist(self, inner: str) -> StageResult:
-        """Return Allow if *inner* is a read-only whitelisted command."""
+        """Return Allow if *inner* is a whitelisted read-only command."""
         try:
             tokens = shlex.split(inner)
         except ValueError:
@@ -477,14 +541,18 @@ class BashValidationPipeline:
         if cmd == "git":
             subcmd = tokens[1] if len(tokens) > 1 else ""
             if subcmd not in _GIT_READ_SUBCOMMANDS:
-                return StageDeny(f"git subcommand {subcmd!r} is not allowed in read_only mode")
+                return StageDeny(
+                    f"git subcommand {subcmd!r} is not allowed in read_only mode"
+                )
 
         return StageAllow()
 
     def _check_workspace_write(self, command: str) -> StageResult:
         """Warn if command references known system paths."""
         for prefix in _SYSTEM_PATH_WARN_PREFIXES:
-            if re.search(rf"(?:^|\s|['\"]){re.escape(prefix)}(?:/|\s|['\"]|$)", command):
+            if re.search(
+                rf"(?:^|\s|['\"]){re.escape(prefix)}(?:/|\s|['\"]|$)", command
+            ):
                 return StageWarn(
                     f"command references system path {prefix!r} — "
                     "proceed with caution in workspace_write mode"
@@ -496,7 +564,7 @@ class BashValidationPipeline:
     # ------------------------------------------------------------------
 
     def _stage2_sed(self, command: str, mode: str) -> StageResult:
-        if not _SED_INPLACE.search(command):
+        if not _SED_INPLACE_PATTERN.search(command):
             return StageAllow()
 
         if mode == "read_only":
@@ -521,42 +589,38 @@ class BashValidationPipeline:
     # ------------------------------------------------------------------
 
     def _stage4_paths(self, command: str, workspace_root: Path | None) -> list[str]:
-        """Return a list of warning strings for suspicious path references."""
-        ws_warnings: list[str] = []
+        """Return warning strings for suspicious path references."""
+        result: list[str] = []
 
         for pattern, label in _PATH_WARN_PATTERNS:
             if pattern.search(command):
-                ws_warnings.append(f"path warning: {label}")
+                result.append(f"path warning: {label}")
 
-        # Warn on absolute paths that are outside the workspace root.
         if workspace_root is not None:
             ws_root_str = str(workspace_root.resolve())
             for match in re.finditer(r"(?:^|\s|['\"])(/[^\s'\"]+)", command):
                 abs_path = match.group(1).rstrip("/")
                 if not abs_path.startswith(ws_root_str):
-                    ws_warnings.append(
+                    result.append(
                         f"path warning: absolute path {abs_path!r} "
                         f"is outside workspace {ws_root_str!r}"
                     )
-                    break  # one warning per command is sufficient
+                    break  # one warning per command is enough
 
-        return ws_warnings
+        return result
 
     # ------------------------------------------------------------------
     # Stage 5 — intent classification
     # ------------------------------------------------------------------
 
     def _stage5_classify(self, command: str) -> CommandIntent:
-        """Classify the primary intent of *command*.
-
-        Splits on pipeline operators to find the highest-risk intent.
-        """
+        """Classify the primary intent of *command* across pipeline segments."""
         parts = re.split(r"\|{1,2}|&&|;", command)
         intents = [self._classify_single(p.strip()) for p in parts if p.strip()]
         return self._highest_intent(intents)
 
     def _classify_single(self, command: str) -> CommandIntent:
-        inner = self._unwrap_sudo(command)
+        inner = unwrap_sudo(command)
         try:
             tokens = shlex.split(inner)
         except ValueError:
@@ -599,7 +663,8 @@ class BashValidationPipeline:
 
         return CommandIntent.UNKNOWN
 
-    def _highest_intent(self, intents: list[CommandIntent]) -> CommandIntent:
+    @staticmethod
+    def _highest_intent(intents: list[CommandIntent]) -> CommandIntent:
         """Return the highest-risk intent from *intents*."""
         priority = [
             CommandIntent.DESTRUCTIVE,
@@ -615,25 +680,3 @@ class BashValidationPipeline:
             if intent in intents:
                 return intent
         return CommandIntent.READ_ONLY
-
-    # ------------------------------------------------------------------
-    # Shared helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _unwrap_sudo(command: str) -> str:
-        """Strip leading ``sudo [flags]`` tokens recursively."""
-        try:
-            tokens = shlex.split(command)
-        except ValueError:
-            return command
-
-        while tokens and tokens[0] == "sudo":
-            tokens = tokens[1:]
-            while tokens and tokens[0].startswith("-"):
-                if tokens[0] in ("-u", "-g", "-H", "-R", "-T"):
-                    tokens = tokens[2:] if len(tokens) > 1 else []
-                else:
-                    tokens = tokens[1:]
-
-        return shlex.join(tokens) if tokens else command
