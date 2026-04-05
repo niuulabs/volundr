@@ -8,11 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from ravn.adapters._memory_scoring import _format_episode_block, _recency_score
 from ravn.adapters.sqlite_memory import (
     SqliteMemoryAdapter,
     _combined_score,
-    _format_episode_block,
-    _recency_score,
     _sanitize_fts_query,
 )
 from ravn.domain.models import Episode, Outcome, SharedContext

@@ -14,11 +14,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import ravn.adapters.postgres_memory as _postgres_memory_module
+from ravn.adapters._memory_scoring import _format_episode_block, _recency_score
 from ravn.adapters.postgres_memory import (
     PostgresMemoryAdapter,
     _combined_score,
-    _format_episode_block,
-    _recency_score,
     _row_to_episode,
 )
 from ravn.domain.models import Episode, Outcome, SharedContext
