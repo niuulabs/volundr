@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
-from ravn.domain.models import ToolResult
+from ravn.domain.models import ToolCall, ToolResult
 from ravn.ports.tool import ToolPort
 from ravn.registry import ToolRegistrationError, ToolRegistry
 
@@ -231,3 +233,234 @@ async def test_dispatch_error_preserves_call_id():
     reg.register(ErrorTool())
     result = await reg.dispatch("error_tool", {}, call_id="err-id-42")
     assert result.tool_call_id == "err-id-42"
+
+
+# ---------------------------------------------------------------------------
+# parallelisable property tests
+# ---------------------------------------------------------------------------
+
+
+def test_tool_parallelisable_defaults_true():
+    assert SimpleTool().parallelisable is True
+
+
+def test_non_parallelisable_tool_can_override():
+    class SequentialTool(SimpleTool):
+        @property
+        def parallelisable(self) -> bool:
+            return False
+
+    assert SequentialTool().parallelisable is False
+
+
+# ---------------------------------------------------------------------------
+# dispatch_batch tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_empty_returns_empty():
+    reg = ToolRegistry()
+    results = await reg.dispatch_batch([])
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_single_call():
+    reg = ToolRegistry()
+    reg.register(SimpleTool())
+    calls = [ToolCall(id="c1", name="simple", input={"x": "hi"})]
+    results = await reg.dispatch_batch(calls)
+    assert len(results) == 1
+    assert results[0].tool_call_id == "c1"
+    assert results[0].content == "ok:hi"
+    assert not results[0].is_error
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_multiple_parallelisable_tools():
+    reg = ToolRegistry()
+    reg.register(SimpleTool("a"))
+    reg.register(SimpleTool("b"))
+    calls = [
+        ToolCall(id="id-a", name="a", input={"x": "alpha"}),
+        ToolCall(id="id-b", name="b", input={"x": "beta"}),
+    ]
+    results = await reg.dispatch_batch(calls)
+    assert len(results) == 2
+    by_id = {r.tool_call_id: r for r in results}
+    assert by_id["id-a"].content == "ok:alpha"
+    assert by_id["id-b"].content == "ok:beta"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_preserves_order():
+    """Results must be in the same order as the input calls."""
+    reg = ToolRegistry()
+    for name in ("t1", "t2", "t3"):
+        reg.register(SimpleTool(name))
+    calls = [ToolCall(id=f"id-{n}", name=n, input={"x": n}) for n in ("t1", "t2", "t3")]
+    results = await reg.dispatch_batch(calls)
+    assert [r.tool_call_id for r in results] == ["id-t1", "id-t2", "id-t3"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_unknown_tool_returns_error_result():
+    reg = ToolRegistry()
+    calls = [ToolCall(id="x", name="no_such_tool", input={})]
+    results = await reg.dispatch_batch(calls)
+    assert len(results) == 1
+    assert results[0].is_error
+    assert "Unknown tool" in results[0].content
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_error_tool_captured_not_raised():
+    reg = ToolRegistry()
+    reg.register(ErrorTool())
+    calls = [ToolCall(id="e1", name="error_tool", input={})]
+    results = await reg.dispatch_batch(calls)
+    assert len(results) == 1
+    assert results[0].is_error
+    assert "boom" in results[0].content
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_sequential_fallback_when_non_parallelisable():
+    """When any tool is non-parallelisable the batch runs sequentially."""
+    execution_order: list[str] = []
+
+    class OrderedTool(ToolPort):
+        def __init__(self, tool_name: str, delay: float = 0.0) -> None:
+            self._tool_name = tool_name
+            self._delay = delay
+
+        @property
+        def name(self) -> str:
+            return self._tool_name
+
+        @property
+        def description(self) -> str:
+            return "tracks order"
+
+        @property
+        def input_schema(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        @property
+        def required_permission(self) -> str:
+            return "tool:order"
+
+        @property
+        def parallelisable(self) -> bool:
+            return False
+
+        async def execute(self, input: dict) -> ToolResult:
+            await asyncio.sleep(self._delay)
+            execution_order.append(self._tool_name)
+            return ToolResult(tool_call_id="", content=self._tool_name)
+
+    reg = ToolRegistry()
+    reg.register(OrderedTool("first", delay=0.05))
+    reg.register(OrderedTool("second", delay=0.0))
+    calls = [
+        ToolCall(id="f", name="first", input={}),
+        ToolCall(id="s", name="second", input={}),
+    ]
+    await reg.dispatch_batch(calls)
+    # Sequential: "first" must complete before "second" starts
+    assert execution_order == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_concurrent_when_all_parallelisable():
+    """Parallel tools run concurrently — the batch completes faster than serial."""
+    import time
+
+    delay = 0.05
+
+    class SlowTool(ToolPort):
+        def __init__(self, tool_name: str) -> None:
+            self._tool_name = tool_name
+
+        @property
+        def name(self) -> str:
+            return self._tool_name
+
+        @property
+        def description(self) -> str:
+            return "slow tool"
+
+        @property
+        def input_schema(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        @property
+        def required_permission(self) -> str:
+            return "tool:slow"
+
+        async def execute(self, input: dict) -> ToolResult:
+            await asyncio.sleep(delay)
+            return ToolResult(tool_call_id="", content="done")
+
+    reg = ToolRegistry()
+    for n in ("s1", "s2", "s3"):
+        reg.register(SlowTool(n))
+    calls = [ToolCall(id=f"id-{n}", name=n, input={}) for n in ("s1", "s2", "s3")]
+
+    start = time.monotonic()
+    results = await reg.dispatch_batch(calls)
+    elapsed = time.monotonic() - start
+
+    assert len(results) == 3
+    assert all(not r.is_error for r in results)
+    # Concurrent: should complete in ~delay, not 3*delay
+    assert elapsed < delay * 2
+
+
+@pytest.mark.asyncio
+async def test_dispatch_batch_mixed_parallelisable_falls_back_to_sequential():
+    """A single non-parallelisable tool forces the whole batch sequential."""
+    execution_order: list[str] = []
+
+    class TrackingTool(ToolPort):
+        def __init__(self, tool_name: str, parallel: bool = True, delay: float = 0.0) -> None:
+            self._tool_name = tool_name
+            self._parallel = parallel
+            self._delay = delay
+
+        @property
+        def name(self) -> str:
+            return self._tool_name
+
+        @property
+        def description(self) -> str:
+            return "tracking"
+
+        @property
+        def input_schema(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        @property
+        def required_permission(self) -> str:
+            return "tool:track"
+
+        @property
+        def parallelisable(self) -> bool:
+            return self._parallel
+
+        async def execute(self, input: dict) -> ToolResult:
+            await asyncio.sleep(self._delay)
+            execution_order.append(self._tool_name)
+            return ToolResult(tool_call_id="", content=self._tool_name)
+
+    reg = ToolRegistry()
+    reg.register(TrackingTool("parallel_a", parallel=True, delay=0.05))
+    reg.register(TrackingTool("sequential_b", parallel=False, delay=0.0))
+    calls = [
+        ToolCall(id="pa", name="parallel_a", input={}),
+        ToolCall(id="sb", name="sequential_b", input={}),
+    ]
+    await reg.dispatch_batch(calls)
+    # Sequential fallback: parallel_a must finish before sequential_b starts
+    assert execution_order == ["parallel_a", "sequential_b"]
