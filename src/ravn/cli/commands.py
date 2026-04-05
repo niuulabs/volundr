@@ -11,10 +11,11 @@ from ravn.adapters.anthropic_adapter import AnthropicAdapter
 from ravn.adapters.approval_memory import ApprovalMemory
 from ravn.adapters.cli_channel import CliChannel
 from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
+from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
 from ravn.adapters.slash_commands import SlashCommandContext
 from ravn.adapters.slash_commands import handle as handle_slash
 from ravn.agent import RavnAgent
-from ravn.config import Settings
+from ravn.config import ProjectConfig, Settings
 from ravn.domain.models import TokenUsage
 
 app = typer.Typer(
@@ -34,7 +35,12 @@ def approvals_main() -> None:
     approvals_app()
 
 
-def _build_agent(settings: Settings, *, no_tools: bool = False) -> tuple[RavnAgent, CliChannel]:
+def _build_agent(
+    settings: Settings,
+    *,
+    no_tools: bool = False,
+    persona_config: PersonaConfig | None = None,
+) -> tuple[RavnAgent, CliChannel]:
     api_key = settings.effective_api_key()
     if not api_key:
         typer.echo(
@@ -55,17 +61,32 @@ def _build_agent(settings: Settings, *, no_tools: bool = False) -> tuple[RavnAge
 
     channel = CliChannel()
 
-    permission = DenyAllPermission() if no_tools else AllowAllPermission()
+    if no_tools:
+        permission = DenyAllPermission()
+    elif persona_config is not None and persona_config.permission_mode == "read-only":
+        permission = DenyAllPermission()
+    else:
+        permission = AllowAllPermission()
+    # TODO(NIU-498): wire persona.allowed_tools / forbidden_tools into tool filtering
+
+    system_prompt = settings.agent.system_prompt
+    max_iterations = settings.agent.max_iterations
+
+    if persona_config is not None:
+        if persona_config.system_prompt_template:
+            system_prompt = persona_config.system_prompt_template
+        if persona_config.iteration_budget:
+            max_iterations = persona_config.iteration_budget
 
     agent = RavnAgent(
         llm=llm,
         tools=[],
         channel=channel,
         permission=permission,
-        system_prompt=settings.agent.system_prompt,
+        system_prompt=system_prompt,
         model=settings.agent.model,
         max_tokens=settings.agent.max_tokens,
-        max_iterations=settings.agent.max_iterations,
+        max_iterations=max_iterations,
     )
 
     return agent, channel
@@ -82,12 +103,48 @@ def _make_slash_ctx(agent: RavnAgent, settings: Settings) -> SlashCommandContext
     )
 
 
+def _resolve_persona(
+    persona_name: str,
+    project_config: ProjectConfig | None,
+) -> PersonaConfig | None:
+    """Load and merge a persona with optional ProjectConfig overrides.
+
+    Resolution order:
+      1. *persona_name* (CLI ``--persona`` flag) — highest priority
+      2. ``project_config.persona`` (RAVN.md) — used when no CLI flag given
+      3. ``None`` — no persona active
+
+    When a persona is found, RAVN.md project fields override persona fields.
+    Returns ``None`` if no persona name resolves to a known persona.
+    """
+    loader = PersonaLoader()
+
+    name = persona_name.strip() or (
+        project_config.persona.strip() if project_config is not None else ""
+    )
+    if not name:
+        return None
+
+    persona = loader.load(name)
+    if persona is None:
+        typer.echo(f"Warning: persona '{name}' not found — using defaults.", err=True)
+        return None
+
+    if project_config is not None:
+        persona = PersonaLoader.merge(persona, project_config)
+
+    return persona
+
+
 @app.command()
 def run(
     prompt: str = typer.Argument(default="", help="Initial prompt. If empty, starts REPL."),
     no_tools: bool = typer.Option(False, "--no-tools", help="Disable all tool execution."),
     show_usage: bool = typer.Option(False, "--show-usage", help="Print token usage after turn."),
     config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
+    persona: str = typer.Option(
+        "", "--persona", "-p", help="Persona name (built-in or from ~/.ravn/personas/)."
+    ),
 ) -> None:
     """Start a Ravn conversation. Pass a prompt for single-turn, or omit for REPL."""
     import os
@@ -96,7 +153,9 @@ def run(
         os.environ["RAVN_CONFIG"] = config
 
     settings = Settings()
-    agent, channel = _build_agent(settings, no_tools=no_tools)
+    project_config = ProjectConfig.discover()
+    persona_config = _resolve_persona(persona, project_config)
+    agent, channel = _build_agent(settings, no_tools=no_tools, persona_config=persona_config)
 
     asyncio.run(_chat(agent, channel, settings=settings, prompt=prompt, show_usage=show_usage))
 
