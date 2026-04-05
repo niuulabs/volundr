@@ -48,6 +48,11 @@ try:
 except ImportError:
     _PYNNG_AVAILABLE = False
 
+from sleipnir.adapters._subscriber_support import (
+    _BaseSubscription,
+    consume_queue,
+    enqueue_with_overflow,
+)
 from sleipnir.adapters.serialization import deserialize, serialize
 from sleipnir.domain.events import SleipnirEvent, match_event_type
 from sleipnir.ports.events import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
@@ -106,6 +111,8 @@ def _nng_topics_for_patterns(patterns: list[str]) -> list[bytes]:
     - ``"ravn.*"`` → ``b"ravn."`` (namespace prefix)
     - ``"ravn.tool.*"`` → ``b"ravn.tool."`` (sub-namespace prefix)
     - ``"ravn.tool.complete"`` → ``b"ravn.tool.complete\\x00"`` (exact match)
+    - Any other pattern with wildcard characters (``*``, ``?``, ``[``) →
+      ``b""`` (receive all; application-level fnmatch filtering handles it)
     """
     topics: list[bytes] = []
     for pattern in patterns:
@@ -115,74 +122,16 @@ def _nng_topics_for_patterns(patterns: list[str]) -> list[bytes]:
             # "ravn.*" → "ravn."  (trim the star, keep the dot)
             prefix = pattern[:-1]
             topics.append(prefix.encode())
+        elif any(c in pattern for c in ("*", "?", "[")):
+            # Pattern contains wildcard characters not handled by prefix rules
+            # (e.g. "ravn.tool.?").  Subscribe to all messages and rely on
+            # application-level fnmatch filtering for correctness.
+            return [b""]
         else:
             # Exact event type: include the null separator so no other type
             # with the same prefix can slip through.
             topics.append(pattern.encode() + b"\x00")
     return topics or [b""]
-
-
-async def _consume_queue(
-    queue: asyncio.Queue[SleipnirEvent],
-    handler: EventHandler,
-) -> None:
-    """Drain *queue* and invoke *handler* for each event."""
-    while True:
-        event = await queue.get()
-        try:
-            await handler(event)
-        except Exception:
-            logger.exception(
-                "Handler raised an exception for event %s (%s)",
-                event.event_id,
-                event.event_type,
-            )
-        finally:
-            queue.task_done()
-
-
-# ---------------------------------------------------------------------------
-# Subscription handle
-# ---------------------------------------------------------------------------
-
-
-class _NngSubscription(Subscription):
-    """Active subscription backed by an asyncio.Queue and a consumer task."""
-
-    def __init__(
-        self,
-        patterns: list[str],
-        queue: asyncio.Queue[SleipnirEvent],
-        task: asyncio.Task[None],
-        owner: NngSubscriber | NngTransport,
-    ) -> None:
-        self._patterns = patterns
-        self._queue = queue
-        self._task = task
-        self._owner = owner
-        self._active = True
-
-    @property
-    def patterns(self) -> list[str]:
-        return self._patterns
-
-    @property
-    def active(self) -> bool:
-        return self._active
-
-    async def unsubscribe(self) -> None:
-        if not self._active:
-            return
-        self._active = False
-        self._owner._remove_subscription(self)
-        self._task.cancel()
-        with suppress(asyncio.CancelledError):
-            await self._task
-        # Drain the queue so join() never blocks.
-        while not self._queue.empty():
-            with suppress(asyncio.QueueEmpty):
-                self._queue.get_nowait()
-                self._queue.task_done()
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +260,7 @@ class NngSubscriber(SleipnirSubscriber):
 
         self._socket: pynng.Sub0 | None = None  # type: ignore[name-defined]
         self._recv_task: asyncio.Task[None] | None = None
-        self._subscriptions: list[_NngSubscription] = []
+        self._subscriptions: list[_BaseSubscription] = []
         self._nng_subscribed_topics: set[bytes] = set()
         self._running = False
 
@@ -361,8 +310,10 @@ class NngSubscriber(SleipnirSubscriber):
                 self._socket.subscribe(topic)
                 self._nng_subscribed_topics.add(topic)
         queue: asyncio.Queue[SleipnirEvent] = asyncio.Queue(maxsize=self._ring_buffer_depth)
-        task = asyncio.create_task(_consume_queue(queue, handler))
-        sub = _NngSubscription(list(event_types), queue, task, self)
+        task = asyncio.create_task(consume_queue(queue, handler))
+        sub = _BaseSubscription(
+            list(event_types), queue, task, lambda: self._remove_subscription(sub)
+        )
         self._subscriptions.append(sub)
         return sub
 
@@ -371,7 +322,7 @@ class NngSubscriber(SleipnirSubscriber):
         for sub in list(self._subscriptions):
             await sub._queue.join()
 
-    def _remove_subscription(self, sub: _NngSubscription) -> None:
+    def _remove_subscription(self, sub: _BaseSubscription) -> None:
         with suppress(ValueError):
             self._subscriptions.remove(sub)
 
@@ -404,18 +355,7 @@ class NngSubscriber(SleipnirSubscriber):
                 continue
             if not any(match_event_type(p, event.event_type) for p in sub.patterns):
                 continue
-            queue = sub._queue
-            if queue.full():
-                with suppress(asyncio.QueueEmpty):
-                    dropped = queue.get_nowait()
-                    queue.task_done()
-                    logger.warning(
-                        "Ring buffer overflow (depth=%d): dropped event %s (%s)",
-                        self._ring_buffer_depth,
-                        dropped.event_id,
-                        dropped.event_type,
-                    )
-            await queue.put(event)
+            await enqueue_with_overflow(sub._queue, event, self._ring_buffer_depth, logger)
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +449,7 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
         """Wait until every queued (already-received) event has been processed."""
         await self._subscriber.flush()
 
-    def _remove_subscription(self, sub: _NngSubscription) -> None:
+    def _remove_subscription(self, sub: _BaseSubscription) -> None:
         self._subscriber._remove_subscription(sub)
 
 

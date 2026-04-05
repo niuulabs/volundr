@@ -105,6 +105,26 @@ def test_nng_topics_empty_list():
     assert _nng_topics_for_patterns([]) == [b""]
 
 
+def test_nng_topics_question_mark_wildcard_falls_back_to_all():
+    """Pattern with '?' wildcard (e.g. 'ravn.tool.?') → b'' fallback.
+
+    nng prefix matching cannot express single-character wildcards; the adapter
+    must subscribe to all messages and rely on application-level fnmatch
+    filtering for the final match decision.
+    """
+    assert _nng_topics_for_patterns(["ravn.tool.?"]) == [b""]
+
+
+def test_nng_topics_bracket_wildcard_falls_back_to_all():
+    """Pattern with '[' wildcard (e.g. 'ravn.[abc]*') → b'' fallback."""
+    assert _nng_topics_for_patterns(["ravn.[abc]*"]) == [b""]
+
+
+def test_nng_topics_mid_star_wildcard_falls_back_to_all():
+    """Pattern with '*' not at the end (e.g. 'ravn.*.complete') → b'' fallback."""
+    assert _nng_topics_for_patterns(["ravn.*.complete"]) == [b""]
+
+
 def test_encode_message_format():
     """Encoded message starts with event_type, then null byte, then payload."""
     event = make_event(event_type="ravn.tool.complete")

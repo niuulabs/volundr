@@ -12,74 +12,17 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from sleipnir.adapters._subscriber_support import (
+    _BaseSubscription,
+    consume_queue,
+    enqueue_with_overflow,
+)
 from sleipnir.domain.events import SleipnirEvent, match_event_type
 from sleipnir.ports.events import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_RING_BUFFER_DEPTH = 1000
-
-
-async def _consume(
-    queue: asyncio.Queue[SleipnirEvent],
-    handler: EventHandler,
-) -> None:
-    """Consumer loop: read events from *queue* and invoke *handler*."""
-    while True:
-        event = await queue.get()
-        try:
-            await handler(event)
-        except Exception:
-            logger.exception(
-                "Handler raised an exception for event %s (%s)",
-                event.event_id,
-                event.event_type,
-            )
-        finally:
-            queue.task_done()
-
-
-class _InProcessSubscription(Subscription):
-    """A subscription backed by an asyncio.Queue and a consumer task."""
-
-    def __init__(
-        self,
-        patterns: list[str],
-        queue: asyncio.Queue[SleipnirEvent],
-        task: asyncio.Task[None],
-        bus: InProcessBus,
-    ) -> None:
-        self._patterns = patterns
-        self._queue = queue
-        self._task = task
-        self._bus = bus
-        self._active = True
-
-    @property
-    def patterns(self) -> list[str]:
-        return self._patterns
-
-    @property
-    def active(self) -> bool:
-        return self._active
-
-    async def unsubscribe(self) -> None:
-        if not self._active:
-            return
-        self._active = False
-        self._bus._remove_subscription(self)
-        self._task.cancel()
-        try:
-            await self._task
-        except asyncio.CancelledError:
-            pass
-        # Drain remaining items so join() is never blocked.
-        while not self._queue.empty():
-            try:
-                self._queue.get_nowait()
-                self._queue.task_done()
-            except asyncio.QueueEmpty:
-                break
 
 
 class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
@@ -94,9 +37,9 @@ class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
         if ring_buffer_depth < 1:
             raise ValueError(f"ring_buffer_depth must be >= 1, got {ring_buffer_depth}")
         self._ring_buffer_depth = ring_buffer_depth
-        self._subscriptions: list[_InProcessSubscription] = []
+        self._subscriptions: list[_BaseSubscription] = []
 
-    def _remove_subscription(self, sub: _InProcessSubscription) -> None:
+    def _remove_subscription(self, sub: _BaseSubscription) -> None:
         try:
             self._subscriptions.remove(sub)
         except ValueError:
@@ -120,20 +63,7 @@ class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
                 continue
             if not any(match_event_type(p, event.event_type) for p in sub.patterns):
                 continue
-            queue = sub._queue
-            if queue.full():
-                try:
-                    dropped = queue.get_nowait()
-                    queue.task_done()
-                    logger.warning(
-                        "Ring buffer overflow (depth=%d): dropped event %s (%s)",
-                        self._ring_buffer_depth,
-                        dropped.event_id,
-                        dropped.event_type,
-                    )
-                except asyncio.QueueEmpty:
-                    pass
-            await queue.put(event)
+            await enqueue_with_overflow(sub._queue, event, self._ring_buffer_depth, logger)
 
     async def publish_batch(self, events: list[SleipnirEvent]) -> None:
         """Publish all *events* in iteration order."""
@@ -147,8 +77,10 @@ class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
     ) -> Subscription:
         """Register *handler* for events matching any pattern in *event_types*."""
         queue: asyncio.Queue[SleipnirEvent] = asyncio.Queue(maxsize=self._ring_buffer_depth)
-        task = asyncio.create_task(_consume(queue, handler))
-        sub = _InProcessSubscription(list(event_types), queue, task, self)
+        task = asyncio.create_task(consume_queue(queue, handler))
+        sub = _BaseSubscription(
+            list(event_types), queue, task, lambda: self._remove_subscription(sub)
+        )
         self._subscriptions.append(sub)
         return sub
 
