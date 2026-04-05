@@ -30,41 +30,39 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import shlex
 import uuid
-from dataclasses import dataclass, field
 from pathlib import Path
 
+from ravn.adapters.tools.terminal import (
+    _DEFAULT_SHELL,
+    _DEFAULT_TIMEOUT_SECONDS,
+    _PERMISSION_SHELL,
+    _SENTINEL_PREFIX,
+    ShellState,
+    _build_result,
+    get_shell_state,
+    restore_shell_state,
+    run_sentinel_command,
+)
 from ravn.config import DockerTerminalConfig
 from ravn.domain.models import ToolResult
 from ravn.ports.tool import ToolPort
 
 logger = logging.getLogger(__name__)
 
-_PERMISSION_SHELL = "shell:execute"
-_SENTINEL_PREFIX = "RAVN_DONE"
-_DEFAULT_SHELL = "/bin/bash"
-_DEFAULT_TIMEOUT_SECONDS = 30.0
 _CONTAINER_STOP_TIMEOUT_SECONDS = 5.0
 _CONTAINER_REMOVE_TIMEOUT_SECONDS = 10.0
 
-
-# ---------------------------------------------------------------------------
-# Shell state (checkpoint / resume)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class ShellState:
-    """Snapshot of a Docker shell's state for checkpoint/resume.
-
-    ``cwd`` is the current working directory; ``env_exports`` is the
-    output of ``export -p`` — the full set of exported variables in
-    POSIX-portable syntax, suitable for re-sourcing into a fresh shell.
-    """
-
-    cwd: str = ""
-    env_exports: str = field(default="", repr=False)
+# Re-export shared symbols so existing imports from this module keep working.
+__all__ = [
+    "DockerPersistentShell",
+    "DockerTerminalTool",
+    "ShellState",
+    "_DEFAULT_SHELL",
+    "_DEFAULT_TIMEOUT_SECONDS",
+    "_PERMISSION_SHELL",
+    "_SENTINEL_PREFIX",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -221,52 +219,13 @@ class DockerPersistentShell:
 
     async def _run_locked(self, command: str) -> tuple[str, int]:
         assert self._process is not None  # noqa: S101 — narrowing
-        assert self._process.stdin is not None  # noqa: S101 — narrowing
-        assert self._process.stdout is not None  # noqa: S101 — narrowing
-
-        sentinel = f"{_SENTINEL_PREFIX}_{uuid.uuid4().hex}"
-        # Do NOT wrap in a subshell — we want cd/export to persist.
-        wrapped = f"{command}\necho {sentinel}:$?\n"
-
-        self._process.stdin.write(wrapped.encode())
-        await self._process.stdin.drain()
-
-        output_lines: list[str] = []
-        try:
-            async with asyncio.timeout(self._timeout):
-                while True:
-                    line_bytes = await self._process.stdout.readline()
-                    if not line_bytes:
-                        # EOF — container exited (e.g. command was "exit N").
-                        try:
-                            await asyncio.wait_for(
-                                self._process.wait(), timeout=_CONTAINER_STOP_TIMEOUT_SECONDS
-                            )
-                        except TimeoutError:
-                            pass
-                        actual_rc = (
-                            self._process.returncode if self._process.returncode is not None else 1
-                        )
-                        self._process = None
-                        return "\n".join(output_lines), actual_rc
-                    line_str = line_bytes.decode(errors="replace").rstrip("\n")
-                    if line_str.startswith(f"{sentinel}:"):
-                        exit_code_str = line_str[len(sentinel) + 1 :]
-                        exit_code = int(exit_code_str) if exit_code_str.isdigit() else 1
-                        break
-                    output_lines.append(line_str)
-        except TimeoutError:
-            if self._process is not None:
-                logger.warning(
-                    "DockerPersistentShell timed out — killing container=%s",
-                    self._container_name,
-                )
-                self._process.kill()
-                await self._process.wait()
-                self._process = None
-            return "\n".join(output_lines) + "\n[timed out]", 124
-
-        return "\n".join(output_lines), exit_code
+        label = f"DockerPersistentShell container={self._container_name}"
+        output, exit_code, process_exited = await run_sentinel_command(
+            self._process, command, self._timeout, label=label
+        )
+        if process_exited:
+            self._process = None
+        return output, exit_code
 
     # ------------------------------------------------------------------
     # State capture / restore
@@ -274,9 +233,7 @@ class DockerPersistentShell:
 
     async def get_state(self) -> ShellState:
         """Capture the current shell state (cwd + exported env vars)."""
-        cwd, _ = await self.run("pwd")
-        env, _ = await self.run("export -p")
-        return ShellState(cwd=cwd.strip(), env_exports=env)
+        return await get_shell_state(self.run)
 
     async def restore_state(self, state: ShellState) -> None:
         """Restore shell to a previously captured state.
@@ -284,10 +241,7 @@ class DockerPersistentShell:
         Re-sources environment exports and changes to the saved working
         directory.  Errors are silently ignored so the shell remains usable.
         """
-        if state.env_exports:
-            await self.run(state.env_exports)
-        if state.cwd:
-            await self.run(f"cd {shlex.quote(state.cwd)} 2>/dev/null || true")
+        await restore_shell_state(self.run, state)
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +338,7 @@ class DockerTerminalTool(ToolPort):
                 await self._shell.restore_state(self._initial_state)
 
         output, exit_code = await self._shell.run(command)
-        return self._build_result(output, exit_code)
+        return _build_result(output, exit_code)
 
     # ------------------------------------------------------------------
     # State / cleanup
@@ -404,15 +358,3 @@ class DockerTerminalTool(ToolPort):
         if self._shell is not None:
             await self._shell.close()
             self._shell = None
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _build_result(output: str, exit_code: int) -> ToolResult:
-        content = output.rstrip("\n")
-        if exit_code != 0:
-            suffix = f"\n[exit {exit_code}]"
-            content = (content + suffix).strip()
-        return ToolResult(tool_call_id="", content=content, is_error=exit_code != 0)
