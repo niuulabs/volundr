@@ -12,6 +12,8 @@ Covers:
 
 from __future__ import annotations
 
+import pytest
+
 from bifrost.adapters.rules.yaml_engine import (
     YamlRuleEngine,
     _extract_message_text,
@@ -209,10 +211,14 @@ class TestStripImageBlocks:
         assert len(content) == 1
         assert isinstance(content[0], TextBlock)
 
-    def test_strips_image_only_message_becomes_empty_list(self):
+    def test_strips_image_only_message_gets_placeholder(self):
         req = _req(messages=[Message(role="user", content=[_image_block()])])
         result = _strip_image_blocks(req)
-        assert result.messages[0].content == []
+        content = result.messages[0].content
+        assert isinstance(content, list)
+        assert len(content) == 1
+        assert isinstance(content[0], TextBlock)
+        assert content[0].text == "[image removed]"
 
     def test_original_request_not_mutated(self):
         img = _image_block()
@@ -543,8 +549,10 @@ class TestApplyRulesStripImagesAction:
             messages=[Message(role="user", content=[img])],
         )
         match = RuleMatch(rule_name="strip", action=RuleAction.STRIP_IMAGES)
-        apply_rules(req, RoutingContext(), engine=FakeRuleEngine(match=match))
-        assert len(req.messages[0].content) == 1
+        result = apply_rules(req, RoutingContext(), engine=FakeRuleEngine(match=match))
+        # original still has image; result has placeholder
+        assert isinstance(req.messages[0].content[0], ImageBlock)
+        assert isinstance(result.messages[0].content[0], TextBlock)
 
     def test_strip_images_no_images_returns_equivalent_request(self):
         req = _req(messages=[Message(role="user", content="no images")])
@@ -735,3 +743,124 @@ class TestRuleConditionNewFieldDefaults:
 
     def test_has_image_defaults_to_none(self):
         assert RuleCondition().has_image is None
+
+
+# ---------------------------------------------------------------------------
+# RuleCondition regex validation (Finding 1)
+# ---------------------------------------------------------------------------
+
+
+class TestRuleConditionRegexValidation:
+    def test_valid_content_matches_accepted(self):
+        cond = RuleCondition(content_matches=r"\bSSN\b")
+        assert cond.content_matches == r"\bSSN\b"
+
+    def test_invalid_content_matches_raises_validation_error(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="Invalid regex in content_matches"):
+            RuleCondition(content_matches="[invalid")
+
+    def test_valid_system_prompt_matches_accepted(self):
+        cond = RuleCondition(system_prompt_matches="confidential")
+        assert cond.system_prompt_matches == "confidential"
+
+    def test_invalid_system_prompt_matches_raises_validation_error(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="Invalid regex in system_prompt_matches"):
+            RuleCondition(system_prompt_matches="(?P<bad")
+
+    def test_invalid_regex_in_rule_config_raises_at_load_time(self):
+        """Config load (not request time) raises for bad regex."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RuleConfig(
+                name="bad",
+                when=RuleCondition(content_matches="[unclosed"),
+                action="log",
+            )
+
+
+# ---------------------------------------------------------------------------
+# YamlRuleEngine pre-compilation (Finding 2)
+# ---------------------------------------------------------------------------
+
+
+class TestYamlRuleEnginePreCompilation:
+    def test_patterns_pre_compiled_at_init(self):
+        engine = _engine(
+            [
+                RuleConfig(
+                    name="r",
+                    when=RuleCondition(content_matches=r"\d{3}-\d{2}-\d{4}"),
+                    action="log",
+                )
+            ]
+        )
+        import re
+
+        assert 0 in engine._content_patterns
+        assert isinstance(engine._content_patterns[0], re.Pattern)
+
+    def test_system_patterns_pre_compiled_at_init(self):
+        engine = _engine(
+            [
+                RuleConfig(
+                    name="r",
+                    when=RuleCondition(system_prompt_matches="internal"),
+                    action="log",
+                )
+            ]
+        )
+        import re
+
+        assert 0 in engine._system_patterns
+        assert isinstance(engine._system_patterns[0], re.Pattern)
+
+    def test_rules_without_regex_have_no_compiled_entries(self):
+        engine = _engine([RuleConfig(name="r", when=RuleCondition(has_image=True), action="log")])
+        assert len(engine._content_patterns) == 0
+        assert len(engine._system_patterns) == 0
+
+    def test_correct_index_used_for_multiple_rules(self):
+        engine = _engine(
+            [
+                RuleConfig(name="r0", when=RuleCondition(has_tools=True), action="log"),
+                RuleConfig(
+                    name="r1",
+                    when=RuleCondition(content_matches="secret"),
+                    action="reject",
+                    message="blocked",
+                ),
+                RuleConfig(name="r2", when=RuleCondition(has_image=True), action="log"),
+            ]
+        )
+        # Only rule at index 1 has content_matches
+        assert 0 not in engine._content_patterns
+        assert 1 in engine._content_patterns
+        assert 2 not in engine._content_patterns
+
+
+# ---------------------------------------------------------------------------
+# _strip_image_blocks placeholder (Finding 5)
+# ---------------------------------------------------------------------------
+
+
+class TestStripImageBlocksPlaceholder:
+    def test_image_only_message_gets_placeholder(self):
+        req = _req(messages=[Message(role="user", content=[_image_block()])])
+        result = _strip_image_blocks(req)
+        content = result.messages[0].content
+        assert len(content) == 1
+        assert isinstance(content[0], TextBlock)
+        assert content[0].text == "[image removed]"
+
+    def test_mixed_content_keeps_text_no_placeholder(self):
+        req = _req(messages=[Message(role="user", content=[_image_block(), TextBlock(text="hi")])])
+        result = _strip_image_blocks(req)
+        content = result.messages[0].content
+        assert len(content) == 1
+        assert isinstance(content[0], TextBlock)
+        assert content[0].text == "hi"

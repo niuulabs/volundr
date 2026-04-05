@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from enum import StrEnum
 from typing import Literal
 
@@ -149,6 +150,17 @@ class RuleCondition(BaseModel):
         default=None,
         description="Match when the request contains image blocks (true) or not (false).",
     )
+
+    @model_validator(mode="after")
+    def _validate_regex_fields(self) -> RuleCondition:
+        for field_name in ("content_matches", "system_prompt_matches"):
+            pattern = getattr(self, field_name)
+            if pattern is not None:
+                try:
+                    re.compile(pattern)
+                except re.error as exc:
+                    raise ValueError(f"Invalid regex in {field_name}: {exc}") from None
+        return self
 
 
 class RuleConfig(BaseModel):

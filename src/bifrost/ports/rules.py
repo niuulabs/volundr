@@ -44,7 +44,7 @@ class RuleMatch:
     message: str | None = None
     """Rejection message shown to the caller (only for REJECT)."""
 
-    tags: dict = field(default_factory=dict)
+    tags: dict[str, str] = field(default_factory=dict)
     """Metadata tags to attach to the audit entry (only for TAG)."""
 
 

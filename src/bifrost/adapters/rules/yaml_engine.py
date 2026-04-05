@@ -139,6 +139,15 @@ class YamlRuleEngine(RuleEnginePort):
     def __init__(self, rules: list[RuleConfig], config: BifrostConfig) -> None:
         self._rules = rules
         self._config = config
+        # Pre-compile regex patterns once at init time rather than per request.
+        # Keyed by rule index so the hot-path _matches() can do a cheap lookup.
+        self._content_patterns: dict[int, re.Pattern] = {}
+        self._system_patterns: dict[int, re.Pattern] = {}
+        for idx, rule in enumerate(rules):
+            if rule.when.content_matches is not None:
+                self._content_patterns[idx] = re.compile(rule.when.content_matches)
+            if rule.when.system_prompt_matches is not None:
+                self._system_patterns[idx] = re.compile(rule.when.system_prompt_matches)
 
     def evaluate(
         self,
@@ -154,8 +163,8 @@ class YamlRuleEngine(RuleEnginePort):
         Returns:
             The first matching ``RuleMatch``, or ``None`` if no rule fires.
         """
-        for rule in self._rules:
-            if self._matches(rule.when, request, context):
+        for idx, rule in enumerate(self._rules):
+            if self._matches(idx, rule.when, request, context):
                 return RuleMatch(
                     rule_name=rule.name,
                     action=RuleAction(rule.action),
@@ -171,6 +180,7 @@ class YamlRuleEngine(RuleEnginePort):
 
     def _matches(
         self,
+        idx: int,
         condition: RuleCondition,
         request: AnthropicRequest,
         context: RoutingContext,
@@ -208,12 +218,12 @@ class YamlRuleEngine(RuleEnginePort):
 
         if condition.content_matches is not None:
             text = _extract_message_text(request)
-            if not re.search(condition.content_matches, text):
+            if not self._content_patterns[idx].search(text):
                 return False
 
         if condition.system_prompt_matches is not None:
             system_text = _extract_system_text(request)
-            if not re.search(condition.system_prompt_matches, system_text):
+            if not self._system_patterns[idx].search(system_text):
                 return False
 
         if condition.message_count is not None:
