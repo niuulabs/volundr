@@ -171,16 +171,17 @@ class TestEditFileToolDiffPreview:
         assert result is not None
         assert "+x = 2" in result
 
-    def test_replace_all_false_only_first_occurrence(self, tmp_path: Path) -> None:
+    def test_returns_none_when_multiple_occurrences_without_replace_all(
+        self, tmp_path: Path
+    ) -> None:
         f = tmp_path / "code.py"
         f.write_text("a\na\n", encoding="utf-8")
         tool = EditFileTool(workspace=tmp_path)
         result = tool.diff_preview(
             {"path": str(f), "old_string": "a", "new_string": "b", "replace_all": False}
         )
-        assert result is not None
-        # After applying one replacement: "b\na\n"
-        assert "+b" in result
+        # execute() would reject this case — diff_preview must not show a misleading preview
+        assert result is None
 
     def test_diff_contains_relative_path(self, tmp_path: Path) -> None:
         f = tmp_path / "mod.py"

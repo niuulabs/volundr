@@ -287,6 +287,8 @@ class EditFileTool(ToolPort):
             return None
         if old_string not in original:
             return None
+        if not replace_all and original.count(old_string) > 1:
+            return None
         if replace_all:
             updated = original.replace(old_string, new_string)
         else:
