@@ -2,6 +2,10 @@
 
 Calls the OpenAI ``/v1/embeddings`` endpoint using ``httpx``.  No OpenAI SDK
 dependency required — only ``httpx``, which is already a project dependency.
+
+A single persistent ``httpx.AsyncClient`` is reused across calls to avoid
+the overhead of creating a new TCP connection pool for each request.
+Call ``await adapter.close()`` when done to release the connection pool.
 """
 
 from __future__ import annotations
@@ -41,23 +45,34 @@ class OpenAIEmbeddingAdapter(EmbeddingPort):
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._dimension: int | None = None
+        self._client: httpx.AsyncClient | None = None
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent HTTP client and release connection pool."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
     async def _post_embeddings(self, texts: list[str]) -> list[list[float]]:
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(
-                f"{self._base_url}/embeddings",
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={"input": texts, "model": self._model},
-            )
-            response.raise_for_status()
-            data = response.json()
+        response = await self._get_client().post(
+            f"{self._base_url}/embeddings",
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            json={"input": texts, "model": self._model},
+        )
+        response.raise_for_status()
+        data = response.json()
 
         sorted_items = sorted(data["data"], key=lambda x: x["index"])
         vectors = [item["embedding"] for item in sorted_items]

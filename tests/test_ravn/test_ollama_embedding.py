@@ -66,7 +66,7 @@ class TestOllamaEmbeddingAdapter:
     async def test_embed_batch_calls_embed_per_text(self) -> None:
         vec = [0.5, 0.5]
         respx.post("http://localhost:11434/api/embed").mock(
-            return_value=Response(200, json=_make_embed_response([vec]))
+            return_value=Response(200, json=_make_embed_response([vec, vec, vec]))
         )
         adapter = OllamaEmbeddingAdapter()
         result = await adapter.embed_batch(["a", "b", "c"])
