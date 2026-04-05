@@ -213,8 +213,19 @@ class UsageStoreConfig(BaseModel):
     )
     dsn: str = Field(
         default="",
-        description="PostgreSQL DSN for the postgres backend (ignored for other adapters).",
+        description=(
+            "PostgreSQL DSN for the postgres backend (ignored for other adapters). "
+            "Falls back to the BIFROST_USAGE_DSN environment variable when blank."
+        ),
     )
+    dsn_env: str = Field(
+        default="BIFROST_USAGE_DSN",
+        description="Environment variable holding the PostgreSQL DSN (used when dsn is blank).",
+    )
+
+    def effective_dsn(self) -> str:
+        """Return the DSN, falling back to the configured environment variable."""
+        return self.dsn or os.environ.get(self.dsn_env, "")
 
 
 class KeyVaultConfig(BaseModel):
@@ -291,6 +302,16 @@ class BifrostConfig(BaseModel):
         description=(
             "Per-model pricing overrides (USD / million tokens). "
             "Unspecified models fall back to the built-in snapshot."
+        ),
+    )
+    pricing_file: str = Field(
+        default="",
+        description=(
+            "Path to a YAML file containing per-model pricing (USD / million tokens). "
+            "Loaded at startup and merged with the built-in snapshot. "
+            "Inline ``pricing`` overrides take precedence over this file. "
+            "Format: ``model_id: {input_per_million, output_per_million, "
+            "cache_creation_per_million, cache_read_per_million}``."
         ),
     )
 

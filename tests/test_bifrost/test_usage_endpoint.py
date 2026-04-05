@@ -33,6 +33,7 @@ def _make_record(
         session_id="sess",
         saga_id="saga",
         model=model,
+        provider="anthropic",
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cost_usd=cost_usd,
@@ -45,9 +46,6 @@ def app_with_data():
     """App with pre-seeded usage records."""
     config = _make_config()
     app = create_app(config)
-    # Access the store directly through the usage endpoint's closure.
-    # We'll seed via HTTP calls followed by assertions, or reach into the module.
-    # Simplest: return the app and a helper to seed the store.
     return app
 
 
@@ -101,7 +99,6 @@ class TestUsageEndpoint:
         assert len(data["records"]) == 3
 
     def test_filter_by_agent_id(self, client):
-        # Two agents make requests.
         from bifrost.translation.models import AnthropicResponse, TextBlock, UsageInfo
 
         response = AnthropicResponse(
@@ -163,6 +160,10 @@ class TestUsageEndpoint:
         resp = client.get("/v1/usage", params={"until": "bad-date"})
         assert resp.status_code == 422
 
+    def test_invalid_granularity_returns_422(self, client):
+        resp = client.get("/v1/usage", params={"granularity": "minute"})
+        assert resp.status_code == 422
+
     def test_response_includes_per_model_breakdown(self, client):
         self._seed(client, 2)
         resp = client.get("/v1/usage")
@@ -170,6 +171,15 @@ class TestUsageEndpoint:
         by_model = data["summary"]["by_model"]
         assert "claude-sonnet-4-6" in by_model
         assert by_model["claude-sonnet-4-6"]["requests"] == 2
+
+    def test_response_includes_per_provider_breakdown(self, client):
+        self._seed(client, 2)
+        resp = client.get("/v1/usage")
+        data = resp.json()
+        by_provider = data["summary"]["by_provider"]
+        # Provider is looked up as "anthropic" for claude-sonnet-4-6.
+        assert "anthropic" in by_provider
+        assert by_provider["anthropic"]["requests"] == 2
 
     def test_cost_is_tracked_and_returned(self, client):
         self._seed(client, 1)
@@ -191,13 +201,40 @@ class TestUsageEndpoint:
             "session_id",
             "saga_id",
             "model",
+            "provider",
             "input_tokens",
             "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "reasoning_tokens",
             "cost_usd",
+            "latency_ms",
+            "streaming",
             "timestamp",
         ]
         for field in required_fields:
             assert field in record, f"Missing field: {field}"
+
+    def test_records_include_streaming_flag(self, client):
+        self._seed(client, 1)
+        resp = client.get("/v1/usage")
+        data = resp.json()
+        record = data["records"][0]
+        assert isinstance(record["streaming"], bool)
+
+    def test_records_include_latency_ms(self, client):
+        self._seed(client, 1)
+        resp = client.get("/v1/usage")
+        data = resp.json()
+        record = data["records"][0]
+        assert isinstance(record["latency_ms"], int | float)
+
+    def test_records_include_provider(self, client):
+        self._seed(client, 1)
+        resp = client.get("/v1/usage")
+        data = resp.json()
+        record = data["records"][0]
+        assert record["provider"] == "anthropic"
 
     def test_limit_parameter_respected(self, client):
         self._seed(client, 5)
@@ -206,3 +243,43 @@ class TestUsageEndpoint:
         assert len(data["records"]) <= 2
         # Summary still reflects all records (no limit on summary).
         assert data["summary"]["total_requests"] == 5
+
+    def test_granularity_hour_returns_timeseries(self, client):
+        self._seed(client, 2)
+        resp = client.get("/v1/usage", params={"granularity": "hour"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "timeseries" in data
+        assert isinstance(data["timeseries"], list)
+        assert len(data["timeseries"]) >= 1
+        entry = data["timeseries"][0]
+        assert "bucket" in entry
+        assert "requests" in entry
+        assert "input_tokens" in entry
+        assert "output_tokens" in entry
+        assert "cost_usd" in entry
+
+    def test_granularity_day_returns_timeseries(self, client):
+        self._seed(client, 3)
+        resp = client.get("/v1/usage", params={"granularity": "day"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "timeseries" in data
+        # All seeded records are in the same day.
+        assert len(data["timeseries"]) == 1
+        assert data["timeseries"][0]["requests"] == 3
+
+    def test_no_granularity_no_timeseries(self, client):
+        self._seed(client, 1)
+        resp = client.get("/v1/usage")
+        data = resp.json()
+        assert "timeseries" not in data
+
+    def test_timeseries_bucket_format(self, client):
+        self._seed(client, 1)
+        resp = client.get("/v1/usage", params={"granularity": "hour"})
+        data = resp.json()
+        bucket = data["timeseries"][0]["bucket"]
+        # Must be parseable as ISO-8601.
+        dt = datetime.fromisoformat(bucket)
+        assert dt.tzinfo is not None

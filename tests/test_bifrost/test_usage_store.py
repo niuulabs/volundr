@@ -22,6 +22,12 @@ def _record(
     session_id: str = "",
     saga_id: str = "",
     request_id: str = "",
+    provider: str = "anthropic",
+    latency_ms: float = 0.0,
+    streaming: bool = False,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
+    reasoning_tokens: int = 0,
 ) -> UsageRecord:
     return UsageRecord(
         request_id=request_id,
@@ -30,9 +36,15 @@ def _record(
         session_id=session_id,
         saga_id=saga_id,
         model=model,
+        provider=provider,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
+        reasoning_tokens=reasoning_tokens,
         cost_usd=cost_usd,
+        latency_ms=latency_ms,
+        streaming=streaming,
         timestamp=timestamp or datetime.now(UTC),
     )
 
@@ -125,6 +137,33 @@ class TestRecordAndQuery:
         assert results[0].session_id == "sess-x"
         assert results[0].saga_id == "saga-y"
 
+    async def test_new_fields_roundtrip(self, store):
+        """All new NIU-483 fields survive a record/query round-trip."""
+        r = _record(
+            provider="anthropic",
+            latency_ms=123.45,
+            streaming=True,
+            cache_read_tokens=10,
+            cache_write_tokens=20,
+            reasoning_tokens=5,
+        )
+        await store.record(r)
+        results = await store.query()
+        assert len(results) == 1
+        rec = results[0]
+        assert rec.provider == "anthropic"
+        assert abs(rec.latency_ms - 123.45) < 0.01
+        assert rec.streaming is True
+        assert rec.cache_read_tokens == 10
+        assert rec.cache_write_tokens == 20
+        assert rec.reasoning_tokens == 5
+
+    async def test_streaming_false_roundtrip(self, store):
+        r = _record(streaming=False)
+        await store.record(r)
+        results = await store.query()
+        assert results[0].streaming is False
+
 
 # ---------------------------------------------------------------------------
 # Summarise
@@ -158,6 +197,17 @@ class TestSummarise:
         assert summary.by_model["m1"]["requests"] == 2
         assert abs(summary.by_model["m2"]["cost_usd"] - 0.05) < 1e-9
 
+    async def test_per_provider_breakdown(self, store):
+        await store.record(_record(provider="anthropic", cost_usd=0.01))
+        await store.record(_record(provider="openai", cost_usd=0.02))
+        await store.record(_record(provider="anthropic", cost_usd=0.03))
+
+        summary = await store.summarise()
+        assert "anthropic" in summary.by_provider
+        assert "openai" in summary.by_provider
+        assert summary.by_provider["anthropic"]["requests"] == 2
+        assert abs(summary.by_provider["openai"]["cost_usd"] - 0.02) < 1e-9
+
     async def test_filter_is_applied_to_summary(self, store):
         await store.record(_record(tenant_id="t1", cost_usd=0.01))
         await store.record(_record(tenant_id="t2", cost_usd=0.50))
@@ -165,6 +215,64 @@ class TestSummarise:
         summary = await store.summarise(tenant_id="t1")
         assert summary.total_requests == 1
         assert abs(summary.total_cost_usd - 0.01) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Time-series
+# ---------------------------------------------------------------------------
+
+
+class TestTimeSeries:
+    async def test_empty_time_series(self, store):
+        entries = await store.time_series()
+        assert entries == []
+
+    async def test_hour_granularity(self, store):
+        now = datetime.now(UTC).replace(minute=30, second=0, microsecond=0)
+        two_hours_ago = now - timedelta(hours=2)
+
+        await store.record(_record(timestamp=now, input_tokens=100, output_tokens=50))
+        await store.record(_record(timestamp=two_hours_ago, input_tokens=200, output_tokens=100))
+
+        entries = await store.time_series(granularity="hour")
+        assert len(entries) == 2
+        # Entries must be in chronological order.
+        assert entries[0].bucket < entries[1].bucket
+
+    async def test_day_granularity(self, store):
+        now = datetime.now(UTC)
+        yesterday = now - timedelta(days=1)
+
+        await store.record(_record(timestamp=now, cost_usd=0.01))
+        await store.record(_record(timestamp=now, cost_usd=0.02))
+        await store.record(_record(timestamp=yesterday, cost_usd=0.10))
+
+        entries = await store.time_series(granularity="day")
+        assert len(entries) == 2
+        today_entry = entries[1]  # last bucket = today
+        assert today_entry.requests == 2
+        assert abs(today_entry.cost_usd - 0.03) < 1e-9
+
+    async def test_time_series_respects_filters(self, store):
+        now = datetime.now(UTC)
+        await store.record(_record(tenant_id="t1", timestamp=now))
+        await store.record(_record(tenant_id="t2", timestamp=now))
+
+        entries = await store.time_series(granularity="hour", tenant_id="t1")
+        assert len(entries) == 1
+        assert entries[0].requests == 1
+
+    async def test_time_series_bucket_token_aggregation(self, store):
+        now = datetime.now(UTC).replace(minute=10, second=0, microsecond=0)
+
+        await store.record(_record(timestamp=now, input_tokens=100, output_tokens=50))
+        await store.record(_record(timestamp=now, input_tokens=200, output_tokens=100))
+
+        entries = await store.time_series(granularity="hour")
+        assert len(entries) == 1
+        assert entries[0].input_tokens == 300
+        assert entries[0].output_tokens == 150
+        assert entries[0].requests == 2
 
 
 # ---------------------------------------------------------------------------

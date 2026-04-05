@@ -1,12 +1,16 @@
 """Per-model pricing table and cost calculation.
 
 Prices are USD per million tokens (input / output / cache variants).
-The built-in snapshot can be extended or overridden via ``BifrostConfig``.
+The built-in snapshot can be extended or overridden via ``BifrostConfig``
+or an external YAML pricing file.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
 
 from bifrost.domain.models import TokenUsage
 
@@ -53,6 +57,38 @@ BUILTIN_PRICING: dict[str, ModelPricing] = {
 }
 
 
+def load_pricing_from_yaml(path: str) -> dict[str, ModelPricing]:
+    """Load a pricing table from a YAML file.
+
+    The file format is a mapping of model identifier to pricing fields::
+
+        claude-sonnet-4-6:
+          input_per_million: 3.00
+          output_per_million: 15.00
+          cache_creation_per_million: 3.75
+          cache_read_per_million: 0.30
+
+    Returns an empty dict if *path* is empty or the file does not exist.
+    """
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    raw: dict = yaml.safe_load(p.read_text()) or {}
+    result: dict[str, ModelPricing] = {}
+    for model, fields in raw.items():
+        if not isinstance(fields, dict):
+            continue
+        result[model] = ModelPricing(
+            input_per_million=float(fields.get("input_per_million", 0.0)),
+            output_per_million=float(fields.get("output_per_million", 0.0)),
+            cache_creation_per_million=float(fields.get("cache_creation_per_million", 0.0)),
+            cache_read_per_million=float(fields.get("cache_read_per_million", 0.0)),
+        )
+    return result
+
+
 def calculate_cost(
     model: str,
     usage: TokenUsage,
@@ -80,4 +116,6 @@ def calculate_cost(
         + usage.output_tokens * pricing.output_per_million / 1_000_000
         + usage.cache_creation_input_tokens * pricing.cache_creation_per_million / 1_000_000
         + usage.cache_read_input_tokens * pricing.cache_read_per_million / 1_000_000
+        # reasoning_tokens are already counted in output_tokens by Anthropic;
+        # no separate billing line is needed.
     )

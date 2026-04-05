@@ -40,21 +40,24 @@ def _extract_usage_from_sse_line(line: str, usage: TokenUsage) -> None:
         usage.input_tokens += msg_usage.get("input_tokens", 0)
         usage.cache_creation_input_tokens += msg_usage.get("cache_creation_input_tokens", 0)
         usage.cache_read_input_tokens += msg_usage.get("cache_read_input_tokens", 0)
+        usage.reasoning_tokens += msg_usage.get("reasoning_tokens", 0)
     elif event_type == "message_delta":
         delta_usage = payload.get("usage", {})
         usage.output_tokens += delta_usage.get("output_tokens", 0)
+        usage.reasoning_tokens += delta_usage.get("reasoning_tokens", 0)
 
 
 def _log_request(log: RequestLog) -> None:
     logger.info(
         "request ts=%s model=%s input=%d output=%d cache_read=%d cache_write=%d "
-        "latency=%.1fms stream=%s",
+        "reasoning=%d latency=%.1fms stream=%s",
         log.timestamp.isoformat(),
         log.model,
         log.usage.input_tokens,
         log.usage.output_tokens,
         log.usage.cache_read_input_tokens,
         log.usage.cache_creation_input_tokens,
+        log.usage.reasoning_tokens,
         log.latency_ms,
         log.stream,
     )
@@ -68,6 +71,7 @@ async def _stream_with_tracking(
     store: UsageStore,
     pricing_overrides: dict[str, ModelPricing],
     request_id: str,
+    provider: str = "",
 ) -> AsyncIterator[str]:
     """Yield SSE lines from *source* while tracking token usage."""
     usage = TokenUsage()
@@ -96,9 +100,15 @@ async def _stream_with_tracking(
             session_id=identity.session_id,
             saga_id=identity.saga_id,
             model=model,
+            provider=provider,
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
+            cache_read_tokens=usage.cache_read_input_tokens,
+            cache_write_tokens=usage.cache_creation_input_tokens,
+            reasoning_tokens=usage.reasoning_tokens,
             cost_usd=cost,
+            latency_ms=latency_ms,
+            streaming=True,
             timestamp=datetime.now(UTC),
         )
     )

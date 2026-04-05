@@ -302,6 +302,8 @@ def create_router(
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
 
+        provider = config.provider_for_model(request.model) or ""
+
         try:
             if request.stream:
                 stream_resp = StreamingResponse(
@@ -313,6 +315,7 @@ def create_router(
                         store,
                         pricing_overrides,
                         request_id,
+                        provider=provider,
                     ),
                     media_type="text/event-stream",
                     headers={
@@ -334,6 +337,7 @@ def create_router(
                 output_tokens=raw_usage.get("output_tokens", 0),
                 cache_creation_input_tokens=raw_usage.get("cache_creation_input_tokens", 0),
                 cache_read_input_tokens=raw_usage.get("cache_read_input_tokens", 0),
+                reasoning_tokens=raw_usage.get("reasoning_tokens", 0),
             )
             _log_request(
                 RequestLog(
@@ -354,9 +358,15 @@ def create_router(
                     session_id=identity.session_id,
                     saga_id=identity.saga_id,
                     model=request.model,
+                    provider=provider,
                     input_tokens=usage.input_tokens,
                     output_tokens=usage.output_tokens,
+                    cache_read_tokens=usage.cache_read_input_tokens,
+                    cache_write_tokens=usage.cache_creation_input_tokens,
+                    reasoning_tokens=usage.reasoning_tokens,
                     cost_usd=cost,
+                    latency_ms=latency_ms,
+                    streaming=False,
                     timestamp=datetime.now(UTC),
                 )
             )
@@ -380,18 +390,23 @@ def create_router(
         since: str | None = None,
         until: str | None = None,
         limit: int = 1000,
+        granularity: str | None = None,
     ) -> dict:
         """Return aggregated usage statistics with optional filters.
 
         Query parameters:
-            agent_id:  Filter by agent identifier.
-            tenant_id: Filter by tenant identifier.
-            model:     Filter by model name.
-            since:     ISO-8601 datetime (inclusive lower bound).
-            until:     ISO-8601 datetime (inclusive upper bound).
-            limit:     Maximum number of raw records returned (default 1000).
+            agent_id:    Filter by agent identifier.
+            tenant_id:   Filter by tenant identifier.
+            model:       Filter by model name.
+            since:       ISO-8601 datetime (inclusive lower bound).
+            until:       ISO-8601 datetime (inclusive upper bound).
+            limit:       Maximum number of raw records returned (default 1000).
+            granularity: Time-series bucket size — 'hour' (default) or 'day'.
+                         When provided, the response includes a ``timeseries``
+                         array with per-bucket aggregates.
 
-        Returns a summary (totals + per-model breakdown) and the raw record list.
+        Returns a summary (totals + per-model/provider breakdown), an optional
+        time-series breakdown, and the raw record list.
         """
         since_dt: datetime | None = None
         until_dt: datetime | None = None
@@ -416,6 +431,12 @@ def create_router(
                     detail=f"Invalid 'until' datetime: {exc}",
                 ) from exc
 
+        if granularity is not None and granularity not in ("hour", "day"):
+            raise HTTPException(
+                status_code=422,
+                detail="'granularity' must be 'hour' or 'day'.",
+            )
+
         summary = await store.summarise(
             agent_id=agent_id,
             tenant_id=tenant_id,
@@ -432,13 +453,14 @@ def create_router(
             limit=limit,
         )
 
-        return {
+        response_body: dict = {
             "summary": {
                 "total_requests": summary.total_requests,
                 "total_input_tokens": summary.total_input_tokens,
                 "total_output_tokens": summary.total_output_tokens,
                 "total_cost_usd": round(summary.total_cost_usd, 6),
                 "by_model": summary.by_model,
+                "by_provider": summary.by_provider,
             },
             "records": [
                 {
@@ -448,14 +470,42 @@ def create_router(
                     "session_id": r.session_id,
                     "saga_id": r.saga_id,
                     "model": r.model,
+                    "provider": r.provider,
                     "input_tokens": r.input_tokens,
                     "output_tokens": r.output_tokens,
+                    "cache_read_tokens": r.cache_read_tokens,
+                    "cache_write_tokens": r.cache_write_tokens,
+                    "reasoning_tokens": r.reasoning_tokens,
                     "cost_usd": round(r.cost_usd, 6),
+                    "latency_ms": round(r.latency_ms, 2),
+                    "streaming": r.streaming,
                     "timestamp": r.timestamp.isoformat(),
                 }
                 for r in records
             ],
         }
+
+        if granularity is not None:
+            ts_entries = await store.time_series(
+                granularity=granularity,
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                model=model,
+                since=since_dt,
+                until=until_dt,
+            )
+            response_body["timeseries"] = [
+                {
+                    "bucket": e.bucket,
+                    "requests": e.requests,
+                    "input_tokens": e.input_tokens,
+                    "output_tokens": e.output_tokens,
+                    "cost_usd": round(e.cost_usd, 6),
+                }
+                for e in ts_entries
+            ]
+
+        return response_body
 
     @api_router.post("/v1/chat/completions", response_model=None)
     async def chat_completions(raw_request: Request) -> JSONResponse | StreamingResponse:
@@ -492,6 +542,7 @@ def create_router(
 
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
+        provider = config.provider_for_model(request.model) or ""
 
         try:
             if request.stream:
@@ -506,6 +557,7 @@ def create_router(
                             store,
                             pricing_overrides,
                             request_id,
+                            provider=provider,
                         ),
                         message_id=message_id,
                         model=request.model,
@@ -528,6 +580,7 @@ def create_router(
                 output_tokens=response.usage.output_tokens,
                 cache_creation_input_tokens=0,
                 cache_read_input_tokens=0,
+                reasoning_tokens=0,
             )
             _log_request(
                 RequestLog(
@@ -548,9 +601,15 @@ def create_router(
                     session_id=identity.session_id,
                     saga_id=identity.saga_id,
                     model=request.model,
+                    provider=provider,
                     input_tokens=usage.input_tokens,
                     output_tokens=usage.output_tokens,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    reasoning_tokens=0,
                     cost_usd=cost,
+                    latency_ms=latency_ms,
+                    streaming=False,
                     timestamp=datetime.now(UTC),
                 )
             )
@@ -618,6 +677,7 @@ def create_router(
 
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
+        provider = config.provider_for_model(request.model) or ""
 
         try:
             if request.stream:
@@ -631,6 +691,7 @@ def create_router(
                             store,
                             pricing_overrides,
                             request_id,
+                            provider=provider,
                         ),
                         model=request.model,
                         start=start,
@@ -648,6 +709,7 @@ def create_router(
                 output_tokens=response.usage.output_tokens,
                 cache_creation_input_tokens=0,
                 cache_read_input_tokens=0,
+                reasoning_tokens=0,
             )
             _log_request(
                 RequestLog(
@@ -668,9 +730,15 @@ def create_router(
                     session_id=identity.session_id,
                     saga_id=identity.saga_id,
                     model=request.model,
+                    provider=provider,
                     input_tokens=usage.input_tokens,
                     output_tokens=usage.output_tokens,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    reasoning_tokens=0,
                     cost_usd=cost,
+                    latency_ms=latency_ms,
+                    streaming=False,
                     timestamp=datetime.now(UTC),
                 )
             )
