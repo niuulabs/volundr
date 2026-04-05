@@ -7,6 +7,7 @@ import json
 from collections.abc import AsyncIterator
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from ravn.adapters.channels.gateway import RavnGateway
@@ -208,3 +209,81 @@ def test_sse_payload_contains_metadata():
     for line in lines:
         payload = json.loads(line[len("data: ") :])
         assert "metadata" in payload
+
+
+# ---------------------------------------------------------------------------
+# _broadcast_stream — real queue-based implementation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_broadcast_stream_yields_events_from_queue():
+    """_broadcast_stream reads real events from the subscribe queue."""
+    gw = MagicMock(spec=RavnGateway)
+    q: asyncio.Queue = asyncio.Queue()
+    gw.subscribe.return_value = q
+    gw.unsubscribe = MagicMock()
+
+    ht = HttpGateway(_make_http_config(), gw)
+
+    # Push one event then the sentinel None.
+    event = RavnEvent.response("broadcast msg")
+    await q.put(event)
+    await q.put(None)
+
+    lines = []
+    async for chunk in ht._broadcast_stream():
+        lines.append(chunk)
+
+    gw.unsubscribe.assert_called_once_with(q)
+    assert len(lines) == 1
+    payload = json.loads(lines[0][len("data: ") :])
+    assert payload["data"] == "broadcast msg"
+
+
+@pytest.mark.asyncio
+async def test_broadcast_stream_unsubscribes_on_exit():
+    """unsubscribe is called even if the loop is exited via sentinel."""
+    gw = MagicMock(spec=RavnGateway)
+    q: asyncio.Queue = asyncio.Queue()
+    gw.subscribe.return_value = q
+    gw.unsubscribe = MagicMock()
+
+    ht = HttpGateway(_make_http_config(), gw)
+    await q.put(None)
+
+    async for _ in ht._broadcast_stream():
+        pass
+
+    gw.unsubscribe.assert_called_once_with(q)
+
+
+# ---------------------------------------------------------------------------
+# run() — uvicorn lifecycle
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_starts_and_cancels_cleanly(monkeypatch):
+    """run() wires up uvicorn and re-raises CancelledError."""
+    import uvicorn
+
+    served = []
+
+    class FakeServer:
+        def __init__(self, config):
+            pass
+
+        async def serve(self):
+            served.append(True)
+            raise asyncio.CancelledError()
+
+    monkeypatch.setattr(uvicorn, "Server", FakeServer)
+
+    gw = MagicMock(spec=RavnGateway)
+    ht = HttpGateway(_make_http_config(), gw)
+
+    with pytest.raises(asyncio.CancelledError):
+        await ht.run()
+
+    assert served

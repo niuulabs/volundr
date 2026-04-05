@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -335,3 +336,116 @@ async def test_register_commands_swallows_exception(caplog):
     with caplog.at_level(logging.WARNING):
         await tg._register_commands(client)
     # Should not raise; warning logged instead.
+
+
+# ---------------------------------------------------------------------------
+# _send_typing — exception silencing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_send_typing_swallows_exception():
+    tg = TelegramGateway(_make_config(), _make_gateway_mock())
+    tg._token = "test-token"
+
+    client = AsyncMock()
+    client.post = AsyncMock(side_effect=httpx.ConnectError("fail"))
+
+    # Should not raise
+    await tg._send_typing(client, 42)
+
+
+# ---------------------------------------------------------------------------
+# _send_message — exception logging
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_send_message_logs_on_exception(caplog):
+    import logging
+
+    tg = TelegramGateway(_make_config(token_env="TK"), _make_gateway_mock())
+    tg._token = "test-token"
+
+    client = AsyncMock()
+    client.post = AsyncMock(side_effect=httpx.ConnectError("network fail"))
+
+    with caplog.at_level(logging.ERROR):
+        await tg._send_message(client, 99, "hello")
+
+    assert "99" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# run() — main polling loop (with token set)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_cancels_cleanly(monkeypatch):
+    """run() exits cleanly when the task is cancelled after one poll."""
+    monkeypatch.setenv("TG_TOKEN", "test-token")
+
+    gw = _make_gateway_mock("ok")
+    cfg = _make_config(token_env="TG_TOKEN")
+    tg = TelegramGateway(cfg, gw)
+    tg._token = "test-token"
+
+    poll_count = 0
+
+    async def fake_poll_once(client):
+        nonlocal poll_count
+        poll_count += 1
+        raise asyncio.CancelledError()
+
+    tg._poll_once = fake_poll_once
+
+    # Patch _register_commands so it doesn't need a real HTTP client.
+    async def fake_register(client):
+        pass
+
+    tg._register_commands = fake_register
+
+    with pytest.raises(asyncio.CancelledError):
+        await tg.run()
+
+    assert poll_count == 1
+
+
+@pytest.mark.asyncio
+async def test_run_retries_on_exception(monkeypatch):
+    """run() retries after a non-cancel exception."""
+    monkeypatch.setenv("TG_TOKEN", "test-token")
+
+    gw = _make_gateway_mock("ok")
+    cfg = TelegramChannelConfig(
+        enabled=True,
+        token_env="TG_TOKEN",
+        allowed_chat_ids=[],
+        poll_timeout=1,
+        retry_delay=0.0,
+        message_max_chars=4096,
+    )
+    tg = TelegramGateway(cfg, gw)
+    tg._token = "test-token"
+
+    call_count = 0
+
+    async def fake_poll_once(client):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("transient error")
+        raise asyncio.CancelledError()
+
+    tg._poll_once = fake_poll_once
+
+    async def fake_register(client):
+        pass
+
+    tg._register_commands = fake_register
+
+    with pytest.raises(asyncio.CancelledError):
+        await tg.run()
+
+    assert call_count == 2
