@@ -19,6 +19,12 @@ class TodoStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class Outcome(StrEnum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    PARTIAL = "partial"
+
+
 class StopReason(StrEnum):
     END_TURN = "end_turn"
     TOOL_USE = "tool_use"
@@ -30,6 +36,52 @@ class StreamEventType(StrEnum):
     TEXT_DELTA = "text_delta"
     TOOL_CALL = "tool_call"
     MESSAGE_DONE = "message_done"
+
+
+# ---------------------------------------------------------------------------
+# Episodic memory models
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Episode:
+    """A single recorded episode — what happened during one agent turn."""
+
+    episode_id: str
+    session_id: str
+    timestamp: datetime
+    summary: str
+    task_description: str
+    tools_used: list[str]
+    outcome: Outcome
+    tags: list[str]
+    embedding: list[float] | None = None
+
+
+@dataclass(frozen=True)
+class EpisodeMatch:
+    """An episode returned by a memory query, annotated with its relevance score."""
+
+    episode: Episode
+    relevance: float
+
+
+@dataclass(frozen=True)
+class SessionSummary:
+    """A summary of all episodes from a single session, returned by session search."""
+
+    session_id: str
+    summary: str
+    episode_count: int
+    last_active: datetime
+    tags: list[str]
+
+
+@dataclass
+class SharedContext:
+    """Shared blackboard context injected into a memory adapter from external regions."""
+
+    data: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

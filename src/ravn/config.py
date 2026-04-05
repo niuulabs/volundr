@@ -299,6 +299,42 @@ class MemoryConfig(BaseModel):
         default="",
         description="Env var name to read the DSN from (takes precedence over dsn).",
     )
+    prefetch_budget: int = Field(
+        default=2000,
+        description="Maximum approximate tokens of past context injected per turn.",
+    )
+    prefetch_limit: int = Field(
+        default=5,
+        description="Maximum number of episodes retrieved during prefetch.",
+    )
+    prefetch_min_relevance: float = Field(
+        default=0.3,
+        description="Minimum relevance score (0–1) for an episode to appear in prefetch.",
+    )
+    recency_half_life_days: float = Field(
+        default=14.0,
+        description="Half-life in days for the exponential recency decay applied to episodes.",
+    )
+    max_retries: int = Field(
+        default=15,
+        description="Maximum retry attempts on SQLite 'database is locked' errors.",
+    )
+    min_retry_jitter_ms: float = Field(
+        default=20.0,
+        description="Minimum random jitter (ms) between SQLite retry attempts.",
+    )
+    max_retry_jitter_ms: float = Field(
+        default=150.0,
+        description="Maximum random jitter (ms) between SQLite retry attempts.",
+    )
+    checkpoint_interval: int = Field(
+        default=50,
+        description="Number of writes between passive WAL checkpoints.",
+    )
+    session_search_truncate_chars: int = Field(
+        default=100_000,
+        description="Maximum characters of episode content returned per session in session_search.",
+    )
 
 
 class PermissionRuleConfig(BaseModel):
