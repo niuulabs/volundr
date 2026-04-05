@@ -246,6 +246,47 @@ class TestAgentContextCompressor:
         assert agent.last_compression_result is None
 
     @pytest.mark.asyncio
+    async def test_memory_summary_passed_to_compressor(self):
+        """When a memory port is configured, memory_summary is forwarded to maybe_compress."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from ravn.adapters.permission_adapter import AllowAllPermission
+        from ravn.agent import RavnAgent
+        from ravn.ports.memory import MemoryPort
+        from tests.ravn.fixtures.fakes import EchoTool, InMemoryChannel
+
+        mock_memory = MagicMock(spec=MemoryPort)
+        mock_memory.prefetch = AsyncMock(return_value="Relevant past: user prefers raw SQL.")
+
+        captured_calls: list[dict] = []
+
+        async def _capture_compress(messages, *, system_tokens=0, todos=None, memory_summary=None):
+            captured_calls.append({"memory_summary": memory_summary})
+            return messages, CompressionResult(
+                original_count=len(messages), final_count=len(messages)
+            )
+
+        mock_compressor = MagicMock(spec=ContextCompressor)
+        mock_compressor.maybe_compress = _capture_compress
+
+        channel = InMemoryChannel()
+        agent = RavnAgent(
+            llm=make_simple_llm(),
+            tools=[EchoTool()],
+            channel=channel,
+            permission=AllowAllPermission(),
+            system_prompt="You are Ravn.",
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            max_iterations=10,
+            memory=mock_memory,
+            compressor=mock_compressor,
+        )
+        await agent.run_turn("do something")
+        assert captured_calls, "maybe_compress was never called"
+        assert captured_calls[0]["memory_summary"] == "Relevant past: user prefers raw SQL."
+
+    @pytest.mark.asyncio
     async def test_session_messages_updated_after_compression(self):
         """After compression, agent.session.messages reflects the compressed state."""
         compressed_msgs = [
@@ -428,14 +469,28 @@ class TestContextManagementConfig:
         c = ContextManagementConfig()
         assert c.compression_threshold == 0.8
         assert c.protect_first_messages == 2
-        assert c.protect_last_messages == 4
+        assert c.protect_last_messages == 6
         assert c.compact_recent_turns == 3
         assert c.compression_max_tokens == 1024
         assert c.prompt_cache_max_entries == 16
+        # effective_protect_last: compact_recent_turns=3 → 3*2=6
+        assert c.effective_protect_last() == 6
 
         b = IterationBudgetConfig()
         assert b.total == 90
         assert b.near_limit_threshold == 0.8
+
+    def test_effective_protect_last_uses_compact_recent_turns(self):
+        from ravn.config import ContextManagementConfig
+
+        c = ContextManagementConfig(compact_recent_turns=4, protect_last_messages=6)
+        assert c.effective_protect_last() == 8  # 4 turns * 2
+
+    def test_effective_protect_last_falls_back_when_zero(self):
+        from ravn.config import ContextManagementConfig
+
+        c = ContextManagementConfig(compact_recent_turns=0, protect_last_messages=10)
+        assert c.effective_protect_last() == 10
 
     def test_settings_has_new_fields(self):
         from ravn.config import Settings

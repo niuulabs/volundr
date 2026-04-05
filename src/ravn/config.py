@@ -563,7 +563,7 @@ class ContextManagementConfig(BaseModel):
         description="Number of messages at the start of history to preserve unchanged.",
     )
     protect_last_messages: int = Field(
-        default=4,
+        default=6,
         description="Number of messages at the end of history to preserve unchanged.",
     )
     compact_recent_turns: int = Field(
@@ -586,6 +586,17 @@ class ContextManagementConfig(BaseModel):
         default="~/.ravn/prompt_cache",
         description="Directory for disk-snapshot prompt cache entries.",
     )
+
+    def effective_protect_last(self) -> int:
+        """Return the protect_last value to pass to ContextCompressor.
+
+        When ``compact_recent_turns`` is non-zero it takes precedence:
+        ``protect_last = compact_recent_turns * 2`` (one turn = user + assistant).
+        Falls back to ``protect_last_messages`` when ``compact_recent_turns`` is 0.
+        """
+        if self.compact_recent_turns > 0:
+            return self.compact_recent_turns * 2
+        return self.protect_last_messages
 
 
 # ---------------------------------------------------------------------------
