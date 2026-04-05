@@ -15,7 +15,7 @@ import random
 import re
 import sqlite3
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ravn.adapters.sqlite_common import CHARS_PER_TOKEN
@@ -109,6 +109,19 @@ class SQLiteOutcomeAdapter(OutcomePort):
         """Persist a task outcome, replacing any existing record with the same id."""
         await asyncio.to_thread(self._sync_record, outcome)
 
+    async def count_all_outcomes(self) -> int:
+        """Return the total number of stored outcomes."""
+        return await asyncio.to_thread(self._sync_count)
+
+    async def list_recent_outcomes(
+        self,
+        limit: int = 50,
+        *,
+        since: datetime | None = None,
+    ) -> list[TaskOutcome]:
+        """Return recent outcomes ordered by descending timestamp."""
+        return await asyncio.to_thread(self._sync_list_recent, limit, since)
+
     async def retrieve_lessons(
         self,
         task_description: str,
@@ -200,6 +213,54 @@ class SQLiteOutcomeAdapter(OutcomePort):
 
         self._with_retry(_run)
 
+    def _sync_count(self) -> int:
+        def _run(conn: sqlite3.Connection) -> int:
+            try:
+                row = conn.execute("SELECT COUNT(*) FROM task_outcomes").fetchone()
+                return int(row[0]) if row else 0
+            except sqlite3.OperationalError:
+                return 0
+
+        return self._with_retry(_run)
+
+    def _sync_list_recent(
+        self,
+        limit: int,
+        since: datetime | None,
+    ) -> list[TaskOutcome]:
+        def _run(conn: sqlite3.Connection) -> list[TaskOutcome]:
+            try:
+                if since is not None:
+                    rows = conn.execute(
+                        """
+                        SELECT task_id, task_summary, outcome, tools_used,
+                               iterations_used, cost_usd, duration_seconds,
+                               errors, reflection, tags, timestamp
+                        FROM task_outcomes
+                        WHERE timestamp > ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                        """,
+                        (since.isoformat(), limit),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT task_id, task_summary, outcome, tools_used,
+                               iterations_used, cost_usd, duration_seconds,
+                               errors, reflection, tags, timestamp
+                        FROM task_outcomes
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                        """,
+                        (limit,),
+                    ).fetchall()
+            except sqlite3.OperationalError:
+                return []
+            return [_row_to_outcome(row) for row in rows]
+
+        return self._with_retry(_run)
+
     def _sync_search(self, query: str, limit: int) -> list[sqlite3.Row]:
         def _run(conn: sqlite3.Connection) -> list[sqlite3.Row]:
             try:
@@ -226,6 +287,30 @@ class SQLiteOutcomeAdapter(OutcomePort):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _row_to_outcome(row: sqlite3.Row) -> TaskOutcome:
+    """Convert a ``task_outcomes`` row to a ``TaskOutcome`` dataclass."""
+    try:
+        ts = datetime.fromisoformat(row["timestamp"])
+    except (ValueError, KeyError):
+        ts = datetime.now(UTC)
+
+    from ravn.domain.models import Outcome  # local import to avoid circular dependency
+
+    return TaskOutcome(
+        task_id=row["task_id"],
+        task_summary=row["task_summary"],
+        outcome=Outcome(row["outcome"]),
+        tools_used=json.loads(row["tools_used"]),
+        iterations_used=int(row["iterations_used"]),
+        cost_usd=float(row["cost_usd"]),
+        duration_seconds=float(row["duration_seconds"]),
+        errors=json.loads(row["errors"]),
+        reflection=row["reflection"],
+        tags=json.loads(row["tags"]),
+        timestamp=ts,
+    )
 
 
 def _sanitise_fts_query(text: str) -> str:

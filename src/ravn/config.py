@@ -667,6 +667,59 @@ class LLMAdapterConfig(BaseModel):
     timeout: float = Field(default=120.0)
 
 
+class EvolutionConfig(BaseModel):
+    """Self-improvement loop configuration (NIU-501).
+
+    Controls when the pattern extraction pass runs and how many samples it
+    analyses when looking for recurring tool sequences, error patterns, and
+    effective strategies.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable the self-improvement pattern extraction pass.",
+    )
+    min_new_outcomes: int = Field(
+        default=10,
+        description=(
+            "Minimum number of new outcomes recorded since the last extraction "
+            "before the pass is triggered automatically on startup."
+        ),
+    )
+    state_path: str = Field(
+        default="~/.ravn/evolution_state.json",
+        description="Path to the JSON file that persists the last-run state.",
+    )
+    max_episodes_to_analyze: int = Field(
+        default=100,
+        description="Maximum number of episodes loaded per extraction pass.",
+    )
+    max_outcomes_to_analyze: int = Field(
+        default=50,
+        description="Maximum number of task outcomes loaded per extraction pass.",
+    )
+    skill_suggestion_min_occurrences: int = Field(
+        default=3,
+        description="Minimum times a tool pattern must appear before a skill is suggested.",
+    )
+    error_warning_min_occurrences: int = Field(
+        default=3,
+        description="Minimum times an error keyword must appear before a warning is proposed.",
+    )
+    max_skill_suggestions: int = Field(
+        default=5,
+        description="Maximum skill suggestions to include in one evolution proposal.",
+    )
+    max_system_warnings: int = Field(
+        default=5,
+        description="Maximum system-prompt warnings to include in one proposal.",
+    )
+    max_strategy_injections: int = Field(
+        default=3,
+        description="Maximum strategy injections to include in one proposal.",
+    )
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -714,6 +767,9 @@ class Settings(BaseSettings):
     # NIU-436: semantic memory
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     skill: SkillConfig = Field(default_factory=SkillConfig)
+
+    # NIU-501: self-improvement loop
+    evolution: EvolutionConfig = Field(default_factory=EvolutionConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
