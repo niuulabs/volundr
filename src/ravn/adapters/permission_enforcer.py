@@ -245,7 +245,9 @@ class BashValidator:
         if cmd in _READ_ONLY_WHITELIST:
             return CommandIntent.READ_ONLY
 
-        return CommandIntent.UNKNOWN
+        # Unknown commands are treated as WRITE-level for safety: they may
+        # mutate state even though we cannot determine the exact intent.
+        return CommandIntent.WRITE
 
     def _highest_intent(self, intents: list[CommandIntent]) -> CommandIntent:
         """Return the highest-risk intent from a list."""
