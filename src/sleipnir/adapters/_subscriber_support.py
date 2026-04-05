@@ -1,9 +1,8 @@
 """Shared helpers for Sleipnir subscriber adapters.
 
-Extracted so that both :mod:`sleipnir.adapters.in_process` and
-:mod:`sleipnir.adapters.nng_transport` can reuse the consumer loop,
-base subscription class, and ring-buffer overflow helper without
-duplicating code.
+Extracted so that all transport adapters (in-process, nng, RabbitMQ, …) can
+reuse the consumer loop, base subscription class, ring-buffer overflow helper,
+and event dispatch logic without duplicating code.
 """
 
 from __future__ import annotations
@@ -12,8 +11,12 @@ import asyncio
 import logging
 from collections.abc import Callable
 
-from sleipnir.domain.events import SleipnirEvent
+from sleipnir.domain.events import SleipnirEvent, match_event_type
 from sleipnir.ports.events import EventHandler, Subscription
+
+#: Default depth of each subscriber's ring buffer (events).
+#: All adapters use this value so the behaviour is consistent across transports.
+DEFAULT_RING_BUFFER_DEPTH = 1000
 
 
 async def consume_queue(
@@ -108,3 +111,39 @@ class _BaseSubscription(Subscription):
                 self._queue.task_done()
             except asyncio.QueueEmpty:
                 break
+
+
+async def dispatch_to_subscriptions(
+    event: SleipnirEvent,
+    subscriptions: list[_BaseSubscription],
+    ring_buffer_depth: int,
+    log: logging.Logger,
+) -> None:
+    """Dispatch *event* to all active subscriptions whose patterns match.
+
+    Events with ``ttl`` that is not ``None`` and ``<= 0`` are considered
+    expired on arrival and silently dropped (logged at DEBUG level).
+
+    This is the canonical dispatch loop shared by all transport adapters so
+    that TTL handling, pattern matching, and ring-buffer overflow semantics
+    are consistent everywhere.
+
+    :param event: The event to dispatch.
+    :param subscriptions: The list of active subscriptions to consider.
+    :param ring_buffer_depth: Ring buffer depth used for overflow warnings.
+    :param log: Logger to use for debug/warning messages.
+    """
+    if event.ttl is not None and event.ttl <= 0:
+        log.debug(
+            "Dropping expired event %s (%s): ttl=%d",
+            event.event_id,
+            event.event_type,
+            event.ttl,
+        )
+        return
+    for sub in list(subscriptions):
+        if not sub.active:
+            continue
+        if not any(match_event_type(p, event.event_type) for p in sub.patterns):
+            continue
+        await enqueue_with_overflow(sub._queue, event, ring_buffer_depth, log)

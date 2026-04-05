@@ -13,16 +13,15 @@ import asyncio
 import logging
 
 from sleipnir.adapters._subscriber_support import (
+    DEFAULT_RING_BUFFER_DEPTH,
     _BaseSubscription,
     consume_queue,
-    enqueue_with_overflow,
+    dispatch_to_subscriptions,
 )
-from sleipnir.domain.events import SleipnirEvent, match_event_type
+from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.events import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_RING_BUFFER_DEPTH = 1000
 
 
 class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
@@ -50,20 +49,7 @@ class InProcessBus(SleipnirPublisher, SleipnirSubscriber):
 
         Events with ``ttl=0`` are expired on arrival and never delivered.
         """
-        if event.ttl is not None and event.ttl <= 0:
-            logger.debug(
-                "Dropping expired event %s (%s): ttl=%d",
-                event.event_id,
-                event.event_type,
-                event.ttl,
-            )
-            return
-        for sub in list(self._subscriptions):
-            if not sub.active:
-                continue
-            if not any(match_event_type(p, event.event_type) for p in sub.patterns):
-                continue
-            await enqueue_with_overflow(sub._queue, event, self._ring_buffer_depth, logger)
+        await dispatch_to_subscriptions(event, self._subscriptions, self._ring_buffer_depth, logger)
 
     async def publish_batch(self, events: list[SleipnirEvent]) -> None:
         """Publish all *events* in iteration order."""

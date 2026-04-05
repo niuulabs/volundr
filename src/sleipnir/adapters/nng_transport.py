@@ -60,13 +60,14 @@ except ImportError:
     _PYNNG_AVAILABLE = False
 
 from sleipnir.adapters._subscriber_support import (
+    DEFAULT_RING_BUFFER_DEPTH,
     _BaseSubscription,
     consume_queue,
-    enqueue_with_overflow,
+    dispatch_to_subscriptions,
 )
 from sleipnir.adapters.discovery import ServiceRegistry
 from sleipnir.adapters.serialization import deserialize, serialize
-from sleipnir.domain.events import SleipnirEvent, match_event_type
+from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.events import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
 
 logger = logging.getLogger(__name__)
@@ -88,9 +89,6 @@ DEFAULT_BIND_RETRY_DELAY_S = 0.1
 
 #: Maximum number of bind attempts before raising.
 DEFAULT_BIND_MAX_RETRIES = 50
-
-#: Depth of each subscriber's ring buffer (events).
-DEFAULT_RING_BUFFER_DEPTH = 1000
 
 #: Milliseconds to sleep after opening sockets to let nng establish the
 #: underlying IPC/TCP connection before the first publish.
@@ -416,14 +414,7 @@ class NngSubscriber(SleipnirSubscriber):
         event = _decode_message(data)
         if event is None:
             return
-        if event.ttl is not None and event.ttl <= 0:
-            return
-        for sub in list(self._subscriptions):
-            if not sub.active:
-                continue
-            if not any(match_event_type(p, event.event_type) for p in sub.patterns):
-                continue
-            await enqueue_with_overflow(sub._queue, event, self._ring_buffer_depth, logger)
+        await dispatch_to_subscriptions(event, self._subscriptions, self._ring_buffer_depth, logger)
 
 
 # ---------------------------------------------------------------------------
