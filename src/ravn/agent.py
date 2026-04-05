@@ -297,6 +297,8 @@ class RavnAgent:
             system_tokens=system_tokens,
         )
         if result.was_compressed:
+            self._session.messages.clear()
+            self._session.messages.extend(messages)
             self._last_compression_result = result
             logger.info(
                 "Context compressed: %d → %d messages (%d pass(es), %d removed)",

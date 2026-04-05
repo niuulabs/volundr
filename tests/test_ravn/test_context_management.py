@@ -245,6 +245,32 @@ class TestAgentContextCompressor:
         await agent.run_turn("hello")
         assert agent.last_compression_result is None
 
+    @pytest.mark.asyncio
+    async def test_session_messages_updated_after_compression(self):
+        """After compression, agent.session.messages reflects the compressed state."""
+        compressed_msgs = [
+            Message(role="user", content="[Conversation summary: earlier context]"),
+            Message(role="user", content="hello"),
+        ]
+        mock_compressor = MagicMock(spec=ContextCompressor)
+        mock_compressor.maybe_compress = AsyncMock(
+            return_value=(
+                compressed_msgs,
+                CompressionResult(
+                    original_count=5,
+                    final_count=2,
+                    compression_count=1,
+                    removed_message_count=3,
+                ),
+            )
+        )
+        agent, _ = _make_agent(compressor=mock_compressor)
+        await agent.run_turn("hello")
+        # Session messages must reflect the compressed state so subsequent
+        # iterations don't re-compress from the full uncompressed history.
+        session_contents = [m.content for m in agent.session.messages]
+        assert "[Conversation summary: earlier context]" in session_contents
+
 
 # ---------------------------------------------------------------------------
 # PromptBuilder integration
