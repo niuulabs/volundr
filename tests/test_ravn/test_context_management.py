@@ -328,7 +328,7 @@ class TestAgentPromptBuilder:
 
         call_system: list = []
 
-        async def capturing_stream(messages, *, tools, system, model, max_tokens):
+        async def capturing_stream(messages, *, tools, system, model, max_tokens, thinking=None):
             call_system.append(system)
             yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="OK")
             yield StreamEvent(
@@ -351,7 +351,7 @@ class TestAgentPromptBuilder:
         """Without a prompt_builder, system prompt is a plain string."""
         call_system: list = []
 
-        async def capturing_stream(messages, *, tools, system, model, max_tokens):
+        async def capturing_stream(messages, *, tools, system, model, max_tokens, thinking=None):
             call_system.append(system)
             yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="OK")
             yield StreamEvent(
@@ -382,7 +382,7 @@ class TestAgentPromptBuilder:
 
         call_system: list = []
 
-        async def capturing_stream(messages, *, tools, system, model, max_tokens):
+        async def capturing_stream(messages, *, tools, system, model, max_tokens, thinking=None):
             call_system.append(system)
             yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="OK")
             yield StreamEvent(
@@ -428,7 +428,7 @@ class TestAgentPromptBuilder:
         builder = PromptBuilder()
         builder.set_identity("You are Ravn.")
 
-        async def simple_stream(messages, *, tools, system, model, max_tokens):
+        async def simple_stream(messages, *, tools, system, model, max_tokens, thinking=None):
             yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="OK")
             yield StreamEvent(
                 type=StreamEventType.MESSAGE_DONE,

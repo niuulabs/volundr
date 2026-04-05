@@ -86,6 +86,32 @@ class LLMProviderConfig(BaseModel):
     )
 
 
+class ExtendedThinkingConfig(BaseModel):
+    """Extended thinking (extended reasoning budget) configuration.
+
+    Extended thinking allocates a deliberate reasoning budget to hard problems
+    before the model produces its response.  Anthropic-only — FallbackAdapter
+    skips this when routing to a non-Anthropic provider.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Allow extended thinking to be activated.",
+    )
+    budget_tokens: int = Field(
+        default=8000,
+        description="Token budget allocated for thinking per activation.",
+    )
+    auto_trigger: bool = Field(
+        default=True,
+        description="Automatically activate thinking on planning/ambiguous inputs.",
+    )
+    auto_trigger_on_retry: bool = Field(
+        default=True,
+        description="Automatically activate thinking after the first tool failure.",
+    )
+
+
 class LLMConfig(BaseModel):
     """LLM provider configuration: primary provider and optional fallback chain."""
 
@@ -98,6 +124,10 @@ class LLMConfig(BaseModel):
     fallbacks: list[LLMProviderConfig] = Field(
         default_factory=list,
         description="Ordered list of fallback providers tried when the primary fails.",
+    )
+    extended_thinking: ExtendedThinkingConfig = Field(
+        default_factory=ExtendedThinkingConfig,
+        description="Extended thinking (deliberate reasoning budget) configuration.",
     )
 
 

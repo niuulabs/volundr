@@ -83,6 +83,7 @@ class ScriptedLLM(LLMPort):
         system,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> LLMResponse:
         self.calls.append({"messages": messages, "system": system})
         return next(self._responses)
@@ -95,6 +96,7 @@ class ScriptedLLM(LLMPort):
         system,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> AsyncIterator[StreamEvent]:
         response = next(self._responses)
         self.calls.append({"messages": messages, "system": system})

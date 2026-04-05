@@ -17,6 +17,16 @@ SystemPrompt = str | list[dict]
 class LLMPort(ABC):
     """Abstract interface for LLM streaming and generation with tool support."""
 
+    @property
+    def supports_thinking(self) -> bool:
+        """Return True if this adapter supports extended thinking.
+
+        Defaults to False.  AnthropicAdapter overrides to True.
+        FallbackLLMAdapter uses this to decide whether to forward the
+        ``thinking`` parameter to a given provider.
+        """
+        return False
+
     @abstractmethod
     def stream(
         self,
@@ -26,12 +36,19 @@ class LLMPort(ABC):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> AsyncIterator[StreamEvent]:
         """Stream a response from the LLM, yielding events as they arrive.
 
-        Yields StreamEvent objects with TEXT_DELTA, TOOL_CALL, and MESSAGE_DONE types.
+        Yields StreamEvent objects with TEXT_DELTA, TOOL_CALL, THINKING, and
+        MESSAGE_DONE types.
+
         ``system`` may be a plain string or a list of Anthropic-format text blocks
         with optional ``cache_control`` entries for prompt caching.
+
+        ``thinking`` enables extended thinking when set to
+        ``{"type": "enabled", "budget_tokens": N}``.  Ignored by adapters that
+        do not support extended thinking (``supports_thinking == False``).
         """
         ...
 
@@ -44,6 +61,12 @@ class LLMPort(ABC):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> LLMResponse:
-        """Generate a complete (non-streaming) response from the LLM."""
+        """Generate a complete (non-streaming) response from the LLM.
+
+        ``thinking`` enables extended thinking when set to
+        ``{"type": "enabled", "budget_tokens": N}``.  Ignored by adapters that
+        do not support extended thinking (``supports_thinking == False``).
+        """
         ...

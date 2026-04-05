@@ -37,6 +37,7 @@ class StreamEventType(StrEnum):
     TEXT_DELTA = "text_delta"
     TOOL_CALL = "tool_call"
     MESSAGE_DONE = "message_done"
+    THINKING = "thinking"  # Extended thinking block content (Anthropic-only)
 
 
 # ---------------------------------------------------------------------------
@@ -160,12 +161,19 @@ class TodoItem:
 
 @dataclass(frozen=True)
 class TokenUsage:
-    """Token usage for a single LLM call or cumulative across a session."""
+    """Token usage for a single LLM call or cumulative across a session.
+
+    ``thinking_tokens`` tracks the subset of ``output_tokens`` consumed by
+    extended-thinking blocks (Anthropic-only).  They are already included in
+    ``output_tokens``; this field provides a separate breakdown for cost
+    accounting (Bifrost).
+    """
 
     input_tokens: int
     output_tokens: int
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    thinking_tokens: int = 0
 
     @property
     def total_tokens(self) -> int:
@@ -177,6 +185,7 @@ class TokenUsage:
             output_tokens=self.output_tokens + other.output_tokens,
             cache_read_tokens=self.cache_read_tokens + other.cache_read_tokens,
             cache_write_tokens=self.cache_write_tokens + other.cache_write_tokens,
+            thinking_tokens=self.thinking_tokens + other.thinking_tokens,
         )
 
 

@@ -29,7 +29,8 @@ from ravn.ports.llm import LLMPort, SystemPrompt
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_API_VERSION = "2023-06-01"
-ANTHROPIC_BETA_HEADER = "prompt-caching-2024-07-31"
+_BETA_PROMPT_CACHING = "prompt-caching-2024-07-31"
+_BETA_INTERLEAVED_THINKING = "interleaved-thinking-2025-05-14"
 
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503})
 _DEFAULT_BASE_URL = "https://api.anthropic.com"
@@ -39,7 +40,18 @@ class AnthropicAdapter(LLMPort):
     """Calls the Anthropic Messages API with streaming and tool support.
 
     Constructor kwargs are forwarded from config via the dynamic adapter pattern.
+
+    Extended thinking is activated by passing
+    ``thinking={"type": "enabled", "budget_tokens": N}`` to ``stream()`` or
+    ``generate()``.  When enabled, the ``interleaved-thinking-2025-05-14`` beta
+    header is added automatically.  Thinking blocks are yielded as
+    ``StreamEvent(type=StreamEventType.THINKING, text=…)`` events and their
+    approximate token count is tracked in ``TokenUsage.thinking_tokens``.
     """
+
+    @property
+    def supports_thinking(self) -> bool:
+        return True
 
     def __init__(
         self,
@@ -60,11 +72,14 @@ class AnthropicAdapter(LLMPort):
         self._retry_base_delay = retry_base_delay
         self._timeout = timeout
 
-    def _headers(self) -> dict[str, str]:
+    def _headers(self, *, thinking_enabled: bool = False) -> dict[str, str]:
+        betas = [_BETA_PROMPT_CACHING]
+        if thinking_enabled:
+            betas.append(_BETA_INTERLEAVED_THINKING)
         return {
             "x-api-key": self._api_key,
             "anthropic-version": ANTHROPIC_API_VERSION,
-            "anthropic-beta": ANTHROPIC_BETA_HEADER,
+            "anthropic-beta": ",".join(betas),
             "content-type": "application/json",
         }
 
@@ -97,10 +112,12 @@ class AnthropicAdapter(LLMPort):
         model: str,
         max_tokens: int,
         stream: bool,
+        thinking: dict | None = None,
     ) -> dict:
+        effective_max_tokens = max_tokens or self._default_max_tokens
         body: dict = {
             "model": model or self._default_model,
-            "max_tokens": max_tokens or self._default_max_tokens,
+            "max_tokens": effective_max_tokens,
             "messages": messages,
             "stream": stream,
         }
@@ -109,6 +126,8 @@ class AnthropicAdapter(LLMPort):
             body["system"] = system_blocks
         if tools:
             body["tools"] = tools
+        if thinking is not None:
+            body["thinking"] = thinking
         return body
 
     async def _post_with_retry(
@@ -168,7 +187,9 @@ class AnthropicAdapter(LLMPort):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> AsyncIterator[StreamEvent]:
+        thinking_enabled = thinking is not None
         payload = self._build_request(
             messages,
             tools=tools,
@@ -176,9 +197,13 @@ class AnthropicAdapter(LLMPort):
             model=model,
             max_tokens=max_tokens,
             stream=True,
+            thinking=thinking,
         )
 
-        async with httpx.AsyncClient(headers=self._headers(), timeout=self._timeout) as client:
+        async with httpx.AsyncClient(
+            headers=self._headers(thinking_enabled=thinking_enabled),
+            timeout=self._timeout,
+        ) as client:
             response = await self._post_with_retry(client, payload, stream=True)
 
             if response.status_code != 200:
@@ -192,7 +217,10 @@ class AnthropicAdapter(LLMPort):
             partial_inputs: dict[int, dict] = {}
             tool_ids: dict[int, str] = {}
             tool_names: dict[int, str] = {}
+            # Accumulate thinking block text keyed by block index.
+            partial_thinking: dict[int, str] = {}
             current_block_index = -1
+            accumulated_thinking_chars = 0
 
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):
@@ -216,6 +244,8 @@ class AnthropicAdapter(LLMPort):
                             tool_ids[current_block_index] = block.get("id", "")
                             tool_names[current_block_index] = block.get("name", "")
                             partial_inputs[current_block_index] = {}
+                        elif block.get("type") == "thinking":
+                            partial_thinking[current_block_index] = ""
 
                     case "content_block_delta":
                         delta = event_data.get("delta", {})
@@ -225,6 +255,16 @@ class AnthropicAdapter(LLMPort):
                                 yield StreamEvent(
                                     type=StreamEventType.TEXT_DELTA,
                                     text=delta.get("text", ""),
+                                )
+                            case "thinking_delta":
+                                chunk = delta.get("thinking", "")
+                                if idx not in partial_thinking:
+                                    partial_thinking[idx] = ""
+                                partial_thinking[idx] += chunk
+                                accumulated_thinking_chars += len(chunk)
+                                yield StreamEvent(
+                                    type=StreamEventType.THINKING,
+                                    text=chunk,
                                 )
                             case "input_json_delta":
                                 # Accumulate partial JSON — emit when block stops.
@@ -252,9 +292,13 @@ class AnthropicAdapter(LLMPort):
                                 ),
                             )
                             del partial_inputs[idx]
+                        if idx in partial_thinking:
+                            del partial_thinking[idx]
 
                     case "message_delta":
                         usage_data = event_data.get("usage", {})
+                        # Approximate thinking tokens from accumulated char count.
+                        thinking_tokens = accumulated_thinking_chars // 4
                         yield StreamEvent(
                             type=StreamEventType.MESSAGE_DONE,
                             usage=TokenUsage(
@@ -262,6 +306,7 @@ class AnthropicAdapter(LLMPort):
                                 output_tokens=usage_data.get("output_tokens", 0),
                                 cache_read_tokens=usage_data.get("cache_read_input_tokens", 0),
                                 cache_write_tokens=usage_data.get("cache_creation_input_tokens", 0),
+                                thinking_tokens=thinking_tokens,
                             ),
                         )
 
@@ -273,7 +318,9 @@ class AnthropicAdapter(LLMPort):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> LLMResponse:
+        thinking_enabled = thinking is not None
         payload = self._build_request(
             messages,
             tools=tools,
@@ -281,9 +328,13 @@ class AnthropicAdapter(LLMPort):
             model=model,
             max_tokens=max_tokens,
             stream=False,
+            thinking=thinking,
         )
 
-        async with httpx.AsyncClient(headers=self._headers(), timeout=self._timeout) as client:
+        async with httpx.AsyncClient(
+            headers=self._headers(thinking_enabled=thinking_enabled),
+            timeout=self._timeout,
+        ) as client:
             response = await self._post_with_retry(client, payload, stream=False)
 
         if response.status_code != 200:
@@ -295,9 +346,12 @@ class AnthropicAdapter(LLMPort):
         data = response.json()
         content_text = ""
         tool_calls: list[ToolCall] = []
+        thinking_chars = 0
 
         for block in data.get("content", []):
             match block.get("type"):
+                case "thinking":
+                    thinking_chars += len(block.get("thinking", ""))
                 case "text":
                     content_text += block.get("text", "")
                 case "tool_use":
@@ -325,5 +379,6 @@ class AnthropicAdapter(LLMPort):
                 output_tokens=usage_data.get("output_tokens", 0),
                 cache_read_tokens=usage_data.get("cache_read_input_tokens", 0),
                 cache_write_tokens=usage_data.get("cache_creation_input_tokens", 0),
+                thinking_tokens=thinking_chars // 4,
             ),
         )
