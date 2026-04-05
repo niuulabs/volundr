@@ -36,9 +36,6 @@ def _config_paths() -> list[Path]:
     ]
 
 
-CONFIG_PATHS = _config_paths()
-
-
 class AnthropicConfig(BaseModel):
     """Anthropic API configuration."""
 
@@ -96,7 +93,6 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        yaml_file=CONFIG_PATHS,
         yaml_file_encoding="utf-8",
         env_prefix="RAVN_",
         env_nested_delimiter="__",
@@ -121,7 +117,7 @@ class Settings(BaseSettings):
         return (
             init_settings,
             env_settings,
-            YamlConfigSettingsSource(settings_cls),
+            YamlConfigSettingsSource(settings_cls, yaml_file=_config_paths()),
             file_secret_settings,
         )
 

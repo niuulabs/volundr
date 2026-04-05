@@ -82,3 +82,11 @@ class TestSettings:
         with patch.dict(os.environ, {"RAVN_AGENT__MODEL": "claude-haiku-4-5-20251001"}):
             s = Settings()
             assert s.agent.model == "claude-haiku-4-5-20251001"
+
+    def test_config_path_resolved_at_instantiation(self, tmp_path) -> None:
+        """RAVN_CONFIG set before Settings() is constructed is picked up."""
+        cfg = tmp_path / "custom.yaml"
+        cfg.write_text("agent:\n  model: claude-custom\n")
+        with patch.dict(os.environ, {"RAVN_CONFIG": str(cfg)}):
+            s = Settings()
+            assert s.agent.model == "claude-custom"

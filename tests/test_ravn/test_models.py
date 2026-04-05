@@ -75,6 +75,11 @@ class TestMessage:
         assert m.role == "user"
         assert m.content == "Hello"
 
+    def test_content_as_list(self) -> None:
+        blocks = [{"type": "text", "text": "hi"}, {"type": "tool_use", "id": "x"}]
+        m = Message(role="assistant", content=blocks)
+        assert m.content == blocks
+
     def test_frozen(self) -> None:
         m = Message(role="user", content="Hello")
         with pytest.raises(Exception):

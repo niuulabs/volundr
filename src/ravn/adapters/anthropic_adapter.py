@@ -126,6 +126,9 @@ class AnthropicAdapter(LLMPort):
                 if response.status_code not in _RETRYABLE_STATUS_CODES:
                     return response
 
+                if stream:
+                    await response.aclose()
+
                 if attempt < self._max_retries:
                     delay = self._retry_base_delay * (2**attempt)
                     logger.warning(
@@ -135,8 +138,6 @@ class AnthropicAdapter(LLMPort):
                         attempt + 1,
                         self._max_retries,
                     )
-                    if stream:
-                        await response.aclose()
                     await asyncio.sleep(delay)
                     last_exc = LLMError(
                         f"Anthropic API error {response.status_code}",

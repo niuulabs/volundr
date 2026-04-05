@@ -16,9 +16,17 @@ class CliChannel(ChannelPort):
     what the agent is doing in real time.
     """
 
-    def __init__(self, *, file=None) -> None:
+    def __init__(
+        self,
+        *,
+        file=None,
+        result_truncation_limit: int = 500,
+        input_value_limit: int = 60,
+    ) -> None:
         self._file = file or sys.stdout
         self._in_response = False
+        self._result_truncation_limit = result_truncation_limit
+        self._input_value_limit = input_value_limit
 
     async def emit(self, event: RavnEvent) -> None:
         match event.type:
@@ -39,7 +47,10 @@ class CliChannel(ChannelPort):
                 if self._in_response:
                     print(file=self._file)
                     self._in_response = False
-                print(f"\n⚙ {tool_name}({_format_input(tool_input)})", file=self._file)
+                print(
+                    f"\n⚙ {tool_name}({_format_input(tool_input, self._input_value_limit)})",
+                    file=self._file,
+                )
 
             case RavnEventType.TOOL_RESULT:
                 tool_name = event.metadata.get("tool_name", "")
@@ -47,8 +58,8 @@ class CliChannel(ChannelPort):
                 prefix = "✗" if is_error else "✓"
                 content = event.data
                 # Truncate very long results for readability.
-                if len(content) > 500:
-                    content = content[:500] + "…"
+                if len(content) > self._result_truncation_limit:
+                    content = content[: self._result_truncation_limit] + "…"
                 print(f"{prefix} {tool_name}: {content}", file=self._file)
 
             case RavnEventType.ERROR:
@@ -61,14 +72,14 @@ class CliChannel(ChannelPort):
             self._in_response = False
 
 
-def _format_input(tool_input: dict) -> str:
+def _format_input(tool_input: dict, value_limit: int = 60) -> str:
     """Format tool input for compact display."""
     if not tool_input:
         return ""
     parts = []
     for key, value in tool_input.items():
         value_str = str(value)
-        if len(value_str) > 60:
-            value_str = value_str[:60] + "…"
+        if len(value_str) > value_limit:
+            value_str = value_str[:value_limit] + "…"
         parts.append(f"{key}={value_str!r}")
     return ", ".join(parts)

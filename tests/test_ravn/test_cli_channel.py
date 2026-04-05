@@ -82,6 +82,21 @@ class TestCliChannel:
         assert "thinking" in output
         assert "echo" in output
 
+    async def test_custom_result_truncation_limit(self) -> None:
+        buf = io.StringIO()
+        ch = CliChannel(file=buf, result_truncation_limit=10)
+        await ch.emit(RavnEvent.tool_result("tool", "x" * 20))
+        output = buf.getvalue()
+        assert "…" in output
+        assert len(output) < 30
+
+    async def test_custom_input_value_limit(self) -> None:
+        buf = io.StringIO()
+        ch = CliChannel(file=buf, input_value_limit=5)
+        await ch.emit(RavnEvent.tool_start("t", {"k": "v" * 10}))
+        output = buf.getvalue()
+        assert "…" in output
+
 
 class TestFormatInput:
     def test_empty(self) -> None:
@@ -94,6 +109,10 @@ class TestFormatInput:
 
     def test_long_value_truncated(self) -> None:
         result = _format_input({"k": "v" * 100})
+        assert "…" in result
+
+    def test_custom_limit(self) -> None:
+        result = _format_input({"k": "v" * 10}, value_limit=5)
         assert "…" in result
 
     def test_multiple_keys(self) -> None:
