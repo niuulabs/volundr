@@ -325,6 +325,18 @@ class SkillConfig(BaseModel):
         default=128,
         description="Maximum entries in the in-process LRU skill cache.",
     )
+    skill_dirs: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Extra directories to search for user-defined skill Markdown files, "
+            "in addition to the default .ravn/skills/ and ~/.ravn/skills/ paths. "
+            "Paths are searched in order; earlier entries have higher priority."
+        ),
+    )
+    include_builtin: bool = Field(
+        default=True,
+        description="Include the built-in skills shipped with Ravn in the skill registry.",
+    )
 
 
 class MemoryConfig(BaseModel):

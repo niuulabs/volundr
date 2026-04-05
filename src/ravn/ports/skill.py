@@ -40,3 +40,17 @@ class SkillPort(ABC):
     async def record_skill(self, skill: Skill) -> None:
         """Persist *skill* directly (bypass automatic discovery)."""
         ...
+
+    async def get_skill(self, name: str) -> Skill | None:
+        """Return the skill with the given *name*, or None if not found.
+
+        The default implementation calls :meth:`list_skills` and filters by
+        name (case-insensitive).  Implementations may override this for
+        more efficient lookup.
+        """
+        skills = await self.list_skills()
+        name_lower = name.lower()
+        for skill in skills:
+            if skill.name.lower() == name_lower:
+                return skill
+        return None
