@@ -1,4 +1,4 @@
-"""Tests for ModelRouter: alias expansion, provider selection, failover."""
+"""Tests for ModelRouter: alias expansion, provider selection, and all routing strategies."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from bifrost.config import BifrostConfig, ProviderConfig
+from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
 from bifrost.ports.provider import ProviderError, ProviderPort
 from bifrost.router import ModelRouter, RouterError
 from bifrost.translation.models import (
@@ -64,15 +64,10 @@ class FakeProvider(ProviderPort):
         self.closed = True
 
 
-def _make_router(providers_cfg: dict, aliases: dict | None = None) -> tuple[ModelRouter, dict]:
-    """Create a router with injected fake providers."""
-    cfg = BifrostConfig(
-        providers=providers_cfg,
-        aliases=aliases or {},
-        failover_enabled=True,
-    )
-    router = ModelRouter(cfg)
-    return router, {}
+def _http_error(status: int) -> httpx.HTTPStatusError:
+    mock_resp = MagicMock()
+    mock_resp.status_code = status
+    return httpx.HTTPStatusError("err", request=MagicMock(), response=mock_resp)
 
 
 class TestAliasResolution:
@@ -89,7 +84,6 @@ class TestAliasResolution:
         req = _make_request(model="smart")
         await router.complete(req)
 
-        # The adapter should have been called with the canonical model name.
         assert fake.complete_calls[0][1] == "gpt-4o"
 
     @pytest.mark.asyncio
@@ -151,7 +145,7 @@ class TestProviderRouting:
         assert fake.complete_calls[0][1] == "gpt-4o-mini"
 
 
-class TestFailover:
+class TestFailoverStrategy:
     @pytest.mark.asyncio
     async def test_failover_on_http_503(self):
         cfg = BifrostConfig(
@@ -159,15 +153,10 @@ class TestFailover:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 503
-        primary = FakeProvider(
-            raises=httpx.HTTPStatusError("fail", request=MagicMock(), response=mock_resp)
-        )
+        primary = FakeProvider(raises=_http_error(503))
         backup = FakeProvider()
         router._adapters["openai"] = primary
         router._adapters["backup"] = backup
@@ -184,15 +173,10 @@ class TestFailover:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 401
-        primary = FakeProvider(
-            raises=httpx.HTTPStatusError("auth", request=MagicMock(), response=mock_resp)
-        )
+        primary = FakeProvider(raises=_http_error(401))
         backup = FakeProvider()
         router._adapters["openai"] = primary
         router._adapters["backup"] = backup
@@ -203,21 +187,16 @@ class TestFailover:
         assert len(backup.complete_calls) == 0
 
     @pytest.mark.asyncio
-    async def test_failover_disabled(self):
+    async def test_direct_strategy_no_failover(self):
         cfg = BifrostConfig(
             providers={
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=False,
+            routing_strategy=RoutingStrategy.DIRECT,
         )
         router = ModelRouter(cfg)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 503
-        primary = FakeProvider(
-            raises=httpx.HTTPStatusError("fail", request=MagicMock(), response=mock_resp)
-        )
+        primary = FakeProvider(raises=_http_error(503))
         backup = FakeProvider()
         router._adapters["openai"] = primary
         router._adapters["backup"] = backup
@@ -225,7 +204,6 @@ class TestFailover:
         req = _make_request(model="gpt-4o")
         with pytest.raises(RouterError):
             await router.complete(req)
-        # Backup should NOT have been tried.
         assert len(backup.complete_calls) == 0
 
     @pytest.mark.asyncio
@@ -235,13 +213,10 @@ class TestFailover:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 503
-        exc = httpx.HTTPStatusError("fail", request=MagicMock(), response=mock_resp)
+        exc = _http_error(503)
         router._adapters["openai"] = FakeProvider(raises=exc)
         router._adapters["backup"] = FakeProvider(raises=exc)
 
@@ -256,7 +231,7 @@ class TestFailover:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
         router._adapters["openai"] = FakeProvider(raises=ProviderError("down"))
@@ -265,6 +240,247 @@ class TestFailover:
         req = _make_request(model="gpt-4o")
         result = await router.complete(req)
         assert result.content[0].text == "OK"
+
+
+class TestCostOptimisedStrategy:
+    @pytest.mark.asyncio
+    async def test_cheapest_provider_tried_first(self):
+        cfg = BifrostConfig(
+            providers={
+                "expensive": ProviderConfig(models=["gpt-4o"], cost_per_token=10.0),
+                "cheap": ProviderConfig(models=["gpt-4o"], cost_per_token=1.0),
+            },
+            routing_strategy=RoutingStrategy.COST_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        cheap = FakeProvider()
+        expensive = FakeProvider()
+        router._adapters["cheap"] = cheap
+        router._adapters["expensive"] = expensive
+
+        req = _make_request(model="gpt-4o")
+        await router.complete(req)
+
+        assert len(cheap.complete_calls) == 1
+        assert len(expensive.complete_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_next_cheapest_on_failure(self):
+        cfg = BifrostConfig(
+            providers={
+                "expensive": ProviderConfig(models=["gpt-4o"], cost_per_token=10.0),
+                "cheap": ProviderConfig(models=["gpt-4o"], cost_per_token=1.0),
+            },
+            routing_strategy=RoutingStrategy.COST_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        router._adapters["cheap"] = FakeProvider(raises=_http_error(503))
+        router._adapters["expensive"] = FakeProvider()
+
+        req = _make_request(model="gpt-4o")
+        result = await router.complete(req)
+        assert result.content[0].text == "OK"
+
+    @pytest.mark.asyncio
+    async def test_equal_cost_preserves_config_order(self):
+        cfg = BifrostConfig(
+            providers={
+                "first": ProviderConfig(models=["gpt-4o"], cost_per_token=5.0),
+                "second": ProviderConfig(models=["gpt-4o"], cost_per_token=5.0),
+            },
+            routing_strategy=RoutingStrategy.COST_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        first = FakeProvider()
+        second = FakeProvider()
+        router._adapters["first"] = first
+        router._adapters["second"] = second
+
+        req = _make_request(model="gpt-4o")
+        await router.complete(req)
+        # Python's sort is stable; first should be tried first since costs are equal.
+        assert len(first.complete_calls) == 1
+        assert len(second.complete_calls) == 0
+
+
+class TestRoundRobinStrategy:
+    @pytest.mark.asyncio
+    async def test_cycles_through_providers(self):
+        cfg = BifrostConfig(
+            providers={
+                "a": ProviderConfig(models=["gpt-4o"]),
+                "b": ProviderConfig(models=["gpt-4o"]),
+                "c": ProviderConfig(models=["gpt-4o"]),
+            },
+            routing_strategy=RoutingStrategy.ROUND_ROBIN,
+        )
+        router = ModelRouter(cfg)
+        providers = {"a": FakeProvider(), "b": FakeProvider(), "c": FakeProvider()}
+        router._adapters.update(providers)
+
+        req = _make_request(model="gpt-4o")
+        await router.complete(req)
+        await router.complete(req)
+        await router.complete(req)
+
+        assert len(providers["a"].complete_calls) == 1
+        assert len(providers["b"].complete_calls) == 1
+        assert len(providers["c"].complete_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_wraps_around_after_all_providers(self):
+        cfg = BifrostConfig(
+            providers={
+                "a": ProviderConfig(models=["gpt-4o"]),
+                "b": ProviderConfig(models=["gpt-4o"]),
+            },
+            routing_strategy=RoutingStrategy.ROUND_ROBIN,
+        )
+        router = ModelRouter(cfg)
+        a = FakeProvider()
+        b = FakeProvider()
+        router._adapters["a"] = a
+        router._adapters["b"] = b
+
+        req = _make_request(model="gpt-4o")
+        # 4 requests should hit: a, b, a, b
+        for _ in range(4):
+            await router.complete(req)
+
+        assert len(a.complete_calls) == 2
+        assert len(b.complete_calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_next_on_failure(self):
+        cfg = BifrostConfig(
+            providers={
+                "a": ProviderConfig(models=["gpt-4o"]),
+                "b": ProviderConfig(models=["gpt-4o"]),
+            },
+            routing_strategy=RoutingStrategy.ROUND_ROBIN,
+        )
+        router = ModelRouter(cfg)
+        router._adapters["a"] = FakeProvider(raises=_http_error(503))
+        router._adapters["b"] = FakeProvider()
+
+        req = _make_request(model="gpt-4o")
+        # First request starts at 'a', fails, falls back to 'b'.
+        result = await router.complete(req)
+        assert result.content[0].text == "OK"
+
+
+class TestLatencyOptimisedStrategy:
+    @pytest.mark.asyncio
+    async def test_fastest_provider_tried_first(self):
+        cfg = BifrostConfig(
+            providers={
+                "slow": ProviderConfig(models=["gpt-4o"]),
+                "fast": ProviderConfig(models=["gpt-4o"]),
+            },
+            routing_strategy=RoutingStrategy.LATENCY_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        # Seed latency data: slow = 2.0s, fast = 0.1s.
+        router._latency_ewma["slow"] = 2.0
+        router._latency_ewma["fast"] = 0.1
+
+        slow = FakeProvider()
+        fast = FakeProvider()
+        router._adapters["slow"] = slow
+        router._adapters["fast"] = fast
+
+        req = _make_request(model="gpt-4o")
+        await router.complete(req)
+
+        assert len(fast.complete_calls) == 1
+        assert len(slow.complete_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_unknown_latency_providers_placed_after_known(self):
+        cfg = BifrostConfig(
+            providers={
+                "unknown": ProviderConfig(models=["gpt-4o"]),
+                "known": ProviderConfig(models=["gpt-4o"]),
+            },
+            routing_strategy=RoutingStrategy.LATENCY_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        router._latency_ewma["known"] = 0.5
+        # "unknown" has no EWMA data — should be tried after "known".
+
+        unknown = FakeProvider()
+        known = FakeProvider()
+        router._adapters["unknown"] = unknown
+        router._adapters["known"] = known
+
+        req = _make_request(model="gpt-4o")
+        await router.complete(req)
+
+        assert len(known.complete_calls) == 1
+        assert len(unknown.complete_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_latency_recorded_after_successful_request(self):
+        cfg = BifrostConfig(
+            providers={"a": ProviderConfig(models=["gpt-4o"])},
+            routing_strategy=RoutingStrategy.LATENCY_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        router._adapters["a"] = FakeProvider()
+
+        req = _make_request(model="gpt-4o")
+        await router.complete(req)
+
+        assert "a" in router._latency_ewma
+        assert router._latency_ewma["a"] >= 0.0
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_next_on_failure(self):
+        cfg = BifrostConfig(
+            providers={
+                "fast": ProviderConfig(models=["gpt-4o"]),
+                "slow": ProviderConfig(models=["gpt-4o"]),
+            },
+            routing_strategy=RoutingStrategy.LATENCY_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        router._latency_ewma["fast"] = 0.1
+        router._latency_ewma["slow"] = 2.0
+        router._adapters["fast"] = FakeProvider(raises=_http_error(503))
+        router._adapters["slow"] = FakeProvider()
+
+        req = _make_request(model="gpt-4o")
+        result = await router.complete(req)
+        assert result.content[0].text == "OK"
+
+    @pytest.mark.asyncio
+    async def test_ewma_update_on_successive_calls(self):
+        cfg = BifrostConfig(
+            providers={"a": ProviderConfig(models=["gpt-4o"])},
+            routing_strategy=RoutingStrategy.LATENCY_OPTIMISED,
+        )
+        router = ModelRouter(cfg)
+        router._adapters["a"] = FakeProvider()
+        router._latency_ewma["a"] = 1.0
+
+        req = _make_request(model="gpt-4o")
+        await router.complete(req)
+
+        # After a fast call the EWMA should move toward the new (small) value.
+        assert router._latency_ewma["a"] < 1.0
+
+
+class TestBuildCandidatesDefaultCase:
+    def test_unknown_strategy_raises_value_error(self):
+        """The match default case must raise ValueError, not silently return None."""
+        cfg = BifrostConfig(providers={"a": ProviderConfig(models=["gpt-4o"])})
+        router = ModelRouter(cfg)
+
+        # Inject an unrecognised strategy value, bypassing Pydantic field validation.
+        object.__setattr__(cfg, "routing_strategy", "__invalid__")
+
+        with pytest.raises(ValueError, match="Unknown routing strategy"):
+            router._build_candidates("gpt-4o")
 
 
 class TestStreamingRouter:
@@ -289,7 +505,7 @@ class TestStreamingRouter:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
         router._adapters["openai"] = FakeProvider(raises=ProviderError("down"))
@@ -323,7 +539,6 @@ class TestAdapterLoading:
         router = ModelRouter(cfg)
         assert router._adapters == {}
 
-        # Patch to avoid real HTTP calls.
         with patch(
             "bifrost.adapters.anthropic.AnthropicAdapter.complete",
             new_callable=AsyncMock,
@@ -345,5 +560,4 @@ class TestAdapterLoading:
         await router.complete(req)
         await router.complete(req)
 
-        # Only one adapter instance should exist.
         assert router._adapters["openai"] is fake

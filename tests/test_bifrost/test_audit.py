@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bifrost.app import _extract_usage_from_sse_line, create_app
-from bifrost.config import BifrostConfig, ProviderConfig
+from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
 from bifrost.domain.models import TokenUsage
 from bifrost.ports.provider import ProviderError, ProviderPort
 from bifrost.router import ModelRouter, RouterError, _load_adapter
@@ -247,7 +247,7 @@ class TestStreamingFailover:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
         mock_resp = MagicMock()
@@ -269,7 +269,7 @@ class TestStreamingFailover:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
         mock_resp = MagicMock()
@@ -290,7 +290,7 @@ class TestStreamingFailover:
                 "openai": ProviderConfig(models=["gpt-4o"]),
                 "backup": ProviderConfig(models=["gpt-4o"]),
             },
-            failover_enabled=True,
+            routing_strategy=RoutingStrategy.FAILOVER,
         )
         router = ModelRouter(cfg)
         router._adapters["openai"] = FakeProvider(raises=ProviderError("down"))
