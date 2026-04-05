@@ -54,21 +54,16 @@ aio_pika = pytest.importorskip("aio_pika", reason="aio-pika not installed; skipp
 # ---------------------------------------------------------------------------
 
 
-class _AsyncContextManagerMock:
-    """A simple async context manager that does nothing."""
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_):
-        pass
-
-
 def _make_mock_message(body: bytes) -> MagicMock:
-    """Build a mock AMQP incoming message with the given body."""
+    """Build a mock AMQP incoming message with the given body.
+
+    Provides ``ack`` and ``nack`` as :class:`~unittest.mock.AsyncMock` so
+    tests can assert which acknowledgement path was taken.
+    """
     msg = MagicMock()
     msg.body = body
-    msg.process.return_value = _AsyncContextManagerMock()
+    msg.ack = AsyncMock()
+    msg.nack = AsyncMock()
     return msg
 
 
@@ -591,7 +586,7 @@ async def test_subscribe_star_binds_hash():
 
 
 async def test_on_message_dispatches_to_matching_handler():
-    """A matching subscription receives the event."""
+    """A matching subscription receives the event and the message is acked."""
     mocks = _make_amqp_mocks()
     received: list[SleipnirEvent] = []
     done = asyncio.Event()
@@ -614,10 +609,12 @@ async def test_on_message_dispatches_to_matching_handler():
 
     assert len(received) == 1
     assert received[0].event_id == "msg-1"
+    msg.ack.assert_called_once()
+    msg.nack.assert_not_called()
 
 
 async def test_on_message_does_not_dispatch_to_non_matching_handler():
-    """A non-matching subscription does not receive the event."""
+    """A non-matching subscription does not receive the event; message is acked."""
     mocks = _make_amqp_mocks()
     received: list[SleipnirEvent] = []
 
@@ -639,10 +636,12 @@ async def test_on_message_does_not_dispatch_to_non_matching_handler():
         await sub.stop()
 
     assert received == []
+    msg.ack.assert_called_once()
+    msg.nack.assert_not_called()
 
 
 async def test_on_message_drops_expired_ttl():
-    """Messages with ttl=0 are silently dropped after deserialization."""
+    """TTL=0 events are not dispatched but the message is acked (valid, just stale)."""
     mocks = _make_amqp_mocks()
     received: list[SleipnirEvent] = []
 
@@ -662,10 +661,13 @@ async def test_on_message_drops_expired_ttl():
         await sub.stop()
 
     assert received == []
+    # TTL-expired messages are acked (they are valid, just stale) — not nacked.
+    msg.ack.assert_called_once()
+    msg.nack.assert_not_called()
 
 
 async def test_on_message_handles_malformed_json(caplog):
-    """Malformed JSON body is silently dropped (no unhandled exception)."""
+    """Malformed JSON body is nacked without requeue so DLX receives it."""
     mocks = _make_amqp_mocks()
 
     async def handler(_: SleipnirEvent) -> None:
@@ -681,6 +683,9 @@ async def test_on_message_handles_malformed_json(caplog):
             await sub._on_message(msg)
 
         await sub.stop()
+
+    msg.nack.assert_called_once_with(requeue=False)
+    msg.ack.assert_not_called()
 
 
 async def test_on_message_dispatches_to_multiple_subscribers():
@@ -714,6 +719,8 @@ async def test_on_message_dispatches_to_multiple_subscribers():
 
     assert bucket_a == ["multi-sub"]
     assert bucket_b == ["multi-sub"]
+    msg.ack.assert_called_once()
+    msg.nack.assert_not_called()
 
 
 async def test_on_message_inactive_subscription_not_dispatched():

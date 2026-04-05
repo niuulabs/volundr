@@ -64,12 +64,13 @@ except ImportError:
     _AIO_PIKA_AVAILABLE = False
 
 from sleipnir.adapters._subscriber_support import (
+    DEFAULT_RING_BUFFER_DEPTH,
     _BaseSubscription,
     consume_queue,
-    enqueue_with_overflow,
+    dispatch_to_subscriptions,
 )
 from sleipnir.adapters.serialization import deserialize, serialize
-from sleipnir.domain.events import SleipnirEvent, match_event_type
+from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.events import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
 
 logger = logging.getLogger(__name__)
@@ -88,10 +89,6 @@ DEFAULT_PREFETCH_COUNT = 1
 #: Events with urgency above this threshold are published as persistent
 #: (delivery_mode=2); events at or below are transient (delivery_mode=1).
 DEFAULT_DURABLE_THRESHOLD_URGENCY = 0.4
-
-#: Depth of each application-level subscriber ring buffer (events).
-DEFAULT_RING_BUFFER_DEPTH = 1000
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -404,25 +401,20 @@ class RabbitMQSubscriber(SleipnirSubscriber):
         self,
         message: aio_pika.abc.AbstractIncomingMessage,  # type: ignore[name-defined]
     ) -> None:
-        """Receive an AMQP message, deserialise it, and dispatch to handlers."""
-        async with message.process():
-            event = _decode_event(message.body)
-            if event is None:
-                return
-            if event.ttl is not None and event.ttl <= 0:
-                logger.debug(
-                    "Dropping expired event %s (%s): ttl=%d",
-                    event.event_id,
-                    event.event_type,
-                    event.ttl,
-                )
-                return
-            for sub in list(self._subscriptions):
-                if not sub.active:
-                    continue
-                if not any(match_event_type(p, event.event_type) for p in sub.patterns):
-                    continue
-                await enqueue_with_overflow(sub._queue, event, self._ring_buffer_depth, logger)
+        """Receive an AMQP message, deserialise it, and dispatch to handlers.
+
+        Acknowledgement policy:
+        - Deserialization failure → ``nack(requeue=False)`` so the message is
+          routed to ``sleipnir.dead_letter`` for Sköll inspection.
+        - TTL-expired event → ``ack()``; the message is valid but stale.
+        - Successful dispatch → ``ack()``.
+        """
+        event = _decode_event(message.body)
+        if event is None:
+            await message.nack(requeue=False)
+            return
+        await message.ack()
+        await dispatch_to_subscriptions(event, self._subscriptions, self._ring_buffer_depth, logger)
 
 
 # ---------------------------------------------------------------------------
