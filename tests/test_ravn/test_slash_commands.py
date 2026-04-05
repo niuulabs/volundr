@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ravn.adapters.slash_commands import SlashCommandContext, handle
 from ravn.domain.models import Session, TodoItem, TodoStatus
 
@@ -371,13 +373,33 @@ class TestCmdInit:
         assert result is not None
         assert "generic" in result
 
-    def test_generated_ravn_md_no_schema_warnings(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize(
+        "project_type,marker_file,marker_content",
+        [
+            ("python", "pyproject.toml", "[project]\nname = 'mylib'\n"),
+            ("go", "go.mod", "module example.com/myapp\n"),
+            ("rust", "Cargo.toml", "[package]\nname = 'myapp'\n"),
+            ("node", "package.json", '{"name": "myapp"}\n'),
+            ("generic", None, None),
+        ],
+    )
+    def test_generated_ravn_md_no_schema_warnings(
+        self,
+        tmp_path: Path,
+        project_type: str,
+        marker_file: str | None,
+        marker_content: str | None,
+    ) -> None:
         from ravn.config import ProjectConfig
 
+        if marker_file is not None:
+            (tmp_path / marker_file).write_text(marker_content or "")
         handle("/init", _ctx(cwd=tmp_path))
         cfg = ProjectConfig.load(tmp_path / "RAVN.md")
-        assert cfg is not None
-        assert cfg.warnings == []
+        assert cfg is not None, f"ProjectConfig.load returned None for {project_type} template"
+        assert cfg.warnings == [], (
+            f"{project_type} template produced schema warnings: {cfg.warnings}"
+        )
 
 
 # ---------------------------------------------------------------------------
