@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from ravn.cli.commands import _chat, _print_usage, _run_turn, app, main
+from ravn.config import Settings
 from ravn.domain.models import (
     StreamEvent,
     StreamEventType,
@@ -210,7 +211,7 @@ class TestReplMode:
         channel = CliChannel(file=io.StringIO())
 
         with patch("builtins.input", side_effect=EOFError):
-            await _chat(agent, channel, prompt="", show_usage=False)
+            await _chat(agent, channel, settings=Settings(), prompt="", show_usage=False)
 
     async def test_repl_skips_empty_input(self) -> None:
         """Empty lines in REPL are skipped without calling run_turn."""
@@ -231,7 +232,7 @@ class TestReplMode:
         channel = CliChannel(file=io.StringIO())
 
         with patch("builtins.input", side_effect=["", EOFError]):
-            await _chat(agent, channel, prompt="", show_usage=False)
+            await _chat(agent, channel, settings=Settings(), prompt="", show_usage=False)
 
         agent.run_turn.assert_not_called()
 
@@ -254,7 +255,7 @@ class TestReplMode:
         channel = CliChannel(file=io.StringIO())
 
         with patch("builtins.input", side_effect=["hi there", EOFError]):
-            await _chat(agent, channel, prompt="", show_usage=False)
+            await _chat(agent, channel, settings=Settings(), prompt="", show_usage=False)
 
         agent.run_turn.assert_called_once_with("hi there")
 

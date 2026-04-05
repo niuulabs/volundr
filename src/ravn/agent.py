@@ -73,6 +73,16 @@ class RavnAgent:
     def session(self) -> Session:
         return self._session
 
+    @property
+    def tools(self) -> list[ToolPort]:
+        """Return all registered tools in registration order."""
+        return list(self._tools.values())
+
+    @property
+    def max_iterations(self) -> int:
+        """Maximum tool-call iterations allowed per turn."""
+        return self._max_iterations
+
     def _tool_defs(self) -> list[dict]:
         return [t.to_api_dict() for t in self._tools.values()]
 

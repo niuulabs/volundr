@@ -10,6 +10,8 @@ import typer
 from ravn.adapters.anthropic_adapter import AnthropicAdapter
 from ravn.adapters.cli_channel import CliChannel
 from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
+from ravn.adapters.slash_commands import SlashCommandContext
+from ravn.adapters.slash_commands import handle as handle_slash
 from ravn.agent import RavnAgent
 from ravn.config import Settings
 from ravn.domain.models import TokenUsage
@@ -58,6 +60,17 @@ def _build_agent(settings: Settings, *, no_tools: bool = False) -> tuple[RavnAge
     return agent, channel
 
 
+def _make_slash_ctx(agent: RavnAgent, settings: Settings) -> SlashCommandContext:
+    """Build a SlashCommandContext from the running agent and loaded settings."""
+    return SlashCommandContext(
+        session=agent.session,
+        tools=agent.tools,
+        max_iterations=agent.max_iterations,
+        llm_adapter_name=type(agent._llm).__name__,
+        permission_mode=settings.permission.mode,
+    )
+
+
 @app.command()
 def run(
     prompt: str = typer.Argument(default="", help="Initial prompt. If empty, starts REPL."),
@@ -74,23 +87,26 @@ def run(
     settings = Settings()
     agent, channel = _build_agent(settings, no_tools=no_tools)
 
-    asyncio.run(_chat(agent, channel, prompt=prompt, show_usage=show_usage))
+    asyncio.run(_chat(agent, channel, settings=settings, prompt=prompt, show_usage=show_usage))
 
 
 async def _chat(
     agent: RavnAgent,
     channel: CliChannel,
     *,
+    settings: Settings,
     prompt: str,
     show_usage: bool,
 ) -> None:
     """Run a single-turn or multi-turn conversation."""
     if prompt:
+        # Single-turn: slash commands are not meaningful here; pass straight to agent.
         await _run_turn(agent, channel, prompt, show_usage=show_usage, single_turn=True)
         return
 
     # REPL mode.
-    typer.echo("Ravn — type your message, Ctrl+D to exit.\n")
+    typer.echo("Ravn — type your message or /help for commands. Ctrl+D to exit.\n")
+    slash_ctx = _make_slash_ctx(agent, settings)
     while True:
         try:
             user_input = input("You: ").strip()
@@ -98,6 +114,11 @@ async def _chat(
             break
 
         if not user_input:
+            continue
+
+        slash_output = handle_slash(user_input, slash_ctx)
+        if slash_output is not None:
+            typer.echo(slash_output)
             continue
 
         await _run_turn(agent, channel, user_input, show_usage=show_usage)
