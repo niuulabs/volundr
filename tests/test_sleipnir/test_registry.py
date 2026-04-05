@@ -57,6 +57,17 @@ def test_volundr_constants_present():
     assert registry.VOLUNDR_PIPELINE_FAILED == "volundr.pipeline.failed"
 
 
+def test_volundr_session_constants_present():
+    """New session/token/chronicle event type constants added in NIU-466."""
+    assert registry.VOLUNDR_SESSION_CREATED == "volundr.session.created"
+    assert registry.VOLUNDR_SESSION_STARTED == "volundr.session.started"
+    assert registry.VOLUNDR_SESSION_STOPPED == "volundr.session.stopped"
+    assert registry.VOLUNDR_SESSION_FAILED == "volundr.session.failed"
+    assert registry.VOLUNDR_TOKEN_USAGE == "volundr.token.usage"
+    assert registry.VOLUNDR_CHRONICLE_CREATED == "volundr.chronicle.created"
+    assert registry.VOLUNDR_CHRONICLE_UPDATED == "volundr.chronicle.updated"
+
+
 def test_bifrost_constants_present():
     assert registry.BIFROST_CONNECTION_OPEN == "bifrost.connection.open"
     assert registry.BIFROST_CONNECTION_CLOSE == "bifrost.connection.close"

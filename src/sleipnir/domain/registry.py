@@ -86,6 +86,27 @@ TYR_SESSION_END: str = "tyr.session.end"
 # volundr — Volundr platform events
 # ---------------------------------------------------------------------------
 
+#: A session was created in Volundr.
+VOLUNDR_SESSION_CREATED: str = "volundr.session.created"
+
+#: A session was started (pods running, ready to accept CLI connections).
+VOLUNDR_SESSION_STARTED: str = "volundr.session.started"
+
+#: A session was stopped gracefully.
+VOLUNDR_SESSION_STOPPED: str = "volundr.session.stopped"
+
+#: A session failed (pod error or infrastructure failure).
+VOLUNDR_SESSION_FAILED: str = "volundr.session.failed"
+
+#: Token usage was recorded for a session.
+VOLUNDR_TOKEN_USAGE: str = "volundr.token.usage"
+
+#: A chronicle was created for a session.
+VOLUNDR_CHRONICLE_CREATED: str = "volundr.chronicle.created"
+
+#: An existing chronicle was updated.
+VOLUNDR_CHRONICLE_UPDATED: str = "volundr.chronicle.updated"
+
 #: A pull request was opened in the platform.
 VOLUNDR_PR_OPENED: str = "volundr.pr.opened"
 
