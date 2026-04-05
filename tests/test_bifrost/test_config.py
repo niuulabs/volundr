@@ -106,6 +106,14 @@ class TestBifrostConfig:
         cfg = ProviderConfig()
         assert cfg.cost_per_token == 0.0
 
+    def test_latency_ewma_alpha_default(self):
+        cfg = BifrostConfig()
+        assert cfg.latency_ewma_alpha == 0.2
+
+    def test_latency_ewma_alpha_configurable(self):
+        cfg = BifrostConfig.model_validate({"latency_ewma_alpha": 0.5})
+        assert cfg.latency_ewma_alpha == 0.5
+
     def test_full_config(self):
         cfg = BifrostConfig.model_validate(
             {

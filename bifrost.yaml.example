@@ -71,6 +71,14 @@ bifrost:
     powerful: claude-opus-4-6
     local: llama3.1:8b
 
+  # ── Latency estimator ───────────────────────────────────────────────────────
+  #
+  # EWMA smoothing factor for the latency_optimised strategy (0 < alpha <= 1).
+  # Higher values weight recent observations more heavily; lower values smooth
+  # over a longer history.  Default: 0.2
+  #
+  # latency_ewma_alpha: 0.2
+
   # ── Server ──────────────────────────────────────────────────────────────────
   host: 0.0.0.0
   port: 8088

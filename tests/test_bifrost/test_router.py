@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -65,8 +65,6 @@ class FakeProvider(ProviderPort):
 
 
 def _http_error(status: int) -> httpx.HTTPStatusError:
-    from unittest.mock import MagicMock
-
     mock_resp = MagicMock()
     mock_resp.status_code = status
     return httpx.HTTPStatusError("err", request=MagicMock(), response=mock_resp)
@@ -470,6 +468,19 @@ class TestLatencyOptimisedStrategy:
 
         # After a fast call the EWMA should move toward the new (small) value.
         assert router._latency_ewma["a"] < 1.0
+
+
+class TestBuildCandidatesDefaultCase:
+    def test_unknown_strategy_raises_value_error(self):
+        """The match default case must raise ValueError, not silently return None."""
+        cfg = BifrostConfig(providers={"a": ProviderConfig(models=["gpt-4o"])})
+        router = ModelRouter(cfg)
+
+        # Inject an unrecognised strategy value, bypassing Pydantic field validation.
+        object.__setattr__(cfg, "routing_strategy", "__invalid__")
+
+        with pytest.raises(ValueError, match="Unknown routing strategy"):
+            router._build_candidates("gpt-4o")
 
 
 class TestStreamingRouter:

@@ -22,9 +22,6 @@ logger = logging.getLogger(__name__)
 # HTTP status codes that trigger failover to an alternative provider.
 _FAILOVER_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
-# Smoothing factor for the EWMA latency estimator (0 < alpha <= 1).
-_LATENCY_EWMA_ALPHA = 0.2
-
 # Map provider name → adapter class dotted path.
 _PROVIDER_ADAPTER_MAP: dict[str, str] = {
     "anthropic": "bifrost.adapters.anthropic.AnthropicAdapter",
@@ -81,13 +78,12 @@ class ModelRouter:
 
     def _record_latency(self, provider: str, elapsed: float) -> None:
         """Update the EWMA latency estimate for *provider*."""
+        alpha = self._config.latency_ewma_alpha
         current = self._latency_ewma.get(provider)
         if current is None:
             self._latency_ewma[provider] = elapsed
             return
-        self._latency_ewma[provider] = (
-            _LATENCY_EWMA_ALPHA * elapsed + (1 - _LATENCY_EWMA_ALPHA) * current
-        )
+        self._latency_ewma[provider] = alpha * elapsed + (1 - alpha) * current
 
     def _build_candidates(self, raw_model: str) -> list[tuple[str, str]]:
         """Return an ordered list of (provider, model) pairs to try.
@@ -121,6 +117,9 @@ class ModelRouter:
 
             case RoutingStrategy.LATENCY_OPTIMISED:
                 return self._latency_optimised_candidates(providers, model)
+
+            case _:
+                raise ValueError(f"Unknown routing strategy: {self._config.routing_strategy}")
 
     def _cost_optimised_candidates(self, providers: list[str], model: str) -> list[tuple[str, str]]:
         """Sort providers cheapest-first by their configured cost_per_token."""

@@ -77,6 +77,14 @@ class BifrostConfig(BaseModel):
             "Defaults to 'failover' for backwards compatibility."
         ),
     )
+    latency_ewma_alpha: float = Field(
+        default=0.2,
+        description=(
+            "Smoothing factor for the EWMA latency estimator used by the "
+            "latency_optimised strategy (0 < alpha <= 1). Higher values weight "
+            "recent observations more heavily."
+        ),
+    )
     host: str = Field(default="0.0.0.0", description="Host to bind the gateway server.")
     port: int = Field(default=8088, description="Port to bind the gateway server.")
 
