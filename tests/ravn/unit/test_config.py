@@ -31,7 +31,7 @@ class TestConfigPaths:
         cfg.write_text("")
         with patch.dict(os.environ, {"RAVN_CONFIG": str(cfg)}):
             paths = _config_paths()
-        assert paths == [cfg]
+        assert list(paths) == [cfg]
 
 
 class TestAnthropicConfig:
