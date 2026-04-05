@@ -263,6 +263,33 @@ class EventPipelineConfig(BaseModel):
     otel: OtelConfig = Field(default_factory=OtelConfig)
 
 
+class SleipnirConfig(BaseModel):
+    """Sleipnir platform event bus integration (optional).
+
+    When ``enabled`` is True, Volundr creates a Sleipnir adapter and
+    registers a :class:`~volundr.adapters.outbound.sleipnir_event_sink.SleipnirEventSink`
+    in the event pipeline and forwards SSE broadcaster events to the platform bus.
+
+    Example YAML::
+
+        sleipnir:
+          enabled: true
+          adapter: "sleipnir.adapters.nats_transport.NatsTransport"
+          kwargs:
+            servers: ["nats://nats:4222"]
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Sleipnir platform event bus integration.",
+    )
+    adapter: str = Field(
+        default="sleipnir.adapters.in_process.InProcessBus",
+        description="Fully-qualified class path for the Sleipnir adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class IdentityConfig(BaseModel):
     """Dynamic identity adapter configuration.
 
@@ -995,6 +1022,7 @@ class Settings(BaseSettings):
     git: GitConfig = Field(default_factory=GitConfig)
     chronicle: ChronicleConfig = Field(default_factory=ChronicleConfig)
     event_pipeline: EventPipelineConfig = Field(default_factory=EventPipelineConfig)
+    sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
     identity: IdentityConfig = Field(default_factory=IdentityConfig)
     authorization: AuthorizationConfig = Field(default_factory=AuthorizationConfig)
     credential_store: CredentialStoreConfig = Field(default_factory=CredentialStoreConfig)

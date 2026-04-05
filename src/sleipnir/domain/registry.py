@@ -82,6 +82,43 @@ TYR_SESSION_START: str = "tyr.session.start"
 #: A dispatcher session ended.
 TYR_SESSION_END: str = "tyr.session.end"
 
+#: A raid was created.
+TYR_RAID_CREATED: str = "tyr.raid.created"
+
+#: A raid changed state (submitted, running, waiting_review, done, failed, etc.).
+TYR_RAID_STATE_CHANGED: str = "tyr.raid.state_changed"
+
+#: A raid completed successfully.
+TYR_RAID_COMPLETED: str = "tyr.raid.completed"
+
+#: A raid failed.
+TYR_RAID_FAILED: str = "tyr.raid.failed"
+
+#: The autonomous dispatcher state was updated.
+TYR_DISPATCHER_STATE: str = "tyr.dispatcher.state"
+
+#: A notification was sent to a channel.
+TYR_NOTIFICATION_SENT: str = "tyr.notification.sent"
+
+# ---------------------------------------------------------------------------
+# skuld — Skuld broker events (session pod activity)
+# ---------------------------------------------------------------------------
+
+#: A Skuld broker session started.
+SKULD_SESSION_STARTED: str = "skuld.session.started"
+
+#: A Skuld broker session stopped.
+SKULD_SESSION_STOPPED: str = "skuld.session.stopped"
+
+#: A tool was executed in the Skuld session.
+SKULD_TOOL_USE: str = "skuld.tool.use"
+
+#: Token counts were updated in the Skuld session.
+SKULD_TOKEN_UPDATE: str = "skuld.token.update"
+
+#: A permission request was raised by the agent.
+SKULD_PERMISSION_REQUEST: str = "skuld.permission.request"
+
 # ---------------------------------------------------------------------------
 # volundr — Volundr platform events
 # ---------------------------------------------------------------------------
@@ -130,6 +167,74 @@ VOLUNDR_PIPELINE_COMPLETE: str = "volundr.pipeline.complete"
 
 #: A CI pipeline run failed.
 VOLUNDR_PIPELINE_FAILED: str = "volundr.pipeline.failed"
+
+# --- Volundr session lifecycle events ---
+
+#: A session was created in Volundr.
+VOLUNDR_SESSION_CREATED: str = "volundr.session.created"
+
+#: A session was updated (status change, token usage, etc.).
+VOLUNDR_SESSION_UPDATED: str = "volundr.session.updated"
+
+#: A session was deleted.
+VOLUNDR_SESSION_DELETED: str = "volundr.session.deleted"
+
+#: An agent session started inside a pod.
+VOLUNDR_SESSION_STARTED: str = "volundr.session.started"
+
+#: An agent session stopped inside a pod.
+VOLUNDR_SESSION_STOPPED: str = "volundr.session.stopped"
+
+#: A session encountered an error.
+VOLUNDR_SESSION_ERROR: str = "volundr.session.error"
+
+#: Token usage was recorded for a session.
+VOLUNDR_TOKEN_USAGE: str = "volundr.token.usage"
+
+#: Aggregate stats were updated.
+VOLUNDR_STATS_UPDATED: str = "volundr.stats.updated"
+
+#: A chronicle record was created.
+VOLUNDR_CHRONICLE_CREATED: str = "volundr.chronicle.created"
+
+#: A chronicle record was updated (new timeline event appended).
+VOLUNDR_CHRONICLE_UPDATED: str = "volundr.chronicle.updated"
+
+#: A chronicle record was deleted.
+VOLUNDR_CHRONICLE_DELETED: str = "volundr.chronicle.deleted"
+
+#: A user message was recorded in a session.
+VOLUNDR_MESSAGE_USER: str = "volundr.message.user"
+
+#: An assistant message was recorded in a session.
+VOLUNDR_MESSAGE_ASSISTANT: str = "volundr.message.assistant"
+
+#: A file was created in the session workspace.
+VOLUNDR_FILE_CREATED: str = "volundr.file.created"
+
+#: A file was modified in the session workspace.
+VOLUNDR_FILE_MODIFIED: str = "volundr.file.modified"
+
+#: A file was deleted from the session workspace.
+VOLUNDR_FILE_DELETED: str = "volundr.file.deleted"
+
+#: A git commit was made in the session workspace.
+VOLUNDR_GIT_COMMIT: str = "volundr.git.commit"
+
+#: A git push was made from the session workspace.
+VOLUNDR_GIT_PUSH: str = "volundr.git.push"
+
+#: A git branch was created in the session workspace.
+VOLUNDR_GIT_BRANCH: str = "volundr.git.branch"
+
+#: A git checkout was performed in the session workspace.
+VOLUNDR_GIT_CHECKOUT: str = "volundr.git.checkout"
+
+#: A terminal command was executed in the session workspace.
+VOLUNDR_TERMINAL_COMMAND: str = "volundr.terminal.command"
+
+#: A tool was used in the session workspace.
+VOLUNDR_TOOL_USE: str = "volundr.tool.use"
 
 # ---------------------------------------------------------------------------
 # bifrost — Bifrost gateway events
