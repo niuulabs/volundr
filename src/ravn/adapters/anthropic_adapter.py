@@ -24,7 +24,7 @@ from ravn.domain.models import (
     TokenUsage,
     ToolCall,
 )
-from ravn.ports.llm import LLMPort
+from ravn.ports.llm import LLMPort, SystemPrompt
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,16 @@ class AnthropicAdapter(LLMPort):
             "content-type": "application/json",
         }
 
-    def _build_system(self, system: str) -> list[dict]:
-        """Wrap the system prompt with ephemeral cache control."""
+    def _build_system(self, system: SystemPrompt) -> list[dict]:
+        """Return Anthropic-format system blocks from a string or block list.
+
+        - If *system* is already a ``list[dict]``, it is returned as-is (the
+          caller is responsible for setting ``cache_control`` on each block).
+        - If *system* is a plain string, it is wrapped in a single text block
+          with ``cache_control: ephemeral`` for prompt-caching.
+        """
+        if isinstance(system, list):
+            return system
         if not system:
             return []
         return [
@@ -85,7 +93,7 @@ class AnthropicAdapter(LLMPort):
         messages: list[dict],
         *,
         tools: list[dict],
-        system: str,
+        system: SystemPrompt,
         model: str,
         max_tokens: int,
         stream: bool,
@@ -157,7 +165,7 @@ class AnthropicAdapter(LLMPort):
         messages: list[dict],
         *,
         tools: list[dict],
-        system: str,
+        system: SystemPrompt,
         model: str,
         max_tokens: int,
     ) -> AsyncIterator[StreamEvent]:
@@ -262,7 +270,7 @@ class AnthropicAdapter(LLMPort):
         messages: list[dict],
         *,
         tools: list[dict],
-        system: str,
+        system: SystemPrompt,
         model: str,
         max_tokens: int,
     ) -> LLMResponse:

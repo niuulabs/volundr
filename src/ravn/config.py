@@ -460,6 +460,47 @@ class ContextConfig(BaseModel):
     )
 
 
+class OutcomeConfig(BaseModel):
+    """Task outcome recording and post-task reflection configuration."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable outcome recording and self-reflection after each task.",
+    )
+    path: str = Field(
+        default="~/.ravn/memory.db",
+        description="SQLite database path for outcome storage (can share with memory backend).",
+    )
+    reflection_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="Model alias used for the compact post-task reflection call ('fast').",
+    )
+    reflection_max_tokens: int = Field(
+        default=512,
+        description="Maximum tokens for the reflection LLM call.",
+    )
+    lessons_limit: int = Field(
+        default=3,
+        description="Number of past outcomes injected as 'lessons learned' per turn.",
+    )
+    task_summary_max_chars: int = Field(
+        default=200,
+        description="Maximum characters of the user input stored as the task summary.",
+    )
+    lessons_token_budget: int = Field(
+        default=1500,
+        description="Maximum approximate tokens of lessons-learned content injected per turn.",
+    )
+    input_token_cost_per_million: float = Field(
+        default=3.0,
+        description="Input token cost in USD per million tokens (used to estimate cost_usd).",
+    )
+    output_token_cost_per_million: float = Field(
+        default=15.0,
+        description="Output token cost in USD per million tokens (used to estimate cost_usd).",
+    )
+
+
 class AgentConfig(BaseModel):
     """Core agent behaviour configuration."""
 
@@ -479,6 +520,63 @@ class AgentConfig(BaseModel):
     episode_task_max_chars: int = Field(
         default=200,
         description="Maximum characters of the user input stored as the episode task description.",
+    )
+    outcome: OutcomeConfig = Field(
+        default_factory=OutcomeConfig,
+        description="Task outcome recording and self-reflection configuration.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Context management config (NIU-431)
+# ---------------------------------------------------------------------------
+
+
+class IterationBudgetConfig(BaseModel):
+    """Iteration budget configuration."""
+
+    total: int = Field(
+        default=90,
+        description="Total iterations allowed across a session or cascade.",
+    )
+    near_limit_threshold: float = Field(
+        default=0.8,
+        description=(
+            "Fraction of total iterations consumed before 'near limit' warnings are emitted "
+            "(0.0–1.0, default 0.8 = 80%)."
+        ),
+    )
+
+
+class ContextManagementConfig(BaseModel):
+    """Context compression and prompt-builder configuration."""
+
+    compression_threshold: float = Field(
+        default=0.5,
+        description=(
+            "Fraction of the model's context window that triggers compression "
+            "(0.0–1.0, default 0.5 = 50%)."
+        ),
+    )
+    protect_first_messages: int = Field(
+        default=2,
+        description="Number of messages at the start of history to preserve unchanged.",
+    )
+    protect_last_messages: int = Field(
+        default=4,
+        description="Number of messages at the end of history to preserve unchanged.",
+    )
+    compression_max_tokens: int = Field(
+        default=1024,
+        description="Max tokens for compression summary generation.",
+    )
+    prompt_cache_max_entries: int = Field(
+        default=16,
+        description="Maximum number of entries in the in-process LRU prompt cache.",
+    )
+    prompt_cache_dir: str = Field(
+        default="~/.ravn/prompt_cache",
+        description="Directory for disk-snapshot prompt cache entries.",
     )
 
 
@@ -539,6 +637,10 @@ class Settings(BaseSettings):
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     hooks: HooksConfig = Field(default_factory=HooksConfig)
     channels: list[ChannelConfig] = Field(default_factory=list)
+
+    # NIU-431: context management
+    iteration_budget: IterationBudgetConfig = Field(default_factory=IterationBudgetConfig)
+    context_management: ContextManagementConfig = Field(default_factory=ContextManagementConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
