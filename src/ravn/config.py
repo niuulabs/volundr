@@ -769,6 +769,67 @@ class EvolutionConfig(BaseModel):
     )
 
 
+class TelegramChannelConfig(BaseModel):
+    """Telegram channel configuration."""
+
+    enabled: bool = Field(default=False)
+    token_env: str = Field(
+        default="TELEGRAM_BOT_TOKEN",
+        description="Environment variable name containing the Telegram bot token.",
+    )
+    allowed_chat_ids: list[int] = Field(
+        default_factory=list,
+        description="Chat IDs allowed to interact with the bot. Empty list means all.",
+    )
+    poll_timeout: int = Field(
+        default=30,
+        description="Long-poll timeout in seconds for getUpdates.",
+    )
+    retry_delay: float = Field(
+        default=5.0,
+        description="Seconds to wait after a poll error before retrying.",
+    )
+    message_max_chars: int = Field(
+        default=4096,
+        description="Maximum characters per outbound Telegram message (API limit).",
+    )
+
+
+class HttpChannelConfig(BaseModel):
+    """Local HTTP gateway channel configuration."""
+
+    enabled: bool = Field(default=False)
+    host: str = Field(
+        default="127.0.0.1",
+        description="Host/IP to bind the HTTP gateway server.",
+    )
+    port: int = Field(
+        default=7477,
+        description="TCP port for the HTTP gateway server.",
+    )
+
+
+class GatewayChannelsConfig(BaseModel):
+    """Per-channel gateway configuration."""
+
+    telegram: TelegramChannelConfig = Field(default_factory=TelegramChannelConfig)
+    http: HttpChannelConfig = Field(default_factory=HttpChannelConfig)
+
+
+class GatewayConfig(BaseModel):
+    """Pi-mode gateway — Telegram + local HTTP access without Kubernetes.
+
+    When enabled, Ravn runs two extra asyncio tasks:
+    - A Telegram long-poll loop (no webhook, no open inbound port required).
+    - A FastAPI HTTP server on localhost (or LAN IP).
+
+    Each channel+user pair gets its own isolated agent session.
+    """
+
+    enabled: bool = Field(default=False)
+    channels: GatewayChannelsConfig = Field(default_factory=GatewayChannelsConfig)
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -819,6 +880,9 @@ class Settings(BaseSettings):
 
     # NIU-501: self-improvement loop
     evolution: EvolutionConfig = Field(default_factory=EvolutionConfig)
+
+    # NIU-516: Pi-mode gateway
+    gateway: GatewayConfig = Field(default_factory=GatewayConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
