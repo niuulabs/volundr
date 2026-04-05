@@ -219,6 +219,7 @@ async def _ensure_stream(
         await js.stream_info(stream_name)
         logger.debug("NATS stream %r already exists", stream_name)
     except Exception:
+        logger.debug("stream_info(%r) failed, attempting creation", stream_name, exc_info=True)
         try:
             await js.add_stream(config=config)
             logger.info("NATS stream %r created", stream_name)
@@ -510,18 +511,20 @@ class NatsSubscriber(SleipnirSubscriber):
         """Create a JetStream push subscription for *subject*."""
 
         async def _on_message(msg: Any) -> None:
-            with suppress(Exception):
-                await msg.ack()
-            if not self._running:
-                return
-            event = _decode_nats_message(msg.data)
-            if event is None:
-                return
-            if event.ttl is not None and event.ttl <= 0:
-                return
-            if not any(match_event_type(p, event.event_type) for p in patterns):
-                return
-            await enqueue_with_overflow(sub._queue, event, self._ring_buffer_depth, logger)
+            try:
+                if not self._running:
+                    return
+                event = _decode_nats_message(msg.data)
+                if event is None:
+                    return
+                if event.ttl is not None and event.ttl <= 0:
+                    return
+                if not any(match_event_type(p, event.event_type) for p in patterns):
+                    return
+                await enqueue_with_overflow(sub._queue, event, self._ring_buffer_depth, logger)
+            finally:
+                with suppress(Exception):
+                    await msg.ack()
 
         kwargs: dict[str, Any] = {"stream": self._stream_name, "config": config}
         if self._consumer_group is not None:

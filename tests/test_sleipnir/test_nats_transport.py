@@ -271,6 +271,18 @@ async def test_publisher_start_creates_stream_when_missing(mock_nats):
     js.add_stream.assert_called_once()
 
 
+async def test_publisher_ensure_stream_logs_debug_on_stream_info_failure(mock_nats, caplog):
+    """stream_info failure is logged at DEBUG before attempting creation."""
+    import logging
+
+    mock_module, client, js, _ = mock_nats
+    js.stream_info.side_effect = Exception("not found")
+    pub = NatsPublisher()
+    with caplog.at_level(logging.DEBUG, logger="sleipnir.adapters.nats_transport"):
+        await pub.start()
+    assert any("stream_info" in r.message and "failed" in r.message for r in caplog.records)
+
+
 async def test_publisher_publish_sends_correct_subject(mock_nats):
     mock_module, client, js, _ = mock_nats
     pub = NatsPublisher()
@@ -505,10 +517,44 @@ async def test_subscriber_on_message_delivers_to_handler(mock_nats):
 
     assert len(received) == 1
     assert received[0].event_id == event.event_id
+    # ack must fire (in the finally block) even for processed messages
+    mock_msg.ack.assert_called_once()
+    await sub.stop()
+
+
+async def test_subscriber_on_message_acks_after_processing(mock_nats):
+    """ack fires in finally — after enqueue, preserving at-least-once delivery."""
+    mock_module, client, js, _ = mock_nats
+    sub = NatsSubscriber()
+    await sub.start()
+    ack_call_order: list[str] = []
+
+    async def handler(evt: SleipnirEvent) -> None:
+        ack_call_order.append("handler")
+
+    await sub.subscribe(["ravn.*"], handler)
+    on_message = js.subscribe.call_args[1]["cb"]
+
+    event = make_event(event_type="ravn.tool.complete")
+    mock_msg = MagicMock()
+    mock_msg.data = serialize(event)
+
+    async def _ack() -> None:
+        ack_call_order.append("ack")
+
+    mock_msg.ack = _ack
+
+    await on_message(mock_msg)
+    await asyncio.sleep(0.05)
+
+    # ack must come after the event is enqueued (handler runs async, but ack
+    # fires from the finally block in _on_message, before the handler task runs)
+    assert "ack" in ack_call_order
     await sub.stop()
 
 
 async def test_subscriber_on_message_drops_expired_ttl(mock_nats):
+    """Expired TTL events are not dispatched; ack still fires."""
     mock_module, client, js, _ = mock_nats
     sub = NatsSubscriber()
     await sub.start()
@@ -524,10 +570,12 @@ async def test_subscriber_on_message_drops_expired_ttl(mock_nats):
     await on_message(mock_msg)
     await asyncio.sleep(0.02)
     assert len(received) == 0
+    mock_msg.ack.assert_called_once()
     await sub.stop()
 
 
 async def test_subscriber_on_message_drops_pattern_mismatch(mock_nats):
+    """Pattern-mismatched events are not dispatched; ack still fires."""
     mock_module, client, js, _ = mock_nats
     sub = NatsSubscriber()
     await sub.start()
@@ -543,10 +591,12 @@ async def test_subscriber_on_message_drops_pattern_mismatch(mock_nats):
     await on_message(mock_msg)
     await asyncio.sleep(0.02)
     assert len(received) == 0
+    mock_msg.ack.assert_called_once()
     await sub.stop()
 
 
 async def test_subscriber_on_message_drops_bad_payload(mock_nats):
+    """Malformed payloads are dropped; ack still fires."""
     mock_module, client, js, _ = mock_nats
     sub = NatsSubscriber()
     await sub.start()
@@ -561,10 +611,12 @@ async def test_subscriber_on_message_drops_bad_payload(mock_nats):
     await on_message(mock_msg)
     await asyncio.sleep(0.02)
     assert len(received) == 0
+    mock_msg.ack.assert_called_once()
     await sub.stop()
 
 
 async def test_subscriber_on_message_skips_when_not_running(mock_nats):
+    """Messages received after stop() are ignored; ack still fires."""
     mock_module, client, js, _ = mock_nats
     sub = NatsSubscriber()
     await sub.start()
@@ -582,6 +634,7 @@ async def test_subscriber_on_message_skips_when_not_running(mock_nats):
     await on_message(mock_msg)
     await asyncio.sleep(0.02)
     assert len(received) == 0
+    mock_msg.ack.assert_called_once()
     await sub.stop()
 
 
