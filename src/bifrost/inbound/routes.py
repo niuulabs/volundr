@@ -214,7 +214,7 @@ def create_router(
     store: UsageStore,
     pricing_overrides: dict[str, ModelPricing],
     auth_adapter: AuthPort,
-    event_emitter: CostEventEmitter | None = None,
+    event_emitter: CostEventEmitter,
 ) -> APIRouter:
     """Build and return a configured ``APIRouter`` with all Bifröst routes.
 
@@ -229,6 +229,24 @@ def create_router(
         A ``fastapi.APIRouter`` with all routes registered.
     """
     api_router = APIRouter()
+
+    async def _emit_events(
+        identity: AgentIdentity,
+        cost: float,
+        tokens: int,
+        model: str,
+        budget_limit: float,
+    ) -> None:
+        await emit_cost_events(
+            emitter=event_emitter,
+            store=store,
+            identity=identity,
+            cost=cost,
+            tokens_used=tokens,
+            model=model,
+            agent_budget_limit=budget_limit,
+            budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
+        )
 
     @api_router.get("/health")
     async def health() -> dict:
@@ -378,17 +396,7 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
-            if event_emitter is not None:
-                await emit_cost_events(
-                    emitter=event_emitter,
-                    store=store,
-                    identity=identity,
-                    cost=cost,
-                    tokens_used=usage.input_tokens + usage.output_tokens,
-                    model=request.model,
-                    agent_budget_limit=agent_budget_limit,
-                    budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
-                )
+            await _emit_events(identity, cost, usage.input_tokens + usage.output_tokens, request.model, agent_budget_limit)
 
             json_resp = JSONResponse(content=data)
             if warnings:
@@ -636,17 +644,7 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
-            if event_emitter is not None:
-                await emit_cost_events(
-                    emitter=event_emitter,
-                    store=store,
-                    identity=identity,
-                    cost=cost,
-                    tokens_used=usage.input_tokens + usage.output_tokens,
-                    model=request.model,
-                    agent_budget_limit=agent_budget_limit,
-                    budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
-                )
+            await _emit_events(identity, cost, usage.input_tokens + usage.output_tokens, request.model, agent_budget_limit)
 
             json_resp = JSONResponse(content=anthropic_response_to_openai(response))
             if warnings:
@@ -780,17 +778,7 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
-            if event_emitter is not None:
-                await emit_cost_events(
-                    emitter=event_emitter,
-                    store=store,
-                    identity=identity,
-                    cost=cost,
-                    tokens_used=usage.input_tokens + usage.output_tokens,
-                    model=request.model,
-                    agent_budget_limit=agent_budget_limit,
-                    budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
-                )
+            await _emit_events(identity, cost, usage.input_tokens + usage.output_tokens, request.model, agent_budget_limit)
 
             created_at = datetime.now(UTC).isoformat()
             total_ns = int(latency_ms * 1e6)

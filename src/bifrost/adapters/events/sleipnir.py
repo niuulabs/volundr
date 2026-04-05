@@ -47,6 +47,15 @@ class SleipnirEventEmitter(CostEventEmitter):
         """
         if self._healthy:
             return True
+        # Close stale connection before reconnecting to avoid resource leaks.
+        if self._connection is not None:
+            try:
+                await self._connection.close()
+            except Exception:
+                pass
+            self._connection = None
+            self._channel = None
+            self._exchange = None
         try:
             import aio_pika
 

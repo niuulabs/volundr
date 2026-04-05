@@ -81,17 +81,19 @@ def _build_usage_store(config: BifrostConfig) -> UsageStore:
 
 def _build_event_emitter(config: BifrostConfig) -> CostEventEmitter:
     """Instantiate the configured cost event emitter adapter."""
-    if config.events.adapter == "sleipnir":
-        from bifrost.adapters.events.sleipnir import SleipnirEventEmitter
+    match config.events.adapter:
+        case "sleipnir":
+            from bifrost.adapters.events.sleipnir import SleipnirEventEmitter
 
-        return SleipnirEventEmitter(
-            url=config.events.url,
-            exchange=config.events.exchange,
-            exchange_type=config.events.exchange_type,
-        )
-    from bifrost.adapters.events.null import NullEventEmitter
+            return SleipnirEventEmitter(
+                url=config.events.url,
+                exchange=config.events.exchange,
+                exchange_type=config.events.exchange_type,
+            )
+        case _:
+            from bifrost.adapters.events.null import NullEventEmitter
 
-    return NullEventEmitter()
+            return NullEventEmitter()
 
 
 # ---------------------------------------------------------------------------

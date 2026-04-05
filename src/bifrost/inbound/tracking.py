@@ -125,8 +125,8 @@ async def _stream_with_tracking(
     store: UsageStore,
     pricing_overrides: dict[str, ModelPricing],
     request_id: str,
+    emitter: CostEventEmitter,
     provider: str = "",
-    emitter: CostEventEmitter | None = None,
     agent_budget_limit: float = 0.0,
     budget_warning_threshold_pct: float = 20.0,
 ) -> AsyncIterator[str]:
@@ -170,14 +170,13 @@ async def _stream_with_tracking(
         )
     )
 
-    if emitter is not None:
-        await emit_cost_events(
-            emitter=emitter,
-            store=store,
-            identity=identity,
-            cost=cost,
-            tokens_used=usage.input_tokens + usage.output_tokens,
-            model=model,
-            agent_budget_limit=agent_budget_limit,
-            budget_warning_threshold_pct=budget_warning_threshold_pct,
-        )
+    await emit_cost_events(
+        emitter=emitter,
+        store=store,
+        identity=identity,
+        cost=cost,
+        tokens_used=usage.input_tokens + usage.output_tokens,
+        model=model,
+        agent_budget_limit=agent_budget_limit,
+        budget_warning_threshold_pct=budget_warning_threshold_pct,
+    )

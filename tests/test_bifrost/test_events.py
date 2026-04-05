@@ -266,6 +266,28 @@ class TestSleipnirEventEmitter:
         assert not emitter._healthy
 
     @pytest.mark.asyncio
+    async def test_reconnect_closes_stale_connection(self) -> None:
+        emitter = SleipnirEventEmitter(url="amqp://localhost/")
+        stale_conn = AsyncMock()
+        emitter._connection = stale_conn
+        emitter._healthy = False  # simulate prior failure
+
+        mock_aio = _mock_aio_pika()
+        new_conn = AsyncMock()
+        new_channel = AsyncMock()
+        new_exchange = AsyncMock()
+        mock_aio.connect_robust = AsyncMock(return_value=new_conn)
+        new_conn.channel = AsyncMock(return_value=new_channel)
+        new_channel.declare_exchange = AsyncMock(return_value=new_exchange)
+
+        with patch.dict(sys.modules, {"aio_pika": mock_aio}):
+            connected = await emitter._ensure_connected()
+
+        assert connected
+        stale_conn.close.assert_awaited_once()
+        assert emitter._connection is new_conn
+
+    @pytest.mark.asyncio
     async def test_close_resets_state(self) -> None:
         emitter = SleipnirEventEmitter(url="amqp://localhost/")
         mock_conn = AsyncMock()
