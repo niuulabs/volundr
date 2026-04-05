@@ -26,6 +26,7 @@ from bifrost.inbound.chat_completions import (
     OpenAIChatRequest,
     anthropic_response_to_openai,
     anthropic_stream_to_openai,
+    openai_error_response,
     openai_request_to_anthropic,
 )
 from bifrost.router import ModelRouter, RouterError
@@ -203,16 +204,14 @@ def create_app(config: BifrostConfig) -> FastAPI:
             body = await raw_request.json()
             oai_request = OpenAIChatRequest.model_validate(body)
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            return openai_error_response(422, str(exc), "invalid_request_error")
 
         request = openai_request_to_anthropic(oai_request)
         start = time.monotonic()
 
         try:
             if request.stream:
-                import uuid as _uuid
-
-                message_id = f"chatcmpl-{_uuid.uuid4().hex[:24]}"
+                message_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
                 return StreamingResponse(
                     anthropic_stream_to_openai(
                         _stream_with_tracking(router.stream(request), request.model, start),
@@ -235,6 +234,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
                     usage=TokenUsage(
                         input_tokens=response.usage.input_tokens,
                         output_tokens=response.usage.output_tokens,
+                        cache_creation_input_tokens=0,
+                        cache_read_input_tokens=0,
                     ),
                     latency_ms=latency_ms,
                     stream=False,
@@ -243,6 +244,6 @@ def create_app(config: BifrostConfig) -> FastAPI:
             return JSONResponse(content=anthropic_response_to_openai(response))
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            return openai_error_response(502, str(exc), "server_error")
 
     return app
