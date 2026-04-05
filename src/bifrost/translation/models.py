@@ -15,9 +15,14 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 
+class CacheControl(BaseModel):
+    type: Literal["ephemeral"] = "ephemeral"
+
+
 class TextBlock(BaseModel):
     type: Literal["text"] = "text"
     text: str
+    cache_control: CacheControl | None = None
 
 
 class ThinkingBlock(BaseModel):
@@ -37,6 +42,7 @@ class ToolResultBlock(BaseModel):
     tool_use_id: str
     content: str | list[TextBlock] = ""
     is_error: bool = False
+    cache_control: CacheControl | None = None
 
 
 ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock

@@ -9,10 +9,12 @@ import pytest
 from bifrost.translation.models import (
     AnthropicRequest,
     AnthropicResponse,
+    CacheControl,
     Message,
     TextBlock,
     ThinkingBlock,
     ToolDefinition,
+    ToolResultBlock,
     ToolUseBlock,
 )
 from bifrost.translation.to_anthropic import openai_to_anthropic
@@ -387,3 +389,145 @@ class TestOpenAIToAnthropic:
         assert len(resp.content) == 1
         assert isinstance(resp.content[0], TextBlock)
         assert resp.content[0].text == "Plain response."
+
+
+# ---------------------------------------------------------------------------
+# cache_control handling
+# ---------------------------------------------------------------------------
+
+
+class TestCacheControl:
+    """Tests for cache_control field on TextBlock and ToolResultBlock."""
+
+    def _simple_request(self, **kwargs) -> AnthropicRequest:
+        defaults = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 1024,
+            "messages": [Message(role="user", content="Hello")],
+        }
+        defaults.update(kwargs)
+        return AnthropicRequest.model_validate(defaults)
+
+    # --- model round-trip (field persists in Pydantic) ---------------------
+
+    def test_text_block_cache_control_roundtrip(self):
+        block = TextBlock(text="cached", cache_control=CacheControl(type="ephemeral"))
+        assert block.cache_control is not None
+        assert block.cache_control.type == "ephemeral"
+        dumped = block.model_dump(exclude_none=True)
+        assert dumped["cache_control"] == {"type": "ephemeral"}
+
+    def test_tool_result_block_cache_control_roundtrip(self):
+        block = ToolResultBlock(
+            tool_use_id="call_1",
+            content="result",
+            cache_control=CacheControl(type="ephemeral"),
+        )
+        assert block.cache_control is not None
+        dumped = block.model_dump(exclude_none=True)
+        assert dumped["cache_control"] == {"type": "ephemeral"}
+
+    def test_text_block_without_cache_control_excluded(self):
+        block = TextBlock(text="no cache")
+        dumped = block.model_dump(exclude_none=True)
+        assert "cache_control" not in dumped
+
+    def test_system_block_cache_control_roundtrip(self):
+        req = self._simple_request(
+            system=[{"type": "text", "text": "Sys.", "cache_control": {"type": "ephemeral"}}]
+        )
+        assert req.system is not None
+        assert isinstance(req.system, list)
+        assert req.system[0].cache_control is not None
+        assert req.system[0].cache_control.type == "ephemeral"
+
+    # --- Anthropic adapter passthrough (model_dump carries cache_control) --
+
+    def test_anthropic_request_dump_includes_cache_control(self):
+        req = self._simple_request(
+            messages=[
+                Message(
+                    role="user",
+                    content=[
+                        TextBlock(
+                            text="cached content",
+                            cache_control=CacheControl(type="ephemeral"),
+                        )
+                    ],
+                )
+            ]
+        )
+        payload = req.model_dump(exclude_none=True, exclude={"stream"})
+        block = payload["messages"][0]["content"][0]
+        assert block["cache_control"] == {"type": "ephemeral"}
+        assert block["text"] == "cached content"
+
+    # --- OpenAI translation: cache_control is stripped ----------------------
+
+    def test_cache_control_stripped_from_text_block_to_openai(self):
+        req = self._simple_request(
+            messages=[
+                Message(
+                    role="user",
+                    content=[
+                        TextBlock(
+                            text="cached",
+                            cache_control=CacheControl(type="ephemeral"),
+                        )
+                    ],
+                )
+            ]
+        )
+        payload = anthropic_to_openai(req, "gpt-4o")
+        msg = payload["messages"][0]
+        assert msg["content"] == "cached"
+        assert "cache_control" not in msg
+
+    def test_cache_control_stripped_from_system_block_to_openai(self):
+        req = self._simple_request(
+            system=[{"type": "text", "text": "Sys.", "cache_control": {"type": "ephemeral"}}]
+        )
+        payload = anthropic_to_openai(req, "gpt-4o")
+        sys_msg = payload["messages"][0]
+        assert sys_msg["role"] == "system"
+        assert sys_msg["content"] == "Sys."
+        assert "cache_control" not in sys_msg
+
+    def test_cache_control_stripped_from_tool_result_to_openai(self):
+        req = self._simple_request(
+            messages=[
+                Message(
+                    role="user",
+                    content=[
+                        ToolResultBlock(
+                            tool_use_id="call_1",
+                            content="result data",
+                            cache_control=CacheControl(type="ephemeral"),
+                        )
+                    ],
+                )
+            ]
+        )
+        payload = anthropic_to_openai(req, "gpt-4o")
+        tool_msg = payload["messages"][0]
+        assert tool_msg["role"] == "tool"
+        assert tool_msg["content"] == "result data"
+        assert "cache_control" not in tool_msg
+
+    def test_multiple_blocks_mixed_cache_control_stripped(self):
+        """Verify cache_control is stripped even when only some blocks have it."""
+        req = self._simple_request(
+            messages=[
+                Message(
+                    role="user",
+                    content=[
+                        TextBlock(text="part1", cache_control=CacheControl(type="ephemeral")),
+                        TextBlock(text=" part2"),
+                    ],
+                )
+            ]
+        )
+        payload = anthropic_to_openai(req, "gpt-4o")
+        msg = payload["messages"][0]
+        assert msg["content"] == "part1 part2"
+        assert "cache_control" not in msg
