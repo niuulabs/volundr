@@ -7,7 +7,6 @@ from collections.abc import AsyncIterator
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from typer.testing import CliRunner
 
 from ravn.cli.commands import _chat, app, main
