@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from ravn.adapters.anthropic_adapter import (
     ANTHROPIC_API_VERSION,  # noqa: F401 — re-exported for tests
-    ANTHROPIC_BETA_HEADER,  # noqa: F401 — re-exported for tests
     AnthropicAdapter,
 )
 
@@ -58,8 +57,8 @@ class BifrostAdapter(AnthropicAdapter):
         self._agent_id = agent_id
         self._session_id = session_id
 
-    def _headers(self) -> dict[str, str]:
-        headers = super()._headers()
+    def _headers(self, *, thinking_enabled: bool = False) -> dict[str, str]:
+        headers = super()._headers(thinking_enabled=thinking_enabled)
         # Bifrost manages API keys — remove the empty x-api-key header
         headers.pop("x-api-key", None)
         # Inject agent identity for per-agent usage tracking and cost attribution
