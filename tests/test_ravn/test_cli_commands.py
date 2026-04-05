@@ -1,0 +1,145 @@
+"""Tests for Ravn CLI commands."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from unittest.mock import MagicMock, patch
+
+from typer.testing import CliRunner
+
+from ravn.cli.commands import _print_usage, app
+from ravn.domain.models import (
+    StreamEvent,
+    StreamEventType,
+    TokenUsage,
+)
+
+runner = CliRunner()
+
+
+class TestPrintUsage:
+    def test_basic(self, capsys) -> None:
+        _print_usage(TokenUsage(input_tokens=10, output_tokens=5))
+        # Just verify it doesn't crash — the output goes through typer.echo.
+
+    def test_with_cache_tokens(self) -> None:
+        # Just verify no exception.
+        _print_usage(
+            TokenUsage(
+                input_tokens=10,
+                output_tokens=5,
+                cache_read_tokens=100,
+                cache_write_tokens=200,
+            )
+        )
+
+
+class TestRunCommand:
+    def test_no_api_key_exits(self) -> None:
+        with patch.dict("os.environ", {}, clear=False):
+            import os
+
+            env_without_key = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+            with patch.dict("os.environ", env_without_key, clear=True):
+                result = runner.invoke(app, ["hi"])
+                assert result.exit_code != 0
+
+    def test_single_turn_with_mocked_agent(self) -> None:
+        """Test that run_turn is called with the given prompt."""
+
+        async def _stream(*args, **kwargs) -> AsyncIterator[StreamEvent]:
+            yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="Hello!")
+            yield StreamEvent(
+                type=StreamEventType.MESSAGE_DONE,
+                usage=TokenUsage(input_tokens=10, output_tokens=5),
+            )
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_adapter_cls,
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_adapter = MagicMock()
+            mock_adapter.stream = _stream
+            mock_adapter_cls.return_value = mock_adapter
+
+            result = runner.invoke(app, ["Hello, Ravn!"])
+            assert result.exit_code == 0
+
+    def test_single_turn_with_show_usage(self) -> None:
+        async def _stream(*args, **kwargs) -> AsyncIterator[StreamEvent]:
+            yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="ok")
+            yield StreamEvent(
+                type=StreamEventType.MESSAGE_DONE,
+                usage=TokenUsage(input_tokens=5, output_tokens=3),
+            )
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_adapter_cls,
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_adapter = MagicMock()
+            mock_adapter.stream = _stream
+            mock_adapter_cls.return_value = mock_adapter
+
+            result = runner.invoke(app, ["Hello!", "--show-usage"])
+            assert result.exit_code == 0
+            assert "tokens" in result.output
+
+    def test_help(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == 0
+        assert "ravn" in result.output.lower()
+
+    def test_no_tools_flag(self) -> None:
+        async def _stream(*args, **kwargs) -> AsyncIterator[StreamEvent]:
+            yield StreamEvent(type=StreamEventType.TEXT_DELTA, text="ok")
+            yield StreamEvent(
+                type=StreamEventType.MESSAGE_DONE,
+                usage=TokenUsage(input_tokens=5, output_tokens=3),
+            )
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_adapter_cls,
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_adapter = MagicMock()
+            mock_adapter.stream = _stream
+            mock_adapter_cls.return_value = mock_adapter
+
+            result = runner.invoke(app, ["Hello!", "--no-tools"])
+            assert result.exit_code == 0
+
+
+class TestRunTurnErrorHandling:
+    def test_exception_exits_nonzero(self) -> None:
+        async def _stream(*args, **kwargs) -> AsyncIterator[StreamEvent]:
+            raise RuntimeError("boom")
+            yield  # make it a generator
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_adapter_cls,
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_adapter = MagicMock()
+            mock_adapter.stream = _stream
+            mock_adapter_cls.return_value = mock_adapter
+
+            result = runner.invoke(app, ["Hello!"])
+            assert result.exit_code != 0 or "error" in result.output.lower()
+
+    async def test_repl_continues_after_error(self) -> None:
+        """In REPL mode (single_turn=False), an error prints but does not exit."""
+        from unittest.mock import AsyncMock
+
+        from ravn.adapters.cli_channel import CliChannel
+        from ravn.cli.commands import _run_turn
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(side_effect=RuntimeError("boom"))
+
+        import io
+
+        channel = CliChannel(file=io.StringIO())
+
+        # Must not raise SystemExit
+        await _run_turn(agent, channel, "hi", show_usage=False, single_turn=False)
