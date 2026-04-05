@@ -27,11 +27,22 @@ Configuration example
     sleipnir:
       transport: "nng"
       address: "ipc:///tmp/sleipnir.sock"
+      discovery:
+        enabled: true
+        registry_path: /run/odin/sleipnir.json
 
 Transports
 ----------
 - **IPC** (``ipc:///tmp/sleipnir.sock``) — Unix-domain socket, ~10-50 µs latency.
 - **TCP** (``tcp://localhost:9500``) — for multi-machine or container deployments.
+
+Service discovery
+-----------------
+Pass a :class:`~sleipnir.adapters.discovery.ServiceRegistry` to enable
+multi-process discovery.  :class:`NngPublisher` registers its socket address on
+:meth:`~NngPublisher.start` and deregisters on :meth:`~NngPublisher.stop`.
+:class:`NngSubscriber` reads the registry on :meth:`~NngSubscriber.start` and
+dials every live publisher socket it finds.
 """
 
 from __future__ import annotations
@@ -53,6 +64,7 @@ from sleipnir.adapters._subscriber_support import (
     consume_queue,
     enqueue_with_overflow,
 )
+from sleipnir.adapters.discovery import ServiceRegistry
 from sleipnir.adapters.serialization import deserialize, serialize
 from sleipnir.domain.events import SleipnirEvent, match_event_type
 from sleipnir.ports.events import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
@@ -145,6 +157,11 @@ class NngPublisher(SleipnirPublisher):
     Binds a PUB socket at *address* and serialises :class:`SleipnirEvent`
     objects with msgpack before sending.
 
+    When *service_id* and *registry* are provided, the publisher registers
+    itself in the service registry on :meth:`start` and deregisters on
+    :meth:`stop`, enabling other processes to discover this socket
+    automatically.
+
     Usage::
 
         pub = NngPublisher("ipc:///tmp/sleipnir.sock")
@@ -157,21 +174,29 @@ class NngPublisher(SleipnirPublisher):
         address: str = DEFAULT_IPC_ADDRESS,
         bind_retry_delay_s: float = DEFAULT_BIND_RETRY_DELAY_S,
         bind_max_retries: int = DEFAULT_BIND_MAX_RETRIES,
+        service_id: str | None = None,
+        registry: ServiceRegistry | None = None,
     ) -> None:
         _require_pynng()
         self._address = address
         self._bind_retry_delay_s = bind_retry_delay_s
         self._bind_max_retries = bind_max_retries
+        self._service_id = service_id
+        self._registry = registry
         self._socket: pynng.Pub0 | None = None  # type: ignore[name-defined]
 
     async def start(self) -> None:
-        """Bind the PUB socket, retrying on transient address-in-use errors."""
+        """Bind the PUB socket, retrying on transient address-in-use errors.
+
+        If discovery is configured, registers this publisher in the service
+        registry after the socket is bound.
+        """
         self._socket = pynng.Pub0()
         for attempt in range(self._bind_max_retries):
             try:
                 self._socket.listen(self._address)
                 logger.debug("NngPublisher: bound to %s", self._address)
-                return
+                break
             except pynng.AddressInUse:
                 if attempt == self._bind_max_retries - 1:
                     self._socket.close()
@@ -184,9 +209,18 @@ class NngPublisher(SleipnirPublisher):
                     self._bind_max_retries,
                 )
                 await asyncio.sleep(self._bind_retry_delay_s)
+        if self._registry is not None and self._service_id is not None:
+            await asyncio.get_running_loop().run_in_executor(
+                None, self._registry.register, self._service_id, self._address
+            )
 
     async def stop(self) -> None:
-        """Close the PUB socket."""
+        """Deregister from discovery (if configured), then close the PUB socket."""
+        if self._registry is not None and self._service_id is not None:
+            with suppress(Exception):
+                await asyncio.get_running_loop().run_in_executor(
+                    None, self._registry.deregister, self._service_id
+                )
         if self._socket is not None:
             with suppress(Exception):
                 self._socket.close()
@@ -230,6 +264,10 @@ class NngSubscriber(SleipnirSubscriber):
     Dials a SUB socket to *address* and dispatches received events to
     registered handlers via per-subscription asyncio queues.
 
+    When a *registry* is provided, :meth:`start` queries it for all live
+    publisher sockets and dials each one, enabling multi-publisher discovery.
+    If the registry is empty, *address* is used as the fallback.
+
     Usage::
 
         sub = NngSubscriber("ipc:///tmp/sleipnir.sock")
@@ -247,6 +285,7 @@ class NngSubscriber(SleipnirSubscriber):
         connect_settle_ms: int = DEFAULT_CONNECT_SETTLE_MS,
         reconnect_min_ms: int = DEFAULT_RECONNECT_MIN_MS,
         reconnect_max_ms: int = DEFAULT_RECONNECT_MAX_MS,
+        registry: ServiceRegistry | None = None,
     ) -> None:
         _require_pynng()
         if ring_buffer_depth < 1:
@@ -257,6 +296,7 @@ class NngSubscriber(SleipnirSubscriber):
         self._connect_settle_ms = connect_settle_ms
         self._reconnect_min_ms = reconnect_min_ms
         self._reconnect_max_ms = reconnect_max_ms
+        self._registry = registry
 
         self._socket: pynng.Sub0 | None = None  # type: ignore[name-defined]
         self._recv_task: asyncio.Task[None] | None = None
@@ -265,17 +305,42 @@ class NngSubscriber(SleipnirSubscriber):
         self._running = False
 
     async def start(self) -> None:
-        """Dial the SUB socket and start the receive loop."""
+        """Dial the SUB socket and start the receive loop.
+
+        When discovery is configured, all live publisher sockets from the
+        registry are dialled.  Falls back to *address* when the registry is
+        empty or discovery is disabled.
+        """
         self._socket = pynng.Sub0()
         self._socket.recv_timeout = self._recv_timeout_ms
         self._socket.reconnect_time_min = self._reconnect_min_ms
         self._socket.reconnect_time_max = self._reconnect_max_ms
-        self._socket.dial(self._address, block=False)
-        logger.debug("NngSubscriber: dialing %s", self._address)
+
+        addresses = await self._discover_addresses()
+        for addr in addresses:
+            self._socket.dial(addr, block=False)
+            logger.debug("NngSubscriber: dialing %s", addr)
+
         if self._connect_settle_ms > 0:
             await asyncio.sleep(self._connect_settle_ms / 1000.0)
         self._running = True
         self._recv_task = asyncio.create_task(self._recv_loop(), name="sleipnir-nng-sub-recv")
+
+    async def _discover_addresses(self) -> list[str]:
+        """Return the list of publisher addresses to dial.
+
+        Uses the service registry when available; falls back to *self._address*.
+        """
+        if self._registry is None:
+            return [self._address]
+        loop = asyncio.get_running_loop()
+        entries = await loop.run_in_executor(None, self._registry.list_services)
+        if not entries:
+            logger.debug("NngSubscriber: registry empty, falling back to %s", self._address)
+            return [self._address]
+        addresses = [e.socket for e in entries]
+        logger.debug("NngSubscriber: discovered %d publisher(s): %s", len(addresses), addresses)
+        return addresses
 
     async def stop(self) -> None:
         """Cancel the receive loop and close the SUB socket."""
@@ -371,6 +436,10 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
     by this process loop back through nng and are delivered to local
     subscribers as well as remote ones.
 
+    When *service_id* and *registry* are provided, the publisher registers
+    itself in the service registry on start, and the subscriber discovers all
+    live publishers (including itself) to dial.
+
     Usage::
 
         bus = NngTransport("ipc:///tmp/sleipnir.sock")
@@ -391,12 +460,16 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
         connect_settle_ms: int = DEFAULT_CONNECT_SETTLE_MS,
         reconnect_min_ms: int = DEFAULT_RECONNECT_MIN_MS,
         reconnect_max_ms: int = DEFAULT_RECONNECT_MAX_MS,
+        service_id: str | None = None,
+        registry: ServiceRegistry | None = None,
     ) -> None:
         _require_pynng()
         self._publisher = NngPublisher(
             address=address,
             bind_retry_delay_s=bind_retry_delay_s,
             bind_max_retries=bind_max_retries,
+            service_id=service_id,
+            registry=registry,
         )
         self._subscriber = NngSubscriber(
             address=address,
@@ -405,6 +478,7 @@ class NngTransport(SleipnirPublisher, SleipnirSubscriber):
             connect_settle_ms=connect_settle_ms,
             reconnect_min_ms=reconnect_min_ms,
             reconnect_max_ms=reconnect_max_ms,
+            registry=registry,
         )
 
     async def start(self) -> None:
