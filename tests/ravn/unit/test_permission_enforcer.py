@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from ravn.adapters.bash_validator import unwrap_sudo
 from ravn.adapters.permission_enforcer import (
     BashValidator,
     PermissionEnforcer,
@@ -156,7 +157,7 @@ class TestBashValidatorSudoUnwrap:
         assert intent in (CommandIntent.DESTRUCTIVE, CommandIntent.SYSTEM_ADMIN)
 
     def test_nested_sudo_unwrapped(self, v: BashValidator) -> None:
-        inner = v._unwrap_sudo("sudo sudo ls")
+        inner = unwrap_sudo("sudo sudo ls")
         assert "sudo" not in inner.split()[0] if inner else True
 
 

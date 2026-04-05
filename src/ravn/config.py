@@ -126,9 +126,34 @@ class FileToolsConfig(BaseModel):
     )
 
 
+class DockerTerminalConfig(BaseModel):
+    """Docker-specific settings for the docker terminal backend."""
+
+    image: str = Field(
+        default="python:3.11-slim",
+        description="Docker image used for the sandboxed container.",
+    )
+    network: str = Field(
+        default="none",
+        description="Docker network mode: 'none' (isolated), 'bridge', or 'host'.",
+    )
+    mount_workspace: bool = Field(
+        default=True,
+        description="Mount the workspace directory read-write inside the container.",
+    )
+    extra_mounts: list[str] = Field(
+        default_factory=list,
+        description="Additional volume mounts in 'host:container' format.",
+    )
+
+
 class TerminalToolConfig(BaseModel):
     """Terminal tool configuration."""
 
+    backend: str = Field(
+        default="local",
+        description="Terminal backend: 'local' (host shell) or 'docker' (sandboxed container).",
+    )
     persistent_shell: bool = Field(
         default=True,
         description="Keep a single shell process alive across tool calls.",
@@ -140,6 +165,10 @@ class TerminalToolConfig(BaseModel):
     timeout_seconds: float = Field(
         default=30.0,
         description="Seconds to wait for a command to complete before timing out.",
+    )
+    docker: DockerTerminalConfig = Field(
+        default_factory=DockerTerminalConfig,
+        description="Docker backend configuration (used when backend='docker').",
     )
 
 
@@ -210,7 +239,6 @@ class BashToolConfig(BaseModel):
             "and for path boundary checks. Defaults to CWD when empty."
         ),
     )
-
 
 
 class ToolsConfig(BaseModel):
@@ -554,7 +582,7 @@ class ProjectConfig:
         for line in text.splitlines():
             if not past_header:
                 if line.startswith("# RAVN Project:"):
-                    project_name = line[len("# RAVN Project:"):].strip()
+                    project_name = line[len("# RAVN Project:") :].strip()
                     past_header = True
                 continue
             yaml_lines.append(line)

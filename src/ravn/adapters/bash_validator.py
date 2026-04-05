@@ -541,18 +541,14 @@ class BashValidationPipeline:
         if cmd == "git":
             subcmd = tokens[1] if len(tokens) > 1 else ""
             if subcmd not in _GIT_READ_SUBCOMMANDS:
-                return StageDeny(
-                    f"git subcommand {subcmd!r} is not allowed in read_only mode"
-                )
+                return StageDeny(f"git subcommand {subcmd!r} is not allowed in read_only mode")
 
         return StageAllow()
 
     def _check_workspace_write(self, command: str) -> StageResult:
         """Warn if command references known system paths."""
         for prefix in _SYSTEM_PATH_WARN_PREFIXES:
-            if re.search(
-                rf"(?:^|\s|['\"]){re.escape(prefix)}(?:/|\s|['\"]|$)", command
-            ):
+            if re.search(rf"(?:^|\s|['\"]){re.escape(prefix)}(?:/|\s|['\"]|$)", command):
                 return StageWarn(
                     f"command references system path {prefix!r} — "
                     "proceed with caution in workspace_write mode"
@@ -661,7 +657,9 @@ class BashValidationPipeline:
         if cmd in _READ_ONLY_WHITELIST:
             return CommandIntent.READ_ONLY
 
-        return CommandIntent.UNKNOWN
+        # Unknown commands are treated as WRITE-level for safety: they may
+        # mutate state even though we cannot determine the exact intent.
+        return CommandIntent.WRITE
 
     @staticmethod
     def _highest_intent(intents: list[CommandIntent]) -> CommandIntent:
