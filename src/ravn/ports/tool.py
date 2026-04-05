@@ -48,6 +48,15 @@ class ToolPort(ABC):
         """Execute the tool with the given input and return a result."""
         ...
 
+    def diff_preview(self, input: dict) -> str | None:
+        """Return a unified diff preview of the change, or None if not applicable.
+
+        Tools that modify files should override this to return a diff of the
+        proposed change before it is written to disk.  The diff is included in
+        the TOOL_START event so all channels can render it.
+        """
+        return None
+
     def to_api_dict(self) -> dict:
         """Serialize to the Anthropic tool definition format."""
         return {

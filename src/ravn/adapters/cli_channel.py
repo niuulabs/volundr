@@ -44,13 +44,19 @@ class CliChannel(ChannelPort):
             case RavnEventType.TOOL_START:
                 tool_name = event.data
                 tool_input = event.metadata.get("input", {})
+                diff = event.metadata.get("diff")
                 if self._in_response:
                     print(file=self._file)
                     self._in_response = False
                 print(
-                    f"\n⚙ {tool_name}({_format_input(tool_input, self._input_value_limit)})",
+                    f"\n⟳ {tool_name}({_format_input(tool_input, self._input_value_limit)})",
                     file=self._file,
                 )
+                if diff:
+                    separator = "─" * 33
+                    print(separator, file=self._file)
+                    print(diff.rstrip(), file=self._file)
+                    print(separator, file=self._file)
 
             case RavnEventType.TOOL_RESULT:
                 tool_name = event.metadata.get("tool_name", "")

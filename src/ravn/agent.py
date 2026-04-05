@@ -203,7 +203,8 @@ class RavnAgent:
             )
             return result
 
-        await self._channel.emit(RavnEvent.tool_start(tool_call.name, tool_call.input))
+        diff = tool.diff_preview(tool_call.input)
+        await self._channel.emit(RavnEvent.tool_start(tool_call.name, tool_call.input, diff=diff))
 
         granted = await self._permission.check(tool.required_permission)
         if not granted:

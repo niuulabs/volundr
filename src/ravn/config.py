@@ -126,6 +126,23 @@ class FileToolsConfig(BaseModel):
     )
 
 
+class TerminalToolConfig(BaseModel):
+    """Terminal tool configuration."""
+
+    persistent_shell: bool = Field(
+        default=True,
+        description="Keep a single shell process alive across tool calls.",
+    )
+    shell: str = Field(
+        default="/bin/bash",
+        description="Shell executable used for command execution.",
+    )
+    timeout_seconds: float = Field(
+        default=30.0,
+        description="Seconds to wait for a command to complete before timing out.",
+    )
+
+
 class ToolsConfig(BaseModel):
     """Tool availability and custom adapter configuration."""
 
@@ -147,6 +164,10 @@ class ToolsConfig(BaseModel):
     file: FileToolsConfig = Field(
         default_factory=FileToolsConfig,
         description="Limits and thresholds for the built-in file tools.",
+    )
+    terminal: TerminalToolConfig = Field(
+        default_factory=TerminalToolConfig,
+        description="Persistent shell configuration for the built-in terminal tool.",
     )
 
 
@@ -187,21 +208,42 @@ class PermissionRuleConfig(BaseModel):
 class PermissionConfig(BaseModel):
     """Permission enforcement configuration."""
 
-    mode: Literal["allow_all", "deny_all", "prompt"] = Field(
-        default="allow_all",
-        description="Default permission mode: allow_all, deny_all, or prompt.",
+    mode: Literal[
+        "read_only",
+        "workspace_write",
+        "full_access",
+        "prompt",
+        # Legacy aliases kept for backwards compatibility
+        "allow_all",
+        "deny_all",
+    ] = Field(
+        default="workspace_write",
+        description=(
+            "Permission mode: "
+            "'read_only' (no mutations), "
+            "'workspace_write' (writes within workspace only), "
+            "'full_access' (unrestricted, explicit opt-in), "
+            "'prompt' (interactive confirmation per action)."
+        ),
+    )
+    workspace_root: str = Field(
+        default="",
+        description=(
+            "Absolute path to the workspace root enforced in workspace_write mode. "
+            "Defaults to the current working directory when empty."
+        ),
     )
     allow: list[str] = Field(
         default_factory=list,
-        description="Permissions always granted without prompting.",
+        description="Tool names or permission strings always granted without prompting.",
     )
     deny: list[str] = Field(
         default_factory=list,
-        description="Permissions always denied without prompting.",
+        description="Tool names or permission strings always denied.",
     )
     ask: list[str] = Field(
         default_factory=list,
-        description="Permissions that always prompt the user.",
+        description="Tool names or permission strings that always prompt the user.",
     )
     rules: list[PermissionRuleConfig] = Field(
         default_factory=list,
