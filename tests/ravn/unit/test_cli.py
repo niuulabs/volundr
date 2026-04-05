@@ -6,6 +6,8 @@ import os
 from collections.abc import AsyncIterator
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from typer.testing import CliRunner
 
 from ravn.cli.commands import _chat, app, main
@@ -132,3 +134,91 @@ class TestMainEntryPoint:
         with patch("ravn.cli.commands.app") as mock_app:
             main()
             mock_app.assert_called_once()
+
+
+class TestBuildAgentNoApiKey:
+    def test_no_api_key_exits_with_error(self) -> None:
+        """_build_agent raises typer.Exit(1) when no API key is configured."""
+        import typer
+
+        from ravn.cli.commands import _build_agent
+        from ravn.config import Settings
+
+        settings = Settings()
+        with patch.object(settings, "effective_api_key", return_value=None):
+            with pytest.raises(typer.Exit):
+                _build_agent(settings)
+
+
+class TestRunTurnException:
+    @pytest.mark.asyncio
+    async def test_exception_is_caught_and_printed(self) -> None:
+        """Exceptions in run_turn are caught; sys.exit called for single_turn."""
+        import io
+        from unittest.mock import AsyncMock
+
+        from ravn.adapters.cli_channel import CliChannel
+        from ravn.cli.commands import _run_turn
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(side_effect=RuntimeError("boom"))
+        channel = CliChannel(file=io.StringIO())
+
+        # In REPL mode (single_turn=False), no sys.exit — just prints error
+        with patch("typer.echo") as mock_echo:
+            await _run_turn(agent, channel, "hello", show_usage=False, single_turn=False)
+        mock_echo.assert_called_once()
+        assert "boom" in mock_echo.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_single_turn_exception_calls_sys_exit(self) -> None:
+        """In single_turn mode, an exception causes sys.exit(1)."""
+        import io
+        import sys
+        from unittest.mock import AsyncMock
+
+        from ravn.adapters.cli_channel import CliChannel
+        from ravn.cli.commands import _run_turn
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(side_effect=RuntimeError("fatal"))
+        channel = CliChannel(file=io.StringIO())
+
+        with (
+            patch("typer.echo"),
+            patch.object(sys, "exit") as mock_exit,
+        ):
+            await _run_turn(agent, channel, "hello", show_usage=False, single_turn=True)
+        mock_exit.assert_called_once_with(1)
+
+
+class TestPrintUsage:
+    def test_print_usage_with_cache_tokens(self) -> None:
+        """_print_usage includes cache_read and cache_write when non-zero."""
+        from ravn.cli.commands import _print_usage
+        from ravn.domain.models import TokenUsage
+
+        usage = TokenUsage(
+            input_tokens=10,
+            output_tokens=5,
+            cache_read_tokens=100,
+            cache_write_tokens=200,
+        )
+        with patch("typer.echo") as mock_echo:
+            _print_usage(usage)
+        msg = mock_echo.call_args[0][0]
+        assert "cache_read=100" in msg
+        assert "cache_write=200" in msg
+
+    def test_print_usage_without_cache_tokens(self) -> None:
+        """_print_usage omits cache fields when zero."""
+        from ravn.cli.commands import _print_usage
+        from ravn.domain.models import TokenUsage
+
+        usage = TokenUsage(input_tokens=10, output_tokens=5)
+        with patch("typer.echo") as mock_echo:
+            _print_usage(usage)
+        msg = mock_echo.call_args[0][0]
+        assert "cache" not in msg
+        assert "in=10" in msg
+        assert "out=5" in msg
