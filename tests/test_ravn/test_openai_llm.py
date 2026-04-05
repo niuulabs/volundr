@@ -23,9 +23,11 @@ import respx
 from ravn.adapters.openai_llm import (
     OpenAICompatibleAdapter,
     _convert_tools,
+    _estimate_tokens,
     _normalise_usage,
     _strip_reasoning_tags,
     _system_to_string,
+    _uses_developer_role,
 )
 from ravn.domain.exceptions import LLMError
 from ravn.domain.models import StopReason, StreamEventType, TokenUsage
@@ -719,3 +721,262 @@ class TestOpenAIAdapterRetry:
             await adapter.generate(_MESSAGES, **_KWARGS)
 
         assert exc_info.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# REASONING_SCRATCHPAD tag stripping
+# ---------------------------------------------------------------------------
+
+
+class TestReasoningScratchpadStripping:
+    def test_strips_reasoning_scratchpad_tags(self) -> None:
+        text = "<REASONING_SCRATCHPAD>hidden reasoning</REASONING_SCRATCHPAD>answer"
+        assert _strip_reasoning_tags(text) == "answer"
+
+    def test_strips_reasoning_scratchpad_case_insensitive(self) -> None:
+        text = "<reasoning_scratchpad>hidden</reasoning_scratchpad>visible"
+        assert _strip_reasoning_tags(text) == "visible"
+
+    def test_strips_multiline_scratchpad(self) -> None:
+        text = "<REASONING_SCRATCHPAD>\nstep 1\nstep 2\n</REASONING_SCRATCHPAD>final"
+        assert _strip_reasoning_tags(text) == "final"
+
+    def test_all_three_tag_types_stripped(self) -> None:
+        text = (
+            "<think>t</think>"
+            "<reasoning>r</reasoning>"
+            "<REASONING_SCRATCHPAD>s</REASONING_SCRATCHPAD>result"
+        )
+        assert _strip_reasoning_tags(text) == "result"
+
+    @respx.mock
+    async def test_generate_strips_scratchpad_tag(self) -> None:
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(
+            return_value=httpx.Response(
+                200,
+                json=_non_stream_response(
+                    "<REASONING_SCRATCHPAD>internal</REASONING_SCRATCHPAD>clean answer"
+                ),
+            )
+        )
+
+        result = await adapter.generate(_MESSAGES, **_KWARGS)
+        assert "REASONING_SCRATCHPAD" not in result.content
+        assert "clean answer" in result.content
+
+    @respx.mock
+    async def test_stream_strips_scratchpad_tag(self) -> None:
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        sse = _make_sse_lines(
+            _text_chunk("<REASONING_SCRATCHPAD>hidden</REASONING_SCRATCHPAD>"),
+            _text_chunk("visible"),
+            usage={"prompt_tokens": 5, "completion_tokens": 5},
+        )
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(
+            return_value=httpx.Response(200, content=sse)
+        )
+
+        events = []
+        async for event in adapter.stream(_MESSAGES, **_KWARGS):
+            events.append(event)
+
+        text_events = [e for e in events if e.type == StreamEventType.TEXT_DELTA]
+        combined = "".join(e.text or "" for e in text_events)
+        assert "REASONING_SCRATCHPAD" not in combined
+        assert "visible" in combined
+
+
+# ---------------------------------------------------------------------------
+# Developer role swap (GPT-5/o1/o3/Codex models)
+# ---------------------------------------------------------------------------
+
+
+class TestDeveloperRoleSwap:
+    def test_o1_uses_developer_role(self) -> None:
+        assert _uses_developer_role("o1-mini") is True
+
+    def test_o3_uses_developer_role(self) -> None:
+        assert _uses_developer_role("o3-mini") is True
+
+    def test_gpt5_uses_developer_role(self) -> None:
+        assert _uses_developer_role("gpt-5") is True
+        assert _uses_developer_role("gpt-5-turbo") is True
+
+    def test_codex_uses_developer_role(self) -> None:
+        assert _uses_developer_role("codex-mini") is True
+
+    def test_gpt4_uses_system_role(self) -> None:
+        assert _uses_developer_role("gpt-4o") is False
+
+    def test_claude_uses_system_role(self) -> None:
+        assert _uses_developer_role("claude-sonnet-4-6") is False
+
+    def test_llama_uses_system_role(self) -> None:
+        assert _uses_developer_role("llama3.1:8b") is False
+
+    @respx.mock
+    async def test_o1_model_sends_developer_role(self) -> None:
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        captured: list[dict] = []
+
+        def _capture(request, route) -> httpx.Response:
+            captured.append(json.loads(request.content))
+            return httpx.Response(200, json=_non_stream_response())
+
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(side_effect=_capture)
+
+        await adapter.generate(
+            _MESSAGES, tools=[], system="You are helpful.", model="o1-mini", max_tokens=100
+        )
+        first_msg = captured[0]["messages"][0]
+        assert first_msg["role"] == "developer"
+        assert "You are helpful." in first_msg["content"]
+
+    @respx.mock
+    async def test_gpt4_model_sends_system_role(self) -> None:
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        captured: list[dict] = []
+
+        def _capture(request, route) -> httpx.Response:
+            captured.append(json.loads(request.content))
+            return httpx.Response(200, json=_non_stream_response())
+
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(side_effect=_capture)
+
+        await adapter.generate(
+            _MESSAGES, tools=[], system="You are helpful.", model="gpt-4o", max_tokens=100
+        )
+        first_msg = captured[0]["messages"][0]
+        assert first_msg["role"] == "system"
+
+    @respx.mock
+    async def test_codex_model_stream_sends_developer_role(self) -> None:
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        captured: list[dict] = []
+
+        sse = _make_sse_lines(
+            _text_chunk("ok"),
+            usage={"prompt_tokens": 5, "completion_tokens": 5},
+        )
+
+        def _capture(request, route) -> httpx.Response:
+            captured.append(json.loads(request.content))
+            return httpx.Response(200, content=sse)
+
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(side_effect=_capture)
+
+        async for _ in adapter.stream(
+            _MESSAGES, tools=[], system="sys", model="codex-mini", max_tokens=100
+        ):
+            pass
+
+        first_msg = captured[0]["messages"][0]
+        assert first_msg["role"] == "developer"
+
+
+# ---------------------------------------------------------------------------
+# Token estimation fallback
+# ---------------------------------------------------------------------------
+
+
+class TestTokenEstimationFallback:
+    def test_estimate_tokens_nonzero(self) -> None:
+        assert _estimate_tokens("hello world") > 0
+
+    def test_estimate_tokens_proportional(self) -> None:
+        short = _estimate_tokens("hi")
+        long = _estimate_tokens("a" * 400)
+        assert long > short
+
+    def test_estimate_tokens_minimum_one(self) -> None:
+        # Single char → at least 1 token
+        assert _estimate_tokens("x") >= 1
+
+    def test_normalise_usage_estimation_fallback_when_zero(self) -> None:
+        usage = _normalise_usage({}, input_text="hello world prompt", output_text="response text")
+        assert usage.input_tokens > 0
+        assert usage.output_tokens > 0
+
+    def test_normalise_usage_real_data_not_overridden(self) -> None:
+        """When real token counts are present they must not be replaced by estimates."""
+        usage = _normalise_usage(
+            {"prompt_tokens": 42, "completion_tokens": 17},
+            input_text="hello world prompt",
+            output_text="response text",
+        )
+        assert usage.input_tokens == 42
+        assert usage.output_tokens == 17
+
+    def test_normalise_usage_partial_estimation(self) -> None:
+        """Only zero fields are estimated; non-zero fields are kept."""
+        usage = _normalise_usage(
+            {"prompt_tokens": 10, "completion_tokens": 0},
+            input_text="x",
+            output_text="response text here",
+        )
+        assert usage.input_tokens == 10
+        assert usage.output_tokens > 0
+
+    @respx.mock
+    async def test_generate_estimates_when_no_usage(self) -> None:
+        """generate() falls back to estimation when the API omits usage."""
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        # Response with no usage field.
+        body = {
+            "choices": [
+                {"message": {"role": "assistant", "content": "Hello!"}, "finish_reason": "stop"}
+            ]
+        }
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+
+        result = await adapter.generate(
+            _MESSAGES, tools=[], system="sys", model="gpt-4o", max_tokens=100
+        )
+        # Estimated values must be positive.
+        assert result.usage.input_tokens > 0
+        assert result.usage.output_tokens > 0
+
+    @respx.mock
+    async def test_stream_emits_estimated_usage_when_no_usage_chunk(self) -> None:
+        """stream() emits MESSAGE_DONE with estimated usage when no usage chunk arrives."""
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        # SSE stream with no usage chunk and no [DONE].
+        sse_lines = f"data: {_text_chunk('Hello there!')}\n\n".encode() + b"data: [DONE]\n\n"
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(
+            return_value=httpx.Response(200, content=sse_lines)
+        )
+
+        events = []
+        async for event in adapter.stream(
+            _MESSAGES, tools=[], system="sys", model="gpt-4o", max_tokens=100
+        ):
+            events.append(event)
+
+        done_events = [e for e in events if e.type == StreamEventType.MESSAGE_DONE]
+        assert len(done_events) == 1
+        assert done_events[0].usage is not None
+        assert done_events[0].usage.input_tokens > 0
+        assert done_events[0].usage.output_tokens > 0
+
+    @respx.mock
+    async def test_stream_no_duplicate_done_when_usage_present(self) -> None:
+        """stream() emits exactly one MESSAGE_DONE when the server sends a usage chunk."""
+        adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
+        sse = _make_sse_lines(
+            _text_chunk("hi"),
+            usage={"prompt_tokens": 10, "completion_tokens": 5},
+        )
+        respx.post(f"{_BASE_URL}/v1/chat/completions").mock(
+            return_value=httpx.Response(200, content=sse)
+        )
+
+        events = []
+        async for event in adapter.stream(_MESSAGES, **_KWARGS):
+            events.append(event)
+
+        done_events = [e for e in events if e.type == StreamEventType.MESSAGE_DONE]
+        assert len(done_events) == 1
+        assert done_events[0].usage.input_tokens == 10
