@@ -19,6 +19,11 @@ dependencies = [
     "websockets>=12.0",
     "python-on-whales>=0.70",
     "gitpython>=3.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
+    "respx>=0.22.0",
+    "typer>=0.24.1",
 ]
 
 [project.optional-dependencies]
@@ -87,6 +92,8 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = "-v --tb=short -m 'not integration'"
 markers = [
     "integration: tests that require a real PostgreSQL database",
+    "ravn: tests for the Ravn agent module",
+    "e2e: end-to-end tests for full agent conversation flows",
 ]
 
 [tool.ruff]

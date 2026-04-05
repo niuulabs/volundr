@@ -26,7 +26,8 @@ PGVECTOR_VERSION := $(shell python3 -c "exec(open('$(PG_VERSIONS_PY)').read()); 
 PGINSTALL_DIR    := build/pginstall
 
 .PHONY: build build-web build-postgres build-cli copy-migrations clean lint test verify \
-       test-integration test-integration-volundr test-integration-tyr test-e2e test-e2e-ui test-all
+       test-integration test-integration-volundr test-integration-tyr test-e2e test-e2e-ui test-all \
+       test-ravn
 
 # --------------------------------------------------------------------------
 # Full build: web assets → migrations → PostgreSQL → Nuitka binary
@@ -99,6 +100,13 @@ test-e2e-ui:
 	cd $(WEB_DIR) && npm run test:e2e -- --ui
 
 test-all: test test-integration test-e2e
+
+# --------------------------------------------------------------------------
+# Ravn-specific tests with coverage
+# --------------------------------------------------------------------------
+test-ravn:
+	uv run pytest tests/ravn/ tests/test_ravn/ -v --tb=short \
+		--cov=src/ravn --cov-report=term-missing --cov-fail-under=85
 
 # --------------------------------------------------------------------------
 # Cleanup
