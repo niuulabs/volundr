@@ -242,6 +242,43 @@ class KeyVaultConfig(BaseModel):
     )
 
 
+class CacheMode(StrEnum):
+    """Which cache backend to use."""
+
+    REDIS = "redis"
+    """Shared Redis cache — suitable for multi-instance infra deployments."""
+
+    MEMORY = "memory"
+    """In-process LRU cache — suitable for standalone / Pi-mode deployments."""
+
+    DISABLED = "disabled"
+    """No caching (default). Every request is forwarded to the provider."""
+
+
+class CacheConfig(BaseModel):
+    """Configuration for the semantic response cache."""
+
+    mode: CacheMode = Field(
+        default=CacheMode.DISABLED,
+        description=(
+            "Cache backend: 'redis' (shared, multi-instance), "
+            "'memory' (in-process LRU), or 'disabled' (no cache, default)."
+        ),
+    )
+    redis_url: str = Field(
+        default="redis://localhost:6379",
+        description="Redis connection URL (used when mode='redis').",
+    )
+    default_ttl: int = Field(
+        default=300,
+        description="Default cache entry time-to-live in seconds.",
+    )
+    max_memory_entries: int = Field(
+        default=1000,
+        description="Maximum entries kept in the in-memory LRU cache (mode='memory').",
+    )
+
+
 # Default base URLs per provider type.
 _DEFAULT_BASE_URLS: dict[str, str] = {
     "anthropic": "https://api.anthropic.com",
@@ -350,6 +387,16 @@ class BifrostConfig(BaseModel):
         description=(
             "Provider API key vault configuration. "
             "Keys are loaded at startup and never returned in responses or logs."
+        ),
+    )
+
+    # ── Response cache ────────────────────────────────────────────────────────
+    cache: CacheConfig = Field(
+        default_factory=CacheConfig,
+        description=(
+            "Semantic response cache configuration. "
+            "Caches non-streaming LLM responses by SHA-256(tenant+model+system+messages). "
+            "Hits are recorded in accounting with cost=0."
         ),
     )
 

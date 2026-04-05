@@ -7,6 +7,8 @@ mounted on the main ``FastAPI`` application.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import time
 import uuid
@@ -44,12 +46,74 @@ from bifrost.inbound.tracking import (
     _stream_with_tracking,
 )
 from bifrost.ports.auth import AuthPort
+from bifrost.ports.cache import CachePort
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
 from bifrost.router import ModelRouter, RouterError
-from bifrost.translation.models import AnthropicRequest
+from bifrost.translation.models import AnthropicRequest, AnthropicResponse
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Cache key computation
+# ---------------------------------------------------------------------------
+
+
+def _compute_cache_key(tenant_id: str, request: AnthropicRequest) -> str:
+    """Return a per-tenant SHA-256 cache key for *request*.
+
+    The key covers ``tenant_id``, ``model``, ``system``, and ``messages`` so
+    that two requests with different prompts or from different tenants always
+    get distinct entries.  The ``stream`` flag is intentionally excluded —
+    only non-streaming responses are cached (the flag does not affect content).
+
+    Args:
+        tenant_id: Caller's tenant identifier (prevents cross-tenant leakage).
+        request:   The inbound Anthropic-format request.
+
+    Returns:
+        A lowercase hex SHA-256 digest (64 characters).
+    """
+    if isinstance(request.system, str):
+        system_str = request.system or ""
+    elif request.system is not None:
+        system_str = json.dumps([b.model_dump() for b in request.system], sort_keys=True)
+    else:
+        system_str = ""
+
+    messages_str = json.dumps([m.model_dump() for m in request.messages], sort_keys=True)
+    payload = f"{tenant_id}:{request.model}:{system_str}:{messages_str}"
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _cache_hit_record(
+    request_id: str,
+    identity,
+    model: str,
+    provider: str,
+    latency_ms: float,
+) -> UsageRecord:
+    """Build a zero-cost ``UsageRecord`` for a cache hit."""
+    return UsageRecord(
+        request_id=request_id,
+        agent_id=identity.agent_id,
+        tenant_id=identity.tenant_id,
+        session_id=identity.session_id,
+        saga_id=identity.saga_id,
+        model=model,
+        provider=provider,
+        input_tokens=0,
+        output_tokens=0,
+        cache_read_tokens=0,
+        cache_write_tokens=0,
+        reasoning_tokens=0,
+        cost_usd=0.0,
+        latency_ms=latency_ms,
+        streaming=False,
+        cache_hit=True,
+        timestamp=datetime.now(UTC),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Quota enforcement
@@ -212,6 +276,7 @@ def create_router(
     store: UsageStore,
     pricing_overrides: dict[str, ModelPricing],
     auth_adapter: AuthPort,
+    cache: CachePort | None = None,
 ) -> APIRouter:
     """Build and return a configured ``APIRouter`` with all Bifröst routes.
 
@@ -221,10 +286,18 @@ def create_router(
         store:            Usage store for recording and querying usage records.
         pricing_overrides: Per-model pricing overrides from config.
         auth_adapter:     Authentication adapter (open / pat / mesh).
+        cache:            Optional response cache (disabled by default).
 
     Returns:
         A ``fastapi.APIRouter`` with all routes registered.
     """
+    _cache: CachePort
+    if cache is None:
+        from bifrost.adapters.cache.disabled import DisabledCache
+
+        _cache = DisabledCache()
+    else:
+        _cache = cache
     api_router = APIRouter()
 
     @api_router.get("/health")
@@ -328,6 +401,20 @@ def create_router(
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return stream_resp
 
+            # --- Exact response cache (non-streaming only) ---
+            cache_key = _compute_cache_key(identity.tenant_id, request)
+            cached: AnthropicResponse | None = await _cache.get(cache_key)
+            if cached is not None:
+                latency_ms = (time.monotonic() - start) * 1000
+                hit_record = _cache_hit_record(
+                    request_id, identity, request.model, provider, latency_ms
+                )
+                await store.record(hit_record)
+                json_resp = JSONResponse(content=cached.model_dump())
+                if warnings:
+                    json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return json_resp
+
             response = await router.complete(request)
             latency_ms = (time.monotonic() - start) * 1000
             data = response.model_dump()
@@ -370,6 +457,7 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            await _cache.set(cache_key, response, config.cache.default_ttl)
 
             json_resp = JSONResponse(content=data)
             if warnings:
@@ -573,6 +661,20 @@ def create_router(
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return stream_resp
 
+            # --- Exact response cache (non-streaming only) ---
+            cache_key = _compute_cache_key(identity.tenant_id, request)
+            cached = await _cache.get(cache_key)
+            if cached is not None:
+                latency_ms = (time.monotonic() - start) * 1000
+                hit_record = _cache_hit_record(
+                    request_id, identity, request.model, provider, latency_ms
+                )
+                await store.record(hit_record)
+                json_resp = JSONResponse(content=anthropic_response_to_openai(cached))
+                if warnings:
+                    json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return json_resp
+
             response = await router.complete(request)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
@@ -613,6 +715,7 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            await _cache.set(cache_key, response, config.cache.default_ttl)
 
             json_resp = JSONResponse(content=anthropic_response_to_openai(response))
             if warnings:
@@ -702,6 +805,26 @@ def create_router(
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return stream_resp
 
+            # --- Exact response cache (non-streaming only) ---
+            cache_key = _compute_cache_key(identity.tenant_id, request)
+            cached = await _cache.get(cache_key)
+            if cached is not None:
+                latency_ms = (time.monotonic() - start) * 1000
+                hit_record = _cache_hit_record(
+                    request_id, identity, request.model, provider, latency_ms
+                )
+                await store.record(hit_record)
+                created_at = datetime.now(UTC).isoformat()
+                total_ns = int(latency_ms * 1e6)
+                json_resp = JSONResponse(
+                    content=response_translate_fn(
+                        cached, created_at=created_at, total_duration_ns=total_ns
+                    )
+                )
+                if warnings:
+                    json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return json_resp
+
             response = await router.complete(request)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
@@ -742,6 +865,7 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            await _cache.set(cache_key, response, config.cache.default_ttl)
 
             created_at = datetime.now(UTC).isoformat()
             total_ns = int(latency_ms * 1e6)
