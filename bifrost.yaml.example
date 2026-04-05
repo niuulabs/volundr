@@ -185,6 +185,42 @@ bifrost:
   #   # Or set BIFROST_USAGE_DSN environment variable and leave dsn blank.
   #   dsn_env: BIFROST_USAGE_DSN      # default env var name
 
+  # ── Response cache ────────────────────────────────────────────────────────
+  #
+  # Caches non-streaming LLM responses to avoid redundant provider calls for
+  # identical requests (same tenant + model + system prompt + messages).
+  #
+  # Cache key: SHA-256(tenant_id + model + system_prompt + messages_json)
+  # Scope:     per-tenant — cross-tenant leakage is not possible.
+  # On hit:    returns cached response immediately, records cost=0 in accounting.
+  #
+  # Modes:
+  #   disabled — No caching (default). Every request hits the provider.
+  #   memory   — In-process LRU cache. Zero deps, bounded by max_memory_entries.
+  #              Best for standalone / Pi-mode deployments.
+  #   redis    — Shared Redis cache. Requires pip install 'redis>=5.0'.
+  #              Best for multi-instance infra deployments.
+  #
+  # cache:
+  #   mode: disabled           # disabled | memory | redis
+  #   redis_url: redis://localhost:6379   # for mode=redis
+  #   default_ttl: 300         # entry TTL in seconds (default: 5 minutes)
+  #   max_memory_entries: 1000 # max entries for in-memory LRU (mode=memory)
+  #
+  # Examples:
+  #
+  # Pi / standalone (memory cache, 10-minute TTL):
+  # cache:
+  #   mode: memory
+  #   default_ttl: 600
+  #   max_memory_entries: 500
+  #
+  # Infra / multi-instance (Redis cache):
+  # cache:
+  #   mode: redis
+  #   redis_url: redis://redis-svc:6379
+  #   default_ttl: 300
+
   # ── Server ──────────────────────────────────────────────────────────────────
   host: 0.0.0.0
   port: 8088

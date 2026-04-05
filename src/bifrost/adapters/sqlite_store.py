@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS usage_records (
     cost_usd           REAL    NOT NULL DEFAULT 0.0,
     latency_ms         REAL    NOT NULL DEFAULT 0.0,
     streaming          INTEGER NOT NULL DEFAULT 0,
+    cache_hit          INTEGER NOT NULL DEFAULT 0,
     timestamp          TEXT    NOT NULL
 );
 """
@@ -60,6 +61,7 @@ _MIGRATE_COLUMNS = [
     "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS reasoning_tokens INTEGER NOT NULL DEFAULT 0",  # noqa: E501
     "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS latency_ms REAL NOT NULL DEFAULT 0.0",
     "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS streaming INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS cache_hit INTEGER NOT NULL DEFAULT 0",
 ]
 # fmt: on
 
@@ -68,8 +70,8 @@ INSERT INTO usage_records
     (request_id, agent_id, tenant_id, session_id, saga_id,
      model, provider,
      input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
-     cost_usd, latency_ms, streaming, timestamp)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     cost_usd, latency_ms, streaming, cache_hit, timestamp)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -102,6 +104,7 @@ def _row_to_record(row: tuple) -> UsageRecord:
         cost_usd,
         latency_ms,
         streaming,
+        cache_hit,
         timestamp,
     ) = row
     return UsageRecord(
@@ -120,6 +123,7 @@ def _row_to_record(row: tuple) -> UsageRecord:
         cost_usd=cost_usd,
         latency_ms=latency_ms,
         streaming=bool(streaming),
+        cache_hit=bool(cache_hit),
         timestamp=_parse_ts(timestamp),
     )
 
@@ -192,6 +196,7 @@ class SQLiteUsageStore(UsageStore):
                 record.cost_usd,
                 record.latency_ms,
                 1 if record.streaming else 0,
+                1 if record.cache_hit else 0,
                 _ts(record.timestamp),
             ),
         )
@@ -240,7 +245,7 @@ class SQLiteUsageStore(UsageStore):
             SELECT id, request_id, agent_id, tenant_id, session_id, saga_id,
                    model, provider,
                    input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-                   reasoning_tokens, cost_usd, latency_ms, streaming, timestamp
+                   reasoning_tokens, cost_usd, latency_ms, streaming, cache_hit, timestamp
             FROM usage_records {where}
             ORDER BY timestamp DESC
             LIMIT ?

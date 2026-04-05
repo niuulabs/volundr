@@ -36,6 +36,9 @@ otel = [
 encryption = [
     "cryptography>=42.0",
 ]
+infra = [
+    "redis>=5.0",
+]
 cli = [
     "typer>=0.12",
     "textual>=0.79",
