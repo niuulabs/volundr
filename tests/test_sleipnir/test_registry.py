@@ -77,6 +77,15 @@ def test_bifrost_constants_present():
     assert registry.BIFROST_RATE_LIMITED == "bifrost.rate.limited"
 
 
+def test_bifrost_cost_quota_provider_constants_present():
+    """New cost/quota/provider event type constants added in NIU-526."""
+    assert registry.BIFROST_REQUEST_COMPLETE == "bifrost.request.complete"
+    assert registry.BIFROST_QUOTA_WARNING == "bifrost.quota.warning"
+    assert registry.BIFROST_QUOTA_EXCEEDED == "bifrost.quota.exceeded"
+    assert registry.BIFROST_PROVIDER_DOWN == "bifrost.provider.down"
+    assert registry.BIFROST_PROVIDER_RECOVERED == "bifrost.provider.recovered"
+
+
 def test_system_constants_present():
     assert registry.SYSTEM_HEALTH_PING == "system.health.ping"
     assert registry.SYSTEM_SERVICE_STARTED == "system.service.started"

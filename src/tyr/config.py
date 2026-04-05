@@ -517,6 +517,27 @@ class LLMConfig(BaseModel):
             "When empty, the built-in DECOMPOSITION_PROMPT in bifrost.py is used."
         ),
     )
+    budget_tokens: int = Field(
+        default=0,
+        description=(
+            "Cumulative token budget per BifrostAdapter instance. "
+            "0 means unlimited. When exceeded, bifrost.quota.exceeded is emitted."
+        ),
+    )
+    quota_warning_threshold: float = Field(
+        default=0.8,
+        description=(
+            "Fraction of budget_tokens at which bifrost.quota.warning is emitted. "
+            "Must be between 0.0 and 1.0. Default: 0.8 (80%)."
+        ),
+    )
+    agent_id: str = Field(
+        default="",
+        description=(
+            "Optional identifier for the agent/saga making LLM calls. "
+            "Used as correlation_id in Sleipnir events."
+        ),
+    )
 
 
 class LinearConfig(BaseModel):

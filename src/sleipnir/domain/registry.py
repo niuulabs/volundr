@@ -238,6 +238,21 @@ BIFROST_AUTH_FAILURE: str = "bifrost.auth.failure"
 #: A rate limit was applied to a request.
 BIFROST_RATE_LIMITED: str = "bifrost.rate.limited"
 
+#: An LLM call completed — emitted after every successful request.
+BIFROST_REQUEST_COMPLETE: str = "bifrost.request.complete"
+
+#: An agent reached 80 %+ of its token budget — early warning.
+BIFROST_QUOTA_WARNING: str = "bifrost.quota.warning"
+
+#: An agent hit its hard token limit — calls will be rejected.
+BIFROST_QUOTA_EXCEEDED: str = "bifrost.quota.exceeded"
+
+#: The upstream LLM provider started returning errors.
+BIFROST_PROVIDER_DOWN: str = "bifrost.provider.down"
+
+#: The upstream LLM provider recovered and is healthy again.
+BIFROST_PROVIDER_RECOVERED: str = "bifrost.provider.recovered"
+
 # ---------------------------------------------------------------------------
 # system — Infrastructure and lifecycle events
 # ---------------------------------------------------------------------------
