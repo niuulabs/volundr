@@ -92,6 +92,7 @@ def make_agent(
     permission: PermissionPort | None = None,
     system_prompt: str = "You are a test assistant.",
     max_iterations: int = 10,
+    user_input_fn=None,
 ) -> tuple[RavnAgent, InMemoryChannel]:
     """Construct a RavnAgent wired to an InMemoryChannel for test assertions."""
     ch = channel or InMemoryChannel()
@@ -105,6 +106,7 @@ def make_agent(
         model="claude-sonnet-4-6",
         max_tokens=1024,
         max_iterations=max_iterations,
+        user_input_fn=user_input_fn,
     )
     return agent, ch
 

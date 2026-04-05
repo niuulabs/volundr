@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
 PreToolHook = Callable[[ToolCall], Coroutine[Any, Any, None]]
 PostToolHook = Callable[[ToolCall, ToolResult], Coroutine[Any, Any, None]]
 
+# Async callable that receives a question string and returns the user's answer.
+UserInputFn = Callable[[str], Coroutine[Any, Any, str]]
+
+_ASK_USER_TOOL_NAME = "ask_user"
+
 
 class RavnAgent:
     """Turn-based agent that converses with an LLM and executes tools.
@@ -41,6 +46,10 @@ class RavnAgent:
     3. If the LLM requests tool calls, execute them (with permission check and hooks).
     4. Feed tool results back to the LLM and repeat from step 2.
     5. When the LLM returns a final response (stop_reason != tool_use), return.
+
+    The ``ask_user`` tool is agent-intercepted: when the LLM calls it, the
+    agent pauses the loop, emits the question to the channel, waits for the
+    caller-supplied ``user_input_fn``, and injects the answer as a tool result.
     """
 
     def __init__(
@@ -56,6 +65,7 @@ class RavnAgent:
         max_iterations: int,
         pre_tool_hooks: list[PreToolHook] | None = None,
         post_tool_hooks: list[PostToolHook] | None = None,
+        user_input_fn: UserInputFn | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -67,6 +77,7 @@ class RavnAgent:
         self._max_iterations = max_iterations
         self._pre_tool_hooks: list[PreToolHook] = pre_tool_hooks or []
         self._post_tool_hooks: list[PostToolHook] = post_tool_hooks or []
+        self._user_input_fn = user_input_fn
         self._session = Session()
 
     @property
@@ -174,7 +185,15 @@ class RavnAgent:
         )
 
     async def _execute_tool(self, tool_call: ToolCall) -> ToolResult:
-        """Execute a single tool call, enforcing permissions and running hooks."""
+        """Execute a single tool call, enforcing permissions and running hooks.
+
+        The ``ask_user`` tool is intercepted before regular dispatch and
+        handled by ``_intercept_ask_user`` regardless of whether it is
+        present in the tools registry.
+        """
+        if tool_call.name == _ASK_USER_TOOL_NAME:
+            return await self._intercept_ask_user(tool_call)
+
         tool = self._tools.get(tool_call.name)
 
         if tool is None:
@@ -228,6 +247,32 @@ class RavnAgent:
                 metadata={"tool_name": tool_call.name, "is_error": result.is_error},
             )
         )
+        return result
+
+    async def _intercept_ask_user(self, tool_call: ToolCall) -> ToolResult:
+        """Handle an ask_user tool call by collecting input from the user.
+
+        Emits a TOOL_START event so channels can render the question, then
+        calls ``user_input_fn`` if configured.  Returns an error result when
+        no input function is available.
+        """
+        question = tool_call.input.get("question", "")
+        await self._channel.emit(RavnEvent.tool_start(_ASK_USER_TOOL_NAME, tool_call.input))
+
+        if self._user_input_fn is None:
+            result = ToolResult(
+                tool_call_id=tool_call.id,
+                content="ask_user is not available in this session (no user_input_fn configured)",
+                is_error=True,
+            )
+            await self._channel.emit(
+                RavnEvent.tool_result(_ASK_USER_TOOL_NAME, result.content, is_error=True)
+            )
+            return result
+
+        answer = await self._user_input_fn(question)
+        result = ToolResult(tool_call_id=tool_call.id, content=answer)
+        await self._channel.emit(RavnEvent.tool_result(_ASK_USER_TOOL_NAME, answer))
         return result
 
 
