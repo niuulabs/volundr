@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from bifrost.auth import AgentIdentity, extract_identity
+from bifrost.auth import AgentIdentity
 from bifrost.config import AgentPermissions, BifrostConfig
 from bifrost.domain.models import RequestLog, TokenUsage
 from bifrost.domain.routing import RuleRejectError
@@ -43,6 +43,7 @@ from bifrost.inbound.tracking import (
     _log_request,
     _stream_with_tracking,
 )
+from bifrost.ports.auth import AuthPort
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
 from bifrost.router import ModelRouter, RouterError
@@ -141,12 +142,17 @@ def _check_model_access(
 ) -> None:
     """Raise 403 if the agent does not have permission to use *model*.
 
-    An empty ``allowed_models`` list means all models are permitted.
+    Rules:
+    - An empty ``allowed_models`` list means all models are permitted.
+    - ``'*'`` in the list means all models are permitted (unrestricted).
+    - Other entries are matched exactly against *model*.
 
     Args:
         agent_perms: Pre-resolved permissions for the caller.
     """
     if not agent_perms.allowed_models:
+        return
+    if "*" in agent_perms.allowed_models:
         return
     if model not in agent_perms.allowed_models:
         raise HTTPException(
@@ -205,18 +211,16 @@ def create_router(
     router: ModelRouter,
     store: UsageStore,
     pricing_overrides: dict[str, ModelPricing],
-    auth_mode: str,
-    pat_secret: str,
+    auth_adapter: AuthPort,
 ) -> APIRouter:
     """Build and return a configured ``APIRouter`` with all Bifröst routes.
 
     Args:
-        config: Gateway configuration.
-        router: Routing layer that dispatches to LLM providers.
-        store: Usage store for recording and querying usage records.
+        config:           Gateway configuration.
+        router:           Routing layer that dispatches to LLM providers.
+        store:            Usage store for recording and querying usage records.
         pricing_overrides: Per-model pricing overrides from config.
-        auth_mode: Authentication mode (``open``, ``pat``, or ``mesh``).
-        pat_secret: Secret used to validate PAT tokens.
+        auth_adapter:     Authentication adapter (open / pat / mesh).
 
     Returns:
         A ``fastapi.APIRouter`` with all routes registered.
@@ -225,6 +229,28 @@ def create_router(
 
     @api_router.get("/health")
     async def health() -> dict:
+        return {"status": "ok"}
+
+    @api_router.post("/admin/reload-keys")
+    async def admin_reload_keys(raw_request: Request) -> dict:
+        """Reload provider API keys from their source without restarting.
+
+        Triggers the same key-rotation logic as a SIGHUP signal.  Useful
+        in environments where sending UNIX signals is inconvenient (e.g.
+        containers without a shell, or Windows).
+
+        Authentication is enforced according to the configured auth mode —
+        in PAT or mesh mode a valid credential is required to call this
+        endpoint, preventing unauthenticated disruption of the adapter cache.
+
+        After this call, all cached provider adapters are discarded and
+        will be rebuilt with the freshly loaded keys on the next request.
+
+        Returns:
+            ``{"status": "ok"}``
+        """
+        auth_adapter.extract(raw_request)
+        router.reload_keys()
         return {"status": "ok"}
 
     @api_router.get("/v1/models")
@@ -256,7 +282,7 @@ def create_router(
         Token usage is tracked per-request and attributed to the caller.
         """
         # --- Authentication ---
-        identity = extract_identity(raw_request, auth_mode, pat_secret)
+        identity = auth_adapter.extract(raw_request)
 
         try:
             body = await raw_request.json()
@@ -441,7 +467,7 @@ def create_router(
         path is supported; token usage is extracted and logged on each request.
         """
         # --- Authentication ---
-        identity = extract_identity(raw_request, auth_mode, pat_secret)
+        identity = auth_adapter.extract(raw_request)
 
         try:
             body = await raw_request.json()
@@ -569,7 +595,7 @@ def create_router(
                 → dict`` — translates a non-streaming Anthropic response to Ollama
                 format.
         """
-        identity = extract_identity(raw_request, auth_mode, pat_secret)
+        identity = auth_adapter.extract(raw_request)
 
         try:
             body = await raw_request.json()

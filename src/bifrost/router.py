@@ -15,6 +15,7 @@ import httpx
 
 from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
 from bifrost.domain.routing import RoutingContext, apply_rules
+from bifrost.ports.key_vault import KeyVaultPort
 from bifrost.ports.provider import ProviderError, ProviderPort
 from bifrost.ports.rules import RuleEnginePort
 from bifrost.translation.models import AnthropicRequest, AnthropicResponse
@@ -32,8 +33,18 @@ _PROVIDER_ADAPTER_MAP: dict[str, str] = {
 }
 
 
-def _load_adapter(provider_name: str, cfg: ProviderConfig, base_url: str) -> ProviderPort:
-    """Instantiate the appropriate adapter for *provider_name*."""
+def _load_adapter(
+    provider_name: str,
+    cfg: ProviderConfig,
+    base_url: str,
+    key_vault: KeyVaultPort | None = None,
+) -> ProviderPort:
+    """Instantiate the appropriate adapter for *provider_name*.
+
+    When a *key_vault* is provided, the provider's API key is read from
+    the vault (which holds the cached, rotatable value).  Otherwise the
+    key is read directly from ``cfg.api_key`` for backwards compatibility.
+    """
     dotted = _PROVIDER_ADAPTER_MAP.get(
         provider_name,
         "bifrost.adapters.openai_compat.OpenAICompatAdapter",
@@ -44,7 +55,7 @@ def _load_adapter(provider_name: str, cfg: ProviderConfig, base_url: str) -> Pro
     kwargs: dict = {}
     if base_url:
         kwargs["base_url"] = base_url
-    api_key = cfg.api_key
+    api_key = key_vault.get_key(provider_name) if key_vault else cfg.api_key
     if api_key:
         kwargs["api_key"] = api_key
     if cfg.timeout != 120.0:
@@ -67,9 +78,11 @@ class ModelRouter:
         self,
         config: BifrostConfig,
         rule_engine: RuleEnginePort | None = None,
+        key_vault: KeyVaultPort | None = None,
     ) -> None:
         self._config = config
         self._rule_engine = rule_engine
+        self._key_vault = key_vault
         self._adapters: dict[str, ProviderPort] = {}
         # Per-model request counter used by the round_robin strategy.
         self._round_robin_counters: dict[str, int] = {}
@@ -80,8 +93,23 @@ class ModelRouter:
         if provider_name not in self._adapters:
             cfg = self._config.providers.get(provider_name, ProviderConfig())
             base_url = self._config.effective_base_url(provider_name)
-            self._adapters[provider_name] = _load_adapter(provider_name, cfg, base_url)
+            self._adapters[provider_name] = _load_adapter(
+                provider_name, cfg, base_url, self._key_vault
+            )
         return self._adapters[provider_name]
+
+    def reload_keys(self) -> None:
+        """Reload provider API keys and discard cached adapters.
+
+        After a call to this method, adapters are re-instantiated on the
+        next request with the freshly loaded keys.  This is the hook
+        called by the SIGHUP handler and the admin reload endpoint.
+        """
+        if self._key_vault is not None:
+            self._key_vault.reload()
+        # Clear cached adapters so they are rebuilt with the new keys.
+        self._adapters.clear()
+        logger.info("ModelRouter: adapters cleared after key reload")
 
     def _record_latency(self, provider: str, elapsed: float) -> None:
         """Update the EWMA latency estimate for *provider*."""
