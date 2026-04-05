@@ -7,89 +7,27 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ravn.domain.events import RavnEvent
+from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
 from ravn.domain.models import (
     LLMResponse,
     StopReason,
     StreamEvent,
     StreamEventType,
     TokenUsage,
-    ToolResult,
 )
-from ravn.ports.channel import ChannelPort
 from ravn.ports.llm import LLMPort
-from ravn.ports.permission import PermissionPort
-from ravn.ports.tool import ToolPort
+from tests.ravn.fixtures.fakes import EchoTool, FailingTool, InMemoryChannel
 
-
-class InMemoryChannel(ChannelPort):
-    """Records all emitted events for assertion in tests."""
-
-    def __init__(self) -> None:
-        self.events: list[RavnEvent] = []
-
-    async def emit(self, event: RavnEvent) -> None:
-        self.events.append(event)
-
-
-class AllowAllPermission(PermissionPort):
-    async def check(self, permission: str) -> bool:
-        return True
-
-
-class DenyAllPermission(PermissionPort):
-    async def check(self, permission: str) -> bool:
-        return False
-
-
-class EchoTool(ToolPort):
-    """A test tool that echoes its input back."""
-
-    @property
-    def name(self) -> str:
-        return "echo"
-
-    @property
-    def description(self) -> str:
-        return "Echoes the message back."
-
-    @property
-    def input_schema(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {"message": {"type": "string"}},
-            "required": ["message"],
-        }
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:echo"
-
-    async def execute(self, input: dict) -> ToolResult:
-        return ToolResult(tool_call_id="", content=input.get("message", ""))
-
-
-class FailingTool(ToolPort):
-    """A test tool that always raises an exception."""
-
-    @property
-    def name(self) -> str:
-        return "fail"
-
-    @property
-    def description(self) -> str:
-        return "Always fails."
-
-    @property
-    def input_schema(self) -> dict:
-        return {"type": "object", "properties": {}}
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:fail"
-
-    async def execute(self, input: dict) -> ToolResult:
-        raise RuntimeError("intentional failure")
+# Re-export so existing test imports that used `from tests.test_ravn.conftest import X`
+# continue to work without modification.
+__all__ = [
+    "AllowAllPermission",
+    "DenyAllPermission",
+    "EchoTool",
+    "FailingTool",
+    "InMemoryChannel",
+    "make_simple_llm",
+]
 
 
 def make_simple_llm(response_text: str = "Hello!") -> LLMPort:
