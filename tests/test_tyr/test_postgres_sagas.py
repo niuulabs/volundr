@@ -190,6 +190,20 @@ class TestDeleteSaga:
         assert result is False
 
 
+class TestUpdateSagaStatus:
+    @pytest.mark.asyncio
+    async def test_executes_update_query(
+        self, repo: PostgresSagaRepository, mock_pool: MagicMock
+    ):
+        saga_id = uuid4()
+        await repo.update_saga_status(saga_id, SagaStatus.COMPLETE)
+        mock_pool.execute.assert_called_once()
+        call_args = mock_pool.execute.call_args
+        assert "UPDATE sagas" in call_args[0][0]
+        assert call_args[0][1] == SagaStatus.COMPLETE.value
+        assert call_args[0][2] == saga_id
+
+
 class TestCountByStatus:
     @pytest.mark.asyncio
     async def test_returns_all_statuses_zero_when_no_raids(

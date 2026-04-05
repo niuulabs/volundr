@@ -155,6 +155,13 @@ class PostgresSagaRepository(SagaRepository):
             )
         return result == "DELETE 1"
 
+    async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
+        await self._pool.execute(
+            "UPDATE sagas SET status = $1 WHERE id = $2",
+            status.value,
+            saga_id,
+        )
+
     @staticmethod
     def _row_to_saga(row: asyncpg.Record) -> Saga:
         slug = row["slug"]
