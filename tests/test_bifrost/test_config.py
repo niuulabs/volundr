@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from bifrost.__main__ import _load_config
+from bifrost.auth import AuthMode
 from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
 
 
@@ -142,3 +146,77 @@ class TestBifrostConfig:
         assert len(cfg.aliases) == 3
         assert cfg.provider_for_model("gpt-4o") == "openai"
         assert cfg.resolve_alias("local") == "llama3.1:8b"
+
+
+# ---------------------------------------------------------------------------
+# Pi-mode config
+# ---------------------------------------------------------------------------
+
+#: Absolute path to the Pi-mode example config shipped in the repo root.
+_PI_CONFIG = Path(__file__).parents[2] / "bifrost.pi.example.yaml"
+
+
+class TestPiModeConfig:
+    """Verify that BifrostConfig boots cleanly with only Ollama configured."""
+
+    def test_pi_example_file_exists(self):
+        assert _PI_CONFIG.exists(), "bifrost.pi.example.yaml must exist in repo root"
+
+    def test_pi_config_loads_without_error(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert isinstance(cfg, BifrostConfig)
+
+    def test_pi_config_single_ollama_provider(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert list(cfg.providers.keys()) == ["ollama"]
+
+    def test_pi_config_no_cloud_api_keys(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        for provider in cfg.providers.values():
+            assert provider.api_key_env == "", (
+                "Pi-mode config must not reference any cloud API key env vars"
+            )
+
+    def test_pi_config_ollama_default_base_url(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert cfg.effective_base_url("ollama") == "http://localhost:11434"
+
+    def test_pi_config_open_auth(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert cfg.auth_mode == AuthMode.OPEN
+
+    def test_pi_config_direct_routing(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert cfg.routing_strategy == RoutingStrategy.DIRECT
+
+    def test_pi_config_aliases_point_to_local_models(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        fast = cfg.resolve_alias("fast")
+        balanced = cfg.resolve_alias("balanced")
+        best = cfg.resolve_alias("best")
+        ollama_models = cfg.providers["ollama"].models
+        assert fast in ollama_models, f"fast alias '{fast}' not in ollama models"
+        assert balanced in ollama_models, f"balanced alias '{balanced}' not in ollama models"
+        assert best in ollama_models, f"best alias '{best}' not in ollama models"
+
+    def test_pi_config_provider_for_alias_resolves_to_ollama(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        for alias in ("fast", "balanced", "best", "local"):
+            canonical = cfg.resolve_alias(alias)
+            provider = cfg.provider_for_model(canonical)
+            assert provider == "ollama", (
+                f"alias '{alias}' → '{canonical}' should route to ollama, got {provider!r}"
+            )
+
+    def test_pi_config_sqlite_usage_store(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert cfg.usage_store.adapter == "sqlite"
+
+    def test_pi_config_localhost_binding(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert cfg.host == "127.0.0.1"
+        assert cfg.port == 8088
+
+    def test_pi_config_ollama_free_cost(self):
+        cfg = _load_config(str(_PI_CONFIG))
+        assert cfg.providers["ollama"].cost_per_token == 0.0
