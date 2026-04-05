@@ -225,3 +225,15 @@ def test_audit_config_custom():
     config = AuditConfig(enabled=False, ttl_cleanup_interval_seconds=7200)
     assert config.enabled is False
     assert config.ttl_cleanup_interval_seconds == 7200
+
+
+async def test_stop_cancels_ttl_task():
+    """stop() must cancel a running TTL task and swallow CancelledError."""
+    subscriber, _, _ = _make_subscriber()
+    await subscriber.start()
+    assert subscriber._ttl_task is not None
+
+    # The TTL task is sleeping; stopping should cancel it without raising
+    await subscriber.stop()
+    assert subscriber.running is False
+    assert subscriber._ttl_task is None

@@ -1,5 +1,8 @@
 """Tests for the main application factory."""
 
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, patch
+
 from fastapi import FastAPI
 
 from volundr.config import Settings
@@ -70,3 +73,37 @@ class TestCORSMiddleware:
         )
         # CORS preflight should succeed
         assert response.status_code in (200, 204, 400)
+
+
+class TestLifespan:
+    """Tests for app lifespan startup/shutdown (mocked infrastructure)."""
+
+    def test_lifespan_initializes_audit_subscriber(self):
+        """Lifespan must run startup/shutdown without error when sleipnir is disabled.
+
+        Covers the audit_subscriber = None initialisation and the
+        ``if audit_subscriber is not None:`` guard in the finally block.
+        """
+        from fastapi.testclient import TestClient
+
+        mock_pool = AsyncMock()
+
+        @asynccontextmanager
+        async def _mock_db_pool(_config):
+            yield mock_pool
+
+        with (
+            patch("volundr.main.database_pool", _mock_db_pool),
+            patch(
+                "volundr.domain.services.tenant.TenantService.ensure_default_tenant",
+                new=AsyncMock(),
+            ),
+            patch(
+                "volundr.domain.services.session.SessionService.reconcile_provisioning_sessions",
+                new=AsyncMock(),
+            ),
+        ):
+            app = create_app()
+            with TestClient(app) as client:
+                response = client.get("/health")
+                assert response.status_code == 200

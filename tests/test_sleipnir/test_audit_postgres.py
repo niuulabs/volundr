@@ -300,3 +300,10 @@ async def test_postgres_query_empty_result():
 
     results = await repo.query(AuditQuery())
     assert results == []
+
+
+def test_row_to_event_dict_payload():
+    """asyncpg may decode JSONB as a dict directly (not a JSON string)."""
+    row = _make_row(payload={"already": "decoded"})
+    event = _row_to_event(row)
+    assert event.payload == {"already": "decoded"}

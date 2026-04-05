@@ -274,3 +274,20 @@ async def test_purge_expired_keeps_live_ttl_events(repo):
 async def test_purge_returns_zero_when_empty(repo):
     deleted = await repo.purge_expired()
     assert deleted == 0
+
+
+async def test_query_naive_timestamp_gets_utc(repo):
+    """Rows stored with a naive ISO timestamp should be read back with UTC tzinfo."""
+    evt = make_event(event_id="ts-test")
+    await repo.append(evt)
+
+    # Tamper: overwrite the stored timestamp to a naive ISO string (no tzinfo)
+    conn = repo._conn  # direct access for test
+    conn.execute(
+        "UPDATE sleipnir_events SET timestamp = ? WHERE event_id = ?",
+        ("2024-01-15T12:00:00", "ts-test"),
+    )
+    conn.commit()
+
+    results = await repo.query(AuditQuery())
+    assert results[0].timestamp.tzinfo is not None
