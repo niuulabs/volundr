@@ -58,7 +58,7 @@ dev = [
 niuu = "cli.main:main"
 volundr = "volundr.main:main"
 skuld = "skuld.broker:main"
-bifrost = "volundr.bifrost.__main__:main"
+bifrost = "bifrost.__main__:main"
 tyr = "tyr.main:main"
 
 [project.entry-points."niuu.plugins"]
@@ -77,7 +77,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld"]
+packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld", "src/bifrost"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -96,7 +96,7 @@ line-length = 100
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.coverage.run]
-source = ["src/volundr", "src/cli", "src/tyr", "src/niuu", "src/skuld"]
+source = ["src/volundr", "src/cli", "src/tyr", "src/niuu", "src/skuld", "src/bifrost"]
 branch = true
 
 [tool.coverage.report]
