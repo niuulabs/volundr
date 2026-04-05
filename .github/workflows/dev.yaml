@@ -1,8 +1,9 @@
 # Runs on every push to dev:
-# 1. Builds all container images with "dev" + "dev-<sha>" tags
-# 2. Determines next version from conventional commits and creates a v*-dev.N prerelease tag
-# 3. Packages Helm charts with the dev version
-# 4. Builds CLI binaries (uploaded as artifacts, no GitHub Release)
+# 1. Full test suite (lint, unit tests, integration tests, e2e, web tests, helm lint)
+# 2. Builds all container images with "dev" + "dev-<sha>" tags
+# 3. Determines next version from conventional commits and creates a v*-dev.N prerelease tag
+# 4. Packages Helm charts with the dev version
+# 5. Builds CLI binaries (uploaded as artifacts, no GitHub Release)
 #
 # The dev prerelease tags (v*-dev.N) are skipped by release.yaml so they
 # never create a production GitHub Release.
@@ -23,6 +24,421 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Python — lint + unit tests
+  # ---------------------------------------------------------------------------
+  python-lint:
+    name: "Python: Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run ruff linting
+        run: uv run ruff check src/ tests/
+
+      - name: Check ruff formatting
+        run: uv run ruff format --check src/ tests/ || echo "::warning::Formatting issues found - consider running 'ruff format src/ tests/'"
+        continue-on-error: true
+
+  python-test-volundr:
+    name: "Python: Test Volundr"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/ --ignore=tests/test_tyr --ignore=tests/integration -v --tb=short \
+            --override-ini="addopts=" \
+            --cov=src/volundr --cov=src/cli --cov=src/niuu --cov=src/skuld \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67af1b5c037d887 # v5
+        with:
+          files: coverage.xml
+          flags: backend-volundr
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  python-test-tyr:
+    name: "Python: Test Tyr"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/test_tyr -v --tb=short \
+            --override-ini="addopts=" \
+            --cov=src/tyr \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67af1b5c037d887 # v5
+        with:
+          files: coverage.xml
+          flags: backend-tyr
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Python integration tests (real PostgreSQL)
+  # ---------------------------------------------------------------------------
+  python-integration-test-volundr:
+    name: "Python: Integration Test Volundr"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/volundr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  python-integration-test-tyr:
+    name: "Python: Integration Test Tyr"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_USER: volundr_test
+          TEST_DATABASE_PASSWORD: volundr_test
+          TEST_DATABASE_NAME: volundr_test
+        run: |
+          uv run pytest tests/integration/tyr/ -v --tb=short -m integration \
+            --override-ini="addopts="
+
+  # ---------------------------------------------------------------------------
+  # End-to-end tests (Playwright against real backend + frontend)
+  # ---------------------------------------------------------------------------
+  e2e-test:
+    name: "E2E: Playwright"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volundr_test
+          POSTGRES_PASSWORD: volundr_test
+          POSTGRES_DB: volundr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "0.11.2"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install Python dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: Start backend
+        env:
+          DATABASE__HOST: localhost
+          DATABASE__PORT: "5432"
+          DATABASE__USER: volundr_test
+          DATABASE__PASSWORD: volundr_test
+          DATABASE__NAME: volundr_test
+        run: |
+          uv run uvicorn volundr.main:app --port 8080 &
+
+      - name: Start frontend
+        run: |
+          npm run dev -- --port 5174 &
+        working-directory: web
+
+      - name: Wait for servers
+        run: |
+          timeout 30 bash -c '
+            until curl -sf http://localhost:8080/health > /dev/null 2>&1; do
+              sleep 1
+            done
+          '
+          timeout 30 bash -c '
+            until curl -sf http://localhost:5174 > /dev/null 2>&1; do
+              sleep 1
+            done
+          '
+          echo "Both servers are ready"
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        working-directory: web
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Web — lint + unit tests
+  # ---------------------------------------------------------------------------
+  web-lint:
+    name: "Web: Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+  web-test:
+    name: "Web: Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        if: always() && hashFiles('web/coverage/lcov.info') != ''
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67af1b5c037d887 # v5
+        with:
+          files: web/coverage/lcov.info
+          flags: web
+          token: ${{ secrets.CODECOV_TOKEN }}
+          working-directory: web
+
+  # ---------------------------------------------------------------------------
+  # Helm — lint
+  # ---------------------------------------------------------------------------
+  helm-lint:
+    name: "Helm: Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Helm
+        run: |
+          HELM_VERSION="3.14.0"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          echo "f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Lint skuld chart
+        run: helm lint charts/skuld/
+
+      - name: Lint volundr chart
+        run: helm lint charts/volundr/
+
+      - name: Lint tyr chart
+        run: helm lint charts/tyr/
+
+      - name: Lint skuld-planner chart
+        run: helm lint charts/skuld-planner/
+
+      - name: Lint niuu-shared chart
+        run: helm lint charts/niuu-shared/
+
+      - name: Lint niuu umbrella chart
+        run: |
+          helm dependency build charts/niuu
+          helm lint charts/niuu/
+
   # ---------------------------------------------------------------------------
   # Containers — build per platform natively, then merge manifests
   # ---------------------------------------------------------------------------
