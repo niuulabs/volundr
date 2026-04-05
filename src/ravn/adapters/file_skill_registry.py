@@ -151,7 +151,8 @@ class FileSkillRegistry(SkillPort):
             first).  When ``None``, uses the default three-layer discovery:
             ``.ravn/skills/`` → ``~/.ravn/skills/`` → built-in skills.
         include_builtin: Whether to include the skills shipped with the
-            ``ravn`` package.  Ignored when *skill_dirs* is set explicitly.
+            ``ravn`` package.  Controls whether built-in skills are appended
+            regardless of how *skill_dirs* is configured.
         cwd: Working directory used to resolve ``.ravn/skills/``.  Defaults to
             the process working directory at construction time.
     """

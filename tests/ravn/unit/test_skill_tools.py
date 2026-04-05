@@ -377,11 +377,28 @@ class TestSkillRunToolExecute:
 # ---------------------------------------------------------------------------
 
 
+class _DefaultGetSkillStub(SkillPort):
+    """Minimal stub that does NOT override get_skill(), so the base-class
+    default implementation is exercised directly."""
+
+    def __init__(self, skills: list[Skill]) -> None:
+        self._skills = skills
+
+    async def record_episode(self, episode) -> Skill | None:
+        return None
+
+    async def list_skills(self, query: str | None = None) -> list[Skill]:
+        return list(self._skills)
+
+    async def record_skill(self, skill: Skill) -> None:
+        pass
+
+
 class TestSkillPortDefaultGetSkill:
     @pytest.mark.asyncio
     async def test_default_get_skill_returns_matching_skill(self) -> None:
         skill = _make_skill("fix-tests", "Fix tests.")
-        port = StubSkillPort(skills=[skill])
+        port = _DefaultGetSkillStub(skills=[skill])
         result = await port.get_skill("fix-tests")
         assert result is not None
         assert result.name == "fix-tests"
@@ -389,12 +406,12 @@ class TestSkillPortDefaultGetSkill:
     @pytest.mark.asyncio
     async def test_default_get_skill_case_insensitive(self) -> None:
         skill = _make_skill("Fix-Tests", "Fix tests.")
-        port = StubSkillPort(skills=[skill])
+        port = _DefaultGetSkillStub(skills=[skill])
         result = await port.get_skill("fix-tests")
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_default_get_skill_returns_none_for_missing(self) -> None:
-        port = StubSkillPort(skills=[])
+        port = _DefaultGetSkillStub(skills=[])
         result = await port.get_skill("nonexistent")
         assert result is None
