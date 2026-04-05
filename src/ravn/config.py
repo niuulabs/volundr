@@ -277,6 +277,56 @@ class ToolsConfig(BaseModel):
     )
 
 
+class EmbeddingConfig(BaseModel):
+    """Embedding backend configuration for semantic memory search."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable embedding-based semantic search in episodic memory.",
+    )
+    adapter: str = Field(
+        default="ravn.adapters.sentence_transformer_embedding.SentenceTransformerEmbeddingAdapter",
+        description="Fully-qualified class path for the embedding adapter.",
+    )
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to the embedding adapter constructor.",
+    )
+    secret_kwargs_env: dict[str, str] = Field(
+        default_factory=dict,
+        description="Maps kwarg names to env var names for credential injection.",
+    )
+    rrf_k: int = Field(
+        default=60,
+        description="Reciprocal Rank Fusion constant k (higher = less top-rank bias).",
+    )
+    semantic_candidate_limit: int = Field(
+        default=50,
+        description="Maximum number of episodes scanned for cosine similarity.",
+    )
+
+
+class SkillConfig(BaseModel):
+    """Skill extraction and discovery configuration."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic skill extraction from recurring episode patterns.",
+    )
+    path: str = Field(
+        default="~/.ravn/skills.db",
+        description="SQLite database path for skill storage.",
+    )
+    suggestion_threshold: int = Field(
+        default=3,
+        description="Minimum matching SUCCESS episodes before a skill is synthesised.",
+    )
+    cache_max_entries: int = Field(
+        default=128,
+        description="Maximum entries in the in-process LRU skill cache.",
+    )
+
+
 class MemoryConfig(BaseModel):
     """Conversation memory / persistence backend configuration."""
 
@@ -660,6 +710,10 @@ class Settings(BaseSettings):
     # NIU-431: context management
     iteration_budget: IterationBudgetConfig = Field(default_factory=IterationBudgetConfig)
     context_management: ContextManagementConfig = Field(default_factory=ContextManagementConfig)
+
+    # NIU-436: semantic memory
+    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    skill: SkillConfig = Field(default_factory=SkillConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)

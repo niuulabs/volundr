@@ -3,6 +3,12 @@
 Uses WAL mode for concurrent access, FTS5 for full-text search, and BM25
 ranking for relevance.  Designed for low-resource environments (e.g. Pi).
 
+When an ``EmbeddingPort`` is provided, query_episodes runs *hybrid retrieval*:
+1. FTS5 keyword search → top-K BM25 candidates
+2. Cosine similarity on stored episode embeddings → semantic candidates
+3. Reciprocal Rank Fusion (RRF) to merge both ranking lists
+4. Recency decay × outcome weight applied to normalised RRF score
+
 Retry strategy: up to ``max_retries`` attempts on SQLite "database is locked"
 errors with random jitter in [min_jitter_ms, max_jitter_ms] between attempts.
 WAL passive checkpoint fires every ``checkpoint_interval`` writes.
@@ -25,6 +31,8 @@ from ravn.adapters._memory_scoring import (
     _recency_score,
     build_prefetch_context,
     build_session_summaries,
+    cosine_similarity,
+    reciprocal_rank_fusion,
 )
 from ravn.domain.models import (
     Episode,
@@ -33,6 +41,7 @@ from ravn.domain.models import (
     SessionSummary,
     SharedContext,
 )
+from ravn.ports.embedding import EmbeddingPort
 from ravn.ports.memory import MemoryPort
 
 # ---------------------------------------------------------------------------
@@ -151,7 +160,12 @@ def _combined_score(
 
 
 class SqliteMemoryAdapter(MemoryPort):
-    """Episodic memory backed by a local SQLite database with FTS5 search."""
+    """Episodic memory backed by a local SQLite database with FTS5 search.
+
+    When *embedding_port* is supplied, ``query_episodes`` uses hybrid retrieval
+    (FTS5 + cosine similarity on stored embeddings merged via RRF).  Without an
+    embedding port the adapter falls back to FTS5-only search.
+    """
 
     def __init__(
         self,
@@ -166,6 +180,9 @@ class SqliteMemoryAdapter(MemoryPort):
         prefetch_min_relevance: float = 0.3,
         recency_half_life_days: float = 14.0,
         session_search_truncate_chars: int = 100_000,
+        embedding_port: EmbeddingPort | None = None,
+        rrf_k: int = 60,
+        semantic_candidate_limit: int = 50,
     ) -> None:
         self._path = Path(path).expanduser()
         self._max_retries = max_retries
@@ -177,6 +194,9 @@ class SqliteMemoryAdapter(MemoryPort):
         self._prefetch_min_relevance = prefetch_min_relevance
         self._recency_half_life_days = recency_half_life_days
         self._session_search_truncate_chars = session_search_truncate_chars
+        self._embedding_port = embedding_port
+        self._rrf_k = rrf_k
+        self._semantic_candidate_limit = semantic_candidate_limit
         self._write_count = 0
         self._shared_context: SharedContext | None = None
 
@@ -198,7 +218,9 @@ class SqliteMemoryAdapter(MemoryPort):
         limit: int = 5,
         min_relevance: float = 0.3,
     ) -> list[EpisodeMatch]:
-        return await asyncio.to_thread(self._query_episodes_sync, query, limit, min_relevance)
+        if self._embedding_port is not None:
+            return await self._query_hybrid(query, limit=limit, min_relevance=min_relevance)
+        return await asyncio.to_thread(self._query_fts_sync, query, limit, min_relevance)
 
     async def prefetch(self, context: str) -> str:
         matches = await self.query_episodes(
@@ -292,9 +314,8 @@ class SqliteMemoryAdapter(MemoryPort):
 
         self._with_retry(_do_insert)
 
-    def _query_episodes_sync(
-        self, query: str, limit: int, min_relevance: float
-    ) -> list[EpisodeMatch]:
+    def _query_fts_sync(self, query: str, limit: int, min_relevance: float) -> list[EpisodeMatch]:
+        """FTS5-only keyword search with BM25 + recency + outcome scoring."""
         safe_query = _sanitize_fts_query(query)
 
         def _do_query() -> list[EpisodeMatch]:
@@ -338,6 +359,123 @@ class SqliteMemoryAdapter(MemoryPort):
             return matches[:limit]
 
         return self._with_retry(_do_query)
+
+    def _load_fts_episodes_sync(self, query: str, limit: int) -> list[tuple[Episode, float]]:
+        """Return FTS5 candidates as (episode, bm25_score) pairs."""
+        safe_query = _sanitize_fts_query(query)
+
+        def _do_query() -> list[tuple[Episode, float]]:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT e.*, bm25(episodes_fts) AS bm25_score
+                    FROM episodes_fts
+                    JOIN episodes e ON e.rowid = episodes_fts.rowid
+                    WHERE episodes_fts MATCH ?
+                    ORDER BY bm25(episodes_fts)
+                    LIMIT ?
+                    """,
+                    (safe_query, limit),
+                ).fetchall()
+            finally:
+                conn.close()
+
+            return [(_row_to_episode(r), float(r["bm25_score"])) for r in rows]
+
+        return self._with_retry(_do_query)
+
+    def _load_embedded_episodes_sync(self, limit: int) -> list[Episode]:
+        """Load episodes that have a stored embedding vector."""
+
+        def _do_load() -> list[Episode]:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM episodes
+                    WHERE embedding IS NOT NULL
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+            finally:
+                conn.close()
+
+            return [_row_to_episode(r) for r in rows]
+
+        return self._with_retry(_do_load)
+
+    async def _query_hybrid(
+        self,
+        query: str,
+        *,
+        limit: int,
+        min_relevance: float,
+    ) -> list[EpisodeMatch]:
+        """Hybrid retrieval: FTS5 + semantic cosine similarity merged via RRF.
+
+        Steps:
+        1. FTS5 → top-(limit*3) keyword candidates
+        2. Embed *query*, compute cosine similarity against episodes with stored
+           embeddings (up to ``semantic_candidate_limit`` most recent)
+        3. Build RRF ranking from both lists
+        4. Apply recency decay × outcome weight to normalised RRF score
+        5. Filter by *min_relevance* and return top *limit* matches
+        """
+        fts_pairs = await asyncio.to_thread(self._load_fts_episodes_sync, query, limit * 3)
+        semantic_episodes = await asyncio.to_thread(
+            self._load_embedded_episodes_sync, self._semantic_candidate_limit
+        )
+
+        # Embed query and compute cosine similarities.
+        assert self._embedding_port is not None
+        if semantic_episodes:
+            query_vec = await self._embedding_port.embed(query)
+            sem_scored: list[tuple[Episode, float]] = []
+            for ep in semantic_episodes:
+                if ep.embedding:
+                    sim = cosine_similarity(query_vec, ep.embedding)
+                    sem_scored.append((ep, sim))
+            sem_scored.sort(key=lambda x: x[1], reverse=True)
+            sem_scored = sem_scored[: limit * 3]
+        else:
+            sem_scored = []
+
+        # Build episode pool (union of both candidate sets).
+        all_episodes: dict[str, Episode] = {}
+        for ep, _ in fts_pairs:
+            all_episodes[ep.episode_id] = ep
+        for ep, _ in sem_scored:
+            all_episodes.setdefault(ep.episode_id, ep)
+
+        if not all_episodes:
+            return []
+
+        fts_ranking = [ep.episode_id for ep, _ in fts_pairs]
+        sem_ranking = [ep.episode_id for ep, _ in sem_scored]
+
+        rrf_scores = reciprocal_rank_fusion(
+            [fts_ranking, sem_ranking] if sem_ranking else [fts_ranking],
+            k=self._rrf_k,
+        )
+
+        # Normalise RRF to [0,1] and apply recency + outcome weighting.
+        max_rrf = max(rrf_scores.values()) if rrf_scores else 1.0
+
+        matches: list[EpisodeMatch] = []
+        for episode_id, rrf_score in rrf_scores.items():
+            ep = all_episodes[episode_id]
+            normalised = rrf_score / max_rrf
+            recency = _recency_score(ep.timestamp, self._recency_half_life_days)
+            weight = _OUTCOME_WEIGHTS.get(ep.outcome, 0.5)
+            combined = normalised * recency * weight
+            if combined >= min_relevance:
+                matches.append(EpisodeMatch(episode=ep, relevance=combined))
+
+        matches.sort(key=lambda m: m.relevance, reverse=True)
+        return matches[:limit]
 
     def _search_sessions_sync(self, query: str, limit: int) -> list[SessionSummary]:
         safe_query = _sanitize_fts_query(query)

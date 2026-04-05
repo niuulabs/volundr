@@ -114,6 +114,31 @@ class TaskOutcome:
 
 
 # ---------------------------------------------------------------------------
+# Skill models (NIU-436)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Skill:
+    """A reusable procedure extracted from successful episode patterns.
+
+    Skills are Markdown documents with YAML frontmatter describing conditions
+    for applicability.  They are discovered automatically when N successful
+    episodes share the same tool/tag patterns.
+    """
+
+    skill_id: str
+    name: str
+    description: str
+    content: str  # Markdown body with YAML frontmatter
+    requires_tools: list[str]
+    fallback_for_tools: list[str]
+    source_episodes: list[str]  # episode_ids that triggered skill creation
+    created_at: datetime
+    success_count: int = 0
+
+
+# ---------------------------------------------------------------------------
 # Todo domain models
 # ---------------------------------------------------------------------------
 
