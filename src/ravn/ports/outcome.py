@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from ravn.domain.models import TaskOutcome
 
@@ -36,3 +37,28 @@ class OutcomePort(ABC):
         outcomes are found.
         """
         ...
+
+    async def count_all_outcomes(self) -> int:
+        """Return the total number of stored outcomes.
+
+        Returns 0 when the backend does not support counting.  Override in
+        concrete adapters to provide an accurate count.
+        """
+        return 0
+
+    async def list_recent_outcomes(
+        self,
+        limit: int = 50,
+        *,
+        since: datetime | None = None,
+    ) -> list[TaskOutcome]:
+        """Return recent task outcomes for pattern analysis.
+
+        Returns an empty list when the backend does not support listing.
+        Override in concrete adapters to provide actual data.
+
+        Args:
+            limit: Maximum number of outcomes to return.
+            since: If provided, return only outcomes recorded after this timestamp.
+        """
+        raise NotImplementedError("list_recent_outcomes not supported by this backend")

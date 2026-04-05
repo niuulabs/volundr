@@ -679,6 +679,66 @@ class LLMAdapterConfig(BaseModel):
     timeout: float = Field(default=120.0)
 
 
+class EvolutionConfig(BaseModel):
+    """Self-improvement loop configuration (NIU-501).
+
+    Controls when the pattern extraction pass runs and how many samples it
+    analyses when looking for recurring tool sequences, error patterns, and
+    effective strategies.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable the self-improvement pattern extraction pass.",
+    )
+    min_new_outcomes: int = Field(
+        default=10,
+        description=(
+            "Minimum number of new outcomes recorded since the last extraction "
+            "before the pass is triggered automatically on startup."
+        ),
+    )
+    state_path: str = Field(
+        default="~/.ravn/evolution_state.json",
+        description="Path to the JSON file that persists the last-run state.",
+    )
+    max_episodes_to_analyze: int = Field(
+        default=100,
+        description="Maximum number of episodes loaded per extraction pass.",
+    )
+    max_outcomes_to_analyze: int = Field(
+        default=50,
+        description="Maximum number of task outcomes loaded per extraction pass.",
+    )
+    skill_suggestion_min_occurrences: int = Field(
+        default=3,
+        description="Minimum times a tool pattern must appear before a skill is suggested.",
+    )
+    error_warning_min_occurrences: int = Field(
+        default=3,
+        description="Minimum times an error keyword must appear before a warning is proposed.",
+    )
+    strategy_min_occurrences: int = Field(
+        default=3,
+        description=(
+            "Minimum times a domain tag must appear in SUCCESS episodes "
+            "before a strategy injection is proposed."
+        ),
+    )
+    max_skill_suggestions: int = Field(
+        default=5,
+        description="Maximum skill suggestions to include in one evolution proposal.",
+    )
+    max_system_warnings: int = Field(
+        default=5,
+        description="Maximum system-prompt warnings to include in one proposal.",
+    )
+    max_strategy_injections: int = Field(
+        default=3,
+        description="Maximum strategy injections to include in one proposal.",
+    )
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -727,6 +787,9 @@ class Settings(BaseSettings):
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     skill: SkillConfig = Field(default_factory=SkillConfig)
 
+    # NIU-501: self-improvement loop
+    evolution: EvolutionConfig = Field(default_factory=EvolutionConfig)
+
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -765,6 +828,46 @@ def _safe_int(val: object, default: int = 0) -> int:
         return default
 
 
+def _safe_bool(val: object, default: bool = False) -> bool:
+    """Convert *val* to bool, returning *default* on unrecognised input."""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() in ("true", "yes", "1", "on")
+    if isinstance(val, int):
+        return bool(val)
+    return default
+
+
+# ---------------------------------------------------------------------------
+# Valid schema values
+# ---------------------------------------------------------------------------
+
+_VALID_PERMISSION_MODES: frozenset[str] = frozenset(
+    {
+        "read_only",
+        "workspace_write",
+        "workspace-write",
+        "full_access",
+        "full-access",
+        "prompt",
+        # Legacy aliases
+        "allow_all",
+        "deny_all",
+    }
+)
+
+_VALID_PERSONAS: frozenset[str] = frozenset(
+    {
+        "coding-agent",
+        "assistant",
+        "researcher",
+        "reviewer",
+        "planner",
+    }
+)
+
+
 @dataclass
 class ProjectConfig:
     """Project-level configuration overlay parsed from a RAVN.md file.
@@ -782,9 +885,15 @@ class ProjectConfig:
         allowed_tools: [file, git, terminal, web]
         forbidden_tools: [volundr, cascade]
         permission_mode: workspace-write
+        primary_alias: balanced
+        thinking_enabled: true
         iteration_budget: 30
         notes: >
           This is a FastAPI service. Always run tests before committing.
+
+    Attributes:
+        warnings: Non-fatal schema validation messages populated by
+            ``from_text()``.  Callers may display these to the user.
     """
 
     project_name: str = ""
@@ -792,8 +901,11 @@ class ProjectConfig:
     allowed_tools: list[str] = field(default_factory=list)
     forbidden_tools: list[str] = field(default_factory=list)
     permission_mode: str = ""
+    primary_alias: str = ""
+    thinking_enabled: bool = False
     iteration_budget: int = 0
     notes: str = ""
+    warnings: list[str] = field(default_factory=list)
 
     @classmethod
     def from_text(cls, text: str) -> ProjectConfig:
@@ -803,6 +915,8 @@ class ProjectConfig:
         Everything after the header is treated as YAML.  If the header is
         absent or the YAML is malformed the method returns an empty
         ProjectConfig rather than raising.
+
+        Schema validation warnings are stored in ``ProjectConfig.warnings``.
         """
         import yaml  # PyYAML — present via pydantic-settings[yaml]
 
@@ -827,14 +941,37 @@ class ProjectConfig:
             except Exception:
                 pass
 
+        warnings: list[str] = []
+
+        permission_mode = str(raw.get("permission_mode", ""))
+        if permission_mode and permission_mode not in _VALID_PERMISSION_MODES:
+            warnings.append(
+                f"Unknown permission_mode {permission_mode!r}. "
+                f"Valid values: {sorted(_VALID_PERMISSION_MODES)}"
+            )
+
+        persona = str(raw.get("persona", ""))
+        if persona and persona not in _VALID_PERSONAS:
+            warnings.append(
+                f"Unknown persona {persona!r}. Known personas: {sorted(_VALID_PERSONAS)}"
+            )
+
+        iteration_budget = _safe_int(raw.get("iteration_budget", 0))
+        if iteration_budget < 0:
+            warnings.append(f"iteration_budget must be >= 0, got {iteration_budget}. Using 0.")
+            iteration_budget = 0
+
         return cls(
             project_name=project_name,
-            persona=str(raw.get("persona", "")),
+            persona=persona,
             allowed_tools=list(raw.get("allowed_tools", [])),
             forbidden_tools=list(raw.get("forbidden_tools", [])),
-            permission_mode=str(raw.get("permission_mode", "")),
-            iteration_budget=_safe_int(raw.get("iteration_budget", 0)),
+            permission_mode=permission_mode,
+            primary_alias=str(raw.get("primary_alias", "")),
+            thinking_enabled=_safe_bool(raw.get("thinking_enabled", False)),
+            iteration_budget=iteration_budget,
             notes=str(raw.get("notes", "")),
+            warnings=warnings,
         )
 
     @classmethod
@@ -850,8 +987,13 @@ class ProjectConfig:
     def discover(cls, cwd: Path | None = None) -> ProjectConfig | None:
         """Walk from *cwd* toward the filesystem root looking for RAVN.md.
 
-        Returns the first ProjectConfig found, or None if no RAVN.md exists
-        in any ancestor directory.
+        Discovery order:
+        1. *cwd* (defaults to ``Path.cwd()``)
+        2. Each ancestor directory up to the filesystem root
+        3. ``~/.ravn/default.md`` — user-level global default
+
+        Returns the first ``ProjectConfig`` found, or ``None`` if no file
+        exists in any of the above locations.
         """
         start = Path(cwd) if cwd is not None else Path.cwd()
         current = start.resolve()
@@ -863,4 +1005,10 @@ class ProjectConfig:
             if parent == current:
                 break
             current = parent
+
+        # Global user default — ~/.ravn/default.md
+        global_default = Path.home() / ".ravn" / "default.md"
+        if global_default.is_file():
+            return cls.load(global_default)
+
         return None

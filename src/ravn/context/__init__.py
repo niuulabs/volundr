@@ -1,4 +1,4 @@
-"""Project context discovery for Ravn.
+"""Project context discovery for Ravn, and prompt evolution utilities.
 
 Walks from CWD up to the git root (or filesystem root) looking for
 project context files. Discovered content is truncated, deduplicated,

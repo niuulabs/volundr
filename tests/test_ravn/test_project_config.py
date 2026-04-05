@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
-from ravn.config import ProjectConfig
+from ravn.config import _VALID_PERMISSION_MODES, _VALID_PERSONAS, ProjectConfig
 
 _FULL_RAVN_MD = """\
 # RAVN Project: my-service
@@ -13,6 +14,8 @@ persona: coding-agent
 allowed_tools: [file, git, terminal, web]
 forbidden_tools: [volundr, cascade]
 permission_mode: workspace-write
+primary_alias: balanced
+thinking_enabled: true
 iteration_budget: 30
 notes: >
   This is a FastAPI service. Always run tests before committing.
@@ -179,3 +182,136 @@ class TestProjectConfigDiscover:
         assert cfg is not None
         assert cfg.project_name == "child"
         assert cfg.iteration_budget == 99
+
+    def test_discover_falls_back_to_global_default(self, tmp_path: Path) -> None:
+        """When no RAVN.md is found in the tree, ~/.ravn/default.md is tried."""
+        global_default = tmp_path / ".ravn" / "default.md"
+        global_default.parent.mkdir(parents=True)
+        global_default.write_text("# RAVN Project: global-default\n\niteration_budget: 5\n")
+
+        isolated = tmp_path / "project"
+        isolated.mkdir()
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            cfg = ProjectConfig.discover(cwd=isolated)
+
+        assert cfg is not None
+        assert cfg.project_name == "global-default"
+
+    def test_discover_project_file_beats_global_default(self, tmp_path: Path) -> None:
+        """A local RAVN.md takes precedence over ~/.ravn/default.md."""
+        global_default = tmp_path / ".ravn" / "default.md"
+        global_default.parent.mkdir(parents=True)
+        global_default.write_text("# RAVN Project: global-default\n")
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        (project_dir / "RAVN.md").write_text("# RAVN Project: local\n")
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            cfg = ProjectConfig.discover(cwd=project_dir)
+
+        assert cfg is not None
+        assert cfg.project_name == "local"
+
+    def test_discover_returns_none_when_no_files_anywhere(self, tmp_path: Path) -> None:
+        """Returns None when no RAVN.md exists anywhere and no global default."""
+        isolated = tmp_path / "project"
+        isolated.mkdir()
+
+        # Point home to a directory without .ravn/default.md
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            cfg = ProjectConfig.discover(cwd=isolated)
+
+        assert cfg is None
+
+
+# ---------------------------------------------------------------------------
+# New fields: primary_alias, thinking_enabled, warnings
+# ---------------------------------------------------------------------------
+
+
+class TestProjectConfigNewFields:
+    def test_parses_primary_alias(self) -> None:
+        cfg = ProjectConfig.from_text(_FULL_RAVN_MD)
+        assert cfg.primary_alias == "balanced"
+
+    def test_parses_thinking_enabled_true(self) -> None:
+        cfg = ProjectConfig.from_text(_FULL_RAVN_MD)
+        assert cfg.thinking_enabled is True
+
+    def test_thinking_enabled_defaults_false(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\npersona: coding-agent\n")
+        assert cfg.thinking_enabled is False
+
+    def test_thinking_enabled_false_explicit(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\nthinking_enabled: false\n")
+        assert cfg.thinking_enabled is False
+
+    def test_primary_alias_defaults_empty(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\npersona: coding-agent\n")
+        assert cfg.primary_alias == ""
+
+    def test_no_warnings_for_valid_config(self) -> None:
+        cfg = ProjectConfig.from_text(_FULL_RAVN_MD)
+        assert cfg.warnings == []
+
+    def test_thinking_enabled_string_true(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\nthinking_enabled: 'true'\n")
+        assert cfg.thinking_enabled is True
+
+    def test_thinking_enabled_integer_one(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\nthinking_enabled: 1\n")
+        assert cfg.thinking_enabled is True
+
+
+# ---------------------------------------------------------------------------
+# Schema validation
+# ---------------------------------------------------------------------------
+
+
+class TestProjectConfigValidation:
+    def test_invalid_permission_mode_produces_warning(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\npermission_mode: fly-mode\n")
+        assert any("permission_mode" in w for w in cfg.warnings)
+
+    def test_valid_permission_modes_no_warning(self) -> None:
+        for mode in _VALID_PERMISSION_MODES:
+            cfg = ProjectConfig.from_text(f"# RAVN Project: x\n\npermission_mode: {mode}\n")
+            assert not any("permission_mode" in w for w in cfg.warnings), (
+                f"Unexpected warning for valid mode {mode!r}"
+            )
+
+    def test_invalid_persona_produces_warning(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\npersona: quantum-hacker\n")
+        assert any("persona" in w for w in cfg.warnings)
+
+    def test_valid_personas_no_warning(self) -> None:
+        for persona in _VALID_PERSONAS:
+            cfg = ProjectConfig.from_text(f"# RAVN Project: x\n\npersona: {persona}\n")
+            assert not any("persona" in w for w in cfg.warnings), (
+                f"Unexpected warning for valid persona {persona!r}"
+            )
+
+    def test_negative_iteration_budget_clamped_to_zero(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\niteration_budget: -5\n")
+        assert cfg.iteration_budget == 0
+        assert any("iteration_budget" in w for w in cfg.warnings)
+
+    def test_empty_permission_mode_no_warning(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\npersona: coding-agent\n")
+        assert not any("permission_mode" in w for w in cfg.warnings)
+
+    def test_empty_persona_no_warning(self) -> None:
+        cfg = ProjectConfig.from_text("# RAVN Project: x\n\nallowed_tools: [file]\n")
+        assert not any("persona" in w for w in cfg.warnings)
+
+    def test_multiple_warnings_accumulated(self) -> None:
+        cfg = ProjectConfig.from_text(
+            "# RAVN Project: x\n\npermission_mode: bad\npersona: robot\niteration_budget: -1\n"
+        )
+        assert len(cfg.warnings) >= 3
+
+    def test_valid_schema_constants_non_empty(self) -> None:
+        assert len(_VALID_PERMISSION_MODES) > 0
+        assert len(_VALID_PERSONAS) > 0
