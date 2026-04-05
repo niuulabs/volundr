@@ -11,7 +11,7 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -44,12 +44,25 @@ from bifrost.inbound.tracking import (
     _stream_with_tracking,
 )
 from bifrost.ports.auth import AuthPort
+from bifrost.ports.rules import RoutingContext
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
 from bifrost.router import ModelRouter, RouterError
 from bifrost.translation.models import AnthropicRequest
 
 logger = logging.getLogger(__name__)
+
+# Header injected on responses when the agent's budget is approaching or at the
+# warn threshold.  Callers can inspect this header to adjust their behaviour.
+_HEADER_BUDGET_WARNING = "X-Bifrost-Budget-Warning"
+
+
+def _seconds_until_utc_midnight() -> int:
+    """Return the number of seconds remaining until midnight UTC today."""
+    now = datetime.now(UTC)
+    tomorrow = datetime.combine(date.today() + timedelta(days=1), datetime.min.time(), tzinfo=UTC)
+    return max(0, int((tomorrow - now).total_seconds()))
+
 
 # ---------------------------------------------------------------------------
 # Quota enforcement
@@ -162,6 +175,84 @@ def _check_model_access(
                 f"Allowed: {agent_perms.allowed_models}"
             ),
         )
+
+
+# ---------------------------------------------------------------------------
+# Guardrail evaluation (budget + context-window)
+# ---------------------------------------------------------------------------
+
+
+async def _evaluate_guardrails(
+    request: AnthropicRequest,
+    identity: AgentIdentity,
+    config: BifrostConfig,
+    store: UsageStore,
+    agent_perms: AgentPermissions,
+) -> tuple[AnthropicRequest, RoutingContext, str | None]:
+    """Evaluate budget and context-window guardrails before routing.
+
+    This runs *after* the hard quota check so that the 429 from an exhausted
+    tenant/agent quota is raised first; the budget guardrail then applies its
+    own routing logic for agents that are *approaching* (but have not yet hit)
+    their per-agent cost limit.
+
+    Args:
+        request:     Inbound Anthropic-format request (may be mutated).
+        identity:    Authenticated agent identity.
+        config:      Gateway configuration containing guardrail policies.
+        store:       Usage store for querying today's agent cost.
+        agent_perms: Pre-resolved permissions for the caller.
+
+    Returns:
+        A 3-tuple of:
+        - ``request``      — possibly with model overridden (budget warn_action).
+        - ``context``      — ``RoutingContext`` with ``agent_budget_pct`` set so
+                             that declarative budget rules in the rule engine also
+                             fire correctly.
+        - ``budget_warn``  — header value for ``X-Bifrost-Budget-Warning``, or
+                             ``None`` when no warning is applicable.
+
+    Raises:
+        HTTPException(429): When the agent's daily cost budget is fully exhausted.
+        HTTPException(400): When the request exceeds the context-window message limit.
+    """
+    budget_warn: str | None = None
+    agent_budget_pct: float | None = None
+
+    # ── Context-window guardrail ─────────────────────────────────────────────
+    cw_cfg = config.guardrails.context_window
+    if cw_cfg is not None and len(request.messages) >= cw_cfg.max_messages:
+        raise HTTPException(status_code=400, detail=cw_cfg.reason)
+
+    # ── Budget guardrail ─────────────────────────────────────────────────────
+    budget_cfg = config.guardrails.budget
+    agent_quota = agent_perms.quota
+
+    if budget_cfg is not None and agent_quota.max_cost_per_day > 0.0:
+        agent_cost = await store.agent_cost_today(identity.agent_id)
+        limit = agent_quota.max_cost_per_day
+        pct_consumed = (agent_cost / limit) * 100.0
+        agent_budget_pct = pct_consumed
+
+        if pct_consumed >= 100.0:
+            retry_after = _seconds_until_utc_midnight()
+            raise HTTPException(
+                status_code=429,
+                detail=(f"Agent daily budget exhausted (${agent_cost:.4f} / ${limit:.4f})."),
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        if pct_consumed >= budget_cfg.warn_at_pct:
+            if budget_cfg.warn_action == "route_to":
+                request = request.model_copy(update={"model": budget_cfg.warn_target})
+            budget_warn = (
+                f"budget_consumed={pct_consumed:.1f}% "
+                f"(${agent_cost:.4f}/${limit:.4f}); "
+                f"routed_to={budget_cfg.warn_target}"
+            )
+
+    context = RoutingContext(agent_budget_pct=agent_budget_pct)
+    return request, context, budget_warn
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +390,11 @@ def create_router(
         # --- Quota check (before routing) ---
         warnings = await _check_quotas(identity, config, store, agent_perms)
 
+        # --- Guardrail evaluation (budget + context-window) ---
+        request, routing_ctx, budget_warn = await _evaluate_guardrails(
+            request, identity, config, store, agent_perms
+        )
+
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
 
@@ -308,7 +404,7 @@ def create_router(
             if request.stream:
                 stream_resp = StreamingResponse(
                     _stream_with_tracking(
-                        router.stream(request),
+                        router.stream(request, routing_ctx),
                         request.model,
                         start,
                         identity,
@@ -326,9 +422,11 @@ def create_router(
                 )
                 if warnings:
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                if budget_warn:
+                    stream_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
                 return stream_resp
 
-            response = await router.complete(request)
+            response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             data = response.model_dump()
             raw_usage = data.get("usage", {})
@@ -374,6 +472,8 @@ def create_router(
             json_resp = JSONResponse(content=data)
             if warnings:
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            if budget_warn:
+                json_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
             return json_resp
 
         except RuleRejectError as exc:
@@ -540,6 +640,14 @@ def create_router(
         except HTTPException as exc:
             return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
 
+        # --- Guardrail evaluation (budget + context-window) ---
+        try:
+            request, routing_ctx, budget_warn = await _evaluate_guardrails(
+                request, identity, config, store, agent_perms
+            )
+        except HTTPException as exc:
+            return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
+
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
         provider = config.provider_for_model(request.model) or ""
@@ -550,7 +658,7 @@ def create_router(
                 stream_resp = StreamingResponse(
                     anthropic_stream_to_openai(
                         _stream_with_tracking(
-                            router.stream(request),
+                            router.stream(request, routing_ctx),
                             request.model,
                             start,
                             identity,
@@ -571,9 +679,11 @@ def create_router(
                 )
                 if warnings:
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                if budget_warn:
+                    stream_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
                 return stream_resp
 
-            response = await router.complete(request)
+            response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
                 input_tokens=response.usage.input_tokens,
@@ -617,6 +727,8 @@ def create_router(
             json_resp = JSONResponse(content=anthropic_response_to_openai(response))
             if warnings:
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            if budget_warn:
+                json_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
             return json_resp
 
         except RuleRejectError as exc:
@@ -675,6 +787,14 @@ def create_router(
         except HTTPException as exc:
             return ollama_error_response(exc.status_code, exc.detail)
 
+        # --- Guardrail evaluation (budget + context-window) ---
+        try:
+            request, routing_ctx, budget_warn = await _evaluate_guardrails(
+                request, identity, config, store, agent_perms
+            )
+        except HTTPException as exc:
+            return ollama_error_response(exc.status_code, exc.detail)
+
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
         provider = config.provider_for_model(request.model) or ""
@@ -684,7 +804,7 @@ def create_router(
                 stream_resp = StreamingResponse(
                     stream_translate_fn(
                         _stream_with_tracking(
-                            router.stream(request),
+                            router.stream(request, routing_ctx),
                             request.model,
                             start,
                             identity,
@@ -700,9 +820,11 @@ def create_router(
                 )
                 if warnings:
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                if budget_warn:
+                    stream_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
                 return stream_resp
 
-            response = await router.complete(request)
+            response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
                 input_tokens=response.usage.input_tokens,
@@ -752,6 +874,8 @@ def create_router(
             )
             if warnings:
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            if budget_warn:
+                json_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
             return json_resp
 
         except RouterError as exc:
