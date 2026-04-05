@@ -6,19 +6,31 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from ravn.domain.events import RavnEvent
+from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
+from ravn.agent import RavnAgent
 from ravn.domain.models import (
     LLMResponse,
     StopReason,
     StreamEvent,
     StreamEventType,
     TokenUsage,
-    ToolResult,
 )
-from ravn.ports.channel import ChannelPort
 from ravn.ports.llm import LLMPort
 from ravn.ports.permission import PermissionPort
-from ravn.ports.tool import ToolPort
+from tests.ravn.fixtures.fakes import EchoTool, FailingTool, InMemoryChannel
+
+# Re-export fakes so tests can import from a single conftest location.
+__all__ = [
+    "AllowAllPermission",
+    "DenyAllPermission",
+    "EchoTool",
+    "FailingTool",
+    "InMemoryChannel",
+    "MockLLM",
+    "make_agent",
+    "make_text_response",
+]
+
 
 # ---------------------------------------------------------------------------
 # MockLLM — scripted, deterministic LLM for testing
@@ -68,91 +80,53 @@ class MockLLM(LLMPort):
 
 
 # ---------------------------------------------------------------------------
-# InMemoryChannel — records all emitted events for assertion
+# Shared agent factory
 # ---------------------------------------------------------------------------
 
 
-class InMemoryChannel(ChannelPort):
-    """Records every event emitted by the agent for inspection in tests."""
-
-    def __init__(self) -> None:
-        self.events: list[RavnEvent] = []
-
-    async def emit(self, event: RavnEvent) -> None:
-        self.events.append(event)
-
-    def event_types(self) -> list[str]:
-        return [str(e.type) for e in self.events]
-
-
-# ---------------------------------------------------------------------------
-# Test tool implementations
-# ---------------------------------------------------------------------------
-
-
-class EchoTool(ToolPort):
-    """Returns the ``message`` input as its result."""
-
-    @property
-    def name(self) -> str:
-        return "echo"
-
-    @property
-    def description(self) -> str:
-        return "Echoes the message back."
-
-    @property
-    def input_schema(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {"message": {"type": "string"}},
-            "required": ["message"],
-        }
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:echo"
-
-    async def execute(self, input: dict) -> ToolResult:
-        return ToolResult(tool_call_id="", content=input.get("message", ""))
-
-
-class FailingTool(ToolPort):
-    """Always raises a RuntimeError when executed."""
-
-    @property
-    def name(self) -> str:
-        return "fail"
-
-    @property
-    def description(self) -> str:
-        return "Always fails."
-
-    @property
-    def input_schema(self) -> dict:
-        return {"type": "object", "properties": {}}
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:fail"
-
-    async def execute(self, input: dict) -> ToolResult:
-        raise RuntimeError("intentional failure")
+def make_agent(
+    llm: LLMPort,
+    tools=None,
+    *,
+    channel: InMemoryChannel | None = None,
+    permission: PermissionPort | None = None,
+    system_prompt: str = "You are a test assistant.",
+    max_iterations: int = 10,
+) -> tuple[RavnAgent, InMemoryChannel]:
+    """Construct a RavnAgent wired to an InMemoryChannel for test assertions."""
+    ch = channel or InMemoryChannel()
+    perm = permission or AllowAllPermission()
+    agent = RavnAgent(
+        llm=llm,
+        tools=tools or [],
+        channel=ch,
+        permission=perm,
+        system_prompt=system_prompt,
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        max_iterations=max_iterations,
+    )
+    return agent, ch
 
 
 # ---------------------------------------------------------------------------
-# Permission implementations
+# Helper builders
 # ---------------------------------------------------------------------------
 
 
-class AllowAllPermission(PermissionPort):
-    async def check(self, permission: str) -> bool:
-        return True
-
-
-class DenyAllPermission(PermissionPort):
-    async def check(self, permission: str) -> bool:
-        return False
+def make_text_response(
+    text: str = "Hello!",
+    *,
+    input_tokens: int = 10,
+    output_tokens: int = 5,
+) -> LLMResponse:
+    """Build a simple text-only LLMResponse for scripting the MockLLM."""
+    return LLMResponse(
+        content=text,
+        tool_calls=[],
+        stop_reason=StopReason.END_TURN,
+        usage=TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -183,21 +157,6 @@ def echo_tool() -> EchoTool:
 @pytest.fixture
 def failing_tool() -> FailingTool:
     return FailingTool()
-
-
-def make_text_response(
-    text: str = "Hello!",
-    *,
-    input_tokens: int = 10,
-    output_tokens: int = 5,
-) -> LLMResponse:
-    """Build a simple text-only LLMResponse for scripting the MockLLM."""
-    return LLMResponse(
-        content=text,
-        tool_calls=[],
-        stop_reason=StopReason.END_TURN,
-        usage=TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
-    )
 
 
 @pytest.fixture

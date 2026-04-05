@@ -16,39 +16,16 @@ from ravn.domain.models import (
 )
 from tests.ravn.conftest import (
     EchoTool,
-    InMemoryChannel,
     MockLLM,
+    make_agent,
     make_text_response,
 )
-
-
-def _make_agent(
-    llm: MockLLM,
-    tools=None,
-    *,
-    channel=None,
-    permission=None,
-    max_iterations: int = 10,
-) -> tuple[RavnAgent, InMemoryChannel]:
-    ch = channel or InMemoryChannel()
-    perm = permission or AllowAllPermission()
-    agent = RavnAgent(
-        llm=llm,
-        tools=tools or [],
-        channel=ch,
-        permission=perm,
-        system_prompt="You are Ravn, a helpful AI assistant.",
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        max_iterations=max_iterations,
-    )
-    return agent, ch
 
 
 class TestBasicConversation:
     async def test_user_input_produces_llm_response(self) -> None:
         llm = MockLLM([make_text_response("Hello there!")])
-        agent, ch = _make_agent(llm)
+        agent, ch = make_agent(llm)
 
         result = await agent.run_turn("Hello")
 
@@ -56,7 +33,7 @@ class TestBasicConversation:
 
     async def test_response_emitted_to_channel(self) -> None:
         llm = MockLLM([make_text_response("Hi!")])
-        agent, ch = _make_agent(llm)
+        agent, ch = make_agent(llm)
 
         await agent.run_turn("Hello")
 
@@ -88,7 +65,7 @@ class TestBasicConversation:
 
     async def test_session_starts_empty(self) -> None:
         llm = MockLLM([make_text_response("Hi!")])
-        agent, _ = _make_agent(llm)
+        agent, _ = make_agent(llm)
 
         assert agent.session.turn_count == 0
         assert agent.session.messages == []
@@ -132,7 +109,7 @@ class TestMultiTurnConversation:
                 make_text_response("You said hello, then asked who I am."),
             ]
         )
-        agent, ch = _make_agent(llm)
+        agent, ch = make_agent(llm)
 
         await agent.run_turn("Hello")
         await agent.run_turn("Who are you?")
@@ -148,7 +125,7 @@ class TestMultiTurnConversation:
                 make_text_response("answer2"),
             ]
         )
-        agent, ch = _make_agent(llm)
+        agent, ch = make_agent(llm)
 
         await agent.run_turn("question1")
         await agent.run_turn("question2")
@@ -166,7 +143,7 @@ class TestMultiTurnConversation:
                 make_text_response("ans2", input_tokens=20, output_tokens=8),
             ]
         )
-        agent, _ = _make_agent(llm)
+        agent, _ = make_agent(llm)
 
         await agent.run_turn("q1")
         await agent.run_turn("q2")
@@ -181,7 +158,7 @@ class TestMultiTurnConversation:
                 make_text_response("turn2"),
             ]
         )
-        agent, ch = _make_agent(llm)
+        agent, ch = make_agent(llm)
 
         await agent.run_turn("first message")
         events_after_turn1 = len(ch.events)
@@ -205,7 +182,7 @@ class TestMultiTurnConversation:
         second_turn = make_text_response("Happy to help further!", input_tokens=12, output_tokens=5)
 
         llm = MockLLM([tool_response, after_tool, second_turn])
-        agent, ch = _make_agent(llm, tools=[tool])
+        agent, ch = make_agent(llm, tools=[tool])
 
         result1 = await agent.run_turn("echo hi")
         result2 = await agent.run_turn("thanks")
