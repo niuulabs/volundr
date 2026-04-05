@@ -12,26 +12,7 @@ from sleipnir.domain.events import (
     match_event_type,
     validate_event_type,
 )
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_event(**kwargs) -> SleipnirEvent:
-    defaults = dict(
-        event_id="evt-001",
-        event_type="ravn.tool.complete",
-        source="ravn:agent-abc123",
-        payload={"tool": "bash", "exit_code": 0},
-        summary="Bash tool completed successfully",
-        urgency=0.5,
-        domain="code",
-        timestamp=datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC),
-    )
-    defaults.update(kwargs)
-    return SleipnirEvent(**defaults)
-
+from tests.test_sleipnir.conftest import make_event
 
 # ---------------------------------------------------------------------------
 # Construction
@@ -39,7 +20,7 @@ def _make_event(**kwargs) -> SleipnirEvent:
 
 
 def test_event_construction_minimal():
-    evt = _make_event()
+    evt = make_event()
     assert evt.event_id == "evt-001"
     assert evt.event_type == "ravn.tool.complete"
     assert evt.source == "ravn:agent-abc123"
@@ -51,7 +32,7 @@ def test_event_construction_minimal():
 
 
 def test_event_construction_full():
-    evt = _make_event(
+    evt = make_event(
         correlation_id="corr-123",
         causation_id="cause-456",
         tenant_id="tenant-789",
@@ -64,20 +45,30 @@ def test_event_construction_full():
 
 
 def test_event_urgency_boundaries():
-    lo = _make_event(urgency=0.0)
-    hi = _make_event(urgency=1.0)
+    lo = make_event(urgency=0.0)
+    hi = make_event(urgency=1.0)
     assert lo.urgency == 0.0
     assert hi.urgency == 1.0
 
 
 def test_event_urgency_invalid_low():
     with pytest.raises(ValueError, match="urgency"):
-        _make_event(urgency=-0.1)
+        make_event(urgency=-0.1)
 
 
 def test_event_urgency_invalid_high():
     with pytest.raises(ValueError, match="urgency"):
-        _make_event(urgency=1.1)
+        make_event(urgency=1.1)
+
+
+def test_event_invalid_event_type_rejected():
+    with pytest.raises(ValueError):
+        make_event(event_type="INVALID")
+
+
+def test_event_unknown_namespace_rejected():
+    with pytest.raises(ValueError, match="Unknown namespace"):
+        make_event(event_type="unknown.namespace.event")
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +77,7 @@ def test_event_urgency_invalid_high():
 
 
 def test_to_dict_contains_all_fields():
-    evt = _make_event(correlation_id="corr-1", tenant_id="t-1", ttl=60)
+    evt = make_event(correlation_id="corr-1", tenant_id="t-1", ttl=60)
     d = evt.to_dict()
     assert d["event_id"] == "evt-001"
     assert d["event_type"] == "ravn.tool.complete"
@@ -102,7 +93,7 @@ def test_to_dict_contains_all_fields():
 
 
 def test_round_trip_from_dict():
-    original = _make_event(
+    original = make_event(
         correlation_id="c1",
         causation_id="c2",
         tenant_id="t1",
@@ -123,7 +114,7 @@ def test_round_trip_from_dict():
 
 
 def test_from_dict_parses_iso_timestamp():
-    d = _make_event().to_dict()
+    d = make_event().to_dict()
     assert isinstance(d["timestamp"], str)
     restored = SleipnirEvent.from_dict(d)
     assert isinstance(restored.timestamp, datetime)
@@ -131,7 +122,7 @@ def test_from_dict_parses_iso_timestamp():
 
 def test_from_dict_accepts_datetime_object():
     ts = datetime(2026, 1, 1, tzinfo=UTC)
-    d = _make_event().to_dict()
+    d = make_event().to_dict()
     d["timestamp"] = ts  # already a datetime
     restored = SleipnirEvent.from_dict(d)
     assert restored.timestamp == ts

@@ -2,28 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from sleipnir.adapters.in_process import InProcessBus
 from sleipnir.domain.events import SleipnirEvent
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _event(event_type: str = "ravn.tool.complete", event_id: str = "e1") -> SleipnirEvent:
-    return SleipnirEvent(
-        event_id=event_id,
-        event_type=event_type,
-        source="ravn:agent-test",
-        payload={},
-        summary="test event",
-        urgency=0.3,
-        domain="code",
-        timestamp=datetime(2026, 4, 5, tzinfo=UTC),
-    )
-
+from tests.test_sleipnir.conftest import make_event
 
 # ---------------------------------------------------------------------------
 # publish → subscribe → handler called
@@ -38,10 +19,10 @@ async def test_subscribe_and_receive_event():
         received.append(evt)
 
     await bus.subscribe(["ravn.*"], handler)
-    await bus.publish(_event("ravn.tool.complete"))
+    await bus.publish(make_event())
 
     assert len(received) == 1
-    assert received[0].event_id == "e1"
+    assert received[0].event_id == "evt-001"
 
 
 async def test_handler_not_called_for_non_matching_event():
@@ -52,7 +33,7 @@ async def test_handler_not_called_for_non_matching_event():
         received.append(evt)
 
     await bus.subscribe(["ravn.*"], handler)
-    await bus.publish(_event("tyr.saga.created"))
+    await bus.publish(make_event(event_type="tyr.saga.created"))
 
     assert received == []
 
@@ -65,9 +46,9 @@ async def test_multiple_patterns_any_match_triggers_handler():
         received.append(evt)
 
     await bus.subscribe(["tyr.*", "ravn.*"], handler)
-    await bus.publish(_event("ravn.tool.complete"))
-    await bus.publish(_event("tyr.saga.created"))
-    await bus.publish(_event("volundr.pr.opened"))
+    await bus.publish(make_event(event_type="ravn.tool.complete"))
+    await bus.publish(make_event(event_type="tyr.saga.created"))
+    await bus.publish(make_event(event_type="volundr.pr.opened"))
 
     assert len(received) == 2
     types = {e.event_type for e in received}
@@ -88,9 +69,9 @@ async def test_publish_batch_delivers_all_events():
 
     await bus.subscribe(["*"], handler)
     events = [
-        _event("ravn.tool.complete", "e1"),
-        _event("tyr.saga.created", "e2"),
-        _event("volundr.pr.opened", "e3"),
+        make_event(event_type="ravn.tool.complete", event_id="e1"),
+        make_event(event_type="tyr.saga.created", event_id="e2"),
+        make_event(event_type="volundr.pr.opened", event_id="e3"),
     ]
     await bus.publish_batch(events)
 
@@ -106,7 +87,7 @@ async def test_publish_batch_preserves_order():
         order.append(evt.event_id)
 
     await bus.subscribe(["*"], handler)
-    await bus.publish_batch([_event(event_id=str(i)) for i in range(10)])
+    await bus.publish_batch([make_event(event_id=str(i)) for i in range(10)])
 
     assert order == [str(i) for i in range(10)]
 
@@ -129,7 +110,7 @@ async def test_multiple_subscribers_each_receive_event():
 
     await bus.subscribe(["ravn.*"], handler_a)
     await bus.subscribe(["ravn.*"], handler_b)
-    await bus.publish(_event("ravn.tool.complete"))
+    await bus.publish(make_event())
 
     assert len(bucket_a) == 1
     assert len(bucket_b) == 1
@@ -148,9 +129,9 @@ async def test_unsubscribe_stops_delivery():
         received.append(evt)
 
     sub = await bus.subscribe(["ravn.*"], handler)
-    await bus.publish(_event("ravn.tool.complete", "e1"))
+    await bus.publish(make_event(event_id="e1"))
     await sub.unsubscribe()
-    await bus.publish(_event("ravn.tool.complete", "e2"))
+    await bus.publish(make_event(event_id="e2"))
 
     assert len(received) == 1
     assert received[0].event_id == "e1"
@@ -196,7 +177,7 @@ async def test_failing_handler_does_not_block_other_handlers():
 
     await bus.subscribe(["*"], bad_handler)
     await bus.subscribe(["*"], good_handler)
-    await bus.publish(_event())
+    await bus.publish(make_event())
 
     assert len(received) == 1
 
@@ -221,6 +202,6 @@ async def test_global_wildcard_receives_all_namespaces():
         "bifrost.connection.open",
         "system.health.ping",
     ]:
-        await bus.publish(_event(et))
+        await bus.publish(make_event(event_type=et))
 
     assert len(received) == 5

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -13,33 +12,12 @@ from sleipnir.adapters.serialization import (
     msgpack_available,
     serialize,
 )
-from sleipnir.domain.events import SleipnirEvent
-
-_TS = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
+from tests.test_sleipnir.conftest import DEFAULT_TIMESTAMP, make_event
 
 _skip_no_msgpack = pytest.mark.skipif(
     not msgpack_available(),
     reason="msgpack not installed",
 )
-
-
-def _event(**kwargs) -> SleipnirEvent:
-    defaults = dict(
-        event_id="evt-serial-01",
-        event_type="ravn.tool.complete",
-        source="ravn:agent-serial",
-        payload={"key": "value", "count": 42},
-        summary="serialisation test event",
-        urgency=0.7,
-        domain="code",
-        timestamp=_TS,
-        correlation_id="corr-1",
-        causation_id="cause-1",
-        tenant_id="tenant-abc",
-        ttl=120,
-    )
-    defaults.update(kwargs)
-    return SleipnirEvent(**defaults)
 
 
 # ---------------------------------------------------------------------------
@@ -48,12 +26,12 @@ def _event(**kwargs) -> SleipnirEvent:
 
 
 def test_json_serialize_returns_bytes():
-    data = serialize(_event(), fmt="json")
+    data = serialize(make_event(), fmt="json")
     assert isinstance(data, bytes)
 
 
 def test_json_round_trip():
-    original = _event()
+    original = make_event()
     data = serialize(original, fmt="json")
     restored = deserialize(data, fmt="json")
 
@@ -71,7 +49,7 @@ def test_json_round_trip():
 
 
 def test_json_round_trip_none_fields():
-    original = _event(correlation_id=None, causation_id=None, tenant_id=None, ttl=None)
+    original = make_event(correlation_id=None, causation_id=None, tenant_id=None, ttl=None)
     data = serialize(original, fmt="json")
     restored = deserialize(data, fmt="json")
 
@@ -82,14 +60,14 @@ def test_json_round_trip_none_fields():
 
 
 def test_json_round_trip_preserves_timestamp():
-    original = _event()
+    original = make_event()
     data = serialize(original, fmt="json")
     restored = deserialize(data, fmt="json")
-    assert restored.timestamp.isoformat() == _TS.isoformat()
+    assert restored.timestamp.isoformat() == DEFAULT_TIMESTAMP.isoformat()
 
 
 def test_json_round_trip_complex_payload():
-    original = _event(payload={"nested": {"a": 1, "b": [1, 2, 3]}, "flag": True})
+    original = make_event(payload={"nested": {"a": 1, "b": [1, 2, 3]}, "flag": True})
     data = serialize(original, fmt="json")
     restored = deserialize(data, fmt="json")
     assert restored.payload == original.payload
@@ -102,7 +80,7 @@ def test_json_round_trip_complex_payload():
 
 def test_serialize_unknown_format_raises():
     with pytest.raises(ValueError, match="Unknown serialisation format"):
-        serialize(_event(), fmt="xml")  # type: ignore[arg-type]
+        serialize(make_event(), fmt="xml")  # type: ignore[arg-type]
 
 
 def test_deserialize_unknown_format_raises():
@@ -122,7 +100,7 @@ def test_msgpack_available_returns_bool():
 def test_serialize_msgpack_raises_import_error_when_unavailable():
     with patch.object(_ser_module, "_MSGPACK_AVAILABLE", False):
         with pytest.raises(ImportError, match="msgpack is not installed"):
-            serialize(_event(), fmt="msgpack")
+            serialize(make_event(), fmt="msgpack")
 
 
 def test_deserialize_msgpack_raises_import_error_when_unavailable():
@@ -143,13 +121,13 @@ def test_msgpack_available_returns_true_when_installed():
 
 @_skip_no_msgpack
 def test_msgpack_serialize_returns_bytes():
-    data = serialize(_event(), fmt="msgpack")
+    data = serialize(make_event(), fmt="msgpack")
     assert isinstance(data, bytes)
 
 
 @_skip_no_msgpack
 def test_msgpack_round_trip():
-    original = _event()
+    original = make_event()
     data = serialize(original, fmt="msgpack")
     restored = deserialize(data, fmt="msgpack")
 
@@ -168,7 +146,7 @@ def test_msgpack_round_trip():
 
 @_skip_no_msgpack
 def test_msgpack_round_trip_none_fields():
-    original = _event(correlation_id=None, causation_id=None, tenant_id=None, ttl=None)
+    original = make_event(correlation_id=None, causation_id=None, tenant_id=None, ttl=None)
     data = serialize(original, fmt="msgpack")
     restored = deserialize(data, fmt="msgpack")
 
@@ -180,7 +158,7 @@ def test_msgpack_round_trip_none_fields():
 
 @_skip_no_msgpack
 def test_msgpack_is_more_compact_than_json():
-    evt = _event()
+    evt = make_event()
     msgpack_bytes = serialize(evt, fmt="msgpack")
     json_bytes = serialize(evt, fmt="json")
     assert len(msgpack_bytes) < len(json_bytes)
