@@ -657,9 +657,7 @@ class BashValidationPipeline:
         if cmd in _READ_ONLY_WHITELIST:
             return CommandIntent.READ_ONLY
 
-        # Unknown commands are treated as WRITE-level for safety: they may
-        # mutate state even though we cannot determine the exact intent.
-        return CommandIntent.WRITE
+        return CommandIntent.UNKNOWN
 
     @staticmethod
     def _highest_intent(intents: list[CommandIntent]) -> CommandIntent:
