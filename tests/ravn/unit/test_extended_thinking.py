@@ -153,8 +153,13 @@ def test_anthropic_adapter_supports_thinking_true():
         ("think:write a plan", True, "write a plan"),
         ("THINK: hello", True, "hello"),
         ("normal message", False, "normal message"),
-        ("please --think about this", True, "please  about this"),
+        # Standalone --think: collapses to a single space between words
+        ("please --think about this", True, "please about this"),
         ("--think", True, ""),
+        # --thinking must NOT trigger the flag
+        ("explain --thinking process", False, "explain --thinking process"),
+        # mid-text --think with no surrounding whitespace must not trigger
+        ("I do not --thinking this works", False, "I do not --thinking this works"),
     ],
 )
 def test_parse_think_flag(user_input, expected_flag, expected_text):
@@ -179,6 +184,10 @@ def test_parse_think_flag(user_input, expected_flag, expected_text):
         ("just fix the bug", False),
         ("run the tests", False),
         ("", False),
+        # Word-boundary false-positive regression cases
+        ("this bug was unplanned, just fix it", False),
+        ("no replanning needed", False),
+        ("I need to re-architect the service", True),  # still matches "architect"
     ],
 )
 def test_looks_like_planning_task(user_input, expected):

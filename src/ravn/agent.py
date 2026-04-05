@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from collections.abc import Callable, Coroutine
@@ -782,45 +783,59 @@ def _compute_cost(
 
 
 _THINK_PREFIXES = ("think:", "think: ")
-_THINK_FLAG = "--think"
 
-_PLANNING_KEYWORDS = frozenset(
-    {
-        "plan",
-        "design",
-        "architect",
-        "architecture",
-        "strategy",
-        "roadmap",
-        "approach",
-        "how should",
-        "what approach",
-        "what's the best",
-        "best way to",
-        "how do i",
-    }
+# Matches --think only as a standalone flag (word boundary on both sides).
+# Captures any surrounding whitespace so collapsing leaves a single space.
+_THINK_FLAG_RE = re.compile(r"(?<!\S)--think(?!\S)")
+
+# Single-word planning keywords matched with \b to avoid substring false-positives
+# (e.g. "unplanned" must not match "plan").
+_PLANNING_WORD_RE = re.compile(
+    r"\b(?:plan|design|architect|architecture|strategy|roadmap|approach)\b",
+    re.IGNORECASE,
+)
+# Multi-word phrases can remain as plain substring checks.
+_PLANNING_PHRASES = (
+    "how should",
+    "what approach",
+    "what's the best",
+    "best way to",
+    "how do i",
 )
 
 
 def _parse_think_flag(user_input: str) -> tuple[bool, str]:
     """Return (explicit_thinking, cleaned_input).
 
-    Strips ``think:`` prefix or ``--think`` flag from user input and returns
-    a bool indicating whether explicit thinking was requested.
+    Strips ``think:`` prefix or ``--think`` standalone flag from user input
+    and returns a bool indicating whether explicit thinking was requested.
+
+    ``--think`` is only recognised as a standalone flag; ``--thinking`` and
+    other ``--think``-prefixed words are left untouched.
     """
     stripped = user_input
     for prefix in _THINK_PREFIXES:
         if stripped.lower().startswith(prefix):
             return True, stripped[len(prefix) :].lstrip()
-    if _THINK_FLAG in stripped:
-        return True, stripped.replace(_THINK_FLAG, "").strip()
+    if _THINK_FLAG_RE.search(stripped):
+        cleaned = _THINK_FLAG_RE.sub(" ", stripped).strip()
+        # Collapse any run of spaces introduced by the substitution.
+        cleaned = re.sub(r" {2,}", " ", cleaned)
+        return True, cleaned
     return False, stripped
 
 
 def _looks_like_planning_task(user_input: str) -> bool:
-    """Return True if the input looks like a planning or ambiguous task."""
+    """Return True if the input looks like a planning or ambiguous task.
+
+    Single-word keywords are matched with word boundaries to prevent
+    substring false-positives (e.g. ``unplanned`` must not match ``plan``).
+    Multi-word phrases are matched as plain substrings.
+    """
+    if _PLANNING_WORD_RE.search(user_input):
+        return True
     lower = user_input.lower()
-    return any(kw in lower for kw in _PLANNING_KEYWORDS)
+    return any(phrase in lower for phrase in _PLANNING_PHRASES)
 
 
 def _build_assistant_content(response: LLMResponse) -> list[dict]:
