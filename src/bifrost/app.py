@@ -19,6 +19,7 @@ from fastapi import FastAPI, Request, Response
 
 from bifrost.config import BifrostConfig
 from bifrost.inbound.routes import create_router
+from bifrost.ports.usage_store import UsageStore
 from bifrost.pricing import ModelPricing
 from bifrost.router import ModelRouter
 
@@ -27,7 +28,7 @@ from bifrost.router import ModelRouter
 # ---------------------------------------------------------------------------
 
 
-def _build_usage_store(config: BifrostConfig):
+def _build_usage_store(config: BifrostConfig) -> UsageStore:
     """Instantiate the configured usage store adapter."""
     match config.usage_store.adapter:
         case "sqlite":
