@@ -168,37 +168,17 @@ VOLUNDR_PIPELINE_COMPLETE: str = "volundr.pipeline.complete"
 #: A CI pipeline run failed.
 VOLUNDR_PIPELINE_FAILED: str = "volundr.pipeline.failed"
 
-# --- Volundr session lifecycle events ---
-
-#: A session was created in Volundr.
-VOLUNDR_SESSION_CREATED: str = "volundr.session.created"
-
 #: A session was updated (status change, token usage, etc.).
 VOLUNDR_SESSION_UPDATED: str = "volundr.session.updated"
 
 #: A session was deleted.
 VOLUNDR_SESSION_DELETED: str = "volundr.session.deleted"
 
-#: An agent session started inside a pod.
-VOLUNDR_SESSION_STARTED: str = "volundr.session.started"
-
-#: An agent session stopped inside a pod.
-VOLUNDR_SESSION_STOPPED: str = "volundr.session.stopped"
-
 #: A session encountered an error.
 VOLUNDR_SESSION_ERROR: str = "volundr.session.error"
 
-#: Token usage was recorded for a session.
-VOLUNDR_TOKEN_USAGE: str = "volundr.token.usage"
-
 #: Aggregate stats were updated.
 VOLUNDR_STATS_UPDATED: str = "volundr.stats.updated"
-
-#: A chronicle record was created.
-VOLUNDR_CHRONICLE_CREATED: str = "volundr.chronicle.created"
-
-#: A chronicle record was updated (new timeline event appended).
-VOLUNDR_CHRONICLE_UPDATED: str = "volundr.chronicle.updated"
 
 #: A chronicle record was deleted.
 VOLUNDR_CHRONICLE_DELETED: str = "volundr.chronicle.deleted"

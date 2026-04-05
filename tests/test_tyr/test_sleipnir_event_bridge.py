@@ -19,7 +19,7 @@ from sleipnir.domain.registry import (
 )
 from sleipnir.testing import EventCapture
 from tyr.adapters.memory_event_bus import InMemoryEventBus
-from tyr.adapters.sleipnir_event_bridge import SleipnirEventBridge
+from tyr.adapters.sleipnir_event_bridge import SleipnirEventBridge, TyrSleipnirBridge
 from tyr.ports.event_bus import TyrEvent
 
 _TS = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
@@ -306,3 +306,68 @@ class TestSleipnirEventBridgeFaultTolerance:
         # Inner bus still received the event
         received = q.get_nowait()
         assert received is event
+
+
+# ---------------------------------------------------------------------------
+# TyrSleipnirBridge lifecycle
+# ---------------------------------------------------------------------------
+
+
+class TestTyrSleipnirBridge:
+    async def test_start_creates_background_task(self):
+        inner = InMemoryEventBus()
+        bridge = TyrSleipnirBridge(event_bus=inner, publisher=AsyncMock())
+        assert not bridge.is_running
+        await bridge.start()
+        assert bridge.is_running
+        await bridge.stop()
+
+    async def test_start_is_idempotent(self):
+        inner = InMemoryEventBus()
+        bridge = TyrSleipnirBridge(event_bus=inner, publisher=AsyncMock())
+        await bridge.start()
+        task_before = bridge._task
+        await bridge.start()
+        assert bridge._task is task_before
+        await bridge.stop()
+
+    async def test_stop_cancels_task(self):
+        inner = InMemoryEventBus()
+        bridge = TyrSleipnirBridge(event_bus=inner, publisher=AsyncMock())
+        await bridge.start()
+        await bridge.stop()
+        assert not bridge.is_running
+        assert bridge._task is None
+
+    async def test_stop_is_idempotent(self):
+        inner = InMemoryEventBus()
+        bridge = TyrSleipnirBridge(event_bus=inner, publisher=AsyncMock())
+        await bridge.stop()  # must not raise when not started
+        assert not bridge.is_running
+
+    async def test_stop_unsubscribes_from_event_bus(self):
+        inner = InMemoryEventBus()
+        bridge = TyrSleipnirBridge(event_bus=inner, publisher=AsyncMock())
+        await bridge.start()
+        await asyncio.sleep(0)  # let _run() reach await q.get()
+        assert inner.client_count == 1
+        await bridge.stop()
+        assert inner.client_count == 0
+
+    async def test_run_loop_mirrors_events_to_sleipnir(self):
+        sleipnir = InProcessBus()
+        inner = InMemoryEventBus()
+        bridge = TyrSleipnirBridge(event_bus=inner, publisher=sleipnir)
+
+        async with EventCapture(sleipnir, [TYR_SAGA_CREATED]) as capture:
+            await bridge.start()
+            await asyncio.sleep(0)
+            await inner.emit(
+                _make_tyr_event("saga.created", {"saga_id": "s-1", "name": "BridgeTest"})
+            )
+            await asyncio.sleep(0)
+            await sleipnir.flush()
+
+        await bridge.stop()
+        assert len(capture.events) == 1
+        assert capture.events[0].event_type == TYR_SAGA_CREATED

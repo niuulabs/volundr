@@ -190,3 +190,61 @@ class SleipnirEventBridge(EventBusPort):
             timestamp=event.timestamp,
             tenant_id=owner_id,
         )
+
+
+class TyrSleipnirBridge:
+    """Lifecycle wrapper around :class:`SleipnirEventBridge` for use in main.py.
+
+    Runs as a background asyncio task: subscribes to *event_bus*, delegates
+    each :class:`TyrEvent` to :class:`SleipnirEventBridge` for mapping and
+    publication.  This avoids replacing the ``event_bus`` reference already
+    wired into SSE endpoints and dependency injection.
+
+    Usage::
+
+        bridge = TyrSleipnirBridge(event_bus=bus, publisher=sleipnir)
+        await bridge.start()
+        # ... application runs ...
+        await bridge.stop()
+    """
+
+    def __init__(self, event_bus: EventBusPort, publisher: SleipnirPublisher) -> None:
+        self._event_bus = event_bus
+        self._inner = SleipnirEventBridge(inner=event_bus, publisher=publisher)
+        self._task: asyncio.Task[None] | None = None
+
+    async def start(self) -> None:
+        """Start the background mirroring task."""
+        if self._task is not None:
+            return
+        self._task = asyncio.create_task(self._run(), name="tyr-sleipnir-bridge")
+        logger.info("TyrSleipnirBridge started")
+
+    async def stop(self) -> None:
+        """Cancel the mirroring task and clean up."""
+        if self._task is None:
+            return
+        self._task.cancel()
+        try:
+            await self._task
+        except asyncio.CancelledError:
+            pass
+        self._task = None
+        logger.info("TyrSleipnirBridge stopped")
+
+    @property
+    def is_running(self) -> bool:
+        """True when the background task is active."""
+        return self._task is not None and not self._task.done()
+
+    async def _run(self) -> None:
+        """Subscribe to event_bus and mirror events to Sleipnir until cancelled."""
+        q = self._event_bus.subscribe()
+        try:
+            while True:
+                event: TyrEvent = await q.get()
+                await self._inner._mirror_to_sleipnir(event)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._event_bus.unsubscribe(q)
