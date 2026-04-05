@@ -22,6 +22,7 @@ class ModelInfo:
 
     id: str
     display_name: str
+    owned_by: str = ""
 
 
 @dataclass
