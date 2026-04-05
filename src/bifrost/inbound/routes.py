@@ -42,8 +42,10 @@ from bifrost.inbound.tracking import (
     _HEADER_QUOTA_WARNING,
     _log_request,
     _stream_with_tracking,
+    emit_cost_events,
 )
 from bifrost.ports.auth import AuthPort
+from bifrost.ports.events import CostEventEmitter
 from bifrost.ports.rules import RoutingContext
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
@@ -320,6 +322,7 @@ def create_router(
     store: UsageStore,
     pricing_overrides: dict[str, ModelPricing],
     auth_adapter: AuthPort,
+    event_emitter: CostEventEmitter,
 ) -> APIRouter:
     """Build and return a configured ``APIRouter`` with all Bifröst routes.
 
@@ -334,6 +337,24 @@ def create_router(
         A ``fastapi.APIRouter`` with all routes registered.
     """
     api_router = APIRouter()
+
+    async def _emit_events(
+        identity: AgentIdentity,
+        cost: float,
+        tokens: int,
+        model: str,
+        budget_limit: float,
+    ) -> None:
+        await emit_cost_events(
+            emitter=event_emitter,
+            store=store,
+            identity=identity,
+            cost=cost,
+            tokens_used=tokens,
+            model=model,
+            agent_budget_limit=budget_limit,
+            budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
+        )
 
     @api_router.get("/health")
     async def health() -> dict:
@@ -418,6 +439,8 @@ def create_router(
 
         provider = config.provider_for_model(request.model) or ""
 
+        agent_budget_limit = agent_perms.quota.max_cost_per_day
+
         try:
             if request.stream:
                 stream_resp = StreamingResponse(
@@ -430,6 +453,9 @@ def create_router(
                         pricing_overrides,
                         request_id,
                         provider=provider,
+                        emitter=event_emitter,
+                        agent_budget_limit=agent_budget_limit,
+                        budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
                     ),
                     media_type="text/event-stream",
                     headers={
@@ -485,6 +511,10 @@ def create_router(
                     streaming=False,
                     timestamp=datetime.now(UTC),
                 )
+            )
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
             )
 
             json_resp = JSONResponse(content=data)
@@ -670,6 +700,7 @@ def create_router(
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
         provider = config.provider_for_model(request.model) or ""
+        agent_budget_limit = agent_perms.quota.max_cost_per_day
 
         try:
             if request.stream:
@@ -685,6 +716,9 @@ def create_router(
                             pricing_overrides,
                             request_id,
                             provider=provider,
+                            emitter=event_emitter,
+                            agent_budget_limit=agent_budget_limit,
+                            budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
                         ),
                         message_id=message_id,
                         model=request.model,
@@ -741,6 +775,10 @@ def create_router(
                     streaming=False,
                     timestamp=datetime.now(UTC),
                 )
+            )
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
             )
 
             json_resp = JSONResponse(content=anthropic_response_to_openai(response))
@@ -818,6 +856,7 @@ def create_router(
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
         provider = config.provider_for_model(request.model) or ""
+        agent_budget_limit = agent_perms.quota.max_cost_per_day
 
         try:
             if request.stream:
@@ -832,6 +871,9 @@ def create_router(
                             pricing_overrides,
                             request_id,
                             provider=provider,
+                            emitter=event_emitter,
+                            agent_budget_limit=agent_budget_limit,
+                            budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
                         ),
                         model=request.model,
                         start=start,
@@ -883,6 +925,10 @@ def create_router(
                     streaming=False,
                     timestamp=datetime.now(UTC),
                 )
+            )
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
             )
 
             created_at = datetime.now(UTC).isoformat()

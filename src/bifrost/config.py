@@ -303,6 +303,36 @@ class KeyVaultConfig(BaseModel):
     )
 
 
+class EventsConfig(BaseModel):
+    """Configuration for the Valkyrie cost event emitter."""
+
+    adapter: str = Field(
+        default="null",
+        description="Event emitter adapter. Accepted values: 'null' (default), 'sleipnir'.",
+    )
+    url: str = Field(
+        default="",
+        description=(
+            "AMQP URL for the Sleipnir (RabbitMQ) adapter (e.g. amqp://guest:guest@localhost/)."
+        ),
+    )
+    exchange: str = Field(
+        default="bifrost.events",
+        description="RabbitMQ exchange name.",
+    )
+    exchange_type: str = Field(
+        default="topic",
+        description="RabbitMQ exchange type.",
+    )
+    budget_warning_threshold_pct: float = Field(
+        default=20.0,
+        description=(
+            "Remaining budget percentage at or below which a budget_warning event is "
+            "emitted. Only applies when the agent has a configured daily cost limit."
+        ),
+    )
+
+
 # Default base URLs per provider type.
 _DEFAULT_BASE_URLS: dict[str, str] = {
     "anthropic": "https://api.anthropic.com",
@@ -421,6 +451,12 @@ class BifrostConfig(BaseModel):
             "Provider API key vault configuration. "
             "Keys are loaded at startup and never returned in responses or logs."
         ),
+    )
+
+    # ── Event emission ───────────────────────────────────────────────────────
+    events: EventsConfig = Field(
+        default_factory=EventsConfig,
+        description="Configuration for the Valkyrie cost event emitter.",
     )
 
     # ── Helpers ──────────────────────────────────────────────────────────────
