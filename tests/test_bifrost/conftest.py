@@ -16,9 +16,7 @@ def make_config(models: list[str] | None = None) -> BifrostConfig:
     """Return a minimal BifrostConfig suitable for unit tests."""
     return BifrostConfig(
         providers={
-            "anthropic": ProviderConfig(
-                models=models or ["claude-sonnet-4-6", "claude-opus-4-6"]
-            )
+            "anthropic": ProviderConfig(models=models or ["claude-sonnet-4-6", "claude-opus-4-6"])
         }
     )
 
