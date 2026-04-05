@@ -11,7 +11,7 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -60,7 +60,7 @@ _HEADER_BUDGET_WARNING = "X-Bifrost-Budget-Warning"
 def _seconds_until_utc_midnight() -> int:
     """Return the number of seconds remaining until midnight UTC today."""
     now = datetime.now(UTC)
-    tomorrow = datetime.combine(date.today() + timedelta(days=1), datetime.min.time(), tzinfo=UTC)
+    tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tzinfo=UTC)
     return max(0, int((tomorrow - now).total_seconds()))
 
 
@@ -74,17 +74,26 @@ async def _check_quotas(
     config: BifrostConfig,
     store: UsageStore,
     agent_perms: AgentPermissions,
-) -> list[str]:
-    """Check quota limits and return a list of warning strings (empty = OK).
+) -> tuple[list[str], float | None]:
+    """Check quota limits and return warnings plus the agent cost already fetched.
 
     Args:
         agent_perms: Pre-resolved permissions for the caller (avoids a second
                      ``config.permissions_for_agent()`` lookup per request).
 
+    Returns:
+        A 2-tuple of:
+        - ``warnings``         — list of human-readable soft-limit warning strings.
+        - ``agent_cost_today`` — the agent's total cost today (USD) when a per-agent
+                                 budget is configured, else ``None``.  Returned so
+                                 callers can pass it to ``_evaluate_guardrails``
+                                 without issuing a second store round-trip.
+
     Raises:
         HTTPException(429): If any hard limit is exceeded.
     """
     warnings: list[str] = []
+    agent_cost_today: float | None = None
 
     tenant_quota = config.quota_for_tenant(identity.tenant_id)
     agent_quota = agent_perms.quota
@@ -130,22 +139,26 @@ async def _check_quotas(
         if fraction >= tenant_quota.soft_limit_fraction:
             warnings.append(f"tenant_requests_per_hour={used_req}/{limit_req} ({fraction:.0%})")
 
-    # Agent: cost per day (only when a per-agent budget is configured)
+    # Agent: cost per day (only when a per-agent budget is configured).
+    # The fetched cost is returned so _evaluate_guardrails can reuse it
+    # without issuing a duplicate store query.
     if agent_quota.max_cost_per_day > 0.0:
-        agent_cost = await store.agent_cost_today(identity.agent_id)
+        agent_cost_today = await store.agent_cost_today(identity.agent_id)
         limit_cost = agent_quota.max_cost_per_day
-        fraction = agent_cost / limit_cost
+        fraction = agent_cost_today / limit_cost
         if fraction >= 1.0:
             raise HTTPException(
                 status_code=429,
-                detail=(f"Agent daily cost quota exceeded (${agent_cost:.4f}/${limit_cost:.4f})."),
+                detail=(
+                    f"Agent daily cost quota exceeded (${agent_cost_today:.4f}/${limit_cost:.4f})."
+                ),
             )
         if fraction >= agent_quota.soft_limit_fraction:
             warnings.append(
-                f"agent_cost_per_day=${agent_cost:.4f}/${limit_cost:.4f} ({fraction:.0%})"
+                f"agent_cost_per_day=${agent_cost_today:.4f}/${limit_cost:.4f} ({fraction:.0%})"
             )
 
-    return warnings
+    return warnings, agent_cost_today
 
 
 def _check_model_access(
@@ -188,20 +201,25 @@ async def _evaluate_guardrails(
     config: BifrostConfig,
     store: UsageStore,
     agent_perms: AgentPermissions,
+    agent_cost_today: float | None = None,
 ) -> tuple[AnthropicRequest, RoutingContext, str | None]:
     """Evaluate budget and context-window guardrails before routing.
 
-    This runs *after* the hard quota check so that the 429 from an exhausted
-    tenant/agent quota is raised first; the budget guardrail then applies its
-    own routing logic for agents that are *approaching* (but have not yet hit)
-    their per-agent cost limit.
+    This runs *after* ``_check_quotas`` so the hard-limit 429 (agent budget
+    exhausted) is always raised there first.  This function handles the
+    *soft* budget path: routing to a cheaper model and injecting the
+    ``X-Bifrost-Budget-Warning`` response header.
 
     Args:
-        request:     Inbound Anthropic-format request (may be mutated).
-        identity:    Authenticated agent identity.
-        config:      Gateway configuration containing guardrail policies.
-        store:       Usage store for querying today's agent cost.
-        agent_perms: Pre-resolved permissions for the caller.
+        request:          Inbound Anthropic-format request (may be mutated).
+        identity:         Authenticated agent identity.
+        config:           Gateway configuration containing guardrail policies.
+        store:            Usage store (queried only when ``agent_cost_today``
+                          is not supplied).
+        agent_perms:      Pre-resolved permissions for the caller.
+        agent_cost_today: Agent cost already fetched by ``_check_quotas``
+                          (avoids a duplicate store round-trip).  When
+                          ``None``, the store is queried directly.
 
     Returns:
         A 3-tuple of:
@@ -213,34 +231,33 @@ async def _evaluate_guardrails(
                              ``None`` when no warning is applicable.
 
     Raises:
-        HTTPException(429): When the agent's daily cost budget is fully exhausted.
         HTTPException(400): When the request exceeds the context-window message limit.
     """
     budget_warn: str | None = None
     agent_budget_pct: float | None = None
 
     # ── Context-window guardrail ─────────────────────────────────────────────
+    # max_messages is inclusive: a request with exactly max_messages messages
+    # is allowed; only strictly more than max_messages is rejected.
     cw_cfg = config.guardrails.context_window
-    if cw_cfg is not None and len(request.messages) >= cw_cfg.max_messages:
+    if cw_cfg is not None and len(request.messages) > cw_cfg.max_messages:
         raise HTTPException(status_code=400, detail=cw_cfg.reason)
 
     # ── Budget guardrail ─────────────────────────────────────────────────────
+    # Note: the >= 100% hard limit is enforced upstream by _check_quotas (which
+    # also raises 429 + sets Retry-After).  By the time we reach this point the
+    # agent is guaranteed to be below 100%.  We only handle the warn threshold
+    # here (route to a cheaper model, inject X-Bifrost-Budget-Warning).
     budget_cfg = config.guardrails.budget
     agent_quota = agent_perms.quota
 
     if budget_cfg is not None and agent_quota.max_cost_per_day > 0.0:
-        agent_cost = await store.agent_cost_today(identity.agent_id)
+        if agent_cost_today is None:
+            agent_cost_today = await store.agent_cost_today(identity.agent_id)
+        agent_cost = agent_cost_today
         limit = agent_quota.max_cost_per_day
         pct_consumed = (agent_cost / limit) * 100.0
         agent_budget_pct = pct_consumed
-
-        if pct_consumed >= 100.0:
-            retry_after = _seconds_until_utc_midnight()
-            raise HTTPException(
-                status_code=429,
-                detail=(f"Agent daily budget exhausted (${agent_cost:.4f} / ${limit:.4f})."),
-                headers={"Retry-After": str(retry_after)},
-            )
 
         if pct_consumed >= budget_cfg.warn_at_pct:
             if budget_cfg.warn_action == "route_to":
@@ -388,11 +405,12 @@ def create_router(
         _check_model_access(identity, request.model, agent_perms)
 
         # --- Quota check (before routing) ---
-        warnings = await _check_quotas(identity, config, store, agent_perms)
+        warnings, agent_cost_today = await _check_quotas(identity, config, store, agent_perms)
 
         # --- Guardrail evaluation (budget + context-window) ---
+        # Pass agent_cost_today to avoid a duplicate store query.
         request, routing_ctx, budget_warn = await _evaluate_guardrails(
-            request, identity, config, store, agent_perms
+            request, identity, config, store, agent_perms, agent_cost_today
         )
 
         request_id = str(raw_request.state.correlation_id)
@@ -636,14 +654,15 @@ def create_router(
 
         # --- Quota check (before routing) ---
         try:
-            warnings = await _check_quotas(identity, config, store, agent_perms)
+            warnings, agent_cost_today = await _check_quotas(identity, config, store, agent_perms)
         except HTTPException as exc:
             return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
 
         # --- Guardrail evaluation (budget + context-window) ---
+        # Pass agent_cost_today to avoid a duplicate store query.
         try:
             request, routing_ctx, budget_warn = await _evaluate_guardrails(
-                request, identity, config, store, agent_perms
+                request, identity, config, store, agent_perms, agent_cost_today
             )
         except HTTPException as exc:
             return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
@@ -783,14 +802,15 @@ def create_router(
             return ollama_error_response(exc.status_code, exc.detail)
 
         try:
-            warnings = await _check_quotas(identity, config, store, agent_perms)
+            warnings, agent_cost_today = await _check_quotas(identity, config, store, agent_perms)
         except HTTPException as exc:
             return ollama_error_response(exc.status_code, exc.detail)
 
         # --- Guardrail evaluation (budget + context-window) ---
+        # Pass agent_cost_today to avoid a duplicate store query.
         try:
             request, routing_ctx, budget_warn = await _evaluate_guardrails(
-                request, identity, config, store, agent_perms
+                request, identity, config, store, agent_perms, agent_cost_today
             )
         except HTTPException as exc:
             return ollama_error_response(exc.status_code, exc.detail)

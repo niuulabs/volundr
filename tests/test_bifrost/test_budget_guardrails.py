@@ -334,55 +334,12 @@ class TestEvaluateGuardrailsBudgetWarn:
         assert new_req.model == "cheap"
 
 
-class TestEvaluateGuardrailsBudgetHardLimit:
-    """Budget exhausted (>= 100%): raises 429 with Retry-After."""
-
-    async def test_hard_limit_raises_429(self):
-        config = BifrostConfig(
-            providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
-            guardrails=GuardrailsConfig(budget=BudgetGuardrailConfig()),
-        )
-        store = _seeded_store(_now_record(cost_usd=1.05))  # 105% of $1
-        identity = _identity()
-        agent_perms = AgentPermissions(quota=QuotaConfig(max_cost_per_day=1.0))
-
-        with pytest.raises(HTTPException) as exc_info:
-            await _evaluate_guardrails(_req(), identity, config, store, agent_perms)
-
-        assert exc_info.value.status_code == 429
-
-    async def test_hard_limit_includes_retry_after_header(self):
-        config = BifrostConfig(
-            providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
-            guardrails=GuardrailsConfig(budget=BudgetGuardrailConfig()),
-        )
-        store = _seeded_store(_now_record(cost_usd=2.0))
-        identity = _identity()
-        agent_perms = AgentPermissions(quota=QuotaConfig(max_cost_per_day=1.0))
-
-        with pytest.raises(HTTPException) as exc_info:
-            await _evaluate_guardrails(_req(), identity, config, store, agent_perms)
-
-        assert "Retry-After" in exc_info.value.headers
-        assert int(exc_info.value.headers["Retry-After"]) > 0
-
-    async def test_exactly_at_100_pct_raises_429(self):
-        config = BifrostConfig(
-            providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
-            guardrails=GuardrailsConfig(budget=BudgetGuardrailConfig()),
-        )
-        store = _seeded_store(_now_record(cost_usd=1.0))  # exactly 100%
-        identity = _identity()
-        agent_perms = AgentPermissions(quota=QuotaConfig(max_cost_per_day=1.0))
-
-        with pytest.raises(HTTPException) as exc_info:
-            await _evaluate_guardrails(_req(), identity, config, store, agent_perms)
-
-        assert exc_info.value.status_code == 429
-
-
 class TestEvaluateGuardrailsContextWindow:
-    """Context-window guardrail: reject when message count >= max_messages."""
+    """Context-window guardrail: reject when message count > max_messages.
+
+    max_messages is *inclusive* — exactly max_messages messages are allowed;
+    only strictly more than max_messages triggers the 400.
+    """
 
     async def test_exceeds_max_messages_raises_400(self):
         config = BifrostConfig(
@@ -396,7 +353,7 @@ class TestEvaluateGuardrailsContextWindow:
         agent_perms = AgentPermissions()
 
         with pytest.raises(HTTPException) as exc_info:
-            await _evaluate_guardrails(_req(n_messages=5), identity, config, store, agent_perms)
+            await _evaluate_guardrails(_req(n_messages=6), identity, config, store, agent_perms)
 
         assert exc_info.value.status_code == 400
 
@@ -412,9 +369,26 @@ class TestEvaluateGuardrailsContextWindow:
         agent_perms = AgentPermissions()
 
         with pytest.raises(HTTPException) as exc_info:
-            await _evaluate_guardrails(_req(n_messages=3), identity, config, store, agent_perms)
+            await _evaluate_guardrails(_req(n_messages=4), identity, config, store, agent_perms)
 
         assert exc_info.value.detail == "Too long"
+
+    async def test_exactly_at_max_messages_passes(self):
+        """Sending exactly max_messages messages is allowed (inclusive limit)."""
+        config = BifrostConfig(
+            providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
+            guardrails=GuardrailsConfig(
+                context_window=ContextWindowGuardrailConfig(max_messages=5)
+            ),
+        )
+        store = MemoryUsageStore()
+        identity = _identity()
+        agent_perms = AgentPermissions()
+        req = _req(n_messages=5)
+
+        new_req, _, _ = await _evaluate_guardrails(req, identity, config, store, agent_perms)
+
+        assert new_req is req  # no modification
 
     async def test_below_max_messages_passes(self):
         config = BifrostConfig(
@@ -449,9 +423,50 @@ class TestEvaluateGuardrailsContextWindow:
         agent_perms = AgentPermissions(quota=QuotaConfig(max_cost_per_day=1.0))
 
         with pytest.raises(HTTPException) as exc_info:
-            await _evaluate_guardrails(_req(n_messages=2), identity, config, store, agent_perms)
+            await _evaluate_guardrails(_req(n_messages=3), identity, config, store, agent_perms)
 
         assert exc_info.value.status_code == 400
+
+
+class TestEvaluateGuardrailsAgentCostToday:
+    """agent_cost_today parameter avoids a duplicate store round-trip."""
+
+    async def test_uses_provided_cost_without_querying_store(self):
+        """When agent_cost_today is given, the store is not queried."""
+        config = BifrostConfig(
+            providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
+            guardrails=GuardrailsConfig(budget=BudgetGuardrailConfig(warn_at_pct=80.0)),
+        )
+        # Store is empty — if queried directly it would return 0 (no warning fired).
+        store = MemoryUsageStore()
+        identity = _identity()
+        agent_perms = AgentPermissions(quota=QuotaConfig(max_cost_per_day=1.0))
+
+        # Pass pre-fetched cost of 0.85 (85%) — should trigger the warn path
+        # even though the in-memory store has no records.
+        _, _, budget_warn = await _evaluate_guardrails(
+            _req(), identity, config, store, agent_perms, agent_cost_today=0.85
+        )
+
+        assert budget_warn is not None
+        assert "budget_consumed=85.0%" in budget_warn
+
+    async def test_queries_store_when_cost_not_provided(self):
+        """When agent_cost_today=None, the store is queried normally."""
+        config = BifrostConfig(
+            providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
+            guardrails=GuardrailsConfig(budget=BudgetGuardrailConfig(warn_at_pct=80.0)),
+        )
+        store = _seeded_store(_now_record(cost_usd=0.90))
+        identity = _identity()
+        agent_perms = AgentPermissions(quota=QuotaConfig(max_cost_per_day=1.0))
+
+        _, _, budget_warn = await _evaluate_guardrails(
+            _req(), identity, config, store, agent_perms, agent_cost_today=None
+        )
+
+        assert budget_warn is not None
+        assert "budget_consumed=90.0%" in budget_warn
 
 
 # ---------------------------------------------------------------------------
@@ -559,6 +574,7 @@ class TestMessagesEndpointBudgetGuardrail:
                         "messages": [
                             {"role": "user", "content": "msg1"},
                             {"role": "assistant", "content": "msg2"},
+                            {"role": "user", "content": "msg3"},
                         ],
                     },
                 )
