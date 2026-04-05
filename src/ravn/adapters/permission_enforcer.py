@@ -35,6 +35,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ravn.adapters.approval_memory import ApprovalMemory
 from ravn.adapters.file_security import (
     _SYSTEM_PREFIXES,
     DEFAULT_BINARY_CHECK_BYTES,
@@ -605,6 +606,7 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
         config: PermissionConfig,
         workspace_root: Path | None = None,
         max_audit_entries: int = _DEFAULT_MAX_AUDIT_ENTRIES,
+        approval_memory: ApprovalMemory | None = None,
     ) -> None:
         self._config = config
         self._mode = config.mode
@@ -613,6 +615,7 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
         )
         self._bash_validator = BashValidator()
         self._audit: deque[PermissionAuditEntry] = deque(maxlen=max_audit_entries)
+        self._approval_memory: ApprovalMemory | None = approval_memory
 
     @property
     def audit_log(self) -> list[PermissionAuditEntry]:
@@ -664,6 +667,21 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
     def check_bash(self, command: str) -> PermissionDecision:
         """Validate a bash command through the multi-stage pipeline."""
         return self._bash_validator.validate(command, self._mode)
+
+    def record_approval(self, tool_name: str, args: dict) -> None:
+        """Persist an explicit user approval so the same command is auto-approved later.
+
+        Only bash tool calls are recorded; all other tool types are ignored.
+        This method is idempotent — calling it multiple times for the same
+        command leaves exactly one entry in the approval memory.
+        """
+        if self._approval_memory is None:
+            return
+        if tool_name not in _BASH_TOOL_NAMES:
+            return
+        command = args.get("command", "")
+        if command:
+            self._approval_memory.remember(command)
 
     # ------------------------------------------------------------------
     # PermissionPort implementation (backward-compat)
@@ -719,7 +737,17 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
             command = args.get("command", "")
             if not command:
                 return Deny("bash tool called with no command")
-            return self.check_bash(command)
+            decision = self.check_bash(command)
+            # In prompt mode, auto-approve previously approved commands.
+            # Only NeedsApproval results are eligible — Deny is never overridden.
+            if (
+                isinstance(decision, NeedsApproval)
+                and self._approval_memory is not None
+                and self._approval_memory.is_approved(command)
+            ):
+                self._approval_memory.record_auto_approval(command)
+                return Allow()
+            return decision
 
         # File write tools — validate boundaries before applying mode defaults.
         if tool_name in _FILE_WRITE_TOOL_NAMES:

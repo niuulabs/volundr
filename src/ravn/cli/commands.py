@@ -8,6 +8,7 @@ import sys
 import typer
 
 from ravn.adapters.anthropic_adapter import AnthropicAdapter
+from ravn.adapters.approval_memory import ApprovalMemory
 from ravn.adapters.cli_channel import CliChannel
 from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
 from ravn.agent import RavnAgent
@@ -19,6 +20,16 @@ app = typer.Typer(
     help="Ravn — conversational AI agent with tool calling.",
     add_completion=False,
 )
+
+approvals_app = typer.Typer(
+    name="ravn-approvals",
+    help="Manage per-project command approval patterns.",
+    add_completion=False,
+)
+
+
+def approvals_main() -> None:
+    approvals_app()
 
 
 def _build_agent(settings: Settings, *, no_tools: bool = False) -> tuple[RavnAgent, CliChannel]:
@@ -130,6 +141,37 @@ def _print_usage(usage: TokenUsage) -> None:
     if usage.cache_write_tokens:
         parts.append(f"cache_write={usage.cache_write_tokens}")
     typer.echo(f"[tokens] {', '.join(parts)}")
+
+
+@approvals_app.command("list")
+def approvals_list() -> None:
+    """List all stored approval patterns for the current project."""
+    memory = ApprovalMemory()
+    entries = memory.list_entries()
+    if not entries:
+        typer.echo("No approval patterns stored.")
+        return
+    typer.echo(f"Approval patterns ({len(entries)}):\n")
+    for entry in entries:
+        auto = entry.auto_approved_count
+        typer.echo(f"  {entry.command!r}")
+        typer.echo(f"    pattern      : {entry.pattern}")
+        typer.echo(f"    approved_at  : {entry.approved_at}")
+        typer.echo(f"    auto-approved: {auto} time(s)\n")
+
+
+@approvals_app.command("revoke")
+def approvals_revoke(
+    pattern: str = typer.Argument(help="Command text or pattern to revoke."),
+) -> None:
+    """Revoke an approval pattern so the command will be prompted again."""
+    memory = ApprovalMemory()
+    removed = memory.revoke(pattern)
+    if removed:
+        typer.echo(f"Revoked: {pattern!r}")
+    else:
+        typer.echo(f"No matching approval found for {pattern!r}", err=True)
+        raise typer.Exit(1)
 
 
 def main() -> None:
