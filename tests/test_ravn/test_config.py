@@ -144,7 +144,7 @@ class TestMemoryConfig:
 class TestPermissionConfig:
     def test_defaults(self) -> None:
         c = PermissionConfig()
-        assert c.mode == "allow_all"
+        assert c.mode == "workspace_write"
         assert c.allow == []
         assert c.deny == []
         assert c.ask == []
