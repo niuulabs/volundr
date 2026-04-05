@@ -104,6 +104,23 @@ class ToolAdapterConfig(BaseModel):
     secret_kwargs_env: dict[str, str] = Field(default_factory=dict)
 
 
+class FileToolsConfig(BaseModel):
+    """File operation tool limits and thresholds."""
+
+    max_read_bytes: int = Field(
+        default=1 * 1024 * 1024,
+        description="Maximum file size allowed for read_file (bytes).",
+    )
+    max_write_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        description="Maximum content size allowed for write_file / edit_file (bytes).",
+    )
+    binary_check_bytes: int = Field(
+        default=8 * 1024,
+        description="Number of bytes inspected for binary (NUL-byte) detection.",
+    )
+
+
 class ToolsConfig(BaseModel):
     """Tool availability and custom adapter configuration."""
 
@@ -121,6 +138,10 @@ class ToolsConfig(BaseModel):
     custom: list[ToolAdapterConfig] = Field(
         default_factory=list,
         description="Custom tool adapters to register alongside built-ins.",
+    )
+    file: FileToolsConfig = Field(
+        default_factory=FileToolsConfig,
+        description="Limits and thresholds for the built-in file tools.",
     )
 
 
