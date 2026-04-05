@@ -41,6 +41,7 @@ bifrost:
   providers:
     anthropic:
       api_key_env: ANTHROPIC_API_KEY       # env var holding the API key
+      # api_key_file: /run/secrets/anthropic_key  # alternative: read from file
       models:
         - claude-opus-4-6
         - claude-sonnet-4-6
@@ -95,6 +96,22 @@ bifrost:
 
   # pat_secret: ""   # Required when auth_mode = pat (or set PAT_SECRET env var)
 
+  # ── Key vault ────────────────────────────────────────────────────────────────
+  #
+  # Provider API keys are loaded at startup and cached in memory.
+  # They are never returned in responses or written to logs.
+  #
+  # Rotation without restart: send SIGHUP or POST /admin/reload-keys
+  #
+  # By default keys come from the api_key_env / api_key_file fields of each
+  # provider above.  Optionally, point to a single secrets file instead:
+  #
+  # key_vault:
+  #   secrets_file: /run/secrets/bifrost-keys.yaml
+  #   # Format of the secrets file:
+  #   #   anthropic: sk-ant-...
+  #   #   openai: sk-...
+
   # ── Pricing overrides ────────────────────────────────────────────────────────
   #
   # Override or extend the built-in pricing snapshot (USD per million tokens).
@@ -127,11 +144,21 @@ bifrost:
   #     max_requests_per_hour: 1000
 
   # agent_permissions:               # per-agent model access + optional budget
+  #                                  # keys support glob patterns: volundr-session-*
   #   my-agent-id:
   #     allowed_models:              # empty list = all models allowed
-  #       - claude-sonnet-4-6
+  #       - claude-sonnet-4-6        # exact model or alias name
+  #       # - '*'                    # unrestricted (same as empty list)
   #     quota:
   #       max_cost_per_day: 2.50
+  #
+  #   # Example: wildcard pattern matching agent IDs
+  #   volundr-session-*:
+  #     allowed_models: [balanced, fast, local]
+  #   tyr:
+  #     allowed_models: [best, balanced]
+  #   claude-code:
+  #     allowed_models: ['*']        # unrestricted
 
   # ── Usage storage ─────────────────────────────────────────────────────────────
   #

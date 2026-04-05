@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 from enum import StrEnum
@@ -35,6 +36,14 @@ class ProviderConfig(BaseModel):
     """Configuration for a single LLM provider."""
 
     api_key_env: str = Field(default="", description="Environment variable holding the API key.")
+    api_key_file: str = Field(
+        default="",
+        description=(
+            "Path to a file whose contents are the API key. "
+            "Used as a fallback when api_key_env is absent or empty. "
+            "Suitable for Kubernetes secret mounts."
+        ),
+    )
     base_url: str = Field(default="", description="Base URL for the provider's API.")
     models: list[str] = Field(
         default_factory=list, description="Models supported by this provider."
@@ -50,9 +59,18 @@ class ProviderConfig(BaseModel):
 
     @property
     def api_key(self) -> str:
-        if not self.api_key_env:
-            return ""
-        return os.environ.get(self.api_key_env, "")
+        if self.api_key_env:
+            value = os.environ.get(self.api_key_env, "")
+            if value:
+                return value
+        if self.api_key_file:
+            try:
+                from pathlib import Path
+
+                return Path(self.api_key_file).read_text(encoding="utf-8").strip()
+            except OSError:
+                pass
+        return ""
 
 
 class PricingOverride(BaseModel):
@@ -208,6 +226,20 @@ class UsageStoreConfig(BaseModel):
     )
 
 
+class KeyVaultConfig(BaseModel):
+    """Configuration for the provider key vault."""
+
+    secrets_file: str = Field(
+        default="",
+        description=(
+            "Path to a YAML file mapping provider names to API keys. "
+            "When set, keys are loaded from this file instead of (or in "
+            "addition to) environment variables. "
+            "File format: ``provider_name: api_key_value``."
+        ),
+    )
+
+
 # Default base URLs per provider type.
 _DEFAULT_BASE_URLS: dict[str, str] = {
     "anthropic": "https://api.anthropic.com",
@@ -300,6 +332,15 @@ class BifrostConfig(BaseModel):
         description="Configuration for the usage persistence backend.",
     )
 
+    # ── Key vault ────────────────────────────────────────────────────────────
+    key_vault: KeyVaultConfig = Field(
+        default_factory=KeyVaultConfig,
+        description=(
+            "Provider API key vault configuration. "
+            "Keys are loaded at startup and never returned in responses or logs."
+        ),
+    )
+
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def resolve_alias(self, model: str) -> str:
@@ -333,5 +374,25 @@ class BifrostConfig(BaseModel):
         return self.tenant_quotas.get(tenant_id, self.default_quota)
 
     def permissions_for_agent(self, agent_id: str) -> AgentPermissions:
-        """Return the permissions for *agent_id* (empty = unrestricted)."""
-        return self.agent_permissions.get(agent_id, AgentPermissions())
+        """Return the permissions for *agent_id* (empty = unrestricted).
+
+        Exact matches take priority over glob patterns.  When multiple
+        patterns match, the first matching pattern (in config file order)
+        is used.
+
+        Examples of supported patterns::
+
+            volundr-session-*   # matches volundr-session-abc, volundr-session-xyz
+            tyr                 # exact match
+            claude-code         # exact match
+        """
+        # Exact match takes priority.
+        if agent_id in self.agent_permissions:
+            return self.agent_permissions[agent_id]
+
+        # Glob pattern match (first match wins, preserving config order).
+        for pattern, perms in self.agent_permissions.items():
+            if fnmatch.fnmatch(agent_id, pattern):
+                return perms
+
+        return AgentPermissions()

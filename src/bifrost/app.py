@@ -1,8 +1,8 @@
 """Bifröst FastAPI application factory.
 
 Wires the inbound routing layer (route handlers, middleware) to the
-infrastructure adapters (usage store, model router) and returns a configured
-``FastAPI`` instance.
+infrastructure adapters (usage store, model router, key vault) and
+returns a configured ``FastAPI`` instance.
 
 The inbound HTTP layer lives in ``bifrost.inbound``:
   - ``inbound/routes.py``   — route handlers and quota/access enforcement
@@ -12,17 +12,24 @@ The inbound HTTP layer lives in ``bifrost.inbound``:
 
 from __future__ import annotations
 
+import logging
+import signal
 import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
+from bifrost.adapters.auth import build_auth_adapter
+from bifrost.adapters.key_vault import EnvKeyVault
 from bifrost.config import BifrostConfig
 from bifrost.inbound.routes import create_router
+from bifrost.ports.key_vault import KeyVaultPort
 from bifrost.ports.rules import RuleEnginePort
 from bifrost.ports.usage_store import UsageStore
 from bifrost.pricing import ModelPricing
 from bifrost.router import ModelRouter
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Rule engine factory
@@ -54,6 +61,24 @@ def _build_usage_store(config: BifrostConfig) -> UsageStore:
             from bifrost.adapters.memory_store import MemoryUsageStore
 
             return MemoryUsageStore()
+
+
+# ---------------------------------------------------------------------------
+# Key vault factory
+# ---------------------------------------------------------------------------
+
+
+def _build_key_vault(config: BifrostConfig) -> KeyVaultPort:
+    """Instantiate the key vault from config.
+
+    Uses ``SecretsFileKeyVault`` when ``key_vault.secrets_file`` is set,
+    otherwise falls back to ``EnvKeyVault`` (reads ``api_key_env`` per provider).
+    """
+    if config.key_vault.secrets_file:
+        from bifrost.adapters.key_vault import SecretsFileKeyVault
+
+        return SecretsFileKeyVault(path=config.key_vault.secrets_file)
+    return EnvKeyVault(config)
 
 
 # ---------------------------------------------------------------------------
@@ -89,11 +114,22 @@ def create_app(config: BifrostConfig) -> FastAPI:
         A configured ``FastAPI`` instance.
     """
     rule_engine = _build_rule_engine(config)
-    router = ModelRouter(config, rule_engine=rule_engine)
+    key_vault = _build_key_vault(config)
+    router = ModelRouter(config, rule_engine=rule_engine, key_vault=key_vault)
     store = _build_usage_store(config)
     pricing_overrides = _pricing_overrides(config)
-    auth_mode = config.auth_mode
-    pat_secret = config.effective_pat_secret()
+    auth_adapter = build_auth_adapter(config.auth_mode, config.effective_pat_secret())
+
+    # ── SIGHUP handler — reload keys without restarting ──────────────────────
+    def _handle_sighup(signum: int, frame: object) -> None:  # noqa: ARG001
+        logger.info("Received SIGHUP — reloading provider keys")
+        router.reload_keys()
+
+    try:
+        signal.signal(signal.SIGHUP, _handle_sighup)
+    except (OSError, ValueError):
+        # SIGHUP is not available on Windows or in some restricted environments.
+        logger.debug("SIGHUP not available on this platform; key rotation via signal disabled")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -122,8 +158,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
         router=router,
         store=store,
         pricing_overrides=pricing_overrides,
-        auth_mode=auth_mode,
-        pat_secret=pat_secret,
+        auth_adapter=auth_adapter,
     )
     app.include_router(api_router)
 
