@@ -120,14 +120,17 @@ class MemoryUsageStore(UsageStore):
         since: datetime | None = None,
         until: datetime | None = None,
     ) -> list[TimeSeriesEntry]:
-        records = await self.query(
-            agent_id=agent_id,
-            tenant_id=tenant_id,
-            model=model,
-            since=since,
-            until=until,
-            limit=1_000_000,
-        )
+        records = self._records
+        if agent_id is not None:
+            records = [r for r in records if r.agent_id == agent_id]
+        if tenant_id is not None:
+            records = [r for r in records if r.tenant_id == tenant_id]
+        if model is not None:
+            records = [r for r in records if r.model == model]
+        if since is not None:
+            records = [r for r in records if r.timestamp >= since]
+        if until is not None:
+            records = [r for r in records if r.timestamp <= until]
         buckets: dict[str, TimeSeriesEntry] = {}
         for r in records:
             key = _bucket_key(r.timestamp, granularity)

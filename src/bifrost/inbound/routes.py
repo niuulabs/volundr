@@ -337,6 +337,7 @@ def create_router(
                 output_tokens=raw_usage.get("output_tokens", 0),
                 cache_creation_input_tokens=raw_usage.get("cache_creation_input_tokens", 0),
                 cache_read_input_tokens=raw_usage.get("cache_read_input_tokens", 0),
+                reasoning_tokens=raw_usage.get("reasoning_tokens", 0),
             )
             _log_request(
                 RequestLog(
@@ -362,6 +363,7 @@ def create_router(
                     output_tokens=usage.output_tokens,
                     cache_read_tokens=usage.cache_read_input_tokens,
                     cache_write_tokens=usage.cache_creation_input_tokens,
+                    reasoning_tokens=usage.reasoning_tokens,
                     cost_usd=cost,
                     latency_ms=latency_ms,
                     streaming=False,
@@ -578,6 +580,7 @@ def create_router(
                 output_tokens=response.usage.output_tokens,
                 cache_creation_input_tokens=0,
                 cache_read_input_tokens=0,
+                reasoning_tokens=0,
             )
             _log_request(
                 RequestLog(
@@ -601,6 +604,9 @@ def create_router(
                     provider=provider,
                     input_tokens=usage.input_tokens,
                     output_tokens=usage.output_tokens,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    reasoning_tokens=0,
                     cost_usd=cost,
                     latency_ms=latency_ms,
                     streaming=False,
@@ -703,6 +709,7 @@ def create_router(
                 output_tokens=response.usage.output_tokens,
                 cache_creation_input_tokens=0,
                 cache_read_input_tokens=0,
+                reasoning_tokens=0,
             )
             _log_request(
                 RequestLog(
@@ -726,6 +733,9 @@ def create_router(
                     provider=provider,
                     input_tokens=usage.input_tokens,
                     output_tokens=usage.output_tokens,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    reasoning_tokens=0,
                     cost_usd=cost,
                     latency_ms=latency_ms,
                     streaming=False,

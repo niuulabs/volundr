@@ -235,24 +235,7 @@ class SQLiteUsageStore(UsageStore):
         until: datetime | None,
         limit: int,
     ) -> list[tuple]:
-        clauses = []
-        params: list[Any] = []
-        if agent_id is not None:
-            clauses.append("agent_id = ?")
-            params.append(agent_id)
-        if tenant_id is not None:
-            clauses.append("tenant_id = ?")
-            params.append(tenant_id)
-        if model is not None:
-            clauses.append("model = ?")
-            params.append(model)
-        if since is not None:
-            clauses.append("timestamp >= ?")
-            params.append(_ts(since))
-        if until is not None:
-            clauses.append("timestamp <= ?")
-            params.append(_ts(until))
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where, params = SQLiteUsageStore._build_where(agent_id, tenant_id, model, since, until)
         sql = f"""
             SELECT id, request_id, agent_id, tenant_id, session_id, saga_id,
                    model, provider,
@@ -276,24 +259,7 @@ class SQLiteUsageStore(UsageStore):
         until: datetime | None,
     ) -> tuple[int, int, int, float, list[tuple], list[tuple]]:
         """Run SQL aggregation for summarise() — no Python-level looping."""
-        clauses = []
-        params: list[Any] = []
-        if agent_id is not None:
-            clauses.append("agent_id = ?")
-            params.append(agent_id)
-        if tenant_id is not None:
-            clauses.append("tenant_id = ?")
-            params.append(tenant_id)
-        if model is not None:
-            clauses.append("model = ?")
-            params.append(model)
-        if since is not None:
-            clauses.append("timestamp >= ?")
-            params.append(_ts(since))
-        if until is not None:
-            clauses.append("timestamp <= ?")
-            params.append(_ts(until))
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where, params = SQLiteUsageStore._build_where(agent_id, tenant_id, model, since, until)
 
         totals_row = conn.execute(
             f"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
@@ -332,24 +298,7 @@ class SQLiteUsageStore(UsageStore):
         since: datetime | None,
         until: datetime | None,
     ) -> list[tuple]:
-        clauses = []
-        params: list[Any] = []
-        if agent_id is not None:
-            clauses.append("agent_id = ?")
-            params.append(agent_id)
-        if tenant_id is not None:
-            clauses.append("tenant_id = ?")
-            params.append(tenant_id)
-        if model is not None:
-            clauses.append("model = ?")
-            params.append(model)
-        if since is not None:
-            clauses.append("timestamp >= ?")
-            params.append(_ts(since))
-        if until is not None:
-            clauses.append("timestamp <= ?")
-            params.append(_ts(until))
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where, params = SQLiteUsageStore._build_where(agent_id, tenant_id, model, since, until)
 
         if granularity == "day":
             bucket_expr = "substr(timestamp, 1, 10) || 'T00:00:00+00:00'"

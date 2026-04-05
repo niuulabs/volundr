@@ -40,9 +40,11 @@ def _extract_usage_from_sse_line(line: str, usage: TokenUsage) -> None:
         usage.input_tokens += msg_usage.get("input_tokens", 0)
         usage.cache_creation_input_tokens += msg_usage.get("cache_creation_input_tokens", 0)
         usage.cache_read_input_tokens += msg_usage.get("cache_read_input_tokens", 0)
+        usage.reasoning_tokens += msg_usage.get("reasoning_tokens", 0)
     elif event_type == "message_delta":
         delta_usage = payload.get("usage", {})
         usage.output_tokens += delta_usage.get("output_tokens", 0)
+        usage.reasoning_tokens += delta_usage.get("reasoning_tokens", 0)
 
 
 def _log_request(log: RequestLog) -> None:
