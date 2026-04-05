@@ -31,6 +31,8 @@ class _InMemoryAuditRepository(AuditRepository):
             events = [e for e in events if fnmatch.fnmatch(e.event_type, q.event_type_pattern)]
         if q.correlation_id:
             events = [e for e in events if e.correlation_id == q.correlation_id]
+        if q.source:
+            events = [e for e in events if e.source == q.source]
         return events[: q.limit]
 
     async def purge_expired(self) -> int:
@@ -163,6 +165,17 @@ async def test_get_events_to_param(repo, client):
     ts = DEFAULT_TIMESTAMP.isoformat()
     response = client.get("/audit/events", params={"to": ts})
     assert response.status_code == 200
+
+
+async def test_get_events_filter_source(repo, client):
+    await repo.append(make_event(event_id="a", source="ravn:agent-1"))
+    await repo.append(make_event(event_id="b", source="tyr:dispatcher"))
+
+    response = client.get("/audit/events", params={"source": "ravn:agent-1"})
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["event_id"] == "a"
 
 
 # ---------------------------------------------------------------------------

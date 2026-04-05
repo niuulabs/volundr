@@ -7,6 +7,7 @@ Exposes a single endpoint::
         &from=2026-04-01T00:00:00Z
         &to=2026-04-02T00:00:00Z
         &correlation_id=abc-123
+        &source=ravn:agent
         &limit=100
 
 Used by the Hliðskjálf timeline view and incident investigation tooling.
@@ -106,6 +107,10 @@ def create_audit_router(repository: AuditRepository) -> APIRouter:
             default=None,
             description="Filter to events with this exact correlation ID.",
         ),
+        source: str | None = Query(
+            default=None,
+            description="Filter to events from this exact source (e.g. ``ravn:agent``).",
+        ),
         limit: int = Query(
             default=_DEFAULT_LIMIT,
             ge=1,
@@ -124,6 +129,7 @@ def create_audit_router(repository: AuditRepository) -> APIRouter:
             from_ts=from_,
             to_ts=to,
             correlation_id=correlation_id,
+            source=source,
             limit=limit,
         )
         events = await repository.query(q)

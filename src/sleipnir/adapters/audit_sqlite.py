@@ -60,12 +60,6 @@ WHERE ttl IS NOT NULL
 """
 
 
-def _run_sync(fn: Any, *args: Any) -> Any:
-    """Run a synchronous callable in the default thread-pool executor."""
-    loop = asyncio.get_event_loop()
-    return loop.run_in_executor(None, fn, *args)
-
-
 def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -98,10 +92,10 @@ class SqliteAuditRepository(AuditRepository):
     async def _ensure_connection(self) -> sqlite3.Connection:
         if self._conn is not None:
             return self._conn
-        conn = await asyncio.get_event_loop().run_in_executor(
+        conn = await asyncio.get_running_loop().run_in_executor(
             None, partial(_connect, self._db_path)
         )
-        await asyncio.get_event_loop().run_in_executor(None, _init_schema, conn)
+        await asyncio.get_running_loop().run_in_executor(None, _init_schema, conn)
         self._conn = conn
         return conn
 
@@ -126,8 +120,8 @@ class SqliteAuditRepository(AuditRepository):
             event.ttl,
         )
         async with self._lock:
-            await asyncio.get_event_loop().run_in_executor(None, conn.execute, _INSERT, params)
-            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            await asyncio.get_running_loop().run_in_executor(None, conn.execute, _INSERT, params)
+            await asyncio.get_running_loop().run_in_executor(None, conn.commit)
 
     async def query(self, q: AuditQuery) -> list[SleipnirEvent]:
         conn = await self._ensure_connection()
@@ -154,7 +148,7 @@ class SqliteAuditRepository(AuditRepository):
         params.append(fetch_limit)
 
         async with self._lock:
-            rows = await asyncio.get_event_loop().run_in_executor(
+            rows = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: conn.execute(sql, params).fetchall()
             )
 
@@ -169,18 +163,18 @@ class SqliteAuditRepository(AuditRepository):
         conn = await self._ensure_connection()
         now_iso = datetime.now(UTC).isoformat()
         async with self._lock:
-            cursor = await asyncio.get_event_loop().run_in_executor(
+            cursor = await asyncio.get_running_loop().run_in_executor(
                 None, conn.execute, _PURGE, (now_iso,)
             )
             count: int = cursor.rowcount
-            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            await asyncio.get_running_loop().run_in_executor(None, conn.commit)
         logger.debug("SQLite audit purge removed %d expired rows", count)
         return count
 
     async def close(self) -> None:
         """Close the underlying SQLite connection."""
         if self._conn is not None:
-            await asyncio.get_event_loop().run_in_executor(None, self._conn.close)
+            await asyncio.get_running_loop().run_in_executor(None, self._conn.close)
             self._conn = None
 
 

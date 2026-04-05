@@ -71,7 +71,9 @@ class PostgresAuditRepository(AuditRepository):
     async def query(self, q: AuditQuery) -> list[SleipnirEvent]:
         sql, params = _build_query(q)
         rows = await self._pool.fetch(sql, *params)
-        return [_row_to_event(row) for row in rows]
+        events = [_row_to_event(row) for row in rows]
+        events = apply_event_type_filter(events, q.event_type_pattern)
+        return events[: q.limit]
 
     async def purge_expired(self) -> int:
         result: str = await self._pool.execute(_PURGE)

@@ -307,3 +307,44 @@ def test_row_to_event_dict_payload():
     row = _make_row(payload={"already": "decoded"})
     event = _row_to_event(row)
     assert event.payload == {"already": "decoded"}
+
+
+# ---------------------------------------------------------------------------
+# PostgresAuditRepository.query — complex pattern filtering
+# ---------------------------------------------------------------------------
+
+
+async def test_postgres_query_complex_pattern_filters_results():
+    """Complex glob patterns (e.g. ravn.*.complete) must be applied in Python
+    after the over-fetched DB results are returned, and results truncated to limit."""
+    rows = [
+        _make_row(event_id="a", event_type="ravn.tool.complete"),
+        _make_row(event_id="b", event_type="ravn.step.complete"),
+        _make_row(event_id="c", event_type="ravn.tool.started"),  # no match
+        _make_row(event_id="d", event_type="tyr.task.complete"),  # no match
+    ]
+    pool = AsyncMock()
+    pool.fetch = AsyncMock(return_value=rows)
+    repo = PostgresAuditRepository(pool)
+
+    results = await repo.query(AuditQuery(event_type_pattern="ravn.*.complete", limit=10))
+
+    ids = {e.event_id for e in results}
+    assert ids == {"a", "b"}
+    # Verify the DB was called with over-fetched limit (10 × 10 = 100)
+    call_args = pool.fetch.call_args
+    assert 100 in call_args[0]
+
+
+async def test_postgres_query_complex_pattern_truncates_to_limit():
+    """Results after fnmatch filtering must be capped at q.limit."""
+    rows = [
+        _make_row(event_id=f"evt-{i}", event_type="ravn.tool.complete")
+        for i in range(20)
+    ]
+    pool = AsyncMock()
+    pool.fetch = AsyncMock(return_value=rows)
+    repo = PostgresAuditRepository(pool)
+
+    results = await repo.query(AuditQuery(event_type_pattern="ravn.*.complete", limit=5))
+    assert len(results) == 5
