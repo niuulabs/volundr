@@ -30,12 +30,8 @@ from tyr.adapters.postgres_notification_subscriptions import (
 from tyr.adapters.postgres_sagas import PostgresSagaRepository
 from tyr.adapters.tracker_factory import TrackerAdapterFactory
 from tyr.adapters.volundr_factory import VolundrAdapterFactory
-from tyr.api.dispatch import (
-    create_dispatch_router,
-    resolve_dispatch_service,
-    resolve_volundr,
-    resolve_volundr_factory,
-)
+from tyr.adapters.volundr_http import VolundrHTTPAdapter
+from tyr.api.dispatch import create_dispatch_router, resolve_volundr, resolve_volundr_factory
 from tyr.api.dispatch import resolve_dispatcher_repo as dispatch_resolve_dispatcher_repo
 from tyr.api.dispatch import resolve_saga_repo as dispatch_resolve_saga_repo
 from tyr.api.dispatcher import create_dispatcher_router, resolve_dispatcher_repo
@@ -51,12 +47,6 @@ from tyr.api.sagas import resolve_volundr as sagas_resolve_volundr
 from tyr.api.tracker import create_tracker_router, resolve_trackers
 from tyr.config import Settings
 from tyr.domain.services.activity_subscriber import SessionActivitySubscriber
-from tyr.domain.services.dispatch_service import (
-    DispatchConfig as DispatchServiceConfig,
-)
-from tyr.domain.services.dispatch_service import (
-    DispatchService,
-)
 from tyr.domain.services.notification import NotificationService
 from tyr.domain.services.review_engine import ReviewEngine
 from tyr.domain.services.reviewer_session import ReviewerSessionService
@@ -94,60 +84,13 @@ def _configure_logging(settings: Settings) -> None:
     logging.getLogger().setLevel(level)
 
     logging.getLogger(__name__).info(
-        "Logging configured: level=%s, format=%s",
-        level_name,
-        log_format,
+        "Logging configured: level=%s, format=%s", level_name, log_format,
     )
 
     # Silence noisy loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
-
-
-async def _seed_linear_integration(
-    integration_repo: PostgresIntegrationRepository,
-    credential_store: object,
-    api_key: str,
-    team_id: str = "",
-    adapter_class: str = "tyr.adapters.linear.LinearTrackerAdapter",
-) -> None:
-    """Seed Linear integration from config into the DB.
-
-    Idempotent — uses a fixed ID so repeated calls update the same row.
-    """
-    from datetime import UTC, datetime
-
-    from niuu.domain.models import IntegrationConnection, IntegrationType, SecretType
-
-    owner_id = "dev-user"
-    cred_name = "linear-config"
-
-    await credential_store.store(
-        owner_type="user",
-        owner_id=owner_id,
-        name=cred_name,
-        secret_type=SecretType.API_KEY,
-        data={"api_key": api_key},
-    )
-
-    config: dict = {}
-    if team_id:
-        config["team_id"] = team_id
-
-    connection = IntegrationConnection(
-        id="6a397506-ccc6-5f89-be1e-47108ad702c8",
-        owner_id=owner_id,
-        integration_type=IntegrationType.ISSUE_TRACKER,
-        adapter=adapter_class,
-        credential_name=cred_name,
-        config=config,
-        enabled=True,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-        slug="linear",
-    )
-    await integration_repo.save_connection(connection)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -207,32 +150,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.credential_store = credential_store
 
             # Wire adapter factories (used by autonomous dispatcher)
-            if settings.auth.allow_anonymous_dev:
-                from tyr.adapters.volundr_factory import LocalVolundrAdapterFactory
-
-                app.state.volundr_factory = LocalVolundrAdapterFactory(
-                    url=settings.volundr.url,
-                )
-                logger.info("Volundr factory: local (no PAT required)")
-            else:
-                app.state.volundr_factory = VolundrAdapterFactory(
-                    integration_repo, credential_store
-                )
+            app.state.volundr_factory = VolundrAdapterFactory(
+                integration_repo, credential_store
+            )
             app.state.tracker_factory = TrackerAdapterFactory(
                 integration_repo, credential_store, pool=pool
             )
-
-            # Seed Linear integration from config so the tracker factory
-            # finds it in the DB (same seed as Volundr).
-            if settings.linear.api_key:
-                await _seed_linear_integration(
-                    integration_repo,
-                    credential_store,
-                    api_key=settings.linear.api_key,
-                    team_id=settings.linear.team_id,
-                    adapter_class="tyr.adapters.linear.LinearTrackerAdapter",
-                )
-                logger.info("Linear integration seeded from config")
 
             # Override the tracker resolver dependency with factory delegation
             from tyr.adapters.inbound.auth import extract_principal
@@ -269,38 +192,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.dependency_overrides[resolve_dispatcher_repo] = _resolve_dispatcher_repo
             app.dependency_overrides[dispatch_resolve_dispatcher_repo] = _resolve_dispatcher_repo
 
-            # Wire DispatchService
-            dispatch_svc = DispatchService(
-                tracker_factory=app.state.tracker_factory,
-                volundr_factory=app.state.volundr_factory,
-                saga_repo=saga_repo,
-                dispatcher_repo=dispatcher_repo,
-                config=DispatchServiceConfig(
-                    default_system_prompt=settings.dispatch.default_system_prompt,
-                    default_model=settings.dispatch.default_model,
-                    dispatch_prompt_template=settings.dispatch.dispatch_prompt_template,
-                ),
-            )
-            app.state.dispatch_service = dispatch_svc
+            # Wire Volundr adapter — per-user resolution via factory,
+            # falling back to the global URL when no per-user connection exists.
+            fallback_volundr = VolundrHTTPAdapter(settings.volundr.url, name="default")
+            app.state.volundr = fallback_volundr
 
-            async def _resolve_dispatch_service() -> DispatchService:
-                return dispatch_svc
-
-            app.dependency_overrides[resolve_dispatch_service] = _resolve_dispatch_service
-
-            # Wire Volundr adapter — per-user resolution via factory.
             async def _resolve_volundr_per_user(
                 principal: Principal = Depends(extract_principal),
             ) -> VolundrPort:
                 adapter = await app.state.volundr_factory.primary_for_owner(principal.user_id)
-                if adapter is None:
-                    from fastapi import HTTPException
-
-                    raise HTTPException(
-                        status_code=503,
-                        detail="No Volundr adapter available — configure a CODE_FORGE integration",
-                    )
-                return adapter
+                return adapter or fallback_volundr
 
             app.dependency_overrides[resolve_volundr] = _resolve_volundr_per_user
             app.dependency_overrides[resolve_raids_volundr] = _resolve_volundr_per_user
@@ -437,7 +338,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event_bus=event_bus,
                 reviewer_service=reviewer_service,
                 dispatcher_repo=dispatcher_repo,
-                dispatch_service=dispatch_svc,
             )
             app.state.review_engine = review_engine
             await review_engine.start()
