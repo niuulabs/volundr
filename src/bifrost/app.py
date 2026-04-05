@@ -125,13 +125,39 @@ def create_app(config: BifrostConfig) -> FastAPI:
 
     @app.get("/v1/models")
     async def list_models() -> dict:
-        """List models available across all configured providers."""
+        """List models available across all configured providers.
+
+        Returns an OpenAI-compatible list response including both canonical
+        model IDs and any configured aliases.
+        """
         models: list[ModelInfo] = []
-        for provider_cfg in config.providers.values():
+        seen: set[str] = set()
+
+        for provider_name, provider_cfg in config.providers.items():
             for model_id in provider_cfg.models:
-                models.append(ModelInfo(id=model_id, display_name=model_id))
+                if model_id in seen:
+                    continue
+                seen.add(model_id)
+                models.append(ModelInfo(id=model_id, display_name=model_id, owned_by=provider_name))
+
+        for alias, canonical in config.aliases.items():
+            if alias in seen:
+                continue
+            seen.add(alias)
+            provider_name = config.provider_for_model(canonical) or "unknown"
+            models.append(ModelInfo(id=alias, display_name=canonical, owned_by=provider_name))
+
         return {
-            "data": [{"id": m.id, "type": "model", "display_name": m.display_name} for m in models]
+            "object": "list",
+            "data": [
+                {
+                    "id": m.id,
+                    "object": "model",
+                    "owned_by": m.owned_by,
+                    "display_name": m.display_name,
+                }
+                for m in models
+            ],
         }
 
     @app.post("/v1/messages", response_model=None)
