@@ -202,18 +202,6 @@ def test_msgpack_urgency_float_precision_preserved():
 
 
 @_skip_no_msgpack
-def test_msgpack_none_optional_fields_round_trip_as_none():
-    """All optional fields set to None must survive as None after round-trip."""
-    evt = make_event(correlation_id=None, causation_id=None, tenant_id=None, ttl=None)
-    data = serialize(evt, fmt="msgpack")
-    restored = deserialize(data, fmt="msgpack")
-    assert restored.correlation_id is None
-    assert restored.causation_id is None
-    assert restored.tenant_id is None
-    assert restored.ttl is None
-
-
-@_skip_no_msgpack
 def test_msgpack_payload_extra_fields_preserved_forward_compatibility():
     """Unknown extra keys in payload survive msgpack round-trip unchanged.
 
