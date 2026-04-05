@@ -23,6 +23,7 @@ from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
 from bifrost.config import BifrostConfig
 from bifrost.inbound.routes import create_router
+from bifrost.ports.events import CostEventEmitter
 from bifrost.ports.key_vault import KeyVaultPort
 from bifrost.ports.rules import RuleEnginePort
 from bifrost.ports.usage_store import UsageStore
@@ -71,6 +72,26 @@ def _build_usage_store(config: BifrostConfig) -> UsageStore:
             from bifrost.adapters.memory_store import MemoryUsageStore
 
             return MemoryUsageStore()
+
+
+# ---------------------------------------------------------------------------
+# Event emitter factory
+# ---------------------------------------------------------------------------
+
+
+def _build_event_emitter(config: BifrostConfig) -> CostEventEmitter:
+    """Instantiate the configured cost event emitter adapter."""
+    if config.events.adapter == "sleipnir":
+        from bifrost.adapters.events.sleipnir import SleipnirEventEmitter
+
+        return SleipnirEventEmitter(
+            url=config.events.url,
+            exchange=config.events.exchange,
+            exchange_type=config.events.exchange_type,
+        )
+    from bifrost.adapters.events.null import NullEventEmitter
+
+    return NullEventEmitter()
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +159,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
     store = _build_usage_store(config)
     pricing_overrides = _pricing_overrides(config)
     auth_adapter = build_auth_adapter(config.auth_mode, config.effective_pat_secret())
+    event_emitter = _build_event_emitter(config)
 
     # ── SIGHUP handler — reload keys without restarting ──────────────────────
     def _handle_sighup(signum: int, frame: object) -> None:  # noqa: ARG001
@@ -156,6 +178,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
         await router.close()
         if hasattr(store, "close"):
             await store.close()
+        await event_emitter.close()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -178,6 +201,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
         store=store,
         pricing_overrides=pricing_overrides,
         auth_adapter=auth_adapter,
+        event_emitter=event_emitter,
     )
     app.include_router(api_router)
 

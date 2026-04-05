@@ -1,7 +1,8 @@
 """SSE token tracking helpers for the Bifröst inbound layer.
 
-Provides utilities for extracting token usage from Anthropic SSE events and
-wrapping async streams with per-request usage recording.
+Provides utilities for extracting token usage from Anthropic SSE events,
+wrapping async streams with per-request usage recording, and emitting cost
+events to downstream Valkyrie consumers.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from datetime import UTC, datetime
 
 from bifrost.auth import AgentIdentity
 from bifrost.domain.models import RequestLog, TokenUsage
+from bifrost.ports.events import BudgetWarningEvent, CostEventEmitter, RequestCompletedEvent
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
 
@@ -63,6 +65,58 @@ def _log_request(log: RequestLog) -> None:
     )
 
 
+def _compute_budget_pct(spent_usd: float, limit_usd: float) -> float:
+    """Return remaining budget as a percentage (0–100).
+
+    Returns 100.0 when *limit_usd* is zero (unlimited budget).
+    """
+    if limit_usd <= 0.0:
+        return 100.0
+    remaining = max(0.0, limit_usd - spent_usd)
+    return (remaining / limit_usd) * 100.0
+
+
+async def emit_cost_events(
+    emitter: CostEventEmitter,
+    store: UsageStore,
+    identity: AgentIdentity,
+    cost: float,
+    tokens_used: int,
+    model: str,
+    agent_budget_limit: float,
+    budget_warning_threshold_pct: float,
+) -> None:
+    """Emit request_completed (always) and budget_warning (when threshold crossed).
+
+    Queries *store* for the agent's current daily cost to compute the
+    remaining budget percentage after recording the current request.
+    """
+    cost_today = await store.agent_cost_today(identity.agent_id)
+    budget_pct = _compute_budget_pct(cost_today, agent_budget_limit)
+
+    await emitter.emit_request_completed(
+        RequestCompletedEvent(
+            agent_id=identity.agent_id,
+            session_id=identity.session_id,
+            cost_usd=cost,
+            tokens_used=tokens_used,
+            budget_pct_remaining=budget_pct,
+            model=model,
+            timestamp=datetime.now(UTC).isoformat(),
+        )
+    )
+
+    if agent_budget_limit > 0.0 and budget_pct <= budget_warning_threshold_pct:
+        await emitter.emit_budget_warning(
+            BudgetWarningEvent(
+                agent_id=identity.agent_id,
+                budget_pct_remaining=budget_pct,
+                daily_limit_usd=agent_budget_limit,
+                spent_usd=cost_today,
+            )
+        )
+
+
 async def _stream_with_tracking(
     source: AsyncIterator[str],
     model: str,
@@ -72,6 +126,9 @@ async def _stream_with_tracking(
     pricing_overrides: dict[str, ModelPricing],
     request_id: str,
     provider: str = "",
+    emitter: CostEventEmitter | None = None,
+    agent_budget_limit: float = 0.0,
+    budget_warning_threshold_pct: float = 20.0,
 ) -> AsyncIterator[str]:
     """Yield SSE lines from *source* while tracking token usage."""
     usage = TokenUsage()
@@ -112,3 +169,15 @@ async def _stream_with_tracking(
             timestamp=datetime.now(UTC),
         )
     )
+
+    if emitter is not None:
+        await emit_cost_events(
+            emitter=emitter,
+            store=store,
+            identity=identity,
+            cost=cost,
+            tokens_used=usage.input_tokens + usage.output_tokens,
+            model=model,
+            agent_budget_limit=agent_budget_limit,
+            budget_warning_threshold_pct=budget_warning_threshold_pct,
+        )
