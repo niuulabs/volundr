@@ -242,11 +242,25 @@ class TestComputeCacheKey:
         )
         assert _compute_cache_key("t", r1) == _compute_cache_key("t", r2)
 
-    def test_system_none_maps_same_as_empty_string(self):
-        """None system and empty-string system produce the same cache key."""
-        r_none = _request(content="Hi", system=None)
-        r_empty = _request(content="Hi", system="")
-        assert _compute_cache_key("t", r_none) == _compute_cache_key("t", r_empty)
+    def test_different_max_tokens_produce_different_keys(self):
+        """max_tokens affects the response, so must affect the cache key."""
+        r1 = AnthropicRequest(
+            model=_MODEL, messages=[Message(role="user", content="Hi")], max_tokens=100
+        )
+        r2 = AnthropicRequest(
+            model=_MODEL, messages=[Message(role="user", content="Hi")], max_tokens=500
+        )
+        assert _compute_cache_key("t", r1) != _compute_cache_key("t", r2)
+
+    def test_different_temperature_produces_different_keys(self):
+        """temperature affects the response, so must affect the cache key."""
+        r1 = AnthropicRequest(
+            model=_MODEL, messages=[Message(role="user", content="Hi")], temperature=0.0
+        )
+        r2 = AnthropicRequest(
+            model=_MODEL, messages=[Message(role="user", content="Hi")], temperature=1.0
+        )
+        assert _compute_cache_key("t", r1) != _compute_cache_key("t", r2)
 
 
 # ---------------------------------------------------------------------------
