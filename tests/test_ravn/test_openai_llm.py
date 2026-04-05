@@ -23,7 +23,6 @@ import respx
 from ravn.adapters.openai_llm import (
     OpenAICompatibleAdapter,
     _convert_tools,
-    _estimate_tokens,
     _normalise_usage,
     _strip_reasoning_tags,
     _system_to_string,
@@ -749,6 +748,10 @@ class TestReasoningScratchpadStripping:
         )
         assert _strip_reasoning_tags(text) == "result"
 
+    def test_mismatched_tags_not_stripped(self) -> None:
+        text = "<think>hidden</reasoning>visible"
+        assert _strip_reasoning_tags(text) == text
+
     @respx.mock
     async def test_generate_strips_scratchpad_tag(self) -> None:
         adapter = OpenAICompatibleAdapter(api_key="k", base_url=_BASE_URL)
@@ -881,18 +884,6 @@ class TestDeveloperRoleSwap:
 
 
 class TestTokenEstimationFallback:
-    def test_estimate_tokens_nonzero(self) -> None:
-        assert _estimate_tokens("hello world") > 0
-
-    def test_estimate_tokens_proportional(self) -> None:
-        short = _estimate_tokens("hi")
-        long = _estimate_tokens("a" * 400)
-        assert long > short
-
-    def test_estimate_tokens_minimum_one(self) -> None:
-        # Single char → at least 1 token
-        assert _estimate_tokens("x") >= 1
-
     def test_normalise_usage_estimation_fallback_when_zero(self) -> None:
         usage = _normalise_usage({}, input_text="hello world prompt", output_text="response text")
         assert usage.input_tokens > 0

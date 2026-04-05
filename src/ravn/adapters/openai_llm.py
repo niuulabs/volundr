@@ -49,6 +49,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 
+from ravn.budget import TokenEstimator
 from ravn.domain.exceptions import LLMError
 from ravn.domain.models import (
     LLMResponse,
@@ -66,9 +67,10 @@ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503})
 _DEFAULT_BASE_URL = "https://api.openai.com"
 
 # Regex to strip reasoning tags produced by some open-source models.
+# Uses a named backreference so open and close tags must match exactly.
 # Handles: <think>, <reasoning>, <REASONING_SCRATCHPAD> (all case-insensitive).
 _REASONING_TAG_RE = re.compile(
-    r"<(?:think|reasoning|REASONING_SCRATCHPAD)>.*?</(?:think|reasoning|REASONING_SCRATCHPAD)>",
+    r"<(?P<tag>think|reasoning|REASONING_SCRATCHPAD)>.*?</(?P=tag)>",
     re.DOTALL | re.IGNORECASE,
 )
 
@@ -76,15 +78,13 @@ _REASONING_TAG_RE = re.compile(
 # Covers: o1-*, o3-*, gpt-5*, codex-*
 _DEVELOPER_ROLE_PREFIXES = ("o1-", "o3-", "gpt-5", "codex-")
 
-# Approximate token estimation: 1 token ≈ 4 characters (conservative).
-_CHARS_PER_TOKEN = 4
-
 
 def _strip_reasoning_tags(text: str) -> str:
     """Remove <think>, <reasoning>, and <REASONING_SCRATCHPAD> blocks.
 
     Only strips leading/trailing whitespace when a tag was actually removed,
     so that partial streaming deltas (e.g. ``"Hello, "``) are not trimmed.
+    Open and close tags must match exactly (backreference guard).
     """
     result = _REASONING_TAG_RE.sub("", text)
     if result == text:
@@ -95,11 +95,6 @@ def _strip_reasoning_tags(text: str) -> str:
 def _uses_developer_role(model: str) -> bool:
     """Return True when *model* expects a ``developer`` role instead of ``system``."""
     return any(model.startswith(prefix) for prefix in _DEVELOPER_ROLE_PREFIXES)
-
-
-def _estimate_tokens(text: str) -> int:
-    """Rough token count estimate: one token ≈ four characters."""
-    return max(1, len(text) // _CHARS_PER_TOKEN)
 
 
 def _convert_tools(tools: list[dict]) -> list[dict]:
@@ -144,9 +139,9 @@ def _normalise_usage(raw: dict, *, input_text: str = "", output_text: str = "") 
 
     # Estimation fallback: when the API sends no usage numbers, estimate from text length.
     if input_tokens == 0 and input_text:
-        input_tokens = _estimate_tokens(input_text)
+        input_tokens = max(1, TokenEstimator.rough(input_text))
     if output_tokens == 0 and output_text:
-        output_tokens = _estimate_tokens(output_text)
+        output_tokens = max(1, TokenEstimator.rough(output_text))
 
     return TokenUsage(
         input_tokens=input_tokens,
@@ -399,8 +394,10 @@ class OpenAICompatibleAdapter(LLMPort):
 
             # Emit a MESSAGE_DONE with estimated usage when the API did not send one.
             if not usage_emitted:
-                input_text = _system_to_string(system) + " ".join(
-                    str(m.get("content", "")) for m in messages
+                input_text = (
+                    _system_to_string(system)
+                    + " "
+                    + " ".join(str(m.get("content", "")) for m in messages)
                 )
                 output_text = "".join(accumulated_text)
                 yield StreamEvent(
