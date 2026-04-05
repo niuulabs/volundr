@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [main, dev]
   pull_request:
 
 permissions: read-all
@@ -13,7 +11,7 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Change detection — only run what's affected
+  # Change detection + pipeline tier
   # ---------------------------------------------------------------------------
   changes:
     name: Detect Changes
@@ -26,6 +24,7 @@ jobs:
       helm: ${{ steps.override.outputs.helm }}
       container-names: ${{ steps.override.outputs.names }}
       has_containers: ${{ steps.override.outputs.any }}
+      tier: ${{ steps.tier.outputs.level }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -90,8 +89,22 @@ jobs:
           echo 'names=["volundr","skuld","devrunner","volundr-web","vscode-reh","tyr","niuu"]' >> $GITHUB_OUTPUT
           echo "any=true" >> $GITHUB_OUTPUT
 
+      - name: Determine pipeline tier
+        id: tier
+        run: |
+          # PRs targeting feat/* branches run a light pipeline (lint + unit tests).
+          # PRs targeting dev or main run the full pipeline.
+          BASE="${{ github.base_ref }}"
+          if [[ "$BASE" == feat/* ]]; then
+            echo "level=light" >> $GITHUB_OUTPUT
+            echo "Pipeline tier: light (PR targets ${BASE})"
+          else
+            echo "level=full" >> $GITHUB_OUTPUT
+            echo "Pipeline tier: full (PR targets ${BASE})"
+          fi
+
   # ---------------------------------------------------------------------------
-  # Python
+  # Python — lint + unit tests (all tiers)
   # ---------------------------------------------------------------------------
   python-lint:
     name: "Python: Lint"
@@ -158,15 +171,12 @@ jobs:
             --cov-fail-under=85
 
       - name: Upload coverage to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          CODECOV_VERSION="v0.8.0"
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
-          cd /tmp && sha256sum -c codecov.SHA256SUM
-          chmod +x /tmp/codecov
-          /tmp/codecov -f coverage.xml -F backend-volundr -t "${CODECOV_TOKEN}"
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67af1b5c037d887 # v5
+        with:
+          files: coverage.xml
+          flags: backend-volundr
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   python-test-tyr:
     name: "Python: Test Tyr"
@@ -202,15 +212,12 @@ jobs:
             --cov-fail-under=85
 
       - name: Upload coverage to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          CODECOV_VERSION="v0.8.0"
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
-          cd /tmp && sha256sum -c codecov.SHA256SUM
-          chmod +x /tmp/codecov
-          /tmp/codecov -f coverage.xml -F backend-tyr -t "${CODECOV_TOKEN}"
+        if: always() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67af1b5c037d887 # v5
+        with:
+          files: coverage.xml
+          flags: backend-tyr
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # Rollup gate — branch ruleset requires "Python: Test"
   python-test:
@@ -227,12 +234,12 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Python integration tests (real PostgreSQL)
+  # Python integration tests — full tier only
   # ---------------------------------------------------------------------------
   python-integration-test-volundr:
     name: "Python: Integration Test Volundr"
     needs: changes
-    if: needs.changes.outputs.python == 'true'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -280,7 +287,7 @@ jobs:
   python-integration-test-tyr:
     name: "Python: Integration Test Tyr"
     needs: changes
-    if: needs.changes.outputs.python == 'true'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -328,24 +335,29 @@ jobs:
   # Rollup gate — branch ruleset requires "Python: Integration Test"
   python-integration-test:
     name: "Python: Integration Test"
-    needs: [python-integration-test-volundr, python-integration-test-tyr]
+    needs: [changes, python-integration-test-volundr, python-integration-test-tyr]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
+          # Skip check if tier is light (integration tests were not required)
+          if [[ "${{ needs.changes.outputs.tier }}" == "light" ]]; then
+            echo "Skipped — light tier pipeline"
+            exit 0
+          fi
           if [[ "${{ needs.python-integration-test-volundr.result }}" == "failure" ]] || \
              [[ "${{ needs.python-integration-test-tyr.result }}" == "failure" ]]; then
             exit 1
           fi
 
   # ---------------------------------------------------------------------------
-  # End-to-end tests (Playwright against real backend + frontend)
+  # End-to-end tests — full tier only
   # ---------------------------------------------------------------------------
   e2e-test:
     name: "E2E: Playwright"
     needs: changes
-    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.tier == 'full' && (needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -437,7 +449,7 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Web
+  # Web — lint + unit tests (all tiers)
   # ---------------------------------------------------------------------------
   web-lint:
     name: "Web: Lint"
@@ -504,23 +516,21 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          CODECOV_VERSION="v0.8.0"
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov" -o /tmp/codecov
-          curl -sSfL "https://uploader.codecov.io/${CODECOV_VERSION}/linux/codecov.SHA256SUM" -o /tmp/codecov.SHA256SUM
-          cd /tmp && sha256sum -c codecov.SHA256SUM
-          chmod +x /tmp/codecov
-          /tmp/codecov -f web/coverage/lcov.info -F web -t "${CODECOV_TOKEN}"
+        if: always() && hashFiles('web/coverage/lcov.info') != ''
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67af1b5c037d887 # v5
+        with:
+          files: web/coverage/lcov.info
+          flags: web
+          token: ${{ secrets.CODECOV_TOKEN }}
+          working-directory: web
 
   # ---------------------------------------------------------------------------
-  # Helm
+  # Helm — full tier only
   # ---------------------------------------------------------------------------
   helm-lint:
     name: "Helm: Lint"
     needs: changes
-    if: needs.changes.outputs.helm == 'true'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
@@ -560,12 +570,12 @@ jobs:
           helm lint charts/niuu/
 
   # ---------------------------------------------------------------------------
-  # Helm — smoke test (kind cluster)
+  # Helm — smoke test (kind cluster) — full tier only
   # ---------------------------------------------------------------------------
   helm-smoke-test:
     name: "Helm: Smoke Test"
     needs: [changes, merge-container-manifests]
-    if: needs.changes.outputs.helm == 'true'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -693,12 +703,12 @@ jobs:
           kubectl get events --sort-by=.lastTimestamp | tail -30 || true
 
   # ---------------------------------------------------------------------------
-  # Containers — build per platform natively, then merge manifests
+  # Containers — full tier only
   # ---------------------------------------------------------------------------
   build-container-image:
     name: "Container: ${{ matrix.container }} (${{ matrix.platform }})"
     needs: changes
-    if: needs.changes.outputs.has_containers == 'true'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.has_containers == 'true'
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -743,7 +753,7 @@ jobs:
   merge-container-manifests:
     name: "Container: ${{ matrix.container }} (manifest)"
     needs: [changes, build-container-image]
-    if: needs.changes.outputs.has_containers == 'true'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.has_containers == 'true'
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -780,12 +790,12 @@ jobs:
           docker manifest push "${IMAGE}:${PR_TAG}"
 
   # ---------------------------------------------------------------------------
-  # Helm charts — PR versions
+  # Helm charts — PR versions — full tier only
   # ---------------------------------------------------------------------------
   build-charts:
     name: Build Helm Charts
     needs: changes
-    if: needs.changes.outputs.helm == 'true' && github.event_name == 'pull_request'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -851,12 +861,12 @@ jobs:
           helm push .helm-packages/niuu-0*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
   # ---------------------------------------------------------------------------
-  # Security — container vulnerability scanning (Grype)
+  # Security — container vulnerability scanning — full tier only
   # ---------------------------------------------------------------------------
   scan-containers:
     name: "Scan: ${{ matrix.container }}"
     needs: [changes, merge-container-manifests]
-    if: needs.changes.outputs.has_containers == 'true'
+    if: needs.changes.outputs.tier == 'full' && needs.changes.outputs.has_containers == 'true'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -904,7 +914,6 @@ jobs:
   # ---------------------------------------------------------------------------
   dependency-review:
     name: Dependency Review
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
