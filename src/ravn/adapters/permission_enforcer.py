@@ -31,10 +31,17 @@ import logging
 import re
 import shlex
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ravn.adapters.file_security import PathSecurityError, is_binary, resolve_safe
+from ravn.adapters.file_security import (
+    _SYSTEM_PREFIXES,
+    DEFAULT_BINARY_CHECK_BYTES,
+    PathSecurityError,
+    is_binary,
+    resolve_safe,
+)
 from ravn.config import PermissionConfig
 from ravn.ports.permission import (
     Allow,
@@ -126,8 +133,6 @@ _GIT_READ_SUBCOMMANDS: frozenset[str] = frozenset(
         "describe",
         "shortlog",
         "blame",
-        "stash",
-        "config",
         "help",
         "version",
     }
@@ -253,13 +258,8 @@ _PATH_TRAVERSAL_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 # System paths that tools should never touch.
-_SYSTEM_PATH_PREFIXES: tuple[str, ...] = (
-    "/etc",
-    "/usr",
-    "/var",
-    "/boot",
-    "/sys",
-    "/proc",
+# Extends file_security._SYSTEM_PREFIXES with additional executable/device paths.
+_SYSTEM_PATH_PREFIXES: tuple[str, ...] = _SYSTEM_PREFIXES + (
     "/dev",
     "/bin",
     "/sbin",
@@ -318,6 +318,8 @@ _GIT_WRITE_SUBCOMMANDS: frozenset[str] = frozenset(
         "clean",
         "init",
         "clone",
+        "stash",
+        "config",
     }
 )
 
@@ -361,11 +363,17 @@ _SENSITIVE_KEYS: frozenset[str] = frozenset(
 
 
 def _redact_args(args: dict) -> dict:
-    """Return a copy of *args* with sensitive values replaced by '[REDACTED]'."""
+    """Return a copy of *args* with sensitive values replaced by '[REDACTED]'.
+
+    Recurses into nested dicts so that keys like ``{"config": {"api_key": "…"}}``
+    are also redacted.
+    """
     result: dict = {}
     for k, v in args.items():
         if any(s in k.lower() for s in _SENSITIVE_KEYS):
             result[k] = "[REDACTED]"
+        elif isinstance(v, dict):
+            result[k] = _redact_args(v)
         else:
             result[k] = v
     return result
@@ -604,8 +612,7 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
             Path(config.workspace_root).resolve() if config.workspace_root else Path.cwd()
         )
         self._bash_validator = BashValidator()
-        self._audit: list[PermissionAuditEntry] = []
-        self._max_audit_entries = max_audit_entries
+        self._audit: deque[PermissionAuditEntry] = deque(maxlen=max_audit_entries)
 
     @property
     def audit_log(self) -> list[PermissionAuditEntry]:
@@ -751,10 +758,13 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
         """Validate file write based on mode."""
         if self._mode == "read_only":
             return Deny("mode=read_only does not permit file writes")
-
+        if self._mode == "deny_all":
+            return Deny("mode=deny_all blocks all tool calls")
+        if self._mode == "prompt":
+            return NeedsApproval(f"Allow file write to {path!r}?")
         if self._mode == "workspace_write":
             return self.check_file_write(path, self._workspace_root)
-
+        # full_access / allow_all
         return Allow()
 
     def _mode_default_for_permission(self, permission: str) -> PermissionDecision:
@@ -779,8 +789,8 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
         return any(fnmatch.fnmatch(name, p) for p in patterns)
 
     def _config_binary_check_bytes(self) -> int:
-        """Return the binary-check byte count (pulled from file tools config if available)."""
-        return 8 * 1024  # 8 KB default; real config lives in FileToolsConfig
+        """Return the binary-check byte count from the shared file_security constant."""
+        return DEFAULT_BINARY_CHECK_BYTES
 
     def _record_audit(self, tool: str, args: dict, decision: PermissionDecision) -> None:
         """Append a decision to the bounded audit log."""
@@ -798,10 +808,6 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
             decision=dec_str,
             reason=reason,
         )
-
-        if len(self._audit) >= self._max_audit_entries:
-            self._audit = self._audit[-(self._max_audit_entries - 1) :]
-
         self._audit.append(entry)
         logger.debug(
             "permission tool=%r decision=%s mode=%s reason=%s",

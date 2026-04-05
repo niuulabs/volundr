@@ -246,6 +246,9 @@ class TestBashValidatorIntentClassification:
             ("git add .", CommandIntent.WRITE),
             ("git commit -m 'msg'", CommandIntent.WRITE),
             ("git push origin main", CommandIntent.WRITE),
+            # stash and config are write-classified (fix 5)
+            ("git stash", CommandIntent.WRITE),
+            ("git config user.email test@example.com", CommandIntent.WRITE),
             ("cp src dst", CommandIntent.WRITE),
             ("mv src dst", CommandIntent.WRITE),
             ("mkdir -p /tmp/foo", CommandIntent.WRITE),
@@ -749,3 +752,179 @@ class TestPermissionConfigIntegration:
         cfg = PermissionConfig(mode="workspace_write", workspace_root="/some/other/path")
         e = PermissionEnforcer(cfg, workspace_root=tmp_path)
         assert e._workspace_root == tmp_path
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: _file_write_for_mode handles deny_all and prompt explicitly
+# ---------------------------------------------------------------------------
+
+
+class TestFileWriteForMode:
+    @pytest.mark.asyncio
+    async def test_deny_all_blocks_file_write_with_path(self) -> None:
+        e = _enforcer("deny_all")
+        decision = await e.evaluate("write_file", {"path": "/workspace/f.txt"})
+        assert isinstance(decision, Deny)
+
+    @pytest.mark.asyncio
+    async def test_prompt_mode_asks_for_file_write_with_path(self) -> None:
+        e = _enforcer("prompt")
+        decision = await e.evaluate("write_file", {"path": "/workspace/f.txt"})
+        assert isinstance(decision, NeedsApproval)
+
+    @pytest.mark.asyncio
+    async def test_full_access_allows_file_write(self) -> None:
+        e = _enforcer("full_access")
+        decision = await e.evaluate("write_file", {"path": "/workspace/f.txt"})
+        assert isinstance(decision, Allow)
+
+    @pytest.mark.asyncio
+    async def test_allow_all_allows_file_write(self) -> None:
+        e = _enforcer("allow_all")
+        decision = await e.evaluate("write_file", {"path": "/workspace/f.txt"})
+        assert isinstance(decision, Allow)
+
+    def test_file_write_for_mode_deny_all_direct(self) -> None:
+        e = _enforcer("deny_all")
+        result = e._file_write_for_mode("/workspace/f.txt")
+        assert isinstance(result, Deny)
+
+    def test_file_write_for_mode_prompt_direct(self) -> None:
+        e = _enforcer("prompt")
+        result = e._file_write_for_mode("/workspace/f.txt")
+        assert isinstance(result, NeedsApproval)
+        assert "/workspace/f.txt" in result.question
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: _SYSTEM_PATH_PREFIXES derived from file_security._SYSTEM_PREFIXES
+# ---------------------------------------------------------------------------
+
+
+class TestSystemPathPrefixDeduplication:
+    def test_system_prefixes_imported_from_file_security(self) -> None:
+        from ravn.adapters.file_security import _SYSTEM_PREFIXES
+        from ravn.adapters.permission_enforcer import _SYSTEM_PATH_PREFIXES
+
+        # All base prefixes are included
+        for prefix in _SYSTEM_PREFIXES:
+            assert prefix in _SYSTEM_PATH_PREFIXES
+
+    def test_extra_prefixes_added(self) -> None:
+        from ravn.adapters.permission_enforcer import _SYSTEM_PATH_PREFIXES
+
+        for extra in ("/dev", "/bin", "/sbin", "/lib", "/lib64", "/root"):
+            assert extra in _SYSTEM_PATH_PREFIXES
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: binary check uses DEFAULT_BINARY_CHECK_BYTES constant
+# ---------------------------------------------------------------------------
+
+
+class TestBinaryCheckBytes:
+    def test_config_binary_check_bytes_uses_constant(self) -> None:
+        from ravn.adapters.file_security import DEFAULT_BINARY_CHECK_BYTES
+
+        e = _enforcer("workspace_write")
+        assert e._config_binary_check_bytes() == DEFAULT_BINARY_CHECK_BYTES
+
+
+# ---------------------------------------------------------------------------
+# Fix 4: audit log uses deque
+# ---------------------------------------------------------------------------
+
+
+class TestAuditDeque:
+    def test_audit_is_a_deque(self) -> None:
+        from collections import deque
+
+        e = _enforcer("full_access")
+        assert isinstance(e._audit, deque)
+
+    def test_audit_deque_has_correct_maxlen(self) -> None:
+        from collections import deque
+
+        e = PermissionEnforcer(_cfg("full_access"), max_audit_entries=42)
+        assert isinstance(e._audit, deque)
+        assert e._audit.maxlen == 42
+
+    @pytest.mark.asyncio
+    async def test_audit_bounded_eviction_via_deque(self) -> None:
+        e = PermissionEnforcer(_cfg("full_access"), max_audit_entries=3)
+        for i in range(6):
+            await e.evaluate(f"tool_{i}", {})
+        log = e.audit_log
+        assert len(log) == 3
+        # Most-recent 3 entries survived
+        assert log[-1].tool == "tool_5"
+        assert log[0].tool == "tool_3"
+
+
+# ---------------------------------------------------------------------------
+# Fix 5: git stash and git config classified as WRITE
+# ---------------------------------------------------------------------------
+
+
+class TestGitStashConfigClassification:
+    @pytest.fixture
+    def v(self) -> BashValidator:
+        return BashValidator()
+
+    def test_git_stash_is_write(self, v: BashValidator) -> None:
+        assert v.classify("git stash") == CommandIntent.WRITE
+
+    def test_git_stash_push_is_write(self, v: BashValidator) -> None:
+        assert v.classify("git stash push -m 'wip'") == CommandIntent.WRITE
+
+    def test_git_stash_pop_is_write(self, v: BashValidator) -> None:
+        assert v.classify("git stash pop") == CommandIntent.WRITE
+
+    def test_git_config_write_is_write(self, v: BashValidator) -> None:
+        assert v.classify("git config user.email foo@bar.com") == CommandIntent.WRITE
+
+    def test_git_config_local_is_write(self, v: BashValidator) -> None:
+        assert v.classify("git config --local core.autocrlf false") == CommandIntent.WRITE
+
+    def test_git_stash_denied_in_read_only(self, v: BashValidator) -> None:
+        result = v.validate("git stash", "read_only")
+        assert isinstance(result, Deny)
+
+    def test_git_config_denied_in_read_only(self, v: BashValidator) -> None:
+        result = v.validate("git config user.name foo", "read_only")
+        assert isinstance(result, Deny)
+
+
+# ---------------------------------------------------------------------------
+# Fix 6: _redact_args recurses into nested dicts
+# ---------------------------------------------------------------------------
+
+
+class TestRedactArgsNested:
+    def test_nested_dict_sensitive_key_redacted(self) -> None:
+        args = {"config": {"api_key": "sk-secret", "url": "https://example.com"}}
+        result = _redact_args(args)
+        assert result["config"]["api_key"] == "[REDACTED]"
+        assert result["config"]["url"] == "https://example.com"
+
+    def test_deeply_nested_redaction(self) -> None:
+        args = {"outer": {"inner": {"token": "tok-abc"}}}
+        result = _redact_args(args)
+        assert result["outer"]["inner"]["token"] == "[REDACTED]"
+
+    def test_non_sensitive_nested_keys_preserved(self) -> None:
+        args = {"metadata": {"file": "foo.txt", "size": 42}}
+        result = _redact_args(args)
+        assert result["metadata"]["file"] == "foo.txt"
+        assert result["metadata"]["size"] == 42
+
+    def test_top_level_sensitive_still_redacted(self) -> None:
+        args = {"token": "top-level-secret", "nested": {"password": "deep-secret"}}
+        result = _redact_args(args)
+        assert result["token"] == "[REDACTED]"
+        assert result["nested"]["password"] == "[REDACTED]"
+
+    def test_original_dict_not_mutated(self) -> None:
+        args = {"config": {"api_key": "original"}}
+        _redact_args(args)
+        assert args["config"]["api_key"] == "original"
