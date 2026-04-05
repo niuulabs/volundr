@@ -22,7 +22,6 @@ from ravn.adapters.postgres_memory import (
 )
 from ravn.domain.models import Episode, Outcome, SharedContext
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

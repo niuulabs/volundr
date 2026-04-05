@@ -13,7 +13,6 @@ import pytest
 
 from ravn.adapters.migrate_memory import migrate_sqlite_to_postgres
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
