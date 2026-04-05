@@ -27,6 +27,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from bifrost.auth import AgentIdentity, extract_identity
 from bifrost.config import AgentPermissions, BifrostConfig
 from bifrost.domain.models import ModelInfo, RequestLog, TokenUsage
+from bifrost.inbound.chat_completions import (
+    OpenAIChatRequest,
+    anthropic_response_to_openai,
+    anthropic_stream_to_openai,
+    openai_error_response,
+    openai_request_to_anthropic,
+)
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
 from bifrost.router import ModelRouter, RouterError
@@ -537,5 +544,112 @@ def create_app(config: BifrostConfig) -> FastAPI:
                 for r in records
             ],
         }
+
+    @app.post("/v1/chat/completions", response_model=None)
+    async def chat_completions(raw_request: Request) -> JSONResponse | StreamingResponse:
+        """OpenAI Chat Completions-compatible endpoint.
+
+        Accepts an OpenAI Chat Completions request, translates it to the
+        internal Anthropic canonical format, routes via the shared ModelRouter,
+        then translates the response back to OpenAI format.  The full streaming
+        path is supported; token usage is extracted and logged on each request.
+        """
+        # --- Authentication ---
+        identity = extract_identity(raw_request, auth_mode, pat_secret)
+
+        try:
+            body = await raw_request.json()
+            oai_request = OpenAIChatRequest.model_validate(body)
+        except Exception as exc:
+            return openai_error_response(422, str(exc), "invalid_request_error")
+
+        request = openai_request_to_anthropic(oai_request)
+
+        # --- Model access control ---
+        agent_perms = config.permissions_for_agent(identity.agent_id)
+        try:
+            _check_model_access(identity, request.model, agent_perms)
+        except HTTPException as exc:
+            return openai_error_response(exc.status_code, exc.detail, "invalid_request_error")
+
+        # --- Quota check (before routing) ---
+        try:
+            warnings = await _check_quotas(identity, config, store, agent_perms)
+        except HTTPException as exc:
+            return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
+
+        request_id = str(raw_request.state.correlation_id)
+        start = time.monotonic()
+
+        try:
+            if request.stream:
+                message_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+                stream_resp = StreamingResponse(
+                    anthropic_stream_to_openai(
+                        _stream_with_tracking(
+                            router.stream(request),
+                            request.model,
+                            start,
+                            identity,
+                            store,
+                            pricing_overrides,
+                            request_id,
+                        ),
+                        message_id=message_id,
+                        model=request.model,
+                    ),
+                    media_type="text/event-stream",
+                    headers={
+                        "cache-control": "no-cache",
+                        "x-accel-buffering": "no",
+                        "connection": "keep-alive",
+                    },
+                )
+                if warnings:
+                    stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return stream_resp
+
+            response = await router.complete(request)
+            latency_ms = (time.monotonic() - start) * 1000
+            usage = TokenUsage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                cache_creation_input_tokens=0,
+                cache_read_input_tokens=0,
+            )
+            _log_request(
+                RequestLog(
+                    timestamp=datetime.now(UTC),
+                    model=request.model,
+                    usage=usage,
+                    latency_ms=latency_ms,
+                    stream=False,
+                )
+            )
+
+            cost = calculate_cost(request.model, usage, pricing_overrides)
+            await store.record(
+                UsageRecord(
+                    request_id=request_id,
+                    agent_id=identity.agent_id,
+                    tenant_id=identity.tenant_id,
+                    session_id=identity.session_id,
+                    saga_id=identity.saga_id,
+                    model=request.model,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    cost_usd=cost,
+                    timestamp=datetime.now(UTC),
+                )
+            )
+
+            json_resp = JSONResponse(content=anthropic_response_to_openai(response))
+            if warnings:
+                json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            return json_resp
+
+        except RouterError as exc:
+            logger.error("Routing failed: %s", exc)
+            return openai_error_response(502, str(exc), "server_error")
 
     return app
