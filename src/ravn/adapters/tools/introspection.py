@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 _INTROSPECT_PERMISSION = "introspect:read"
 
+_REFLECT_TASK_EXCERPT_MAX = 300
+_REFLECT_HEADER_DESC_MAX = 100
+
 _REFLECT_SYSTEM = (
     "You are Ravn performing a mid-task self-assessment. "
     "Review the information provided and identify: what has been completed, "
@@ -339,7 +342,7 @@ class RavnReflectTool(ToolPort):
         tools_str = ", ".join(sorted(tools_mentioned)) if tools_mentioned else "none yet"
         turn_count = self._session.turn_count
 
-        task_excerpt = task_description[:300]
+        task_excerpt = task_description[:_REFLECT_TASK_EXCERPT_MAX]
         prompt = _REFLECT_PROMPT_TEMPLATE.format(
             task_description=task_excerpt,
             turn_count=turn_count,
@@ -362,8 +365,8 @@ class RavnReflectTool(ToolPort):
                 is_error=True,
             )
 
-        short_desc = task_description[:100]
-        if len(task_description) > 100:
+        short_desc = task_description[:_REFLECT_HEADER_DESC_MAX]
+        if len(task_description) > _REFLECT_HEADER_DESC_MAX:
             short_desc += "…"
 
         header = (
