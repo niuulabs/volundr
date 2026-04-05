@@ -19,9 +19,24 @@ from fastapi import FastAPI, Request, Response
 
 from bifrost.config import BifrostConfig
 from bifrost.inbound.routes import create_router
+from bifrost.ports.rules import RuleEnginePort
 from bifrost.ports.usage_store import UsageStore
 from bifrost.pricing import ModelPricing
 from bifrost.router import ModelRouter
+
+# ---------------------------------------------------------------------------
+# Rule engine factory
+# ---------------------------------------------------------------------------
+
+
+def _build_rule_engine(config: BifrostConfig) -> RuleEnginePort | None:
+    """Instantiate a ``YamlRuleEngine`` when rules are configured, else return ``None``."""
+    if not config.rules:
+        return None
+    from bifrost.adapters.rules.yaml_engine import YamlRuleEngine
+
+    return YamlRuleEngine(rules=config.rules, config=config)
+
 
 # ---------------------------------------------------------------------------
 # Usage store factory
@@ -73,7 +88,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
     Returns:
         A configured ``FastAPI`` instance.
     """
-    router = ModelRouter(config)
+    rule_engine = _build_rule_engine(config)
+    router = ModelRouter(config, rule_engine=rule_engine)
     store = _build_usage_store(config)
     pricing_overrides = _pricing_overrides(config)
     auth_mode = config.auth_mode

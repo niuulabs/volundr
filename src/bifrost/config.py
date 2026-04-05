@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from bifrost.auth import AuthMode
 
@@ -101,6 +102,63 @@ class AgentPermissions(BaseModel):
     )
 
 
+class RuleCondition(BaseModel):
+    """Conditions that must all match for a rule to fire (AND semantics).
+
+    Numeric fields accept comparison expressions like ``'<= 512'`` or ``'>= 80'``.
+    Plain numbers are treated as equality checks.
+    """
+
+    model: str | None = Field(
+        default=None,
+        description="Match when the request model equals this alias or model ID.",
+    )
+    max_tokens: str | None = Field(
+        default=None,
+        description="Numeric comparison expression for max_tokens (e.g. '<= 512').",
+    )
+    thinking: bool | None = Field(
+        default=None,
+        description="Match when thinking is enabled (true) or disabled (false).",
+    )
+    agent_budget_pct: str | None = Field(
+        default=None,
+        description="Numeric comparison expression for remaining agent budget % (e.g. '>= 80').",
+    )
+    provider: str | None = Field(
+        default=None,
+        description="Match when the resolved primary provider name equals this value.",
+    )
+    has_tools: bool | None = Field(
+        default=None,
+        description="Match when the request includes tool definitions (true) or not (false).",
+    )
+
+
+class RuleConfig(BaseModel):
+    """A single declarative routing rule."""
+
+    name: str = Field(description="Human-readable rule identifier (used in logs).")
+    when: RuleCondition = Field(description="Conditions that must all match for the rule to fire.")
+    action: Literal["route_to", "reject", "log"] = Field(
+        description="Action to take when the rule matches.",
+    )
+    target: str | None = Field(
+        default=None,
+        description="Model or alias to route to (required for action='route_to').",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Rejection message returned to the caller (for action='reject').",
+    )
+
+    @model_validator(mode="after")
+    def _validate_action_fields(self) -> RuleConfig:
+        if self.action == "route_to" and not self.target:
+            raise ValueError("target is required when action is 'route_to'")
+        return self
+
+
 class UsageStoreConfig(BaseModel):
     """Configuration for the usage persistence backend."""
 
@@ -193,6 +251,15 @@ class BifrostConfig(BaseModel):
     agent_permissions: dict[str, AgentPermissions] = Field(
         default_factory=dict,
         description="Per-agent model access control and optional budget.",
+    )
+
+    # ── Routing rules ────────────────────────────────────────────────────────
+    rules: list[RuleConfig] = Field(
+        default_factory=list,
+        description=(
+            "Declarative routing rules evaluated in order before the routing strategy runs. "
+            "First match wins."
+        ),
     )
 
     # ── Usage storage ────────────────────────────────────────────────────────

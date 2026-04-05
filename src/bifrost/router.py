@@ -14,7 +14,9 @@ from collections.abc import AsyncIterator
 import httpx
 
 from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
+from bifrost.domain.routing import RoutingContext, apply_rules
 from bifrost.ports.provider import ProviderError, ProviderPort
+from bifrost.ports.rules import RuleEnginePort
 from bifrost.translation.models import AnthropicRequest, AnthropicResponse
 
 logger = logging.getLogger(__name__)
@@ -61,8 +63,13 @@ class ModelRouter:
     opened until an actual request arrives.
     """
 
-    def __init__(self, config: BifrostConfig) -> None:
+    def __init__(
+        self,
+        config: BifrostConfig,
+        rule_engine: RuleEnginePort | None = None,
+    ) -> None:
         self._config = config
+        self._rule_engine = rule_engine
         self._adapters: dict[str, ProviderPort] = {}
         # Per-model request counter used by the round_robin strategy.
         self._round_robin_counters: dict[str, int] = {}
@@ -161,6 +168,7 @@ class ModelRouter:
 
         Tries candidates in order; moves to the next on retryable errors.
         """
+        request = apply_rules(request, RoutingContext(), self._rule_engine)
         candidates = self._build_candidates(request.model)
         last_exc: Exception | None = None
 
@@ -195,6 +203,7 @@ class ModelRouter:
         Failover is attempted on connection or HTTP errors before the first
         byte is yielded.
         """
+        request = apply_rules(request, RoutingContext(), self._rule_engine)
         candidates = self._build_candidates(request.model)
         last_exc: Exception | None = None
 
