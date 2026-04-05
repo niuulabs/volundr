@@ -27,8 +27,10 @@ class CommandIntent(StrEnum):
     WRITE = "write"
     DESTRUCTIVE = "destructive"
     NETWORK = "network"
+    PROCESS_MANAGEMENT = "process_management"
     PACKAGE_MANAGEMENT = "package_management"
     SYSTEM_ADMIN = "system_admin"
+    UNKNOWN = "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -120,5 +122,19 @@ class PermissionEnforcerPort(ABC):
 
         Returns:
             Allow, Deny, or NeedsApproval depending on command analysis.
+        """
+        ...
+
+    @abstractmethod
+    def record_approval(self, tool_name: str, args: dict) -> None:
+        """Persist an explicit user approval so the same call is auto-approved later.
+
+        Called by the agent loop (or hook pipeline) after the user confirms a
+        NeedsApproval prompt.  Implementations that do not support approval
+        memory should provide a no-op.
+
+        Args:
+            tool_name: Name of the tool the user approved.
+            args: Arguments that were supplied to the tool.
         """
         ...

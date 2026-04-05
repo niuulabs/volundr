@@ -18,11 +18,16 @@ Precedence (highest to lowest):
 Note: project context files (.ravn.yaml, RAVN.md, CLAUDE.md) discovered by
 `ravn.context.discover()` are a *separate* mechanism — they enrich the agent's
 system prompt with project-specific instructions and are not config overrides.
+
+ProjectConfig is the structured config overlay parsed from RAVN.md.  It lets
+a project define allowed/forbidden tools, a persona, and an iteration budget
+without modifying the global ravn.yaml.
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -177,6 +182,37 @@ class WebToolsConfig(BaseModel):
     search: WebSearchConfig = Field(default_factory=WebSearchConfig)
 
 
+class BashToolConfig(BaseModel):
+    """Bash tool configuration (non-persistent, validation-gated execution)."""
+
+    mode: str = Field(
+        default="workspace_write",
+        description=(
+            "Permission mode for the bash tool. Mirrors PermissionConfig.mode. "
+            "Controls which commands are allowed, denied, or require approval."
+        ),
+    )
+    timeout_seconds: float = Field(
+        default=120.0,
+        description="Seconds to wait for a bash command before timing out.",
+    )
+    max_output_bytes: int = Field(
+        default=100 * 1024,
+        description=(
+            "Maximum output size in bytes returned to the caller. "
+            "Output exceeding this limit is truncated with a notice."
+        ),
+    )
+    workspace_root: str = Field(
+        default="",
+        description=(
+            "Absolute path to the workspace root used as the working directory "
+            "and for path boundary checks. Defaults to CWD when empty."
+        ),
+    )
+
+
+
 class ToolsConfig(BaseModel):
     """Tool availability and custom adapter configuration."""
 
@@ -206,6 +242,10 @@ class ToolsConfig(BaseModel):
     web: WebToolsConfig = Field(
         default_factory=WebToolsConfig,
         description="Configuration for the built-in web tools (web_fetch, web_search).",
+    )
+    bash: BashToolConfig = Field(
+        default_factory=BashToolConfig,
+        description="Configuration for the bash tool (non-persistent, validation-gated).",
     )
 
 
@@ -451,3 +491,117 @@ class Settings(BaseSettings):
     def effective_api_key(self) -> str:
         """Return the API key, preferring ANTHROPIC_API_KEY env var."""
         return os.environ.get("ANTHROPIC_API_KEY", "") or self.anthropic.api_key
+
+
+# ---------------------------------------------------------------------------
+# Project-level config overlay (RAVN.md)
+# ---------------------------------------------------------------------------
+
+
+def _safe_int(val: object, default: int = 0) -> int:
+    """Convert *val* to int, returning *default* on ValueError/TypeError."""
+    try:
+        return int(val)  # type: ignore[arg-type]
+    except (ValueError, TypeError):
+        return default
+
+
+@dataclass
+class ProjectConfig:
+    """Project-level configuration overlay parsed from a RAVN.md file.
+
+    When Ravn starts in a directory containing RAVN.md it reads this as a
+    lightweight config overlay on top of the global Settings.  Only fields
+    explicitly present in the file are populated; absent fields keep their
+    zero/empty defaults so callers can safely merge them with Settings.
+
+    Format (Markdown header + YAML body)::
+
+        # RAVN Project: my-service
+
+        persona: coding-agent
+        allowed_tools: [file, git, terminal, web]
+        forbidden_tools: [volundr, cascade]
+        permission_mode: workspace-write
+        iteration_budget: 30
+        notes: >
+          This is a FastAPI service. Always run tests before committing.
+    """
+
+    project_name: str = ""
+    persona: str = ""
+    allowed_tools: list[str] = field(default_factory=list)
+    forbidden_tools: list[str] = field(default_factory=list)
+    permission_mode: str = ""
+    iteration_budget: int = 0
+    notes: str = ""
+
+    @classmethod
+    def from_text(cls, text: str) -> ProjectConfig:
+        """Parse RAVN.md *text* into a ProjectConfig.
+
+        The file must start with a ``# RAVN Project: <name>`` header.
+        Everything after the header is treated as YAML.  If the header is
+        absent or the YAML is malformed the method returns an empty
+        ProjectConfig rather than raising.
+        """
+        import yaml  # PyYAML — present via pydantic-settings[yaml]
+
+        project_name = ""
+        yaml_lines: list[str] = []
+        past_header = False
+
+        for line in text.splitlines():
+            if not past_header:
+                if line.startswith("# RAVN Project:"):
+                    project_name = line[len("# RAVN Project:"):].strip()
+                    past_header = True
+                continue
+            yaml_lines.append(line)
+
+        raw: dict = {}
+        if yaml_lines:
+            try:
+                parsed = yaml.safe_load("\n".join(yaml_lines))
+                if isinstance(parsed, dict):
+                    raw = parsed
+            except Exception:
+                pass
+
+        return cls(
+            project_name=project_name,
+            persona=str(raw.get("persona", "")),
+            allowed_tools=list(raw.get("allowed_tools", [])),
+            forbidden_tools=list(raw.get("forbidden_tools", [])),
+            permission_mode=str(raw.get("permission_mode", "")),
+            iteration_budget=_safe_int(raw.get("iteration_budget", 0)),
+            notes=str(raw.get("notes", "")),
+        )
+
+    @classmethod
+    def load(cls, path: Path) -> ProjectConfig | None:
+        """Load a ProjectConfig from *path*, or None if the file is unreadable."""
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        return cls.from_text(text)
+
+    @classmethod
+    def discover(cls, cwd: Path | None = None) -> ProjectConfig | None:
+        """Walk from *cwd* toward the filesystem root looking for RAVN.md.
+
+        Returns the first ProjectConfig found, or None if no RAVN.md exists
+        in any ancestor directory.
+        """
+        start = Path(cwd) if cwd is not None else Path.cwd()
+        current = start.resolve()
+        while True:
+            candidate = current / "RAVN.md"
+            if candidate.is_file():
+                return cls.load(candidate)
+            parent = current.parent
+            if parent == current:
+                break
+            current = parent
+        return None
