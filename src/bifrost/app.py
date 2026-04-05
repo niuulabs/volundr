@@ -3,8 +3,12 @@
 Exposes an Anthropic-compatible HTTP API that routes requests to the
 configured providers (Anthropic, OpenAI, Ollama, generic).
 
-Phase 1 additions integrated here: correlation-ID middleware, token
-tracking with request logging, and the GET /v1/models endpoint.
+Phase 3 additions:
+- Agent authentication (open / PAT / mesh)
+- Per-agent model access control
+- Per-request cost tracking with attribution
+- Quota enforcement (soft warn + hard 429 reject)
+- Usage query endpoint (GET /v1/usage)
 """
 
 from __future__ import annotations
@@ -20,12 +24,60 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from bifrost.auth import AgentIdentity, extract_identity
 from bifrost.config import BifrostConfig
 from bifrost.domain.models import ModelInfo, RequestLog, TokenUsage
+from bifrost.ports.usage_store import UsageRecord, UsageStore
+from bifrost.pricing import ModelPricing, calculate_cost
 from bifrost.router import ModelRouter, RouterError
 from bifrost.translation.models import AnthropicRequest
 
 logger = logging.getLogger(__name__)
+
+# Header names for quota warnings.
+_HEADER_QUOTA_WARNING = "X-Quota-Warning"
+_HEADER_QUOTA_REMAINING = "X-Quota-Remaining"
+
+
+# ---------------------------------------------------------------------------
+# Usage store factory
+# ---------------------------------------------------------------------------
+
+
+def _build_usage_store(config: BifrostConfig) -> UsageStore:
+    """Instantiate the configured usage store adapter."""
+    match config.usage_store.adapter:
+        case "sqlite":
+            from bifrost.adapters.sqlite_store import SQLiteUsageStore
+
+            return SQLiteUsageStore(path=config.usage_store.path)
+        case _:
+            from bifrost.adapters.memory_store import MemoryUsageStore
+
+            return MemoryUsageStore()
+
+
+# ---------------------------------------------------------------------------
+# Pricing helpers
+# ---------------------------------------------------------------------------
+
+
+def _pricing_overrides(config: BifrostConfig) -> dict[str, ModelPricing]:
+    """Convert PricingOverride config objects to ModelPricing instances."""
+    result: dict[str, ModelPricing] = {}
+    for model, override in config.pricing.items():
+        result[model] = ModelPricing(
+            input_per_million=override.input_per_million,
+            output_per_million=override.output_per_million,
+            cache_creation_per_million=override.cache_creation_per_million,
+            cache_read_per_million=override.cache_read_per_million,
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# SSE / streaming helpers
+# ---------------------------------------------------------------------------
 
 
 def _extract_usage_from_sse_line(line: str, usage: TokenUsage) -> None:
@@ -64,12 +116,123 @@ def _log_request(log: RequestLog) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Quota enforcement
+# ---------------------------------------------------------------------------
+
+
+async def _check_quotas(
+    identity: AgentIdentity,
+    config: BifrostConfig,
+    store: UsageStore,
+) -> list[str]:
+    """Check quota limits and return a list of warning strings (empty = OK).
+
+    Raises:
+        HTTPException(429): If any hard limit is exceeded.
+    """
+    warnings: list[str] = []
+
+    tenant_quota = config.quota_for_tenant(identity.tenant_id)
+    agent_perms = config.permissions_for_agent(identity.agent_id)
+    agent_quota = agent_perms.quota
+
+    # Tenant: tokens per day
+    if tenant_quota.max_tokens_per_day > 0:
+        used = await store.tokens_today(identity.tenant_id)
+        limit = tenant_quota.max_tokens_per_day
+        fraction = used / limit
+        if fraction >= 1.0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Tenant daily token quota exceeded ({used}/{limit}).",
+            )
+        if fraction >= tenant_quota.soft_limit_fraction:
+            warnings.append(f"tenant_tokens_per_day={used}/{limit} ({fraction:.0%})")
+
+    # Tenant: cost per day
+    if tenant_quota.max_cost_per_day > 0.0:
+        used_cost = await store.cost_today(identity.tenant_id)
+        limit_cost = tenant_quota.max_cost_per_day
+        fraction = used_cost / limit_cost
+        if fraction >= 1.0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Tenant daily cost quota exceeded (${used_cost:.4f}/${limit_cost:.4f}).",
+            )
+        if fraction >= tenant_quota.soft_limit_fraction:
+            warnings.append(
+                f"tenant_cost_per_day=${used_cost:.4f}/${limit_cost:.4f} ({fraction:.0%})"
+            )
+
+    # Tenant: requests per hour
+    if tenant_quota.max_requests_per_hour > 0:
+        used_req = await store.requests_this_hour(identity.tenant_id)
+        limit_req = tenant_quota.max_requests_per_hour
+        fraction = used_req / limit_req
+        if fraction >= 1.0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Tenant hourly request quota exceeded ({used_req}/{limit_req}).",
+            )
+        if fraction >= tenant_quota.soft_limit_fraction:
+            warnings.append(f"tenant_requests_per_hour={used_req}/{limit_req} ({fraction:.0%})")
+
+    # Agent: cost per day (only when a per-agent budget is configured)
+    if agent_quota.max_cost_per_day > 0.0:
+        agent_cost = await store.agent_cost_today(identity.agent_id)
+        limit_cost = agent_quota.max_cost_per_day
+        fraction = agent_cost / limit_cost
+        if fraction >= 1.0:
+            raise HTTPException(
+                status_code=429,
+                detail=(f"Agent daily cost quota exceeded (${agent_cost:.4f}/${limit_cost:.4f})."),
+            )
+        if fraction >= agent_quota.soft_limit_fraction:
+            warnings.append(
+                f"agent_cost_per_day=${agent_cost:.4f}/${limit_cost:.4f} ({fraction:.0%})"
+            )
+
+    return warnings
+
+
+def _check_model_access(
+    identity: AgentIdentity,
+    model: str,
+    config: BifrostConfig,
+) -> None:
+    """Raise 403 if the agent does not have permission to use *model*.
+
+    An empty ``allowed_models`` list means all models are permitted.
+    """
+    perms = config.permissions_for_agent(identity.agent_id)
+    if not perms.allowed_models:
+        return
+    if model not in perms.allowed_models:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Agent '{identity.agent_id}' is not permitted to use model '{model}'. "
+                f"Allowed: {perms.allowed_models}"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Streaming wrapper with tracking
+# ---------------------------------------------------------------------------
+
+
 async def _stream_with_tracking(
     source: AsyncIterator[str],
     model: str,
     start: float,
+    identity: AgentIdentity,
+    store: UsageStore,
+    pricing_overrides: dict[str, ModelPricing],
+    request_id: str,
 ) -> AsyncIterator[str]:
-    """Yield SSE lines from *source* while tracking token usage for logging."""
+    """Yield SSE lines from *source* while tracking token usage."""
     usage = TokenUsage()
 
     async for line in source:
@@ -87,17 +250,42 @@ async def _stream_with_tracking(
         )
     )
 
+    cost = calculate_cost(model, usage, pricing_overrides)
+    await store.record(
+        UsageRecord(
+            request_id=request_id,
+            agent_id=identity.agent_id,
+            tenant_id=identity.tenant_id,
+            session_id=identity.session_id,
+            saga_id=identity.saga_id,
+            model=model,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cost_usd=cost,
+            timestamp=datetime.now(UTC),
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Application factory
+# ---------------------------------------------------------------------------
+
 
 def create_app(config: BifrostConfig) -> FastAPI:
     """Create and return the Bifröst FastAPI application.
 
     Args:
-        config: Gateway configuration (providers, aliases, etc.).
+        config: Gateway configuration (providers, aliases, auth, quotas, etc.).
 
     Returns:
         A configured ``FastAPI`` instance.
     """
     router = ModelRouter(config)
+    store = _build_usage_store(config)
+    pricing_overrides = _pricing_overrides(config)
+    auth_mode = config.auth_mode
+    pat_secret = config.effective_pat_secret()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -166,20 +354,38 @@ def create_app(config: BifrostConfig) -> FastAPI:
 
         Accepts an Anthropic Messages API request body, routes it to the
         configured provider, and returns the response in Anthropic format.
-        Token usage is extracted and logged on each request.
+        Token usage is tracked per-request and attributed to the caller.
         """
+        # --- Authentication ---
+        identity = extract_identity(raw_request, auth_mode, pat_secret)
+
         try:
             body = await raw_request.json()
             request = AnthropicRequest.model_validate(body)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+        # --- Model access control ---
+        _check_model_access(identity, request.model, config)
+
+        # --- Quota check (before routing) ---
+        warnings = await _check_quotas(identity, config, store)
+
+        request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
 
         try:
             if request.stream:
-                return StreamingResponse(
-                    _stream_with_tracking(router.stream(request), request.model, start),
+                stream_resp = StreamingResponse(
+                    _stream_with_tracking(
+                        router.stream(request),
+                        request.model,
+                        start,
+                        identity,
+                        store,
+                        pricing_overrides,
+                        request_id,
+                    ),
                     media_type="text/event-stream",
                     headers={
                         "cache-control": "no-cache",
@@ -187,27 +393,136 @@ def create_app(config: BifrostConfig) -> FastAPI:
                         "connection": "keep-alive",
                     },
                 )
+                if warnings:
+                    stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return stream_resp
+
             response = await router.complete(request)
             latency_ms = (time.monotonic() - start) * 1000
             data = response.model_dump()
             raw_usage = data.get("usage", {})
+            usage = TokenUsage(
+                input_tokens=raw_usage.get("input_tokens", 0),
+                output_tokens=raw_usage.get("output_tokens", 0),
+                cache_creation_input_tokens=raw_usage.get("cache_creation_input_tokens", 0),
+                cache_read_input_tokens=raw_usage.get("cache_read_input_tokens", 0),
+            )
             _log_request(
                 RequestLog(
                     timestamp=datetime.now(UTC),
                     model=request.model,
-                    usage=TokenUsage(
-                        input_tokens=raw_usage.get("input_tokens", 0),
-                        output_tokens=raw_usage.get("output_tokens", 0),
-                        cache_creation_input_tokens=raw_usage.get("cache_creation_input_tokens", 0),
-                        cache_read_input_tokens=raw_usage.get("cache_read_input_tokens", 0),
-                    ),
+                    usage=usage,
                     latency_ms=latency_ms,
                     stream=False,
                 )
             )
-            return JSONResponse(content=data)
+
+            cost = calculate_cost(request.model, usage, pricing_overrides)
+            await store.record(
+                UsageRecord(
+                    request_id=request_id,
+                    agent_id=identity.agent_id,
+                    tenant_id=identity.tenant_id,
+                    session_id=identity.session_id,
+                    saga_id=identity.saga_id,
+                    model=request.model,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    cost_usd=cost,
+                    timestamp=datetime.now(UTC),
+                )
+            )
+
+            json_resp = JSONResponse(content=data)
+            if warnings:
+                json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            return json_resp
+
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.get("/v1/usage")
+    async def usage_endpoint(
+        agent_id: str | None = None,
+        tenant_id: str | None = None,
+        model: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int = 1000,
+    ) -> dict:
+        """Return aggregated usage statistics with optional filters.
+
+        Query parameters:
+            agent_id:  Filter by agent identifier.
+            tenant_id: Filter by tenant identifier.
+            model:     Filter by model name.
+            since:     ISO-8601 datetime (inclusive lower bound).
+            until:     ISO-8601 datetime (inclusive upper bound).
+            limit:     Maximum number of raw records returned (default 1000).
+
+        Returns a summary (totals + per-model breakdown) and the raw record list.
+        """
+        since_dt: datetime | None = None
+        until_dt: datetime | None = None
+
+        if since is not None:
+            try:
+                since_dt = datetime.fromisoformat(since).replace(tzinfo=UTC)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid 'since' datetime: {exc}",
+                ) from exc
+
+        if until is not None:
+            try:
+                until_dt = datetime.fromisoformat(until).replace(tzinfo=UTC)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid 'until' datetime: {exc}",
+                ) from exc
+
+        summary = await store.summarise(
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            model=model,
+            since=since_dt,
+            until=until_dt,
+        )
+        records = await store.query(
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            model=model,
+            since=since_dt,
+            until=until_dt,
+            limit=limit,
+        )
+
+        return {
+            "summary": {
+                "total_requests": summary.total_requests,
+                "total_input_tokens": summary.total_input_tokens,
+                "total_output_tokens": summary.total_output_tokens,
+                "total_cost_usd": round(summary.total_cost_usd, 6),
+                "by_model": summary.by_model,
+            },
+            "records": [
+                {
+                    "request_id": r.request_id,
+                    "agent_id": r.agent_id,
+                    "tenant_id": r.tenant_id,
+                    "session_id": r.session_id,
+                    "saga_id": r.saga_id,
+                    "model": r.model,
+                    "input_tokens": r.input_tokens,
+                    "output_tokens": r.output_tokens,
+                    "cost_usd": round(r.cost_usd, 6),
+                    "timestamp": r.timestamp.isoformat(),
+                }
+                for r in records
+            ],
+        }
 
     return app

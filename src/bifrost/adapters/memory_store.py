@@ -1,0 +1,108 @@
+"""In-memory UsageStore adapter.
+
+Suitable for testing and standalone single-process deployments where
+persistence across restarts is not required.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from bifrost.ports.usage_store import UsageRecord, UsageStore, UsageSummary
+
+
+def _today_start() -> datetime:
+    now = datetime.now(UTC)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _hour_start() -> datetime:
+    now = datetime.now(UTC)
+    return now.replace(minute=0, second=0, microsecond=0)
+
+
+class MemoryUsageStore(UsageStore):
+    """Thread-safe (GIL) in-memory implementation of ``UsageStore``."""
+
+    def __init__(self) -> None:
+        self._records: list[UsageRecord] = []
+
+    async def record(self, usage: UsageRecord) -> None:
+        self._records.append(usage)
+
+    async def query(
+        self,
+        *,
+        agent_id: str | None = None,
+        tenant_id: str | None = None,
+        model: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int = 1000,
+    ) -> list[UsageRecord]:
+        results = self._records
+        if agent_id is not None:
+            results = [r for r in results if r.agent_id == agent_id]
+        if tenant_id is not None:
+            results = [r for r in results if r.tenant_id == tenant_id]
+        if model is not None:
+            results = [r for r in results if r.model == model]
+        if since is not None:
+            results = [r for r in results if r.timestamp >= since]
+        if until is not None:
+            results = [r for r in results if r.timestamp <= until]
+        return results[-limit:]
+
+    async def summarise(
+        self,
+        *,
+        agent_id: str | None = None,
+        tenant_id: str | None = None,
+        model: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> UsageSummary:
+        records = await self.query(
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            model=model,
+            since=since,
+            until=until,
+            limit=1_000_000,
+        )
+        summary = UsageSummary()
+        summary.total_requests = len(records)
+        for r in records:
+            summary.total_input_tokens += r.input_tokens
+            summary.total_output_tokens += r.output_tokens
+            summary.total_cost_usd += r.cost_usd
+            entry = summary.by_model.setdefault(
+                r.model,
+                {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+            )
+            entry["requests"] += 1
+            entry["input_tokens"] += r.input_tokens
+            entry["output_tokens"] += r.output_tokens
+            entry["cost_usd"] += r.cost_usd
+        return summary
+
+    async def tokens_today(self, tenant_id: str) -> int:
+        since = _today_start()
+        records = [r for r in self._records if r.tenant_id == tenant_id and r.timestamp >= since]
+        return sum(r.input_tokens + r.output_tokens for r in records)
+
+    async def cost_today(self, tenant_id: str) -> float:
+        since = _today_start()
+        return sum(
+            r.cost_usd for r in self._records if r.tenant_id == tenant_id and r.timestamp >= since
+        )
+
+    async def requests_this_hour(self, tenant_id: str) -> int:
+        since = _hour_start()
+        return sum(1 for r in self._records if r.tenant_id == tenant_id and r.timestamp >= since)
+
+    async def agent_cost_today(self, agent_id: str) -> float:
+        since = _today_start()
+        return sum(
+            r.cost_usd for r in self._records if r.agent_id == agent_id and r.timestamp >= since
+        )

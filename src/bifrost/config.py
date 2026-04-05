@@ -1,4 +1,4 @@
-"""Bifröst configuration: providers, aliases, and routing settings."""
+"""Bifröst configuration: providers, aliases, routing settings, auth, and quotas."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import os
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+from bifrost.auth import AuthMode
 
 
 class RoutingStrategy(StrEnum):
@@ -51,6 +53,71 @@ class ProviderConfig(BaseModel):
         return os.environ.get(self.api_key_env, "")
 
 
+class PricingOverride(BaseModel):
+    """USD per million tokens for a single model (overrides built-in snapshot)."""
+
+    input_per_million: float = 0.0
+    output_per_million: float = 0.0
+    cache_creation_per_million: float = 0.0
+    cache_read_per_million: float = 0.0
+
+
+class QuotaConfig(BaseModel):
+    """Quota limits for a tenant or agent."""
+
+    max_tokens_per_day: int = Field(
+        default=0,
+        description="Maximum total tokens (input + output) per day. 0 = unlimited.",
+    )
+    max_cost_per_day: float = Field(
+        default=0.0,
+        description="Maximum USD cost per day. 0.0 = unlimited.",
+    )
+    max_requests_per_hour: int = Field(
+        default=0,
+        description="Maximum requests per calendar hour. 0 = unlimited.",
+    )
+    soft_limit_fraction: float = Field(
+        default=0.9,
+        description=(
+            "Fraction of any hard limit at which a warning header is injected "
+            "(0 < fraction < 1). Default: 0.9 (warn at 90% of the limit)."
+        ),
+    )
+
+
+class AgentPermissions(BaseModel):
+    """Per-agent access control and optional budget."""
+
+    allowed_models: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Models this agent is permitted to use. Empty list means all models are allowed."
+        ),
+    )
+    quota: QuotaConfig = Field(
+        default_factory=QuotaConfig,
+        description="Optional per-agent quota (zero values mean no limit).",
+    )
+
+
+class UsageStoreConfig(BaseModel):
+    """Configuration for the usage persistence backend."""
+
+    adapter: str = Field(
+        default="memory",
+        description=("Storage backend. Accepted values: 'memory' (default), 'sqlite', 'postgres'."),
+    )
+    path: str = Field(
+        default="./bifrost_usage.db",
+        description="File path for the SQLite backend (ignored for other adapters).",
+    )
+    dsn: str = Field(
+        default="",
+        description="PostgreSQL DSN for the postgres backend (ignored for other adapters).",
+    )
+
+
 # Default base URLs per provider type.
 _DEFAULT_BASE_URLS: dict[str, str] = {
     "anthropic": "https://api.anthropic.com",
@@ -88,6 +155,54 @@ class BifrostConfig(BaseModel):
     host: str = Field(default="0.0.0.0", description="Host to bind the gateway server.")
     port: int = Field(default=8088, description="Port to bind the gateway server.")
 
+    # ── Authentication ───────────────────────────────────────────────────────
+    auth_mode: AuthMode = Field(
+        default=AuthMode.OPEN,
+        description=(
+            "Authentication mode: 'open' (trust headers), "
+            "'pat' (Bearer JWT), or 'mesh' (Envoy injected headers)."
+        ),
+    )
+    pat_secret: str = Field(
+        default="",
+        description=(
+            "HS256 signing secret for PAT verification. "
+            "Required when auth_mode = 'pat'. "
+            "Read from the PAT_SECRET environment variable if blank."
+        ),
+    )
+
+    # ── Pricing overrides ───────────────────────────────────────────────────
+    pricing: dict[str, PricingOverride] = Field(
+        default_factory=dict,
+        description=(
+            "Per-model pricing overrides (USD / million tokens). "
+            "Unspecified models fall back to the built-in snapshot."
+        ),
+    )
+
+    # ── Quota enforcement ────────────────────────────────────────────────────
+    default_quota: QuotaConfig = Field(
+        default_factory=QuotaConfig,
+        description="Default quota applied to all tenants (zero values = unlimited).",
+    )
+    tenant_quotas: dict[str, QuotaConfig] = Field(
+        default_factory=dict,
+        description="Per-tenant quota overrides (keyed by tenant_id).",
+    )
+    agent_permissions: dict[str, AgentPermissions] = Field(
+        default_factory=dict,
+        description="Per-agent model access control and optional budget.",
+    )
+
+    # ── Usage storage ────────────────────────────────────────────────────────
+    usage_store: UsageStoreConfig = Field(
+        default_factory=UsageStoreConfig,
+        description="Configuration for the usage persistence backend.",
+    )
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
     def resolve_alias(self, model: str) -> str:
         """Expand a model alias to its canonical name."""
         return self.aliases.get(model, model)
@@ -109,3 +224,15 @@ class BifrostConfig(BaseModel):
         if cfg and cfg.base_url:
             return cfg.base_url
         return _DEFAULT_BASE_URLS.get(provider_name, "")
+
+    def effective_pat_secret(self) -> str:
+        """Return the PAT signing secret, falling back to the PAT_SECRET env var."""
+        return self.pat_secret or os.environ.get("PAT_SECRET", "")
+
+    def quota_for_tenant(self, tenant_id: str) -> QuotaConfig:
+        """Return the quota config for *tenant_id*, falling back to the default."""
+        return self.tenant_quotas.get(tenant_id, self.default_quota)
+
+    def permissions_for_agent(self, agent_id: str) -> AgentPermissions:
+        """Return the permissions for *agent_id* (empty = unrestricted)."""
+        return self.agent_permissions.get(agent_id, AgentPermissions())
