@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -27,8 +27,7 @@ from bifrost.translation.models import (
     AnthropicRequest,
     AnthropicResponse,
     Message,
-    TextBlock,
-    ThinkingBlock,
+    extract_text_from_response,
 )
 
 # ---------------------------------------------------------------------------
@@ -157,17 +156,6 @@ def ollama_chat_to_anthropic(req: OllamaChatRequest) -> AnthropicRequest:
 # ---------------------------------------------------------------------------
 
 
-def _extract_response_text(response: AnthropicResponse) -> str:
-    """Flatten Anthropic content blocks to a plain string for Ollama."""
-    parts: list[str] = []
-    for block in response.content:
-        if isinstance(block, TextBlock):
-            parts.append(block.text)
-        elif isinstance(block, ThinkingBlock):
-            parts.append(f"<thinking>{block.thinking}</thinking>")
-    return "".join(parts)
-
-
 def _done_reason(stop_reason: str | None) -> str:
     """Map Anthropic stop_reason to an Ollama done_reason string."""
     mapping = {
@@ -186,7 +174,7 @@ def anthropic_response_to_ollama_generate(
     total_duration_ns: int,
 ) -> dict[str, Any]:
     """Convert an Anthropic response to Ollama /api/generate non-streaming format."""
-    text = _extract_response_text(response)
+    text = extract_text_from_response(response)
     return {
         "model": response.model,
         "created_at": created_at,
@@ -209,7 +197,7 @@ def anthropic_response_to_ollama_chat(
     total_duration_ns: int,
 ) -> dict[str, Any]:
     """Convert an Anthropic response to Ollama /api/chat non-streaming format."""
-    text = _extract_response_text(response)
+    text = extract_text_from_response(response)
     return {
         "model": response.model,
         "created_at": created_at,
@@ -235,6 +223,93 @@ def _ndjson(obj: dict[str, Any]) -> str:
     return json.dumps(obj) + "\n"
 
 
+async def _parse_anthropic_sse_to_ollama(
+    source: AsyncIterator[str],
+    *,
+    model: str,
+    start: float,
+    intermediate_chunk: Callable[[str, str, str], dict[str, Any]],
+    final_chunk: Callable[[str, str, str, int, int, int], dict[str, Any]],
+) -> AsyncIterator[str]:
+    """Parse Anthropic SSE events and yield Ollama NDJSON lines.
+
+    This is the shared core for both /api/generate and /api/chat streaming.
+    The two callables control the chunk shape for each endpoint:
+
+    - ``intermediate_chunk(model, created_at, text)`` — called for each text
+      delta; should return a dict with ``"done": false``.
+    - ``final_chunk(model, created_at, done_reason, total_ns, input_tokens,
+      output_tokens)`` — called once after the stream ends; should return a
+      dict with ``"done": true`` and timing / token metadata.
+
+    Args:
+        source: Async iterator of raw Anthropic SSE strings from the router.
+        model: Model name passed through to each chunk builder.
+        start: ``time.monotonic()`` value recorded before the request was sent.
+        intermediate_chunk: Callable that builds intermediate NDJSON payloads.
+        final_chunk: Callable that builds the terminal NDJSON payload.
+
+    Yields:
+        Newline-terminated JSON strings (NDJSON).
+    """
+    current_event_type = ""
+    input_tokens = 0
+    output_tokens = 0
+    done_reason = "stop"
+
+    async for raw in source:
+        for raw_line in raw.split("\n"):
+            line = raw_line.strip()
+
+            if not line:
+                current_event_type = ""
+                continue
+
+            if line.startswith("event: "):
+                current_event_type = line[7:]
+                continue
+
+            if not line.startswith("data: "):
+                continue
+
+            payload_str = line[6:]
+            if payload_str == "[DONE]":
+                break
+
+            try:
+                payload = json.loads(payload_str)
+            except json.JSONDecodeError:
+                continue
+
+            event_type = current_event_type or payload.get("type", "")
+
+            if event_type == "message_start":
+                usage = payload.get("message", {}).get("usage", {})
+                input_tokens = usage.get("input_tokens", 0)
+
+            elif event_type == "content_block_delta":
+                delta = payload.get("delta", {})
+                if delta.get("type") == "text_delta":
+                    text = delta.get("text", "")
+                    created_at = datetime.now(UTC).isoformat()
+                    yield _ndjson(intermediate_chunk(model, created_at, text))
+
+            elif event_type == "message_delta":
+                delta = payload.get("delta", {})
+                done_reason = _done_reason(delta.get("stop_reason"))
+                usage = payload.get("usage", {})
+                output_tokens = usage.get("output_tokens", output_tokens)
+
+            elif event_type == "message_stop":
+                break
+
+    total_ns = int((time.monotonic() - start) * 1e9)
+    created_at = datetime.now(UTC).isoformat()
+    yield _ndjson(
+        final_chunk(model, created_at, done_reason, total_ns, input_tokens, output_tokens)
+    )
+
+
 async def anthropic_stream_to_ollama_generate(
     source: AsyncIterator[str],
     *,
@@ -255,81 +330,29 @@ async def anthropic_stream_to_ollama_generate(
     Yields:
         NDJSON lines compatible with the Ollama /api/generate streaming format.
     """
-    current_event_type = ""
-    input_tokens = 0
-    output_tokens = 0
-    done_reason = "stop"
 
-    async for raw in source:
-        for raw_line in raw.split("\n"):
-            line = raw_line.strip()
+    def _intermediate(m: str, ts: str, text: str) -> dict[str, Any]:
+        return {"model": m, "created_at": ts, "response": text, "done": False}
 
-            if not line:
-                current_event_type = ""
-                continue
-
-            if line.startswith("event: "):
-                current_event_type = line[7:]
-                continue
-
-            if not line.startswith("data: "):
-                continue
-
-            payload_str = line[6:]
-            if payload_str == "[DONE]":
-                break
-
-            try:
-                payload = json.loads(payload_str)
-            except json.JSONDecodeError:
-                continue
-
-            event_type = current_event_type or payload.get("type", "")
-
-            if event_type == "message_start":
-                usage = payload.get("message", {}).get("usage", {})
-                input_tokens = usage.get("input_tokens", 0)
-
-            elif event_type == "content_block_delta":
-                delta = payload.get("delta", {})
-                if delta.get("type") == "text_delta":
-                    text = delta.get("text", "")
-                    created_at = datetime.now(UTC).isoformat()
-                    yield _ndjson(
-                        {
-                            "model": model,
-                            "created_at": created_at,
-                            "response": text,
-                            "done": False,
-                        }
-                    )
-
-            elif event_type == "message_delta":
-                delta = payload.get("delta", {})
-                done_reason = _done_reason(delta.get("stop_reason"))
-                usage = payload.get("usage", {})
-                output_tokens = usage.get("output_tokens", output_tokens)
-
-            elif event_type == "message_stop":
-                break
-
-    total_ns = int((time.monotonic() - start) * 1e9)
-    created_at = datetime.now(UTC).isoformat()
-    yield _ndjson(
-        {
-            "model": model,
-            "created_at": created_at,
+    def _final(m: str, ts: str, dr: str, ns: int, inp: int, out: int) -> dict[str, Any]:
+        return {
+            "model": m,
+            "created_at": ts,
             "response": "",
             "done": True,
-            "done_reason": done_reason,
-            "total_duration": total_ns,
+            "done_reason": dr,
+            "total_duration": ns,
             "load_duration": 0,
-            "prompt_eval_count": input_tokens,
+            "prompt_eval_count": inp,
             "prompt_eval_duration": 0,
-            "eval_count": output_tokens,
-            "eval_duration": total_ns,
+            "eval_count": out,
+            "eval_duration": ns,
         }
-    )
+
+    async for chunk in _parse_anthropic_sse_to_ollama(
+        source, model=model, start=start, intermediate_chunk=_intermediate, final_chunk=_final
+    ):
+        yield chunk
 
 
 async def anthropic_stream_to_ollama_chat(
@@ -340,9 +363,9 @@ async def anthropic_stream_to_ollama_chat(
 ) -> AsyncIterator[str]:
     """Translate Anthropic SSE stream to Ollama /api/chat NDJSON.
 
-    Identical to ``anthropic_stream_to_ollama_generate`` except each
-    intermediate chunk wraps the text in a ``message`` object to match the
-    /api/chat streaming shape.
+    Each text delta is emitted as an intermediate chunk (``"done": false``)
+    wrapping the text in a ``message`` object.  On stream completion a final
+    chunk with ``"done": true`` and token counts is emitted.
 
     Args:
         source: Async iterator of raw Anthropic SSE strings from the router.
@@ -352,78 +375,31 @@ async def anthropic_stream_to_ollama_chat(
     Yields:
         NDJSON lines compatible with the Ollama /api/chat streaming format.
     """
-    current_event_type = ""
-    input_tokens = 0
-    output_tokens = 0
-    done_reason = "stop"
 
-    async for raw in source:
-        for raw_line in raw.split("\n"):
-            line = raw_line.strip()
+    def _intermediate(m: str, ts: str, text: str) -> dict[str, Any]:
+        return {
+            "model": m,
+            "created_at": ts,
+            "message": {"role": "assistant", "content": text},
+            "done": False,
+        }
 
-            if not line:
-                current_event_type = ""
-                continue
-
-            if line.startswith("event: "):
-                current_event_type = line[7:]
-                continue
-
-            if not line.startswith("data: "):
-                continue
-
-            payload_str = line[6:]
-            if payload_str == "[DONE]":
-                break
-
-            try:
-                payload = json.loads(payload_str)
-            except json.JSONDecodeError:
-                continue
-
-            event_type = current_event_type or payload.get("type", "")
-
-            if event_type == "message_start":
-                usage = payload.get("message", {}).get("usage", {})
-                input_tokens = usage.get("input_tokens", 0)
-
-            elif event_type == "content_block_delta":
-                delta = payload.get("delta", {})
-                if delta.get("type") == "text_delta":
-                    text = delta.get("text", "")
-                    created_at = datetime.now(UTC).isoformat()
-                    yield _ndjson(
-                        {
-                            "model": model,
-                            "created_at": created_at,
-                            "message": {"role": "assistant", "content": text},
-                            "done": False,
-                        }
-                    )
-
-            elif event_type == "message_delta":
-                delta = payload.get("delta", {})
-                done_reason = _done_reason(delta.get("stop_reason"))
-                usage = payload.get("usage", {})
-                output_tokens = usage.get("output_tokens", output_tokens)
-
-            elif event_type == "message_stop":
-                break
-
-    total_ns = int((time.monotonic() - start) * 1e9)
-    created_at = datetime.now(UTC).isoformat()
-    yield _ndjson(
-        {
-            "model": model,
-            "created_at": created_at,
+    def _final(m: str, ts: str, dr: str, ns: int, inp: int, out: int) -> dict[str, Any]:
+        return {
+            "model": m,
+            "created_at": ts,
             "message": {"role": "assistant", "content": ""},
             "done": True,
-            "done_reason": done_reason,
-            "total_duration": total_ns,
+            "done_reason": dr,
+            "total_duration": ns,
             "load_duration": 0,
-            "prompt_eval_count": input_tokens,
+            "prompt_eval_count": inp,
             "prompt_eval_duration": 0,
-            "eval_count": output_tokens,
-            "eval_duration": total_ns,
+            "eval_count": out,
+            "eval_duration": ns,
         }
-    )
+
+    async for chunk in _parse_anthropic_sse_to_ollama(
+        source, model=model, start=start, intermediate_chunk=_intermediate, final_chunk=_final
+    ):
+        yield chunk

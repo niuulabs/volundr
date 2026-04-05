@@ -192,3 +192,24 @@ STOP_REASON_TO_OPENAI: dict[str, str] = {
     "max_tokens": "length",
     "stop_sequence": "stop",
 }
+
+
+def extract_text_from_response(response: AnthropicResponse) -> str:
+    """Flatten Anthropic content blocks to a plain text string.
+
+    ``TextBlock`` content is concatenated directly; ``ThinkingBlock`` content
+    is wrapped in ``<thinking>`` tags.  All other block types are ignored.
+
+    Args:
+        response: An ``AnthropicResponse`` from the routing layer.
+
+    Returns:
+        A single string suitable for embedding in any text-based response format.
+    """
+    parts: list[str] = []
+    for block in response.content:
+        if isinstance(block, TextBlock):
+            parts.append(block.text)
+        elif isinstance(block, ThinkingBlock):
+            parts.append(f"<thinking>{block.thinking}</thinking>")
+    return "".join(parts)

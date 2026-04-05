@@ -25,12 +25,12 @@ from bifrost.translation.models import (
     ContentBlock,
     Message,
     TextBlock,
-    ThinkingBlock,
     ToolChoiceAny,
     ToolChoiceAuto,
     ToolChoiceTool,
     ToolDefinition,
     ToolResultBlock,
+    extract_text_from_response,
 )
 from bifrost.translation.to_anthropic import _openai_tool_calls_to_blocks
 from bifrost.translation.to_openai import _extract_tool_calls
@@ -249,14 +249,7 @@ def anthropic_response_to_openai(response: AnthropicResponse) -> dict[str, Any]:
     Returns:
         A dict ready to be JSON-serialised and returned to the caller.
     """
-    text_parts: list[str] = []
-    for block in response.content:
-        if isinstance(block, TextBlock):
-            text_parts.append(block.text)
-        elif isinstance(block, ThinkingBlock):
-            text_parts.append(f"<thinking>{block.thinking}</thinking>")
-
-    text = "".join(text_parts)
+    text = extract_text_from_response(response)
     tool_calls = _extract_tool_calls(response.content)
     finish_reason = STOP_REASON_TO_OPENAI.get(response.stop_reason or "end_turn", "stop")
 
