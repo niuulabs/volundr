@@ -63,3 +63,36 @@ class PostToolHookPort(ABC):
             Possibly modified ToolResult.
         """
         ...
+
+
+class HookPipelinePort(ABC):
+    """Abstract interface for the hook pipeline that wraps tool dispatch.
+
+    The registry depends on this port — concrete implementations live in
+    ``ravn.adapters.tools.hooks``.
+    """
+
+    @abstractmethod
+    async def run_pre(
+        self,
+        tool_name: str,
+        args: dict,
+        agent_state: dict,
+    ) -> dict:
+        """Run all pre-hooks in order and return the (possibly modified) args.
+
+        Raises:
+            PermissionDeniedError: If any pre-hook blocks execution.
+        """
+        ...
+
+    @abstractmethod
+    async def run_post(
+        self,
+        tool_name: str,
+        args: dict,
+        result: ToolResult,
+        agent_state: dict,
+    ) -> ToolResult:
+        """Run all post-hooks in order and return the (possibly modified) result."""
+        ...

@@ -19,11 +19,12 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections import deque
 from dataclasses import dataclass, field
 
 from ravn.domain.exceptions import PermissionDeniedError
 from ravn.domain.models import ToolResult
-from ravn.ports.hooks import PostToolHookPort, PreToolHookPort
+from ravn.ports.hooks import HookPipelinePort, PostToolHookPort, PreToolHookPort
 from ravn.ports.permission import PermissionPort
 
 logger = logging.getLogger(__name__)
@@ -145,19 +146,24 @@ class AuditEntry:
     timestamp: float = field(default_factory=time.time)
 
 
+_DEFAULT_MAX_AUDIT_ENTRIES = 1000
+
+
 class AuditHook(PostToolHookPort):
     """Post-hook that records a structured audit entry for every tool call.
 
-    Entries are accumulated in ``self.entries`` and also emitted at DEBUG
-    level so they appear in structured logs when the log level is set low
-    enough.
+    Entries are accumulated in ``self.entries`` (a bounded deque) and also
+    emitted at DEBUG level so they appear in structured logs when the log
+    level is set low enough.  Once ``max_entries`` is reached the oldest
+    entry is evicted automatically, bounding memory use in long-running
+    sessions.
 
     The hook reads ``_started_at`` from ``agent_state`` (a ``time.monotonic``
     stamp set by the registry before dispatch) to compute elapsed time.
     """
 
-    def __init__(self) -> None:
-        self.entries: list[AuditEntry] = []
+    def __init__(self, max_entries: int = _DEFAULT_MAX_AUDIT_ENTRIES) -> None:
+        self.entries: deque[AuditEntry] = deque(maxlen=max_entries)
 
     async def post_execute(
         self,
@@ -238,7 +244,7 @@ class SanitisationHook(PostToolHookPort):
 # ---------------------------------------------------------------------------
 
 
-class HookPipeline:
+class HookPipeline(HookPipelinePort):
     """Orchestrates pre and post hooks around a tool dispatch.
 
     Pre-hooks run in registration order before the tool executes; any hook

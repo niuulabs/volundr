@@ -7,6 +7,7 @@ import time
 
 from ravn.domain.exceptions import PermissionDeniedError
 from ravn.domain.models import ToolResult
+from ravn.ports.hooks import HookPipelinePort
 from ravn.ports.tool import ToolPort
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class ToolRegistry:
     every dispatch call — transparent to individual tool implementations.
     """
 
-    def __init__(self, hook_pipeline: object | None = None) -> None:
+    def __init__(self, hook_pipeline: HookPipelinePort | None = None) -> None:
         self._tools: dict[str, ToolPort] = {}
         self._pipeline = hook_pipeline
 

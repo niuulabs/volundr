@@ -19,7 +19,7 @@ from ravn.adapters.tools.hooks import (
 )
 from ravn.domain.exceptions import PermissionDeniedError
 from ravn.domain.models import ToolResult
-from ravn.ports.hooks import PostToolHookPort, PreToolHookPort
+from ravn.ports.hooks import HookPipelinePort, PostToolHookPort, PreToolHookPort
 from ravn.registry import ToolRegistry
 from tests.ravn.fixtures.fakes import EchoTool, FailingTool
 
@@ -75,6 +75,47 @@ class TestPostToolHookPort:
         r = _result("hello")
         out = await hook.post_execute("echo", {}, r, {})
         assert out is r
+
+
+# ---------------------------------------------------------------------------
+# HookPipelinePort
+# ---------------------------------------------------------------------------
+
+
+class TestHookPipelinePort:
+    def test_is_abstract(self) -> None:
+        with pytest.raises(TypeError):
+            HookPipelinePort()  # type: ignore[abstract]
+
+    def test_concrete_must_implement_run_pre_and_run_post(self) -> None:
+        class Incomplete(HookPipelinePort):
+            async def run_pre(self, tool_name: str, args: dict, state: dict) -> dict:
+                return args
+
+        with pytest.raises(TypeError):
+            Incomplete()  # type: ignore[abstract]
+
+    async def test_hook_pipeline_implements_port(self) -> None:
+        pipeline = HookPipeline()
+        assert isinstance(pipeline, HookPipelinePort)
+
+    async def test_concrete_subclass_works(self) -> None:
+        class NoopPipeline(HookPipelinePort):
+            async def run_pre(self, tool_name: str, args: dict, state: dict) -> dict:
+                return args
+
+            async def run_post(
+                self, tool_name: str, args: dict, result: ToolResult, state: dict
+            ) -> ToolResult:
+                return result
+
+        pipeline = NoopPipeline()
+        args = {"x": 1}
+        out = await pipeline.run_pre("t", args, {})
+        assert out == args
+        r = _result("ok")
+        out2 = await pipeline.run_post("t", {}, r, {})
+        assert out2 is r
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +268,30 @@ class TestAuditHook:
         )
         assert entry.tool_name == "t"
         assert entry.elapsed_ms == 1.5
+
+    async def test_entries_is_bounded_deque(self) -> None:
+        from collections import deque
+
+        hook = AuditHook(max_entries=3)
+        assert isinstance(hook.entries, deque)
+        assert hook.entries.maxlen == 3
+
+    async def test_entries_evicts_oldest_when_full(self) -> None:
+        hook = AuditHook(max_entries=3)
+        for i in range(5):
+            await hook.post_execute("t", {}, _result(f"r{i}"), {})
+        # deque kept only the last 3
+        assert len(hook.entries) == 3
+        contents = [e.result_content for e in hook.entries]
+        assert contents == ["r2", "r3", "r4"]
+
+    async def test_default_max_entries_is_1000(self) -> None:
+        hook = AuditHook()
+        assert hook.entries.maxlen == 1000
+
+    async def test_custom_max_entries(self) -> None:
+        hook = AuditHook(max_entries=50)
+        assert hook.entries.maxlen == 50
 
 
 # ---------------------------------------------------------------------------
