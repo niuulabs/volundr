@@ -12,15 +12,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 import random
 import sqlite3
 import time
-from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ravn.adapters.sqlite_common import CHARS_PER_TOKEN
+from ravn.adapters._memory_scoring import (
+    _AVG_EPISODE_CHARS,
+    _CHARS_PER_TOKEN,
+    _OUTCOME_WEIGHTS,
+    _recency_score,
+    build_prefetch_context,
+    build_session_summaries,
+)
 from ravn.domain.models import (
     Episode,
     EpisodeMatch,
@@ -76,18 +81,6 @@ AFTER UPDATE ON episodes BEGIN
 END;
 """
 
-# Estimated average character length of a single episode row, used to compute
-# the FTS5 LIMIT when searching for sessions.
-_AVG_EPISODE_CHARS = 200
-
-# Outcome weights for combined scoring.
-_OUTCOME_WEIGHTS: dict[str, float] = {
-    Outcome.SUCCESS: 1.0,
-    Outcome.PARTIAL: 0.7,
-    Outcome.FAILURE: 0.3,
-}
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -138,14 +131,6 @@ def _row_to_episode(row: sqlite3.Row) -> Episode:
     )
 
 
-def _recency_score(timestamp: datetime, half_life_days: float) -> float:
-    """Compute exponential decay recency in [0, 1] given episode age."""
-    now = datetime.now(UTC)
-    ts = timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=UTC)
-    age_days = (now - ts).total_seconds() / 86400.0
-    return math.exp(-age_days * math.log(2) / half_life_days)
-
-
 def _combined_score(
     bm25: float,
     max_abs_bm25: float,
@@ -158,19 +143,6 @@ def _combined_score(
     recency = _recency_score(timestamp, half_life_days)
     weight = _OUTCOME_WEIGHTS.get(outcome, 0.5)
     return bm25_rel * recency * weight
-
-
-def _format_episode_block(episode: Episode) -> str:
-    """Format a single episode for injection into the system prompt."""
-    ts = episode.timestamp.strftime("%Y-%m-%d")
-    outcome = episode.outcome.upper()
-    tags_str = ", ".join(episode.tags) if episode.tags else "general"
-    tools_str = ", ".join(episode.tools_used) if episode.tools_used else "none"
-    return (
-        f"[{ts}] [{outcome}] {episode.task_description}\n"
-        f"Tags: {tags_str} | Tools: {tools_str}\n"
-        f"{episode.summary}"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -236,23 +208,8 @@ class SqliteMemoryAdapter(MemoryPort):
         )
         if not matches:
             return ""
-
-        budget_chars = self._prefetch_budget * CHARS_PER_TOKEN
-        blocks: list[str] = []
-        used = 0
-        for match in matches:
-            block = _format_episode_block(match.episode)
-            if used + len(block) > budget_chars:
-                break
-            blocks.append(block)
-            used += len(block) + 1  # +1 for separator
-
-        if not blocks:
-            return ""
-
-        separator = "\n\n---\n\n"
-        body = separator.join(blocks)
-        return f"## Relevant Past Context\n\n{body}"
+        budget_chars = self._prefetch_budget * _CHARS_PER_TOKEN
+        return build_prefetch_context(matches, budget_chars)
 
     async def search_sessions(
         self,
@@ -405,43 +362,7 @@ class SqliteMemoryAdapter(MemoryPort):
             if not rows:
                 return []
 
-            # Group episodes by session, collect tags and timestamps.
-            session_episodes: dict[str, list[Episode]] = defaultdict(list)
-            for row in rows:
-                ep = _row_to_episode(row)
-                session_episodes[ep.session_id].append(ep)
-
-            summaries: list[SessionSummary] = []
-            for session_id, episodes in session_episodes.items():
-                episodes.sort(key=lambda e: e.timestamp)
-                last_active = max(e.timestamp for e in episodes)
-                all_tags: list[str] = []
-                for ep in episodes:
-                    all_tags.extend(ep.tags)
-                unique_tags = list(dict.fromkeys(all_tags))
-
-                # Build a concise summary of the session's episodes.
-                lines: list[str] = []
-                total_chars = 0
-                for ep in episodes:
-                    line = f"- [{ep.outcome.upper()}] {ep.task_description}: {ep.summary}"
-                    if total_chars + len(line) > self._session_search_truncate_chars:
-                        break
-                    lines.append(line)
-                    total_chars += len(line)
-
-                summary_text = "\n".join(lines)
-                summaries.append(
-                    SessionSummary(
-                        session_id=session_id,
-                        summary=summary_text,
-                        episode_count=len(episodes),
-                        last_active=last_active,
-                        tags=unique_tags[:10],
-                    )
-                )
-
-            summaries.sort(key=lambda s: s.last_active, reverse=True)
-            return summaries[:limit]
+            episodes = [_row_to_episode(row) for row in rows]
+            return build_session_summaries(episodes, limit, self._session_search_truncate_chars)
 
         return self._with_retry(_do_search)
