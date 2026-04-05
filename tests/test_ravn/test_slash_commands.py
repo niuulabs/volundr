@@ -71,8 +71,16 @@ class TestCmdHelp:
     def test_lists_all_commands(self) -> None:
         result = handle("/help", _ctx())
         assert result is not None
-        all_cmds = ("/help", "/tools", "/memory", "/compact", "/budget", "/todo", "/status",
-                    "/init")
+        all_cmds = (
+            "/help",
+            "/tools",
+            "/memory",
+            "/compact",
+            "/budget",
+            "/todo",
+            "/status",
+            "/init",
+        )
         for cmd in all_cmds:
             assert cmd in result
 
@@ -180,8 +188,8 @@ class TestCmdBudget:
         s.record_turn(s.total_usage)  # used = 1
         result = handle("/budget", _ctx(session=s, max_iterations=10))
         assert result is not None
-        assert "1" in result   # used
-        assert "9" in result   # remaining
+        assert "1" in result  # used
+        assert "9" in result  # remaining
         assert "10" in result  # limit
 
     def test_remaining_never_negative(self) -> None:

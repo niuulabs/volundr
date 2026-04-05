@@ -558,9 +558,7 @@ class TestSearchSessions:
         ep1 = _ep(episode_id="e1", session_id="s1", summary="git commit changes")
         ep2 = _ep(episode_id="e2", session_id="s1", summary="git push to remote")
         ep3 = _ep(episode_id="e3", session_id="s2", summary="git merge main")
-        conn = _make_conn(
-            fetch_result=[_make_row(ep1), _make_row(ep2), _make_row(ep3)]
-        )
+        conn = _make_conn(fetch_result=[_make_row(ep1), _make_row(ep2), _make_row(ep3)])
         adapter = _make_adapter(conn)
         summaries = await adapter.search_sessions("git", limit=10)
         session_ids = {s.session_id for s in summaries}
@@ -569,8 +567,7 @@ class TestSearchSessions:
 
     async def test_episode_count_per_session(self) -> None:
         eps = [
-            _ep(episode_id=f"e{i}", session_id="s1", summary="refactored module")
-            for i in range(3)
+            _ep(episode_id=f"e{i}", session_id="s1", summary="refactored module") for i in range(3)
         ]
         conn = _make_conn(fetch_result=[_make_row(ep) for ep in eps])
         adapter = _make_adapter(conn)

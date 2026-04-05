@@ -123,8 +123,7 @@ class TestMigrateSqliteToPostgres:
     async def test_migrates_three_episodes(self, tmp_path: Path) -> None:
         db_path = tmp_path / "memory.db"
         episodes = [
-            {"episode_id": f"ep-{i}", "session_id": "s1", "summary": f"task {i}"}
-            for i in range(3)
+            {"episode_id": f"ep-{i}", "session_id": "s1", "summary": f"task {i}"} for i in range(3)
         ]
         _populate_sqlite(db_path, episodes)
         conn = _make_pg_conn(execute_result="INSERT 0 1")
@@ -155,8 +154,7 @@ class TestMigrateSqliteToPostgres:
     async def test_progress_callback_called(self, tmp_path: Path) -> None:
         db_path = tmp_path / "memory.db"
         episodes = [
-            {"episode_id": f"ep-{i}", "session_id": "s1", "summary": f"task {i}"}
-            for i in range(5)
+            {"episode_id": f"ep-{i}", "session_id": "s1", "summary": f"task {i}"} for i in range(5)
         ]
         _populate_sqlite(db_path, episodes)
         conn = _make_pg_conn()
@@ -179,8 +177,7 @@ class TestMigrateSqliteToPostgres:
     async def test_batch_size_respected(self, tmp_path: Path) -> None:
         db_path = tmp_path / "memory.db"
         episodes = [
-            {"episode_id": f"ep-{i}", "session_id": "s1", "summary": f"task {i}"}
-            for i in range(10)
+            {"episode_id": f"ep-{i}", "session_id": "s1", "summary": f"task {i}"} for i in range(10)
         ]
         _populate_sqlite(db_path, episodes)
         conn = _make_pg_conn()
