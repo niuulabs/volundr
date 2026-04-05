@@ -14,8 +14,10 @@ import pytest
 from ravn.adapters.permission_adapter import AllowAllPermission
 from ravn.adapters.sqlite_outcome import SQLiteOutcomeAdapter, _format_lessons, _sanitise_fts_query
 from ravn.agent import RavnAgent, _compute_cost
+from ravn.config import OutcomeConfig
 from ravn.domain.models import (
     LLMResponse,
+    Outcome,
     StopReason,
     StreamEvent,
     StreamEventType,
@@ -73,8 +75,7 @@ def make_simple_llm(response_text: str = "Done!") -> LLMPort:
 def make_agent(
     llm: LLMPort,
     outcome_port: OutcomePort | None = None,
-    lessons_limit: int = 3,
-    reflection_model: str = "claude-haiku-4-5-20251001",
+    outcome_config: OutcomeConfig | None = None,
 ) -> tuple[RavnAgent, InMemoryChannel]:
     ch = InMemoryChannel()
     agent = RavnAgent(
@@ -87,8 +88,7 @@ def make_agent(
         max_tokens=1024,
         max_iterations=5,
         outcome_port=outcome_port,
-        lessons_limit=lessons_limit,
-        reflection_model=reflection_model,
+        outcome_config=outcome_config,
     )
     return agent, ch
 
@@ -125,7 +125,7 @@ class TestComputeCost:
 def _make_outcome(
     task_id: str = "t1",
     summary: str = "deploy to production",
-    outcome: str = "success",
+    outcome: Outcome = Outcome.SUCCESS,
     reflection: str = "Everything worked.",
     tags: list[str] | None = None,
 ) -> TaskOutcome:
@@ -341,7 +341,7 @@ class TestTaskOutcomeModel:
         outcome = TaskOutcome(
             task_id="abc",
             task_summary="fix the bug",
-            outcome="success",
+            outcome=Outcome.SUCCESS,
             tools_used=["bash"],
             iterations_used=2,
             cost_usd=0.005,
@@ -352,7 +352,7 @@ class TestTaskOutcomeModel:
             timestamp=now,
         )
         assert outcome.task_id == "abc"
-        assert outcome.outcome == "success"
+        assert outcome.outcome == Outcome.SUCCESS
         assert outcome.cost_usd == pytest.approx(0.005)
         assert outcome.timestamp is now
 
@@ -398,7 +398,8 @@ class TestAgentOutcomeRecording:
         port = RecordingOutcomePort()
         llm = make_simple_llm()
         reflection_model = "claude-haiku-4-5-20251001"
-        agent, _ = make_agent(llm, outcome_port=port, reflection_model=reflection_model)
+        cfg = OutcomeConfig(reflection_model=reflection_model)
+        agent, _ = make_agent(llm, outcome_port=port, outcome_config=cfg)
         await agent.run_turn("read the docs")
         call_kwargs = llm.generate.call_args.kwargs
         assert call_kwargs["model"] == reflection_model
@@ -518,7 +519,7 @@ class TestSQLiteOutcomeEndToEnd:
         outcome = TaskOutcome(
             task_id="e2e-1",
             task_summary="run pytest suite for authentication module",
-            outcome="success",
+            outcome=Outcome.SUCCESS,
             tools_used=["bash"],
             iterations_used=2,
             cost_usd=0.002,

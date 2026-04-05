@@ -23,6 +23,7 @@ class Outcome(StrEnum):
     SUCCESS = "success"
     FAILURE = "failure"
     PARTIAL = "partial"
+    INTERRUPTED = "interrupted"
 
 
 class StopReason(StrEnum):
@@ -101,7 +102,7 @@ class TaskOutcome:
 
     task_id: str
     task_summary: str  # one-sentence description (≤200 chars)
-    outcome: str  # success | partial | failure | interrupted
+    outcome: Outcome
     tools_used: list[str]
     iterations_used: int
     cost_usd: float

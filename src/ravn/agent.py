@@ -9,6 +9,7 @@ from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any
 
+from ravn.config import OutcomeConfig
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
@@ -78,12 +79,7 @@ class RavnAgent:
         episode_summary_max_chars: int = 500,
         episode_task_max_chars: int = 200,
         outcome_port: OutcomePort | None = None,
-        reflection_model: str = "claude-haiku-4-5-20251001",
-        reflection_max_tokens: int = 512,
-        lessons_limit: int = 3,
-        task_summary_max_chars: int = 200,
-        input_token_cost_per_million: float = 3.0,
-        output_token_cost_per_million: float = 15.0,
+        outcome_config: OutcomeConfig | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -100,12 +96,13 @@ class RavnAgent:
         self._episode_summary_max_chars = episode_summary_max_chars
         self._episode_task_max_chars = episode_task_max_chars
         self._outcome_port = outcome_port
-        self._reflection_model = reflection_model
-        self._reflection_max_tokens = reflection_max_tokens
-        self._lessons_limit = lessons_limit
-        self._task_summary_max_chars = task_summary_max_chars
-        self._input_token_cost_per_million = input_token_cost_per_million
-        self._output_token_cost_per_million = output_token_cost_per_million
+        _oc = outcome_config or OutcomeConfig()
+        self._reflection_model = _oc.reflection_model
+        self._reflection_max_tokens = _oc.reflection_max_tokens
+        self._lessons_limit = _oc.lessons_limit
+        self._task_summary_max_chars = _oc.task_summary_max_chars
+        self._input_token_cost_per_million = _oc.input_token_cost_per_million
+        self._output_token_cost_per_million = _oc.output_token_cost_per_million
         self._session = Session()
 
     @property
@@ -266,7 +263,7 @@ class RavnAgent:
         if len(user_input) > self._task_summary_max_chars:
             task_summary = task_summary.rstrip() + "…"
 
-        outcome_str = _determine_outcome(turn_result.tool_results).value
+        outcome_str = _determine_outcome(turn_result.tool_results)
         tools_used = list({tc.name for tc in turn_result.tool_calls})
         tags = _infer_tags(tools_used)
         errors = [r.content for r in turn_result.tool_results if r.is_error]
@@ -303,7 +300,7 @@ class RavnAgent:
     async def _run_reflection(
         self,
         task_summary: str,
-        outcome: str,
+        outcome: Outcome,
         tools_used: list[str],
         errors: list[str],
         past_context: str,

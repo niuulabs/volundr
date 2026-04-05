@@ -12,11 +12,13 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
 
+from ravn.adapters.sqlite_common import CHARS_PER_TOKEN
 from ravn.domain.models import TaskOutcome
 from ravn.ports.outcome import OutcomePort
 
@@ -68,10 +70,6 @@ AFTER UPDATE ON task_outcomes BEGIN
 END;
 """
 
-# Approximate chars per token for lessons budget estimation.
-_CHARS_PER_TOKEN = 4
-_LESSONS_TOKEN_BUDGET = 1500
-
 
 class SQLiteOutcomeAdapter(OutcomePort):
     """SQLite-backed outcome store with FTS5 retrieval.
@@ -83,6 +81,8 @@ class SQLiteOutcomeAdapter(OutcomePort):
         max_retries: Retry attempts on ``database is locked`` errors.
         min_jitter_ms: Minimum random jitter between retries (ms).
         max_jitter_ms: Maximum random jitter between retries (ms).
+        lessons_token_budget: Maximum tokens of lessons content injected per
+            turn (approximate; converted to chars using CHARS_PER_TOKEN).
     """
 
     def __init__(
@@ -92,12 +92,14 @@ class SQLiteOutcomeAdapter(OutcomePort):
         max_retries: int = 15,
         min_jitter_ms: float = 20.0,
         max_jitter_ms: float = 150.0,
+        lessons_token_budget: int = 1500,
     ) -> None:
         self._path = Path(path).expanduser()
         self._max_retries = max_retries
         self._min_jitter_ms = min_jitter_ms
         self._max_jitter_ms = max_jitter_ms
-        self._write_count = 0
+        self._lessons_token_budget = lessons_token_budget
+        self._initialized = False
 
     # ------------------------------------------------------------------
     # OutcomePort interface
@@ -125,24 +127,36 @@ class SQLiteOutcomeAdapter(OutcomePort):
         rows = await asyncio.to_thread(self._sync_search, query, limit)
         if not rows:
             return ""
-        return _format_lessons(rows)
+        return _format_lessons(rows, self._lessons_token_budget)
 
     # ------------------------------------------------------------------
     # Synchronous helpers (run in thread)
     # ------------------------------------------------------------------
 
     def _connect(self) -> sqlite3.Connection:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        """Open a connection and set PRAGMAs; does not create the schema."""
         conn = sqlite3.connect(str(self._path), check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
-        conn.executescript(_SCHEMA)
-        conn.commit()
         return conn
+
+    def _init_db(self) -> None:
+        """Create the database directory and tables (called once on first use)."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        conn = self._connect()
+        try:
+            conn.executescript(_SCHEMA)
+            conn.commit()
+        finally:
+            conn.close()
 
     def _with_retry(self, fn):  # type: ignore[no-untyped-def]
         """Execute *fn(conn)* with retry on ``database is locked``."""
+        if not self._initialized:
+            self._init_db()
+            self._initialized = True
+
         last_exc: Exception | None = None
         for attempt in range(self._max_retries):
             try:
@@ -216,8 +230,6 @@ class SQLiteOutcomeAdapter(OutcomePort):
 
 def _sanitise_fts_query(text: str) -> str:
     """Convert free text into a safe FTS5 OR query (strips special chars)."""
-    import re
-
     words = re.findall(r"[a-zA-Z0-9_]+", text)
     stopwords = {
         "a",
@@ -246,10 +258,10 @@ def _sanitise_fts_query(text: str) -> str:
     return " OR ".join(terms[:20])
 
 
-def _format_lessons(rows: list[sqlite3.Row]) -> str:
+def _format_lessons(rows: list[sqlite3.Row], lessons_token_budget: int = 1500) -> str:
     """Format a list of outcome rows as a Markdown 'Lessons Learned' block."""
     lines = ["## Lessons Learned\n"]
-    budget = _LESSONS_TOKEN_BUDGET * _CHARS_PER_TOKEN
+    budget = lessons_token_budget * CHARS_PER_TOKEN
     used = len(lines[0])
 
     for row in rows:

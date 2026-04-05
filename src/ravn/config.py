@@ -487,6 +487,10 @@ class OutcomeConfig(BaseModel):
         default=200,
         description="Maximum characters of the user input stored as the task summary.",
     )
+    lessons_token_budget: int = Field(
+        default=1500,
+        description="Maximum approximate tokens of lessons-learned content injected per turn.",
+    )
     input_token_cost_per_million: float = Field(
         default=3.0,
         description="Input token cost in USD per million tokens (used to estimate cost_usd).",
