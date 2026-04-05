@@ -8,8 +8,11 @@ Features:
 - Tool calling in OpenAI function-calling format
 - Token usage normalisation: ``prompt_tokens`` → ``input_tokens``,
   ``completion_tokens`` → ``output_tokens``
-- Reasoning-tag stripping: ``<think>…</think>`` / ``<reasoning>…</reasoning>``
-  blocks (used by DeepSeek-R1, Qwen-QwQ, etc.) are stripped from final text
+- Token estimation fallback when the API response does not include usage data
+- Reasoning-tag stripping: ``<think>…</think>`` / ``<reasoning>…</reasoning>`` /
+  ``<REASONING_SCRATCHPAD>…</REASONING_SCRATCHPAD>`` blocks are stripped from final text
+- Developer role swap: models in the GPT-5/o-series/Codex family receive the
+  system prompt as a ``"developer"`` role message instead of ``"system"``
 - Model-specific steering injection via optional ``system_prefix`` kwarg
 - Transient-error retries (429, 500, 502, 503) with exponential back-off
 
@@ -28,6 +31,12 @@ System prompt
 If ``system`` is a string it is used directly.  If it is a list of Anthropic
 text blocks the text values are concatenated (cache_control entries are
 ignored — OpenAI does not support prompt caching in the same way).
+
+Developer role
+~~~~~~~~~~~~~~
+OpenAI's o1/o3/GPT-5/Codex model series uses a ``"developer"`` role in place of
+``"system"`` for the instruction message.  The adapter detects these model
+families and substitutes the role automatically so callers do not need to know.
 """
 
 from __future__ import annotations
@@ -40,6 +49,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 
+from ravn.budget import TokenEstimator
 from ravn.domain.exceptions import LLMError
 from ravn.domain.models import (
     LLMResponse,
@@ -57,22 +67,34 @@ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503})
 _DEFAULT_BASE_URL = "https://api.openai.com"
 
 # Regex to strip reasoning tags produced by some open-source models.
+# Uses a named backreference so open and close tags must match exactly.
+# Handles: <think>, <reasoning>, <REASONING_SCRATCHPAD> (all case-insensitive).
 _REASONING_TAG_RE = re.compile(
-    r"<(?:think|reasoning)>.*?</(?:think|reasoning)>",
+    r"<(?P<tag>think|reasoning|REASONING_SCRATCHPAD)>.*?</(?P=tag)>",
     re.DOTALL | re.IGNORECASE,
 )
 
+# Model name prefixes that use "developer" role instead of "system".
+# Covers: o1-*, o3-*, gpt-5*, codex-*
+_DEVELOPER_ROLE_PREFIXES = ("o1-", "o3-", "gpt-5", "codex-")
+
 
 def _strip_reasoning_tags(text: str) -> str:
-    """Remove <think>…</think> and <reasoning>…</reasoning> blocks.
+    """Remove <think>, <reasoning>, and <REASONING_SCRATCHPAD> blocks.
 
     Only strips leading/trailing whitespace when a tag was actually removed,
     so that partial streaming deltas (e.g. ``"Hello, "``) are not trimmed.
+    Open and close tags must match exactly (backreference guard).
     """
     result = _REASONING_TAG_RE.sub("", text)
     if result == text:
         return text
     return result.strip()
+
+
+def _uses_developer_role(model: str) -> bool:
+    """Return True when *model* expects a ``developer`` role instead of ``system``."""
+    return any(model.startswith(prefix) for prefix in _DEVELOPER_ROLE_PREFIXES)
 
 
 def _convert_tools(tools: list[dict]) -> list[dict]:
@@ -100,16 +122,30 @@ def _system_to_string(system: SystemPrompt) -> str:
     return "\n\n".join(block.get("text", "") for block in system if block.get("text"))
 
 
-def _normalise_usage(raw: dict) -> TokenUsage:
-    """Normalise an OpenAI usage dict to TokenUsage."""
+def _normalise_usage(raw: dict, *, input_text: str = "", output_text: str = "") -> TokenUsage:
+    """Normalise an OpenAI usage dict to TokenUsage.
+
+    When the API response does not include usage data (e.g. local Ollama
+    models with ``stream: false``), falls back to a character-based
+    token estimate using *input_text* and *output_text* if provided.
+    """
     cache_read = 0
     details = raw.get("prompt_tokens_details") or {}
     if isinstance(details, dict):
         cache_read = details.get("cached_tokens", 0) or 0
 
+    input_tokens = raw.get("prompt_tokens", 0)
+    output_tokens = raw.get("completion_tokens", 0)
+
+    # Estimation fallback: when the API sends no usage numbers, estimate from text length.
+    if input_tokens == 0 and input_text:
+        input_tokens = max(1, TokenEstimator.rough(input_text))
+    if output_tokens == 0 and output_text:
+        output_tokens = max(1, TokenEstimator.rough(output_text))
+
     return TokenUsage(
-        input_tokens=raw.get("prompt_tokens", 0),
-        output_tokens=raw.get("completion_tokens", 0),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
         cache_read_tokens=cache_read,
         cache_write_tokens=0,  # OpenAI does not expose cache writes
     )
@@ -154,8 +190,14 @@ class OpenAICompatibleAdapter(LLMPort):
             headers["authorization"] = f"Bearer {self._api_key}"
         return headers
 
-    def _build_messages(self, messages: list[dict], system: SystemPrompt) -> list[dict]:
-        """Prepend a system message when *system* is non-empty."""
+    def _build_messages(
+        self, messages: list[dict], system: SystemPrompt, model: str = ""
+    ) -> list[dict]:
+        """Prepend a system (or developer) message when *system* is non-empty.
+
+        GPT-5/o1/o3/Codex models use a ``"developer"`` role for instruction
+        messages.  Other models use the standard ``"system"`` role.
+        """
         system_text = _system_to_string(system)
         if self._system_prefix:
             system_text = f"{self._system_prefix}\n\n{system_text}".strip()
@@ -163,7 +205,8 @@ class OpenAICompatibleAdapter(LLMPort):
         if not system_text:
             return list(messages)
 
-        return [{"role": "system", "content": system_text}, *messages]
+        role = "developer" if _uses_developer_role(model or self._default_model) else "system"
+        return [{"role": role, "content": system_text}, *messages]
 
     def _build_request(
         self,
@@ -175,10 +218,11 @@ class OpenAICompatibleAdapter(LLMPort):
         max_tokens: int,
         stream: bool,
     ) -> dict:
+        effective_model = model or self._default_model
         body: dict = {
-            "model": model or self._default_model,
+            "model": effective_model,
             "max_tokens": max_tokens or self._default_max_tokens,
-            "messages": self._build_messages(messages, system),
+            "messages": self._build_messages(messages, system, effective_model),
             "stream": stream,
         }
         if stream:
@@ -276,6 +320,10 @@ class OpenAICompatibleAdapter(LLMPort):
             tool_ids: dict[int, str] = {}
             tool_names: dict[int, str] = {}
 
+            # Accumulate output text for estimation fallback when usage is absent.
+            accumulated_text: list[str] = []
+            usage_emitted = False
+
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):
                     continue
@@ -291,6 +339,7 @@ class OpenAICompatibleAdapter(LLMPort):
                 # Usage-only chunk (stream_options: include_usage)
                 usage_raw = event_data.get("usage")
                 if usage_raw:
+                    usage_emitted = True
                     yield StreamEvent(
                         type=StreamEventType.MESSAGE_DONE,
                         usage=_normalise_usage(usage_raw),
@@ -310,6 +359,7 @@ class OpenAICompatibleAdapter(LLMPort):
                 if content:
                     cleaned = _strip_reasoning_tags(content)
                     if cleaned:
+                        accumulated_text.append(cleaned)
                         yield StreamEvent(type=StreamEventType.TEXT_DELTA, text=cleaned)
 
                 # Tool call deltas.
@@ -341,6 +391,19 @@ class OpenAICompatibleAdapter(LLMPort):
                                 input=parsed,
                             ),
                         )
+
+            # Emit a MESSAGE_DONE with estimated usage when the API did not send one.
+            if not usage_emitted:
+                input_text = (
+                    _system_to_string(system)
+                    + " "
+                    + " ".join(str(m.get("content", "")) for m in messages)
+                )
+                output_text = "".join(accumulated_text)
+                yield StreamEvent(
+                    type=StreamEventType.MESSAGE_DONE,
+                    usage=_normalise_usage({}, input_text=input_text, output_text=output_text),
+                )
 
     async def generate(
         self,
@@ -396,7 +459,15 @@ class OpenAICompatibleAdapter(LLMPort):
         if finish_reason == "length":
             stop_reason = StopReason.MAX_TOKENS
 
-        usage = _normalise_usage(data.get("usage") or {})
+        # Build an approximate input text for estimation fallback.
+        input_text = (
+            _system_to_string(system) + " " + " ".join(str(m.get("content", "")) for m in messages)
+        )
+        usage = _normalise_usage(
+            data.get("usage") or {},
+            input_text=input_text,
+            output_text=content_text,
+        )
 
         return LLMResponse(
             content=content_text,
