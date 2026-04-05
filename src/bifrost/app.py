@@ -22,6 +22,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from bifrost.config import BifrostConfig
 from bifrost.domain.models import ModelInfo, RequestLog, TokenUsage
+from bifrost.inbound.chat_completions import (
+    OpenAIChatRequest,
+    anthropic_response_to_openai,
+    anthropic_stream_to_openai,
+    openai_request_to_anthropic,
+)
 from bifrost.router import ModelRouter, RouterError
 from bifrost.translation.models import AnthropicRequest
 
@@ -180,6 +186,61 @@ def create_app(config: BifrostConfig) -> FastAPI:
                 )
             )
             return JSONResponse(content=data)
+        except RouterError as exc:
+            logger.error("Routing failed: %s", exc)
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/v1/chat/completions", response_model=None)
+    async def chat_completions(raw_request: Request) -> JSONResponse | StreamingResponse:
+        """OpenAI Chat Completions-compatible endpoint.
+
+        Accepts an OpenAI Chat Completions request, translates it to the
+        internal Anthropic canonical format, routes via the shared ModelRouter,
+        then translates the response back to OpenAI format.  The full streaming
+        path is supported; token usage is extracted and logged on each request.
+        """
+        try:
+            body = await raw_request.json()
+            oai_request = OpenAIChatRequest.model_validate(body)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        request = openai_request_to_anthropic(oai_request)
+        start = time.monotonic()
+
+        try:
+            if request.stream:
+                import uuid as _uuid
+
+                message_id = f"chatcmpl-{_uuid.uuid4().hex[:24]}"
+                return StreamingResponse(
+                    anthropic_stream_to_openai(
+                        _stream_with_tracking(router.stream(request), request.model, start),
+                        message_id=message_id,
+                        model=request.model,
+                    ),
+                    media_type="text/event-stream",
+                    headers={
+                        "cache-control": "no-cache",
+                        "x-accel-buffering": "no",
+                        "connection": "keep-alive",
+                    },
+                )
+            response = await router.complete(request)
+            latency_ms = (time.monotonic() - start) * 1000
+            _log_request(
+                RequestLog(
+                    timestamp=datetime.now(UTC),
+                    model=request.model,
+                    usage=TokenUsage(
+                        input_tokens=response.usage.input_tokens,
+                        output_tokens=response.usage.output_tokens,
+                    ),
+                    latency_ms=latency_ms,
+                    stream=False,
+                )
+            )
+            return JSONResponse(content=anthropic_response_to_openai(response))
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
             raise HTTPException(status_code=502, detail=str(exc)) from exc
