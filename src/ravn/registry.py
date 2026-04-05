@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from ravn.domain.models import ToolResult
+from ravn.domain.models import ToolCall, ToolResult
 from ravn.ports.tool import ToolPort
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,35 @@ class ToolRegistry:
                 content=f"Tool error: {exc}",
                 is_error=True,
             )
+
+    async def dispatch_batch(self, calls: list[ToolCall]) -> list[ToolResult]:
+        """Execute a batch of tool calls, returning results in the same order.
+
+        When all tools in the batch declare ``parallelisable=True`` (the default),
+        calls are executed concurrently via ``asyncio.gather``.  If any tool
+        declares ``parallelisable=False`` the entire batch falls back to
+        sequential execution so that ordering guarantees are preserved.
+
+        Unknown tools and execution errors are captured as error results —
+        exceptions are never propagated to the caller.
+        """
+        if not calls:
+            return []
+
+        all_parallelisable = all(
+            (self._tools[c.name].parallelisable if c.name in self._tools else True) for c in calls
+        )
+
+        if all_parallelisable:
+            return list(
+                await asyncio.gather(*[self.dispatch(c.name, c.input, c.id) for c in calls])
+            )
+
+        results: list[ToolResult] = []
+        for call in calls:
+            result = await self.dispatch(call.name, call.input, call.id)
+            results.append(result)
+        return results
 
     def list(self) -> list[ToolPort]:
         """Return all registered tools in registration order."""
