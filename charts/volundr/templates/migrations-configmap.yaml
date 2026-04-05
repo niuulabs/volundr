@@ -603,4 +603,33 @@ data:
     DROP INDEX IF EXISTS idx_integration_connections_owner;
     CREATE INDEX IF NOT EXISTS idx_integration_connections_user
         ON integration_connections(user_id, integration_type);
+
+  000025_sleipnir_events.up.sql: |
+    -- Sleipnir audit log — persistent record of every event on the bus.
+    CREATE TABLE IF NOT EXISTS sleipnir_events (
+        event_id        TEXT        PRIMARY KEY,
+        event_type      TEXT        NOT NULL,
+        source          TEXT        NOT NULL,
+        summary         TEXT,
+        urgency         REAL,
+        domain          TEXT,
+        correlation_id  TEXT,
+        causation_id    TEXT,
+        tenant_id       TEXT,
+        payload         JSONB,
+        timestamp       TIMESTAMPTZ NOT NULL,
+        ttl             INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_sleipnir_events_type_ts
+        ON sleipnir_events (event_type, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_sleipnir_events_correlation
+        ON sleipnir_events (correlation_id);
+    CREATE INDEX IF NOT EXISTS idx_sleipnir_events_source_ts
+        ON sleipnir_events (source, timestamp);
+
+  000025_sleipnir_events.down.sql: |
+    DROP INDEX IF EXISTS idx_sleipnir_events_source_ts;
+    DROP INDEX IF EXISTS idx_sleipnir_events_correlation;
+    DROP INDEX IF EXISTS idx_sleipnir_events_type_ts;
+    DROP TABLE IF EXISTS sleipnir_events;
 {{- end }}
