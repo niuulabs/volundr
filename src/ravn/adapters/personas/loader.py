@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ravn.config import ProjectConfig
+from ravn.config import ProjectConfig, _safe_int
 
 _DEFAULT_PERSONAS_DIR = Path.home() / ".ravn" / "personas"
 
@@ -139,14 +139,6 @@ def _safe_bool(val: Any, default: bool = False) -> bool:
     if isinstance(val, str):
         return val.lower() in {"true", "yes", "1"}
     return default
-
-
-def _safe_int(val: Any, default: int = 0) -> int:
-    """Convert *val* to int, returning *default* on ValueError/TypeError."""
-    try:
-        return int(val)  # type: ignore[arg-type]
-    except (ValueError, TypeError):
-        return default
 
 
 class PersonaLoader:

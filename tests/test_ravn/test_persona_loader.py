@@ -11,9 +11,8 @@ from ravn.adapters.personas.loader import (
     PersonaLLMConfig,
     PersonaLoader,
     _safe_bool,
-    _safe_int,
 )
-from ravn.config import ProjectConfig
+from ravn.config import ProjectConfig, _safe_int
 
 # ---------------------------------------------------------------------------
 # Helper fixtures
@@ -561,6 +560,63 @@ class TestBuildAgentWithPersona:
 
         assert agent._system_prompt == settings.agent.system_prompt
         assert agent.max_iterations == settings.agent.max_iterations
+
+    def test_read_only_persona_uses_deny_all_permission(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.cli.commands import _build_agent
+        from ravn.config import Settings
+
+        persona = PersonaConfig(name="research", permission_mode="read-only")
+        settings = Settings()
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_cls.return_value = MagicMock()
+            agent, _ = _build_agent(settings, persona_config=persona)
+
+        assert isinstance(agent._permission, DenyAllPermission)
+
+    def test_non_read_only_persona_uses_allow_all_permission(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from ravn.adapters.permission_adapter import AllowAllPermission
+        from ravn.cli.commands import _build_agent
+        from ravn.config import Settings
+
+        persona = PersonaConfig(name="coder", permission_mode="workspace-write")
+        settings = Settings()
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_cls.return_value = MagicMock()
+            agent, _ = _build_agent(settings, persona_config=persona)
+
+        assert isinstance(agent._permission, AllowAllPermission)
+
+    def test_no_tools_flag_overrides_persona_permission(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.cli.commands import _build_agent
+        from ravn.config import Settings
+
+        persona = PersonaConfig(name="full", permission_mode="full-access")
+        settings = Settings()
+
+        with (
+            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
+        ):
+            mock_cls.return_value = MagicMock()
+            agent, _ = _build_agent(settings, no_tools=True, persona_config=persona)
+
+        assert isinstance(agent._permission, DenyAllPermission)
 
 
 # ---------------------------------------------------------------------------

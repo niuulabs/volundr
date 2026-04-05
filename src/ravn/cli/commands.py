@@ -61,7 +61,13 @@ def _build_agent(
 
     channel = CliChannel()
 
-    permission = DenyAllPermission() if no_tools else AllowAllPermission()
+    if no_tools:
+        permission = DenyAllPermission()
+    elif persona_config is not None and persona_config.permission_mode == "read-only":
+        permission = DenyAllPermission()
+    else:
+        permission = AllowAllPermission()
+    # TODO(NIU-498): wire persona.allowed_tools / forbidden_tools into tool filtering
 
     system_prompt = settings.agent.system_prompt
     max_iterations = settings.agent.max_iterations
@@ -136,7 +142,9 @@ def run(
     no_tools: bool = typer.Option(False, "--no-tools", help="Disable all tool execution."),
     show_usage: bool = typer.Option(False, "--show-usage", help="Print token usage after turn."),
     config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
-    persona: str = typer.Option("", "--persona", "-p", help="Persona name or path to YAML."),
+    persona: str = typer.Option(
+        "", "--persona", "-p", help="Persona name (built-in or from ~/.ravn/personas/)."
+    ),
 ) -> None:
     """Start a Ravn conversation. Pass a prompt for single-turn, or omit for REPL."""
     import os
