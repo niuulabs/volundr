@@ -224,7 +224,9 @@ class RavnAgent:
                 raise MaxIterationsError(self._max_iterations)
 
             # Optionally compress context before calling the LLM.
-            messages_for_llm = await self._maybe_compress(effective_system)
+            messages_for_llm = await self._maybe_compress(
+                effective_system, memory_summary=memory_ctx
+            )
 
             llm_response = await self._call_llm_streaming(
                 system_prompt=effective_system,
@@ -337,12 +339,26 @@ class RavnAgent:
                 logger.warning("Memory prefetch failed; continuing without context.")
         return effective
 
-    async def _maybe_compress(self, effective_system: SystemPrompt) -> list[Message]:
+    async def _maybe_compress(
+        self,
+        effective_system: SystemPrompt,
+        *,
+        memory_summary: str = "",
+    ) -> list[Message]:
         """Return (possibly compressed) session messages.
 
         When no compressor is configured, the session messages are returned
         unchanged.  Compression results are stored in
         ``self._last_compression_result``.
+
+        Parameters
+        ----------
+        effective_system:
+            The rendered system prompt used to estimate token overhead.
+        memory_summary:
+            The episodic memory context string fetched for this turn.  Passed
+            to the compactor as an anchor so the structured state document can
+            reference relevant past context.
         """
         if self._compressor is None:
             return self._session.messages
@@ -355,6 +371,8 @@ class RavnAgent:
         messages, result = await self._compressor.maybe_compress(
             self._session.messages,
             system_tokens=system_tokens,
+            todos=self._session.todos or None,
+            memory_summary=memory_summary or None,
         )
         if result.was_compressed:
             self._session.messages.clear()

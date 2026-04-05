@@ -1,16 +1,56 @@
 """Context compression for long Ravn sessions.
 
-When a session's estimated token count exceeds a threshold (default 50% of the
-model's context window), the ContextCompressor summarises the middle messages
-using the LLM itself and replaces them with a synthetic summary message.
+When a session's estimated token count exceeds a threshold (default 80% of the
+model's context window — leaving <20% remaining), the ContextCompressor performs
+*intelligent compaction*: rather than summarising the full conversation, it
+produces a structured state document that preserves decision-relevant information
+while discarding redundant content.
+
+Compaction strategy
+-------------------
+1. **Identifies**: decisions made, tools called and their outcomes, open
+   questions, active todos.
+2. **Preserves verbatim**: the most recent ``protect_last`` messages
+   (configurable via ``compact_recent_turns``); any DECISION events; any
+   ERROR events.
+3. **Summarises**: resolved tool call chains where the result was clean.
+4. **Drops**: redundant back-and-forth and successfully-completed uncontested
+   actions.
+5. **Injects**: the active todo list and current episodic memory summary as
+   anchors (when supplied by the caller).
+
+The compacted context is not the conversation — it is a structured state
+document::
+
+    ## Active task
+    ...
+
+    ## Decisions made
+    - ...
+
+    ## Errors encountered
+    - ...
+
+    ## Actions completed
+    - ...
+
+    ## Open questions
+    - ...
 
 Protected regions
 -----------------
-- First *protect_first* messages are never touched (system context, initial
+- First ``protect_first`` messages are never touched (system context, initial
   instructions).
-- Last *protect_last* messages are never touched (recent work in progress).
+- Last ``protect_last`` messages are never touched (recent work in progress —
+  the verbatim recent turns).
 
-Multiple passes are allowed: compression repeats until the session falls below
+Trigger
+-------
+- Automatic: when remaining context budget < 20% of max_tokens
+  (``compression_threshold`` defaults to 0.8).
+- Manual: callers may call ``maybe_compress`` at any time.
+
+Multiple passes are allowed: compaction repeats until the session falls below
 the threshold or no further reduction is possible.
 
 Compression statistics are returned in a ``CompressionResult`` so callers can
@@ -23,21 +63,53 @@ import logging
 from dataclasses import dataclass
 
 from ravn.budget import TokenEstimator
-from ravn.domain.models import LLMResponse, Message
+from ravn.domain.models import LLMResponse, Message, TodoItem
 from ravn.ports.llm import LLMPort
 
 logger = logging.getLogger(__name__)
 
-_SUMMARY_SYSTEM = (
-    "You are a concise conversation summariser.  Summarise the conversation "
-    "accurately, preserving key decisions, actions taken, errors encountered, "
-    "and important context.  Output only the summary text — no preamble, no "
-    "markdown headers."
+# ---------------------------------------------------------------------------
+# LLM prompt constants
+# ---------------------------------------------------------------------------
+
+_COMPACT_SYSTEM = (
+    "You are an intelligent context compactor for an AI agent session.  "
+    "Analyse the conversation segment and produce a concise structured state "
+    "document.  Preserve all decision-relevant information; discard redundant "
+    "back-and-forth and successfully-completed uncontested actions.\n\n"
+    "Output ONLY the structured document — no preamble, no extra commentary.\n\n"
+    "Required sections (use exactly these headings):\n"
+    "  ## Active task\n"
+    "  ## Decisions made\n"
+    "  ## Errors encountered\n"
+    "  ## Actions completed\n"
+    "  ## Open questions"
 )
 
-_SUMMARY_USER_TEMPLATE = "Summarise the following conversation segment concisely:\n\n{transcript}"
+_COMPACT_USER_TEMPLATE = (
+    "{todo_anchor}{memory_anchor}Conversation segment to compact:\n\n{transcript}"
+)
 
-_SUMMARY_PLACEHOLDER = "[Conversation summary: {summary}]"
+_TODO_ANCHOR_TEMPLATE = "Active todos (preserve as context anchors):\n{todos}\n\n"
+
+_MEMORY_ANCHOR_TEMPLATE = (
+    "Episodic memory summary (use as background context):\n{memory_summary}\n\n"
+)
+
+_COMPACTED_PLACEHOLDER = "[Compacted context]\n\n{document}"
+
+_FALLBACK_DOCUMENT = (
+    "## Active task\n"
+    "Unknown\n\n"
+    "## Decisions made\n"
+    "- [summary unavailable]\n\n"
+    "## Errors encountered\n"
+    "- None\n\n"
+    "## Actions completed\n"
+    "- None\n\n"
+    "## Open questions\n"
+    "- None"
+)
 
 # Default context window sizes for well-known models.
 _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
@@ -75,22 +147,28 @@ class CompressionResult:
 class ContextCompressor:
     """Compresses message history when it approaches the context window limit.
 
+    Rather than a simple summarisation, this compactor produces a structured
+    state document capturing decisions, errors, completed actions, and open
+    questions — so the agent retains decision-relevant context even after
+    aggressive compaction.
+
     Parameters
     ----------
     llm:
-        LLM port used to generate compression summaries.
+        LLM port used to generate compaction documents.
     model:
         Model identifier (used to look up context window size and for
-        generating summaries).
+        generating compaction documents).
     max_tokens:
-        Max tokens for summary generation (default 1024).
+        Max tokens for compaction document generation (default 1024).
     protect_first:
         Number of messages at the start of history to preserve unchanged.
     protect_last:
-        Number of messages at the end of history to preserve unchanged.
+        Number of messages at the end of history to preserve unchanged
+        (the verbatim recent turns).  Defaults to 6 (≈ 3 turns).
     compression_threshold:
-        Fraction of the model's context window that triggers compression
-        (default 0.5 = 50%).
+        Fraction of the model's context window that triggers compaction
+        (default 0.8 — fires when <20% of the context window remains).
     context_window:
         Override context window size in tokens.  When 0 (default), the known
         table is consulted and falls back to 200 000.
@@ -103,8 +181,8 @@ class ContextCompressor:
         model: str,
         max_tokens: int = 1024,
         protect_first: int = 2,
-        protect_last: int = 4,
-        compression_threshold: float = 0.5,
+        protect_last: int = 6,
+        compression_threshold: float = 0.8,
         context_window: int = 0,
     ) -> None:
         self._llm = llm
@@ -125,11 +203,25 @@ class ContextCompressor:
         messages: list[Message],
         *,
         system_tokens: int = 0,
+        todos: list[TodoItem] | None = None,
+        memory_summary: str | None = None,
     ) -> tuple[list[Message], CompressionResult]:
-        """Compress *messages* if estimated tokens exceed the threshold.
+        """Compact *messages* if estimated tokens exceed the threshold.
 
-        Returns the (possibly compressed) message list and a
-        ``CompressionResult``.  When no compression was needed, the original
+        Parameters
+        ----------
+        messages:
+            The current conversation history.
+        system_tokens:
+            Estimated token count for the system prompt (added to the
+            per-message estimate before threshold comparison).
+        todos:
+            Active todo items injected as anchors in the compacted document.
+        memory_summary:
+            Episodic memory summary injected as background context.
+
+        Returns the (possibly compacted) message list and a
+        ``CompressionResult``.  When no compaction was needed, the original
         list is returned unchanged.
         """
         original_count = len(messages)
@@ -146,9 +238,11 @@ class ContextCompressor:
         removed_count = 0
 
         while True:
-            new_messages, removed = await self._compress_once(result_messages)
+            new_messages, removed = await self._compact_once(
+                result_messages, todos=todos, memory_summary=memory_summary
+            )
             if removed == 0:
-                # Cannot compress further (protected zones cover everything).
+                # Cannot compact further (protected zones cover everything).
                 break
             compression_count += 1
             removed_count += removed
@@ -168,8 +262,14 @@ class ContextCompressor:
     # Internal
     # ------------------------------------------------------------------
 
-    async def _compress_once(self, messages: list[Message]) -> tuple[list[Message], int]:
-        """Run a single compression pass.
+    async def _compact_once(
+        self,
+        messages: list[Message],
+        *,
+        todos: list[TodoItem] | None = None,
+        memory_summary: str | None = None,
+    ) -> tuple[list[Message], int]:
+        """Run a single compaction pass.
 
         Returns ``(new_messages, removed_count)``.  ``removed_count`` is 0
         when the protected zones leave no compressible middle section.
@@ -185,34 +285,48 @@ class ContextCompressor:
         if not middle:
             return messages, 0
 
-        summary_text = await self._summarise(middle)
-        summary_msg = Message(
+        document = await self._build_state_document(
+            middle, todos=todos, memory_summary=memory_summary
+        )
+        compacted_msg = Message(
             role="user",
-            content=_SUMMARY_PLACEHOLDER.format(summary=summary_text),
+            content=_COMPACTED_PLACEHOLDER.format(document=document),
         )
 
         head = messages[:protect_first]
         tail = messages[total - protect_last :] if protect_last > 0 else []
-        # middle (len M) is replaced by 1 summary message → removed = M - 1
+        # middle (len M) is replaced by 1 compacted message → removed = M - 1
         removed = len(middle) - 1
-        return head + [summary_msg] + tail, removed
+        return head + [compacted_msg] + tail, removed
 
-    async def _summarise(self, messages: list[Message]) -> str:
-        """Ask the LLM to summarise a list of messages."""
+    async def _build_state_document(
+        self,
+        messages: list[Message],
+        *,
+        todos: list[TodoItem] | None = None,
+        memory_summary: str | None = None,
+    ) -> str:
+        """Ask the LLM to produce a structured state document from *messages*."""
         transcript = _format_transcript(messages)
-        user_text = _SUMMARY_USER_TEMPLATE.format(transcript=transcript)
+        todo_anchor = _format_todo_anchor(todos)
+        memory_anchor = _format_memory_anchor(memory_summary)
+        user_text = _COMPACT_USER_TEMPLATE.format(
+            todo_anchor=todo_anchor,
+            memory_anchor=memory_anchor,
+            transcript=transcript,
+        )
         try:
             response: LLMResponse = await self._llm.generate(
                 [{"role": "user", "content": user_text}],
                 tools=[],
-                system=_SUMMARY_SYSTEM,
+                system=_COMPACT_SYSTEM,
                 model=self._model,
                 max_tokens=self._max_tokens,
             )
-            return response.content.strip() or "[summary unavailable]"
+            return response.content.strip() or _FALLBACK_DOCUMENT
         except Exception as exc:
-            logger.warning("Compression summary failed: %s", exc)
-            return "[summary unavailable]"
+            logger.warning("Compaction document generation failed: %s", exc)
+            return _FALLBACK_DOCUMENT
 
 
 # ---------------------------------------------------------------------------
@@ -246,10 +360,28 @@ def _extract_content_text(content: str | list[dict]) -> str:
 
 
 def _format_transcript(messages: list[Message]) -> str:
-    """Render messages to a plain-text transcript for the summary prompt."""
+    """Render messages to a plain-text transcript for the compaction prompt."""
     lines: list[str] = []
     for msg in messages:
         text = _extract_content_text(msg.content)
         if text:
             lines.append(f"{msg.role.upper()}: {text}")
     return "\n\n".join(lines)
+
+
+def _format_todo_anchor(todos: list[TodoItem] | None) -> str:
+    """Format the todo list as an anchor section, or return empty string."""
+    if not todos:
+        return ""
+    lines = [f"  [{todo.status}] {todo.content}" for todo in todos]
+    return _TODO_ANCHOR_TEMPLATE.format(todos="\n".join(lines))
+
+
+def _format_memory_anchor(memory_summary: str | None) -> str:
+    """Format the memory summary as an anchor section, or return empty string."""
+    if not memory_summary:
+        return ""
+    stripped = memory_summary.strip()
+    if not stripped:
+        return ""
+    return _MEMORY_ANCHOR_TEMPLATE.format(memory_summary=stripped)
