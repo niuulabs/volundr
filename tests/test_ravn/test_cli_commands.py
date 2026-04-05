@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from ravn.cli.commands import _print_usage, app
+from ravn.cli.commands import _print_usage, _run_turn, app, main
 from ravn.domain.models import (
     StreamEvent,
     StreamEventType,
@@ -129,17 +129,42 @@ class TestRunTurnErrorHandling:
 
     async def test_repl_continues_after_error(self) -> None:
         """In REPL mode (single_turn=False), an error prints but does not exit."""
+        import io
+        import sys
         from unittest.mock import AsyncMock
 
         from ravn.adapters.cli_channel import CliChannel
-        from ravn.cli.commands import _run_turn
 
         agent = MagicMock()
         agent.run_turn = AsyncMock(side_effect=RuntimeError("boom"))
-
-        import io
-
         channel = CliChannel(file=io.StringIO())
 
         # Must not raise SystemExit
         await _run_turn(agent, channel, "hi", show_usage=False, single_turn=False)
+
+    async def test_single_turn_exception_calls_sys_exit(self) -> None:
+        """In single_turn mode, an exception causes sys.exit(1)."""
+        import io
+        import sys
+        from unittest.mock import AsyncMock, patch
+
+        from ravn.adapters.cli_channel import CliChannel
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(side_effect=RuntimeError("fatal"))
+        channel = CliChannel(file=io.StringIO())
+
+        with (
+            patch("typer.echo"),
+            patch.object(sys, "exit") as mock_exit,
+        ):
+            await _run_turn(agent, channel, "hello", show_usage=False, single_turn=True)
+        mock_exit.assert_called_once_with(1)
+
+
+class TestMainEntryPoint:
+    def test_main_invokes_app(self) -> None:
+        """main() is the package entry point — it delegates to the Typer app."""
+        with patch("ravn.cli.commands.app") as mock_app:
+            main()
+            mock_app.assert_called_once()
