@@ -96,36 +96,36 @@ class SimpleTool(ToolPort):
 # ---------------------------------------------------------------------------
 
 
-def testcosine_similarity_identical_vectors():
+def test_cosine_similarity_identical_vectors():
     v = [1.0, 0.0, 0.0]
     assert cosine_similarity(v, v) == pytest.approx(1.0)
 
 
-def testcosine_similarity_orthogonal_vectors():
+def test_cosine_similarity_orthogonal_vectors():
     a = [1.0, 0.0]
     b = [0.0, 1.0]
     assert cosine_similarity(a, b) == pytest.approx(0.0)
 
 
-def testcosine_similarity_opposite_vectors():
+def test_cosine_similarity_opposite_vectors():
     a = [1.0, 0.0]
     b = [-1.0, 0.0]
     assert cosine_similarity(a, b) == pytest.approx(-1.0)
 
 
-def testcosine_similarity_zero_vector_a():
+def test_cosine_similarity_zero_vector_a():
     assert cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
 
 
-def testcosine_similarity_zero_vector_b():
+def test_cosine_similarity_zero_vector_b():
     assert cosine_similarity([1.0, 0.0], [0.0, 0.0]) == 0.0
 
 
-def testcosine_similarity_both_zero():
+def test_cosine_similarity_both_zero():
     assert cosine_similarity([0.0, 0.0], [0.0, 0.0]) == 0.0
 
 
-def testcosine_similarity_known_value():
+def test_cosine_similarity_known_value():
     # 45 degrees → cos(45°) = 1/√2
     a = [1.0, 1.0]
     b = [1.0, 0.0]
