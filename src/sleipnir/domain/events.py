@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 #: Keys are namespace prefixes; values are documentation strings.
 EVENT_NAMESPACES: dict[str, str] = {
     "ravn": "Ravn agent events (tool calls, reasoning steps, completions)",
-    "tyr": "Tyr autonomous dispatcher events (tasks, sessions, runs)",
-    "volundr": "Volundr platform events (repos, PRs, integrations)",
+    "tyr": "Tyr autonomous dispatcher events (tasks, sagas, raids, sessions)",
+    "volundr": "Volundr platform events (sessions, repos, PRs, tokens, chronicles)",
     "bifrost": "Bifrost gateway events (routing, connection, auth)",
     "system": "Infrastructure and lifecycle events (health, config, restart)",
+    "skuld": "Skuld broker events (session pod activity, tool use, token updates)",
 }
 
 #: Known high-level domain tags for events.

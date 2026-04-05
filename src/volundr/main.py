@@ -526,7 +526,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             gateway_adapter = _create_gateway_adapter(settings)
             pricing_provider = HardcodedPricingProvider(settings.models or None)
             git_registry = create_git_registry(settings.git)
-            broadcaster = InMemoryEventBroadcaster()
+
+            # Sleipnir integration (optional — enabled via sleipnir.enabled config)
+            sleipnir_bus = None
+            if settings.sleipnir.enabled:
+                try:
+                    sl_cls = import_class(settings.sleipnir.adapter)
+                    sleipnir_bus = sl_cls(**settings.sleipnir.kwargs)
+                    logger.info(
+                        "Sleipnir integration enabled: adapter=%s",
+                        settings.sleipnir.adapter.rsplit(".", 1)[-1],
+                    )
+                except Exception:
+                    logger.exception("Failed to initialise Sleipnir integration")
+                    sleipnir_bus = None
+
+            broadcaster = InMemoryEventBroadcaster(
+                sleipnir_publisher=sleipnir_bus,
+            )
 
             # Create services with broadcaster for real-time updates
             # Create profile and template adapters (config-driven)
@@ -854,6 +871,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     )
                 except Exception:
                     logger.exception("Failed to initialize OTel event sink")
+
+            # Register Sleipnir event sink when integration is active
+            if sleipnir_bus is not None:
+                from volundr.adapters.outbound.sleipnir_event_sink import (  # noqa: PLC0415
+                    SleipnirEventSink,
+                )
+
+                event_sinks.append(SleipnirEventSink(sleipnir_bus))
+                logger.info("Sleipnir event sink registered in pipeline")
 
             event_ingestion = EventIngestionService(sinks=event_sinks)
             events_router = create_events_router(

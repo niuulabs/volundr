@@ -595,6 +595,33 @@ class EventBusConfig(BaseModel):
     kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
+class SleipnirConfig(BaseModel):
+    """Sleipnir platform event bus integration (optional).
+
+    When ``enabled`` is True, Tyr creates a Sleipnir adapter and starts a
+    :class:`~tyr.adapters.sleipnir_event_bridge.TyrSleipnirBridge` that
+    republishes all Tyr events to the platform-wide bus.
+
+    Example YAML::
+
+        sleipnir:
+          enabled: true
+          adapter: "sleipnir.adapters.nats_transport.NatsTransport"
+          kwargs:
+            servers: ["nats://nats:4222"]
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Sleipnir platform event bus integration.",
+    )
+    adapter: str = Field(
+        default="sleipnir.adapters.in_process.InProcessBus",
+        description="Fully-qualified class path for the Sleipnir adapter.",
+    )
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class NotificationConfig(BaseModel):
     """Notification service configuration."""
 
@@ -662,6 +689,7 @@ class Settings(BaseSettings):
     events: EventsConfig = Field(default_factory=EventsConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
+    sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
 
     @classmethod
     def settings_customise_sources(
