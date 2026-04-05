@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bifrost.adapters.memory_store import MemoryUsageStore
-from bifrost.app import _check_quotas, create_app
+from bifrost.app import create_app
+from bifrost.inbound.routes import _check_quotas
 from bifrost.auth import AgentIdentity
 from bifrost.config import AgentPermissions, BifrostConfig, ProviderConfig, QuotaConfig
 from bifrost.ports.usage_store import UsageRecord

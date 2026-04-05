@@ -13,7 +13,8 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from bifrost.app import _extract_usage_from_sse_line, create_app
+from bifrost.app import create_app
+from bifrost.inbound.tracking import _extract_usage_from_sse_line
 from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
 from bifrost.domain.models import TokenUsage
 from bifrost.ports.provider import ProviderError, ProviderPort
