@@ -8,6 +8,8 @@ from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any
 
+from ravn.budget import IterationBudget, TokenEstimator
+from ravn.compression import CompressionResult, ContextCompressor
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
@@ -24,10 +26,11 @@ from ravn.domain.models import (
     TurnResult,
 )
 from ravn.ports.channel import ChannelPort
-from ravn.ports.llm import LLMPort
+from ravn.ports.llm import LLMPort, SystemPrompt
 from ravn.ports.memory import MemoryPort
 from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
+from ravn.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +77,9 @@ class RavnAgent:
         memory: MemoryPort | None = None,
         episode_summary_max_chars: int = 500,
         episode_task_max_chars: int = 200,
+        iteration_budget: IterationBudget | None = None,
+        compressor: ContextCompressor | None = None,
+        prompt_builder: PromptBuilder | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -89,7 +95,11 @@ class RavnAgent:
         self._memory = memory
         self._episode_summary_max_chars = episode_summary_max_chars
         self._episode_task_max_chars = episode_task_max_chars
+        self._iteration_budget = iteration_budget
+        self._compressor = compressor
+        self._prompt_builder = prompt_builder
         self._session = Session()
+        self._last_compression_result: CompressionResult | None = None
 
     @property
     def session(self) -> Session:
@@ -104,6 +114,16 @@ class RavnAgent:
     def max_iterations(self) -> int:
         """Maximum tool-call iterations allowed per turn."""
         return self._max_iterations
+
+    @property
+    def iteration_budget(self) -> IterationBudget | None:
+        """The iteration budget shared with this agent, or None."""
+        return self._iteration_budget
+
+    @property
+    def last_compression_result(self) -> CompressionResult | None:
+        """Compression result from the most recent turn, or None."""
+        return self._last_compression_result
 
     @property
     def llm_adapter_name(self) -> str:
@@ -126,16 +146,22 @@ class RavnAgent:
         If a memory adapter is configured:
         - Relevant past context is prefetched and appended to the system prompt.
         - A new episode is recorded after the turn completes.
+
+        If an iteration_budget is configured:
+        - Each LLM call consumes one budget unit.
+        - Budget warnings are appended to tool result content.
+        - When the budget is exhausted, MaxIterationsError is raised.
+
+        If a compressor is configured:
+        - Context is compressed before each LLM call when the estimated token
+          count exceeds the compression threshold.
         """
-        # Prefetch memory context before appending the user message.
-        effective_system = self._system_prompt
-        if self._memory is not None:
-            try:
-                memory_ctx = await self._memory.prefetch(user_input)
-                if memory_ctx:
-                    effective_system = f"{self._system_prompt}\n\n{memory_ctx}"
-            except Exception:
-                logger.warning("Memory prefetch failed; continuing without context.")
+        # Check budget before starting the turn.
+        if self._iteration_budget is not None and self._iteration_budget.exhausted:
+            raise MaxIterationsError(self._max_iterations)
+
+        # Prefetch memory context and build the effective system prompt.
+        effective_system: SystemPrompt = await self._build_effective_system(user_input)
 
         self._session.add_message(Message(role="user", content=user_input))
 
@@ -143,9 +169,25 @@ class RavnAgent:
         turn_tool_results: list[ToolResult] = []
         cumulative_usage = TokenUsage(input_tokens=0, output_tokens=0)
         final_response = ""
+        self._last_compression_result = None
 
         for iteration in range(self._max_iterations):
-            llm_response = await self._call_llm_streaming(system_prompt=effective_system)
+            # Enforce iteration budget.
+            if self._iteration_budget is not None and self._iteration_budget.exhausted:
+                raise MaxIterationsError(self._max_iterations)
+
+            # Optionally compress context before calling the LLM.
+            messages_for_llm = await self._maybe_compress(effective_system)
+
+            llm_response = await self._call_llm_streaming(
+                system_prompt=effective_system,
+                messages=messages_for_llm,
+            )
+
+            # Consume one iteration from the budget.
+            if self._iteration_budget is not None:
+                self._iteration_budget.consume()
+
             cumulative_usage = cumulative_usage + llm_response.usage
 
             if llm_response.content:
@@ -160,11 +202,15 @@ class RavnAgent:
             assistant_content = _build_assistant_content(llm_response)
             self._session.messages.append(Message(role="assistant", content=assistant_content))
 
-            # Execute all tool calls sequentially.
+            # Execute all tool calls sequentially and collect results.
             tool_results_content = []
             for tool_call in llm_response.tool_calls:
                 turn_tool_calls.append(tool_call)
                 result = await self._execute_tool(tool_call)
+
+                # Inject budget warning into the tool result content.
+                result = _maybe_append_budget_warning(result, self._iteration_budget)
+
                 turn_tool_results.append(result)
                 tool_results_content.append(
                     {
@@ -204,16 +250,84 @@ class RavnAgent:
 
         return result
 
-    async def _call_llm_streaming(self, system_prompt: str | None = None) -> LLMResponse:
+    async def _build_effective_system(self, user_input: str) -> SystemPrompt:
+        """Build the effective system prompt for this turn.
+
+        When a PromptBuilder is configured, it handles memory context as a
+        section and returns Anthropic-format blocks.  Otherwise falls back to
+        the legacy string concatenation approach.
+        """
+        if self._prompt_builder is not None:
+            if self._memory is not None:
+                try:
+                    memory_ctx = await self._memory.prefetch(user_input)
+                    self._prompt_builder.set_memory_context(memory_ctx or "")
+                except Exception:
+                    logger.warning("Memory prefetch failed; continuing without context.")
+            return self._prompt_builder.render_blocks()
+
+        # Legacy: plain-string system prompt with optional memory suffix.
+        effective: str = self._system_prompt
+        if self._memory is not None:
+            try:
+                memory_ctx = await self._memory.prefetch(user_input)
+                if memory_ctx:
+                    effective = f"{self._system_prompt}\n\n{memory_ctx}"
+            except Exception:
+                logger.warning("Memory prefetch failed; continuing without context.")
+        return effective
+
+    async def _maybe_compress(self, effective_system: SystemPrompt) -> list[Message]:
+        """Return (possibly compressed) session messages.
+
+        When no compressor is configured, the session messages are returned
+        unchanged.  Compression results are stored in
+        ``self._last_compression_result``.
+        """
+        if self._compressor is None:
+            return self._session.messages
+
+        system_tokens = (
+            TokenEstimator.rough_blocks(effective_system)
+            if isinstance(effective_system, list)
+            else TokenEstimator.rough(effective_system)
+        )
+        messages, result = await self._compressor.maybe_compress(
+            self._session.messages,
+            system_tokens=system_tokens,
+        )
+        if result.was_compressed:
+            self._last_compression_result = result
+            logger.info(
+                "Context compressed: %d → %d messages (%d pass(es), %d removed)",
+                result.original_count,
+                result.final_count,
+                result.compression_count,
+                result.removed_message_count,
+            )
+        return messages
+
+    async def _call_llm_streaming(
+        self,
+        system_prompt: SystemPrompt | None = None,
+        messages: list[Message] | None = None,
+    ) -> LLMResponse:
         """Call the LLM with streaming and accumulate into an LLMResponse."""
         accumulated_text = ""
         tool_calls: list[ToolCall] = []
         final_usage = TokenUsage(input_tokens=0, output_tokens=0)
         stop_reason = StopReason.END_TURN
-        effective = system_prompt if system_prompt is not None else self._system_prompt
+        effective: SystemPrompt = (
+            system_prompt if system_prompt is not None else self._system_prompt
+        )
+        api_messages = (
+            [{"role": m.role, "content": m.content} for m in messages]
+            if messages is not None
+            else self._build_api_messages()
+        )
 
         async for event in self._llm.stream(
-            self._build_api_messages(),
+            api_messages,
             tools=self._tool_defs(),
             system=effective,
             model=self._model,
@@ -330,6 +444,27 @@ class RavnAgent:
         result = ToolResult(tool_call_id=tool_call.id, content=answer)
         await self._channel.emit(RavnEvent.tool_result(_ASK_USER_TOOL_NAME, answer))
         return result
+
+
+def _maybe_append_budget_warning(
+    result: ToolResult,
+    budget: IterationBudget | None,
+) -> ToolResult:
+    """Return a new ToolResult with a budget warning appended when near limit.
+
+    Budget warnings are injected into tool result content (not separate
+    messages) so the model is informed without disrupting conversation flow.
+    """
+    if budget is None:
+        return result
+    suffix = budget.warning_suffix()
+    if suffix is None:
+        return result
+    return ToolResult(
+        tool_call_id=result.tool_call_id,
+        content=result.content + suffix,
+        is_error=result.is_error,
+    )
 
 
 _TAG_MAP: dict[str, list[str]] = {

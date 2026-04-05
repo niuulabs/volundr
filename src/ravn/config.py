@@ -483,6 +483,59 @@ class AgentConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Context management config (NIU-431)
+# ---------------------------------------------------------------------------
+
+
+class IterationBudgetConfig(BaseModel):
+    """Iteration budget configuration."""
+
+    total: int = Field(
+        default=90,
+        description="Total iterations allowed across a session or cascade.",
+    )
+    near_limit_threshold: float = Field(
+        default=0.8,
+        description=(
+            "Fraction of total iterations consumed before 'near limit' warnings are emitted "
+            "(0.0–1.0, default 0.8 = 80%)."
+        ),
+    )
+
+
+class ContextManagementConfig(BaseModel):
+    """Context compression and prompt-builder configuration."""
+
+    compression_threshold: float = Field(
+        default=0.5,
+        description=(
+            "Fraction of the model's context window that triggers compression "
+            "(0.0–1.0, default 0.5 = 50%)."
+        ),
+    )
+    protect_first_messages: int = Field(
+        default=2,
+        description="Number of messages at the start of history to preserve unchanged.",
+    )
+    protect_last_messages: int = Field(
+        default=4,
+        description="Number of messages at the end of history to preserve unchanged.",
+    )
+    compression_max_tokens: int = Field(
+        default=1024,
+        description="Max tokens for compression summary generation.",
+    )
+    prompt_cache_max_entries: int = Field(
+        default=16,
+        description="Maximum number of entries in the in-process LRU prompt cache.",
+    )
+    prompt_cache_dir: str = Field(
+        default="~/.ravn/prompt_cache",
+        description="Directory for disk-snapshot prompt cache entries.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Legacy adapter config (kept for backwards compat with NIU-426 wiring)
 # ---------------------------------------------------------------------------
 
@@ -539,6 +592,10 @@ class Settings(BaseSettings):
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     hooks: HooksConfig = Field(default_factory=HooksConfig)
     channels: list[ChannelConfig] = Field(default_factory=list)
+
+    # NIU-431: context management
+    iteration_budget: IterationBudgetConfig = Field(default_factory=IterationBudgetConfig)
+    context_management: ContextManagementConfig = Field(default_factory=ContextManagementConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
