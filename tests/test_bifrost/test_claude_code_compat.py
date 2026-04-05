@@ -20,16 +20,19 @@ Test matrix:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
+from bifrost.adapters.memory_store import MemoryUsageStore
 from bifrost.app import create_app
-from bifrost.config import BifrostConfig, ProviderConfig
+from bifrost.config import AuthMode, BifrostConfig, ProviderConfig
 from bifrost.translation.models import (
     AnthropicResponse,
     TextBlock,
@@ -37,6 +40,7 @@ from bifrost.translation.models import (
     ToolUseBlock,
     UsageInfo,
 )
+from tests.test_bifrost.conftest import make_config, make_response
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,21 +61,13 @@ _ANTHROPIC_BETA_HEADERS = {
 }
 
 
-def _make_pi_config() -> BifrostConfig:
-    """Minimal Pi-mode config: open auth, memory store, single Anthropic provider."""
-    return BifrostConfig(
-        providers={"anthropic": ProviderConfig(models=[_CLAUDE_MODEL, "claude-opus-4-6"])},
-        aliases={"claude-3-5-sonnet-latest": _CLAUDE_MODEL},
-    )
+_RESPONSE_INPUT_TOKENS = 15
+_RESPONSE_OUTPUT_TOKENS = 8
 
 
 def _text_response(text: str = "Hello from Bifröst!") -> AnthropicResponse:
-    return AnthropicResponse(
-        id="msg_test_001",
-        content=[TextBlock(text=text)],
-        model=_CLAUDE_MODEL,
-        stop_reason="end_turn",
-        usage=UsageInfo(input_tokens=15, output_tokens=8),
+    return make_response(
+        text, input_tokens=_RESPONSE_INPUT_TOKENS, output_tokens=_RESPONSE_OUTPUT_TOKENS
     )
 
 
@@ -172,7 +168,10 @@ def _make_stream_events(text: str = "Hi there") -> list[tuple[str, dict]]:
 
 @pytest.fixture
 def config() -> BifrostConfig:
-    return _make_pi_config()
+    return make_config(
+        models=[_CLAUDE_MODEL, "claude-opus-4-6"],
+        aliases={"claude-3-5-sonnet-latest": _CLAUDE_MODEL},
+    )
 
 
 @pytest.fixture
@@ -746,10 +745,7 @@ class TestCostTracking:
         self, mock_complete: AsyncMock, config: BifrostConfig
     ):
         """Every request must be persisted to the usage store."""
-        from bifrost.adapters.memory_store import MemoryUsageStore
-
         store = MemoryUsageStore()
-        app = create_app(config)
 
         # Inject the store via the app factory's internal state by patching.
         with patch("bifrost.app._build_usage_store", return_value=store):
@@ -766,8 +762,6 @@ class TestCostTracking:
                     headers={**_ANTHROPIC_HEADERS, "x-agent-id": "claude-code-agent"},
                 )
 
-        import asyncio
-
         records = asyncio.run(store.query())
         assert len(records) == 1
         assert records[0].model == _CLAUDE_MODEL
@@ -778,8 +772,6 @@ class TestCostTracking:
     def test_agent_id_attributed_in_usage_record(
         self, mock_complete: AsyncMock, config: BifrostConfig
     ):
-        from bifrost.adapters.memory_store import MemoryUsageStore
-
         store = MemoryUsageStore()
 
         with patch("bifrost.app._build_usage_store", return_value=store):
@@ -796,8 +788,6 @@ class TestCostTracking:
                     headers={**_ANTHROPIC_HEADERS, "x-agent-id": "claude-code-cli"},
                 )
 
-        import asyncio
-
         records = asyncio.run(store.query())
         assert records[0].agent_id == "claude-code-cli"
 
@@ -805,8 +795,6 @@ class TestCostTracking:
     def test_session_id_attributed_in_usage_record(
         self, mock_complete: AsyncMock, config: BifrostConfig
     ):
-        from bifrost.adapters.memory_store import MemoryUsageStore
-
         store = MemoryUsageStore()
 
         with patch("bifrost.app._build_usage_store", return_value=store):
@@ -826,8 +814,6 @@ class TestCostTracking:
                     },
                 )
 
-        import asyncio
-
         records = asyncio.run(store.query())
         assert records[0].session_id == "session-abc-123"
 
@@ -836,8 +822,6 @@ class TestCostTracking:
         self, mock_complete: AsyncMock, config: BifrostConfig
     ):
         """For known models the cost must be > 0."""
-        from bifrost.adapters.memory_store import MemoryUsageStore
-
         store = MemoryUsageStore()
 
         with patch("bifrost.app._build_usage_store", return_value=store):
@@ -853,8 +837,6 @@ class TestCostTracking:
                     },
                     headers=_ANTHROPIC_HEADERS,
                 )
-
-        import asyncio
 
         records = asyncio.run(store.query())
         assert records[0].cost_usd > 0.0
@@ -896,8 +878,6 @@ class TestNoApiKeyLeaks:
     @patch("bifrost.router.ModelRouter.complete", new_callable=AsyncMock)
     def test_bearer_token_not_logged(self, mock_complete: AsyncMock, config: BifrostConfig, caplog):
         """PAT Bearer tokens must not appear in any log output."""
-        from bifrost.config import AuthMode
-
         # Use a 32-byte secret to satisfy the JWT library's minimum key length.
         _pat_secret = "test-secret-for-log-test-32bytes!"
         pat_config = BifrostConfig(
@@ -905,8 +885,6 @@ class TestNoApiKeyLeaks:
             auth_mode=AuthMode.PAT,
             pat_secret=_pat_secret,
         )
-        import jwt
-
         token = jwt.encode(
             {"sub": "agent-1", "tenant_id": "default"},
             _pat_secret,
@@ -976,8 +954,6 @@ class TestPiMode:
     def test_open_mode_defaults_agent_id_to_anonymous(
         self, mock_complete: AsyncMock, config: BifrostConfig
     ):
-        from bifrost.adapters.memory_store import MemoryUsageStore
-
         store = MemoryUsageStore()
         with patch("bifrost.app._build_usage_store", return_value=store):
             app = create_app(config)
@@ -991,8 +967,6 @@ class TestPiMode:
                         "messages": [{"role": "user", "content": "anon"}],
                     },
                 )
-
-        import asyncio
 
         records = asyncio.run(store.query())
         assert records[0].agent_id == "anonymous"
