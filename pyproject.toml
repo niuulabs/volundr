@@ -32,6 +32,9 @@ nats = [
 rabbitmq = [
     "aio-pika>=9.0",
 ]
+redis = [
+    "redis[hiredis]>=5.0",
+]
 k8s = [
     "kubernetes-asyncio>=30.0",
 ]
