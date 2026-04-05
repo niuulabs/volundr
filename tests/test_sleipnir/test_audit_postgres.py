@@ -7,8 +7,8 @@ without touching a real database.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -19,10 +19,8 @@ from sleipnir.adapters.audit_postgres import (
     _row_to_event,
     apply_event_type_filter,
 )
-from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.audit import AuditQuery
 from tests.test_sleipnir.conftest import DEFAULT_TIMESTAMP, make_event
-
 
 # ---------------------------------------------------------------------------
 # _is_simple_prefix_pattern

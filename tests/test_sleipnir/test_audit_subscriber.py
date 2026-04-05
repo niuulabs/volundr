@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from sleipnir.adapters.audit_subscriber import AuditConfig, AuditSubscriber
 from sleipnir.adapters.in_process import InProcessBus
 from sleipnir.ports.audit import AuditRepository
 from tests.test_sleipnir.conftest import make_event
-
 
 # ---------------------------------------------------------------------------
 # Helpers

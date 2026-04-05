@@ -11,7 +11,6 @@ from sleipnir.domain.events import SleipnirEvent
 from sleipnir.ports.audit import AuditQuery
 from tests.test_sleipnir.conftest import DEFAULT_TIMESTAMP, make_event
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

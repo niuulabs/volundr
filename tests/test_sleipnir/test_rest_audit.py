@@ -10,9 +10,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from sleipnir.ports.audit import AuditQuery, AuditRepository
-from volundr.adapters.inbound.rest_audit import AuditEventResponse, create_audit_router
 from tests.test_sleipnir.conftest import DEFAULT_TIMESTAMP, make_event
-
+from volundr.adapters.inbound.rest_audit import AuditEventResponse, create_audit_router
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -29,9 +28,7 @@ class _InMemoryAuditRepository(AuditRepository):
     async def query(self, q: AuditQuery) -> list:
         events = list(self._events)
         if q.event_type_pattern and q.event_type_pattern != "*":
-            events = [
-                e for e in events if fnmatch.fnmatch(e.event_type, q.event_type_pattern)
-            ]
+            events = [e for e in events if fnmatch.fnmatch(e.event_type, q.event_type_pattern)]
         if q.correlation_id:
             events = [e for e in events if e.correlation_id == q.correlation_id]
         return events[: q.limit]
