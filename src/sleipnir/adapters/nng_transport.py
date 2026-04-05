@@ -333,7 +333,8 @@ class NngSubscriber(SleipnirSubscriber):
         """
         if self._registry is None:
             return [self._address]
-        entries = await asyncio.get_running_loop().run_in_executor(None, self._registry.list_services)
+        loop = asyncio.get_running_loop()
+        entries = await loop.run_in_executor(None, self._registry.list_services)
         if not entries:
             logger.debug("NngSubscriber: registry empty, falling back to %s", self._address)
             return [self._address]
