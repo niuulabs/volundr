@@ -9,6 +9,7 @@ from ravn.config import (
     AgentConfig,
     AnthropicConfig,
     ChannelConfig,
+    ContextConfig,
     HookConfig,
     HooksConfig,
     LLMAdapterConfig,
@@ -165,6 +166,18 @@ class TestPermissionConfig:
         assert c.rules[0].action == "deny"
 
 
+class TestContextConfig:
+    def test_defaults(self) -> None:
+        c = ContextConfig()
+        assert c.per_file_limit == 4096
+        assert c.total_budget == 12288
+
+    def test_custom_values(self) -> None:
+        c = ContextConfig(per_file_limit=1024, total_budget=8192)
+        assert c.per_file_limit == 1024
+        assert c.total_budget == 8192
+
+
 class TestPermissionRuleConfig:
     def test_defaults(self) -> None:
         r = PermissionRuleConfig(pattern="tool:*")
@@ -263,6 +276,7 @@ class TestSettings:
         assert isinstance(s.permission, PermissionConfig)
         assert isinstance(s.logging, LoggingConfig)
         # NIU-427 new sections
+        assert isinstance(s.context, ContextConfig)
         assert isinstance(s.llm, LLMConfig)
         assert isinstance(s.tools, ToolsConfig)
         assert isinstance(s.memory, MemoryConfig)
@@ -376,3 +390,11 @@ class TestSettings:
             s = Settings()
             assert len(s.channels) == 1
             assert s.channels[0].kwargs["result_truncation_limit"] == 200
+
+    def test_yaml_context_section(self, tmp_path) -> None:
+        cfg = tmp_path / "ravn.yaml"
+        cfg.write_text("context:\n  per_file_limit: 2048\n  total_budget: 6144\n")
+        with patch.dict(os.environ, {"RAVN_CONFIG": str(cfg)}):
+            s = Settings()
+            assert s.context.per_file_limit == 2048
+            assert s.context.total_budget == 6144

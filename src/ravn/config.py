@@ -13,14 +13,18 @@ Environment variable override format (RAVN_ prefix, double underscore for nestin
 - RAVN_MEMORY__BACKEND
 
 Precedence (highest to lowest):
-  env vars > project context (.ravn.yaml in CWD/git root) > yaml file > defaults
+  env vars > yaml file > defaults
+
+Note: project context files (.ravn.yaml, RAVN.md, CLAUDE.md) discovered by
+`ravn.context.discover()` are a *separate* mechanism — they enrich the agent's
+system prompt with project-specific instructions and are not config overrides.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from pydantic_settings import (
@@ -34,17 +38,17 @@ from pydantic_settings import (
 # Config file resolution
 # ---------------------------------------------------------------------------
 
-_DEFAULT_CONFIG_PATHS = [
+_DEFAULT_CONFIG_PATHS: tuple[Path, ...] = (
     Path.home() / ".ravn" / "config.yaml",
     Path("./ravn.yaml"),
     Path("/etc/ravn/config.yaml"),
-]
+)
 
 
-def _config_paths() -> list[Path]:
+def _config_paths() -> tuple[Path, ...]:
     env = os.environ.get("RAVN_CONFIG")
     if env:
-        return [Path(env)]
+        return (Path(env),)
     return _DEFAULT_CONFIG_PATHS
 
 
@@ -123,9 +127,12 @@ class ToolsConfig(BaseModel):
 class MemoryConfig(BaseModel):
     """Conversation memory / persistence backend configuration."""
 
-    backend: str = Field(
+    backend: Literal["sqlite", "postgres"] | str = Field(
         default="sqlite",
-        description="Backend to use: 'sqlite', 'postgres', or a fully-qualified class path.",
+        description=(
+            "Backend to use: 'sqlite', 'postgres', or a fully-qualified class path "
+            "for a custom backend adapter."
+        ),
     )
     path: str = Field(
         default="~/.ravn/memory.db",
@@ -145,7 +152,7 @@ class PermissionRuleConfig(BaseModel):
     """A single permission rule entry."""
 
     pattern: str = Field(description="Permission name or glob pattern.")
-    action: str = Field(
+    action: Literal["allow", "deny", "ask"] = Field(
         default="ask",
         description="Action to take: 'allow', 'deny', or 'ask'.",
     )
@@ -154,7 +161,7 @@ class PermissionRuleConfig(BaseModel):
 class PermissionConfig(BaseModel):
     """Permission enforcement configuration."""
 
-    mode: str = Field(
+    mode: Literal["allow_all", "deny_all", "prompt"] = Field(
         default="allow_all",
         description="Default permission mode: allow_all, deny_all, or prompt.",
     )
@@ -180,7 +187,7 @@ class MCPServerConfig(BaseModel):
     """Configuration for a single MCP server."""
 
     name: str = Field(description="Human-readable name for this server.")
-    transport: str = Field(
+    transport: Literal["stdio", "http"] = Field(
         default="stdio",
         description="Transport type: 'stdio' or 'http'.",
     )
@@ -228,6 +235,19 @@ class ChannelConfig(BaseModel):
     )
     kwargs: dict[str, Any] = Field(default_factory=dict)
     secret_kwargs_env: dict[str, str] = Field(default_factory=dict)
+
+
+class ContextConfig(BaseModel):
+    """Project context discovery configuration."""
+
+    per_file_limit: int = Field(
+        default=4096,
+        description="Maximum characters read from a single context file.",
+    )
+    total_budget: int = Field(
+        default=12288,
+        description="Maximum total characters of context injected into the system prompt.",
+    )
 
 
 class AgentConfig(BaseModel):
@@ -278,7 +298,7 @@ class Settings(BaseSettings):
     """Ravn application settings.
 
     Loaded from YAML with RAVN_ environment variable overrides.
-    Precedence: env vars > project .ravn.yaml > config file > defaults.
+    Precedence: env vars > yaml file > defaults.
     """
 
     model_config = SettingsConfigDict(
@@ -293,6 +313,7 @@ class Settings(BaseSettings):
     agent: AgentConfig = Field(default_factory=AgentConfig)
 
     # New NIU-427 sections
+    context: ContextConfig = Field(default_factory=ContextConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)

@@ -95,9 +95,10 @@ def _git_root(start: Path) -> Path | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=5,
         )
         return Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
         return None
 
 

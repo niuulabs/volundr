@@ -125,6 +125,13 @@ class TestGitRoot:
         ):
             assert _git_root(tmp_path) is None
 
+    def test_git_timeout_returns_none(self, tmp_path: Path) -> None:
+        with patch(
+            "subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="git", timeout=5),
+        ):
+            assert _git_root(tmp_path) is None
+
 
 class TestCandidateDirs:
     def test_includes_start(self, tmp_path: Path) -> None:
