@@ -603,4 +603,65 @@ data:
     DROP INDEX IF EXISTS idx_integration_connections_owner;
     CREATE INDEX IF NOT EXISTS idx_integration_connections_user
         ON integration_connections(user_id, integration_type);
+
+  000025_bifrost_requests.up.sql: |
+    -- Bifrost per-request accounting table.
+    -- One row per LLM request: token counts, cost attribution, and latency.
+    CREATE TABLE IF NOT EXISTS bifrost_requests (
+        id                 BIGSERIAL   PRIMARY KEY,
+        request_id         TEXT        NOT NULL DEFAULT '',
+        agent_id           TEXT        NOT NULL,
+        tenant_id          TEXT        NOT NULL,
+        session_id         TEXT        NOT NULL DEFAULT '',
+        saga_id            TEXT        NOT NULL DEFAULT '',
+        model              TEXT        NOT NULL,
+        provider           TEXT        NOT NULL DEFAULT '',
+        input_tokens       INTEGER     NOT NULL DEFAULT 0,
+        output_tokens      INTEGER     NOT NULL DEFAULT 0,
+        cache_read_tokens  INTEGER     NOT NULL DEFAULT 0,
+        cache_write_tokens INTEGER     NOT NULL DEFAULT 0,
+        reasoning_tokens   INTEGER     NOT NULL DEFAULT 0,
+        cost_usd           NUMERIC     NOT NULL DEFAULT 0,
+        latency_ms         REAL        NOT NULL DEFAULT 0,
+        streaming          BOOLEAN     NOT NULL DEFAULT FALSE,
+        timestamp          TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_bifrost_req_tenant_ts  ON bifrost_requests(tenant_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_bifrost_req_agent_ts   ON bifrost_requests(agent_id,  timestamp);
+    CREATE INDEX IF NOT EXISTS idx_bifrost_req_model      ON bifrost_requests(model);
+    CREATE INDEX IF NOT EXISTS idx_bifrost_req_provider   ON bifrost_requests(provider);
+
+  000025_bifrost_requests.down.sql: |
+    -- Rollback bifrost accounting table.
+    DROP TABLE IF EXISTS bifrost_requests;
+
+  000026_bifrost_audit.up.sql: |
+    -- Bifrost per-request audit log table.
+    -- One row per LLM request attempt: outcome, rule matches, and security metadata.
+    CREATE TABLE IF NOT EXISTS bifrost_audit (
+        id            BIGSERIAL   PRIMARY KEY,
+        request_id    TEXT        NOT NULL DEFAULT '',
+        agent_id      TEXT        NOT NULL,
+        tenant_id     TEXT        NOT NULL,
+        session_id    TEXT        NOT NULL DEFAULT '',
+        saga_id       TEXT        NOT NULL DEFAULT '',
+        model         TEXT        NOT NULL,
+        provider      TEXT        NOT NULL DEFAULT '',
+        outcome       TEXT        NOT NULL DEFAULT 'success',
+        status_code   INTEGER     NOT NULL DEFAULT 200,
+        rule_name     TEXT        NOT NULL DEFAULT '',
+        rule_action   TEXT        NOT NULL DEFAULT '',
+        tags          JSONB       NOT NULL DEFAULT '{}',
+        error_message TEXT        NOT NULL DEFAULT '',
+        latency_ms    REAL        NOT NULL DEFAULT 0,
+        timestamp     TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_bifrost_audit_tenant_ts  ON bifrost_audit(tenant_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_bifrost_audit_agent_ts   ON bifrost_audit(agent_id,  timestamp);
+    CREATE INDEX IF NOT EXISTS idx_bifrost_audit_outcome    ON bifrost_audit(outcome);
+    CREATE INDEX IF NOT EXISTS idx_bifrost_audit_request_id ON bifrost_audit(request_id);
+
+  000026_bifrost_audit.down.sql: |
+    -- Rollback bifrost audit log table.
+    DROP TABLE IF EXISTS bifrost_audit;
 {{- end }}
