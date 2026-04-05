@@ -1,0 +1,42 @@
+"""Skill port — interface for skill discovery and storage."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from ravn.domain.models import Episode, Skill
+
+
+class SkillPort(ABC):
+    """Abstract interface for skill extraction and retrieval.
+
+    Implementations detect when a reusable *skill* can be extracted from
+    recurring successful episode patterns and persist discovered skills for
+    future injection into agent context.
+    """
+
+    @abstractmethod
+    async def record_episode(self, episode: Episode) -> Skill | None:
+        """Inspect *episode* and optionally suggest a new skill.
+
+        Called after each episode is recorded in episodic memory.  When
+        the implementation detects that *episode* completes a recurring
+        success pattern (same tool/tag combination seen >= threshold times),
+        it returns a newly created ``Skill``; otherwise returns ``None``.
+
+        The returned skill has already been persisted by the implementation.
+        """
+        ...
+
+    @abstractmethod
+    async def list_skills(self, query: str | None = None) -> list[Skill]:
+        """List discovered skills, optionally filtered by *query* text.
+
+        Returns all stored skills when *query* is ``None`` or empty.
+        """
+        ...
+
+    @abstractmethod
+    async def record_skill(self, skill: Skill) -> None:
+        """Persist *skill* directly (bypass automatic discovery)."""
+        ...
