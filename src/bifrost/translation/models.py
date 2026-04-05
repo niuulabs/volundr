@@ -45,7 +45,20 @@ class ToolResultBlock(BaseModel):
     cache_control: CacheControl | None = None
 
 
-ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock
+class ImageSource(BaseModel):
+    type: Literal["base64", "url"] = "base64"
+    media_type: str = ""
+    data: str = ""
+    url: str = ""
+
+
+class ImageBlock(BaseModel):
+    type: Literal["image"] = "image"
+    source: ImageSource
+    cache_control: CacheControl | None = None
+
+
+ContentBlock = TextBlock | ThinkingBlock | ImageBlock | ToolUseBlock | ToolResultBlock
 
 # A message content value is either a plain string or a list of blocks.
 MessageContent = str | list[ContentBlock]

@@ -14,9 +14,21 @@ from __future__ import annotations
 import logging
 
 from bifrost.ports.rules import RoutingContext, RuleAction, RuleEnginePort
-from bifrost.translation.models import AnthropicRequest
+from bifrost.translation.models import AnthropicRequest, ImageBlock
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_image_blocks(request: AnthropicRequest) -> AnthropicRequest:
+    """Return a copy of *request* with all image blocks removed from messages."""
+    new_messages = []
+    for msg in request.messages:
+        if isinstance(msg.content, str):
+            new_messages.append(msg)
+            continue
+        filtered = [b for b in msg.content if not isinstance(b, ImageBlock)]
+        new_messages.append(msg.model_copy(update={"content": filtered}))
+    return request.model_copy(update={"messages": new_messages})
 
 
 class RuleRejectError(Exception):
@@ -86,6 +98,23 @@ def apply_rules(
                 request.model,
             )
             return request
+
+        case RuleAction.TAG:
+            logger.info(
+                "AUDIT rule='%s' model='%s' action=tag tags=%s",
+                match_result.rule_name,
+                request.model,
+                match_result.tags,
+            )
+            return request
+
+        case RuleAction.STRIP_IMAGES:
+            logger.info(
+                "Rule '%s' stripping image blocks from request for model '%s'",
+                match_result.rule_name,
+                request.model,
+            )
+            return _strip_image_blocks(request)
 
         case _:
             logger.warning("Unknown rule action '%s'; ignoring", match_result.action)
