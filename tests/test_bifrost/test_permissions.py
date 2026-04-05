@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -71,10 +72,11 @@ class TestPermissionsForAgent:
 # ---------------------------------------------------------------------------
 
 
+@contextmanager
 def _make_app_with_permissions(
     agent_id: str,
     allowed_models: list[str],
-) -> TestClient:
+):
     from bifrost.translation.models import AnthropicResponse, TextBlock, UsageInfo
 
     cfg = BifrostConfig(
@@ -110,22 +112,22 @@ class TestModelAccessWildcard:
         )
 
     def test_star_wildcard_allows_any_model(self):
-        for client in _make_app_with_permissions("my-agent", ["*"]):
+        with _make_app_with_permissions("my-agent", ["*"]) as client:
             resp = self._post(client)
             assert resp.status_code == 200
 
     def test_explicit_model_allowed(self):
-        for client in _make_app_with_permissions("my-agent", ["claude-sonnet-4-6"]):
+        with _make_app_with_permissions("my-agent", ["claude-sonnet-4-6"]) as client:
             resp = self._post(client)
             assert resp.status_code == 200
 
     def test_model_not_in_list_rejected(self):
-        for client in _make_app_with_permissions("my-agent", ["gpt-4o"]):
+        with _make_app_with_permissions("my-agent", ["gpt-4o"]) as client:
             resp = self._post(client, model="claude-sonnet-4-6")
             assert resp.status_code == 403
 
     def test_empty_allowed_models_unrestricted(self):
-        for client in _make_app_with_permissions("my-agent", []):
+        with _make_app_with_permissions("my-agent", []) as client:
             resp = self._post(client)
             assert resp.status_code == 200
 
@@ -136,7 +138,8 @@ class TestModelAccessWildcard:
 
 
 class TestAdminReloadKeys:
-    def _client(self) -> TestClient:
+    @contextmanager
+    def _client(self):
         cfg = BifrostConfig(
             providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])},
         )
@@ -145,12 +148,12 @@ class TestAdminReloadKeys:
             yield client
 
     def test_reload_keys_returns_ok(self):
-        for client in self._client():
+        with self._client() as client:
             resp = client.post("/admin/reload-keys")
             assert resp.status_code == 200
             assert resp.json() == {"status": "ok"}
 
     def test_reload_keys_method_not_allowed_on_get(self):
-        for client in self._client():
+        with self._client() as client:
             resp = client.get("/admin/reload-keys")
             assert resp.status_code == 405

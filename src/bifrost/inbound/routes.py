@@ -232,12 +232,16 @@ def create_router(
         return {"status": "ok"}
 
     @api_router.post("/admin/reload-keys")
-    async def admin_reload_keys() -> dict:
+    async def admin_reload_keys(raw_request: Request) -> dict:
         """Reload provider API keys from their source without restarting.
 
         Triggers the same key-rotation logic as a SIGHUP signal.  Useful
         in environments where sending UNIX signals is inconvenient (e.g.
         containers without a shell, or Windows).
+
+        Authentication is enforced according to the configured auth mode —
+        in PAT or mesh mode a valid credential is required to call this
+        endpoint, preventing unauthenticated disruption of the adapter cache.
 
         After this call, all cached provider adapters are discarded and
         will be rebuilt with the freshly loaded keys on the next request.
@@ -245,6 +249,7 @@ def create_router(
         Returns:
             ``{"status": "ok"}``
         """
+        auth_adapter.extract(raw_request)
         router.reload_keys()
         return {"status": "ok"}
 

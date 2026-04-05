@@ -59,18 +59,9 @@ class ProviderConfig(BaseModel):
 
     @property
     def api_key(self) -> str:
-        if self.api_key_env:
-            value = os.environ.get(self.api_key_env, "")
-            if value:
-                return value
-        if self.api_key_file:
-            try:
-                from pathlib import Path
-
-                return Path(self.api_key_file).read_text(encoding="utf-8").strip()
-            except OSError:
-                pass
-        return ""
+        if not self.api_key_env:
+            return ""
+        return os.environ.get(self.api_key_env, "")
 
 
 class PricingOverride(BaseModel):
