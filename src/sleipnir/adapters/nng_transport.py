@@ -166,24 +166,27 @@ class NngPublisher(SleipnirPublisher):
 
     async def start(self) -> None:
         """Bind the PUB socket, retrying on transient address-in-use errors."""
-        self._socket = pynng.Pub0()
-        for attempt in range(self._bind_max_retries):
-            try:
-                self._socket.listen(self._address)
-                logger.debug("NngPublisher: bound to %s", self._address)
-                return
-            except pynng.AddressInUse:
-                if attempt == self._bind_max_retries - 1:
-                    self._socket.close()
-                    self._socket = None
-                    raise
-                logger.warning(
-                    "NngPublisher: %s in use, retry %d/%d",
-                    self._address,
-                    attempt + 1,
-                    self._bind_max_retries,
-                )
-                await asyncio.sleep(self._bind_retry_delay_s)
+        socket = pynng.Pub0()
+        try:
+            for attempt in range(self._bind_max_retries):
+                try:
+                    socket.listen(self._address)
+                    logger.debug("NngPublisher: bound to %s", self._address)
+                    self._socket = socket
+                    return
+                except pynng.AddressInUse:
+                    if attempt == self._bind_max_retries - 1:
+                        raise
+                    logger.warning(
+                        "NngPublisher: %s in use, retry %d/%d",
+                        self._address,
+                        attempt + 1,
+                        self._bind_max_retries,
+                    )
+                    await asyncio.sleep(self._bind_retry_delay_s)
+        except Exception:
+            socket.close()
+            raise
 
     async def stop(self) -> None:
         """Close the PUB socket."""
