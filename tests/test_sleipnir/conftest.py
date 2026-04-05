@@ -8,9 +8,6 @@ from sleipnir.domain.events import SleipnirEvent
 
 DEFAULT_TIMESTAMP = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
 
-#: Sentinel meaning "omit this field so the dataclass default_factory runs".
-_OMIT = object()
-
 
 def make_event(**kwargs) -> SleipnirEvent:
     """Return a :class:`SleipnirEvent` with sensible test defaults.
