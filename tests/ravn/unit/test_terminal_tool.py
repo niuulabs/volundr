@@ -152,13 +152,17 @@ class TestPersistentShellRun:
     async def test_run_timeout_returns_124(self):
         shell = PersistentShell(timeout_seconds=0.2)
         await shell.start()
-        try:
-            output, rc = await shell.run("sleep 10")
-            assert rc == 124
-            assert "timed out" in output
-        finally:
-            # shell may be in bad state after timeout; close gracefully
-            await shell.close()
+        output, rc = await shell.run("sleep 10")
+        assert rc == 124
+        assert "timed out" in output
+
+    @pytest.mark.asyncio
+    async def test_run_timeout_kills_shell(self):
+        shell = PersistentShell(timeout_seconds=0.2)
+        await shell.start()
+        await shell.run("sleep 10")
+        # Shell must be killed after timeout — not running, not corrupted
+        assert not shell.is_running
 
 
 class TestPersistentShellState:
@@ -413,3 +417,6 @@ class TestTerminalToolConfig:
     def test_persistent_shell_false(self):
         tool = TerminalTool(persistent_shell=False)
         assert tool._persistent is False
+
+    def test_not_parallelisable(self):
+        assert TerminalTool().parallelisable is False

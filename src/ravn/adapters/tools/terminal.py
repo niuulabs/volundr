@@ -15,15 +15,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shlex
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from ravn.domain.models import ToolResult
 from ravn.ports.tool import ToolPort
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +184,11 @@ class PersistentShell:
                         break
                     output_lines.append(line_str)
         except TimeoutError:
+            if self._process is not None:
+                logger.warning("PersistentShell timed out — killing to avoid output pollution")
+                self._process.kill()
+                await self._process.wait()
+                self._process = None
             return "\n".join(output_lines) + "\n[timed out]", 124
 
         return "\n".join(output_lines), exit_code
@@ -211,7 +213,7 @@ class PersistentShell:
         if state.env_exports:
             await self.run(state.env_exports)
         if state.cwd:
-            await self.run(f"cd {state.cwd!r} 2>/dev/null || true")
+            await self.run(f"cd {shlex.quote(state.cwd)} 2>/dev/null || true")
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +281,10 @@ class TerminalTool(ToolPort):
     @property
     def required_permission(self) -> str:
         return _PERMISSION_SHELL
+
+    @property
+    def parallelisable(self) -> bool:
+        return False
 
     async def execute(self, input: dict) -> ToolResult:
         command = input.get("command", "").strip()
