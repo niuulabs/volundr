@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from enum import StrEnum
 from typing import Literal
 
@@ -133,6 +134,33 @@ class RuleCondition(BaseModel):
         default=None,
         description="Match when the request includes tool definitions (true) or not (false).",
     )
+    content_matches: str | None = Field(
+        default=None,
+        description="Regex pattern applied to the full concatenated message content.",
+    )
+    system_prompt_matches: str | None = Field(
+        default=None,
+        description="Regex pattern applied to the system prompt text.",
+    )
+    message_count: str | None = Field(
+        default=None,
+        description="Numeric comparison expression for the number of messages (e.g. '>= 10').",
+    )
+    has_image: bool | None = Field(
+        default=None,
+        description="Match when the request contains image blocks (true) or not (false).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_regex_fields(self) -> RuleCondition:
+        for field_name in ("content_matches", "system_prompt_matches"):
+            pattern = getattr(self, field_name)
+            if pattern is not None:
+                try:
+                    re.compile(pattern)
+                except re.error as exc:
+                    raise ValueError(f"Invalid regex in {field_name}: {exc}") from None
+        return self
 
 
 class RuleConfig(BaseModel):
@@ -140,7 +168,7 @@ class RuleConfig(BaseModel):
 
     name: str = Field(description="Human-readable rule identifier (used in logs).")
     when: RuleCondition = Field(description="Conditions that must all match for the rule to fire.")
-    action: Literal["route_to", "reject", "log"] = Field(
+    action: Literal["route_to", "reject", "log", "tag", "strip_images"] = Field(
         description="Action to take when the rule matches.",
     )
     target: str | None = Field(
@@ -150,6 +178,10 @@ class RuleConfig(BaseModel):
     message: str | None = Field(
         default=None,
         description="Rejection message returned to the caller (for action='reject').",
+    )
+    tags: dict[str, str] = Field(
+        default_factory=dict,
+        description="Metadata key-value pairs added to the audit entry (for action='tag').",
     )
 
     @model_validator(mode="after")

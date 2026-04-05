@@ -21,6 +21,12 @@ class RuleAction(StrEnum):
     LOG = "log"
     """Emit a full-level audit log entry; request continues unchanged."""
 
+    TAG = "tag"
+    """Add metadata tags to the audit entry; request continues unchanged."""
+
+    STRIP_IMAGES = "strip_images"
+    """Remove all image blocks from the request before forwarding."""
+
 
 @dataclass
 class RuleMatch:
@@ -37,6 +43,9 @@ class RuleMatch:
 
     message: str | None = None
     """Rejection message shown to the caller (only for REJECT)."""
+
+    tags: dict[str, str] = field(default_factory=dict)
+    """Metadata tags to attach to the audit entry (only for TAG)."""
 
 
 @dataclass

@@ -7,12 +7,16 @@ order they appear in the config; first match wins.
 
 Supported conditions
 --------------------
-* ``model``          — request model equals this alias or model ID.
-* ``max_tokens``     — numeric comparison expression (e.g. ``'<= 512'``).
-* ``thinking``       — thinking enabled / disabled (bool).
-* ``agent_budget_pct`` — numeric comparison on remaining budget % (e.g. ``'>= 80'``).
-* ``provider``       — resolved primary provider name equals this value.
-* ``has_tools``      — request includes tool definitions (bool).
+* ``model``                 — request model equals this alias or model ID.
+* ``max_tokens``            — numeric comparison expression (e.g. ``'<= 512'``).
+* ``thinking``              — thinking enabled / disabled (bool).
+* ``agent_budget_pct``      — numeric comparison on remaining budget % (e.g. ``'>= 80'``).
+* ``provider``              — resolved primary provider name equals this value.
+* ``has_tools``             — request includes tool definitions (bool).
+* ``content_matches``       — regex applied to full concatenated message content.
+* ``system_prompt_matches`` — regex applied to the system prompt text.
+* ``message_count``         — numeric comparison on the number of messages.
+* ``has_image``             — request contains image blocks (bool).
 
 Numeric comparison expressions
 -------------------------------
@@ -26,7 +30,7 @@ import re
 
 from bifrost.config import BifrostConfig, RuleCondition, RuleConfig
 from bifrost.ports.rules import RoutingContext, RuleAction, RuleEnginePort, RuleMatch
-from bifrost.translation.models import AnthropicRequest
+from bifrost.translation.models import AnthropicRequest, ImageBlock, TextBlock
 
 # Pre-compiled pattern for numeric comparison expressions like '<= 512' or '>= 80'.
 _CMP_RE = re.compile(r"^\s*(<=|>=|<|>|==|!=)\s*([0-9]+(?:\.[0-9]*)?)\s*$")
@@ -89,6 +93,39 @@ def _thinking_enabled(request: AnthropicRequest) -> bool:
     return request.thinking.get("type") == "enabled"
 
 
+def _extract_message_text(request: AnthropicRequest) -> str:
+    """Concatenate all text content from messages into a single string."""
+    parts: list[str] = []
+    for msg in request.messages:
+        if isinstance(msg.content, str):
+            parts.append(msg.content)
+            continue
+        for block in msg.content:
+            if isinstance(block, TextBlock):
+                parts.append(block.text)
+    return "\n".join(parts)
+
+
+def _extract_system_text(request: AnthropicRequest) -> str:
+    """Return the system prompt as a plain string."""
+    if request.system is None:
+        return ""
+    if isinstance(request.system, str):
+        return request.system
+    return "\n".join(block.text for block in request.system if isinstance(block, TextBlock))
+
+
+def _request_has_image(request: AnthropicRequest) -> bool:
+    """Return ``True`` if any message in *request* contains an image block."""
+    for msg in request.messages:
+        if isinstance(msg.content, str):
+            continue
+        for block in msg.content:
+            if isinstance(block, ImageBlock):
+                return True
+    return False
+
+
 class YamlRuleEngine(RuleEnginePort):
     """Rule engine driven by a list of ``RuleConfig`` objects.
 
@@ -102,6 +139,15 @@ class YamlRuleEngine(RuleEnginePort):
     def __init__(self, rules: list[RuleConfig], config: BifrostConfig) -> None:
         self._rules = rules
         self._config = config
+        # Pre-compile regex patterns once at init time rather than per request.
+        # Keyed by rule index so the hot-path _matches() can do a cheap lookup.
+        self._content_patterns: dict[int, re.Pattern] = {}
+        self._system_patterns: dict[int, re.Pattern] = {}
+        for idx, rule in enumerate(rules):
+            if rule.when.content_matches is not None:
+                self._content_patterns[idx] = re.compile(rule.when.content_matches)
+            if rule.when.system_prompt_matches is not None:
+                self._system_patterns[idx] = re.compile(rule.when.system_prompt_matches)
 
     def evaluate(
         self,
@@ -117,13 +163,14 @@ class YamlRuleEngine(RuleEnginePort):
         Returns:
             The first matching ``RuleMatch``, or ``None`` if no rule fires.
         """
-        for rule in self._rules:
-            if self._matches(rule.when, request, context):
+        for idx, rule in enumerate(self._rules):
+            if self._matches(idx, rule.when, request, context):
                 return RuleMatch(
                     rule_name=rule.name,
                     action=RuleAction(rule.action),
                     target=rule.target,
                     message=rule.message,
+                    tags=rule.tags,
                 )
         return None
 
@@ -133,6 +180,7 @@ class YamlRuleEngine(RuleEnginePort):
 
     def _matches(
         self,
+        idx: int,
         condition: RuleCondition,
         request: AnthropicRequest,
         context: RoutingContext,
@@ -166,6 +214,25 @@ class YamlRuleEngine(RuleEnginePort):
             resolved = self._config.resolve_alias(request.model)
             providers = self._config.providers_for_model(resolved)
             if condition.provider not in providers:
+                return False
+
+        if condition.content_matches is not None:
+            text = _extract_message_text(request)
+            if not self._content_patterns[idx].search(text):
+                return False
+
+        if condition.system_prompt_matches is not None:
+            system_text = _extract_system_text(request)
+            if not self._system_patterns[idx].search(system_text):
+                return False
+
+        if condition.message_count is not None:
+            if not _compare_numeric(len(request.messages), condition.message_count):
+                return False
+
+        if condition.has_image is not None:
+            req_has_image = _request_has_image(request)
+            if req_has_image != condition.has_image:
                 return False
 
         return True

@@ -2,11 +2,13 @@
 
 ``apply_rules`` is the single entry-point called by the ``ModelRouter`` before
 it builds provider candidates.  It delegates to whichever ``RuleEnginePort``
-implementation is configured, and handles the three possible outcomes:
+implementation is configured, and handles five possible outcomes:
 
-* ``route_to``  — returns a copy of the request with the model overridden.
-* ``reject``    — raises ``RuleRejectError`` (callers map this to HTTP 400).
-* ``log``       — emits a full-level audit log entry, returns the request unchanged.
+* ``route_to``     — returns a copy of the request with the model overridden.
+* ``reject``       — raises ``RuleRejectError`` (callers map this to HTTP 400).
+* ``log``          — emits a full-level audit log entry, returns the request unchanged.
+* ``tag``          — emits an audit log entry with metadata tags, returns the request unchanged.
+* ``strip_images`` — returns a copy of the request with all image blocks removed.
 """
 
 from __future__ import annotations
@@ -14,9 +16,28 @@ from __future__ import annotations
 import logging
 
 from bifrost.ports.rules import RoutingContext, RuleAction, RuleEnginePort
-from bifrost.translation.models import AnthropicRequest
+from bifrost.translation.models import AnthropicRequest, ImageBlock, TextBlock
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_image_blocks(request: AnthropicRequest) -> AnthropicRequest:
+    """Return a copy of *request* with all image blocks removed from messages.
+
+    If stripping images would leave a message with no content blocks, a
+    placeholder ``TextBlock(text="[image removed]")`` is inserted so that
+    downstream providers never receive an empty content list.
+    """
+    new_messages = []
+    for msg in request.messages:
+        if isinstance(msg.content, str):
+            new_messages.append(msg)
+            continue
+        filtered = [b for b in msg.content if not isinstance(b, ImageBlock)]
+        if not filtered:
+            filtered = [TextBlock(text="[image removed]")]
+        new_messages.append(msg.model_copy(update={"content": filtered}))
+    return request.model_copy(update={"messages": new_messages})
 
 
 class RuleRejectError(Exception):
@@ -86,6 +107,23 @@ def apply_rules(
                 request.model,
             )
             return request
+
+        case RuleAction.TAG:
+            logger.info(
+                "AUDIT rule='%s' model='%s' action=tag tags=%s",
+                match_result.rule_name,
+                request.model,
+                match_result.tags,
+            )
+            return request
+
+        case RuleAction.STRIP_IMAGES:
+            logger.info(
+                "Rule '%s' stripping image blocks from request for model '%s'",
+                match_result.rule_name,
+                request.model,
+            )
+            return _strip_image_blocks(request)
 
         case _:
             logger.warning("Unknown rule action '%s'; ignoring", match_result.action)
