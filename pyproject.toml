@@ -65,6 +65,7 @@ tyr = "tyr.main:main"
 niuu = "niuu.plugin:NiuuPlugin"
 volundr = "volundr.plugin:VolundrPlugin"
 tyr = "tyr.plugin:TyrPlugin"
+bifrost = "bifrost.plugin:BifrostPlugin"
 
 [project.urls]
 Homepage = "https://github.com/niuulabs/volundr"
