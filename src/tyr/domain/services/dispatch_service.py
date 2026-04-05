@@ -12,7 +12,7 @@ import string
 from collections import defaultdict
 from dataclasses import dataclass
 
-from tyr.domain.models import RaidStatus, Saga, TrackerIssue
+from tyr.domain.models import RaidStatus, Saga, SagaStatus, TrackerIssue, TrackerProject
 from tyr.ports.dispatcher_repository import DispatcherRepository
 from tyr.ports.saga_repository import SagaRepository
 from tyr.ports.tracker import TrackerFactory, TrackerPort
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 _READY_STATUSES = {"todo", "backlog", "triage"}
 _ACTIVE_SESSION_STATUSES = {"running", "starting", "creating"}
+_COMPLETED_LINEAR_STATES = {"completed", "cancelled"}
 
 
 @dataclass(frozen=True)
@@ -202,7 +203,9 @@ class DispatchService:
         sagas = await self._saga_repo.list_sagas(owner_id=owner_id)
         if saga_tracker_id:
             sagas = [s for s in sagas if s.tracker_id == saga_tracker_id]
-        if not sagas:
+        # Only process active sagas — completed/failed ones have no dispatchable work
+        active_sagas = [s for s in sagas if s.status == SagaStatus.ACTIVE]
+        if not active_sagas:
             return []
 
         # Get active sessions to exclude already-running issues
@@ -213,41 +216,24 @@ class DispatchService:
             if s.tracker_issue_id and s.status in _ACTIVE_SESSION_STATUSES
         }
 
-        queue: list[QueueItem] = []
-        for saga in sagas:
-            for adapter in adapters:
-                try:
-                    milestones, issues = await self._fetch_saga_data(adapter, saga)
-                    milestone_names = {m.id: m.name for m in milestones}
-                    blocked_identifiers = await self._get_blocked_safe(adapter, saga)
+        # Fetch all active sagas in parallel
+        saga_results = await asyncio.gather(
+            *[
+                self._fetch_and_filter_saga(adapters, saga, active_issue_ids)
+                for saga in active_sagas
+            ]
+        )
 
-                    for issue in issues:
-                        if not is_ready(issue, active_issue_ids, blocked_identifiers):
-                            continue
-                        queue.append(
-                            QueueItem(
-                                saga_id=str(saga.id),
-                                saga_name=saga.name,
-                                saga_slug=saga.slug,
-                                repos=saga.repos,
-                                feature_branch=saga.feature_branch,
-                                phase_name=milestone_names.get(
-                                    issue.milestone_id or "", "Unassigned"
-                                ),
-                                issue_id=issue.id,
-                                identifier=issue.identifier,
-                                title=issue.title,
-                                description=issue.description,
-                                status=issue.status,
-                                priority=issue.priority,
-                                priority_label=issue.priority_label,
-                                estimate=issue.estimate,
-                                url=issue.url,
-                            )
-                        )
-                    break
-                except Exception:
-                    logger.error("Failed to fetch issues for saga %s", saga.id, exc_info=True)
+        queue: list[QueueItem] = []
+        for saga, (items, should_complete) in zip(active_sagas, saga_results):
+            if should_complete:
+                await self._saga_repo.update_saga_status(saga.id, SagaStatus.COMPLETE)
+                logger.info(
+                    "Auto-archived saga %s — Linear project is completed/cancelled",
+                    saga.slug,
+                )
+                continue
+            queue.extend(items)
 
         queue.sort(key=lambda q: (q.priority, q.identifier))
         return queue
@@ -379,14 +365,68 @@ class DispatchService:
     # -------------------------------------------------------------------
 
     @staticmethod
-    async def _fetch_saga_data(adapter: TrackerPort, saga: Saga) -> tuple[list, list]:
-        """Fetch milestones and issues for a saga from the tracker."""
+    async def _fetch_saga_data(
+        adapter: TrackerPort, saga: Saga
+    ) -> tuple[TrackerProject | None, list, list]:
+        """Fetch project, milestones, and issues for a saga from the tracker."""
         if hasattr(adapter, "get_project_full"):
-            _, milestones, issues = await adapter.get_project_full(saga.tracker_id)
-        else:
-            milestones = await adapter.list_milestones(saga.tracker_id)
-            issues = await adapter.list_issues(saga.tracker_id)
-        return milestones, issues
+            project, milestones, issues = await adapter.get_project_full(saga.tracker_id)
+            return project, milestones, issues
+        milestones = await adapter.list_milestones(saga.tracker_id)
+        issues = await adapter.list_issues(saga.tracker_id)
+        return None, milestones, issues
+
+    async def _fetch_and_filter_saga(
+        self,
+        adapters: list[TrackerPort],
+        saga: Saga,
+        active_issue_ids: set[str],
+    ) -> tuple[list[QueueItem], bool]:
+        """Fetch and filter dispatchable issues for a single saga.
+
+        Returns (queue_items, should_mark_complete). should_mark_complete is True
+        when the Linear project is completed/cancelled and the saga should be
+        auto-archived.
+        """
+        for adapter in adapters:
+            try:
+                project, milestones, issues = await self._fetch_saga_data(adapter, saga)
+
+                if project is not None and project.status in _COMPLETED_LINEAR_STATES:
+                    return [], True
+
+                milestone_names = {m.id: m.name for m in milestones}
+                blocked_identifiers = await self._get_blocked_safe(adapter, saga)
+
+                items: list[QueueItem] = []
+                for issue in issues:
+                    if not is_ready(issue, active_issue_ids, blocked_identifiers):
+                        continue
+                    items.append(
+                        QueueItem(
+                            saga_id=str(saga.id),
+                            saga_name=saga.name,
+                            saga_slug=saga.slug,
+                            repos=saga.repos,
+                            feature_branch=saga.feature_branch,
+                            phase_name=milestone_names.get(
+                                issue.milestone_id or "", "Unassigned"
+                            ),
+                            issue_id=issue.id,
+                            identifier=issue.identifier,
+                            title=issue.title,
+                            description=issue.description,
+                            status=issue.status,
+                            priority=issue.priority,
+                            priority_label=issue.priority_label,
+                            estimate=issue.estimate,
+                            url=issue.url,
+                        )
+                    )
+                return items, False
+            except Exception:
+                logger.error("Failed to fetch issues for saga %s", saga.id, exc_info=True)
+        return [], False
 
     @staticmethod
     async def _get_blocked_safe(adapter: TrackerPort, saga: Saga) -> set[str]:

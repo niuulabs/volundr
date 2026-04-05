@@ -725,6 +725,9 @@ class MockSagaRepository(SagaRepository):
     async def delete_saga(self, saga_id, *, owner_id=None) -> bool:
         return False
 
+    async def update_saga_status(self, saga_id, status) -> None:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # GET /raids/summary
