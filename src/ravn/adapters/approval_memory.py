@@ -22,10 +22,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-import subprocess
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+from ravn.context import _git_root
 
 logger = logging.getLogger(__name__)
 
@@ -49,26 +50,6 @@ class ApprovalEntry:
 
 
 # ---------------------------------------------------------------------------
-# Git root discovery
-# ---------------------------------------------------------------------------
-
-
-def _find_git_root(start: Path | None = None) -> Path | None:
-    """Walk upward from *start* to locate the git repository root."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=str(start or Path.cwd()),
-        )
-        return Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-
-
-# ---------------------------------------------------------------------------
 # ApprovalMemory
 # ---------------------------------------------------------------------------
 
@@ -83,7 +64,7 @@ class ApprovalMemory:
     """
 
     def __init__(self, project_root: Path | None = None) -> None:
-        root = project_root or _find_git_root() or Path.cwd()
+        root = project_root or _git_root(Path.cwd()) or Path.cwd()
         self._path: Path = root / _APPROVALS_RELATIVE
         self._entries: list[ApprovalEntry] = []
         self._load()

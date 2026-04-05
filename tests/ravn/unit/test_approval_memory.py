@@ -12,10 +12,10 @@ from ravn.adapters.approval_memory import (
     _SCHEMA_VERSION,
     ApprovalEntry,
     ApprovalMemory,
-    _find_git_root,
 )
 from ravn.adapters.permission_enforcer import PermissionEnforcer
 from ravn.config import PermissionConfig
+from ravn.context import _git_root
 from ravn.ports.permission import Allow, Deny, NeedsApproval
 
 # ---------------------------------------------------------------------------
@@ -54,17 +54,17 @@ class TestApprovalEntry:
 
 
 # ---------------------------------------------------------------------------
-# _find_git_root
+# _git_root (from context — reused instead of duplicating)
 # ---------------------------------------------------------------------------
 
 
-class TestFindGitRoot:
+class TestGitRoot:
     def test_finds_root_in_git_repo(self) -> None:
-        root = _find_git_root()
+        root = _git_root(Path.cwd())
         assert root is None or isinstance(root, Path)
 
     def test_returns_none_outside_git(self, tmp_path: Path) -> None:
-        root = _find_git_root(start=tmp_path)
+        root = _git_root(tmp_path)
         assert root is None
 
 
@@ -312,6 +312,22 @@ class TestEnforcerApprovalMemoryIntegration:
         enforcer = PermissionEnforcer(cfg, workspace_root=tmp_path, approval_memory=mem)
         result = await enforcer.evaluate("bash", {"command": "make build"})
         assert isinstance(result, Allow)
+
+    @pytest.mark.asyncio
+    async def test_workspace_write_network_gate_not_bypassed(self, tmp_path: Path) -> None:
+        """A curl command approved in prompt mode must still get NeedsApproval
+        in workspace_write mode — the network command gate must not be bypassed."""
+        # Approve the curl command in a prompt-mode enforcer first.
+        prompt_enforcer = _enforcer_prompt(tmp_path)
+        prompt_enforcer.record_approval("bash", {"command": "curl http://example.com"})
+
+        # Same memory, but now in workspace_write mode.
+        cfg = PermissionConfig(mode="workspace_write")
+        mem = _memory(tmp_path)
+        # Re-load memory so it shares the persisted approval.
+        enforcer_ws = PermissionEnforcer(cfg, workspace_root=tmp_path, approval_memory=mem)
+        result = await enforcer_ws.evaluate("bash", {"command": "curl http://example.com"})
+        assert isinstance(result, NeedsApproval)
 
     @pytest.mark.asyncio
     async def test_always_blocked_still_denied_even_if_approved(self, tmp_path: Path) -> None:

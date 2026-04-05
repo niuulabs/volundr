@@ -739,9 +739,12 @@ class PermissionEnforcer(PermissionEnforcerPort, PermissionPort):
                 return Deny("bash tool called with no command")
             decision = self.check_bash(command)
             # In prompt mode, auto-approve previously approved commands.
-            # Only NeedsApproval results are eligible — Deny is never overridden.
+            # Only NeedsApproval results in prompt mode are eligible — Deny is
+            # never overridden, and other modes (workspace_write, etc.) must
+            # retain their own NeedsApproval gates (e.g. network commands).
             if (
                 isinstance(decision, NeedsApproval)
+                and self._mode == "prompt"
                 and self._approval_memory is not None
                 and self._approval_memory.is_approved(command)
             ):
