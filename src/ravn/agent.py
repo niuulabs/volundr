@@ -355,6 +355,7 @@ class RavnAgent:
         messages, result = await self._compressor.maybe_compress(
             self._session.messages,
             system_tokens=system_tokens,
+            todos=self._session.todos or None,
         )
         if result.was_compressed:
             self._session.messages.clear()

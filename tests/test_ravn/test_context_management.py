@@ -426,9 +426,10 @@ class TestContextManagementConfig:
         from ravn.config import ContextManagementConfig, IterationBudgetConfig
 
         c = ContextManagementConfig()
-        assert c.compression_threshold == 0.5
+        assert c.compression_threshold == 0.8
         assert c.protect_first_messages == 2
         assert c.protect_last_messages == 4
+        assert c.compact_recent_turns == 3
         assert c.compression_max_tokens == 1024
         assert c.prompt_cache_max_entries == 16
 
@@ -441,4 +442,4 @@ class TestContextManagementConfig:
 
         s = Settings()
         assert s.iteration_budget.total == 90
-        assert s.context_management.compression_threshold == 0.5
+        assert s.context_management.compression_threshold == 0.8

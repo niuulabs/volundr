@@ -138,17 +138,13 @@ def _cmd_tools(ctx: SlashCommandContext) -> str:
         return "No tools loaded."
     lines = ["Loaded tools:", ""]
     for tool in ctx.tools:
-        lines.append(
-            f"  {tool.name:<24} [{tool.required_permission}]  {tool.description}"
-        )
+        lines.append(f"  {tool.name:<24} [{tool.required_permission}]  {tool.description}")
     return "\n".join(lines)
 
 
 def _cmd_memory(ctx: SlashCommandContext) -> str:
     s = ctx.session
-    open_todos = sum(
-        1 for t in s.todos if str(t.status) in ("pending", "in_progress")
-    )
+    open_todos = sum(1 for t in s.todos if str(t.status) in ("pending", "in_progress"))
     lines = [
         f"Session ID  : {s.id}",
         f"Turns       : {s.turn_count}",
@@ -208,10 +204,7 @@ def _cmd_init(ctx: SlashCommandContext) -> str:
     cwd = ctx.cwd if ctx.cwd is not None else Path.cwd()
     ravn_md = cwd / "RAVN.md"
     if ravn_md.exists():
-        return (
-            f"RAVN.md already exists at {ravn_md}. "
-            "Remove it first to re-initialise."
-        )
+        return f"RAVN.md already exists at {ravn_md}. Remove it first to re-initialise."
     project_name = cwd.name
     content = _RAVN_MD_TEMPLATE.format(project_name=project_name)
     ravn_md.write_text(content, encoding="utf-8")

@@ -552,10 +552,10 @@ class ContextManagementConfig(BaseModel):
     """Context compression and prompt-builder configuration."""
 
     compression_threshold: float = Field(
-        default=0.5,
+        default=0.8,
         description=(
-            "Fraction of the model's context window that triggers compression "
-            "(0.0–1.0, default 0.5 = 50%)."
+            "Fraction of the model's context window that triggers compaction "
+            "(0.0–1.0, default 0.8 — fires when <20% of the context window remains)."
         ),
     )
     protect_first_messages: int = Field(
@@ -566,9 +566,17 @@ class ContextManagementConfig(BaseModel):
         default=4,
         description="Number of messages at the end of history to preserve unchanged.",
     )
+    compact_recent_turns: int = Field(
+        default=3,
+        description=(
+            "Number of recent conversation turns (user+assistant pairs) to preserve "
+            "verbatim at the end of the history.  Overrides protect_last_messages when "
+            "non-zero: protect_last = compact_recent_turns * 2."
+        ),
+    )
     compression_max_tokens: int = Field(
         default=1024,
-        description="Max tokens for compression summary generation.",
+        description="Max tokens for compaction document generation.",
     )
     prompt_cache_max_entries: int = Field(
         default=16,
