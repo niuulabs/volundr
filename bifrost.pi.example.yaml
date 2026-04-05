@@ -1,0 +1,79 @@
+# Bifröst Gateway — Pi Mode Configuration
+# =========================================
+#
+# Lightweight deployment for Raspberry Pi and other low-power hardware.
+# Runs entirely offline with Ollama as the only provider — no cloud API
+# keys required, no authentication proxy.
+#
+# Prerequisites:
+#   1. Install Ollama: https://ollama.com/download/linux
+#   2. Pull the models you want to use:
+#        ollama pull llama3.2:1b      # fast  — 1.3 GB, ~30 tok/s on Pi 5
+#        ollama pull llama3.2:3b      # balanced — 2.0 GB, ~15 tok/s on Pi 5
+#        ollama pull llama3.1:8b      # best  — 4.7 GB, ~6 tok/s on Pi 5
+#
+# Start the gateway:
+#   bifrost --config bifrost.pi.example.yaml
+#
+# The server will be available at http://localhost:8088
+
+bifrost:
+
+  # ── Routing Strategy ──────────────────────────────────────────────────────
+  #
+  # direct: always use the first (and only) configured provider with no
+  # failover. Correct for Pi mode where there is a single local endpoint.
+  #
+  routing_strategy: direct
+
+  # ── Providers ─────────────────────────────────────────────────────────────
+  #
+  # Only Ollama is configured. No API key is needed — Ollama accepts
+  # unauthenticated requests on localhost by default.
+  #
+  providers:
+    ollama:
+      base_url: http://localhost:11434
+      models:
+        - llama3.2:1b      # 1.3 GB  — fastest, good for simple tasks
+        - llama3.2:3b      # 2.0 GB  — balanced quality/speed
+        - llama3.1:8b      # 4.7 GB  — best quality, requires Pi 5 + 8 GB RAM
+      cost_per_token: 0.0  # free — runs locally
+
+  # ── Model Aliases ──────────────────────────────────────────────────────────
+  #
+  # Clients that use the standard alias names (fast / balanced / best) will
+  # be routed to the appropriate local model automatically.
+  #
+  aliases:
+    fast: llama3.2:1b
+    balanced: llama3.2:3b
+    best: llama3.1:8b
+    local: llama3.2:3b     # generic "local" alias, same as balanced
+
+  # ── Authentication ────────────────────────────────────────────────────────
+  #
+  # open: no authentication. Headers (x-agent-id, x-tenant-id) are trusted
+  # verbatim. Suitable for a single-user or trusted-LAN deployment.
+  #
+  # If you expose Bifröst beyond localhost, consider switching to pat mode
+  # and issuing personal access tokens for each client.
+  #
+  auth_mode: open
+
+  # ── Usage Storage ─────────────────────────────────────────────────────────
+  #
+  # sqlite: persists request logs to a single file that survives restarts.
+  # Sensible default for Pi — no external database required.
+  #
+  usage_store:
+    adapter: sqlite
+    path: ./bifrost_usage.db
+
+  # ── Server ────────────────────────────────────────────────────────────────
+  #
+  # Bind to localhost only. Change to 0.0.0.0 if you want other devices on
+  # your local network to reach the gateway.
+  #
+  host: 127.0.0.1
+  port: 8088
