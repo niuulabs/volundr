@@ -130,7 +130,6 @@ class TestRunTurnErrorHandling:
     async def test_repl_continues_after_error(self) -> None:
         """In REPL mode (single_turn=False), an error prints but does not exit."""
         import io
-        import sys
         from unittest.mock import AsyncMock
 
         from ravn.adapters.cli_channel import CliChannel

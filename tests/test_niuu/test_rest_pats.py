@@ -18,7 +18,6 @@ from niuu.adapters.inbound.rest_pats import (
 )
 from niuu.domain.models import Principal
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

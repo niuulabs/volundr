@@ -11,7 +11,6 @@ from httpx import Response
 
 from niuu.adapters.keycloak_token_issuer import KeycloakTokenIssuer
 
-
 TOKEN_URL = "https://keycloak.example.com/realms/test/protocol/openid-connect/token"
 CLIENT_ID = "test-client"
 CLIENT_SECRET = "secret"
