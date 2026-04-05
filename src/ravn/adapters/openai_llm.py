@@ -460,8 +460,8 @@ class OpenAICompatibleAdapter(LLMPort):
             stop_reason = StopReason.MAX_TOKENS
 
         # Build an approximate input text for estimation fallback.
-        input_text = _system_to_string(system) + " ".join(
-            str(m.get("content", "")) for m in messages
+        input_text = (
+            _system_to_string(system) + " " + " ".join(str(m.get("content", "")) for m in messages)
         )
         usage = _normalise_usage(
             data.get("usage") or {},
