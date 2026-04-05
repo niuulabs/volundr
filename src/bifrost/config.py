@@ -1,10 +1,30 @@
-"""Bifröst configuration: providers, aliases, and failover settings."""
+"""Bifröst configuration: providers, aliases, and routing settings."""
 
 from __future__ import annotations
 
 import os
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+
+class RoutingStrategy(StrEnum):
+    """How the router selects and orders provider candidates for a request."""
+
+    DIRECT = "direct"
+    """Try only the first configured provider for the model. No failover."""
+
+    FAILOVER = "failover"
+    """Try the primary provider; fall back to alternatives on retryable errors."""
+
+    COST_OPTIMISED = "cost_optimised"
+    """Order providers by cost_per_token ascending (cheapest first)."""
+
+    ROUND_ROBIN = "round_robin"
+    """Cycle through all providers that serve the model on each request."""
+
+    LATENCY_OPTIMISED = "latency_optimised"
+    """Order providers by recent P99 latency ascending (fastest first)."""
 
 
 class ProviderConfig(BaseModel):
@@ -16,6 +36,13 @@ class ProviderConfig(BaseModel):
         default_factory=list, description="Models supported by this provider."
     )
     timeout: float = Field(default=120.0, description="Request timeout in seconds.")
+    cost_per_token: float = Field(
+        default=0.0,
+        description=(
+            "Relative cost per token (arbitrary units). Used by the cost_optimised "
+            "routing strategy to prefer cheaper providers. Lower is cheaper."
+        ),
+    )
 
     @property
     def api_key(self) -> str:
@@ -43,9 +70,12 @@ class BifrostConfig(BaseModel):
         default_factory=dict,
         description="Model alias → canonical model name.",
     )
-    failover_enabled: bool = Field(
-        default=True,
-        description="Try alternative providers when primary fails.",
+    routing_strategy: RoutingStrategy = Field(
+        default=RoutingStrategy.FAILOVER,
+        description=(
+            "How to select and order provider candidates. "
+            "Defaults to 'failover' for backwards compatibility."
+        ),
     )
     host: str = Field(default="0.0.0.0", description="Host to bind the gateway server.")
     port: int = Field(default=8088, description="Port to bind the gateway server.")
@@ -60,6 +90,10 @@ class BifrostConfig(BaseModel):
             if model in cfg.models:
                 return name
         return None
+
+    def providers_for_model(self, model: str) -> list[str]:
+        """Return all provider names that serve *model*, in config order."""
+        return [name for name, cfg in self.providers.items() if model in cfg.models]
 
     def effective_base_url(self, provider_name: str) -> str:
         """Return the effective base URL for a provider, using defaults when absent."""

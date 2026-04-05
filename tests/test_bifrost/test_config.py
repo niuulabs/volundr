@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bifrost.config import BifrostConfig, ProviderConfig
+from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
 
 
 class TestProviderConfig:
@@ -73,11 +73,38 @@ class TestBifrostConfig:
 
     def test_defaults(self):
         cfg = BifrostConfig()
-        assert cfg.failover_enabled is True
+        assert cfg.routing_strategy == RoutingStrategy.FAILOVER
         assert cfg.host == "0.0.0.0"
         assert cfg.port == 8088
         assert cfg.providers == {}
         assert cfg.aliases == {}
+
+    def test_routing_strategy_field(self):
+        cfg = BifrostConfig(routing_strategy=RoutingStrategy.ROUND_ROBIN)
+        assert cfg.routing_strategy == RoutingStrategy.ROUND_ROBIN
+
+    def test_routing_strategy_from_string(self):
+        cfg = BifrostConfig.model_validate({"routing_strategy": "cost_optimised"})
+        assert cfg.routing_strategy == RoutingStrategy.COST_OPTIMISED
+
+    def test_providers_for_model_returns_all_matching(self):
+        cfg = BifrostConfig(
+            providers={
+                "a": ProviderConfig(models=["gpt-4o"]),
+                "b": ProviderConfig(models=["gpt-4o", "gpt-4o-mini"]),
+                "c": ProviderConfig(models=["claude-sonnet-4-20250514"]),
+            }
+        )
+        providers = cfg.providers_for_model("gpt-4o")
+        assert providers == ["a", "b"]
+
+    def test_providers_for_model_empty_when_none_match(self):
+        cfg = BifrostConfig(providers={"a": ProviderConfig(models=["gpt-4o"])})
+        assert cfg.providers_for_model("unknown") == []
+
+    def test_cost_per_token_default(self):
+        cfg = ProviderConfig()
+        assert cfg.cost_per_token == 0.0
 
     def test_full_config(self):
         cfg = BifrostConfig.model_validate(

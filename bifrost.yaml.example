@@ -1,0 +1,76 @@
+# Bifröst Gateway Configuration
+# ================================
+#
+# Copy this file to bifrost.yaml and customise for your environment.
+#
+# Start the gateway:
+#   bifrost --config bifrost.yaml
+#
+# The top-level key is optional — Bifröst accepts the document with or without
+# the "bifrost:" wrapper.
+
+bifrost:
+
+  # ── Routing Strategy ────────────────────────────────────────────────────────
+  #
+  # Controls how Bifröst selects and orders provider candidates for each request.
+  #
+  # Strategies:
+  #   direct           — Always use the first configured provider. No failover.
+  #   failover         — Try the primary provider; fall back to alternatives on
+  #                      retryable errors (429, 500, 502, 503, 504). DEFAULT.
+  #   cost_optimised   — Sort providers by cost_per_token (ascending). The
+  #                      cheapest provider is tried first; more expensive ones
+  #                      are used as automatic fallbacks.
+  #   round_robin      — Cycle through all providers that serve the model on
+  #                      each request. Distributes load evenly.
+  #   latency_optimised — Sort providers by recent P99 latency (ascending).
+  #                       The fastest provider (based on an EWMA of observed
+  #                       request times) is tried first.
+  #
+  routing_strategy: failover
+
+  # ── Providers ───────────────────────────────────────────────────────────────
+  #
+  # Each provider entry maps a logical name to its API credentials and the
+  # list of models it serves.  The name is arbitrary — it appears in logs.
+  #
+  # For cost_optimised routing, set cost_per_token to a relative value
+  # (e.g. price per 1 000 output tokens in USD).  Lower is cheaper.
+  #
+  providers:
+    anthropic:
+      api_key_env: ANTHROPIC_API_KEY       # env var holding the API key
+      models:
+        - claude-opus-4-6
+        - claude-sonnet-4-6
+        - claude-haiku-4-5-20251001
+      cost_per_token: 0.015                # $/1k tokens (output), for cost_optimised
+
+    openai:
+      api_key_env: OPENAI_API_KEY
+      models:
+        - gpt-4o
+        - gpt-4o-mini
+      cost_per_token: 0.010
+
+    # Example: a self-hosted Ollama instance (free, so cost = 0)
+    ollama:
+      base_url: http://localhost:11434     # override default base URL
+      models:
+        - llama3.1:8b
+      cost_per_token: 0.0
+
+  # ── Model aliases ───────────────────────────────────────────────────────────
+  #
+  # Clients can request an alias; Bifröst resolves it before routing.
+  #
+  aliases:
+    fast: claude-haiku-4-5-20251001
+    balanced: claude-sonnet-4-6
+    powerful: claude-opus-4-6
+    local: llama3.1:8b
+
+  # ── Server ──────────────────────────────────────────────────────────────────
+  host: 0.0.0.0
+  port: 8088
