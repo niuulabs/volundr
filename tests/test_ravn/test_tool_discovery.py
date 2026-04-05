@@ -10,11 +10,8 @@ import math
 
 import pytest
 
-from ravn.adapters.tools.discovery import (
-    ToolDiscovery,
-    ToolSearchTool,
-    _cosine_similarity,
-)
+from ravn.adapters._memory_scoring import cosine_similarity
+from ravn.adapters.tools.discovery import ToolDiscovery, ToolSearchTool
 from ravn.domain.models import ToolResult
 from ravn.ports.embedding import EmbeddingPort
 from ravn.ports.tool import ToolPort
@@ -95,45 +92,45 @@ class SimpleTool(ToolPort):
 
 
 # ---------------------------------------------------------------------------
-# _cosine_similarity tests
+# cosine_similarity tests
 # ---------------------------------------------------------------------------
 
 
-def test_cosine_similarity_identical_vectors():
+def testcosine_similarity_identical_vectors():
     v = [1.0, 0.0, 0.0]
-    assert _cosine_similarity(v, v) == pytest.approx(1.0)
+    assert cosine_similarity(v, v) == pytest.approx(1.0)
 
 
-def test_cosine_similarity_orthogonal_vectors():
+def testcosine_similarity_orthogonal_vectors():
     a = [1.0, 0.0]
     b = [0.0, 1.0]
-    assert _cosine_similarity(a, b) == pytest.approx(0.0)
+    assert cosine_similarity(a, b) == pytest.approx(0.0)
 
 
-def test_cosine_similarity_opposite_vectors():
+def testcosine_similarity_opposite_vectors():
     a = [1.0, 0.0]
     b = [-1.0, 0.0]
-    assert _cosine_similarity(a, b) == pytest.approx(-1.0)
+    assert cosine_similarity(a, b) == pytest.approx(-1.0)
 
 
-def test_cosine_similarity_zero_vector_a():
-    assert _cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
+def testcosine_similarity_zero_vector_a():
+    assert cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
 
 
-def test_cosine_similarity_zero_vector_b():
-    assert _cosine_similarity([1.0, 0.0], [0.0, 0.0]) == 0.0
+def testcosine_similarity_zero_vector_b():
+    assert cosine_similarity([1.0, 0.0], [0.0, 0.0]) == 0.0
 
 
-def test_cosine_similarity_both_zero():
-    assert _cosine_similarity([0.0, 0.0], [0.0, 0.0]) == 0.0
+def testcosine_similarity_both_zero():
+    assert cosine_similarity([0.0, 0.0], [0.0, 0.0]) == 0.0
 
 
-def test_cosine_similarity_known_value():
+def testcosine_similarity_known_value():
     # 45 degrees → cos(45°) = 1/√2
     a = [1.0, 1.0]
     b = [1.0, 0.0]
     expected = 1.0 / math.sqrt(2)
-    assert _cosine_similarity(a, b) == pytest.approx(expected, rel=1e-6)
+    assert cosine_similarity(a, b) == pytest.approx(expected, rel=1e-6)
 
 
 # ---------------------------------------------------------------------------

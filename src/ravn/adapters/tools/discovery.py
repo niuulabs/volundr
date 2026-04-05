@@ -19,9 +19,9 @@ changes (e.g. after dynamic tool registration).
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass
 
+from ravn.adapters._memory_scoring import cosine_similarity
 from ravn.domain.models import ToolResult
 from ravn.ports.embedding import EmbeddingPort
 from ravn.ports.tool import ToolPort
@@ -47,25 +47,6 @@ class _IndexedTool:
     description: str
     required_permission: str
     embedding: list[float]
-
-
-# ---------------------------------------------------------------------------
-# Cosine similarity helper
-# ---------------------------------------------------------------------------
-
-
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Return the cosine similarity between two vectors *a* and *b*.
-
-    Returns 0.0 when either vector has zero magnitude to avoid division
-    by zero.
-    """
-    dot = sum(x * y for x, y in zip(a, b))
-    mag_a = math.sqrt(sum(x * x for x in a))
-    mag_b = math.sqrt(sum(x * x for x in b))
-    if mag_a == 0.0 or mag_b == 0.0:
-        return 0.0
-    return dot / (mag_a * mag_b)
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +110,7 @@ class ToolDiscovery:
             return []
 
         query_vec = await self._embedding.embed(query)
-        scored = [(entry, _cosine_similarity(query_vec, entry.embedding)) for entry in self._index]
+        scored = [(entry, cosine_similarity(query_vec, entry.embedding)) for entry in self._index]
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:top_n]
 
