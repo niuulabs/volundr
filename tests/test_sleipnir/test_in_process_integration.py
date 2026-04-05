@@ -4,8 +4,8 @@ These tests define the behavioural specification that *all* Sleipnir transport
 adapters must satisfy.  Each test case maps 1-to-1 with a requirement from
 NIU-520 and is marked with the requirement name in the docstring.
 
-Transport adapters can re-use this module as a shared test suite by
-parameterising the ``bus`` fixture to supply their own implementation.
+Each test constructs its own bus instance; future transport adapters should
+replicate these test cases against their own implementation.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ async def test_contract_glob_ravn_star_matches_and_rejects():
 
     await bus.subscribe(["ravn.*"], handler)
     await bus.publish(make_event(event_type="ravn.tool.complete", event_id="e1"))
-    await bus.publish(make_event(event_type="tyr.task.started", event_id="e2"))
+    await bus.publish(make_event(event_type="tyr.raid.complete", event_id="e2"))
     await bus.flush()
 
     assert received_types == ["ravn.tool.complete"]
@@ -194,7 +194,7 @@ async def test_contract_unsubscribe_stops_delivery():
 
 async def test_contract_ring_buffer_overflow_drops_oldest_and_warns(caplog):
     """Contract: overflow drops oldest event, logs a warning, newer events arrive."""
-    bus = InProcessBus(ring_buffer_depth=3)
+    bus = InProcessBus(ring_buffer_depth=2)
     received_ids: list[str] = []
 
     async def slow_handler(evt: SleipnirEvent) -> None:
@@ -203,17 +203,28 @@ async def test_contract_ring_buffer_overflow_drops_oldest_and_warns(caplog):
 
     await bus.subscribe(["*"], slow_handler)
 
-    # Publish 5 events into a depth-3 buffer (one slot already occupied by
-    # the first event being processed): e1 and e2 will be dropped.
+    # Publish 3 events into a depth-2 buffer.  All three publishes run before
+    # the consumer task gets a chance to dequeue, so the queue fills with e1
+    # and e2 (depth=2).  Publishing e3 triggers overflow: e1 (oldest) is
+    # dropped and e3 takes its place.  The newer events e2 and e3 remain.
     with caplog.at_level(logging.WARNING, logger="sleipnir.adapters.in_process"):
-        for i in range(1, 6):
-            await bus.publish(make_event(event_id=f"e{i}"))
+        await bus.publish(make_event(event_id="e1"))
+        await bus.publish(make_event(event_id="e2"))
+        await bus.publish(make_event(event_id="e3"))
 
     warning_records = [r for r in caplog.records if "Ring buffer overflow" in r.message]
     assert len(warning_records) >= 1
 
-    # The queue should still have events — the adapter was not blocked
-    assert not bus._subscriptions[0]._queue.empty()
+    # Drain the queue to verify the newer events are present and e1 was dropped.
+    q = bus._subscriptions[0]._queue
+    queued_ids: list[str] = []
+    while not q.empty():
+        queued_ids.append(q.get_nowait().event_id)
+        q.task_done()
+
+    assert "e1" not in queued_ids
+    assert "e2" in queued_ids
+    assert "e3" in queued_ids
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +249,7 @@ async def test_contract_high_volume_no_drops_below_buffer_depth():
     elapsed = time.monotonic() - start
 
     assert len(received) == _HIGH_VOLUME_EVENT_COUNT
-    assert [r for r in received] == [str(i) for i in range(_HIGH_VOLUME_EVENT_COUNT)]
+    assert received == [str(i) for i in range(_HIGH_VOLUME_EVENT_COUNT)]
 
     # Sanity-check throughput: 50k events should complete well under 30 s
     assert elapsed < 30.0, f"High-volume test took {elapsed:.2f}s — too slow"
