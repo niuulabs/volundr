@@ -7,6 +7,12 @@ from collections.abc import AsyncIterator
 
 from ravn.domain.models import LLMResponse, StreamEvent
 
+# The system prompt may be a plain string or a list of Anthropic-format text
+# blocks ({"type": "text", "text": "...", "cache_control": {...}}).  Adapters
+# that do not support structured system prompts should concatenate the text
+# values from the blocks.
+SystemPrompt = str | list[dict]
+
 
 class LLMPort(ABC):
     """Abstract interface for LLM streaming and generation with tool support."""
@@ -17,13 +23,15 @@ class LLMPort(ABC):
         messages: list[dict],
         *,
         tools: list[dict],
-        system: str,
+        system: SystemPrompt,
         model: str,
         max_tokens: int,
     ) -> AsyncIterator[StreamEvent]:
         """Stream a response from the LLM, yielding events as they arrive.
 
         Yields StreamEvent objects with TEXT_DELTA, TOOL_CALL, and MESSAGE_DONE types.
+        ``system`` may be a plain string or a list of Anthropic-format text blocks
+        with optional ``cache_control`` entries for prompt caching.
         """
         ...
 
@@ -33,7 +41,7 @@ class LLMPort(ABC):
         messages: list[dict],
         *,
         tools: list[dict],
-        system: str,
+        system: SystemPrompt,
         model: str,
         max_tokens: int,
     ) -> LLMResponse:
