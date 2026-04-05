@@ -45,6 +45,18 @@ RAVN_RESPONSE_COMPLETE: str = "ravn.response.complete"
 #: An interrupt signal was received by the agent.
 RAVN_INTERRUPT: str = "ravn.interrupt"
 
+#: A Ravn task turn started (agent received a new user request).
+RAVN_TURN_START: str = "ravn.turn.start"
+
+#: A tool invocation started (dispatched to executor, awaiting result).
+RAVN_TOOL_START: str = "ravn.tool.start"
+
+#: A Ravn task completed successfully (all turns and tool calls done).
+RAVN_TASK_COMPLETE: str = "ravn.task.complete"
+
+#: The agent requires a human decision before proceeding (urgency ≥ 0.8).
+RAVN_DECISION_REQUIRED: str = "ravn.decision.required"
+
 # ---------------------------------------------------------------------------
 # tyr — Tyr autonomous dispatcher events
 # ---------------------------------------------------------------------------
