@@ -1,0 +1,225 @@
+"""Streaming translation: OpenAI SSE chunks → Anthropic SSE events.
+
+Bifröst exposes an Anthropic-compatible streaming interface.  When the
+upstream provider uses OpenAI-compatible SSE, we translate on the fly.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import AsyncIterator
+
+# Mapping from OpenAI finish_reason → Anthropic stop_reason.
+_FINISH_REASON_MAP: dict[str, str] = {
+    "stop": "end_turn",
+    "tool_calls": "tool_use",
+    "length": "max_tokens",
+    "content_filter": "end_turn",
+    "function_call": "tool_use",
+}
+
+
+def _sse_event(event_type: str, data: dict) -> str:
+    """Format a single Anthropic SSE event."""
+    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+
+async def openai_stream_to_anthropic(
+    openai_chunks: AsyncIterator[str],
+    *,
+    message_id: str,
+    model: str,
+) -> AsyncIterator[str]:
+    """Translate an OpenAI SSE stream to Anthropic SSE event format.
+
+    Args:
+        openai_chunks: Raw SSE lines from an OpenAI-compatible endpoint.
+        message_id: The message ID to embed in Anthropic events.
+        model: The model name to report.
+
+    Yields:
+        Anthropic-formatted SSE strings.
+    """
+    emitted_start = False
+    emitted_block_start = False
+    block_index = 0
+    output_tokens = 0
+    stop_reason = "end_turn"
+    tool_call_accumulator: dict[str, dict] = {}  # index → partial tool call
+
+    async for raw_line in openai_chunks:
+        line = raw_line.strip()
+        if not line or not line.startswith("data: "):
+            continue
+
+        payload = line[6:]
+        if payload == "[DONE]":
+            break
+
+        try:
+            chunk = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+
+        if not emitted_start:
+            emitted_start = True
+            yield _sse_event(
+                "message_start",
+                {
+                    "type": "message_start",
+                    "message": {
+                        "id": message_id,
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [],
+                        "model": model,
+                        "stop_reason": None,
+                        "usage": {"input_tokens": 0, "output_tokens": 1},
+                    },
+                },
+            )
+            yield _sse_event("ping", {"type": "ping"})
+
+        choices = chunk.get("choices", [])
+        if not choices:
+            continue
+
+        choice = choices[0]
+        delta = choice.get("delta", {})
+        finish_reason = choice.get("finish_reason")
+
+        # Text delta.
+        text = delta.get("content")
+        if text:
+            if not emitted_block_start:
+                emitted_block_start = True
+                yield _sse_event(
+                    "content_block_start",
+                    {
+                        "type": "content_block_start",
+                        "index": block_index,
+                        "content_block": {"type": "text", "text": ""},
+                    },
+                )
+            output_tokens += 1
+            yield _sse_event(
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": block_index,
+                    "delta": {"type": "text_delta", "text": text},
+                },
+            )
+
+        # Tool call deltas.
+        tool_calls = delta.get("tool_calls") or []
+        for tc_delta in tool_calls:
+            tc_index = tc_delta.get("index", 0)
+            if tc_index not in tool_call_accumulator:
+                tool_call_accumulator[tc_index] = {
+                    "id": "",
+                    "name": "",
+                    "arguments": "",
+                }
+            acc = tool_call_accumulator[tc_index]
+            fn = tc_delta.get("function", {})
+            if tc_delta.get("id"):
+                acc["id"] = tc_delta["id"]
+            if fn.get("name"):
+                acc["name"] = fn["name"]
+            if fn.get("arguments"):
+                acc["arguments"] += fn["arguments"]
+
+        if finish_reason:
+            stop_reason = _FINISH_REASON_MAP.get(finish_reason, "end_turn")
+
+    # Flush tool call accumulator as content blocks.
+    if tool_call_accumulator:
+        if emitted_block_start:
+            yield _sse_event(
+                "content_block_stop",
+                {"type": "content_block_stop", "index": block_index},
+            )
+            block_index += 1
+
+        for acc in tool_call_accumulator.values():
+            try:
+                tool_input = json.loads(acc["arguments"] or "{}")
+            except json.JSONDecodeError:
+                tool_input = {"raw": acc["arguments"]}
+
+            yield _sse_event(
+                "content_block_start",
+                {
+                    "type": "content_block_start",
+                    "index": block_index,
+                    "content_block": {
+                        "type": "tool_use",
+                        "id": acc["id"],
+                        "name": acc["name"],
+                        "input": {},
+                    },
+                },
+            )
+            yield _sse_event(
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": block_index,
+                    "delta": {
+                        "type": "input_json_delta",
+                        "partial_json": json.dumps(tool_input),
+                    },
+                },
+            )
+            yield _sse_event(
+                "content_block_stop",
+                {"type": "content_block_stop", "index": block_index},
+            )
+            block_index += 1
+        stop_reason = "tool_use"
+    elif emitted_block_start:
+        yield _sse_event(
+            "content_block_stop",
+            {"type": "content_block_stop", "index": block_index},
+        )
+
+    if not emitted_start:
+        # Empty response — emit minimal events.
+        yield _sse_event(
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": message_id,
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [],
+                    "model": model,
+                    "stop_reason": None,
+                    "usage": {"input_tokens": 0, "output_tokens": 0},
+                },
+            },
+        )
+
+    yield _sse_event(
+        "message_delta",
+        {
+            "type": "message_delta",
+            "delta": {"stop_reason": stop_reason, "stop_sequence": None},
+            "usage": {"output_tokens": output_tokens},
+        },
+    )
+    yield _sse_event("message_stop", {"type": "message_stop"})
+    yield "data: [DONE]\n\n"
+
+
+async def anthropic_stream_passthrough(
+    raw_chunks: AsyncIterator[bytes],
+) -> AsyncIterator[str]:
+    """Pass through Anthropic-native SSE lines unchanged.
+
+    The Anthropic provider returns native SSE, so we just decode and yield.
+    """
+    async for chunk in raw_chunks:
+        yield chunk.decode("utf-8", errors="replace")

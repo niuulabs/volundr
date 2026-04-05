@@ -1,0 +1,88 @@
+"""OpenAI-compatible provider adapter.
+
+Handles any endpoint that speaks the OpenAI Chat Completions API:
+- api.openai.com (OpenAI)
+- vLLM, TGI, Azure OpenAI, LM Studio, llama.cpp server, etc.
+
+Ollama extends this class with minor quirks.
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from collections.abc import AsyncIterator
+
+import httpx
+
+from bifrost.ports.provider import ProviderPort
+from bifrost.translation.models import AnthropicRequest, AnthropicResponse
+from bifrost.translation.streaming import openai_stream_to_anthropic
+from bifrost.translation.to_anthropic import openai_to_anthropic
+from bifrost.translation.to_openai import anthropic_to_openai
+
+logger = logging.getLogger(__name__)
+
+
+class OpenAICompatAdapter(ProviderPort):
+    """Provider adapter for OpenAI-compatible Chat Completions endpoints.
+
+    Translates Anthropic-format requests to OpenAI format before sending
+    and converts responses back to Anthropic format.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_url: str = "https://api.openai.com",
+        api_key: str = "",
+        timeout: float = 120.0,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._client = httpx.AsyncClient(timeout=timeout)
+
+    def _headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {"content-type": "application/json"}
+        if self._api_key:
+            headers["authorization"] = f"Bearer {self._api_key}"
+        return headers
+
+    def _completions_url(self) -> str:
+        return f"{self._base_url}/v1/chat/completions"
+
+    async def complete(self, request: AnthropicRequest, model: str) -> AnthropicResponse:
+        payload = anthropic_to_openai(request, model)
+        payload["stream"] = False
+
+        resp = await self._client.post(
+            self._completions_url(),
+            headers=self._headers(),
+            json=payload,
+        )
+        resp.raise_for_status()
+        return openai_to_anthropic(resp.json(), model)
+
+    async def stream(self, request: AnthropicRequest, model: str) -> AsyncIterator[str]:
+        payload = anthropic_to_openai(request, model)
+        payload["stream"] = True
+
+        message_id = f"msg_{uuid.uuid4().hex[:24]}"
+
+        async with self._client.stream(
+            "POST",
+            self._completions_url(),
+            headers=self._headers(),
+            json=payload,
+        ) as resp:
+            resp.raise_for_status()
+            raw_lines = resp.aiter_lines()
+            async for event in openai_stream_to_anthropic(
+                raw_lines,
+                message_id=message_id,
+                model=model,
+            ):
+                yield event
+
+    async def close(self) -> None:
+        await self._client.aclose()
