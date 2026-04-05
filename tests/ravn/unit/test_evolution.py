@@ -681,7 +681,7 @@ class TestStrategyExtraction:
         return PatternExtractor(
             memory=StubMemory(episodes),
             outcome_port=StubOutcome(),
-            skill_suggestion_min_occurrences=2,
+            strategy_min_occurrences=2,
             max_strategy_injections=3,
         )
 
@@ -726,11 +726,27 @@ class TestStrategyExtraction:
         extractor = PatternExtractor(
             memory=StubMemory(eps),
             outcome_port=StubOutcome(),
-            skill_suggestion_min_occurrences=2,
+            strategy_min_occurrences=2,
             max_strategy_injections=2,
         )
         evolution = await extractor.extract()
         assert len(evolution.strategy_injections) <= 2
+
+    @pytest.mark.asyncio
+    async def test_strategy_min_independent_of_skill_min(self) -> None:
+        """strategy_min_occurrences is distinct from skill_suggestion_min_occurrences."""
+        eps = [_match(_ep(ep_id=f"ep-{i}", tags=["deployment"])) for i in range(3)]
+        # skill threshold is high (10), strategy threshold is low (2) — strategy fires
+        extractor = PatternExtractor(
+            memory=StubMemory(eps),
+            outcome_port=StubOutcome(),
+            skill_suggestion_min_occurrences=10,
+            strategy_min_occurrences=2,
+            max_strategy_injections=3,
+        )
+        evolution = await extractor.extract()
+        assert any(s.task_type == "deployment" for s in evolution.strategy_injections)
+        assert evolution.suggested_skills == []
 
     @pytest.mark.asyncio
     async def test_strategy_has_success_count(self) -> None:

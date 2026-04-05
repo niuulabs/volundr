@@ -325,8 +325,17 @@ class PatternExtractor:
     Args:
         memory: Episodic memory backend (``MemoryPort``).
         outcome_port: Task outcome backend (``OutcomePort``).
-        config: Evolution configuration.  Import from ``ravn.config.EvolutionConfig``
-            or construct directly for testing.
+        max_episodes_to_analyze: Maximum episodes loaded per pass.
+        max_outcomes_to_analyze: Maximum outcomes loaded per pass.
+        skill_suggestion_min_occurrences: Minimum times a tool pattern must appear
+            before a skill suggestion is produced.
+        error_warning_min_occurrences: Minimum times an error keyword must appear
+            before a system-prompt warning is proposed.
+        strategy_min_occurrences: Minimum times a domain tag must appear in SUCCESS
+            episodes before a strategy injection is proposed.
+        max_skill_suggestions: Maximum skill suggestions per proposal.
+        max_system_warnings: Maximum system-prompt warnings per proposal.
+        max_strategy_injections: Maximum strategy injections per proposal.
     """
 
     def __init__(
@@ -338,6 +347,7 @@ class PatternExtractor:
         max_outcomes_to_analyze: int = 50,
         skill_suggestion_min_occurrences: int = 3,
         error_warning_min_occurrences: int = 3,
+        strategy_min_occurrences: int = 3,
         max_skill_suggestions: int = 5,
         max_system_warnings: int = 5,
         max_strategy_injections: int = 3,
@@ -348,6 +358,7 @@ class PatternExtractor:
         self._max_outcomes = max_outcomes_to_analyze
         self._skill_min = skill_suggestion_min_occurrences
         self._error_min = error_warning_min_occurrences
+        self._strategy_min = strategy_min_occurrences
         self._max_skills = max_skill_suggestions
         self._max_warnings = max_system_warnings
         self._max_strategies = max_strategy_injections
@@ -472,7 +483,7 @@ class PatternExtractor:
 
         injections: list[StrategyInjection] = []
         for tag, eps in sorted(tag_groups.items(), key=lambda x: -len(x[1])):
-            if len(eps) < self._skill_min:
+            if len(eps) < self._strategy_min:
                 continue
             injections.append(
                 StrategyInjection(

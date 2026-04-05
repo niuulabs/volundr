@@ -706,6 +706,13 @@ class EvolutionConfig(BaseModel):
         default=3,
         description="Minimum times an error keyword must appear before a warning is proposed.",
     )
+    strategy_min_occurrences: int = Field(
+        default=3,
+        description=(
+            "Minimum times a domain tag must appear in SUCCESS episodes "
+            "before a strategy injection is proposed."
+        ),
+    )
     max_skill_suggestions: int = Field(
         default=5,
         description="Maximum skill suggestions to include in one evolution proposal.",

@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ravn.adapters.sqlite_common import CHARS_PER_TOKEN
-from ravn.domain.models import TaskOutcome
+from ravn.domain.models import Outcome, TaskOutcome
 from ravn.ports.outcome import OutcomePort
 
 # ---------------------------------------------------------------------------
@@ -295,8 +295,6 @@ def _row_to_outcome(row: sqlite3.Row) -> TaskOutcome:
         ts = datetime.fromisoformat(row["timestamp"])
     except (ValueError, KeyError):
         ts = datetime.now(UTC)
-
-    from ravn.domain.models import Outcome  # local import to avoid circular dependency
 
     return TaskOutcome(
         task_id=row["task_id"],
