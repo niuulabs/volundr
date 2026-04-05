@@ -12,14 +12,14 @@ Connection string is resolved in priority order:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import asyncpg
 
 from bifrost.adapters._pg_base import PostgresBase
-from bifrost.adapters._sql_helpers import build_where_with_range, to_utc
+from bifrost.adapters._sql_helpers import build_where_with_range, filter_pairs, to_utc
 from bifrost.ports.accounting import (
     AccountingPort,
     AccountingSummary,
@@ -93,15 +93,8 @@ def _filters(
     agent_id: str | None,
     tenant_id: str | None,
     model: str | None,
-) -> list[tuple[str, str]]:
-    pairs: list[tuple[str, str]] = []
-    if agent_id is not None:
-        pairs.append(("agent_id", agent_id))
-    if tenant_id is not None:
-        pairs.append(("tenant_id", tenant_id))
-    if model is not None:
-        pairs.append(("model", model))
-    return pairs
+) -> list[tuple[str, Any]]:
+    return filter_pairs(agent_id=agent_id, tenant_id=tenant_id, model=model)
 
 
 class PostgresAccountingAdapter(PostgresBase, AccountingPort):
@@ -193,23 +186,21 @@ class PostgresAccountingAdapter(PostgresBase, AccountingPort):
         )
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            totals, model_rows, provider_rows = await asyncio.gather(
-                conn.fetchrow(
-                    f"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
-                    f"FROM bifrost_requests {where}",
-                    *params,
-                ),
-                conn.fetch(
-                    f"SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
-                    f"FROM bifrost_requests {where} GROUP BY model",
-                    *params,
-                ),
-                conn.fetch(
-                    f"SELECT provider, COUNT(*), SUM(input_tokens),"
-                    f" SUM(output_tokens), SUM(cost_usd) "
-                    f"FROM bifrost_requests {where} GROUP BY provider",
-                    *params,
-                ),
+            totals = await conn.fetchrow(
+                f"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
+                f"FROM bifrost_requests {where}",
+                *params,
+            )
+            model_rows = await conn.fetch(
+                f"SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
+                f"FROM bifrost_requests {where} GROUP BY model",
+                *params,
+            )
+            provider_rows = await conn.fetch(
+                f"SELECT provider, COUNT(*), SUM(input_tokens),"
+                f" SUM(output_tokens), SUM(cost_usd) "
+                f"FROM bifrost_requests {where} GROUP BY provider",
+                *params,
             )
 
         summary = AccountingSummary(

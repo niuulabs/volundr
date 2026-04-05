@@ -6,6 +6,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 
+def filter_pairs(**kwargs: Any) -> list[tuple[str, Any]]:
+    """Build *(column, value)* pairs, discarding ``None`` values."""
+    return [(k, v) for k, v in kwargs.items() if v is not None]
+
+
 def to_utc(dt: datetime) -> datetime:
     """Normalise *dt* to UTC."""
     return dt.astimezone(UTC)
