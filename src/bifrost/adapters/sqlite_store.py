@@ -52,7 +52,10 @@ def _ts(dt: datetime) -> str:
 
 
 def _parse_ts(s: str) -> datetime:
-    return datetime.fromisoformat(s).replace(tzinfo=UTC)
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _row_to_record(row: tuple) -> UsageRecord:
@@ -105,7 +108,7 @@ class SQLiteUsageStore(UsageStore):
     async def _get_conn(self) -> sqlite3.Connection:
         async with self._lock:
             if self._conn is None:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 self._conn = await loop.run_in_executor(None, self._open)
         return self._conn
 
@@ -120,7 +123,7 @@ class SQLiteUsageStore(UsageStore):
 
     async def _run(self, fn: Callable[..., Any], *args: Any) -> Any:
         conn = await self._get_conn()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, partial(fn, conn, *args))
 
     @staticmethod
@@ -181,6 +184,88 @@ class SQLiteUsageStore(UsageStore):
         cur = conn.execute(sql, params)
         return cur.fetchall()
 
+    @staticmethod
+    def _do_summarise(
+        conn: sqlite3.Connection,
+        agent_id: str | None,
+        tenant_id: str | None,
+        model: str | None,
+        since: datetime | None,
+        until: datetime | None,
+    ) -> tuple[int, int, int, float, list[tuple]]:
+        """Run SQL aggregation for summarise() — no Python-level looping."""
+        clauses = []
+        params: list[Any] = []
+        if agent_id is not None:
+            clauses.append("agent_id = ?")
+            params.append(agent_id)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+        if model is not None:
+            clauses.append("model = ?")
+            params.append(model)
+        if since is not None:
+            clauses.append("timestamp >= ?")
+            params.append(_ts(since))
+        if until is not None:
+            clauses.append("timestamp <= ?")
+            params.append(_ts(until))
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        totals_row = conn.execute(
+            f"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
+            f"FROM usage_records {where}",
+            params,
+        ).fetchone()
+
+        model_rows = conn.execute(
+            f"SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
+            f"FROM usage_records {where} GROUP BY model",
+            params,
+        ).fetchall()
+
+        return (
+            totals_row[0] or 0,
+            totals_row[1] or 0,
+            totals_row[2] or 0,
+            totals_row[3] or 0.0,
+            model_rows,
+        )
+
+    @staticmethod
+    def _do_tokens_today(conn: sqlite3.Connection, tenant_id: str, since: str) -> int:
+        row = conn.execute(
+            "SELECT SUM(input_tokens + output_tokens) FROM usage_records "
+            "WHERE tenant_id = ? AND timestamp >= ?",
+            (tenant_id, since),
+        ).fetchone()
+        return row[0] or 0
+
+    @staticmethod
+    def _do_cost_today(conn: sqlite3.Connection, tenant_id: str, since: str) -> float:
+        row = conn.execute(
+            "SELECT SUM(cost_usd) FROM usage_records WHERE tenant_id = ? AND timestamp >= ?",
+            (tenant_id, since),
+        ).fetchone()
+        return row[0] or 0.0
+
+    @staticmethod
+    def _do_requests_this_hour(conn: sqlite3.Connection, tenant_id: str, since: str) -> int:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM usage_records WHERE tenant_id = ? AND timestamp >= ?",
+            (tenant_id, since),
+        ).fetchone()
+        return row[0] or 0
+
+    @staticmethod
+    def _do_agent_cost_today(conn: sqlite3.Connection, agent_id: str, since: str) -> float:
+        row = conn.execute(
+            "SELECT SUM(cost_usd) FROM usage_records WHERE agent_id = ? AND timestamp >= ?",
+            (agent_id, since),
+        ).fetchone()
+        return row[0] or 0.0
+
     # ------------------------------------------------------------------
     # Port implementation
     # ------------------------------------------------------------------
@@ -210,46 +295,36 @@ class SQLiteUsageStore(UsageStore):
         since: datetime | None = None,
         until: datetime | None = None,
     ) -> UsageSummary:
-        records = await self.query(
-            agent_id=agent_id,
-            tenant_id=tenant_id,
-            model=model,
-            since=since,
-            until=until,
-            limit=1_000_000,
+        total_requests, total_input, total_output, total_cost, model_rows = await self._run(
+            self._do_summarise, agent_id, tenant_id, model, since, until
         )
-        summary = UsageSummary()
-        summary.total_requests = len(records)
-        for r in records:
-            summary.total_input_tokens += r.input_tokens
-            summary.total_output_tokens += r.output_tokens
-            summary.total_cost_usd += r.cost_usd
-            entry = summary.by_model.setdefault(
-                r.model,
-                {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
-            )
-            entry["requests"] += 1
-            entry["input_tokens"] += r.input_tokens
-            entry["output_tokens"] += r.output_tokens
-            entry["cost_usd"] += r.cost_usd
+        summary = UsageSummary(
+            total_requests=total_requests,
+            total_input_tokens=total_input,
+            total_output_tokens=total_output,
+            total_cost_usd=total_cost,
+        )
+        for m, req_count, in_tok, out_tok, cost in model_rows:
+            summary.by_model[m] = {
+                "requests": req_count,
+                "input_tokens": in_tok or 0,
+                "output_tokens": out_tok or 0,
+                "cost_usd": cost or 0.0,
+            }
         return summary
 
     async def tokens_today(self, tenant_id: str) -> int:
-        since = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        records = await self.query(tenant_id=tenant_id, since=since, limit=1_000_000)
-        return sum(r.input_tokens + r.output_tokens for r in records)
+        since = _ts(datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0))
+        return await self._run(self._do_tokens_today, tenant_id, since)
 
     async def cost_today(self, tenant_id: str) -> float:
-        since = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        records = await self.query(tenant_id=tenant_id, since=since, limit=1_000_000)
-        return sum(r.cost_usd for r in records)
+        since = _ts(datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0))
+        return await self._run(self._do_cost_today, tenant_id, since)
 
     async def requests_this_hour(self, tenant_id: str) -> int:
-        since = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
-        records = await self.query(tenant_id=tenant_id, since=since, limit=1_000_000)
-        return len(records)
+        since = _ts(datetime.now(UTC).replace(minute=0, second=0, microsecond=0))
+        return await self._run(self._do_requests_this_hour, tenant_id, since)
 
     async def agent_cost_today(self, agent_id: str) -> float:
-        since = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        records = await self.query(agent_id=agent_id, since=since, limit=1_000_000)
-        return sum(r.cost_usd for r in records)
+        since = _ts(datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0))
+        return await self._run(self._do_agent_cost_today, agent_id, since)

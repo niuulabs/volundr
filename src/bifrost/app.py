@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from bifrost.auth import AgentIdentity, extract_identity
-from bifrost.config import BifrostConfig
+from bifrost.config import AgentPermissions, BifrostConfig
 from bifrost.domain.models import ModelInfo, RequestLog, TokenUsage
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
@@ -125,8 +125,13 @@ async def _check_quotas(
     identity: AgentIdentity,
     config: BifrostConfig,
     store: UsageStore,
+    agent_perms: AgentPermissions,
 ) -> list[str]:
     """Check quota limits and return a list of warning strings (empty = OK).
+
+    Args:
+        agent_perms: Pre-resolved permissions for the caller (avoids a second
+                     ``config.permissions_for_agent()`` lookup per request).
 
     Raises:
         HTTPException(429): If any hard limit is exceeded.
@@ -134,7 +139,6 @@ async def _check_quotas(
     warnings: list[str] = []
 
     tenant_quota = config.quota_for_tenant(identity.tenant_id)
-    agent_perms = config.permissions_for_agent(identity.agent_id)
     agent_quota = agent_perms.quota
 
     # Tenant: tokens per day
@@ -199,21 +203,23 @@ async def _check_quotas(
 def _check_model_access(
     identity: AgentIdentity,
     model: str,
-    config: BifrostConfig,
+    agent_perms: AgentPermissions,
 ) -> None:
     """Raise 403 if the agent does not have permission to use *model*.
 
     An empty ``allowed_models`` list means all models are permitted.
+
+    Args:
+        agent_perms: Pre-resolved permissions for the caller.
     """
-    perms = config.permissions_for_agent(identity.agent_id)
-    if not perms.allowed_models:
+    if not agent_perms.allowed_models:
         return
-    if model not in perms.allowed_models:
+    if model not in agent_perms.allowed_models:
         raise HTTPException(
             status_code=403,
             detail=(
                 f"Agent '{identity.agent_id}' is not permitted to use model '{model}'. "
-                f"Allowed: {perms.allowed_models}"
+                f"Allowed: {agent_perms.allowed_models}"
             ),
         )
 
@@ -291,6 +297,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
     async def lifespan(app: FastAPI):
         yield
         await router.close()
+        if hasattr(store, "close"):
+            await store.close()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -365,11 +373,14 @@ def create_app(config: BifrostConfig) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+        # Resolve permissions once — used by both access control and quota checks.
+        agent_perms = config.permissions_for_agent(identity.agent_id)
+
         # --- Model access control ---
-        _check_model_access(identity, request.model, config)
+        _check_model_access(identity, request.model, agent_perms)
 
         # --- Quota check (before routing) ---
-        warnings = await _check_quotas(identity, config, store)
+        warnings = await _check_quotas(identity, config, store, agent_perms)
 
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
@@ -468,7 +479,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
 
         if since is not None:
             try:
-                since_dt = datetime.fromisoformat(since).replace(tzinfo=UTC)
+                _dt = datetime.fromisoformat(since)
+                since_dt = _dt.replace(tzinfo=UTC) if _dt.tzinfo is None else _dt.astimezone(UTC)
             except ValueError as exc:
                 raise HTTPException(
                     status_code=422,
@@ -477,7 +489,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
 
         if until is not None:
             try:
-                until_dt = datetime.fromisoformat(until).replace(tzinfo=UTC)
+                _dt = datetime.fromisoformat(until)
+                until_dt = _dt.replace(tzinfo=UTC) if _dt.tzinfo is None else _dt.astimezone(UTC)
             except ValueError as exc:
                 raise HTTPException(
                     status_code=422,

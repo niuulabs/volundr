@@ -70,6 +70,13 @@ def _now_record(
 # ---------------------------------------------------------------------------
 
 
+async def _check(identity: AgentIdentity, config: BifrostConfig, store) -> list[str]:
+    """Convenience wrapper that resolves agent_perms before calling _check_quotas."""
+    return await _check_quotas(
+        identity, config, store, config.permissions_for_agent(identity.agent_id)
+    )
+
+
 class TestCheckQuotas:
     @pytest.fixture
     def identity(self) -> AgentIdentity:
@@ -78,7 +85,7 @@ class TestCheckQuotas:
     async def test_no_limits_no_warnings(self, identity):
         config = _base_config()
         store = MemoryUsageStore()
-        warnings = await _check_quotas(identity, config, store)
+        warnings = await _check(identity, config, store)
         assert warnings == []
 
     # ── Token quota ──────────────────────────────────────────────────────────
@@ -91,7 +98,7 @@ class TestCheckQuotas:
         )
         store = _seeded_store(_now_record(tenant_id="tenant-1", input_tokens=80, output_tokens=30))
         with pytest.raises(HTTPException) as exc_info:
-            await _check_quotas(identity, config, store)
+            await _check(identity, config, store)
         assert exc_info.value.status_code == 429
 
     async def test_soft_token_limit_returns_warning(self, identity):
@@ -99,7 +106,7 @@ class TestCheckQuotas:
             default_quota=QuotaConfig(max_tokens_per_day=100, soft_limit_fraction=0.8),
         )
         store = _seeded_store(_now_record(tenant_id="tenant-1", input_tokens=85, output_tokens=0))
-        warnings = await _check_quotas(identity, config, store)
+        warnings = await _check(identity, config, store)
         assert any("token" in w for w in warnings)
 
     async def test_under_soft_token_limit_no_warning(self, identity):
@@ -107,7 +114,7 @@ class TestCheckQuotas:
             default_quota=QuotaConfig(max_tokens_per_day=1000, soft_limit_fraction=0.9),
         )
         store = _seeded_store(_now_record(tenant_id="tenant-1", input_tokens=100, output_tokens=0))
-        warnings = await _check_quotas(identity, config, store)
+        warnings = await _check(identity, config, store)
         assert not any("token" in w for w in warnings)
 
     # ── Cost quota ───────────────────────────────────────────────────────────
@@ -120,7 +127,7 @@ class TestCheckQuotas:
         )
         store = _seeded_store(_now_record(tenant_id="tenant-1", cost_usd=1.50))
         with pytest.raises(HTTPException) as exc_info:
-            await _check_quotas(identity, config, store)
+            await _check(identity, config, store)
         assert exc_info.value.status_code == 429
 
     async def test_soft_cost_limit_returns_warning(self, identity):
@@ -128,7 +135,7 @@ class TestCheckQuotas:
             default_quota=QuotaConfig(max_cost_per_day=1.0, soft_limit_fraction=0.9),
         )
         store = _seeded_store(_now_record(tenant_id="tenant-1", cost_usd=0.95))
-        warnings = await _check_quotas(identity, config, store)
+        warnings = await _check(identity, config, store)
         assert any("cost" in w for w in warnings)
 
     # ── Request-rate quota ───────────────────────────────────────────────────
@@ -145,7 +152,7 @@ class TestCheckQuotas:
             _now_record(tenant_id="tenant-1"),
         )
         with pytest.raises(HTTPException) as exc_info:
-            await _check_quotas(identity, config, store)
+            await _check(identity, config, store)
         assert exc_info.value.status_code == 429
 
     async def test_soft_request_limit_returns_warning(self, identity):
@@ -153,7 +160,7 @@ class TestCheckQuotas:
             default_quota=QuotaConfig(max_requests_per_hour=10, soft_limit_fraction=0.8),
         )
         store = _seeded_store(*[_now_record(tenant_id="tenant-1") for _ in range(9)])
-        warnings = await _check_quotas(identity, config, store)
+        warnings = await _check(identity, config, store)
         assert any("request" in w for w in warnings)
 
     # ── Agent-level cost quota ───────────────────────────────────────────────
@@ -168,7 +175,7 @@ class TestCheckQuotas:
         )
         store = _seeded_store(_now_record(agent_id="agent-1", cost_usd=0.60))
         with pytest.raises(HTTPException) as exc_info:
-            await _check_quotas(identity, config, store)
+            await _check(identity, config, store)
         assert exc_info.value.status_code == 429
 
     async def test_agent_cost_soft_limit(self, identity):
@@ -180,7 +187,7 @@ class TestCheckQuotas:
             }
         )
         store = _seeded_store(_now_record(agent_id="agent-1", cost_usd=0.85))
-        warnings = await _check_quotas(identity, config, store)
+        warnings = await _check(identity, config, store)
         assert any("agent" in w for w in warnings)
 
     # ── Per-tenant override ──────────────────────────────────────────────────
@@ -194,7 +201,7 @@ class TestCheckQuotas:
         )
         store = _seeded_store(_now_record(tenant_id="tenant-1", input_tokens=80, output_tokens=30))
         with pytest.raises(HTTPException) as exc_info:
-            await _check_quotas(identity, config, store)
+            await _check(identity, config, store)
         assert exc_info.value.status_code == 429
 
 

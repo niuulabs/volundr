@@ -16,7 +16,7 @@ In all modes the standard attribution headers (``X-Session-Id``,
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
 import jwt
@@ -44,11 +44,6 @@ class AgentIdentity:
     tenant_id: str = "default"
     session_id: str = ""
     saga_id: str = ""
-    allowed_models: list[str] = field(default_factory=list)
-    """Models this agent is permitted to use (empty = all models allowed)."""
-
-
-_ANON = AgentIdentity()
 
 
 def _read_attribution_headers(request: Request) -> tuple[str, str]:
