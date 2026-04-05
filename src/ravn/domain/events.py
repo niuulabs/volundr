@@ -27,6 +27,11 @@ class RavnEvent:
         return cls(type=RavnEventType.THOUGHT, data=text)
 
     @classmethod
+    def thinking(cls, text: str) -> RavnEvent:
+        """Emit an extended-thinking block — rendered dimmed/collapsed in CLI."""
+        return cls(type=RavnEventType.THOUGHT, data=text, metadata={"thinking": True})
+
+    @classmethod
     def tool_start(
         cls,
         tool_name: str,

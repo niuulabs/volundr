@@ -57,10 +57,13 @@ class FallbackLLMAdapter(LLMPort):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> LLMResponse:
         last_exc: Exception | None = None
 
         for idx, provider in enumerate(self._providers):
+            # Pass thinking only when the provider supports it; skip silently otherwise.
+            effective_thinking = thinking if provider.supports_thinking else None
             try:
                 return await provider.generate(
                     messages,
@@ -68,6 +71,7 @@ class FallbackLLMAdapter(LLMPort):
                     system=system,
                     model=model,
                     max_tokens=max_tokens,
+                    thinking=effective_thinking,
                 )
             except LLMError as exc:
                 label = "primary" if idx == 0 else f"fallback[{idx}]"
@@ -93,10 +97,13 @@ class FallbackLLMAdapter(LLMPort):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> AsyncIterator[StreamEvent]:
         last_exc: Exception | None = None
 
         for idx, provider in enumerate(self._providers):
+            # Pass thinking only when the provider supports it; skip silently otherwise.
+            effective_thinking = thinking if provider.supports_thinking else None
             try:
                 async for event in provider.stream(
                     messages,
@@ -104,6 +111,7 @@ class FallbackLLMAdapter(LLMPort):
                     system=system,
                     model=model,
                     max_tokens=max_tokens,
+                    thinking=effective_thinking,
                 ):
                     yield event
                 return

@@ -295,6 +295,7 @@ class OpenAICompatibleAdapter(LLMPort):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,  # noqa: ARG002 — Anthropic-only, ignored here
     ) -> AsyncIterator[StreamEvent]:
         payload = self._build_request(
             messages,
@@ -413,6 +414,7 @@ class OpenAICompatibleAdapter(LLMPort):
         system: SystemPrompt,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,  # noqa: ARG002 — Anthropic-only, ignored here
     ) -> LLMResponse:
         payload = self._build_request(
             messages,

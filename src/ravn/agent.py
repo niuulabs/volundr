@@ -11,7 +11,7 @@ from typing import Any
 
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
-from ravn.config import OutcomeConfig
+from ravn.config import ExtendedThinkingConfig, OutcomeConfig
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
@@ -86,6 +86,7 @@ class RavnAgent:
         prompt_builder: PromptBuilder | None = None,
         outcome_port: OutcomePort | None = None,
         outcome_config: OutcomeConfig | None = None,
+        extended_thinking: ExtendedThinkingConfig | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -112,6 +113,7 @@ class RavnAgent:
         self._task_summary_max_chars = _oc.task_summary_max_chars
         self._input_token_cost_per_million = _oc.input_token_cost_per_million
         self._output_token_cost_per_million = _oc.output_token_cost_per_million
+        self._extended_thinking = extended_thinking
         self._session = Session()
         self._last_compression_result: CompressionResult | None = None
 
@@ -207,6 +209,9 @@ class RavnAgent:
             except Exception:
                 logger.warning("Outcome lessons retrieval failed; continuing without lessons.")
 
+        # Determine whether explicit thinking was requested for this turn.
+        explicit_thinking, user_input = _parse_think_flag(user_input)
+
         self._session.add_message(Message(role="user", content=user_input))
 
         turn_tool_calls: list[ToolCall] = []
@@ -215,6 +220,7 @@ class RavnAgent:
         final_response = ""
         self._last_compression_result = None
         iterations_used = 0
+        last_had_tool_error = False
 
         for iteration in range(self._max_iterations):
             iterations_used = iteration + 1
@@ -228,9 +234,17 @@ class RavnAgent:
                 effective_system, memory_summary=memory_ctx
             )
 
+            thinking_param = self._resolve_thinking(
+                user_input=user_input,
+                iteration=iteration,
+                explicit=explicit_thinking,
+                last_had_tool_error=last_had_tool_error,
+            )
+
             llm_response = await self._call_llm_streaming(
                 system_prompt=effective_system,
                 messages=messages_for_llm,
+                thinking=thinking_param,
             )
 
             # Consume one iteration from the budget.
@@ -253,6 +267,7 @@ class RavnAgent:
 
             # Execute all tool calls sequentially and collect results.
             tool_results_content = []
+            last_had_tool_error = False
             for tool_call in llm_response.tool_calls:
                 turn_tool_calls.append(tool_call)
                 result = await self._execute_tool(tool_call)
@@ -260,6 +275,8 @@ class RavnAgent:
                 # Inject budget warning into the tool result content.
                 result = _maybe_append_budget_warning(result, self._iteration_budget)
 
+                if result.is_error:
+                    last_had_tool_error = True
                 turn_tool_results.append(result)
                 tool_results_content.append(
                     {
@@ -475,10 +492,41 @@ class RavnAgent:
             logger.warning("Reflection LLM call failed: %s", exc)
             return f"Reflection unavailable: {exc}"
 
+    def _resolve_thinking(
+        self,
+        *,
+        user_input: str,
+        iteration: int,
+        explicit: bool,
+        last_had_tool_error: bool,
+    ) -> dict | None:
+        """Return the thinking parameter dict for this LLM call, or None.
+
+        Extended thinking is activated when:
+        - Explicitly requested (``think:`` prefix / ``--think`` flag).
+        - Auto-trigger is on AND the input looks like a planning/ambiguous task.
+        - Auto-trigger-on-retry is on AND a tool failed on the previous iteration.
+        """
+        et = self._extended_thinking
+        if et is None or not et.enabled:
+            return None
+
+        if explicit:
+            return {"type": "enabled", "budget_tokens": et.budget_tokens}
+
+        if et.auto_trigger_on_retry and iteration > 0 and last_had_tool_error:
+            return {"type": "enabled", "budget_tokens": et.budget_tokens}
+
+        if et.auto_trigger and _looks_like_planning_task(user_input):
+            return {"type": "enabled", "budget_tokens": et.budget_tokens}
+
+        return None
+
     async def _call_llm_streaming(
         self,
         system_prompt: SystemPrompt | None = None,
         messages: list[Message] | None = None,
+        thinking: dict | None = None,
     ) -> LLMResponse:
         """Call the LLM with streaming and accumulate into an LLMResponse."""
         accumulated_text = ""
@@ -500,12 +548,16 @@ class RavnAgent:
             system=effective,
             model=self._model,
             max_tokens=self._max_tokens,
+            thinking=thinking,
         ):
             match event.type:
                 case StreamEventType.TEXT_DELTA:
                     if event.text:
                         accumulated_text += event.text
                         await self._channel.emit(RavnEvent.thought(event.text))
+                case StreamEventType.THINKING:
+                    if event.text:
+                        await self._channel.emit(RavnEvent.thinking(event.text))
                 case StreamEventType.TOOL_CALL:
                     if event.tool_call:
                         tool_calls.append(event.tool_call)
@@ -727,6 +779,48 @@ def _compute_cost(
         usage.input_tokens * input_per_million / 1_000_000
         + usage.output_tokens * output_per_million / 1_000_000
     )
+
+
+_THINK_PREFIXES = ("think:", "think: ")
+_THINK_FLAG = "--think"
+
+_PLANNING_KEYWORDS = frozenset(
+    {
+        "plan",
+        "design",
+        "architect",
+        "architecture",
+        "strategy",
+        "roadmap",
+        "approach",
+        "how should",
+        "what approach",
+        "what's the best",
+        "best way to",
+        "how do i",
+    }
+)
+
+
+def _parse_think_flag(user_input: str) -> tuple[bool, str]:
+    """Return (explicit_thinking, cleaned_input).
+
+    Strips ``think:`` prefix or ``--think`` flag from user input and returns
+    a bool indicating whether explicit thinking was requested.
+    """
+    stripped = user_input
+    for prefix in _THINK_PREFIXES:
+        if stripped.lower().startswith(prefix):
+            return True, stripped[len(prefix) :].lstrip()
+    if _THINK_FLAG in stripped:
+        return True, stripped.replace(_THINK_FLAG, "").strip()
+    return False, stripped
+
+
+def _looks_like_planning_task(user_input: str) -> bool:
+    """Return True if the input looks like a planning or ambiguous task."""
+    lower = user_input.lower()
+    return any(kw in lower for kw in _PLANNING_KEYWORDS)
 
 
 def _build_assistant_content(response: LLMResponse) -> list[dict]:

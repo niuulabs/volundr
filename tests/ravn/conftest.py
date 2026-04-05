@@ -56,6 +56,7 @@ class MockLLM(LLMPort):
         system: str,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> LLMResponse:
         return next(self._responses)
 
@@ -67,6 +68,7 @@ class MockLLM(LLMPort):
         system: str,
         model: str,
         max_tokens: int,
+        thinking: dict | None = None,
     ) -> AsyncIterator[StreamEvent]:
         response = next(self._responses)
 
