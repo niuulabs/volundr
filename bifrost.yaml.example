@@ -79,6 +79,72 @@ bifrost:
   #
   # latency_ewma_alpha: 0.2
 
+  # ── Authentication ───────────────────────────────────────────────────────────
+  #
+  # Controls how Bifröst verifies caller identity.
+  #
+  # Modes:
+  #   open  — No auth. Headers (x-agent-id, x-tenant-id) are trusted verbatim.
+  #            Suitable for local/Pi mode or behind a fully-trusted proxy. DEFAULT.
+  #   pat   — Bearer JWT (HS256) issued by Bifröst. Supply the signing secret via
+  #            pat_secret (or the PAT_SECRET environment variable).
+  #   mesh  — Service-mesh mode. Envoy / mTLS has already verified the caller;
+  #            Bifröst reads Envoy-injected headers (x-agent-id, x-tenant-id).
+  #
+  auth_mode: open
+
+  # pat_secret: ""   # Required when auth_mode = pat (or set PAT_SECRET env var)
+
+  # ── Pricing overrides ────────────────────────────────────────────────────────
+  #
+  # Override or extend the built-in pricing snapshot (USD per million tokens).
+  # Omitted models fall back to the built-in table; unknown models cost $0.
+  #
+  # pricing:
+  #   claude-sonnet-4-6:
+  #     input_per_million: 3.00
+  #     output_per_million: 15.00
+  #     cache_creation_per_million: 3.75
+  #     cache_read_per_million: 0.30
+
+  # ── Quota enforcement ─────────────────────────────────────────────────────────
+  #
+  # Limits are evaluated before each request.
+  # Soft limit (default: 90% of any hard limit) → X-Quota-Warning response header.
+  # Hard limit → HTTP 429 with a descriptive reason.
+  # Zero (0 / 0.0) means unlimited for that dimension.
+  #
+  # default_quota:                   # applied to every tenant unless overridden
+  #   max_tokens_per_day: 0          # 0 = unlimited
+  #   max_cost_per_day: 0.0
+  #   max_requests_per_hour: 0
+  #   soft_limit_fraction: 0.9       # warn at 90% of the hard limit
+
+  # tenant_quotas:                   # per-tenant overrides
+  #   my-tenant:
+  #     max_tokens_per_day: 1000000
+  #     max_cost_per_day: 10.0
+  #     max_requests_per_hour: 1000
+
+  # agent_permissions:               # per-agent model access + optional budget
+  #   my-agent-id:
+  #     allowed_models:              # empty list = all models allowed
+  #       - claude-sonnet-4-6
+  #     quota:
+  #       max_cost_per_day: 2.50
+
+  # ── Usage storage ─────────────────────────────────────────────────────────────
+  #
+  # Where per-request usage records are persisted.
+  #
+  #   memory  — In-process only. Lost on restart. Good for testing. DEFAULT.
+  #   sqlite  — Persistent single-file database. Good for standalone / Pi mode.
+  #   postgres — (coming) PostgreSQL backend for multi-node deployments.
+  #
+  # usage_store:
+  #   adapter: memory
+  #   path: ./bifrost_usage.db      # for sqlite adapter
+
   # ── Server ──────────────────────────────────────────────────────────────────
   host: 0.0.0.0
   port: 8088
