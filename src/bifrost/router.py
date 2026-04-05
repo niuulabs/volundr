@@ -14,10 +14,10 @@ from collections.abc import AsyncIterator
 import httpx
 
 from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
-from bifrost.domain.routing import RoutingContext, apply_rules
+from bifrost.domain.routing import apply_rules
 from bifrost.ports.key_vault import KeyVaultPort
 from bifrost.ports.provider import ProviderError, ProviderPort
-from bifrost.ports.rules import RuleEnginePort
+from bifrost.ports.rules import RoutingContext, RuleEnginePort
 from bifrost.translation.models import AnthropicRequest, AnthropicResponse
 
 logger = logging.getLogger(__name__)
@@ -191,12 +191,23 @@ class ModelRouter:
         ordered = sorted(providers, key=latency_key)
         return [(p, model) for p in ordered]
 
-    async def complete(self, request: AnthropicRequest) -> AnthropicResponse:
+    async def complete(
+        self,
+        request: AnthropicRequest,
+        context: RoutingContext | None = None,
+    ) -> AnthropicResponse:
         """Route a non-streaming completion request.
 
         Tries candidates in order; moves to the next on retryable errors.
+
+        Args:
+            request: Inbound Anthropic-format request.
+            context: Optional per-request routing context (e.g. agent budget
+                     percentage).  When ``None`` an empty context is used so
+                     budget-sensitive rules are skipped silently.
         """
-        request = apply_rules(request, RoutingContext(), self._rule_engine)
+        ctx = context if context is not None else RoutingContext()
+        request = apply_rules(request, ctx, self._rule_engine)
         candidates = self._build_candidates(request.model)
         last_exc: Exception | None = None
 
@@ -225,13 +236,24 @@ class ModelRouter:
             f"All providers failed for model '{candidates[0][1]}': {last_exc}"
         ) from last_exc
 
-    async def stream(self, request: AnthropicRequest) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        request: AnthropicRequest,
+        context: RoutingContext | None = None,
+    ) -> AsyncIterator[str]:
         """Route a streaming request.
 
         Failover is attempted on connection or HTTP errors before the first
         byte is yielded.
+
+        Args:
+            request: Inbound Anthropic-format request.
+            context: Optional per-request routing context (e.g. agent budget
+                     percentage).  When ``None`` an empty context is used so
+                     budget-sensitive rules are skipped silently.
         """
-        request = apply_rules(request, RoutingContext(), self._rule_engine)
+        ctx = context if context is not None else RoutingContext()
+        request = apply_rules(request, ctx, self._rule_engine)
         candidates = self._build_candidates(request.model)
         last_exc: Exception | None = None
 

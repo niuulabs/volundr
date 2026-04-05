@@ -73,9 +73,10 @@ def _now_record(
 
 async def _check(identity: AgentIdentity, config: BifrostConfig, store) -> list[str]:
     """Convenience wrapper that resolves agent_perms before calling _check_quotas."""
-    return await _check_quotas(
+    warnings, _ = await _check_quotas(
         identity, config, store, config.permissions_for_agent(identity.agent_id)
     )
+    return warnings
 
 
 class TestCheckQuotas:
