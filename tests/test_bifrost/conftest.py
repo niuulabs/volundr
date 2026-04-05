@@ -12,22 +12,30 @@ from bifrost.config import BifrostConfig, ProviderConfig
 from bifrost.translation.models import AnthropicResponse, TextBlock, UsageInfo
 
 
-def make_config(models: list[str] | None = None) -> BifrostConfig:
+def make_config(
+    models: list[str] | None = None,
+    aliases: dict[str, str] | None = None,
+) -> BifrostConfig:
     """Return a minimal BifrostConfig suitable for unit tests."""
     return BifrostConfig(
         providers={
             "anthropic": ProviderConfig(models=models or ["claude-sonnet-4-6", "claude-opus-4-6"])
-        }
+        },
+        aliases=aliases or {},
     )
 
 
-def make_response(text: str = "Hello!") -> AnthropicResponse:
+def make_response(
+    text: str = "Hello!",
+    input_tokens: int = 10,
+    output_tokens: int = 5,
+) -> AnthropicResponse:
     return AnthropicResponse(
         id="msg_test",
         content=[TextBlock(text=text)],
         model="claude-sonnet-4-6",
         stop_reason="end_turn",
-        usage=UsageInfo(input_tokens=10, output_tokens=5),
+        usage=UsageInfo(input_tokens=input_tokens, output_tokens=output_tokens),
     )
 
 
