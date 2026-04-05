@@ -1,1 +1,1 @@
-"""Tool adapters for Ravn agents."""
+"""Ravn tool adapter implementations."""
