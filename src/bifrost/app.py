@@ -131,10 +131,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
             for model_id in provider_cfg.models:
                 models.append(ModelInfo(id=model_id, display_name=model_id))
         return {
-            "data": [
-                {"id": m.id, "type": "model", "display_name": m.display_name}
-                for m in models
-            ]
+            "data": [{"id": m.id, "type": "model", "display_name": m.display_name} for m in models]
         }
 
     @app.post("/v1/messages", response_model=None)
@@ -175,9 +172,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
                     usage=TokenUsage(
                         input_tokens=raw_usage.get("input_tokens", 0),
                         output_tokens=raw_usage.get("output_tokens", 0),
-                        cache_creation_input_tokens=raw_usage.get(
-                            "cache_creation_input_tokens", 0
-                        ),
+                        cache_creation_input_tokens=raw_usage.get("cache_creation_input_tokens", 0),
                         cache_read_input_tokens=raw_usage.get("cache_read_input_tokens", 0),
                     ),
                     latency_ms=latency_ms,
