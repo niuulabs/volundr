@@ -121,7 +121,7 @@ def saga_repo() -> MockSagaRepo:
             confidence=0.0,
             created_at=datetime.now(UTC),
             base_branch="dev",
-            owner_id="default",
+            owner_id="dev-user",
         )
     )
     return repo

@@ -11,6 +11,17 @@ from volundr.infrastructure.database import (
     CHRONICLES_INDEX_SQL,
     CHRONICLES_TABLE_SQL,
     CREATE_INDEX_SQL,
+    CREDENTIAL_METADATA_INDEX_SQL,
+    CREDENTIAL_METADATA_TABLE_SQL,
+    FEATURE_TOGGLES_TABLE_SQL,
+    INTEGRATION_CONNECTIONS_INDEX_SQL,
+    INTEGRATION_CONNECTIONS_TABLE_SQL,
+    PERSONAL_ACCESS_TOKENS_INDEX_SQL,
+    PERSONAL_ACCESS_TOKENS_TABLE_SQL,
+    PROJECT_MAPPINGS_INDEX_SQL,
+    PROJECT_MAPPINGS_TABLE_SQL,
+    SAVED_PROMPTS_INDEX_SQL,
+    SAVED_PROMPTS_TABLE_SQL,
     SESSION_EVENTS_INDEX_SQL,
     SESSION_EVENTS_TABLE_SQL,
     SESSIONS_IDENTITY_COLUMNS_SQL,
@@ -22,8 +33,14 @@ from volundr.infrastructure.database import (
     TENANTS_TABLE_SQL,
     TOKEN_USAGE_INDEX_SQL,
     TOKEN_USAGE_TABLE_SQL,
+    USER_FEATURE_PREFERENCES_INDEX_SQL,
+    USER_FEATURE_PREFERENCES_TABLE_SQL,
     USERS_INDEX_SQL,
     USERS_TABLE_SQL,
+    VOLUNDR_PRESETS_INDEX_SQL,
+    VOLUNDR_PRESETS_TABLE_SQL,
+    WORKSPACES_INDEX_SQL,
+    WORKSPACES_TABLE_SQL,
     create_pool,
     database_pool,
     init_db,
@@ -155,7 +172,7 @@ class TestInitDb:
 
         await init_db(mock_pool)
 
-        assert mock_conn.execute.call_count == 18
+        assert mock_conn.execute.call_count == 35
         calls = mock_conn.execute.call_args_list
         assert calls[0][0][0] == SESSIONS_TABLE_SQL
         assert calls[1][0][0] == CREATE_INDEX_SQL
@@ -175,6 +192,23 @@ class TestInitDb:
         assert calls[15][0][0] == TENANT_MEMBERSHIPS_INDEX_SQL
         assert calls[16][0][0] == SESSIONS_IDENTITY_COLUMNS_SQL
         assert calls[17][0][0] == SESSIONS_IDENTITY_INDEX_SQL
+        assert calls[18][0][0] == SAVED_PROMPTS_TABLE_SQL
+        assert calls[19][0][0] == SAVED_PROMPTS_INDEX_SQL
+        assert calls[20][0][0] == PROJECT_MAPPINGS_TABLE_SQL
+        assert calls[21][0][0] == PROJECT_MAPPINGS_INDEX_SQL
+        assert calls[22][0][0] == VOLUNDR_PRESETS_TABLE_SQL
+        assert calls[23][0][0] == VOLUNDR_PRESETS_INDEX_SQL
+        assert calls[24][0][0] == CREDENTIAL_METADATA_TABLE_SQL
+        assert calls[25][0][0] == CREDENTIAL_METADATA_INDEX_SQL
+        assert calls[26][0][0] == INTEGRATION_CONNECTIONS_TABLE_SQL
+        assert calls[27][0][0] == INTEGRATION_CONNECTIONS_INDEX_SQL
+        assert calls[28][0][0] == WORKSPACES_TABLE_SQL
+        assert calls[29][0][0] == WORKSPACES_INDEX_SQL
+        assert calls[30][0][0] == FEATURE_TOGGLES_TABLE_SQL
+        assert calls[31][0][0] == USER_FEATURE_PREFERENCES_TABLE_SQL
+        assert calls[32][0][0] == USER_FEATURE_PREFERENCES_INDEX_SQL
+        assert calls[33][0][0] == PERSONAL_ACCESS_TOKENS_TABLE_SQL
+        assert calls[34][0][0] == PERSONAL_ACCESS_TOKENS_INDEX_SQL
 
 
 class TestDatabasePool:

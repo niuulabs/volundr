@@ -4,6 +4,7 @@ import type { ITyrIntegrationService } from '@/modules/tyr/ports';
 import { useTyrIntegrations } from '@/modules/tyr/hooks/useTyrIntegrations';
 import { INTEGRATION_TYPES } from '@/modules/tyr/constants';
 import { VolundrConnectionSection } from './sections/VolundrConnectionSection';
+import { DispatcherSettingsSection } from './sections/DispatcherSettingsSection';
 import styles from './TyrSettings.module.css';
 
 interface TyrSettingsProps {
@@ -51,6 +52,7 @@ export function TyrSettings({ service }: TyrSettingsProps) {
         showForm={showAddForm}
         onShowFormChange={setShowAddForm}
       />
+      <DispatcherSettingsSection />
     </div>
   );
 }

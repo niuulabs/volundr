@@ -4,6 +4,14 @@ import { WorkspacesSection } from './WorkspacesSection';
 import type { IVolundrService } from '@/modules/volundr/ports';
 import type { VolundrWorkspace } from '@/modules/volundr/models';
 
+const mockServiceRef = { current: {} as IVolundrService };
+
+vi.mock('@/modules/volundr/adapters', () => ({
+  get volundrService() {
+    return mockServiceRef.current;
+  },
+}));
+
 const mockWorkspaces: VolundrWorkspace[] = [
   {
     id: 'ws-1',
@@ -55,7 +63,8 @@ describe('WorkspacesSection', () => {
     service = createMockService({
       listWorkspaces: vi.fn().mockReturnValue(new Promise(() => {})),
     });
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
     expect(screen.getByText('Loading workspaces...')).toBeDefined();
   });
 
@@ -63,7 +72,8 @@ describe('WorkspacesSection', () => {
     service = createMockService({
       listWorkspaces: vi.fn().mockResolvedValue([]),
     });
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('No workspaces found')).toBeDefined();
@@ -71,7 +81,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('renders workspace list with human-readable labels', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -86,7 +97,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('shows Restore button only for archived workspaces', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -97,7 +109,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('calls restoreWorkspace and reloads', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('other-repo / develop')).toBeDefined();
@@ -112,7 +125,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('shows delete confirmation dialog with readable name', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -126,7 +140,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('cancels delete confirmation', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -141,7 +156,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('confirms delete and reloads', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -162,7 +178,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('supports multi-select and bulk delete', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -187,7 +204,8 @@ describe('WorkspacesSection', () => {
   });
 
   it('select-all toggles all checkboxes', async () => {
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       expect(screen.getByText('my-feature-work')).toBeDefined();
@@ -225,7 +243,8 @@ describe('WorkspacesSection', () => {
     service = createMockService({
       listWorkspaces: vi.fn().mockResolvedValue(plainWorkspaces),
     });
-    render(<WorkspacesSection service={service} />);
+    mockServiceRef.current = service;
+    render(<WorkspacesSection />);
 
     await waitFor(() => {
       // Should show PVC name as the label when no sessionName/sourceUrl

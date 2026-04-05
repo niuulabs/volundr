@@ -6,15 +6,106 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from skuld.transport import (
+from skuld.transports import (
     CodexSubprocessTransport,
     SdkWebSocketTransport,
     SubprocessTransport,
+    TransportCapabilities,
     _drain_stream,
     _filter_event,
     _map_codex_tool,
     _stop_process,
 )
+
+# ---------------------------------------------------------------------------
+# TransportCapabilities
+# ---------------------------------------------------------------------------
+
+
+class TestTransportCapabilities:
+    """Tests for TransportCapabilities dataclass and per-transport values."""
+
+    def test_default_capabilities_all_false(self):
+        """Default TransportCapabilities() has all fields False."""
+        caps = TransportCapabilities()
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
+
+    def test_subprocess_transport_capabilities(self, tmp_path):
+        """SubprocessTransport has session_resume=True, rest False."""
+        transport = SubprocessTransport(str(tmp_path))
+        caps = transport.capabilities
+        assert caps.session_resume is True
+        assert caps.cli_websocket is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
+
+    def test_sdk_websocket_transport_capabilities(self, tmp_path):
+        """SdkWebSocketTransport has all capabilities True."""
+        transport = SdkWebSocketTransport(
+            workspace_dir=str(tmp_path),
+            sdk_port=8081,
+            session_id="test",
+        )
+        caps = transport.capabilities
+        assert caps.cli_websocket is True
+        assert caps.session_resume is True
+        assert caps.interrupt is True
+        assert caps.set_model is True
+        assert caps.set_thinking_tokens is True
+        assert caps.set_permission_mode is True
+        assert caps.rewind_files is True
+        assert caps.mcp_set_servers is True
+        assert caps.permission_requests is True
+        assert caps.slash_commands is True
+        assert caps.skills is True
+
+    def test_codex_subprocess_transport_capabilities(self, tmp_path):
+        """CodexSubprocessTransport has all capabilities False."""
+        transport = CodexSubprocessTransport(str(tmp_path))
+        caps = transport.capabilities
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
+
+    def test_capabilities_is_frozen(self):
+        """TransportCapabilities is immutable (frozen dataclass)."""
+        caps = TransportCapabilities()
+        with pytest.raises(AttributeError):
+            caps.cli_websocket = True  # type: ignore[misc]
+
+    def test_capabilities_partial_override(self):
+        """Individual fields can be set at construction time."""
+        caps = TransportCapabilities(interrupt=True, set_model=True)
+        assert caps.interrupt is True
+        assert caps.set_model is True
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
+
 
 # ---------------------------------------------------------------------------
 # _filter_event
@@ -133,7 +224,7 @@ class TestSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -169,7 +260,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -195,7 +286,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -218,7 +309,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -235,7 +326,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -260,7 +351,7 @@ class TestSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -289,7 +380,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -318,7 +409,7 @@ class TestSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -343,7 +434,7 @@ class TestSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.subprocess.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_subprocess
@@ -381,7 +472,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_start_spawns_process(self, transport):
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -408,7 +499,7 @@ class TestSdkWebSocketTransport:
         transport._cli_session_id = "resume-me"
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -433,7 +524,7 @@ class TestSdkWebSocketTransport:
         )
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -452,7 +543,7 @@ class TestSdkWebSocketTransport:
     async def test_start_omits_model_flag_when_empty(self, transport):
         """When model is empty, --model should not appear in CLI args."""
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -682,7 +773,7 @@ class TestSdkWebSocketTransport:
             skip_permissions=False,
         )
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -705,7 +796,7 @@ class TestSdkWebSocketTransport:
             skip_permissions=True,
         )
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -741,7 +832,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_send_control_response_noop_on_base_class(self):
         """Base CLITransport.send_control_response is a no-op."""
-        from skuld.transport import SubprocessTransport
+        from skuld.transports import SubprocessTransport
 
         t = SubprocessTransport("/tmp")
         # Should not raise
@@ -814,7 +905,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_send_control_noop_on_base_class(self):
         """Base CLITransport.send_control is a no-op."""
-        from skuld.transport import SubprocessTransport
+        from skuld.transports import SubprocessTransport
 
         t = SubprocessTransport("/tmp")
         # Should not raise
@@ -848,7 +939,7 @@ class TestSdkWebSocketTransport:
             agent_teams=True,
         )
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -871,7 +962,7 @@ class TestSdkWebSocketTransport:
             agent_teams=False,
         )
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -950,7 +1041,7 @@ class TestSdkWebSocketTransport:
             system_prompt="You are an agent.",
         )
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -968,7 +1059,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_spawn_without_system_prompt_omits_flag(self, transport):
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -990,7 +1081,7 @@ class TestSdkWebSocketTransport:
             initial_prompt="Break down ticket TK-123.",
         )
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -1011,7 +1102,7 @@ class TestSdkWebSocketTransport:
     @pytest.mark.asyncio
     async def test_spawn_without_initial_prompt_no_pending(self, transport):
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.sdk_websocket.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_process = MagicMock()
@@ -1075,8 +1166,19 @@ class TestCodexSubprocessTransport:
         assert transport.last_result is None
         assert transport.is_alive is False
 
-    def test_supports_cli_websocket_is_false(self, transport):
-        assert transport.supports_cli_websocket is False
+    def test_capabilities_all_false(self, transport):
+        caps = transport.capabilities
+        assert caps.cli_websocket is False
+        assert caps.session_resume is False
+        assert caps.interrupt is False
+        assert caps.set_model is False
+        assert caps.set_thinking_tokens is False
+        assert caps.set_permission_mode is False
+        assert caps.rewind_files is False
+        assert caps.mcp_set_servers is False
+        assert caps.permission_requests is False
+        assert caps.slash_commands is False
+        assert caps.skills is False
 
     @pytest.mark.asyncio
     async def test_start_is_noop(self, transport):
@@ -1113,7 +1215,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1152,7 +1254,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1182,7 +1284,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1220,7 +1322,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1260,7 +1362,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1289,7 +1391,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1315,7 +1417,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(callback)
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1338,7 +1440,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process
@@ -1386,7 +1488,7 @@ class TestCodexSubprocessTransport:
         transport.on_event(AsyncMock())
 
         with patch(
-            "skuld.transport.asyncio.create_subprocess_exec",
+            "skuld.transports.codex.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = mock_process

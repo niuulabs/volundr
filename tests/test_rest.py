@@ -151,7 +151,7 @@ class TestSessionEndpoints:
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "test-session"
-        assert data["status"] == "provisioning"
+        assert data["status"] == "starting"
 
         # Verify events were published (created + updated for starting + updated for provisioning)
         assert len(mock_broadcaster.session_created_events) == 1

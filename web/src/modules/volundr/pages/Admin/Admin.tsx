@@ -1,15 +1,11 @@
 import { useState, Suspense } from 'react';
-import type { IVolundrService } from '@/modules/volundr/ports';
+import { featureCatalogService } from '@/modules/shared/adapters/feature-catalog.adapter';
 import { SectionLayout } from '@/modules/volundr/components/SectionLayout';
 import { AdminGuard } from '@/modules/volundr/components/AdminGuard';
 import { useFeatureModules } from '@/modules/volundr/hooks/useFeatureModules';
 
-interface AdminPageProps {
-  service: IVolundrService;
-}
-
-export function AdminPage({ service }: AdminPageProps) {
-  const { sections, loading } = useFeatureModules('admin', service);
+export function AdminPage() {
+  const { sections, loading } = useFeatureModules('admin', featureCatalogService);
   const [activeSection, setActiveSection] = useState('');
 
   const resolvedSection = activeSection || (sections.length > 0 ? sections[0].key : '');
@@ -19,14 +15,13 @@ export function AdminPage({ service }: AdminPageProps) {
   }
 
   return (
-    <AdminGuard service={service}>
+    <AdminGuard>
       <Suspense fallback={null}>
         <SectionLayout
           title="Admin"
           sections={sections}
           activeSection={resolvedSection}
           onSectionChange={setActiveSection}
-          service={service}
         />
       </Suspense>
     </AdminGuard>

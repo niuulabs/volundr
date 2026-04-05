@@ -2,7 +2,7 @@ FROM ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7
 
 
 LABEL org.opencontainers.image.title="skuld"
-LABEL org.opencontainers.image.description="Skuld — remote AI coding session broker (Claude Code)"
+LABEL org.opencontainers.image.description="Skuld — remote AI coding session broker (Claude Code + Codex)"
 LABEL org.opencontainers.image.vendor="Niuu Labs"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
@@ -32,6 +32,9 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
 
 # Install Claude Code CLI globally via npm
 RUN npm install -g @anthropic-ai/claude-code@2.1.81
+
+# Install OpenAI Codex CLI globally via npm
+RUN npm install -g @openai/codex@0.114.0
 
 # Create app user with UID 1000 (matches helm chart runAsUser)
 RUN existing=$(getent passwd 1000 | cut -d: -f1) && \

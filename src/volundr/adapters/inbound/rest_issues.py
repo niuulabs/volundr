@@ -55,6 +55,9 @@ def create_issues_router(
         for conn in connections:
             if not conn.enabled:
                 continue
+            # Only load adapters from volundr's package
+            if not conn.adapter.startswith("volundr."):
+                continue
             try:
                 adapter = await tracker_factory.create(conn)
                 issues = await adapter.search_issues(q)
@@ -82,6 +85,8 @@ def create_issues_router(
         )
         for conn in connections:
             if not conn.enabled:
+                continue
+            if not conn.adapter.startswith("volundr."):
                 continue
             try:
                 adapter = await tracker_factory.create(conn)

@@ -139,14 +139,13 @@ export interface VolundrUser {
   createdAt?: string;
 }
 
-export interface VolundrIdentity {
-  userId: string;
-  email: string;
-  tenantId: string;
-  roles: string[];
-  displayName: string;
-  status: string;
-}
+export { type AppIdentity } from '@/modules/shared/ports/identity.port';
+
+/**
+ * Volundr-specific identity. Extends the shared AppIdentity so it can
+ * be used interchangeably with the shared identity system.
+ */
+export type VolundrIdentity = import('@/modules/shared/ports/identity.port').AppIdentity;
 
 export interface VolundrTenant {
   id: string;
@@ -396,24 +395,12 @@ export interface AdminSettings {
   storage: AdminStorageSettings;
 }
 
-export type FeatureScope = 'admin' | 'user' | 'session';
-
-export interface FeatureModule {
-  key: string;
-  label: string;
-  icon: string;
-  scope: FeatureScope;
-  enabled: boolean;
-  defaultEnabled: boolean;
-  adminOnly: boolean;
-  order: number;
-}
-
-export interface UserFeaturePreference {
-  featureKey: string;
-  visible: boolean;
-  sortOrder: number;
-}
+// Re-exported from shared — canonical definitions live in shared/ports/feature-catalog.port.ts
+export type {
+  FeatureScope,
+  FeatureModule,
+  UserFeaturePreference,
+} from '@/modules/shared/ports/feature-catalog.port';
 
 // Types merged from forgeProfile.model.ts
 export type McpServerType = 'stdio' | 'sse' | 'http';
@@ -438,7 +425,12 @@ export interface WorkloadConfig {
   [key: string]: string | number | boolean | undefined;
 }
 
-export type CliTool = 'claude' | 'codex';
+export type CliTool = string;
+
+export const CLI_TOOL_LABELS: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+};
 
 export interface TerminalSidecarConfig {
   enabled: boolean;

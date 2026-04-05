@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from volundr.domain.services.repo import RepoService
+    from niuu.domain.services.repo import RepoService
 
 
 class RepoResponse(BaseModel):

@@ -80,18 +80,17 @@ class TestSessionServiceBroadcaster:
 
         result = await service.start_session(session.id)
 
-        # start_session now returns PROVISIONING (not RUNNING)
-        assert result.status == SessionStatus.PROVISIONING
+        # start_session returns STARTING immediately (async provisioning)
+        assert result.status == SessionStatus.STARTING
 
-        # Should have 2 updates: starting and provisioning
-        assert len(broadcaster.session_updated_events) == 2
+        # Should have 1 update so far: starting
+        assert len(broadcaster.session_updated_events) >= 1
         assert broadcaster.session_updated_events[0].status == SessionStatus.STARTING
-        assert broadcaster.session_updated_events[1].status == SessionStatus.PROVISIONING
 
-        # Wait for background readiness task to complete
-        await asyncio.sleep(0.1)
+        # Wait for background provisioning + readiness task to complete
+        await asyncio.sleep(0.5)
 
-        # After background task, should have a third update: running
+        # After background task, should have provisioning and running updates
         assert len(broadcaster.session_updated_events) == 3
         assert broadcaster.session_updated_events[2].status == SessionStatus.RUNNING
 
@@ -139,13 +138,16 @@ class TestSessionServiceBroadcaster:
 
         broadcaster._session_updated_events.clear()
 
-        with pytest.raises(RuntimeError):
-            await service.start_session(session.id)
+        # start_session returns immediately; failure happens in background
+        result = await service.start_session(session.id)
+        assert result.status == SessionStatus.STARTING
 
-        # Should have 2 updates: starting and failed
-        assert len(broadcaster.session_updated_events) == 2
+        # Wait for background task to fail
+        await asyncio.sleep(0.5)
+
+        # Should have starting + failed updates
         assert broadcaster.session_updated_events[0].status == SessionStatus.STARTING
-        assert broadcaster.session_updated_events[1].status == SessionStatus.FAILED
+        assert any(e.status == SessionStatus.FAILED for e in broadcaster.session_updated_events)
 
 
 class TestSessionServiceWithoutBroadcaster:
@@ -183,7 +185,7 @@ class TestSessionServiceWithoutBroadcaster:
         )
 
         started = await service.start_session(session.id)
-        assert started.status == SessionStatus.PROVISIONING
+        assert started.status == SessionStatus.STARTING
 
 
 class TestTokenServiceBroadcaster:
@@ -273,8 +275,8 @@ class TestSessionProvisioningState:
         )
 
     @pytest.mark.asyncio
-    async def test_start_session_returns_provisioning(self, service):
-        """start_session returns a session in PROVISIONING state."""
+    async def test_start_session_returns_starting(self, service):
+        """start_session returns a session in STARTING state (async provisioning)."""
         session = await service.create_session(
             name="Test",
             model="claude-sonnet-4-20250514",
@@ -282,10 +284,8 @@ class TestSessionProvisioningState:
         )
 
         result = await service.start_session(session.id)
-        assert result.status == SessionStatus.PROVISIONING
+        assert result.status == SessionStatus.STARTING
         assert result.chat_endpoint is not None
-        assert result.code_endpoint is not None
-        assert result.pod_name is not None
 
     @pytest.mark.asyncio
     async def test_poll_readiness_transitions_to_running(self, service, repository):
@@ -343,7 +343,7 @@ class TestSessionProvisioningState:
         )
 
         started = await service.start_session(session.id)
-        assert started.status == SessionStatus.PROVISIONING
+        assert started.status == SessionStatus.STARTING
 
         # The session should be stoppable from PROVISIONING
         assert started.can_stop()

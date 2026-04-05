@@ -223,47 +223,17 @@ Port interfaces define the contract between the UI and the backend. Adapters imp
 
 ## CLI
 
-Go binary built with Cobra that operates in two modes.
+Python package (`src/cli/`) built with Textual for the TUI and Click for command parsing. Compiled to a single native binary via Nuitka.
 
-### Local Mode
+### Features
 
-Runs the entire Volundr stack as a single process for local development:
+- Plugin-based service registry for managing local Volundr services
+- Textual TUI for interactive session management
+- Connects to a deployed Volundr instance or runs services locally
+- OIDC authentication (device flow and authorization code flow)
 
-- Embeds PostgreSQL (or connects to an existing instance)
-- Starts the Volundr API server
-- Runs a reverse proxy that routes traffic to the API and session pods
-- Manages session lifecycle locally
+### Stack
 
-Intended for individual developers who want Volundr without a Kubernetes cluster.
-
-### Remote Mode
-
-Connects to a deployed Volundr instance:
-
-- REST client for session CRUD, chronicles, git workflows
-- WebSocket client for interactive chat and terminal
-- Interactive TUI built with Bubble Tea (7 pages: sessions, chat, logs, chronicles, settings, help, admin)
-- Multi-context support for managing connections to multiple Volundr servers
-
-### Authentication
-
-The CLI supports two OIDC flows:
-
-- **Device flow** -- for headless environments (SSH, containers). User visits a URL and enters a code.
-- **Authorization code flow** -- opens a browser for login, receives the token via localhost callback.
-
-Tokens are cached locally and refreshed automatically.
-
-### Commands
-
-```
-volundr session create    # Create a new session
-volundr session start     # Start a stopped session
-volundr session stop      # Stop a running session
-volundr session list      # List sessions
-volundr chat              # Interactive chat with a session
-volundr chronicle list    # List chronicles
-volundr context           # Manage server contexts
-volundr local start       # Start the local stack
-volundr tui               # Launch the interactive TUI
-```
+- **Framework:** Click (commands) + Textual (TUI)
+- **Packaging:** Nuitka single-binary compilation
+- **Language:** Python 3.12+

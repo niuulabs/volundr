@@ -23,3 +23,7 @@ dependencies:
     version: ">=0.0.0-0"
     repository: "file://../tyr"
     condition: tyr.enabled
+  - name: niuu-shared
+    version: ">=0.0.0-0"
+    repository: "file://../niuu-shared"
+    condition: niuu-shared.enabled

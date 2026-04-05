@@ -5,3 +5,8 @@ dist-ssr
 .DS_Store
 /coverage
 *.log
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

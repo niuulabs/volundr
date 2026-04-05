@@ -607,7 +607,7 @@ Same structure as skuld-claude with different defaults:
 | `defaults.session.model` | `o4-mini` |
 | `defaults.broker.cliType` | `codex` |
 | `defaults.broker.transport` | `subprocess` |
-| `defaults.image.repository` | `ghcr.io/niuulabs/skuld-codex` |
+| `defaults.image.repository` | `ghcr.io/niuulabs/skuld` |
 
 ---
 
