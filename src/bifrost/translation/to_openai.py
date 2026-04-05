@@ -10,7 +10,6 @@ from bifrost.translation.models import (
     ContentBlock,
     Message,
     TextBlock,
-    ThinkingBlock,
     ToolDefinition,
     ToolResultBlock,
     ToolUseBlock,
