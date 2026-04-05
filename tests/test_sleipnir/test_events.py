@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import uuid
 from datetime import UTC, datetime
 
 import pytest
 
 from sleipnir.domain.events import (
     EVENT_NAMESPACES,
+    KNOWN_DOMAINS,
     SleipnirEvent,
     match_event_type,
     validate_event_type,
@@ -44,6 +47,35 @@ def test_event_construction_full():
     assert evt.ttl == 300
 
 
+# ---------------------------------------------------------------------------
+# event_id auto-generation
+# ---------------------------------------------------------------------------
+
+
+def test_event_id_auto_generated_when_not_supplied():
+    evt = make_event(event_id=None)
+    assert evt.event_id is not None
+    # Must be a valid UUID4 string
+    parsed = uuid.UUID(evt.event_id, version=4)
+    assert str(parsed) == evt.event_id
+
+
+def test_event_id_auto_generated_is_unique():
+    evt_a = make_event(event_id=None)
+    evt_b = make_event(event_id=None)
+    assert evt_a.event_id != evt_b.event_id
+
+
+def test_event_id_explicit_value_preserved():
+    evt = make_event(event_id="my-custom-id")
+    assert evt.event_id == "my-custom-id"
+
+
+# ---------------------------------------------------------------------------
+# urgency validation
+# ---------------------------------------------------------------------------
+
+
 def test_event_urgency_boundaries():
     lo = make_event(urgency=0.0)
     hi = make_event(urgency=1.0)
@@ -61,14 +93,43 @@ def test_event_urgency_invalid_high():
         make_event(urgency=1.1)
 
 
+# ---------------------------------------------------------------------------
+# domain validation
+# ---------------------------------------------------------------------------
+
+
+def test_event_known_domains_accepted():
+    for domain in KNOWN_DOMAINS:
+        evt = make_event(domain=domain)
+        assert evt.domain == domain
+
+
+def test_event_unknown_domain_rejected():
+    with pytest.raises(ValueError, match="Unknown domain"):
+        make_event(domain="finance")
+
+
+def test_event_unknown_domain_error_lists_known_domains():
+    with pytest.raises(ValueError) as exc_info:
+        make_event(domain="unknown_domain")
+    assert "business" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# event_type validation
+# ---------------------------------------------------------------------------
+
+
 def test_event_invalid_event_type_rejected():
     with pytest.raises(ValueError):
         make_event(event_type="INVALID")
 
 
-def test_event_unknown_namespace_rejected():
-    with pytest.raises(ValueError, match="Unknown namespace"):
-        make_event(event_type="unknown.namespace.event")
+def test_event_unknown_namespace_emits_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="sleipnir.domain.events"):
+        evt = make_event(event_type="external.tool.call")
+    assert evt.event_type == "external.tool.call"
+    assert any("external" in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +205,15 @@ def test_validate_known_namespaces():
         validate_event_type(f"{ns}.a.b.c")
 
 
-def test_validate_unknown_namespace():
-    with pytest.raises(ValueError, match="Unknown namespace"):
+def test_validate_unknown_namespace_emits_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="sleipnir.domain.events"):
         validate_event_type("unknown.event.type")
+    assert any("unknown" in r.message for r in caplog.records)
+
+
+def test_validate_unknown_namespace_does_not_raise():
+    # Unknown namespaces are warned about but not rejected (extensibility)
+    validate_event_type("newservice.event.fired")  # must not raise
 
 
 def test_validate_single_segment():

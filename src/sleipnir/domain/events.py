@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import fnmatch
+import logging
 import re
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Event type hierarchy
@@ -21,6 +25,11 @@ EVENT_NAMESPACES: dict[str, str] = {
     "system": "Infrastructure and lifecycle events (health, config, restart)",
 }
 
+#: Known high-level domain tags for events.
+KNOWN_DOMAINS: frozenset[str] = frozenset(
+    {"code", "infrastructure", "home", "business", "personal"}
+)
+
 #: Valid event type pattern: lowercase alphanumerics and dots, min 2 segments.
 _EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 
@@ -31,7 +40,8 @@ def validate_event_type(event_type: str) -> None:
     Rules:
     - Must be lowercase, dot-separated segments (e.g. ``ravn.tool.complete``)
     - Must have at least two segments
-    - First segment must be a known namespace
+    - First segment should be a known namespace; unknown namespaces emit a
+      warning instead of raising to allow extensibility.
     """
     if not _EVENT_TYPE_RE.match(event_type):
         raise ValueError(
@@ -40,9 +50,12 @@ def validate_event_type(event_type: str) -> None:
         )
     namespace = event_type.split(".")[0]
     if namespace not in EVENT_NAMESPACES:
-        raise ValueError(
-            f"Unknown namespace {namespace!r} in event type {event_type!r}. "
-            f"Known namespaces: {sorted(EVENT_NAMESPACES)}"
+        logger.warning(
+            "Unknown namespace %r in event type %r — not in registered namespaces %s. "
+            "Register the namespace in EVENT_NAMESPACES to suppress this warning.",
+            namespace,
+            event_type,
+            sorted(EVENT_NAMESPACES),
         )
 
 
@@ -64,17 +77,17 @@ def match_event_type(pattern: str, event_type: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SleipnirEvent:
     """A structured event published over the Sleipnir event bus.
 
-    :param event_id: Unique identifier (UUID string).
+    :param event_id: Unique identifier (UUID4 string). Auto-generated if not supplied.
     :param event_type: Hierarchical dot-separated type (e.g. ``ravn.tool.complete``).
     :param source: Publisher identity string (e.g. ``ravn:agent-abc123``).
     :param payload: Event-specific data dictionary.
     :param summary: Human-readable one-liner describing the event.
     :param urgency: Priority hint in the range ``0.0`` (lowest) to ``1.0`` (highest).
-    :param domain: High-level domain tag (e.g. ``code``, ``infrastructure``, ``home``).
+    :param domain: High-level domain tag; one of :data:`KNOWN_DOMAINS`.
     :param timestamp: When the event occurred (UTC).
     :param correlation_id: Groups causally related events across services.
     :param causation_id: ID of the event that directly caused this one.
@@ -82,7 +95,6 @@ class SleipnirEvent:
     :param ttl: Seconds until the event expires; ``None`` means no expiry.
     """
 
-    event_id: str
     event_type: str
     source: str
     payload: dict
@@ -90,6 +102,7 @@ class SleipnirEvent:
     urgency: float
     domain: str
     timestamp: datetime
+    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     correlation_id: str | None = None
     causation_id: str | None = None
     tenant_id: str | None = None
@@ -98,6 +111,10 @@ class SleipnirEvent:
     def __post_init__(self) -> None:
         if not 0.0 <= self.urgency <= 1.0:
             raise ValueError(f"urgency must be between 0.0 and 1.0, got {self.urgency}")
+        if self.domain not in KNOWN_DOMAINS:
+            raise ValueError(
+                f"Unknown domain {self.domain!r}. Known domains: {sorted(KNOWN_DOMAINS)}"
+            )
         validate_event_type(self.event_type)
 
     @staticmethod
