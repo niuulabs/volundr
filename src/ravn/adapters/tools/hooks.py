@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from ravn.domain.exceptions import PermissionDeniedError
 from ravn.domain.models import ToolResult
 from ravn.ports.hooks import HookPipelinePort, PostToolHookPort, PreToolHookPort
-from ravn.ports.permission import PermissionPort
+from ravn.ports.permission import Allow, NeedsApproval, PermissionEnforcerPort, PermissionPort
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,48 @@ class PermissionHook(PreToolHookPort):
         if not granted:
             raise PermissionDeniedError(tool_name, required)
         return args
+
+
+# ---------------------------------------------------------------------------
+# EnforcerHook
+# ---------------------------------------------------------------------------
+
+
+class EnforcerHook(PreToolHookPort):
+    """Pre-hook that runs the full PermissionEnforcer evaluation pipeline.
+
+    Unlike the simple ``PermissionHook`` (which checks a bare permission string),
+    this hook passes the tool name *and* all input arguments to the enforcer so
+    it can perform deep analysis: bash command parsing, file-path boundary checks,
+    mode-aware policy, etc.
+
+    Decisions
+    ---------
+    - Allow           → args passed through unmodified
+    - NeedsApproval   → raises PermissionDeniedError (pending CLI prompt support)
+    - Deny            → raises PermissionDeniedError
+    """
+
+    def __init__(self, enforcer: PermissionEnforcerPort) -> None:
+        self._enforcer = enforcer
+
+    async def pre_execute(
+        self,
+        tool_name: str,
+        args: dict,
+        agent_state: dict,
+    ) -> dict:
+        decision = await self._enforcer.evaluate(tool_name, args)
+
+        if isinstance(decision, Allow):
+            return args
+
+        if isinstance(decision, NeedsApproval):
+            # TODO(NIU-429): wire interactive prompt through the channel
+            raise PermissionDeniedError(tool_name, f"needs_approval:{decision.question}")
+
+        # isinstance(decision, Deny)
+        raise PermissionDeniedError(tool_name, decision.reason)
 
 
 # ---------------------------------------------------------------------------
