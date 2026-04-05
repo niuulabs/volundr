@@ -20,6 +20,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ravn.adapters.sqlite_common import CHARS_PER_TOKEN
 from ravn.domain.models import (
     Episode,
     EpisodeMatch,
@@ -74,9 +75,6 @@ AFTER UPDATE ON episodes BEGIN
     VALUES (new.rowid, new.summary, new.task_description, new.tags);
 END;
 """
-
-# Approximate chars per token for budget estimation.
-_CHARS_PER_TOKEN = 4
 
 # Estimated average character length of a single episode row, used to compute
 # the FTS5 LIMIT when searching for sessions.
@@ -239,7 +237,7 @@ class SqliteMemoryAdapter(MemoryPort):
         if not matches:
             return ""
 
-        budget_chars = self._prefetch_budget * _CHARS_PER_TOKEN
+        budget_chars = self._prefetch_budget * CHARS_PER_TOKEN
         blocks: list[str] = []
         used = 0
         for match in matches:

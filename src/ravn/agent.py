@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
@@ -10,6 +11,7 @@ from typing import Any
 
 from ravn.budget import IterationBudget, TokenEstimator
 from ravn.compression import CompressionResult, ContextCompressor
+from ravn.config import OutcomeConfig
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.exceptions import MaxIterationsError, PermissionDeniedError
 from ravn.domain.models import (
@@ -20,6 +22,7 @@ from ravn.domain.models import (
     Session,
     StopReason,
     StreamEventType,
+    TaskOutcome,
     TokenUsage,
     ToolCall,
     ToolResult,
@@ -28,6 +31,7 @@ from ravn.domain.models import (
 from ravn.ports.channel import ChannelPort
 from ravn.ports.llm import LLMPort, SystemPrompt
 from ravn.ports.memory import MemoryPort
+from ravn.ports.outcome import OutcomePort
 from ravn.ports.permission import PermissionPort
 from ravn.ports.tool import ToolPort
 from ravn.prompt_builder import PromptBuilder
@@ -80,6 +84,8 @@ class RavnAgent:
         iteration_budget: IterationBudget | None = None,
         compressor: ContextCompressor | None = None,
         prompt_builder: PromptBuilder | None = None,
+        outcome_port: OutcomePort | None = None,
+        outcome_config: OutcomeConfig | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -98,6 +104,14 @@ class RavnAgent:
         self._iteration_budget = iteration_budget
         self._compressor = compressor
         self._prompt_builder = prompt_builder
+        self._outcome_port = outcome_port
+        _oc = outcome_config or OutcomeConfig()
+        self._reflection_model = _oc.reflection_model
+        self._reflection_max_tokens = _oc.reflection_max_tokens
+        self._lessons_limit = _oc.lessons_limit
+        self._task_summary_max_chars = _oc.task_summary_max_chars
+        self._input_token_cost_per_million = _oc.input_token_cost_per_million
+        self._output_token_cost_per_million = _oc.output_token_cost_per_million
         self._session = Session()
         self._last_compression_result: CompressionResult | None = None
 
@@ -155,13 +169,43 @@ class RavnAgent:
         If a compressor is configured:
         - Context is compressed before each LLM call when the estimated token
           count exceeds the compression threshold.
+
+        If an outcome port is configured:
+        - Past lessons learned are injected into the system prompt.
+        - A TaskOutcome (with LLM reflection) is recorded after the turn.
         """
+        start_time = time.monotonic()
+
         # Check budget before starting the turn.
         if self._iteration_budget is not None and self._iteration_budget.exhausted:
             raise MaxIterationsError(self._max_iterations)
 
-        # Prefetch memory context and build the effective system prompt.
-        effective_system: SystemPrompt = await self._build_effective_system(user_input)
+        # Build the effective system prompt. When using a prompt_builder,
+        # memory context is handled internally as a named section.
+        # For the legacy path, prefetch memory here so memory_ctx is available
+        # for outcome recording.
+        memory_ctx = ""
+        if self._prompt_builder is not None:
+            effective_system: SystemPrompt = await self._build_effective_system(user_input)
+        else:
+            effective_system = self._system_prompt
+            if self._memory is not None:
+                try:
+                    memory_ctx = await self._memory.prefetch(user_input)
+                    if memory_ctx:
+                        effective_system = f"{effective_system}\n\n{memory_ctx}"
+                except Exception:
+                    logger.warning("Memory prefetch failed; continuing without context.")
+
+        if self._outcome_port is not None:
+            try:
+                lessons = await self._outcome_port.retrieve_lessons(
+                    user_input, limit=self._lessons_limit
+                )
+                if lessons:
+                    effective_system = f"{effective_system}\n\n{lessons}"
+            except Exception:
+                logger.warning("Outcome lessons retrieval failed; continuing without lessons.")
 
         self._session.add_message(Message(role="user", content=user_input))
 
@@ -170,8 +214,11 @@ class RavnAgent:
         cumulative_usage = TokenUsage(input_tokens=0, output_tokens=0)
         final_response = ""
         self._last_compression_result = None
+        iterations_used = 0
 
         for iteration in range(self._max_iterations):
+            iterations_used = iteration + 1
+
             # Enforce iteration budget.
             if self._iteration_budget is not None and self._iteration_budget.exhausted:
                 raise MaxIterationsError(self._max_iterations)
@@ -227,6 +274,7 @@ class RavnAgent:
             raise MaxIterationsError(self._max_iterations)
 
         self._session.record_turn(cumulative_usage)
+        duration_seconds = time.monotonic() - start_time
 
         result = TurnResult(
             response=final_response,
@@ -247,6 +295,18 @@ class RavnAgent:
                 await self._memory.record_episode(episode)
             except Exception:
                 logger.warning("Memory episode recording failed; continuing.")
+
+        if self._outcome_port is not None:
+            try:
+                await self._record_task_outcome(
+                    user_input=user_input,
+                    turn_result=result,
+                    iterations_used=iterations_used,
+                    duration_seconds=duration_seconds,
+                    past_context=memory_ctx,
+                )
+            except Exception:
+                logger.warning("Outcome recording failed; continuing.")
 
         return result
 
@@ -308,6 +368,94 @@ class RavnAgent:
                 result.removed_message_count,
             )
         return messages
+
+    async def _record_task_outcome(
+        self,
+        user_input: str,
+        turn_result: TurnResult,
+        iterations_used: int,
+        duration_seconds: float,
+        past_context: str,
+    ) -> None:
+        """Build a TaskOutcome, run a reflection LLM call, and persist via outcome_port."""
+        task_summary = user_input[: self._task_summary_max_chars]
+        if len(user_input) > self._task_summary_max_chars:
+            task_summary = task_summary.rstrip() + "…"
+
+        outcome_str = _determine_outcome(turn_result.tool_results)
+        tools_used = list({tc.name for tc in turn_result.tool_calls})
+        tags = _infer_tags(tools_used)
+        errors = [r.content for r in turn_result.tool_results if r.is_error]
+
+        cost_usd = _compute_cost(
+            turn_result.usage,
+            self._input_token_cost_per_million,
+            self._output_token_cost_per_million,
+        )
+
+        reflection = await self._run_reflection(
+            task_summary=task_summary,
+            outcome=outcome_str,
+            tools_used=tools_used,
+            errors=errors,
+            past_context=past_context,
+        )
+
+        task_outcome = TaskOutcome(
+            task_id=str(uuid.uuid4()),
+            task_summary=task_summary,
+            outcome=outcome_str,
+            tools_used=tools_used,
+            iterations_used=iterations_used,
+            cost_usd=cost_usd,
+            duration_seconds=duration_seconds,
+            errors=errors,
+            reflection=reflection,
+            tags=tags,
+            timestamp=datetime.now(UTC),
+        )
+        await self._outcome_port.record_outcome(task_outcome)  # type: ignore[union-attr]
+
+    async def _run_reflection(
+        self,
+        task_summary: str,
+        outcome: Outcome,
+        tools_used: list[str],
+        errors: list[str],
+        past_context: str,
+    ) -> str:
+        """Call the fast LLM to generate a compact post-task reflection."""
+        tools_str = ", ".join(tools_used) if tools_used else "none"
+        errors_str = "; ".join(errors[:5]) if errors else "none"
+        past_str = past_context[:800] if past_context else "none"
+
+        prompt = (
+            f"Task: {task_summary}\n"
+            f"Outcome: {outcome}\n"
+            f"Tools used: {tools_str}\n"
+            f"Errors: {errors_str}\n"
+            f"\nPast context:\n{past_str}\n"
+            "\nIn 3-5 sentences, briefly reflect:\n"
+            "1. What went well?\n"
+            "2. What would you do differently?\n"
+            "3. What patterns from previous episodes are confirmed or contradicted?"
+        )
+
+        try:
+            response = await self._llm.generate(
+                [{"role": "user", "content": prompt}],
+                tools=[],
+                system=(
+                    "You are Ravn reflecting on a completed task. "
+                    "Be concise, factual, and specific. No preamble."
+                ),
+                model=self._reflection_model,
+                max_tokens=self._reflection_max_tokens,
+            )
+            return response.content
+        except Exception as exc:
+            logger.warning("Reflection LLM call failed: %s", exc)
+            return f"Reflection unavailable: {exc}"
 
     async def _call_llm_streaming(
         self,
@@ -548,6 +696,18 @@ def _extract_episode(
         outcome=outcome,
         tags=tags,
         embedding=None,
+    )
+
+
+def _compute_cost(
+    usage: TokenUsage,
+    input_per_million: float,
+    output_per_million: float,
+) -> float:
+    """Estimate USD cost from token usage using per-million-token rates."""
+    return (
+        usage.input_tokens * input_per_million / 1_000_000
+        + usage.output_tokens * output_per_million / 1_000_000
     )
 
 
