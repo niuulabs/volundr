@@ -34,6 +34,15 @@ class ToolPort(ABC):
         """Permission string that must be granted before this tool executes."""
         ...
 
+    @property
+    def parallelisable(self) -> bool:
+        """Whether this tool can run concurrently with other tools in the same batch.
+
+        Defaults to True. Override to False for stateful tools where ordering
+        matters (e.g. git_commit, git_checkout, todo_write).
+        """
+        return True
+
     @abstractmethod
     async def execute(self, input: dict) -> ToolResult:
         """Execute the tool with the given input and return a result."""
