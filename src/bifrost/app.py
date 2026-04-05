@@ -21,8 +21,9 @@ from fastapi import FastAPI, Request, Response
 
 from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
-from bifrost.config import BifrostConfig
+from bifrost.config import BifrostConfig, CacheMode
 from bifrost.inbound.routes import create_router
+from bifrost.ports.cache import CachePort
 from bifrost.ports.events import CostEventEmitter
 from bifrost.ports.key_vault import KeyVaultPort
 from bifrost.ports.rules import RuleEnginePort
@@ -115,6 +116,28 @@ def _build_key_vault(config: BifrostConfig) -> KeyVaultPort:
 
 
 # ---------------------------------------------------------------------------
+# Cache factory
+# ---------------------------------------------------------------------------
+
+
+def _build_cache(config: BifrostConfig) -> CachePort:
+    """Instantiate the configured cache adapter."""
+    match config.cache.mode:
+        case CacheMode.REDIS:
+            from bifrost.adapters.cache.redis_cache import RedisCache
+
+            return RedisCache(redis_url=config.cache.redis_url)
+        case CacheMode.MEMORY:
+            from bifrost.adapters.cache.memory_cache import MemoryCache
+
+            return MemoryCache(max_entries=config.cache.max_memory_entries)
+        case _:
+            from bifrost.adapters.cache.disabled import DisabledCache
+
+            return DisabledCache()
+
+
+# ---------------------------------------------------------------------------
 # Pricing helpers
 # ---------------------------------------------------------------------------
 
@@ -159,6 +182,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
     key_vault = _build_key_vault(config)
     router = ModelRouter(config, rule_engine=rule_engine, key_vault=key_vault)
     store = _build_usage_store(config)
+    cache = _build_cache(config)
     pricing_overrides = _pricing_overrides(config)
     auth_adapter = build_auth_adapter(config.auth_mode, config.effective_pat_secret())
     event_emitter = _build_event_emitter(config)
@@ -181,6 +205,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
         if hasattr(store, "close"):
             await store.close()
         await event_emitter.close()
+        await cache.close()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -204,6 +229,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
         pricing_overrides=pricing_overrides,
         auth_adapter=auth_adapter,
         event_emitter=event_emitter,
+        cache=cache,
     )
     app.include_router(api_router)
 

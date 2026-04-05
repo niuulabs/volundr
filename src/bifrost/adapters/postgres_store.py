@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS usage_records (
     cost_usd           NUMERIC   NOT NULL DEFAULT 0,
     latency_ms         REAL      NOT NULL DEFAULT 0,
     streaming          BOOLEAN   NOT NULL DEFAULT FALSE,
+    cache_hit          BOOLEAN   NOT NULL DEFAULT FALSE,
     timestamp          TIMESTAMPTZ NOT NULL
 );
 """
@@ -54,13 +55,18 @@ CREATE INDEX IF NOT EXISTS idx_usage_model      ON usage_records(model);
 CREATE INDEX IF NOT EXISTS idx_usage_provider   ON usage_records(provider);
 """
 
+# Additive migrations for databases created before NIU-486.
+_MIGRATE_COLUMNS = [
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS cache_hit BOOLEAN NOT NULL DEFAULT FALSE",
+]
+
 _INSERT = """
 INSERT INTO usage_records
     (request_id, agent_id, tenant_id, session_id, saga_id,
      model, provider,
      input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
-     cost_usd, latency_ms, streaming, timestamp)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     cost_usd, latency_ms, streaming, cache_hit, timestamp)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 """
 
 
@@ -85,6 +91,7 @@ def _record_from_row(row: asyncpg.Record) -> UsageRecord:
         cost_usd=float(row["cost_usd"]),
         latency_ms=row["latency_ms"],
         streaming=row["streaming"],
+        cache_hit=row["cache_hit"],
         timestamp=row["timestamp"].replace(tzinfo=UTC),
     )
 
@@ -151,6 +158,8 @@ class PostgresUsageStore(UsageStore):
             async with self._pool.acquire() as conn:
                 await conn.execute(_CREATE_TABLE)
                 await conn.execute(_CREATE_INDEXES)
+                for stmt in _MIGRATE_COLUMNS:
+                    await conn.execute(stmt)
         return self._pool
 
     async def close(self) -> None:
@@ -182,6 +191,7 @@ class PostgresUsageStore(UsageStore):
                 usage.cost_usd,
                 usage.latency_ms,
                 usage.streaming,
+                usage.cache_hit,
                 _ts(usage.timestamp),
             )
 
@@ -201,7 +211,7 @@ class PostgresUsageStore(UsageStore):
             SELECT request_id, agent_id, tenant_id, session_id, saga_id,
                    model, provider,
                    input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-                   reasoning_tokens, cost_usd, latency_ms, streaming, timestamp
+                   reasoning_tokens, cost_usd, latency_ms, streaming, cache_hit, timestamp
             FROM usage_records {where}
             ORDER BY timestamp DESC
             LIMIT ${limit_idx}
