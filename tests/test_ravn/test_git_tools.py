@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 from pathlib import Path
@@ -324,6 +325,11 @@ class TestGitCheckoutTool:
         assert "warning" in data
         assert "uncommitted" in data["warning"]
 
+    async def test_branch_starting_with_dash_returns_error(self, git_repo: Path):
+        result = await self._tool(git_repo).execute({"branch": "--all"})
+        assert result.is_error
+        assert "must not start with '-'" in result.content
+
     async def test_required_permission(self, git_repo: Path):
         assert self._tool(git_repo).required_permission == "git:write"
 
@@ -375,8 +381,66 @@ class TestGitLogTool:
         result = await self._tool(git_repo).execute({"branch": "no-such-branch"})
         assert result.is_error
 
+    async def test_flag_injection_branch_returns_error(self, git_repo: Path):
+        result = await self._tool(git_repo).execute({"branch": "--all"})
+        assert result.is_error
+        assert "must not start with '-'" in result.content
+
+    async def test_message_with_null_byte_sep_parsed_correctly(self, git_repo: Path):
+        """Commit messages containing the old '||SEP||' string are handled correctly."""
+        (git_repo / "sep.py").write_text("x\n")
+        _git(git_repo, "add", "sep.py")
+        _git(git_repo, "commit", "-m", "fix: message with ||SEP|| inside")
+        result = await self._tool(git_repo).execute({"depth": 1})
+        assert not result.is_error
+        data = json.loads(result.content)
+        assert data["count"] == 1
+        assert "||SEP||" in data["commits"][0]["message"]
+
     async def test_required_permission(self, git_repo: Path):
         assert self._tool(git_repo).required_permission == "git:read"
+
+
+# ---------------------------------------------------------------------------
+# Timeout behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestTimeouts:
+    async def test_run_git_timeout_returns_error(self, git_repo: Path):
+        """A stuck git process should return a timeout error, not hang forever."""
+        with patch(
+            "ravn.adapters.tools.git.asyncio.wait_for",
+            side_effect=asyncio.TimeoutError,
+        ):
+            result = await GitStatusTool(workspace=git_repo).execute({})
+        assert result.is_error
+        assert "timed out" in result.content
+
+    async def test_run_gh_timeout_returns_error(self, git_repo: Path):
+        """A stuck gh process should return a timeout error, not hang forever."""
+        from unittest.mock import MagicMock
+
+        # communicate() is passed to the mocked wait_for (which never calls it),
+        # so it must NOT be a coroutine to avoid "never awaited" warnings.
+        mock_proc = MagicMock()
+        mock_proc.communicate = MagicMock()
+        mock_proc.kill = MagicMock()  # proc.kill() is a sync call
+        mock_proc.wait = AsyncMock()  # await proc.wait() is async
+        with (
+            patch("ravn.adapters.tools.git._gh_available", AsyncMock(return_value=True)),
+            patch(
+                "ravn.adapters.tools.git.asyncio.create_subprocess_exec",
+                AsyncMock(return_value=mock_proc),
+            ),
+            patch(
+                "ravn.adapters.tools.git.asyncio.wait_for",
+                side_effect=asyncio.TimeoutError,
+            ),
+        ):
+            result = await GitPrTool(workspace=git_repo).execute({"title": "My PR"})
+        assert result.is_error
+        assert "timed out" in result.content
 
 
 # ---------------------------------------------------------------------------

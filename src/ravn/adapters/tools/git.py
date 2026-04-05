@@ -16,8 +16,11 @@ _PERMISSION_READ = "git:read"
 _PERMISSION_WRITE = "git:write"
 
 
-async def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    """Run a git subcommand and return (returncode, stdout, stderr)."""
+async def _run_git(args: list[str], cwd: Path, timeout: float = 30.0) -> tuple[int, str, str]:
+    """Run a git subcommand and return (returncode, stdout, stderr).
+
+    Raises no exceptions; a stuck process is killed and (-1, "", error_msg) is returned.
+    """
     proc = await asyncio.create_subprocess_exec(
         "git",
         "-C",
@@ -26,7 +29,14 @@ async def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout_b, stderr_b = await proc.communicate()
+    coro = proc.communicate()
+    try:
+        stdout_b, stderr_b = await asyncio.wait_for(coro, timeout=timeout)
+    except TimeoutError:
+        coro.close()
+        proc.kill()
+        await proc.wait()
+        return -1, "", f"Command timed out after {timeout}s"
     returncode = proc.returncode if proc.returncode is not None else 0
     return returncode, stdout_b.decode(errors="replace"), stderr_b.decode(errors="replace")
 
@@ -46,8 +56,11 @@ async def _gh_available() -> bool:
         return False
 
 
-async def _run_gh(*args: str, cwd: Path) -> tuple[int, str, str]:
-    """Run a gh subcommand and return (returncode, stdout, stderr)."""
+async def _run_gh(*args: str, cwd: Path, timeout: float = 30.0) -> tuple[int, str, str]:
+    """Run a gh subcommand and return (returncode, stdout, stderr).
+
+    Raises no exceptions; a stuck process is killed and (-1, "", error_msg) is returned.
+    """
     proc = await asyncio.create_subprocess_exec(
         "gh",
         *args,
@@ -55,7 +68,14 @@ async def _run_gh(*args: str, cwd: Path) -> tuple[int, str, str]:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout_b, stderr_b = await proc.communicate()
+    coro = proc.communicate()
+    try:
+        stdout_b, stderr_b = await asyncio.wait_for(coro, timeout=timeout)
+    except TimeoutError:
+        coro.close()
+        proc.kill()
+        await proc.wait()
+        return -1, "", f"Command timed out after {timeout}s"
     returncode = proc.returncode if proc.returncode is not None else 0
     return returncode, stdout_b.decode(errors="replace"), stderr_b.decode(errors="replace")
 
@@ -365,6 +385,9 @@ class GitCheckoutTool(ToolPort):
         if not branch:
             return _err("branch name must not be empty")
 
+        if branch.startswith("-"):
+            return _err("branch name must not start with '-'")
+
         # Warn when working tree is dirty, but do not block the checkout.
         warning: str | None = None
         code, stdout, _ = await _run_git(["status", "--porcelain=v2", "--branch"], self._workspace)
@@ -425,11 +448,19 @@ class GitLogTool(ToolPort):
         depth = input.get("depth", 10)
         branch = (input.get("branch") or "HEAD").strip() or "HEAD"
 
-        sep = "||SEP||"
-        fmt = f"%H{sep}%h{sep}%an{sep}%ae{sep}%ai{sep}%s"
+        # Reject leading dashes to prevent flag injection (e.g. "--all").
+        if branch != "HEAD" and branch.startswith("-"):
+            return _err("branch name must not start with '-'")
 
+        sep = "\x00"
+        # Use git's %x00 escape so the argv string contains no NUL bytes, but
+        # the output is NUL-delimited.  NUL cannot appear in git commit data.
+        fmt = "%H%x00%h%x00%an%x00%ae%x00%ai%x00%s"
+
+        # Place branch BEFORE "--" so git treats it as a revision, not a
+        # pathspec.  The trailing "--" tells git no path filters follow.
         code, stdout, stderr = await _run_git(
-            ["log", f"-n{depth}", f"--format={fmt}", branch],
+            ["log", f"-n{depth}", f"--format={fmt}", branch, "--"],
             self._workspace,
         )
         if code != 0:
