@@ -121,6 +121,23 @@ class FileToolsConfig(BaseModel):
     )
 
 
+class TerminalToolConfig(BaseModel):
+    """Terminal tool configuration."""
+
+    persistent_shell: bool = Field(
+        default=True,
+        description="Keep a single shell process alive across tool calls.",
+    )
+    shell: str = Field(
+        default="/bin/bash",
+        description="Shell executable used for command execution.",
+    )
+    timeout_seconds: float = Field(
+        default=30.0,
+        description="Seconds to wait for a command to complete before timing out.",
+    )
+
+
 class ToolsConfig(BaseModel):
     """Tool availability and custom adapter configuration."""
 
@@ -142,6 +159,10 @@ class ToolsConfig(BaseModel):
     file: FileToolsConfig = Field(
         default_factory=FileToolsConfig,
         description="Limits and thresholds for the built-in file tools.",
+    )
+    terminal: TerminalToolConfig = Field(
+        default_factory=TerminalToolConfig,
+        description="Persistent shell configuration for the built-in terminal tool.",
     )
 
 
