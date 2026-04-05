@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import ravn.adapters.migrate_memory as _migrate_memory_module
 from ravn.adapters.migrate_memory import migrate_sqlite_to_postgres
 
 # ---------------------------------------------------------------------------
@@ -87,6 +88,13 @@ def _make_reusable_pool(conn: AsyncMock) -> MagicMock:
     return pool
 
 
+def _patch_asyncpg(pool: MagicMock):
+    """Return a patch.object context manager replacing asyncpg in migrate_memory."""
+    mock = MagicMock()
+    mock.create_pool = AsyncMock(return_value=pool)
+    return patch.object(_migrate_memory_module, "asyncpg", mock)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -105,7 +113,7 @@ class TestMigrateSqliteToPostgres:
         _populate_sqlite(db_path, [])
         conn = _make_pg_conn()
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             count = await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",
@@ -121,7 +129,7 @@ class TestMigrateSqliteToPostgres:
         _populate_sqlite(db_path, episodes)
         conn = _make_pg_conn(execute_result="INSERT 0 1")
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             count = await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",
@@ -137,7 +145,7 @@ class TestMigrateSqliteToPostgres:
         # Simulate PostgreSQL returning "INSERT 0 0" (conflict, no row inserted).
         conn = _make_pg_conn(execute_result="INSERT 0 0")
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             count = await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",
@@ -158,7 +166,7 @@ class TestMigrateSqliteToPostgres:
         def _on_progress(done: int, total: int) -> None:
             calls.append((done, total))
 
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",
@@ -177,7 +185,7 @@ class TestMigrateSqliteToPostgres:
         _populate_sqlite(db_path, episodes)
         conn = _make_pg_conn()
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",
@@ -194,7 +202,7 @@ class TestMigrateSqliteToPostgres:
         )
         conn = _make_pg_conn()
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",
@@ -210,7 +218,7 @@ class TestMigrateSqliteToPostgres:
         conn = _make_pg_conn()
         conn.execute = AsyncMock(side_effect=RuntimeError("db error"))
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             with pytest.raises(RuntimeError, match="db error"):
                 await migrate_sqlite_to_postgres(
                     sqlite_path=db_path,
@@ -233,7 +241,7 @@ class TestMigrateSqliteToPostgres:
         )
         conn = _make_pg_conn()
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",
@@ -264,7 +272,7 @@ class TestMigrateSqliteToPostgres:
 
         pg_conn = _make_pg_conn()
         pool = _make_reusable_pool(pg_conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             # Should complete without raising despite invalid timestamp.
             count = await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
@@ -287,7 +295,7 @@ class TestMigrateSqliteToPostgres:
         )
         conn = _make_pg_conn()
         pool = _make_reusable_pool(conn)
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
+        with _patch_asyncpg(pool):
             await migrate_sqlite_to_postgres(
                 sqlite_path=db_path,
                 postgres_dsn="postgresql://u:p@h/db",

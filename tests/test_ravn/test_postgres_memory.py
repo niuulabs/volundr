@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import ravn.adapters.postgres_memory as _postgres_memory_module
 from ravn.adapters.postgres_memory import (
     PostgresMemoryAdapter,
     _combined_score,
@@ -44,9 +45,9 @@ def _ep(
         timestamp=timestamp or datetime.now(UTC),
         summary=summary,
         task_description=task_description,
-        tools_used=tools_used or ["bash"],
+        tools_used=tools_used if tools_used is not None else ["bash"],
         outcome=outcome,
-        tags=tags or ["shell"],
+        tags=tags if tags is not None else ["shell"],
         embedding=embedding,
     )
 
@@ -99,11 +100,11 @@ def _make_pool(conn: AsyncMock) -> MagicMock:
     return pool
 
 
-async def _make_adapter(
+def _make_adapter(
     conn: AsyncMock | None = None,
     pgvector: bool = False,
 ) -> PostgresMemoryAdapter:
-    """Build and initialize an adapter with a mocked asyncpg pool."""
+    """Build an adapter with a mock pool injected directly (no I/O)."""
     if conn is None:
         conn = _make_conn()
 
@@ -116,13 +117,17 @@ async def _make_adapter(
         prefetch_min_relevance=0.0,
         recency_half_life_days=14.0,
     )
-
-    with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)):
-        await adapter.initialize()
-
-    # Override pgvector flag after init.
+    # Inject the mock pool directly to avoid hitting asyncpg.create_pool.
+    adapter._pool = pool
     adapter._pgvector_available = pgvector
     return adapter
+
+
+def _patch_asyncpg(pool: MagicMock) -> Any:
+    """Return a patch.object context manager that replaces asyncpg in postgres_memory."""
+    mock = MagicMock()
+    mock.create_pool = AsyncMock(return_value=pool)
+    return patch.object(_postgres_memory_module, "asyncpg", mock)
 
 
 # ---------------------------------------------------------------------------
@@ -307,33 +312,33 @@ class TestPostgresMemoryAdapterInit:
         pool = _make_pool(conn)
 
         adapter = PostgresMemoryAdapter(dsn="postgresql://u:p@h/db")
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=pool)) as mock_create:
+        with _patch_asyncpg(pool) as mock_asyncpg:
             await adapter.initialize()
 
-        mock_create.assert_awaited_once()
+        mock_asyncpg.create_pool.assert_awaited_once()
         assert adapter._pool is pool
 
     async def test_initialize_detects_pgvector_present(self) -> None:
         conn = _make_conn(fetchrow_result={"1": 1})
         adapter = PostgresMemoryAdapter(dsn="postgresql://u:p@h/db")
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=_make_pool(conn))):
+        with _patch_asyncpg(_make_pool(conn)):
             await adapter.initialize()
         assert adapter.pgvector_available is True
 
     async def test_initialize_detects_pgvector_absent(self) -> None:
         conn = _make_conn(fetchrow_result=None)
         adapter = PostgresMemoryAdapter(dsn="postgresql://u:p@h/db")
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=_make_pool(conn))):
+        with _patch_asyncpg(_make_pool(conn)):
             await adapter.initialize()
         assert adapter.pgvector_available is False
 
     async def test_close_clears_pool(self) -> None:
-        adapter = await _make_adapter()
+        adapter = _make_adapter()
         await adapter.close()
         assert adapter._pool is None
 
     async def test_close_idempotent(self) -> None:
-        adapter = await _make_adapter()
+        adapter = _make_adapter()
         await adapter.close()
         await adapter.close()  # Must not raise.
 
@@ -351,7 +356,7 @@ class TestPostgresMemoryAdapterInit:
 class TestRecordEpisode:
     async def test_calls_execute_with_upsert(self) -> None:
         conn = _make_conn()
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         await adapter.record_episode(_ep(episode_id="ep-record"))
         conn.execute.assert_awaited_once()
         sql_arg = conn.execute.call_args[0][0]
@@ -360,7 +365,7 @@ class TestRecordEpisode:
 
     async def test_passes_correct_episode_fields(self) -> None:
         conn = _make_conn()
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         ep = _ep(
             episode_id="ep-fields",
             session_id="sess-fields",
@@ -378,7 +383,7 @@ class TestRecordEpisode:
 
     async def test_embedding_serialized_as_json(self) -> None:
         conn = _make_conn()
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         ep = _ep(embedding=[0.1, 0.2, 0.3])
         await adapter.record_episode(ep)
         args = conn.execute.call_args[0]
@@ -387,7 +392,7 @@ class TestRecordEpisode:
 
     async def test_null_embedding_passed_as_none(self) -> None:
         conn = _make_conn()
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         ep = _ep(embedding=None)
         await adapter.record_episode(ep)
         args = conn.execute.call_args[0]
@@ -401,20 +406,20 @@ class TestRecordEpisode:
 
 class TestQueryEpisodes:
     async def test_empty_query_returns_empty(self) -> None:
-        adapter = await _make_adapter()
+        adapter = _make_adapter()
         result = await adapter.query_episodes("   ")
         assert result == []
 
     async def test_no_db_rows_returns_empty(self) -> None:
         conn = _make_conn(fetch_result=[])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.query_episodes("python tests")
         assert result == []
 
     async def test_returns_episode_matches(self) -> None:
         ep = _ep(episode_id="e1", summary="ran unit tests")
         conn = _make_conn(fetch_result=[_make_row(ep, rank_score=0.8)])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.query_episodes("unit tests", min_relevance=0.0)
         assert len(result) == 1
         assert result[0].episode.episode_id == "e1"
@@ -422,7 +427,7 @@ class TestQueryEpisodes:
     async def test_relevance_filtered_by_min_relevance(self) -> None:
         ep = _ep(timestamp=datetime.now(UTC) - timedelta(days=60), outcome=Outcome.FAILURE)
         conn = _make_conn(fetch_result=[_make_row(ep, rank_score=0.001)])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.query_episodes("unit tests", min_relevance=0.5)
         assert result == []
 
@@ -436,7 +441,7 @@ class TestQueryEpisodes:
         conn = _make_conn(
             fetch_result=[_make_row(ep1, rank_score=0.9), _make_row(ep2, rank_score=0.9)]
         )
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.query_episodes("tests", min_relevance=0.0)
         if len(result) >= 2:
             assert result[0].relevance >= result[1].relevance
@@ -444,13 +449,13 @@ class TestQueryEpisodes:
     async def test_respects_limit(self) -> None:
         rows = [_make_row(_ep(episode_id=f"e{i}"), rank_score=0.8) for i in range(6)]
         conn = _make_conn(fetch_result=rows)
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.query_episodes("python", limit=3, min_relevance=0.0)
         assert len(result) <= 3
 
     async def test_uses_websearch_to_tsquery(self) -> None:
         conn = _make_conn(fetch_result=[])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         await adapter.query_episodes("python unit tests")
         sql_arg = conn.fetch.call_args[0][0]
         assert "websearch_to_tsquery" in sql_arg
@@ -458,14 +463,14 @@ class TestQueryEpisodes:
     async def test_relevance_scores_in_range(self) -> None:
         ep = _ep()
         conn = _make_conn(fetch_result=[_make_row(ep, rank_score=0.7)])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.query_episodes("tests", min_relevance=0.0)
         for m in result:
             assert 0.0 <= m.relevance <= 1.0
 
     async def test_fetches_extra_for_post_filter(self) -> None:
         conn = _make_conn(fetch_result=[])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         await adapter.query_episodes("python", limit=5)
         call_args = conn.fetch.call_args[0]
         # Limit parameter is limit * 3 = 15.
@@ -480,14 +485,14 @@ class TestQueryEpisodes:
 class TestPrefetch:
     async def test_empty_when_no_matches(self) -> None:
         conn = _make_conn(fetch_result=[])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.prefetch("python crash")
         assert result == ""
 
     async def test_returns_context_block(self) -> None:
         ep = _ep(summary="debugged python import error", outcome=Outcome.SUCCESS)
         conn = _make_conn(fetch_result=[_make_row(ep, rank_score=0.9)])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.prefetch("python error")
         assert "Relevant Past Context" in result
         assert "debugged python import error" in result
@@ -500,14 +505,13 @@ class TestPrefetch:
             prefetch_budget=10,
             prefetch_min_relevance=0.0,
         )
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=_make_pool(conn))):
-            await adapter.initialize()
+        adapter._pool = _make_pool(conn)
         result = await adapter.prefetch("long task")
         assert isinstance(result, str)
 
     async def test_empty_query_returns_empty(self) -> None:
         conn = _make_conn(fetch_result=[])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.prefetch("   ")
         assert result == ""
 
@@ -515,7 +519,7 @@ class TestPrefetch:
         ts = datetime(2025, 6, 1, tzinfo=UTC)
         ep = _ep(summary="fixed database migration", timestamp=ts, outcome=Outcome.SUCCESS)
         conn = _make_conn(fetch_result=[_make_row(ep, rank_score=0.8)])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.prefetch("database migration")
         if result:
             assert "2025-06-01" in result
@@ -527,7 +531,7 @@ class TestPrefetch:
         conn = _make_conn(
             fetch_result=[_make_row(ep1, rank_score=0.9), _make_row(ep2, rank_score=0.8)]
         )
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.prefetch("configured")
         if result and result.count("---") >= 1:
             assert "---" in result
@@ -540,13 +544,13 @@ class TestPrefetch:
 
 class TestSearchSessions:
     async def test_empty_query_returns_empty(self) -> None:
-        adapter = await _make_adapter()
+        adapter = _make_adapter()
         result = await adapter.search_sessions("  ")
         assert result == []
 
     async def test_no_rows_returns_empty(self) -> None:
         conn = _make_conn(fetch_result=[])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         result = await adapter.search_sessions("python")
         assert result == []
 
@@ -557,7 +561,7 @@ class TestSearchSessions:
         conn = _make_conn(
             fetch_result=[_make_row(ep1), _make_row(ep2), _make_row(ep3)]
         )
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         summaries = await adapter.search_sessions("git", limit=10)
         session_ids = {s.session_id for s in summaries}
         assert "s1" in session_ids
@@ -569,7 +573,7 @@ class TestSearchSessions:
             for i in range(3)
         ]
         conn = _make_conn(fetch_result=[_make_row(ep) for ep in eps])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         summaries = await adapter.search_sessions("refactored", limit=5)
         s1 = next((s for s in summaries if s.session_id == "s1"), None)
         assert s1 is not None
@@ -581,7 +585,7 @@ class TestSearchSessions:
         ep_old = _ep(episode_id="old", session_id="s-old", summary="old task", timestamp=ts_old)
         ep_new = _ep(episode_id="new", session_id="s-new", summary="old task", timestamp=ts_new)
         conn = _make_conn(fetch_result=[_make_row(ep_old), _make_row(ep_new)])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         summaries = await adapter.search_sessions("old task", limit=5)
         if len(summaries) >= 2:
             assert summaries[0].last_active >= summaries[1].last_active
@@ -592,7 +596,7 @@ class TestSearchSessions:
             for i in range(5)
         ]
         conn = _make_conn(fetch_result=[_make_row(ep) for ep in eps])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         summaries = await adapter.search_sessions("fixed bug", limit=2)
         assert len(summaries) <= 2
 
@@ -600,14 +604,14 @@ class TestSearchSessions:
         tags = [f"tag{i}" for i in range(15)]
         ep = _ep(session_id="s1", tags=tags)
         conn = _make_conn(fetch_result=[_make_row(ep)])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         summaries = await adapter.search_sessions("refactored", limit=5)
         if summaries:
             assert len(summaries[0].tags) <= 10
 
     async def test_uses_websearch_to_tsquery(self) -> None:
         conn = _make_conn(fetch_result=[])
-        adapter = await _make_adapter(conn)
+        adapter = _make_adapter(conn)
         await adapter.search_sessions("python tests")
         sql_arg = conn.fetch.call_args[0][0]
         assert "websearch_to_tsquery" in sql_arg
@@ -620,8 +624,7 @@ class TestSearchSessions:
             dsn="postgresql://u:p@h/db",
             session_search_truncate_chars=100,
         )
-        with patch("asyncpg.create_pool", new=AsyncMock(return_value=_make_pool(conn))):
-            await adapter.initialize()
+        adapter._pool = _make_pool(conn)
         summaries = await adapter.search_sessions("big task", limit=5)
         assert isinstance(summaries, list)
 
@@ -633,17 +636,17 @@ class TestSearchSessions:
 
 class TestSharedContext:
     async def test_default_none(self) -> None:
-        adapter = await _make_adapter()
+        adapter = _make_adapter()
         assert adapter.get_shared_context() is None
 
     async def test_inject_and_retrieve(self) -> None:
-        adapter = await _make_adapter()
+        adapter = _make_adapter()
         ctx = SharedContext(data={"agent": "sköll"})
         adapter.inject_shared_context(ctx)
         assert adapter.get_shared_context() is ctx
 
     async def test_inject_replaces_previous(self) -> None:
-        adapter = await _make_adapter()
+        adapter = _make_adapter()
         adapter.inject_shared_context(SharedContext(data={"a": 1}))
         adapter.inject_shared_context(SharedContext(data={"b": 2}))
         ctx = adapter.get_shared_context()
