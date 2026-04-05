@@ -303,10 +303,10 @@ class TestEditFileToolExtended:
     # --- empty old_string ---
 
     @pytest.mark.asyncio
-    async def test_empty_old_string_count_zero_returns_error(self, tmp_path: Path) -> None:
+    async def test_old_string_not_found_returns_error(self, tmp_path: Path) -> None:
         f = tmp_path / "file.txt"
         f.write_text("something")
-        # Empty old_string counts 0 occurrences (vacuously not found)
+        # old_string not present in file — should return an error
         result = await self._tool(tmp_path).execute(
             {"path": str(f), "old_string": "notpresent", "new_string": "x"}
         )

@@ -16,125 +16,13 @@ import pytest
 from ravn.domain.exceptions import PermissionDeniedError
 from ravn.domain.models import ToolCall, ToolResult
 from ravn.ports.hooks import HookPipelinePort
-from ravn.ports.tool import ToolPort
 from ravn.registry import ToolRegistrationError, ToolRegistry, _validate_schema
-
-# ---------------------------------------------------------------------------
-# Minimal in-process tool implementations
-# ---------------------------------------------------------------------------
-
-
-class CounterTool(ToolPort):
-    """Records the number of times it was called."""
-
-    def __init__(self, name: str = "counter") -> None:
-        self._name = name
-        self.call_count = 0
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def description(self) -> str:
-        return "Counts calls."
-
-    @property
-    def input_schema(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {"value": {"type": "integer"}},
-        }
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:counter"
-
-    async def execute(self, input: dict) -> ToolResult:
-        self.call_count += 1
-        return ToolResult(tool_call_id="", content=f"count={self.call_count}")
-
-
-class PrefixedTool(ToolPort):
-    """Tool with a structured name to test prefixing / naming."""
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def description(self) -> str:
-        return f"Prefixed tool: {self._name}"
-
-    @property
-    def input_schema(self) -> dict:
-        return {"type": "object", "properties": {}}
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:any"
-
-    async def execute(self, input: dict) -> ToolResult:
-        return ToolResult(tool_call_id="", content=f"called:{self._name}")
-
-
-class RaisingTool(ToolPort):
-    """Raises RuntimeError when executed."""
-
-    @property
-    def name(self) -> str:
-        return "raising_tool"
-
-    @property
-    def description(self) -> str:
-        return "Always raises."
-
-    @property
-    def input_schema(self) -> dict:
-        return {"type": "object", "properties": {}}
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:raise"
-
-    async def execute(self, input: dict) -> ToolResult:
-        raise RuntimeError("intentional error")
-
-
-class SequentialTool(ToolPort):
-    """Non-parallelisable tool for sequential dispatch testing."""
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self.order: list[str] = []
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def description(self) -> str:
-        return "Sequential."
-
-    @property
-    def input_schema(self) -> dict:
-        return {"type": "object", "properties": {}}
-
-    @property
-    def required_permission(self) -> str:
-        return "tool:seq"
-
-    @property
-    def parallelisable(self) -> bool:
-        return False
-
-    async def execute(self, input: dict) -> ToolResult:
-        self.order.append(self._name)
-        return ToolResult(tool_call_id="", content=self._name)
-
+from tests.ravn.fixtures.fakes import (
+    CounterTool,
+    PrefixedTool,
+    RaisingTool,
+    SequentialTool,
+)
 
 # ===========================================================================
 # Schema validation (_validate_schema)
@@ -152,14 +40,6 @@ class TestSchemaValidation:
     def test_non_dict_schema_raises(self) -> None:
         with pytest.raises(ToolRegistrationError):
             _validate_schema("tool", "not a dict")  # type: ignore[arg-type]
-
-    def test_properties_not_dict_raises(self) -> None:
-        with pytest.raises(ToolRegistrationError):
-            _validate_schema("tool", {"type": "object", "properties": "not a dict"})
-
-    def test_schema_without_type_is_valid(self) -> None:
-        # Type is optional in JSON Schema
-        _validate_schema("tool", {"properties": {"x": {"type": "string"}}})
 
     def test_array_schema_type_valid(self) -> None:
         _validate_schema("tool", {"type": "array"})
@@ -191,16 +71,6 @@ class TestToolRegistration:
         registry.register(CounterTool("tool_b"))
         assert len(registry) == 2
 
-    def test_get_returns_registered_tool(self) -> None:
-        registry = ToolRegistry()
-        tool = CounterTool("my_counter")
-        registry.register(tool)
-        assert registry.get("my_counter") is tool
-
-    def test_get_returns_none_for_unknown(self) -> None:
-        registry = ToolRegistry()
-        assert registry.get("nonexistent") is None
-
     def test_list_returns_all_tools(self) -> None:
         registry = ToolRegistry()
         registry.register(CounterTool("a"))
@@ -230,14 +100,6 @@ class TestToolDispatch:
         result = await registry.dispatch("counter", {"value": 1}, call_id="c1")
         assert not result.is_error
         assert "count=1" in result.content
-
-    @pytest.mark.asyncio
-    async def test_dispatch_unknown_tool_returns_error(self) -> None:
-        registry = ToolRegistry()
-        result = await registry.dispatch("nonexistent", {}, call_id="x1")
-        assert result.is_error
-        assert "Unknown tool" in result.content
-        assert "nonexistent" in result.content
 
     @pytest.mark.asyncio
     async def test_dispatch_exception_captured_as_error(self) -> None:

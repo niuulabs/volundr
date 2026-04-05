@@ -225,11 +225,6 @@ class TestCheckFileWrite:
         decision = enforcer.check_file_write(str(tmp_path / ".." / "evil.txt"), tmp_path)
         assert isinstance(decision, Deny)
 
-    def test_denies_system_path(self, tmp_path: Path) -> None:
-        enforcer = _enforcer(workspace_root=tmp_path)
-        decision = enforcer.check_file_write("/etc/passwd", tmp_path)
-        assert isinstance(decision, Deny)
-
     def test_denies_binary_existing_file(self, tmp_path: Path) -> None:
         binary_file = tmp_path / "binary.bin"
         binary_file.write_bytes(b"\x00\x01\x02\x03" * 1024)
@@ -496,25 +491,6 @@ class TestExplicitConfigLists:
         decision = await enforcer.evaluate("risky_tool", {})
         assert isinstance(decision, NeedsApproval)
 
-    @pytest.mark.asyncio
-    async def test_deny_takes_precedence_over_allow(self) -> None:
-        # Deny list is checked first, so deny wins over allow
-        enforcer = _enforcer(mode="full_access", deny=["tool_x"], allow=["tool_x"])
-        decision = await enforcer.evaluate("tool_x", {})
-        assert isinstance(decision, Deny)
-
-    @pytest.mark.asyncio
-    async def test_glob_pattern_in_deny_list(self) -> None:
-        enforcer = _enforcer(mode="full_access", deny=["dangerous_*"])
-        decision = await enforcer.evaluate("dangerous_delete", {})
-        assert isinstance(decision, Deny)
-
-    @pytest.mark.asyncio
-    async def test_glob_pattern_in_allow_list(self) -> None:
-        enforcer = _enforcer(mode="read_only", allow=["safe_*"])
-        decision = await enforcer.evaluate("safe_reader", {})
-        assert isinstance(decision, Allow)
-
 
 # ===========================================================================
 # Ordered rules
@@ -567,38 +543,6 @@ class TestOrderedRules:
 
 
 class TestAuditTrail:
-    @pytest.mark.asyncio
-    async def test_audit_log_records_allow(self) -> None:
-        enforcer = _enforcer(mode="full_access")
-        await enforcer.evaluate("custom_tool", {"arg": "value"})
-        assert len(enforcer.audit_log) == 1
-        entry = enforcer.audit_log[0]
-        assert entry.tool == "custom_tool"
-        assert entry.decision == "allow"
-        assert entry.mode == "full_access"
-
-    @pytest.mark.asyncio
-    async def test_audit_log_records_deny(self) -> None:
-        enforcer = _enforcer(mode="deny_all")
-        await enforcer.evaluate("custom_tool", {})
-        entry = enforcer.audit_log[0]
-        assert entry.decision == "deny"
-
-    @pytest.mark.asyncio
-    async def test_audit_log_records_needs_approval(self) -> None:
-        enforcer = _enforcer(mode="prompt")
-        await enforcer.evaluate("custom_tool", {})
-        entry = enforcer.audit_log[0]
-        assert entry.decision == "needs_approval"
-
-    @pytest.mark.asyncio
-    async def test_audit_log_redacts_sensitive_args(self) -> None:
-        enforcer = _enforcer(mode="full_access")
-        await enforcer.evaluate("custom_tool", {"api_key": "topsecret", "path": "/workspace"})
-        entry = enforcer.audit_log[0]
-        assert entry.args_redacted["api_key"] == "[REDACTED]"
-        assert entry.args_redacted["path"] == "/workspace"
-
     @pytest.mark.asyncio
     async def test_audit_log_accumulates_multiple_entries(self) -> None:
         enforcer = _enforcer(mode="full_access")

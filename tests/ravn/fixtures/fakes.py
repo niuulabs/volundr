@@ -70,3 +70,115 @@ class FailingTool(ToolPort):
 
     async def execute(self, input: dict) -> ToolResult:
         raise RuntimeError("intentional failure")
+
+
+class CounterTool(ToolPort):
+    """Records the number of times it was called; supports a configurable name."""
+
+    def __init__(self, name: str = "counter") -> None:
+        self._name = name
+        self.call_count = 0
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return "Counts calls."
+
+    @property
+    def input_schema(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {"value": {"type": "integer"}},
+        }
+
+    @property
+    def required_permission(self) -> str:
+        return "tool:counter"
+
+    async def execute(self, input: dict) -> ToolResult:
+        self.call_count += 1
+        return ToolResult(tool_call_id="", content=f"count={self.call_count}")
+
+
+class PrefixedTool(ToolPort):
+    """Minimal tool with a caller-supplied name for prefix/naming tests."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return f"Prefixed tool: {self._name}"
+
+    @property
+    def input_schema(self) -> dict:
+        return {"type": "object", "properties": {}}
+
+    @property
+    def required_permission(self) -> str:
+        return "tool:any"
+
+    async def execute(self, input: dict) -> ToolResult:
+        return ToolResult(tool_call_id="", content=f"called:{self._name}")
+
+
+class RaisingTool(ToolPort):
+    """Raises RuntimeError when executed (for exception-capture tests)."""
+
+    @property
+    def name(self) -> str:
+        return "raising_tool"
+
+    @property
+    def description(self) -> str:
+        return "Always raises."
+
+    @property
+    def input_schema(self) -> dict:
+        return {"type": "object", "properties": {}}
+
+    @property
+    def required_permission(self) -> str:
+        return "tool:raise"
+
+    async def execute(self, input: dict) -> ToolResult:
+        raise RuntimeError("intentional error")
+
+
+class SequentialTool(ToolPort):
+    """Non-parallelisable tool for sequential-dispatch ordering tests."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self.order: list[str] = []
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return "Sequential."
+
+    @property
+    def input_schema(self) -> dict:
+        return {"type": "object", "properties": {}}
+
+    @property
+    def required_permission(self) -> str:
+        return "tool:seq"
+
+    @property
+    def parallelisable(self) -> bool:
+        return False
+
+    async def execute(self, input: dict) -> ToolResult:
+        self.order.append(self._name)
+        return ToolResult(tool_call_id="", content=self._name)

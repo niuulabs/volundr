@@ -45,8 +45,8 @@ def _read_only_enforcer(workspace: Path) -> PermissionEnforcer:
     return PermissionEnforcer(cfg, workspace_root=workspace)
 
 
-def _tool_call(name: str, id: str = "tc1", **kwargs) -> ToolCall:
-    return ToolCall(id=id, name=name, input=kwargs)
+def _tool_call(name: str, call_id: str = "tc1", **kwargs) -> ToolCall:
+    return ToolCall(id=call_id, name=name, input=kwargs)
 
 
 def _tool_response(tool_call: ToolCall) -> LLMResponse:
@@ -80,10 +80,10 @@ class TestReadAndModifyFlow:
         # Turn 2: LLM edits the file
         # Turn 3: LLM confirms with a text response
 
-        read_call = _tool_call("read_file", id="r1", path=str(target))
+        read_call = _tool_call("read_file", call_id="r1", path=str(target))
         edit_call = _tool_call(
             "edit_file",
-            id="e1",
+            call_id="e1",
             path=str(target),
             old_string="version: 1.0",
             new_string="version: 2.0",
@@ -120,7 +120,7 @@ class TestReadAndModifyFlow:
         f.write_text("hello from file\n")
 
         read_tool = ReadFileTool(workspace=tmp_path)
-        read_call = _tool_call("read_file", id="r1", path=str(f))
+        read_call = _tool_call("read_file", call_id="r1", path=str(f))
 
         llm = MockLLM(
             [
@@ -141,7 +141,7 @@ class TestReadAndModifyFlow:
         new_file = tmp_path / "output.txt"
         write_tool = WriteFileTool(workspace=tmp_path)
         write_call = _tool_call(
-            "write_file", id="w1", path=str(new_file), content="created by LLM\n"
+            "write_file", call_id="w1", path=str(new_file), content="created by LLM\n"
         )
 
         llm = MockLLM(
@@ -175,7 +175,7 @@ class TestPermissionDeniedRecovery:
         echo = EchoTool()  # requires "tool:echo"
         llm = MockLLM(
             [
-                _tool_response(_tool_call("echo", id="e1", message="hello")),
+                _tool_response(_tool_call("echo", call_id="e1", message="hello")),
                 make_text_response("Denied, I'll try differently."),
             ]
         )
@@ -194,7 +194,7 @@ class TestPermissionDeniedRecovery:
         """Calling an unregistered tool name returns an error ToolResult."""
         llm = MockLLM(
             [
-                _tool_response(_tool_call("nonexistent_tool", id="n1")),
+                _tool_response(_tool_call("nonexistent_tool", call_id="n1")),
                 make_text_response("That tool doesn't exist."),
             ]
         )
@@ -213,13 +213,13 @@ class TestPermissionDeniedRecovery:
 
         outside_call = _tool_call(
             "write_file",
-            id="w1",
+            call_id="w1",
             path=str(tmp_path.parent / "evil.txt"),
             content="bad",
         )
         inside_call = _tool_call(
             "write_file",
-            id="w2",
+            call_id="w2",
             path=str(inside),
             content="good",
         )
@@ -250,7 +250,7 @@ class TestPermissionDeniedRecovery:
         failing = FailingTool()
         llm = MockLLM(
             [
-                _tool_response(_tool_call("fail", id="f1")),
+                _tool_response(_tool_call("fail", call_id="f1")),
                 make_text_response("The tool failed, I'll stop."),
             ]
         )
@@ -294,7 +294,7 @@ class TestConversationHistoryAccumulation:
         from tests.ravn.fixtures.fakes import EchoTool
 
         echo = EchoTool()
-        tool_call = _tool_call("echo", id="t1", message="ping")
+        tool_call = _tool_call("echo", call_id="t1", message="ping")
         llm = MockLLM(
             [
                 _tool_response(tool_call),
@@ -339,7 +339,7 @@ class TestBudgetExhaustion:
 
         echo = EchoTool()
         # Always responds with a tool call (infinite loop)
-        tool_call = _tool_call("echo", id="t1", message="ping")
+        tool_call = _tool_call("echo", call_id="t1", message="ping")
         infinite_responses = [_tool_response(tool_call)] * 20  # more than max_iterations
 
         llm = MockLLM(infinite_responses)
@@ -353,7 +353,7 @@ class TestBudgetExhaustion:
         from tests.ravn.fixtures.fakes import EchoTool
 
         echo = EchoTool()
-        tool_call = _tool_call("echo", id="t1", message="x")
+        tool_call = _tool_call("echo", call_id="t1", message="x")
         llm = MockLLM([_tool_response(tool_call)] * 10)
         agent, ch = make_agent(llm, tools=[echo], max_iterations=2)
 
@@ -368,7 +368,7 @@ class TestBudgetExhaustion:
         from tests.ravn.fixtures.fakes import EchoTool
 
         echo = EchoTool()
-        tool_call = _tool_call("echo", id="t1", message="hello")
+        tool_call = _tool_call("echo", call_id="t1", message="hello")
         llm = MockLLM(
             [
                 _tool_response(tool_call),
@@ -386,7 +386,7 @@ class TestBudgetExhaustion:
         from tests.ravn.fixtures.fakes import EchoTool
 
         echo = EchoTool()
-        tool_call = _tool_call("echo", id="t1", message="ping")
+        tool_call = _tool_call("echo", call_id="t1", message="ping")
         llm = MockLLM(
             [
                 _tool_response(tool_call),
