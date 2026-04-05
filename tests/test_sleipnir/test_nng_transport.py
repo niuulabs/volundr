@@ -742,3 +742,195 @@ async def test_ring_buffer_overflow_drops_oldest_and_warns(ipc_address, caplog):
             for _ in range(sub._subscriptions[0]._queue.qsize() + 1):
                 release.release()
             await sub.flush()
+
+
+# ---------------------------------------------------------------------------
+# NIU-522: latency benchmarks
+# ---------------------------------------------------------------------------
+
+
+async def test_nng_publish_wall_time_bounded_per_event(ipc_address):
+    """publish() wall time must be bounded regardless of subscriber state.
+
+    Measure the time for N synchronous publish() calls (no subscriber running)
+    and assert p99 is within a generous CI threshold.  On bare metal IPC the
+    expected overhead is < 5 µs per call; CI containers allow up to 5 ms.
+    """
+    n = 500
+
+    async with NngPublisher(ipc_address) as pub:
+        times: list[float] = []
+        for i in range(n):
+            t0 = time.perf_counter()
+            await pub.publish(make_event(event_id=f"wall-{i}"))
+            times.append(time.perf_counter() - t0)
+
+    times.sort()
+    p50_ms = times[n // 2] * 1000
+    p99_ms = times[int(n * 0.99)] * 1000
+    max_ms = times[-1] * 1000
+
+    # Log for visibility in CI output.
+    print(
+        f"\nnng publish() wall time (n={n}):"
+        f" p50={p50_ms:.3f}ms  p99={p99_ms:.3f}ms  max={max_ms:.3f}ms"
+        f"  (bare-metal target: p50<0.005ms, p99<0.050ms)"
+    )
+
+    # CI threshold — generous to survive noisy containers.
+    assert p99_ms < 50.0, (
+        f"publish() p99 wall time too high: {p99_ms:.3f}ms. "
+        "Expected < 50ms in CI (bare-metal target: < 0.050ms)."
+    )
+
+
+async def test_nng_end_to_end_latency_10k_events(ipc_address):
+    """End-to-end latency benchmark: publish → handler called, 10 000 events.
+
+    Architecture target (bare metal, same machine):
+      p50 < 20 µs  (0.020 ms)
+      p99 < 50 µs  (0.050 ms)
+
+    CI containers run on shared VMs and are considerably slower.  The
+    assertions here use generous thresholds so the test does not flap;
+    the printed percentiles are what matter for tracking regressions.
+    """
+    n = 10_000
+    latencies: list[float] = []
+    t_publish: dict[str, float] = {}
+    all_done = asyncio.Event()
+
+    async def handler(evt: SleipnirEvent) -> None:
+        latencies.append(time.perf_counter() - t_publish[evt.event_id])
+        if len(latencies) >= n:
+            all_done.set()
+
+    async with NngPublisher(ipc_address) as pub:
+        async with NngSubscriber(ipc_address) as sub:
+            await sub.subscribe(["ravn.*"], handler)
+
+            for i in range(n):
+                eid = f"lat-{i}"
+                t_publish[eid] = time.perf_counter()
+                await pub.publish(make_event(event_id=eid))
+
+            await asyncio.wait_for(all_done.wait(), timeout=120.0)
+
+    latencies.sort()
+    p50_ms = latencies[n // 2] * 1000
+    p95_ms = latencies[int(n * 0.95)] * 1000
+    p99_ms = latencies[int(n * 0.99)] * 1000
+    max_ms = latencies[-1] * 1000
+
+    print(
+        f"\nnng IPC end-to-end latency (n={n:,}):"
+        f" p50={p50_ms:.3f}ms  p95={p95_ms:.3f}ms"
+        f"  p99={p99_ms:.3f}ms  max={max_ms:.3f}ms"
+        f"  (bare-metal targets: p50<0.020ms, p99<0.050ms)"
+    )
+
+    # CI threshold — containers are much slower than bare metal.
+    assert p50_ms < 50.0, (
+        f"p50 latency {p50_ms:.3f}ms exceeds CI threshold 50ms (bare-metal target: 0.020ms)"
+    )
+    assert p99_ms < 200.0, (
+        f"p99 latency {p99_ms:.3f}ms exceeds CI threshold 200ms (bare-metal target: 0.050ms)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# NIU-522: failure mode tests
+# ---------------------------------------------------------------------------
+
+
+async def test_slow_subscriber_does_not_block_publisher(ipc_address, caplog):
+    """publish() must return in bounded time even when subscriber queue is saturated.
+
+    The subscriber's handler blocks indefinitely; the ring buffer overflows and
+    drops events.  The publisher must never stall — all publish() calls must
+    complete quickly and overflow warnings must be logged.
+    """
+    import logging
+
+    block = asyncio.Event()
+    n_events = 50  # >> ring_buffer_depth=2
+
+    async def blocking_handler(_: SleipnirEvent) -> None:
+        await block.wait()
+
+    async with NngPublisher(ipc_address) as pub:
+        async with NngSubscriber(ipc_address, ring_buffer_depth=2) as sub:
+            await sub.subscribe(["*"], blocking_handler)
+
+            with caplog.at_level(logging.WARNING, logger="sleipnir.adapters.nng_transport"):
+                t0 = time.perf_counter()
+                for i in range(n_events):
+                    await pub.publish(make_event(event_id=f"slow-{i}"))
+                elapsed_ms = (time.perf_counter() - t0) * 1000
+
+            # Unblock so the subscriber loop can drain cleanly on shutdown.
+            block.set()
+
+    # All n_events published in well under 1 s — publisher was never stalled.
+    assert elapsed_ms < 1000.0, (
+        f"publish() stalled: {elapsed_ms:.1f}ms for {n_events} events with "
+        "saturated subscriber queue."
+    )
+
+    overflow_warnings = [r for r in caplog.records if "Ring buffer overflow" in r.message]
+    assert len(overflow_warnings) >= 1, (
+        "Expected ring buffer overflow warnings when subscriber queue is saturated."
+    )
+
+
+async def test_crashing_handler_does_not_affect_sibling_subscriber(ipc_address):
+    """A handler that raises must not prevent sibling subscribers from receiving events.
+
+    consume_queue() isolates per-handler exceptions so that one bad handler
+    cannot poison the delivery loop for other subscriptions.
+    """
+    received_by_stable: list[str] = []
+    n = 5
+    all_stable_done = asyncio.Event()
+
+    async def crashing_handler(_: SleipnirEvent) -> None:
+        raise RuntimeError("Simulated handler crash — must not affect siblings")
+
+    async def stable_handler(evt: SleipnirEvent) -> None:
+        received_by_stable.append(evt.event_id)
+        if len(received_by_stable) >= n:
+            all_stable_done.set()
+
+    async with NngPublisher(ipc_address) as pub:
+        async with NngSubscriber(ipc_address) as sub:
+            await sub.subscribe(["*"], crashing_handler)
+            await sub.subscribe(["*"], stable_handler)
+
+            for i in range(n):
+                await pub.publish(make_event(event_id=f"crash-{i}"))
+
+            await asyncio.wait_for(all_stable_done.wait(), timeout=5.0)
+
+    assert len(received_by_stable) == n, (
+        f"Stable handler only received {len(received_by_stable)}/{n} events "
+        "after sibling handler crashed."
+    )
+
+
+async def test_publisher_start_raises_on_invalid_socket_path():
+    """NngPublisher.start() raises a clear error when the IPC path is inaccessible.
+
+    An invalid IPC path (non-existent directory) must raise immediately rather
+    than silently succeeding and then dropping all messages.  The socket must
+    also be cleaned up so there is no resource leak.
+    """
+    bad_address = "ipc:///nonexistent_dir_xyz_522/deep/sleipnir.sock"
+    pub = NngPublisher(bad_address, bind_max_retries=1)
+
+    with pytest.raises(Exception):
+        await pub.start()
+
+    # After failed start the internal socket must be cleaned up.
+    assert pub._socket is None, (
+        "NngPublisher._socket must be None after a failed start() to avoid resource leak."
+    )
