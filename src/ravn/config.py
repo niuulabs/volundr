@@ -143,6 +143,36 @@ class TerminalToolConfig(BaseModel):
     )
 
 
+class BashToolConfig(BaseModel):
+    """Bash tool configuration (non-persistent, validation-gated execution)."""
+
+    mode: str = Field(
+        default="workspace_write",
+        description=(
+            "Permission mode for the bash tool. Mirrors PermissionConfig.mode. "
+            "Controls which commands are allowed, denied, or require approval."
+        ),
+    )
+    timeout_seconds: float = Field(
+        default=120.0,
+        description="Seconds to wait for a bash command before timing out.",
+    )
+    max_output_bytes: int = Field(
+        default=100 * 1024,
+        description=(
+            "Maximum output size in bytes returned to the caller. "
+            "Output exceeding this limit is truncated with a notice."
+        ),
+    )
+    workspace_root: str = Field(
+        default="",
+        description=(
+            "Absolute path to the workspace root used as the working directory "
+            "and for path boundary checks. Defaults to CWD when empty."
+        ),
+    )
+
+
 class ToolsConfig(BaseModel):
     """Tool availability and custom adapter configuration."""
 
@@ -168,6 +198,10 @@ class ToolsConfig(BaseModel):
     terminal: TerminalToolConfig = Field(
         default_factory=TerminalToolConfig,
         description="Persistent shell configuration for the built-in terminal tool.",
+    )
+    bash: BashToolConfig = Field(
+        default_factory=BashToolConfig,
+        description="Configuration for the bash tool (non-persistent, validation-gated).",
     )
 
 
