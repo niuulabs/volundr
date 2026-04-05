@@ -86,7 +86,7 @@ async def _chat(
 ) -> None:
     """Run a single-turn or multi-turn conversation."""
     if prompt:
-        await _run_turn(agent, channel, prompt, show_usage=show_usage)
+        await _run_turn(agent, channel, prompt, show_usage=show_usage, single_turn=True)
         return
 
     # REPL mode.
@@ -109,6 +109,7 @@ async def _run_turn(
     user_input: str,
     *,
     show_usage: bool,
+    single_turn: bool = False,
 ) -> None:
     try:
         result = await agent.run_turn(user_input)
@@ -118,7 +119,8 @@ async def _run_turn(
     except Exception as exc:
         channel.finish()
         typer.echo(f"\n[error] {exc}", err=True)
-        sys.exit(1)
+        if single_turn:
+            sys.exit(1)
 
 
 def _print_usage(usage: TokenUsage) -> None:

@@ -126,3 +126,20 @@ class TestRunTurnErrorHandling:
 
             result = runner.invoke(app, ["Hello!"])
             assert result.exit_code != 0 or "error" in result.output.lower()
+
+    async def test_repl_continues_after_error(self) -> None:
+        """In REPL mode (single_turn=False), an error prints but does not exit."""
+        from unittest.mock import AsyncMock
+
+        from ravn.adapters.cli_channel import CliChannel
+        from ravn.cli.commands import _run_turn
+
+        agent = MagicMock()
+        agent.run_turn = AsyncMock(side_effect=RuntimeError("boom"))
+
+        import io
+
+        channel = CliChannel(file=io.StringIO())
+
+        # Must not raise SystemExit
+        await _run_turn(agent, channel, "hi", show_usage=False, single_turn=False)

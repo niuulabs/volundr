@@ -75,7 +75,7 @@ class Message:
     """A single message in a conversation."""
 
     role: str  # "user" or "assistant"
-    content: str
+    content: str | list[dict]
 
 
 @dataclass(frozen=True)

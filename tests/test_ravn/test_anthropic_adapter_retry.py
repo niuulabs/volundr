@@ -237,6 +237,25 @@ async def test_stream_input_json_delta_without_prior_block_start() -> None:
 
 
 @respx.mock
+async def test_stream_retry_exhausted_raises_llm_error() -> None:
+    """Stream raises LLMError when all retries are exhausted (covers last-attempt close)."""
+    adapter = AnthropicAdapter(
+        api_key="k",
+        base_url="https://api.anthropic.com",
+        max_retries=1,
+        retry_base_delay=0.0,
+    )
+
+    respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(503, text="unavailable")
+    )
+
+    with pytest.raises(LLMError):
+        async for _ in adapter.stream([], tools=[], system="", model="m", max_tokens=100):
+            pass
+
+
+@respx.mock
 async def test_stream_retry_on_server_error() -> None:
     """Stream retries on 500 errors."""
     adapter = AnthropicAdapter(

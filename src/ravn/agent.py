@@ -13,6 +13,7 @@ from ravn.domain.models import (
     Message,
     Session,
     StopReason,
+    StreamEventType,
     TokenUsage,
     ToolCall,
     ToolResult,
@@ -106,7 +107,7 @@ class RavnAgent:
 
             # Append the assistant message (with tool calls) to history.
             assistant_content = _build_assistant_content(llm_response)
-            self._session.messages.append(Message(role="assistant", content=assistant_content))  # type: ignore[arg-type]
+            self._session.messages.append(Message(role="assistant", content=assistant_content))
 
             # Execute all tool calls sequentially.
             tool_results_content = []
@@ -124,9 +125,7 @@ class RavnAgent:
                 )
 
             # Append tool results as a user message.
-            self._session.messages.append(  # type: ignore[arg-type]
-                Message(role="user", content=tool_results_content)  # type: ignore[arg-type]
-            )
+            self._session.messages.append(Message(role="user", content=tool_results_content))
         else:
             raise MaxIterationsError(self._max_iterations)
 
@@ -141,8 +140,6 @@ class RavnAgent:
 
     async def _call_llm_streaming(self) -> LLMResponse:
         """Call the LLM with streaming and accumulate into an LLMResponse."""
-        from ravn.domain.models import StopReason, StreamEventType
-
         accumulated_text = ""
         tool_calls: list[ToolCall] = []
         final_usage = TokenUsage(input_tokens=0, output_tokens=0)
