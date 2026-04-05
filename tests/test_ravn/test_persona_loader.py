@@ -5,18 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from ravn.adapters.personas.loader import (
+    _BUILTIN_PERSONAS,
     PersonaConfig,
     PersonaLLMConfig,
     PersonaLoader,
-    _BUILTIN_PERSONAS,
     _safe_bool,
     _safe_int,
 )
 from ravn.config import ProjectConfig
-
 
 # ---------------------------------------------------------------------------
 # Helper fixtures
@@ -507,7 +504,7 @@ class TestResolvePersona:
 
 class TestBuildAgentWithPersona:
     def test_persona_system_prompt_applied(self) -> None:
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
@@ -530,7 +527,7 @@ class TestBuildAgentWithPersona:
         assert agent.max_iterations == 15
 
     def test_no_persona_uses_settings_defaults(self) -> None:
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
@@ -547,7 +544,7 @@ class TestBuildAgentWithPersona:
         assert agent.max_iterations == settings.agent.max_iterations
 
     def test_persona_empty_system_prompt_keeps_settings_default(self) -> None:
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
@@ -573,6 +570,8 @@ class TestBuildAgentWithPersona:
 
 class TestCliPersonaFlag:
     def test_persona_flag_shown_in_help(self) -> None:
+        import re
+
         from typer.testing import CliRunner
 
         from ravn.cli.commands import app
@@ -580,11 +579,13 @@ class TestCliPersonaFlag:
         runner = CliRunner()
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "--persona" in result.output
+        # Strip ANSI escape codes before checking — typer may colorize output.
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        assert "--persona" in plain
 
     def test_persona_flag_accepted(self) -> None:
         from collections.abc import AsyncIterator
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from typer.testing import CliRunner
 
