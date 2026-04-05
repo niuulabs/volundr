@@ -3,24 +3,20 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from bifrost.translation.models import (
+    FINISH_REASON_MAP,
     AnthropicResponse,
     ContentBlock,
     TextBlock,
+    ThinkingBlock,
     ToolUseBlock,
     UsageInfo,
 )
 
-# Mapping from OpenAI finish_reason → Anthropic stop_reason.
-_FINISH_REASON_MAP: dict[str, str] = {
-    "stop": "end_turn",
-    "tool_calls": "tool_use",
-    "length": "max_tokens",
-    "content_filter": "end_turn",
-    "function_call": "tool_use",
-}
+_THINKING_RE = re.compile(r"<thinking>(.*?)</thinking>", re.DOTALL)
 
 
 def _openai_tool_calls_to_blocks(tool_calls: list[dict[str, Any]]) -> list[ContentBlock]:
@@ -63,10 +59,15 @@ def openai_to_anthropic(response: dict[str, Any], original_model: str) -> Anthro
 
     content: list[ContentBlock] = []
 
-    # Text content.
+    # Text content — extract <thinking> tags into ThinkingBlocks.
     text = message.get("content") or ""
     if text:
-        content.append(TextBlock(text=text))
+        thinking_matches = _THINKING_RE.findall(text)
+        for thinking_text in thinking_matches:
+            content.append(ThinkingBlock(thinking=thinking_text.strip()))
+        remaining = _THINKING_RE.sub("", text).strip()
+        if remaining:
+            content.append(TextBlock(text=remaining))
 
     # Tool calls.
     tool_calls = message.get("tool_calls") or []
@@ -79,7 +80,7 @@ def openai_to_anthropic(response: dict[str, Any], original_model: str) -> Anthro
         output_tokens=usage_raw.get("completion_tokens", 0),
     )
 
-    stop_reason = _FINISH_REASON_MAP.get(finish_reason or "stop", "end_turn")
+    stop_reason = FINISH_REASON_MAP.get(finish_reason or "stop", "end_turn")
 
     return AnthropicResponse(
         id=response_id,

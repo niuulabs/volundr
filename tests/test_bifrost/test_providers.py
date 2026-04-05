@@ -356,6 +356,25 @@ class TestOllamaAdapter:
         await adapter.complete(_simple_request(), "llama3.1:8b")
         assert route.called
 
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_top_p_stripped_in_streaming(self):
+        sse_body = (
+            'data: {"id":"c1","choices":[{"index":0,"delta":{"content":"hi"},'
+            '"finish_reason":null}]}\n\n'
+            "data: [DONE]\n\n"
+        )
+        route = respx.post("http://localhost:11434/v1/chat/completions").mock(
+            return_value=Response(200, text=sse_body)
+        )
+        adapter = OllamaAdapter()
+        req = _simple_request(top_p=0.9)
+        chunks = []
+        async for chunk in adapter.stream(req, "llama3.1:8b"):
+            chunks.append(chunk)
+        body = json.loads(route.calls[0].request.content)
+        assert "top_p" not in body
+
 
 # ---------------------------------------------------------------------------
 # Streaming adapters

@@ -9,14 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-# Mapping from OpenAI finish_reason → Anthropic stop_reason.
-_FINISH_REASON_MAP: dict[str, str] = {
-    "stop": "end_turn",
-    "tool_calls": "tool_use",
-    "length": "max_tokens",
-    "content_filter": "end_turn",
-    "function_call": "tool_use",
-}
+from bifrost.translation.models import FINISH_REASON_MAP
 
 
 def _sse_event(event_type: str, data: dict) -> str:
@@ -43,7 +36,7 @@ async def openai_stream_to_anthropic(
     emitted_start = False
     emitted_block_start = False
     block_index = 0
-    output_tokens = 0
+    output_tokens = 0  # Updated from upstream usage if available.
     stop_reason = "end_turn"
     tool_call_accumulator: dict[str, dict] = {}  # index → partial tool call
 
@@ -101,7 +94,6 @@ async def openai_stream_to_anthropic(
                         "content_block": {"type": "text", "text": ""},
                     },
                 )
-            output_tokens += 1
             yield _sse_event(
                 "content_block_delta",
                 {
@@ -130,8 +122,13 @@ async def openai_stream_to_anthropic(
             if fn.get("arguments"):
                 acc["arguments"] += fn["arguments"]
 
+        # Extract usage from the upstream chunk if available.
+        usage = chunk.get("usage")
+        if usage and isinstance(usage, dict):
+            output_tokens = usage.get("completion_tokens", output_tokens)
+
         if finish_reason:
-            stop_reason = _FINISH_REASON_MAP.get(finish_reason, "end_turn")
+            stop_reason = FINISH_REASON_MAP.get(finish_reason, "end_turn")
 
     # Flush tool call accumulator as content blocks.
     if tool_call_accumulator:
@@ -212,14 +209,3 @@ async def openai_stream_to_anthropic(
     )
     yield _sse_event("message_stop", {"type": "message_stop"})
     yield "data: [DONE]\n\n"
-
-
-async def anthropic_stream_passthrough(
-    raw_chunks: AsyncIterator[bytes],
-) -> AsyncIterator[str]:
-    """Pass through Anthropic-native SSE lines unchanged.
-
-    The Anthropic provider returns native SSE, so we just decode and yield.
-    """
-    async for chunk in raw_chunks:
-        yield chunk.decode("utf-8", errors="replace")

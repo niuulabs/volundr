@@ -12,7 +12,6 @@ For all other behaviour this inherits from ``OpenAICompatAdapter``.
 from __future__ import annotations
 
 from bifrost.adapters.openai_compat import OpenAICompatAdapter
-from bifrost.translation.models import AnthropicRequest
 
 _OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434"
 
@@ -40,23 +39,7 @@ class OllamaAdapter(OpenAICompatAdapter):
             headers["authorization"] = f"Bearer {self._api_key}"
         return headers
 
-    def _strip_unsupported(self, payload: dict) -> dict:
+    def _prepare_payload(self, payload: dict) -> dict:
         """Remove fields that some Ollama versions do not support."""
         payload.pop("top_p", None)
         return payload
-
-    async def complete(self, request: AnthropicRequest, model: str) -> object:
-        from bifrost.translation.to_anthropic import openai_to_anthropic
-        from bifrost.translation.to_openai import anthropic_to_openai
-
-        payload = anthropic_to_openai(request, model)
-        payload["stream"] = False
-        payload = self._strip_unsupported(payload)
-
-        resp = await self._client.post(
-            self._completions_url(),
-            headers=self._headers(),
-            json=payload,
-        )
-        resp.raise_for_status()
-        return openai_to_anthropic(resp.json(), model)

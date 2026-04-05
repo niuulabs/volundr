@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from bifrost.translation.models import (
@@ -9,6 +10,7 @@ from bifrost.translation.models import (
     ContentBlock,
     Message,
     TextBlock,
+    ThinkingBlock,
     ToolDefinition,
     ToolResultBlock,
     ToolUseBlock,
@@ -28,8 +30,6 @@ def _content_to_openai_text(content: str | list[ContentBlock]) -> str:
 
 def _extract_tool_calls(content: list[ContentBlock]) -> list[dict[str, Any]]:
     """Extract tool_use blocks and convert to OpenAI tool_calls format."""
-    import json
-
     tool_calls = []
     for block in content:
         if isinstance(block, ToolUseBlock):
@@ -78,7 +78,12 @@ def _message_to_openai(msg: Message) -> list[dict[str, Any]]:
             text_parts.append(block.text)
 
     if tool_result_messages:
-        return tool_result_messages
+        result: list[dict[str, Any]] = []
+        text = "".join(text_parts)
+        if text:
+            result.append({"role": msg.role, "content": text})
+        result.extend(tool_result_messages)
+        return result
 
     out: dict[str, Any] = {"role": msg.role}
     text = "".join(text_parts)

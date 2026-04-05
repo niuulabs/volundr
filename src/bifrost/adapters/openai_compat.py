@@ -51,9 +51,18 @@ class OpenAICompatAdapter(ProviderPort):
     def _completions_url(self) -> str:
         return f"{self._base_url}/v1/chat/completions"
 
+    def _prepare_payload(self, payload: dict) -> dict:
+        """Hook for subclasses to modify the payload before sending.
+
+        Override this in subclasses to strip unsupported fields or add
+        provider-specific adjustments.
+        """
+        return payload
+
     async def complete(self, request: AnthropicRequest, model: str) -> AnthropicResponse:
         payload = anthropic_to_openai(request, model)
         payload["stream"] = False
+        payload = self._prepare_payload(payload)
 
         resp = await self._client.post(
             self._completions_url(),
@@ -66,6 +75,7 @@ class OpenAICompatAdapter(ProviderPort):
     async def stream(self, request: AnthropicRequest, model: str) -> AsyncIterator[str]:
         payload = anthropic_to_openai(request, model)
         payload["stream"] = True
+        payload = self._prepare_payload(payload)
 
         message_id = f"msg_{uuid.uuid4().hex[:24]}"
 

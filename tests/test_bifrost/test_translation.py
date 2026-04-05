@@ -11,6 +11,7 @@ from bifrost.translation.models import (
     AnthropicResponse,
     Message,
     TextBlock,
+    ThinkingBlock,
     ToolDefinition,
     ToolUseBlock,
 )
@@ -128,6 +129,29 @@ class TestAnthropicToOpenAI:
         assert msg["role"] == "tool"
         assert msg["tool_call_id"] == "tool_1"
         assert msg["content"] == "Sunny, 22°C"
+
+    def test_tool_result_with_text_preserves_both(self):
+        req = self._simple_request(
+            messages=[
+                Message(
+                    role="user",
+                    content=[
+                        {"type": "text", "text": "Here are the results:"},
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tool_1",
+                            "content": "Sunny, 22°C",
+                        },
+                    ],
+                )
+            ]
+        )
+        payload = anthropic_to_openai(req, "gpt-4o")
+        # Text should appear as a user message, tool result as a tool message.
+        assert payload["messages"][0]["role"] == "user"
+        assert payload["messages"][0]["content"] == "Here are the results:"
+        assert payload["messages"][1]["role"] == "tool"
+        assert payload["messages"][1]["tool_call_id"] == "tool_1"
 
     def test_tools_definition(self):
         req = self._simple_request(
@@ -337,3 +361,29 @@ class TestOpenAIToAnthropic:
         types = [type(b).__name__ for b in resp.content]
         assert "TextBlock" in types
         assert "ToolUseBlock" in types
+
+    def test_thinking_tags_extracted(self):
+        r = self._openai_response()
+        r["choices"][0]["message"]["content"] = (
+            "<thinking>Let me think about this.</thinking>The answer is 42."
+        )
+        resp = openai_to_anthropic(r, "gpt-4o")
+        assert isinstance(resp.content[0], ThinkingBlock)
+        assert resp.content[0].thinking == "Let me think about this."
+        assert isinstance(resp.content[1], TextBlock)
+        assert resp.content[1].text == "The answer is 42."
+
+    def test_thinking_only_no_text(self):
+        r = self._openai_response()
+        r["choices"][0]["message"]["content"] = "<thinking>Just thinking.</thinking>"
+        resp = openai_to_anthropic(r, "gpt-4o")
+        assert len(resp.content) == 1
+        assert isinstance(resp.content[0], ThinkingBlock)
+
+    def test_no_thinking_tags(self):
+        r = self._openai_response()
+        r["choices"][0]["message"]["content"] = "Plain response."
+        resp = openai_to_anthropic(r, "gpt-4o")
+        assert len(resp.content) == 1
+        assert isinstance(resp.content[0], TextBlock)
+        assert resp.content[0].text == "Plain response."

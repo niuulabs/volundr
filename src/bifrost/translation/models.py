@@ -167,3 +167,13 @@ class MessageStopEvent(BaseModel):
 
 class PingEvent(BaseModel):
     type: Literal["ping"] = "ping"
+
+
+# Mapping from OpenAI finish_reason → Anthropic stop_reason.
+FINISH_REASON_MAP: dict[str, str] = {
+    "stop": "end_turn",
+    "tool_calls": "tool_use",
+    "length": "max_tokens",
+    "content_filter": "end_turn",
+    "function_call": "tool_use",
+}
