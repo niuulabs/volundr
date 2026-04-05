@@ -290,19 +290,15 @@ def make_transport(**kwargs) -> RedisStreamsTransport:
     return RedisStreamsTransport(_redis=fake, **kwargs), fake
 
 
-async def drain(sub, *, timeout: float = 1.0) -> None:
+async def drain(transport: RedisStreamsTransport, *, timeout: float = 1.0) -> None:
     """Wait for the reader and handler tasks to deliver all pending messages.
 
-    ``asyncio.Queue.join()`` returns immediately when nothing has been put yet,
-    so we first sleep long enough for the reader task to pick up messages from
-    the fake Redis (worst case: one full ``block_timeout_ms`` poll cycle = 10 ms
-    + processing overhead), then drain the handler queue.
+    Sleeps briefly (one poll cycle) to let the reader task pick up messages
+    from the fake Redis, then delegates to ``transport.flush()`` which joins
+    every active subscription queue — consistent with InProcessBus.flush().
     """
-    await asyncio.sleep(0.1)
-    try:
-        await asyncio.wait_for(sub._queue.join(), timeout=timeout)
-    except TimeoutError:
-        pass
+    await asyncio.sleep(_FAST_BLOCK_MS / 1000 * 2)
+    await asyncio.wait_for(transport.flush(), timeout=timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -603,7 +599,7 @@ async def test_publish_then_subscribe_receives_event():
     sub = await transport.subscribe(["ravn.*"], handler)
     await transport.publish(make_event(event_id="e1"))
 
-    await drain(sub)
+    await drain(transport)
 
     assert len(received) == 1
     assert received[0].event_id == "e1"
@@ -627,8 +623,8 @@ async def test_multiple_subscribers_receive_independently():
 
     await transport.publish(make_event(event_id="shared"))
 
-    await drain(sub_a)
-    await drain(sub_b)
+    await drain(transport)
+    await drain(transport)
 
     assert bucket_a == ["shared"]
     assert bucket_b == ["shared"]
@@ -648,7 +644,7 @@ async def test_pattern_filtering_ravn_star():
     await transport.publish(make_event(event_type="ravn.tool.complete", event_id="e1"))
     # tyr events go to a different stream, so this subscribe call won't see it —
     # but even if it did land in the queue, the pattern filter would drop it.
-    await drain(sub)
+    await drain(transport)
 
     assert received_types == ["ravn.tool.complete"]
     await sub.unsubscribe()
@@ -672,7 +668,7 @@ async def test_pattern_filtering_star_receives_all():
     for i, et in enumerate(event_types):
         await transport.publish(make_event(event_type=et, event_id=str(i)))
 
-    await drain(sub)
+    await drain(transport)
 
     assert sorted(received_types) == sorted(event_types)
     await sub.unsubscribe()
@@ -688,7 +684,7 @@ async def test_unsubscribe_stops_delivery():
 
     sub = await transport.subscribe(["ravn.*"], handler)
     await transport.publish(make_event(event_id="before"))
-    await drain(sub)
+    await drain(transport)
 
     await sub.unsubscribe()
 
@@ -714,7 +710,7 @@ async def test_ttl_zero_not_delivered_to_subscriber():
     # ttl=None reaches Redis and should be delivered
     await transport.publish(make_event(event_id="live"))
 
-    await drain(sub)
+    await drain(transport)
 
     assert received == ["live"]
     await sub.unsubscribe()
@@ -730,7 +726,7 @@ async def test_correlation_id_preserved():
 
     sub = await transport.subscribe(["*"], handler)
     await transport.publish(make_event(event_id="e-corr", correlation_id="corr-xyz"))
-    await drain(sub)
+    await drain(transport)
 
     assert received[0].correlation_id == "corr-xyz"
     await sub.unsubscribe()
@@ -746,7 +742,7 @@ async def test_urgency_preserved():
 
     sub = await transport.subscribe(["*"], handler)
     await transport.publish(make_event(event_id="e-urgency", urgency=0.8))
-    await drain(sub)
+    await drain(transport)
 
     assert received[0].urgency == pytest.approx(0.8)
     await sub.unsubscribe()
@@ -763,7 +759,7 @@ async def test_publish_batch_all_received():
     sub = await transport.subscribe(["*"], handler)
     batch = [make_event(event_id=f"b-{i}") for i in range(10)]
     await transport.publish_batch(batch)
-    await drain(sub)
+    await drain(transport)
 
     assert received_ids == [f"b-{i}" for i in range(10)]
     await sub.unsubscribe()
@@ -798,7 +794,7 @@ async def test_replay_on_startup_delivers_historical_events():
         received.append(evt.event_id)
 
     sub = await transport.subscribe(["ravn.*"], handler)
-    await drain(sub)
+    await drain(transport)
 
     assert "hist-1" in received
     await sub.unsubscribe()
@@ -831,7 +827,7 @@ async def test_no_replay_does_not_deliver_historical_events():
 
     # Publish a new event — only this should be delivered.
     await transport.publish(make_event(event_id="new"))
-    await drain(sub)
+    await drain(transport)
 
     assert "old" not in received
     assert "new" in received
@@ -904,7 +900,7 @@ async def test_corrupt_payload_does_not_crash_consumer():
 
     # Publish a valid event after the corrupt one.
     await transport.publish(make_event(event_id="good"))
-    await drain(sub)
+    await drain(transport)
 
     assert "good" in received
     await sub.unsubscribe()
@@ -928,7 +924,7 @@ async def test_missing_payload_field_does_not_crash_consumer():
     fake._msg_event("sleipnir:ravn").set()
 
     await transport.publish(make_event(event_id="ok"))
-    await drain(sub)
+    await drain(transport)
 
     assert "ok" in received
     await sub.unsubscribe()

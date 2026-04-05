@@ -27,6 +27,7 @@ import uuid
 from collections.abc import Callable
 
 from sleipnir.adapters._subscriber_support import (
+    _BaseSubscription,
     consume_queue,
     enqueue_with_overflow,
 )
@@ -102,8 +103,13 @@ def _streams_for_patterns(prefix: str, patterns: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-class _RedisSubscription(Subscription):
-    """Subscription backed by an asyncio.Queue, a reader task, and a handler task."""
+class _RedisSubscription(_BaseSubscription):
+    """Extends :class:`_BaseSubscription` with an extra reader task.
+
+    The base class manages the handler task (queue → handler coroutine).
+    This subclass adds a *reader task* (Redis → queue) that must be cancelled
+    first so no new items land on the queue after the drain.
+    """
 
     def __init__(
         self,
@@ -112,49 +118,19 @@ class _RedisSubscription(Subscription):
         reader_task: asyncio.Task[None],
         handler_task: asyncio.Task[None],
         remove_fn: Callable[[], None],
-        consumer_name: str,
     ) -> None:
-        self._patterns = patterns
-        self._queue = queue
+        super().__init__(patterns, queue, handler_task, remove_fn)
         self._reader_task = reader_task
-        self._handler_task = handler_task
-        self._remove_fn = remove_fn
-        self._consumer_name = consumer_name
-        self._active = True
-
-    @property
-    def patterns(self) -> list[str]:
-        return self._patterns
-
-    @property
-    def active(self) -> bool:
-        return self._active
 
     async def unsubscribe(self) -> None:
         if not self._active:
             return
-        self._active = False
-        self._remove_fn()
-
         self._reader_task.cancel()
         try:
             await self._reader_task
         except asyncio.CancelledError:
             pass
-
-        # Drain remaining items so handler_task join() is never blocked.
-        while not self._queue.empty():
-            try:
-                self._queue.get_nowait()
-                self._queue.task_done()
-            except asyncio.QueueEmpty:
-                break
-
-        self._handler_task.cancel()
-        try:
-            await self._handler_task
-        except asyncio.CancelledError:
-            pass
+        await super().unsubscribe()
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +289,6 @@ class RedisStreamsTransport(SleipnirPublisher, SleipnirSubscriber):
             reader_task,
             handler_task,
             lambda: self._remove_subscription(sub),
-            consumer_name,
         )
         self._subscriptions.append(sub)
         return sub
@@ -402,7 +377,7 @@ class RedisStreamsTransport(SleipnirPublisher, SleipnirSubscriber):
         queue: asyncio.Queue[SleipnirEvent],
     ) -> None:
         """Deserialise, filter, and enqueue a single stream message."""
-        payload_bytes = data.get(_PAYLOAD_FIELD) or data.get(b"payload")
+        payload_bytes = data.get(_PAYLOAD_FIELD)
         if payload_bytes is None:
             await self._redis.xack(stream, group_name, msg_id)
             return
@@ -423,6 +398,15 @@ class RedisStreamsTransport(SleipnirPublisher, SleipnirSubscriber):
             return
 
         await enqueue_with_overflow(queue, event, self._ring_buffer_depth, logger)
+
+    async def flush(self) -> None:
+        """Wait until every queued event has been processed by its handler.
+
+        Consistent with :meth:`InProcessBus.flush` — useful in tests after
+        publishing to ensure delivery before asserting.
+        """
+        for sub in list(self._subscriptions):
+            await sub._queue.join()
 
 
 def redis_available() -> bool:
