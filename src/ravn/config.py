@@ -143,6 +143,45 @@ class TerminalToolConfig(BaseModel):
     )
 
 
+class WebFetchConfig(BaseModel):
+    """web_fetch tool configuration."""
+
+    timeout: float = Field(
+        default=30.0,
+        description="HTTP request timeout in seconds.",
+    )
+    user_agent: str = Field(
+        default="Ravn/1.0 (+https://github.com/niuulabs/volundr)",
+        description="User-Agent header sent with web_fetch requests.",
+    )
+    content_budget: int = Field(
+        default=20_000,
+        description="Maximum characters of extracted text returned by web_fetch.",
+    )
+
+
+class WebSearchConfig(BaseModel):
+    """web_search tool configuration."""
+
+    provider: ToolAdapterConfig = Field(
+        default_factory=lambda: ToolAdapterConfig(
+            adapter="ravn.adapters.tools.web_search.MockWebSearchProvider"
+        ),
+        description="Web search provider adapter configuration.",
+    )
+    num_results: int = Field(
+        default=5,
+        description="Default number of search results to return.",
+    )
+
+
+class WebToolsConfig(BaseModel):
+    """Configuration for built-in web tools."""
+
+    fetch: WebFetchConfig = Field(default_factory=WebFetchConfig)
+    search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+
+
 class BashToolConfig(BaseModel):
     """Bash tool configuration (non-persistent, validation-gated execution)."""
 
@@ -173,6 +212,7 @@ class BashToolConfig(BaseModel):
     )
 
 
+
 class ToolsConfig(BaseModel):
     """Tool availability and custom adapter configuration."""
 
@@ -198,6 +238,10 @@ class ToolsConfig(BaseModel):
     terminal: TerminalToolConfig = Field(
         default_factory=TerminalToolConfig,
         description="Persistent shell configuration for the built-in terminal tool.",
+    )
+    web: WebToolsConfig = Field(
+        default_factory=WebToolsConfig,
+        description="Configuration for the built-in web tools (web_fetch, web_search).",
     )
     bash: BashToolConfig = Field(
         default_factory=BashToolConfig,
