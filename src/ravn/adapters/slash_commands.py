@@ -39,6 +39,7 @@ Ravn slash commands:
   /budget   — show iteration budget: used / remaining / limit
   /todo     — show current todo list
   /status   — full agent state dump
+  /skills   — list all available skills
   /init     — bootstrap a RAVN.md in the current directory\
 """
 
@@ -82,6 +83,10 @@ class SlashCommandContext:
     llm_adapter_name: str = ""
     permission_mode: str = "allow_all"
     cwd: Path | None = None
+    # Pre-fetched skill listing: list of (name, description) tuples.
+    # Populated by the caller before the REPL iteration so that _cmd_skills
+    # can display skills without running an async call.
+    skills_listing: list[tuple[str, str]] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +123,8 @@ def handle(user_input: str, ctx: SlashCommandContext) -> str | None:
             return _cmd_todo(ctx)
         case "/status":
             return _cmd_status(ctx)
+        case "/skills":
+            return _cmd_skills(ctx)
         case "/init":
             return _cmd_init(ctx)
         case _:
@@ -197,6 +204,22 @@ def _cmd_status(ctx: SlashCommandContext) -> str:
         f"Tools ({len(tool_names):>2}) : {', '.join(tool_names) if tool_names else 'none'}",
         f"Todos       : {len(s.todos)}",
     ]
+    return "\n".join(lines)
+
+
+def _cmd_skills(ctx: SlashCommandContext) -> str:
+    listing = ctx.skills_listing
+    if listing is None:
+        return (
+            "Skill listing not available. "
+            "Use the skill_list tool inside the agent to see available skills."
+        )
+    if not listing:
+        return "No skills available. Add .md files to .ravn/skills/ to define skills."
+
+    lines = [f"Skills ({len(listing)}):", ""]
+    for name, description in listing:
+        lines.append(f"  {name:<24}  {description}")
     return "\n".join(lines)
 
 
