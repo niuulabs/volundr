@@ -42,18 +42,99 @@ Ravn slash commands:
   /init     — bootstrap a RAVN.md in the current directory\
 """
 
-_RAVN_MD_TEMPLATE = """\
+_RAVN_MD_TEMPLATE_BASE = """\
 # RAVN Project: {project_name}
 
 persona: coding-agent
 allowed_tools: [file, git, terminal, web]
 forbidden_tools: []
-permission_mode: allow_all
+permission_mode: workspace_write
+primary_alias: balanced
+thinking_enabled: false
 iteration_budget: 20
 notes: >
   Add project-specific instructions here.
   Ravn will include these in its system prompt.
 """
+
+_RAVN_MD_TEMPLATE_PYTHON = """\
+# RAVN Project: {project_name}
+
+persona: coding-agent
+allowed_tools: [file, git, terminal, web, todo]
+forbidden_tools: []
+permission_mode: workspace_write
+primary_alias: balanced
+thinking_enabled: false
+iteration_budget: 30
+notes: >
+  Python project. Python 3.12+ style preferred.
+  Run tests with: pytest -x
+  Lint with: ruff check . && ruff format .
+  Always type-annotate function signatures.
+  Use X | None instead of Optional[X].
+"""
+
+_RAVN_MD_TEMPLATE_GO = """\
+# RAVN Project: {project_name}
+
+persona: coding-agent
+allowed_tools: [file, git, terminal, web, todo]
+forbidden_tools: []
+permission_mode: workspace_write
+primary_alias: balanced
+thinking_enabled: false
+iteration_budget: 30
+notes: >
+  Go project.
+  Run tests with: go test ./...
+  Format with: gofmt -w .
+  Lint with: golangci-lint run
+  Follow standard Go idioms and error handling patterns.
+"""
+
+_RAVN_MD_TEMPLATE_NODE = """\
+# RAVN Project: {project_name}
+
+persona: coding-agent
+allowed_tools: [file, git, terminal, web, todo]
+forbidden_tools: []
+permission_mode: workspace_write
+primary_alias: balanced
+thinking_enabled: false
+iteration_budget: 30
+notes: >
+  Node.js project.
+  Run tests with: npm test
+  Lint/format with: npm run lint
+  Always type-annotate if TypeScript is used.
+"""
+
+_RAVN_MD_TEMPLATE_RUST = """\
+# RAVN Project: {project_name}
+
+persona: coding-agent
+allowed_tools: [file, git, terminal, web, todo]
+forbidden_tools: []
+permission_mode: workspace_write
+primary_alias: balanced
+thinking_enabled: false
+iteration_budget: 30
+notes: >
+  Rust project.
+  Run tests with: cargo test
+  Format with: cargo fmt
+  Lint with: cargo clippy
+  Prefer idiomatic Rust — use Result/Option, avoid unwrap() in library code.
+"""
+
+_RAVN_MD_TEMPLATES: dict[str, str] = {
+    "python": _RAVN_MD_TEMPLATE_PYTHON,
+    "go": _RAVN_MD_TEMPLATE_GO,
+    "node": _RAVN_MD_TEMPLATE_NODE,
+    "rust": _RAVN_MD_TEMPLATE_RUST,
+    "generic": _RAVN_MD_TEMPLATE_BASE,
+}
 
 _TODO_STATUS_ICONS: dict[str, str] = {
     "pending": "○",
@@ -200,12 +281,32 @@ def _cmd_status(ctx: SlashCommandContext) -> str:
     return "\n".join(lines)
 
 
+def _detect_project_type(cwd: Path) -> str:
+    """Return a project type string by inspecting files in *cwd*.
+
+    Checks for well-known marker files and returns one of:
+    ``"python"``, ``"go"``, ``"node"``, ``"rust"``, or ``"generic"``.
+    """
+    markers: list[tuple[str, list[str]]] = [
+        ("python", ["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"]),
+        ("go", ["go.mod"]),
+        ("rust", ["Cargo.toml"]),
+        ("node", ["package.json"]),
+    ]
+    for project_type, files in markers:
+        if any((cwd / f).exists() for f in files):
+            return project_type
+    return "generic"
+
+
 def _cmd_init(ctx: SlashCommandContext) -> str:
     cwd = ctx.cwd if ctx.cwd is not None else Path.cwd()
     ravn_md = cwd / "RAVN.md"
     if ravn_md.exists():
         return f"RAVN.md already exists at {ravn_md}. Remove it first to re-initialise."
     project_name = cwd.name
-    content = _RAVN_MD_TEMPLATE.format(project_name=project_name)
+    project_type = _detect_project_type(cwd)
+    template = _RAVN_MD_TEMPLATES.get(project_type, _RAVN_MD_TEMPLATE_BASE)
+    content = template.format(project_name=project_name)
     ravn_md.write_text(content, encoding="utf-8")
-    return f"Bootstrapped RAVN.md at {ravn_md}"
+    return f"Bootstrapped RAVN.md at {ravn_md} (detected project type: {project_type})"

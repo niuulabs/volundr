@@ -325,3 +325,112 @@ class TestCmdInit:
         result = handle("/init", _ctx(cwd=None))
         assert result is not None
         assert (tmp_path / "RAVN.md").exists()
+
+    def test_ravn_md_contains_primary_alias(self, tmp_path: Path) -> None:
+        handle("/init", _ctx(cwd=tmp_path))
+        content = (tmp_path / "RAVN.md").read_text()
+        assert "primary_alias" in content
+
+    def test_ravn_md_contains_thinking_enabled(self, tmp_path: Path) -> None:
+        handle("/init", _ctx(cwd=tmp_path))
+        content = (tmp_path / "RAVN.md").read_text()
+        assert "thinking_enabled" in content
+
+    def test_python_project_detected(self, tmp_path: Path) -> None:
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'mylib'\n")
+        result = handle("/init", _ctx(cwd=tmp_path))
+        assert result is not None
+        assert "python" in result
+        content = (tmp_path / "RAVN.md").read_text()
+        assert "pytest" in content
+
+    def test_go_project_detected(self, tmp_path: Path) -> None:
+        (tmp_path / "go.mod").write_text("module example.com/myapp\n")
+        result = handle("/init", _ctx(cwd=tmp_path))
+        assert result is not None
+        assert "go" in result
+        content = (tmp_path / "RAVN.md").read_text()
+        assert "go test" in content
+
+    def test_rust_project_detected(self, tmp_path: Path) -> None:
+        (tmp_path / "Cargo.toml").write_text("[package]\nname = 'myapp'\n")
+        result = handle("/init", _ctx(cwd=tmp_path))
+        assert result is not None
+        assert "rust" in result
+        content = (tmp_path / "RAVN.md").read_text()
+        assert "cargo" in content.lower()
+
+    def test_node_project_detected(self, tmp_path: Path) -> None:
+        (tmp_path / "package.json").write_text('{"name": "myapp"}\n')
+        result = handle("/init", _ctx(cwd=tmp_path))
+        assert result is not None
+        assert "node" in result
+
+    def test_generic_project_no_markers(self, tmp_path: Path) -> None:
+        result = handle("/init", _ctx(cwd=tmp_path))
+        assert result is not None
+        assert "generic" in result
+
+    def test_generated_ravn_md_no_schema_warnings(self, tmp_path: Path) -> None:
+        from ravn.config import ProjectConfig
+
+        handle("/init", _ctx(cwd=tmp_path))
+        cfg = ProjectConfig.load(tmp_path / "RAVN.md")
+        assert cfg is not None
+        assert cfg.warnings == []
+
+
+# ---------------------------------------------------------------------------
+# _detect_project_type
+# ---------------------------------------------------------------------------
+
+
+class TestDetectProjectType:
+    def test_pyproject_toml(self, tmp_path: Path) -> None:
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        (tmp_path / "pyproject.toml").write_text("")
+        assert _detect_project_type(tmp_path) == "python"
+
+    def test_setup_py(self, tmp_path: Path) -> None:
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        (tmp_path / "setup.py").write_text("")
+        assert _detect_project_type(tmp_path) == "python"
+
+    def test_requirements_txt(self, tmp_path: Path) -> None:
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        (tmp_path / "requirements.txt").write_text("")
+        assert _detect_project_type(tmp_path) == "python"
+
+    def test_go_mod(self, tmp_path: Path) -> None:
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        (tmp_path / "go.mod").write_text("")
+        assert _detect_project_type(tmp_path) == "go"
+
+    def test_cargo_toml(self, tmp_path: Path) -> None:
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        (tmp_path / "Cargo.toml").write_text("")
+        assert _detect_project_type(tmp_path) == "rust"
+
+    def test_package_json(self, tmp_path: Path) -> None:
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        (tmp_path / "package.json").write_text("")
+        assert _detect_project_type(tmp_path) == "node"
+
+    def test_no_markers_returns_generic(self, tmp_path: Path) -> None:
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        assert _detect_project_type(tmp_path) == "generic"
+
+    def test_python_priority_over_node(self, tmp_path: Path) -> None:
+        """Python markers are checked before Node when both exist."""
+        from ravn.adapters.slash_commands import _detect_project_type
+
+        (tmp_path / "pyproject.toml").write_text("")
+        (tmp_path / "package.json").write_text("")
+        assert _detect_project_type(tmp_path) == "python"
