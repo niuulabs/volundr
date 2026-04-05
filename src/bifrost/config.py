@@ -6,7 +6,7 @@ import os
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from bifrost.auth import AuthMode
 
@@ -151,6 +151,12 @@ class RuleConfig(BaseModel):
         default=None,
         description="Rejection message returned to the caller (for action='reject').",
     )
+
+    @model_validator(mode="after")
+    def _validate_action_fields(self) -> RuleConfig:
+        if self.action == "route_to" and not self.target:
+            raise ValueError("target is required when action is 'route_to'")
+        return self
 
 
 class UsageStoreConfig(BaseModel):

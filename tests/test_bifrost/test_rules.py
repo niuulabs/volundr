@@ -208,6 +208,28 @@ class TestRuleConfig:
         rule = RuleConfig(name="log-rule", when=RuleCondition(), action="log")
         assert rule.action == "log"
 
+    def test_route_to_without_target_raises_validation_error(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="target is required"):
+            RuleConfig(name="bad", when=RuleCondition(), action="route_to", target=None)
+
+    def test_route_to_with_empty_target_raises_validation_error(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="target is required"):
+            RuleConfig(name="bad", when=RuleCondition(), action="route_to", target="")
+
+    def test_reject_without_target_is_valid(self):
+        # target is not required for reject
+        rule = RuleConfig(name="r", when=RuleCondition(), action="reject")
+        assert rule.target is None
+
+    def test_log_without_target_is_valid(self):
+        # target is not required for log
+        rule = RuleConfig(name="r", when=RuleCondition(), action="log")
+        assert rule.target is None
+
 
 # ---------------------------------------------------------------------------
 # YamlRuleEngine — condition matching
