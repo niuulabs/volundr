@@ -44,10 +44,12 @@ class TestBifrostAdapterInit:
         assert adapter._agent_id == "agent-1"
         assert adapter._session_id == "sess-abc"
 
-    def test_no_api_key_attribute(self) -> None:
-        """BifrostAdapter should not expose an _api_key attribute."""
+    def test_api_key_not_used(self) -> None:
+        """BifrostAdapter stores no meaningful api_key — header is absent."""
         adapter = BifrostAdapter()
-        assert not hasattr(adapter, "_api_key")
+        # _api_key exists (inherited) but is empty and excluded from headers
+        assert adapter._api_key == ""
+        assert "x-api-key" not in adapter._headers()
 
 
 # ---------------------------------------------------------------------------
