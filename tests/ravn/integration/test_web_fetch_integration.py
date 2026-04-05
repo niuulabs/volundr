@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import socket
+from unittest.mock import patch
+
 import pytest
 
 pytest.importorskip("respx", reason="respx not installed")
@@ -122,7 +125,9 @@ class TestWebFetchIntegration:
             )
         )
 
-        result = await tool.execute({"url": "https://evil.example.com/"})
+        public = [(None, None, None, None, ("1.1.1.1", 0))]
+        with patch.object(socket, "getaddrinfo", return_value=public):
+            result = await tool.execute({"url": "https://evil.example.com/"})
 
         assert not result.is_error
         assert result.content.startswith(_INJECTION_WARNING[:20])

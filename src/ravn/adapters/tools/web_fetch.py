@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
+import socket
 from html.parser import HTMLParser
+from urllib.parse import urlparse
 
 import httpx
 
@@ -100,6 +103,58 @@ def truncate_to_budget(text: str, budget: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# SSRF protection
+# ---------------------------------------------------------------------------
+
+_PRIVATE_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
+
+
+def _is_private_ip(ip: str) -> bool:
+    """Return True if the IP address falls within a private/reserved range."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return True  # Unparseable — block by default.
+    return any(addr in net for net in _PRIVATE_NETWORKS)
+
+
+def _validate_url(url: str) -> str | None:
+    """Return an error message if *url* is disallowed, else None.
+
+    Blocks:
+    - Non-http(s) schemes (e.g. file://, ftp://)
+    - URLs that resolve to private/reserved IP ranges (SSRF)
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return f"Blocked: only http and https URLs are allowed (got '{parsed.scheme}')"
+
+    hostname = parsed.hostname
+    if not hostname:
+        return "Blocked: URL has no hostname"
+
+    try:
+        results = socket.getaddrinfo(hostname, None)
+    except OSError:
+        return f"Blocked: could not resolve hostname '{hostname}'"
+
+    for _family, _type, _proto, _canonname, sockaddr in results:
+        ip = sockaddr[0]
+        if _is_private_ip(ip):
+            return f"Blocked: '{hostname}' resolves to a private/reserved address"
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Tool implementation
 # ---------------------------------------------------------------------------
 
@@ -158,6 +213,10 @@ class WebFetchTool(ToolPort):
         if not url:
             return ToolResult(tool_call_id="", content="url is required", is_error=True)
 
+        url_error = _validate_url(url)
+        if url_error:
+            return ToolResult(tool_call_id="", content=url_error, is_error=True)
+
         try:
             async with httpx.AsyncClient(
                 timeout=self._timeout,
@@ -191,10 +250,13 @@ class WebFetchTool(ToolPort):
         else:
             text = response.text
 
+        has_injection = scan_for_injection(text)
+        if has_injection:
+            logger.warning("Potential prompt injection detected in fetched content from %s", url)
+
         text = truncate_to_budget(text, self._content_budget)
 
-        if scan_for_injection(text):
-            logger.warning("Potential prompt injection detected in fetched content from %s", url)
+        if has_injection:
             text = _INJECTION_WARNING + text
 
         return ToolResult(tool_call_id="", content=text)

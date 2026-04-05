@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ravn.domain.models import ToolResult
 from ravn.ports.tool import ToolPort
 from ravn.ports.web_search import SearchResult, WebSearchPort
@@ -117,9 +115,3 @@ class WebSearchTool(ToolPort):
 
         lines = [f"{i + 1}. {r.title}\n   {r.url}\n   {r.snippet}" for i, r in enumerate(results)]
         return ToolResult(tool_call_id="", content="\n\n".join(lines))
-
-    def _results_to_json(self, results: list[SearchResult]) -> str:
-        return json.dumps(
-            [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in results],
-            indent=2,
-        )
