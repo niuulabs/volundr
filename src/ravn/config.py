@@ -472,6 +472,14 @@ class AgentConfig(BaseModel):
             "Be concise, accurate, and use tools when they help."
         )
     )
+    episode_summary_max_chars: int = Field(
+        default=500,
+        description="Maximum characters of the agent response stored as an episode summary.",
+    )
+    episode_task_max_chars: int = Field(
+        default=200,
+        description="Maximum characters of the user input stored as the episode task description.",
+    )
 
 
 # ---------------------------------------------------------------------------

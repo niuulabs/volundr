@@ -16,6 +16,7 @@ import math
 import random
 import sqlite3
 import time
+from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -76,6 +77,10 @@ END;
 
 # Approximate chars per token for budget estimation.
 _CHARS_PER_TOKEN = 4
+
+# Estimated average character length of a single episode row, used to compute
+# the FTS5 LIMIT when searching for sessions.
+_AVG_EPISODE_CHARS = 200
 
 # Outcome weights for combined scoring.
 _OUTCOME_WEIGHTS: dict[str, float] = {
@@ -394,7 +399,7 @@ class SqliteMemoryAdapter(MemoryPort):
                     ORDER BY bm25(episodes_fts)
                     LIMIT ?
                     """,
-                    (safe_query, self._session_search_truncate_chars // 200),
+                    (safe_query, self._session_search_truncate_chars // _AVG_EPISODE_CHARS),
                 ).fetchall()
             finally:
                 conn.close()
@@ -403,8 +408,6 @@ class SqliteMemoryAdapter(MemoryPort):
                 return []
 
             # Group episodes by session, collect tags and timestamps.
-            from collections import defaultdict
-
             session_episodes: dict[str, list[Episode]] = defaultdict(list)
             for row in rows:
                 ep = _row_to_episode(row)

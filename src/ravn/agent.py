@@ -72,6 +72,8 @@ class RavnAgent:
         post_tool_hooks: list[PostToolHook] | None = None,
         user_input_fn: UserInputFn | None = None,
         memory: MemoryPort | None = None,
+        episode_summary_max_chars: int = 500,
+        episode_task_max_chars: int = 200,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -85,6 +87,8 @@ class RavnAgent:
         self._post_tool_hooks: list[PostToolHook] = post_tool_hooks or []
         self._user_input_fn = user_input_fn
         self._memory = memory
+        self._episode_summary_max_chars = episode_summary_max_chars
+        self._episode_task_max_chars = episode_task_max_chars
         self._session = Session()
 
     @property
@@ -191,6 +195,8 @@ class RavnAgent:
                     session_id=str(self._session.id),
                     user_input=user_input,
                     turn_result=result,
+                    summary_max_chars=self._episode_summary_max_chars,
+                    task_max_chars=self._episode_task_max_chars,
                 )
                 await self._memory.record_episode(episode)
             except Exception:
@@ -372,6 +378,9 @@ def _extract_episode(
     session_id: str,
     user_input: str,
     turn_result: TurnResult,
+    *,
+    summary_max_chars: int = 500,
+    task_max_chars: int = 200,
 ) -> Episode:
     """Derive an Episode from a completed agent turn.
 
@@ -382,16 +391,14 @@ def _extract_episode(
     outcome = _determine_outcome(turn_result.tool_results)
     tags = _infer_tags(tools_used)
 
-    # Summarise: truncate the response to a reasonable length.
-    max_summary = 500
-    summary = turn_result.response[:max_summary]
-    if len(turn_result.response) > max_summary:
+    summary = turn_result.response[:summary_max_chars]
+    if len(turn_result.response) > summary_max_chars:
         summary = summary.rstrip() + "…"
     if not summary:
         summary = f"Completed task with {len(tools_used)} tool(s) used."
 
-    task_description = user_input[:200]
-    if len(user_input) > 200:
+    task_description = user_input[:task_max_chars]
+    if len(user_input) > task_max_chars:
         task_description = task_description.rstrip() + "…"
 
     return Episode(
