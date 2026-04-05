@@ -117,6 +117,12 @@ bifrost:
   # Override or extend the built-in pricing snapshot (USD per million tokens).
   # Omitted models fall back to the built-in table; unknown models cost $0.
   #
+  # Two ways to supply custom pricing (both can be combined — inline wins):
+  #
+  # 1. External YAML file (updated without restarting the process via SIGHUP):
+  # pricing_file: /etc/bifrost/pricing.yaml
+  #
+  # 2. Inline overrides (takes precedence over pricing_file):
   # pricing:
   #   claude-sonnet-4-6:
   #     input_per_million: 3.00
@@ -164,13 +170,20 @@ bifrost:
   #
   # Where per-request usage records are persisted.
   #
-  #   memory  — In-process only. Lost on restart. Good for testing. DEFAULT.
-  #   sqlite  — Persistent single-file database. Good for standalone / Pi mode.
-  #   postgres — (coming) PostgreSQL backend for multi-node deployments.
+  #   memory   — In-process only. Lost on restart. Good for testing. DEFAULT.
+  #   sqlite   — Persistent single-file database. Good for standalone / Pi mode.
+  #   postgres — PostgreSQL backend for multi-node (M5) deployments.
   #
   # usage_store:
   #   adapter: memory
-  #   path: ./bifrost_usage.db      # for sqlite adapter
+  #   path: ./bifrost_usage.db        # for sqlite adapter
+  #
+  # PostgreSQL example:
+  # usage_store:
+  #   adapter: postgres
+  #   dsn: postgresql://user:pass@localhost/bifrost
+  #   # Or set BIFROST_USAGE_DSN environment variable and leave dsn blank.
+  #   dsn_env: BIFROST_USAGE_DSN      # default env var name
 
   # ── Server ──────────────────────────────────────────────────────────────────
   host: 0.0.0.0

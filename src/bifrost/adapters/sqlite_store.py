@@ -15,21 +15,32 @@ from datetime import UTC, datetime
 from functools import partial
 from typing import Any
 
-from bifrost.ports.usage_store import UsageRecord, UsageStore, UsageSummary
+from bifrost.ports.usage_store import (
+    TimeSeriesEntry,
+    UsageRecord,
+    UsageStore,
+    UsageSummary,
+)
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS usage_records (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_id    TEXT    NOT NULL DEFAULT '',
-    agent_id      TEXT    NOT NULL,
-    tenant_id     TEXT    NOT NULL,
-    session_id    TEXT    NOT NULL DEFAULT '',
-    saga_id       TEXT    NOT NULL DEFAULT '',
-    model         TEXT    NOT NULL,
-    input_tokens  INTEGER NOT NULL DEFAULT 0,
-    output_tokens INTEGER NOT NULL DEFAULT 0,
-    cost_usd      REAL    NOT NULL DEFAULT 0.0,
-    timestamp     TEXT    NOT NULL
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id         TEXT    NOT NULL DEFAULT '',
+    agent_id           TEXT    NOT NULL,
+    tenant_id          TEXT    NOT NULL,
+    session_id         TEXT    NOT NULL DEFAULT '',
+    saga_id            TEXT    NOT NULL DEFAULT '',
+    model              TEXT    NOT NULL,
+    provider           TEXT    NOT NULL DEFAULT '',
+    input_tokens       INTEGER NOT NULL DEFAULT 0,
+    output_tokens      INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
+    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+    reasoning_tokens   INTEGER NOT NULL DEFAULT 0,
+    cost_usd           REAL    NOT NULL DEFAULT 0.0,
+    latency_ms         REAL    NOT NULL DEFAULT 0.0,
+    streaming          INTEGER NOT NULL DEFAULT 0,
+    timestamp          TEXT    NOT NULL
 );
 """
 
@@ -37,13 +48,28 @@ _CREATE_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_usage_tenant_ts  ON usage_records(tenant_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_usage_agent_ts   ON usage_records(agent_id,  timestamp);
 CREATE INDEX IF NOT EXISTS idx_usage_model      ON usage_records(model);
+CREATE INDEX IF NOT EXISTS idx_usage_provider   ON usage_records(provider);
 """
+
+# Columns to add when upgrading an existing database that pre-dates NIU-483.
+# fmt: off
+_MIGRATE_COLUMNS = [
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0",  # noqa: E501
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER NOT NULL DEFAULT 0",  # noqa: E501
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS reasoning_tokens INTEGER NOT NULL DEFAULT 0",  # noqa: E501
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS latency_ms REAL NOT NULL DEFAULT 0.0",
+    "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS streaming INTEGER NOT NULL DEFAULT 0",
+]
+# fmt: on
 
 _INSERT = """
 INSERT INTO usage_records
     (request_id, agent_id, tenant_id, session_id, saga_id,
-     model, input_tokens, output_tokens, cost_usd, timestamp)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     model, provider,
+     input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
+     cost_usd, latency_ms, streaming, timestamp)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -67,9 +93,15 @@ def _row_to_record(row: tuple) -> UsageRecord:
         session_id,
         saga_id,
         model,
+        provider,
         input_tokens,
         output_tokens,
+        cache_read_tokens,
+        cache_write_tokens,
+        reasoning_tokens,
         cost_usd,
+        latency_ms,
+        streaming,
         timestamp,
     ) = row
     return UsageRecord(
@@ -79,9 +111,15 @@ def _row_to_record(row: tuple) -> UsageRecord:
         session_id=session_id,
         saga_id=saga_id,
         model=model,
+        provider=provider,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
+        reasoning_tokens=reasoning_tokens,
         cost_usd=cost_usd,
+        latency_ms=latency_ms,
+        streaming=bool(streaming),
         timestamp=_parse_ts(timestamp),
     )
 
@@ -102,6 +140,14 @@ class SQLiteUsageStore(UsageStore):
         conn = sqlite3.connect(self._path, check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.executescript(_CREATE_TABLE + _CREATE_INDEXES)
+        # Apply additive column migrations for existing databases.
+        for stmt in _MIGRATE_COLUMNS:
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                # Column already exists — SQLite prior to 3.37 lacks IF NOT EXISTS
+                # for ALTER TABLE; safe to ignore.
+                pass
         conn.commit()
         return conn
 
@@ -137,13 +183,47 @@ class SQLiteUsageStore(UsageStore):
                 record.session_id,
                 record.saga_id,
                 record.model,
+                record.provider,
                 record.input_tokens,
                 record.output_tokens,
+                record.cache_read_tokens,
+                record.cache_write_tokens,
+                record.reasoning_tokens,
                 record.cost_usd,
+                record.latency_ms,
+                1 if record.streaming else 0,
                 _ts(record.timestamp),
             ),
         )
         conn.commit()
+
+    @staticmethod
+    def _build_where(
+        agent_id: str | None,
+        tenant_id: str | None,
+        model: str | None,
+        since: datetime | None,
+        until: datetime | None,
+    ) -> tuple[str, list[Any]]:
+        clauses = []
+        params: list[Any] = []
+        if agent_id is not None:
+            clauses.append("agent_id = ?")
+            params.append(agent_id)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+        if model is not None:
+            clauses.append("model = ?")
+            params.append(model)
+        if since is not None:
+            clauses.append("timestamp >= ?")
+            params.append(_ts(since))
+        if until is not None:
+            clauses.append("timestamp <= ?")
+            params.append(_ts(until))
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        return where, params
 
     @staticmethod
     def _do_query(
@@ -175,7 +255,9 @@ class SQLiteUsageStore(UsageStore):
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         sql = f"""
             SELECT id, request_id, agent_id, tenant_id, session_id, saga_id,
-                   model, input_tokens, output_tokens, cost_usd, timestamp
+                   model, provider,
+                   input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+                   reasoning_tokens, cost_usd, latency_ms, streaming, timestamp
             FROM usage_records {where}
             ORDER BY timestamp DESC
             LIMIT ?
@@ -192,7 +274,7 @@ class SQLiteUsageStore(UsageStore):
         model: str | None,
         since: datetime | None,
         until: datetime | None,
-    ) -> tuple[int, int, int, float, list[tuple]]:
+    ) -> tuple[int, int, int, float, list[tuple], list[tuple]]:
         """Run SQL aggregation for summarise() — no Python-level looping."""
         clauses = []
         params: list[Any] = []
@@ -225,13 +307,67 @@ class SQLiteUsageStore(UsageStore):
             params,
         ).fetchall()
 
+        provider_rows = conn.execute(
+            f"SELECT provider, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(cost_usd) "
+            f"FROM usage_records {where} GROUP BY provider",
+            params,
+        ).fetchall()
+
         return (
             totals_row[0] or 0,
             totals_row[1] or 0,
             totals_row[2] or 0,
             totals_row[3] or 0.0,
             model_rows,
+            provider_rows,
         )
+
+    @staticmethod
+    def _do_time_series(
+        conn: sqlite3.Connection,
+        granularity: str,
+        agent_id: str | None,
+        tenant_id: str | None,
+        model: str | None,
+        since: datetime | None,
+        until: datetime | None,
+    ) -> list[tuple]:
+        clauses = []
+        params: list[Any] = []
+        if agent_id is not None:
+            clauses.append("agent_id = ?")
+            params.append(agent_id)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+        if model is not None:
+            clauses.append("model = ?")
+            params.append(model)
+        if since is not None:
+            clauses.append("timestamp >= ?")
+            params.append(_ts(since))
+        if until is not None:
+            clauses.append("timestamp <= ?")
+            params.append(_ts(until))
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        if granularity == "day":
+            bucket_expr = "substr(timestamp, 1, 10) || 'T00:00:00+00:00'"
+        else:
+            bucket_expr = "substr(timestamp, 1, 13) || ':00:00+00:00'"
+
+        sql = f"""
+            SELECT
+                {bucket_expr} AS bucket,
+                COUNT(*) AS requests,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens,
+                SUM(cost_usd) AS cost_usd
+            FROM usage_records {where}
+            GROUP BY bucket
+            ORDER BY bucket ASC
+        """
+        return conn.execute(sql, params).fetchall()
 
     @staticmethod
     def _do_tokens_today(conn: sqlite3.Connection, tenant_id: str, since: str) -> int:
@@ -295,9 +431,14 @@ class SQLiteUsageStore(UsageStore):
         since: datetime | None = None,
         until: datetime | None = None,
     ) -> UsageSummary:
-        total_requests, total_input, total_output, total_cost, model_rows = await self._run(
-            self._do_summarise, agent_id, tenant_id, model, since, until
-        )
+        (
+            total_requests,
+            total_input,
+            total_output,
+            total_cost,
+            model_rows,
+            provider_rows,
+        ) = await self._run(self._do_summarise, agent_id, tenant_id, model, since, until)
         summary = UsageSummary(
             total_requests=total_requests,
             total_input_tokens=total_input,
@@ -311,7 +452,38 @@ class SQLiteUsageStore(UsageStore):
                 "output_tokens": out_tok or 0,
                 "cost_usd": cost or 0.0,
             }
+        for prov, req_count, in_tok, out_tok, cost in provider_rows:
+            summary.by_provider[prov or "unknown"] = {
+                "requests": req_count,
+                "input_tokens": in_tok or 0,
+                "output_tokens": out_tok or 0,
+                "cost_usd": cost or 0.0,
+            }
         return summary
+
+    async def time_series(
+        self,
+        *,
+        granularity: str = "hour",
+        agent_id: str | None = None,
+        tenant_id: str | None = None,
+        model: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[TimeSeriesEntry]:
+        rows = await self._run(
+            self._do_time_series, granularity, agent_id, tenant_id, model, since, until
+        )
+        return [
+            TimeSeriesEntry(
+                bucket=row[0],
+                requests=row[1] or 0,
+                input_tokens=row[2] or 0,
+                output_tokens=row[3] or 0,
+                cost_usd=row[4] or 0.0,
+            )
+            for row in rows
+        ]
 
     async def tokens_today(self, tenant_id: str) -> int:
         since = _ts(datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0))

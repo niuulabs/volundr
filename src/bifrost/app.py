@@ -26,7 +26,7 @@ from bifrost.inbound.routes import create_router
 from bifrost.ports.key_vault import KeyVaultPort
 from bifrost.ports.rules import RuleEnginePort
 from bifrost.ports.usage_store import UsageStore
-from bifrost.pricing import ModelPricing
+from bifrost.pricing import ModelPricing, load_pricing_from_yaml
 from bifrost.router import ModelRouter
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,16 @@ def _build_usage_store(config: BifrostConfig) -> UsageStore:
             from bifrost.adapters.sqlite_store import SQLiteUsageStore
 
             return SQLiteUsageStore(path=config.usage_store.path)
+        case "postgres":
+            from bifrost.adapters.postgres_store import PostgresUsageStore
+
+            dsn = config.usage_store.effective_dsn()
+            if not dsn:
+                raise ValueError(
+                    "PostgreSQL usage store requires a DSN. "
+                    "Set usage_store.dsn in config or the BIFROST_USAGE_DSN environment variable."
+                )
+            return PostgresUsageStore(dsn=dsn)
         case _:
             from bifrost.adapters.memory_store import MemoryUsageStore
 
@@ -87,8 +97,17 @@ def _build_key_vault(config: BifrostConfig) -> KeyVaultPort:
 
 
 def _pricing_overrides(config: BifrostConfig) -> dict[str, ModelPricing]:
-    """Convert PricingOverride config objects to ModelPricing instances."""
-    result: dict[str, ModelPricing] = {}
+    """Build the effective pricing override table from config and optional YAML file.
+
+    Priority (highest wins):
+    1. Inline ``pricing`` entries in ``BifrostConfig``.
+    2. Entries from ``pricing_file`` (YAML).
+    3. Built-in snapshot in ``bifrost.pricing.BUILTIN_PRICING``.
+    """
+    # Start from the YAML file (lower priority).
+    result: dict[str, ModelPricing] = load_pricing_from_yaml(config.pricing_file)
+
+    # Inline config entries override the file.
     for model, override in config.pricing.items():
         result[model] = ModelPricing(
             input_per_million=override.input_per_million,

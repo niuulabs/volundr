@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from bifrost.ports.usage_store import UsageRecord, UsageStore, UsageSummary
+from bifrost.ports.usage_store import (
+    TimeSeriesEntry,
+    UsageRecord,
+    UsageStore,
+    UsageSummary,
+)
 
 
 def _today_start() -> datetime:
@@ -19,6 +24,13 @@ def _today_start() -> datetime:
 def _hour_start() -> datetime:
     now = datetime.now(UTC)
     return now.replace(minute=0, second=0, microsecond=0)
+
+
+def _bucket_key(ts: datetime, granularity: str) -> str:
+    """Return an ISO-8601 bucket key truncated to the given granularity."""
+    if granularity == "day":
+        return ts.astimezone(UTC).strftime("%Y-%m-%dT00:00:00+00:00")
+    return ts.astimezone(UTC).strftime("%Y-%m-%dT%H:00:00+00:00")
 
 
 class MemoryUsageStore(UsageStore):
@@ -76,6 +88,7 @@ class MemoryUsageStore(UsageStore):
             summary.total_input_tokens += r.input_tokens
             summary.total_output_tokens += r.output_tokens
             summary.total_cost_usd += r.cost_usd
+
             entry = summary.by_model.setdefault(
                 r.model,
                 {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
@@ -84,7 +97,46 @@ class MemoryUsageStore(UsageStore):
             entry["input_tokens"] += r.input_tokens
             entry["output_tokens"] += r.output_tokens
             entry["cost_usd"] += r.cost_usd
+
+            prov = r.provider or "unknown"
+            p_entry = summary.by_provider.setdefault(
+                prov,
+                {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+            )
+            p_entry["requests"] += 1
+            p_entry["input_tokens"] += r.input_tokens
+            p_entry["output_tokens"] += r.output_tokens
+            p_entry["cost_usd"] += r.cost_usd
+
         return summary
+
+    async def time_series(
+        self,
+        *,
+        granularity: str = "hour",
+        agent_id: str | None = None,
+        tenant_id: str | None = None,
+        model: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[TimeSeriesEntry]:
+        records = await self.query(
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            model=model,
+            since=since,
+            until=until,
+            limit=1_000_000,
+        )
+        buckets: dict[str, TimeSeriesEntry] = {}
+        for r in records:
+            key = _bucket_key(r.timestamp, granularity)
+            entry = buckets.setdefault(key, TimeSeriesEntry(bucket=key))
+            entry.requests += 1
+            entry.input_tokens += r.input_tokens
+            entry.output_tokens += r.output_tokens
+            entry.cost_usd += r.cost_usd
+        return sorted(buckets.values(), key=lambda e: e.bucket)
 
     async def tokens_today(self, tenant_id: str) -> int:
         since = _today_start()
