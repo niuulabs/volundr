@@ -26,6 +26,17 @@ from bifrost.inbound.chat_completions import (
     openai_error_response,
     openai_request_to_anthropic,
 )
+from bifrost.inbound.ollama import (
+    OllamaChatRequest,
+    OllamaGenerateRequest,
+    anthropic_response_to_ollama_chat,
+    anthropic_response_to_ollama_generate,
+    anthropic_stream_to_ollama_chat,
+    anthropic_stream_to_ollama_generate,
+    ollama_chat_to_anthropic,
+    ollama_error_response,
+    ollama_generate_to_anthropic,
+)
 from bifrost.inbound.tracking import (
     _HEADER_QUOTA_WARNING,
     _log_request,
@@ -507,5 +518,274 @@ def create_router(
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
             return openai_error_response(502, str(exc), "server_error")
+
+    # -----------------------------------------------------------------------
+    # Ollama-compatible endpoints
+    # -----------------------------------------------------------------------
+
+    @api_router.get("/api/tags")
+    async def ollama_tags() -> dict:
+        """List available models in Ollama /api/tags format.
+
+        Maps the internal model registry to the Ollama model list shape so
+        that tools like Open WebUI can discover available models automatically.
+        """
+        models: list[dict] = []
+        seen: set[str] = set()
+
+        for provider_name, provider_cfg in config.providers.items():
+            for model_id in provider_cfg.models:
+                if model_id in seen:
+                    continue
+                seen.add(model_id)
+                models.append(
+                    {
+                        "name": model_id,
+                        "model": model_id,
+                        "modified_at": "2024-01-01T00:00:00Z",
+                        "size": 0,
+                        "digest": "",
+                        "details": {
+                            "format": "unknown",
+                            "family": provider_name,
+                            "families": None,
+                            "parameter_size": "unknown",
+                            "quantization_level": "unknown",
+                        },
+                    }
+                )
+
+        for alias in config.aliases:
+            if alias in seen:
+                continue
+            seen.add(alias)
+            canonical = config.aliases[alias]
+            provider_name = config.provider_for_model(canonical) or "unknown"
+            models.append(
+                {
+                    "name": alias,
+                    "model": alias,
+                    "modified_at": "2024-01-01T00:00:00Z",
+                    "size": 0,
+                    "digest": "",
+                    "details": {
+                        "format": "unknown",
+                        "family": provider_name,
+                        "families": None,
+                        "parameter_size": "unknown",
+                        "quantization_level": "unknown",
+                    },
+                }
+            )
+
+        return {"models": models}
+
+    @api_router.post("/api/generate", response_model=None)
+    async def ollama_generate(raw_request: Request) -> JSONResponse | StreamingResponse:
+        """Ollama /api/generate endpoint.
+
+        Accepts a native Ollama generate request (prompt-based completion),
+        translates it to the internal Anthropic canonical format, routes via
+        the shared ModelRouter, and returns the response in Ollama format.
+        Streaming uses newline-delimited JSON (NDJSON), not SSE.
+        """
+        identity = extract_identity(raw_request, auth_mode, pat_secret)
+
+        try:
+            body = await raw_request.json()
+            ollama_req = OllamaGenerateRequest.model_validate(body)
+        except Exception as exc:
+            return ollama_error_response(422, str(exc))
+
+        request = ollama_generate_to_anthropic(ollama_req)
+
+        agent_perms = config.permissions_for_agent(identity.agent_id)
+        try:
+            _check_model_access(identity, request.model, agent_perms)
+        except HTTPException as exc:
+            return ollama_error_response(exc.status_code, exc.detail)
+
+        try:
+            warnings = await _check_quotas(identity, config, store, agent_perms)
+        except HTTPException as exc:
+            return ollama_error_response(exc.status_code, exc.detail)
+
+        request_id = str(raw_request.state.correlation_id)
+        start = time.monotonic()
+
+        try:
+            if request.stream:
+                stream_resp = StreamingResponse(
+                    anthropic_stream_to_ollama_generate(
+                        _stream_with_tracking(
+                            router.stream(request),
+                            request.model,
+                            start,
+                            identity,
+                            store,
+                            pricing_overrides,
+                            request_id,
+                        ),
+                        model=request.model,
+                        start=start,
+                    ),
+                    media_type="application/x-ndjson",
+                )
+                if warnings:
+                    stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return stream_resp
+
+            response = await router.complete(request)
+            latency_ms = (time.monotonic() - start) * 1000
+            usage = TokenUsage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                cache_creation_input_tokens=0,
+                cache_read_input_tokens=0,
+            )
+            _log_request(
+                RequestLog(
+                    timestamp=datetime.now(UTC),
+                    model=request.model,
+                    usage=usage,
+                    latency_ms=latency_ms,
+                    stream=False,
+                )
+            )
+
+            cost = calculate_cost(request.model, usage, pricing_overrides)
+            await store.record(
+                UsageRecord(
+                    request_id=request_id,
+                    agent_id=identity.agent_id,
+                    tenant_id=identity.tenant_id,
+                    session_id=identity.session_id,
+                    saga_id=identity.saga_id,
+                    model=request.model,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    cost_usd=cost,
+                    timestamp=datetime.now(UTC),
+                )
+            )
+
+            created_at = datetime.now(UTC).isoformat()
+            total_ns = int(latency_ms * 1e6)
+            json_resp = JSONResponse(
+                content=anthropic_response_to_ollama_generate(
+                    response, created_at=created_at, total_duration_ns=total_ns
+                )
+            )
+            if warnings:
+                json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            return json_resp
+
+        except RouterError as exc:
+            logger.error("Routing failed: %s", exc)
+            return ollama_error_response(502, str(exc))
+
+    @api_router.post("/api/chat", response_model=None)
+    async def ollama_chat(raw_request: Request) -> JSONResponse | StreamingResponse:
+        """Ollama /api/chat endpoint.
+
+        Accepts a native Ollama chat request (messages-based), translates it
+        to the internal Anthropic canonical format, routes via the shared
+        ModelRouter, and returns the response in Ollama format.
+        Streaming uses newline-delimited JSON (NDJSON), not SSE.
+        """
+        identity = extract_identity(raw_request, auth_mode, pat_secret)
+
+        try:
+            body = await raw_request.json()
+            ollama_req = OllamaChatRequest.model_validate(body)
+        except Exception as exc:
+            return ollama_error_response(422, str(exc))
+
+        request = ollama_chat_to_anthropic(ollama_req)
+
+        agent_perms = config.permissions_for_agent(identity.agent_id)
+        try:
+            _check_model_access(identity, request.model, agent_perms)
+        except HTTPException as exc:
+            return ollama_error_response(exc.status_code, exc.detail)
+
+        try:
+            warnings = await _check_quotas(identity, config, store, agent_perms)
+        except HTTPException as exc:
+            return ollama_error_response(exc.status_code, exc.detail)
+
+        request_id = str(raw_request.state.correlation_id)
+        start = time.monotonic()
+
+        try:
+            if request.stream:
+                stream_resp = StreamingResponse(
+                    anthropic_stream_to_ollama_chat(
+                        _stream_with_tracking(
+                            router.stream(request),
+                            request.model,
+                            start,
+                            identity,
+                            store,
+                            pricing_overrides,
+                            request_id,
+                        ),
+                        model=request.model,
+                        start=start,
+                    ),
+                    media_type="application/x-ndjson",
+                )
+                if warnings:
+                    stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return stream_resp
+
+            response = await router.complete(request)
+            latency_ms = (time.monotonic() - start) * 1000
+            usage = TokenUsage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                cache_creation_input_tokens=0,
+                cache_read_input_tokens=0,
+            )
+            _log_request(
+                RequestLog(
+                    timestamp=datetime.now(UTC),
+                    model=request.model,
+                    usage=usage,
+                    latency_ms=latency_ms,
+                    stream=False,
+                )
+            )
+
+            cost = calculate_cost(request.model, usage, pricing_overrides)
+            await store.record(
+                UsageRecord(
+                    request_id=request_id,
+                    agent_id=identity.agent_id,
+                    tenant_id=identity.tenant_id,
+                    session_id=identity.session_id,
+                    saga_id=identity.saga_id,
+                    model=request.model,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    cost_usd=cost,
+                    timestamp=datetime.now(UTC),
+                )
+            )
+
+            created_at = datetime.now(UTC).isoformat()
+            total_ns = int(latency_ms * 1e6)
+            json_resp = JSONResponse(
+                content=anthropic_response_to_ollama_chat(
+                    response, created_at=created_at, total_duration_ns=total_ns
+                )
+            )
+            if warnings:
+                json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            return json_resp
+
+        except RouterError as exc:
+            logger.error("Routing failed: %s", exc)
+            return ollama_error_response(502, str(exc))
 
     return api_router
