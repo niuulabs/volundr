@@ -111,6 +111,7 @@ class AnthropicRequest(BaseModel):
     stop_sequences: list[str] | None = None
     stream: bool = False
     metadata: dict[str, Any] | None = None
+    thinking: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------

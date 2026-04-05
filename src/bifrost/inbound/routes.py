@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from bifrost.auth import AgentIdentity, extract_identity
 from bifrost.config import AgentPermissions, BifrostConfig
 from bifrost.domain.models import ModelInfo, RequestLog, TokenUsage
+from bifrost.domain.routing import RuleRejectError
 from bifrost.inbound.chat_completions import (
     OpenAIChatRequest,
     anthropic_response_to_openai,
@@ -307,6 +308,8 @@ def create_router(
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
             return json_resp
 
+        except RuleRejectError as exc:
+            raise HTTPException(status_code=400, detail=exc.message) from exc
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -499,6 +502,8 @@ def create_router(
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
             return json_resp
 
+        except RuleRejectError as exc:
+            return openai_error_response(400, exc.message, "invalid_request_error")
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
             return openai_error_response(502, str(exc), "server_error")
