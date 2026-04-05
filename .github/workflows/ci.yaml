@@ -158,7 +158,6 @@ jobs:
             --cov-fail-under=85
 
       - name: Upload coverage to Codecov
-        continue-on-error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
