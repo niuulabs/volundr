@@ -7,13 +7,13 @@ from unittest.mock import patch
 
 import pytest
 
-import niuu.adapters.sleipnir.serialization as _ser_module
-from niuu.adapters.sleipnir.serialization import (
+import sleipnir.adapters.serialization as _ser_module
+from sleipnir.adapters.serialization import (
     deserialize,
     msgpack_available,
     serialize,
 )
-from niuu.domain.sleipnir import SleipnirEvent
+from sleipnir.domain.events import SleipnirEvent
 
 _TS = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 
-from niuu.domain.sleipnir import SleipnirEvent
+from sleipnir.domain.events import SleipnirEvent
 
 #: Type alias for an async event handler.
 EventHandler = Callable[[SleipnirEvent], Awaitable[None]]

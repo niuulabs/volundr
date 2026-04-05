@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from niuu.domain.sleipnir import SleipnirEvent
+from sleipnir.domain.events import SleipnirEvent
 
 try:
     import msgpack as _msgpack

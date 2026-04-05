@@ -1,1 +1,0 @@
-"""Sleipnir event bus adapters."""

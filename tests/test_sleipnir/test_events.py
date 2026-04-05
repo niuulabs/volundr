@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from niuu.domain.sleipnir import (
+from sleipnir.domain.events import (
     EVENT_NAMESPACES,
     SleipnirEvent,
     match_event_type,

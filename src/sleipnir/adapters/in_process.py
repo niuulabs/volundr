@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 
-from niuu.domain.sleipnir import SleipnirEvent, match_event_type
-from niuu.ports.sleipnir import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
+from sleipnir.domain.events import SleipnirEvent, match_event_type
+from sleipnir.ports.events import EventHandler, SleipnirPublisher, SleipnirSubscriber, Subscription
 
 logger = logging.getLogger(__name__)
 

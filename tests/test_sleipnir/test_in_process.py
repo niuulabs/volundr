@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from niuu.adapters.sleipnir.in_process import InProcessBus
-from niuu.domain.sleipnir import SleipnirEvent
+from sleipnir.adapters.in_process import InProcessBus
+from sleipnir.domain.events import SleipnirEvent
 
 # ---------------------------------------------------------------------------
 # Helpers
