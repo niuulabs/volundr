@@ -396,7 +396,10 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
-            await _emit_events(identity, cost, usage.input_tokens + usage.output_tokens, request.model, agent_budget_limit)
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
+            )
 
             json_resp = JSONResponse(content=data)
             if warnings:
@@ -644,7 +647,10 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
-            await _emit_events(identity, cost, usage.input_tokens + usage.output_tokens, request.model, agent_budget_limit)
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
+            )
 
             json_resp = JSONResponse(content=anthropic_response_to_openai(response))
             if warnings:
@@ -778,7 +784,10 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
-            await _emit_events(identity, cost, usage.input_tokens + usage.output_tokens, request.model, agent_budget_limit)
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
+            )
 
             created_at = datetime.now(UTC).isoformat()
             total_ns = int(latency_ms * 1e6)
