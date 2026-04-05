@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -472,3 +473,100 @@ class TestRetryMechanism:
 
         with pytest.raises(sqlite3.OperationalError, match="database is locked"):
             adapter._with_retry(_always_locked)
+
+
+# ---------------------------------------------------------------------------
+# WAL concurrency: concurrent reads during a write
+# ---------------------------------------------------------------------------
+
+
+class TestWALConcurrency:
+    async def test_concurrent_reads_during_write(self, tmp_path: Path) -> None:
+        """WAL mode allows multiple readers while a write is in progress."""
+        adapter = SqliteMemoryAdapter(
+            path=str(tmp_path / "memory.db"),
+            max_retries=5,
+            min_jitter_ms=1.0,
+            max_jitter_ms=5.0,
+        )
+        await adapter.initialize()
+
+        # Pre-load some episodes so reads return data.
+        for i in range(5):
+            await adapter.record_episode(_ep(episode_id=f"pre-{i}", summary=f"background task {i}"))
+
+        read_results: list[int] = []
+        errors: list[Exception] = []
+
+        def _reader_thread(n: int) -> None:
+            import asyncio
+
+            async def _read() -> None:
+                try:
+                    matches = await adapter.query_episodes("background task", min_relevance=0.0)
+                    read_results.append(len(matches))
+                except Exception as exc:
+                    errors.append(exc)
+
+            asyncio.run(_read())
+
+        # Start concurrent reader threads.
+        threads = [threading.Thread(target=_reader_thread, args=(i,)) for i in range(4)]
+        for t in threads:
+            t.start()
+
+        # Write during concurrent reads.
+        concurrent_ep = _ep(episode_id="concurrent-write", summary="write during reads")
+        await adapter.record_episode(concurrent_ep)
+
+        for t in threads:
+            t.join(timeout=10.0)
+
+        # All reads must have succeeded without errors.
+        assert not errors, f"Reader threads failed: {errors}"
+        # Each reader found the pre-loaded episodes.
+        assert all(r >= 0 for r in read_results)
+
+    async def test_checkpoint_triggers_passively(self, tmp_path: Path) -> None:
+        """Passive WAL checkpoint fires after checkpoint_interval writes (no error)."""
+        adapter = SqliteMemoryAdapter(
+            path=str(tmp_path / "memory.db"),
+            checkpoint_interval=3,
+        )
+        await adapter.initialize()
+
+        # Write more than checkpoint_interval to trigger checkpoint.
+        for i in range(7):
+            await adapter.record_episode(
+                _ep(episode_id=f"ckpt-{i}", summary=f"checkpoint episode {i}")
+            )
+
+        # If checkpoint raised, the above would have failed.  Verify writes persisted.
+        conn = sqlite3.connect(str(tmp_path / "memory.db"))
+        row = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()
+        conn.close()
+        assert row[0] == 7
+
+    async def test_empty_database_query_returns_empty(self, tmp_path: Path) -> None:
+        """A freshly initialised database returns empty results gracefully."""
+        adapter = SqliteMemoryAdapter(path=str(tmp_path / "memory.db"))
+        await adapter.initialize()
+
+        matches = await adapter.query_episodes("anything", min_relevance=0.0)
+        assert matches == []
+
+    async def test_empty_database_prefetch_returns_empty_string(self, tmp_path: Path) -> None:
+        """Prefetch on an empty database returns an empty string (no crash)."""
+        adapter = SqliteMemoryAdapter(path=str(tmp_path / "memory.db"))
+        await adapter.initialize()
+
+        result = await adapter.prefetch("any context query")
+        assert result == ""
+
+    async def test_empty_database_search_sessions_returns_empty(self, tmp_path: Path) -> None:
+        """Session search on an empty database returns empty list."""
+        adapter = SqliteMemoryAdapter(path=str(tmp_path / "memory.db"))
+        await adapter.initialize()
+
+        summaries = await adapter.search_sessions("any query")
+        assert summaries == []

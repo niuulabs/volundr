@@ -43,3 +43,14 @@ class MaxIterationsError(RavnError):
 
 class ConfigurationError(RavnError):
     """Raised when Ravn is misconfigured."""
+
+
+class AllProvidersExhaustedError(RavnError):
+    """Raised when all LLM providers in the fallback chain have failed."""
+
+    def __init__(self, provider_count: int, last_error: Exception | None = None) -> None:
+        self.provider_count = provider_count
+        self.last_error = last_error
+        super().__init__(
+            f"All {provider_count} LLM provider(s) failed; see provider logs for details."
+        )
