@@ -14,9 +14,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bifrost.app import create_app
-from bifrost.inbound.tracking import _extract_usage_from_sse_line
 from bifrost.config import BifrostConfig, ProviderConfig, RoutingStrategy
 from bifrost.domain.models import TokenUsage
+from bifrost.inbound.tracking import _extract_usage_from_sse_line
 from bifrost.ports.provider import ProviderError, ProviderPort
 from bifrost.router import ModelRouter, RouterError, _load_adapter
 from bifrost.translation.models import (
