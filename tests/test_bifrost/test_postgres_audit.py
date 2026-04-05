@@ -9,6 +9,7 @@ import pytest
 
 from bifrost.adapters.audit.postgres import PostgresAuditAdapter
 from bifrost.ports.audit import AuditEvent
+from tests.test_bifrost.conftest import make_pool_mock
 
 
 def _event(**kwargs) -> AuditEvent:
@@ -33,31 +34,13 @@ def _event(**kwargs) -> AuditEvent:
     return AuditEvent(**defaults)
 
 
-def _make_pool_mock():
-    """Return a mocked asyncpg pool that works as an async context manager."""
-    conn = AsyncMock()
-    conn.execute = AsyncMock(return_value=None)
-    conn.fetchrow = AsyncMock()
-    conn.fetch = AsyncMock(return_value=[])
-
-    pool = MagicMock()
-    pool.acquire = MagicMock(
-        return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=conn),
-            __aexit__=AsyncMock(return_value=False),
-        )
-    )
-    pool.close = AsyncMock()
-    return pool, conn
-
-
 _PATCH_PATH = "bifrost.adapters._pg_base.asyncpg.create_pool"
 
 
 @pytest.fixture
 async def pg_audit():
     """PostgresAuditAdapter with asyncpg.create_pool stubbed out."""
-    pool, conn = _make_pool_mock()
+    pool, conn = make_pool_mock()
     with patch(_PATCH_PATH, new_callable=AsyncMock) as mock_cp:
         mock_cp.return_value = pool
         adapter = PostgresAuditAdapter(dsn="postgresql://fake/db")
@@ -156,7 +139,7 @@ class TestPostgresAuditQuery:
 
 class TestPostgresAuditClose:
     async def test_close_calls_pool_close(self):
-        pool, conn = _make_pool_mock()
+        pool, conn = make_pool_mock()
         with patch(_PATCH_PATH, new_callable=AsyncMock) as mock_cp:
             mock_cp.return_value = pool
             adapter = PostgresAuditAdapter(dsn="postgresql://fake/db")
@@ -165,7 +148,7 @@ class TestPostgresAuditClose:
         pool.close.assert_called_once()
 
     async def test_close_is_idempotent(self):
-        pool, conn = _make_pool_mock()
+        pool, conn = make_pool_mock()
         with patch(_PATCH_PATH, new_callable=AsyncMock) as mock_cp:
             mock_cp.return_value = pool
             adapter = PostgresAuditAdapter(dsn="postgresql://fake/db")
@@ -194,7 +177,7 @@ class TestPostgresAuditDsnEnv:
 
 class TestPostgresAuditSchemaInit:
     async def test_schema_created_on_first_pool_acquire(self):
-        pool, conn = _make_pool_mock()
+        pool, conn = make_pool_mock()
         with patch(_PATCH_PATH, new_callable=AsyncMock) as mock_cp:
             mock_cp.return_value = pool
             adapter = PostgresAuditAdapter(dsn="postgresql://fake/db")

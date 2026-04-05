@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,6 +37,24 @@ def make_response(
         stop_reason="end_turn",
         usage=UsageInfo(input_tokens=input_tokens, output_tokens=output_tokens),
     )
+
+
+def make_pool_mock():
+    """Return a mocked asyncpg pool that works as an async context manager."""
+    conn = AsyncMock()
+    conn.execute = AsyncMock(return_value=None)
+    conn.fetchrow = AsyncMock()
+    conn.fetch = AsyncMock(return_value=[])
+
+    pool = MagicMock()
+    pool.acquire = MagicMock(
+        return_value=MagicMock(
+            __aenter__=AsyncMock(return_value=conn),
+            __aexit__=AsyncMock(return_value=False),
+        )
+    )
+    pool.close = AsyncMock()
+    return pool, conn
 
 
 @pytest.fixture

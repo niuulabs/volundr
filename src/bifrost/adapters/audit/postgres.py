@@ -15,11 +15,12 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import asyncpg
 
 from bifrost.adapters._pg_base import PostgresBase
-from bifrost.adapters._sql_helpers import build_where_with_range, to_utc
+from bifrost.adapters._sql_helpers import build_where_with_range, filter_pairs, to_utc
 from bifrost.ports.audit import AuditEvent, AuditPort
 
 logger = logging.getLogger(__name__)
@@ -88,17 +89,10 @@ def _filters(
     tenant_id: str | None,
     model: str | None,
     outcome: str | None,
-) -> list[tuple[str, str]]:
-    pairs: list[tuple[str, str]] = []
-    if agent_id is not None:
-        pairs.append(("agent_id", agent_id))
-    if tenant_id is not None:
-        pairs.append(("tenant_id", tenant_id))
-    if model is not None:
-        pairs.append(("model", model))
-    if outcome is not None:
-        pairs.append(("outcome", outcome))
-    return pairs
+) -> list[tuple[str, Any]]:
+    return filter_pairs(
+        agent_id=agent_id, tenant_id=tenant_id, model=model, outcome=outcome,
+    )
 
 
 class PostgresAuditAdapter(PostgresBase, AuditPort):
