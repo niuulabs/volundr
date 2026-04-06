@@ -93,9 +93,16 @@ class SSETransport(MCPTransport):
     4. Receive responses as ``message`` events on the SSE stream.
     """
 
-    def __init__(self, url: str, *, timeout: float = _REQUEST_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        url: str,
+        *,
+        timeout: float = _REQUEST_TIMEOUT_SECONDS,
+        connect_timeout: float = _CONNECT_TIMEOUT_SECONDS,
+    ) -> None:
         self._url = url
         self._timeout = timeout
+        self._connect_timeout = connect_timeout
         self._post_url: str | None = None
         self._response_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(
             maxsize=_RECEIVE_QUEUE_SIZE
@@ -113,7 +120,7 @@ class SSETransport(MCPTransport):
             raise MCPTransportError("httpx is required for SSE transport") from exc
 
         # Start the SSE reader in the background and wait for the endpoint event.
-        endpoint_ready: asyncio.Future[str] = asyncio.get_event_loop().create_future()
+        endpoint_ready: asyncio.Future[str] = asyncio.get_running_loop().create_future()
         self._sse_task = asyncio.create_task(
             self._read_sse(endpoint_ready),
             name="mcp-sse-reader",
@@ -122,7 +129,7 @@ class SSETransport(MCPTransport):
         try:
             self._post_url = await asyncio.wait_for(
                 endpoint_ready,
-                timeout=_CONNECT_TIMEOUT_SECONDS,
+                timeout=self._connect_timeout,
             )
         except TimeoutError:
             self._sse_task.cancel()

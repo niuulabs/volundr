@@ -36,15 +36,22 @@ def _build_transport(cfg: MCPServerConfig) -> MCPTransport:
                 command=cfg.command,
                 args=list(cfg.args),
                 env=dict(cfg.env),
+                read_timeout=cfg.timeout,
             )
         case "http":
             from ravn.adapters.mcp.sse_transport import HTTPTransport
 
-            return HTTPTransport(url=cfg.url)
+            return HTTPTransport(url=cfg.url, timeout=cfg.timeout)
         case "sse":
             from ravn.adapters.mcp.sse_transport import SSETransport
 
-            return SSETransport(url=cfg.url)
+            return SSETransport(
+                url=cfg.url,
+                timeout=cfg.timeout,
+                connect_timeout=cfg.connect_timeout,
+            )
+        case _:
+            raise ValueError(f"Unknown MCP transport type: {cfg.transport!r}")
 
 
 def _build_input_schema(tool_def: dict[str, Any]) -> dict[str, Any]:

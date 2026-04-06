@@ -504,7 +504,15 @@ class MCPServerConfig(BaseModel):
     )
     url: str = Field(
         default="",
-        description="URL for http transport.",
+        description="URL for http/sse transport.",
+    )
+    timeout: float = Field(
+        default=30.0,
+        description="Request/read timeout in seconds.",
+    )
+    connect_timeout: float = Field(
+        default=10.0,
+        description="Connection timeout in seconds (SSE transport).",
     )
     enabled: bool = Field(default=True)
 
