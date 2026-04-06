@@ -1,0 +1,20 @@
+apiVersion: v2
+name: bifrost
+description: "Bifröst — multi-provider LLM gateway with observability and quota enforcement"
+type: application
+version: 0.0.0
+appVersion: "0.0.0"
+keywords:
+  - llm
+  - gateway
+  - anthropic
+  - openai
+  - ai
+  - kubernetes
+maintainers:
+  - name: Niuu Labs
+    url: https://github.com/niuulabs
+home: https://github.com/niuulabs/volundr
+sources:
+  - https://github.com/niuulabs/volundr
+dependencies: []
