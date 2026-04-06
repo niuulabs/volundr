@@ -12,7 +12,7 @@ from typing import Any
 
 import typer
 
-from ravn.agent import PostToolHook, PreToolHook, RavnAgent, UserInputFn
+from ravn.agent import PostToolHook, PreToolHook, RavnAgent
 from ravn.config import OutcomeConfig, ProjectConfig, Settings
 from ravn.domain.models import Session, TokenUsage, ToolCall, ToolResult
 
@@ -112,7 +112,9 @@ def _build_memory(settings: Settings) -> Any:
     if settings.embedding.enabled:
         try:
             cls = _import_class(settings.embedding.adapter)
-            kwargs = _inject_secrets(settings.embedding.kwargs, settings.embedding.secret_kwargs_env)
+            kwargs = _inject_secrets(
+                settings.embedding.kwargs, settings.embedding.secret_kwargs_env,
+            )
             embedding_port = cls(**kwargs)
         except Exception as exc:
             logger.warning("Failed to load embedding adapter: %s — falling back to FTS-only", exc)
@@ -142,7 +144,9 @@ def _build_memory(settings: Settings) -> Any:
         dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
         dsn = dsn or settings.memory.dsn
         if not dsn:
-            logger.warning("Postgres memory backend configured but no DSN provided — memory disabled")
+            logger.warning(
+                "Postgres memory backend configured but no DSN provided — memory disabled",
+            )
             return None
         return PostgresMemoryAdapter(dsn=dsn)
 
@@ -268,8 +272,12 @@ def _build_tools(
     tools: list[ToolPort] = [
         # -- File tools --
         ReadFileTool(workspace, max_bytes=fc.max_read_bytes),
-        WriteFileTool(workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes),
-        EditFileTool(workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes),
+        WriteFileTool(
+            workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes,
+        ),
+        EditFileTool(
+            workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes,
+        ),
         GlobSearchTool(workspace),
         GrepSearchTool(workspace),
         # -- Git tools --
@@ -367,7 +375,11 @@ def _build_tools(
             tool_names=tool_names,
             permission_mode=settings.permission.mode,
             model=settings.agent.model,
-            persona=persona_config.system_prompt_template[:40] if persona_config and persona_config.system_prompt_template else "",
+            persona=(
+                persona_config.system_prompt_template[:40]
+                if persona_config and persona_config.system_prompt_template
+                else ""
+            ),
             iteration_budget=iteration_budget,
             memory=memory,
         )
@@ -395,7 +407,8 @@ def _filter_tools(
 
     if persona_config is not None:
         if persona_config.allowed_tools:
-            enabled = enabled | set(persona_config.allowed_tools) if enabled else set(persona_config.allowed_tools)
+            persona_allowed = set(persona_config.allowed_tools)
+            enabled = (enabled | persona_allowed) if enabled else persona_allowed
         if persona_config.forbidden_tools:
             disabled = disabled | set(persona_config.forbidden_tools)
 
@@ -503,7 +516,7 @@ def _resolve_persona(
     project_config: ProjectConfig | None,
 ) -> Any:
     """Load and merge a persona with optional ProjectConfig overrides."""
-    from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
+    from ravn.adapters.personas.loader import PersonaLoader
 
     loader = PersonaLoader()
 
