@@ -386,6 +386,24 @@ def _build_tools(
         except Exception as exc:
             logger.warning("Failed to load custom tool %r: %s", ct.adapter, exc)
 
+    # -- Platform tools (gateway/platform mode only) --
+    if settings.gateway.platform.enabled:
+        from ravn.adapters.tools.platform_tools import (
+            TrackerIssueTool,
+            TyrSagaTool,
+            VolundrGitTool,
+            VolundrSessionTool,
+        )
+
+        _purl = settings.gateway.platform.base_url
+        _ptimeout = settings.gateway.platform.timeout
+        tools.extend([
+            VolundrSessionTool(base_url=_purl, timeout=_ptimeout),
+            VolundrGitTool(base_url=_purl, timeout=_ptimeout),
+            TyrSagaTool(base_url=_purl, timeout=_ptimeout),
+            TrackerIssueTool(base_url=_purl, timeout=_ptimeout),
+        ])
+
     # -- Introspection tools (added before filtering so they can be disabled) --
     state_tool = RavnStateTool(
         tool_names=[],  # populated after filtering

@@ -894,11 +894,33 @@ class HttpChannelConfig(BaseModel):
     )
 
 
+class SkuldChannelConfig(BaseModel):
+    """Skuld WebSocket channel configuration for gateway mode."""
+
+    enabled: bool = Field(default=False)
+    broker_url: str = Field(
+        default="ws://localhost:9000/ws/ravn",
+        description="WebSocket URL of the Skuld broker endpoint.",
+    )
+
+
+class PlatformToolsConfig(BaseModel):
+    """Platform integration tools (Volundr sessions, git, Tyr sagas, tracker)."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Register platform tools (requires Volundr/Tyr backend).",
+    )
+    base_url: str = Field(default="http://localhost:8080")
+    timeout: float = Field(default=30.0)
+
+
 class GatewayChannelsConfig(BaseModel):
     """Per-channel gateway configuration."""
 
     telegram: TelegramChannelConfig = Field(default_factory=TelegramChannelConfig)
     http: HttpChannelConfig = Field(default_factory=HttpChannelConfig)
+    skuld: SkuldChannelConfig = Field(default_factory=SkuldChannelConfig)
 
 
 class GatewayConfig(BaseModel):
@@ -913,6 +935,7 @@ class GatewayConfig(BaseModel):
 
     enabled: bool = Field(default=False)
     channels: GatewayChannelsConfig = Field(default_factory=GatewayChannelsConfig)
+    platform: PlatformToolsConfig = Field(default_factory=PlatformToolsConfig)
 
 
 class LoggingConfig(BaseModel):
