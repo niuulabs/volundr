@@ -343,6 +343,10 @@ class SkillConfig(BaseModel):
         default=True,
         description="Enable automatic skill extraction from recurring episode patterns.",
     )
+    backend: Literal["file", "sqlite"] = Field(
+        default="file",
+        description="Skill storage backend: 'file' (Markdown registry) or 'sqlite'.",
+    )
     path: str = Field(
         default="~/.ravn/skills.db",
         description="SQLite database path for skill storage.",

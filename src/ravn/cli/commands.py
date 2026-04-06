@@ -361,14 +361,24 @@ def _build_tools(
 
     # -- Skill tools (if enabled) --
     if settings.skill.enabled:
-        from ravn.adapters.file_skill_registry import FileSkillRegistry
         from ravn.adapters.tools.skill_tools import SkillListTool, SkillRunTool
 
-        skill_port = FileSkillRegistry(
-            skill_dirs=settings.skill.skill_dirs or None,
-            include_builtin=settings.skill.include_builtin,
-            cwd=workspace,
-        )
+        if settings.skill.backend == "sqlite":
+            from ravn.adapters.sqlite_skill import SqliteSkillAdapter
+
+            skill_port = SqliteSkillAdapter(
+                path=settings.skill.path,
+                suggestion_threshold=settings.skill.suggestion_threshold,
+                cache_max_entries=settings.skill.cache_max_entries,
+            )
+        else:
+            from ravn.adapters.file_skill_registry import FileSkillRegistry
+
+            skill_port = FileSkillRegistry(
+                skill_dirs=settings.skill.skill_dirs or None,
+                include_builtin=settings.skill.include_builtin,
+                cwd=workspace,
+            )
         tools.append(SkillListTool(skill_port))
         tools.append(SkillRunTool(skill_port))
 
@@ -936,6 +946,104 @@ def approvals_revoke(
 
 
 # ---------------------------------------------------------------------------
+# Evolution CLI
+# ---------------------------------------------------------------------------
+
+
+evolve_app = typer.Typer(
+    name="ravn-evolve",
+    help="Run the Ravn self-improvement pattern extraction pass.",
+    add_completion=False,
+)
+
+
+@evolve_app.command()
+def evolve(
+    config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
+) -> None:
+    """Run the self-improvement pattern extraction pass.
+
+    Analyses accumulated task outcomes and episodic memory to surface
+    recurring tool sequences (skill suggestions), systematic errors
+    (warnings), and effective strategies.  Results are printed as a
+    human-readable diff — nothing is modified automatically.
+    """
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
+    settings = Settings()
+    _configure_logging(settings)
+
+    if not settings.evolution.enabled:
+        typer.echo("Evolution is disabled in config (evolution.enabled = false).")
+        raise typer.Exit(0)
+
+    asyncio.run(_run_evolve(settings))
+
+
+async def _run_evolve(settings: Settings) -> None:
+    from ravn.context.evolution import (
+        PatternExtractor,
+        load_state,
+        save_state,
+        should_run,
+    )
+
+    memory = _build_memory(settings)
+    if memory is None:
+        typer.echo("Memory backend not available — evolution requires memory.", err=True)
+        raise typer.Exit(1)
+
+    outcome_port, _ = _build_outcome(settings)
+    if outcome_port is None:
+        typer.echo("Outcome recording not enabled — evolution requires outcomes.", err=True)
+        raise typer.Exit(1)
+
+    evo = settings.evolution
+    state_path = Path(evo.state_path).expanduser()
+    state = load_state(state_path)
+    current_count = await outcome_port.count_all_outcomes()
+
+    if not should_run(state, current_count, min_new=evo.min_new_outcomes):
+        typer.echo(
+            f"Not enough new outcomes ({current_count - state.outcome_count_at_last_run} "
+            f"since last run, need {evo.min_new_outcomes})."
+        )
+        return
+
+    typer.echo(
+        f"Analysing {current_count} outcomes "
+        f"({current_count - state.outcome_count_at_last_run} new)..."
+    )
+
+    extractor = PatternExtractor(
+        memory,
+        outcome_port,
+        max_episodes_to_analyze=evo.max_episodes_to_analyze,
+        max_outcomes_to_analyze=evo.max_outcomes_to_analyze,
+        skill_suggestion_min_occurrences=evo.skill_suggestion_min_occurrences,
+        error_warning_min_occurrences=evo.error_warning_min_occurrences,
+        strategy_min_occurrences=evo.strategy_min_occurrences,
+        max_skill_suggestions=evo.max_skill_suggestions,
+        max_system_warnings=evo.max_system_warnings,
+        max_strategy_injections=evo.max_strategy_injections,
+    )
+    evolution = await extractor.extract()
+
+    if evolution.is_empty():
+        typer.echo("No patterns found.")
+    else:
+        typer.echo(evolution.as_diff())
+
+    from datetime import UTC, datetime
+
+    state.outcome_count_at_last_run = current_count
+    state.last_run_at = datetime.now(UTC)
+    save_state(state_path, state)
+    typer.echo("Evolution state saved.")
+
+
+# ---------------------------------------------------------------------------
 # Gateway CLI
 # ---------------------------------------------------------------------------
 
@@ -1120,3 +1228,7 @@ def main() -> None:
 
 def gateway_main() -> None:
     gateway_app()
+
+
+def evolve_main() -> None:
+    evolve_app()
