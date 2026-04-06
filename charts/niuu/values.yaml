@@ -31,3 +31,6 @@ tyr:
 
 niuu-shared:
   enabled: true
+
+bifrost:
+  enabled: true
