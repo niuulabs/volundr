@@ -199,6 +199,7 @@ class SqliteMemoryAdapter(MemoryPort):
         self._semantic_candidate_limit = semantic_candidate_limit
         self._write_count = 0
         self._shared_context: SharedContext | None = None
+        self._init_db()
 
     # ------------------------------------------------------------------
     # Public async API

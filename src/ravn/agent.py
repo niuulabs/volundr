@@ -199,7 +199,7 @@ class RavnAgent:
                     if memory_ctx:
                         effective_system = f"{effective_system}\n\n{memory_ctx}"
                 except Exception:
-                    logger.warning("Memory prefetch failed; continuing without context.")
+                    logger.warning("Memory prefetch failed; continuing without context.", exc_info=True)
 
         if self._outcome_port is not None:
             try:
@@ -315,7 +315,7 @@ class RavnAgent:
                 )
                 await self._memory.record_episode(episode)
             except Exception:
-                logger.warning("Memory episode recording failed; continuing.")
+                logger.warning("Memory episode recording failed; continuing.", exc_info=True)
 
         if self._outcome_port is not None:
             try:
@@ -344,7 +344,7 @@ class RavnAgent:
                     memory_ctx = await self._memory.prefetch(user_input)
                     self._prompt_builder.set_memory_context(memory_ctx or "")
                 except Exception:
-                    logger.warning("Memory prefetch failed; continuing without context.")
+                    logger.warning("Memory prefetch failed; continuing without context.", exc_info=True)
             return self._prompt_builder.render_blocks()
 
         # Legacy: plain-string system prompt with optional memory suffix.
@@ -355,7 +355,7 @@ class RavnAgent:
                 if memory_ctx:
                     effective = f"{self._system_prompt}\n\n{memory_ctx}"
             except Exception:
-                logger.warning("Memory prefetch failed; continuing without context.")
+                logger.warning("Memory prefetch failed; continuing without context.", exc_info=True)
         return effective
 
     async def _maybe_compress(

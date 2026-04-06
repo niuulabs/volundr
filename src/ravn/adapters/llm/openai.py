@@ -151,6 +151,81 @@ def _normalise_usage(raw: dict, *, input_text: str = "", output_text: str = "") 
     )
 
 
+def _convert_anthropic_messages(messages: list[dict]) -> list[dict]:
+    """Convert Anthropic-format tool messages to OpenAI-format.
+
+    Anthropic stores tool calls as ``{"type": "tool_use", ...}`` content blocks
+    in assistant messages, and tool results as ``{"type": "tool_result", ...}``
+    content blocks in user messages.  OpenAI expects tool calls in the
+    ``tool_calls`` field of assistant messages, and tool results as separate
+    ``role: "tool"`` messages.
+    """
+    converted: list[dict] = []
+    for msg in messages:
+        content = msg.get("content")
+
+        # Plain string content — pass through unchanged.
+        if not isinstance(content, list):
+            converted.append(msg)
+            continue
+
+        if msg.get("role") == "assistant":
+            # Split content blocks into text + tool_use entries.
+            text_parts: list[str] = []
+            tool_calls_out: list[dict] = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    tool_calls_out.append(
+                        {
+                            "id": block.get("id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": block.get("name", ""),
+                                "arguments": json.dumps(block.get("input", {})),
+                            },
+                        }
+                    )
+                elif isinstance(block, dict) and block.get("type") == "text":
+                    text_parts.append(block.get("text", ""))
+                elif isinstance(block, str):
+                    text_parts.append(block)
+
+            out: dict = {"role": "assistant", "content": "\n".join(text_parts) or None}
+            if tool_calls_out:
+                out["tool_calls"] = tool_calls_out
+            converted.append(out)
+
+        elif msg.get("role") == "user":
+            # Check if content blocks are tool_result entries.
+            tool_results: list[dict] = []
+            text_parts_u: list[str] = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    tool_results.append(block)
+                elif isinstance(block, dict) and block.get("type") == "text":
+                    text_parts_u.append(block.get("text", ""))
+                elif isinstance(block, str):
+                    text_parts_u.append(block)
+
+            if tool_results:
+                # Emit each tool result as a separate role=tool message.
+                for tr in tool_results:
+                    converted.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tr.get("tool_use_id", ""),
+                            "content": tr.get("content", ""),
+                        }
+                    )
+            else:
+                # Non-tool list content — join text parts.
+                converted.append({"role": "user", "content": "\n".join(text_parts_u)})
+        else:
+            converted.append(msg)
+
+    return converted
+
+
 class OpenAICompatibleAdapter(LLMPort):
     """Calls any OpenAI-compatible Chat Completions endpoint.
 
@@ -197,16 +272,21 @@ class OpenAICompatibleAdapter(LLMPort):
 
         GPT-5/o1/o3/Codex models use a ``"developer"`` role for instruction
         messages.  Other models use the standard ``"system"`` role.
+
+        Anthropic-format tool_use / tool_result content blocks are converted
+        to OpenAI-format tool_calls and role=tool messages.
         """
+        converted = _convert_anthropic_messages(messages)
+
         system_text = _system_to_string(system)
         if self._system_prefix:
             system_text = f"{self._system_prefix}\n\n{system_text}".strip()
 
         if not system_text:
-            return list(messages)
+            return converted
 
         role = "developer" if _uses_developer_role(model or self._default_model) else "system"
-        return [{"role": role, "content": system_text}, *messages]
+        return [{"role": role, "content": system_text}, *converted]
 
     def _build_request(
         self,
