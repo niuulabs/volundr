@@ -164,6 +164,35 @@ async def _try_cache_hit(
     return JSONResponse(content=content)
 
 
+def _cache_hit_record(
+    request_id: str,
+    identity,
+    model: str,
+    provider: str,
+    latency_ms: float,
+) -> UsageRecord:
+    """Build a zero-cost ``UsageRecord`` for a cache hit."""
+    return UsageRecord(
+        request_id=request_id,
+        agent_id=identity.agent_id,
+        tenant_id=identity.tenant_id,
+        session_id=identity.session_id,
+        saga_id=identity.saga_id,
+        model=model,
+        provider=provider,
+        input_tokens=0,
+        output_tokens=0,
+        cache_read_tokens=0,
+        cache_write_tokens=0,
+        reasoning_tokens=0,
+        cost_usd=0.0,
+        latency_ms=latency_ms,
+        streaming=False,
+        cache_hit=True,
+        timestamp=datetime.now(UTC),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Quota enforcement
 # ---------------------------------------------------------------------------
