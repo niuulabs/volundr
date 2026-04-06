@@ -489,9 +489,9 @@ class MCPServerConfig(BaseModel):
     """Configuration for a single MCP server."""
 
     name: str = Field(description="Human-readable name for this server.")
-    transport: Literal["stdio", "http"] = Field(
+    transport: Literal["stdio", "sse", "http"] = Field(
         default="stdio",
-        description="Transport type: 'stdio' or 'http'.",
+        description="Transport type: 'stdio', 'sse', or 'http'.",
     )
     command: str = Field(
         default="",
