@@ -21,7 +21,7 @@ from fastapi import FastAPI, Request, Response
 
 from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
-from bifrost.config import BifrostConfig, CacheMode
+from bifrost.config import AuditAdapter, BifrostConfig, CacheMode
 from bifrost.inbound.routes import create_router
 from bifrost.ports.audit import AuditPort
 from bifrost.ports.cache import CachePort
@@ -56,11 +56,7 @@ def _build_rule_engine(config: BifrostConfig) -> RuleEnginePort | None:
 def _build_audit_adapter(config: BifrostConfig) -> AuditPort:
     """Instantiate the configured audit adapter."""
     match config.audit.adapter:
-        case "sqlite":
-            from bifrost.adapters.audit.sqlite import SQLiteAuditAdapter
-
-            return SQLiteAuditAdapter(path=config.audit.path)
-        case "postgres":
+        case AuditAdapter.POSTGRES:
             from bifrost.adapters.audit.postgres import PostgresAuditAdapter
 
             dsn = config.audit.effective_dsn()
@@ -70,7 +66,7 @@ def _build_audit_adapter(config: BifrostConfig) -> AuditPort:
                     "Set audit.dsn in config or the BIFROST_AUDIT_DSN environment variable."
                 )
             return PostgresAuditAdapter(dsn=dsn)
-        case "otel":
+        case AuditAdapter.OTEL:
             from bifrost.adapters.audit.otel import OtelAuditAdapter
 
             return OtelAuditAdapter(
@@ -243,8 +239,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
             await store.close()
         await event_emitter.close()
         await cache.close()
-        if hasattr(audit_adapter, "shutdown"):
-            audit_adapter.shutdown()
+        if hasattr(audit_adapter, "close"):
+            await audit_adapter.close()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -271,5 +267,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
         cache=cache,
     )
     app.include_router(api_router)
+
+    # Expose the audit adapter on app.state so route handlers can log events.
+    app.state.audit = audit_adapter
 
     return app

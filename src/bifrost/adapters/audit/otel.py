@@ -143,7 +143,7 @@ class OtelAuditAdapter(AuditPort):
         """
         return []
 
-    def shutdown(self, timeout_ms: int = 5_000) -> None:
+    async def close(self) -> None:
         """Flush pending spans and shut down the provider.
 
         Safe to call multiple times (idempotent after the first call).

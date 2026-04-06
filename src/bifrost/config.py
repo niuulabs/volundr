@@ -359,14 +359,25 @@ class OtelAuditConfig(BaseModel):
     )
 
 
+class AuditAdapter(StrEnum):
+    """Supported audit logging backends."""
+
+    NULL = "null"
+    """No-op — discard all audit events (default)."""
+    POSTGRES = "postgres"
+    """Write audit events to PostgreSQL."""
+    OTEL = "otel"
+    """Emit audit events as OpenTelemetry spans."""
+
+
 class AuditConfig(BaseModel):
     """Configuration for the audit logging backend."""
 
-    adapter: str = Field(
-        default="null",
+    adapter: AuditAdapter = Field(
+        default=AuditAdapter.NULL,
         description=(
             "Audit backend. Accepted values: 'null' (default, no-op), "
-            "'sqlite', 'postgres', 'otel'."
+            "'postgres', 'otel'."
         ),
     )
     path: str = Field(

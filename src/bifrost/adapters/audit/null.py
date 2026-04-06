@@ -20,6 +20,9 @@ class NullAuditAdapter(AuditPort):
     async def log(self, event: AuditEvent) -> None:
         """Discard *event* silently."""
 
+    async def close(self) -> None:
+        """No-op — nothing to shut down."""
+
     async def query(
         self,
         *,

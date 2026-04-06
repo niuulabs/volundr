@@ -233,19 +233,19 @@ class TestOtelAuditAdapterQuery:
         assert result == []
 
 
-class TestOtelAuditAdapterShutdown:
-    def test_shutdown_calls_provider_shutdown(self):
+class TestOtelAuditAdapterClose:
+    async def test_close_calls_provider_shutdown(self):
         adapter, _, _ = _make_otel_adapter()
-        adapter.shutdown()
+        await adapter.close()
         adapter._provider.shutdown.assert_called_once()
 
-    def test_shutdown_without_provider_does_not_raise(self):
+    async def test_close_without_provider_does_not_raise(self):
         with patch(_PATCH, return_value=MagicMock()):
             adapter = OtelAuditAdapter()
         # Remove the _provider attribute to simulate pre-init state.
         if hasattr(adapter, "_provider"):
             del adapter._provider
-        adapter.shutdown()  # must not raise
+        await adapter.close()  # must not raise
 
 
 class TestOtelBuildTracer:
@@ -266,6 +266,10 @@ class TestNullAuditAdapter:
     async def test_log_does_not_raise(self):
         adapter = NullAuditAdapter()
         await adapter.log(_event())  # no assertion needed — must not raise
+
+    async def test_close_does_not_raise(self):
+        adapter = NullAuditAdapter()
+        await adapter.close()  # no assertion needed — must not raise
 
     async def test_query_returns_empty_list(self):
         adapter = NullAuditAdapter()
@@ -293,10 +297,10 @@ class TestNullAuditAdapter:
 
 class TestAuditConfig:
     def test_default_adapter_is_null(self):
-        from bifrost.config import AuditConfig
+        from bifrost.config import AuditAdapter, AuditConfig
 
         cfg = AuditConfig()
-        assert cfg.adapter == "null"
+        assert cfg.adapter == AuditAdapter.NULL
 
     def test_default_otel_endpoint(self):
         from bifrost.config import AuditConfig
@@ -389,11 +393,10 @@ class TestBuildAuditAdapter:
         with pytest.raises(ValueError, match="PostgreSQL audit adapter requires a DSN"):
             _build_audit_adapter(cfg)
 
-    def test_unknown_adapter_falls_back_to_null(self):
-        from bifrost.adapters.audit.null import NullAuditAdapter
-        from bifrost.app import _build_audit_adapter
-        from bifrost.config import AuditConfig, BifrostConfig
+    def test_unknown_adapter_rejected_by_pydantic(self):
+        from pydantic import ValidationError
 
-        cfg = BifrostConfig(audit=AuditConfig(adapter="nonexistent"))
-        adapter = _build_audit_adapter(cfg)
-        assert isinstance(adapter, NullAuditAdapter)
+        from bifrost.config import AuditConfig
+
+        with pytest.raises(ValidationError):
+            AuditConfig(adapter="nonexistent")
