@@ -374,7 +374,7 @@ class TestApprovalsCliCommands:
         import ravn.cli.commands as cmd_mod
         from ravn.cli.commands import approvals_app
 
-        monkeypatch.setattr(cmd_mod, "ApprovalMemory", _make_fixed_memory_cls(tmp_path))
+        monkeypatch.setattr("ravn.adapters.approval_memory.ApprovalMemory", _make_fixed_memory_cls(tmp_path))
         runner = CliRunner()
         result = runner.invoke(approvals_app, ["list"])
         assert result.exit_code == 0
@@ -389,7 +389,7 @@ class TestApprovalsCliCommands:
         mem = ApprovalMemory(project_root=tmp_path)
         mem.remember("make build")
 
-        monkeypatch.setattr(cmd_mod, "ApprovalMemory", _make_fixed_memory_cls(tmp_path))
+        monkeypatch.setattr("ravn.adapters.approval_memory.ApprovalMemory", _make_fixed_memory_cls(tmp_path))
         runner = CliRunner()
         result = runner.invoke(approvals_app, ["list"])
         assert result.exit_code == 0
@@ -404,7 +404,7 @@ class TestApprovalsCliCommands:
         mem = ApprovalMemory(project_root=tmp_path)
         mem.remember("make build")
 
-        monkeypatch.setattr(cmd_mod, "ApprovalMemory", _make_fixed_memory_cls(tmp_path))
+        monkeypatch.setattr("ravn.adapters.approval_memory.ApprovalMemory", _make_fixed_memory_cls(tmp_path))
         runner = CliRunner()
         result = runner.invoke(approvals_app, ["revoke", "make build"])
         assert result.exit_code == 0
@@ -418,7 +418,7 @@ class TestApprovalsCliCommands:
         import ravn.cli.commands as cmd_mod
         from ravn.cli.commands import approvals_app
 
-        monkeypatch.setattr(cmd_mod, "ApprovalMemory", _make_fixed_memory_cls(tmp_path))
+        monkeypatch.setattr("ravn.adapters.approval_memory.ApprovalMemory", _make_fixed_memory_cls(tmp_path))
         runner = CliRunner()
         result = runner.invoke(approvals_app, ["revoke", "nonexistent"])
         assert result.exit_code != 0

@@ -88,6 +88,7 @@ class RavnAgent:
         outcome_port: OutcomePort | None = None,
         outcome_config: OutcomeConfig | None = None,
         extended_thinking: ExtendedThinkingConfig | None = None,
+        session: Session | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -115,7 +116,7 @@ class RavnAgent:
         self._input_token_cost_per_million = _oc.input_token_cost_per_million
         self._output_token_cost_per_million = _oc.output_token_cost_per_million
         self._extended_thinking = extended_thinking
-        self._session = Session()
+        self._session = session or Session()
         self._last_compression_result: CompressionResult | None = None
 
     @property

@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+import logging
+import os
 import sys
+from pathlib import Path
+from typing import Any
 
 import typer
 
-from ravn.adapters.anthropic_adapter import AnthropicAdapter
-from ravn.adapters.approval_memory import ApprovalMemory
-from ravn.adapters.cli_channel import CliChannel
-from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
-from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
-from ravn.adapters.slash_commands import SlashCommandContext
-from ravn.adapters.slash_commands import handle as handle_slash
-from ravn.agent import RavnAgent
-from ravn.config import ProjectConfig, Settings
-from ravn.domain.models import TokenUsage
+from ravn.agent import PostToolHook, PreToolHook, RavnAgent, UserInputFn
+from ravn.config import OutcomeConfig, ProjectConfig, Settings
+from ravn.domain.models import Session, TokenUsage, ToolCall, ToolResult
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     name="ravn",
@@ -35,21 +35,47 @@ def approvals_main() -> None:
     approvals_app()
 
 
-def _build_agent(
-    settings: Settings,
-    *,
-    no_tools: bool = False,
-    persona_config: PersonaConfig | None = None,
-) -> tuple[RavnAgent, CliChannel]:
-    api_key = settings.effective_api_key()
-    if not api_key:
-        typer.echo(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
-            err=True,
-        )
-        raise typer.Exit(1)
+# ---------------------------------------------------------------------------
+# Utility helpers
+# ---------------------------------------------------------------------------
 
-    llm = AnthropicAdapter(
+
+def _import_class(dotted_path: str) -> type:
+    """Dynamically import a class from a fully-qualified dotted path."""
+    module_path, class_name = dotted_path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)
+
+
+def _inject_secrets(kwargs: dict[str, Any], secret_map: dict[str, str]) -> dict[str, Any]:
+    """Resolve env var names from *secret_map* and merge into *kwargs*."""
+    merged = dict(kwargs)
+    for kwarg_name, env_var in secret_map.items():
+        value = os.environ.get(env_var, "")
+        if value:
+            merged[kwarg_name] = value
+    return merged
+
+
+def _resolve_workspace(settings: Settings) -> Path:
+    """Return the workspace root from config, defaulting to cwd."""
+    ws = settings.permission.workspace_root
+    return Path(ws).resolve() if ws else Path.cwd()
+
+
+# ---------------------------------------------------------------------------
+# Builder: LLM
+# ---------------------------------------------------------------------------
+
+
+def _build_llm(settings: Settings) -> Any:
+    """Build the LLM adapter (with optional fallback chain)."""
+    from ravn.adapters.anthropic_adapter import AnthropicAdapter
+    from ravn.ports.llm import LLMPort
+
+    api_key = settings.effective_api_key()
+
+    primary: LLMPort = AnthropicAdapter(
         api_key=api_key,
         base_url=settings.anthropic.base_url,
         model=settings.agent.model,
@@ -59,64 +85,426 @@ def _build_agent(
         timeout=settings.llm_adapter.timeout,
     )
 
-    channel = CliChannel()
+    if not settings.llm.fallbacks:
+        return primary
+
+    from ravn.adapters.fallback_llm import FallbackLLMAdapter
+
+    providers: list[LLMPort] = [primary]
+    for fb in settings.llm.fallbacks:
+        cls = _import_class(fb.adapter)
+        kwargs = _inject_secrets(fb.kwargs, fb.secret_kwargs_env)
+        providers.append(cls(**kwargs))
+
+    return FallbackLLMAdapter(providers=providers)
+
+
+# ---------------------------------------------------------------------------
+# Builder: Memory + Embedding
+# ---------------------------------------------------------------------------
+
+
+def _build_memory(settings: Settings) -> Any:
+    """Build the memory adapter (SQLite or Postgres), or None."""
+    backend = settings.memory.backend
+
+    embedding_port = None
+    if settings.embedding.enabled:
+        try:
+            cls = _import_class(settings.embedding.adapter)
+            kwargs = _inject_secrets(settings.embedding.kwargs, settings.embedding.secret_kwargs_env)
+            embedding_port = cls(**kwargs)
+        except Exception as exc:
+            logger.warning("Failed to load embedding adapter: %s — falling back to FTS-only", exc)
+
+    if backend == "sqlite":
+        from ravn.adapters.sqlite_memory import SqliteMemoryAdapter
+
+        return SqliteMemoryAdapter(
+            path=settings.memory.path,
+            max_retries=settings.memory.max_retries,
+            min_jitter_ms=settings.memory.min_retry_jitter_ms,
+            max_jitter_ms=settings.memory.max_retry_jitter_ms,
+            checkpoint_interval=settings.memory.checkpoint_interval,
+            prefetch_budget=settings.memory.prefetch_budget,
+            prefetch_limit=settings.memory.prefetch_limit,
+            prefetch_min_relevance=settings.memory.prefetch_min_relevance,
+            recency_half_life_days=settings.memory.recency_half_life_days,
+            session_search_truncate_chars=settings.memory.session_search_truncate_chars,
+            embedding_port=embedding_port,
+            rrf_k=settings.embedding.rrf_k,
+            semantic_candidate_limit=settings.embedding.semantic_candidate_limit,
+        )
+
+    if backend == "postgres":
+        from ravn.adapters.postgres_memory import PostgresMemoryAdapter
+
+        dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
+        dsn = dsn or settings.memory.dsn
+        if not dsn:
+            logger.warning("Postgres memory backend configured but no DSN provided — memory disabled")
+            return None
+        return PostgresMemoryAdapter(dsn=dsn)
+
+    # Custom backend via fully-qualified class path
+    try:
+        cls = _import_class(backend)
+        return cls(path=settings.memory.path)
+    except Exception as exc:
+        logger.warning("Failed to load custom memory backend %r: %s", backend, exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Builder: Outcome
+# ---------------------------------------------------------------------------
+
+
+def _build_outcome(settings: Settings) -> tuple[Any, OutcomeConfig | None]:
+    """Build the outcome adapter, or (None, None) if disabled."""
+    oc = settings.agent.outcome
+    if not oc.enabled:
+        return None, None
+
+    from ravn.adapters.sqlite_outcome import SQLiteOutcomeAdapter
+
+    adapter = SQLiteOutcomeAdapter(
+        path=oc.path,
+        lessons_token_budget=oc.lessons_token_budget,
+    )
+    return adapter, oc
+
+
+# ---------------------------------------------------------------------------
+# Builder: Permission
+# ---------------------------------------------------------------------------
+
+
+def _build_permission(
+    settings: Settings,
+    workspace: Path,
+    *,
+    no_tools: bool,
+    persona_config: Any | None,
+) -> Any:
+    """Build the permission adapter from config."""
+    from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
 
     if no_tools:
-        permission = DenyAllPermission()
-    elif persona_config is not None and persona_config.permission_mode == "read-only":
-        permission = DenyAllPermission()
-    else:
-        permission = AllowAllPermission()
-    # TODO(NIU-498): wire persona.allowed_tools / forbidden_tools into tool filtering
+        return DenyAllPermission()
 
-    system_prompt = settings.agent.system_prompt
-    max_iterations = settings.agent.max_iterations
+    if persona_config is not None and persona_config.permission_mode == "read-only":
+        return DenyAllPermission()
+
+    mode = settings.permission.mode
+
+    if mode in ("allow_all", "full_access"):
+        return AllowAllPermission()
+
+    if mode == "deny_all":
+        return DenyAllPermission()
+
+    # Rich permission enforcer for workspace_write, read_only, prompt modes
+    from ravn.adapters.approval_memory import ApprovalMemory
+    from ravn.adapters.permission_enforcer import PermissionEnforcer
+
+    return PermissionEnforcer(
+        config=settings.permission,
+        workspace_root=workspace,
+        approval_memory=ApprovalMemory(project_root=workspace),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Builder: Tools
+# ---------------------------------------------------------------------------
+
+
+def _build_tools(
+    settings: Settings,
+    workspace: Path,
+    session: Session,
+    llm: Any,
+    memory: Any | None,
+    iteration_budget: Any | None,
+    *,
+    no_tools: bool = False,
+    persona_config: Any | None = None,
+) -> list[Any]:
+    """Build the full tool list from config."""
+    if no_tools:
+        return []
+
+    from ravn.adapters.file_tools import (
+        EditFileTool,
+        GlobSearchTool,
+        GrepSearchTool,
+        ReadFileTool,
+        WriteFileTool,
+    )
+    from ravn.adapters.tools.ask_user import AskUserTool
+    from ravn.adapters.tools.bash import BashTool
+    from ravn.adapters.tools.git import (
+        GitAddTool,
+        GitCheckoutTool,
+        GitCommitTool,
+        GitDiffTool,
+        GitLogTool,
+        GitPrTool,
+        GitStatusTool,
+    )
+    from ravn.adapters.tools.introspection import (
+        RavnMemorySearchTool,
+        RavnReflectTool,
+        RavnStateTool,
+    )
+    from ravn.adapters.tools.session_search import SessionSearchTool
+    from ravn.adapters.tools.todo import TodoReadTool, TodoWriteTool
+    from ravn.adapters.tools.web_fetch import WebFetchTool
+    from ravn.adapters.tools.web_search import WebSearchTool
+    from ravn.ports.tool import ToolPort
+
+    fc = settings.tools.file
+    tools: list[ToolPort] = [
+        # -- File tools --
+        ReadFileTool(workspace, max_bytes=fc.max_read_bytes),
+        WriteFileTool(workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes),
+        EditFileTool(workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes),
+        GlobSearchTool(workspace),
+        GrepSearchTool(workspace),
+        # -- Git tools --
+        GitStatusTool(workspace),
+        GitDiffTool(workspace),
+        GitAddTool(workspace),
+        GitCommitTool(workspace),
+        GitCheckoutTool(workspace),
+        GitLogTool(workspace),
+        GitPrTool(workspace),
+        # -- Bash tool --
+        BashTool(config=settings.tools.bash, workspace_root=workspace),
+        # -- Web tools --
+        WebFetchTool(
+            timeout=settings.tools.web.fetch.timeout,
+            user_agent=settings.tools.web.fetch.user_agent,
+            content_budget=settings.tools.web.fetch.content_budget,
+        ),
+        # -- Todo tools --
+        TodoWriteTool(session),
+        TodoReadTool(session),
+        # -- Ask user --
+        AskUserTool(),
+    ]
+
+    # -- Terminal tool (local or docker) --
+    tc = settings.tools.terminal
+    if tc.backend == "docker":
+        from ravn.adapters.tools.terminal_docker import DockerTerminalTool
+
+        tools.append(
+            DockerTerminalTool(
+                config=tc.docker,
+                workspace_root=workspace,
+                timeout_seconds=tc.timeout_seconds,
+            )
+        )
+    else:
+        from ravn.adapters.tools.terminal import TerminalTool
+
+        tools.append(
+            TerminalTool(
+                shell=tc.shell,
+                timeout_seconds=tc.timeout_seconds,
+                persistent_shell=tc.persistent_shell,
+            )
+        )
+
+    # -- Web search (with pluggable provider) --
+    ws_cfg = settings.tools.web.search
+    search_provider = None
+    if ws_cfg.provider.adapter != "ravn.adapters.tools.web_search.MockWebSearchProvider":
+        try:
+            cls = _import_class(ws_cfg.provider.adapter)
+            kwargs = _inject_secrets(ws_cfg.provider.kwargs, ws_cfg.provider.secret_kwargs_env)
+            search_provider = cls(**kwargs)
+        except Exception as exc:
+            logger.warning("Failed to load web search provider: %s — using mock", exc)
+    tools.append(WebSearchTool(provider=search_provider, num_results=ws_cfg.num_results))
+
+    # -- Skill tools (if enabled) --
+    if settings.skill.enabled:
+        from ravn.adapters.file_skill_registry import FileSkillRegistry
+        from ravn.adapters.tools.skill_tools import SkillListTool, SkillRunTool
+
+        skill_port = FileSkillRegistry(
+            skill_dirs=settings.skill.skill_dirs or None,
+            include_builtin=settings.skill.include_builtin,
+            cwd=workspace,
+        )
+        tools.append(SkillListTool(skill_port))
+        tools.append(SkillRunTool(skill_port))
+
+    # -- Memory-dependent tools --
+    if memory is not None:
+        tools.append(RavnMemorySearchTool(memory))
+        tools.append(SessionSearchTool(memory))
+
+    # -- Custom tools from config --
+    for ct in settings.tools.custom:
+        try:
+            cls = _import_class(ct.adapter)
+            kwargs = _inject_secrets(ct.kwargs, ct.secret_kwargs_env)
+            tools.append(cls(**kwargs))
+        except Exception as exc:
+            logger.warning("Failed to load custom tool %r: %s", ct.adapter, exc)
+
+    # -- Apply enabled/disabled filters --
+    tools = _filter_tools(tools, settings, persona_config)
+
+    # -- Introspection tools (built last, need final tool names) --
+    tool_names = [t.name for t in tools]
+    tools.append(
+        RavnStateTool(
+            tool_names=tool_names,
+            permission_mode=settings.permission.mode,
+            model=settings.agent.model,
+            persona=persona_config.system_prompt_template[:40] if persona_config and persona_config.system_prompt_template else "",
+            iteration_budget=iteration_budget,
+            memory=memory,
+        )
+    )
+    tools.append(
+        RavnReflectTool(
+            llm,
+            session,
+            model=settings.agent.outcome.reflection_model,
+            max_tokens=settings.agent.outcome.reflection_max_tokens,
+        )
+    )
+
+    return tools
+
+
+def _filter_tools(
+    tools: list[Any],
+    settings: Settings,
+    persona_config: Any | None,
+) -> list[Any]:
+    """Apply enabled/disabled and persona tool filters."""
+    enabled = set(settings.tools.enabled)
+    disabled = set(settings.tools.disabled)
 
     if persona_config is not None:
-        if persona_config.system_prompt_template:
-            system_prompt = persona_config.system_prompt_template
-        if persona_config.iteration_budget:
-            max_iterations = persona_config.iteration_budget
+        if persona_config.allowed_tools:
+            enabled = enabled | set(persona_config.allowed_tools) if enabled else set(persona_config.allowed_tools)
+        if persona_config.forbidden_tools:
+            disabled = disabled | set(persona_config.forbidden_tools)
 
-    agent = RavnAgent(
+    if enabled:
+        tools = [t for t in tools if t.name in enabled]
+
+    if disabled:
+        tools = [t for t in tools if t.name not in disabled]
+
+    return tools
+
+
+# ---------------------------------------------------------------------------
+# Builder: Hooks
+# ---------------------------------------------------------------------------
+
+
+def _build_hooks(settings: Settings) -> tuple[list[PreToolHook], list[PostToolHook]]:
+    """Build pre/post tool hook callables from config."""
+    pre: list[PreToolHook] = []
+    post: list[PostToolHook] = []
+
+    for hc in settings.hooks.pre_tool:
+        try:
+            cls = _import_class(hc.adapter)
+            kwargs = _inject_secrets(hc.kwargs, hc.secret_kwargs_env)
+            hook_port = cls(**kwargs)
+
+            async def _pre(tool_call: ToolCall, _hp: Any = hook_port) -> None:
+                await _hp.pre_execute(tool_call.name, tool_call.input, {})
+
+            pre.append(_pre)
+        except Exception as exc:
+            logger.warning("Failed to load pre-tool hook %r: %s", hc.adapter, exc)
+
+    for hc in settings.hooks.post_tool:
+        try:
+            cls = _import_class(hc.adapter)
+            kwargs = _inject_secrets(hc.kwargs, hc.secret_kwargs_env)
+            hook_port = cls(**kwargs)
+
+            async def _post(
+                tool_call: ToolCall,
+                result: ToolResult,
+                _hp: Any = hook_port,
+            ) -> None:
+                await _hp.post_execute(tool_call.name, tool_call.input, result, {})
+
+            post.append(_post)
+        except Exception as exc:
+            logger.warning("Failed to load post-tool hook %r: %s", hc.adapter, exc)
+
+    return pre, post
+
+
+# ---------------------------------------------------------------------------
+# Builder: Compression & Prompt Builder
+# ---------------------------------------------------------------------------
+
+
+def _build_compressor(settings: Settings, llm: Any) -> Any:
+    """Build the context compressor, or None."""
+    from ravn.compression import ContextCompressor
+
+    cm = settings.context_management
+    return ContextCompressor(
         llm=llm,
-        tools=[],
-        channel=channel,
-        permission=permission,
-        system_prompt=system_prompt,
         model=settings.agent.model,
-        max_tokens=settings.agent.max_tokens,
-        max_iterations=max_iterations,
+        max_tokens=cm.compression_max_tokens,
+        protect_first=cm.protect_first_messages,
+        protect_last=cm.effective_protect_last(),
+        compression_threshold=cm.compression_threshold,
     )
 
-    return agent, channel
 
+def _build_prompt_builder(settings: Settings) -> Any:
+    """Build the prompt builder with cache, or None."""
+    from ravn.prompt_builder import PromptBuilder, PromptCache
 
-def _make_slash_ctx(agent: RavnAgent, settings: Settings) -> SlashCommandContext:
-    """Build a SlashCommandContext from the running agent and loaded settings."""
-    return SlashCommandContext(
-        session=agent.session,
-        tools=agent.tools,
-        max_iterations=agent.max_iterations,
-        llm_adapter_name=agent.llm_adapter_name,
-        permission_mode=settings.permission.mode,
+    cm = settings.context_management
+    cache = PromptCache(
+        max_entries=cm.prompt_cache_max_entries,
+        cache_dir=cm.prompt_cache_dir,
     )
+    return PromptBuilder(cache=cache)
+
+
+# ---------------------------------------------------------------------------
+# User input function
+# ---------------------------------------------------------------------------
+
+
+async def _cli_user_input(question: str) -> str:
+    """Prompt the user for input during ask_user tool calls."""
+    return input(f"\n[Ravn asks] {question}\nYou: ").strip()
+
+
+# ---------------------------------------------------------------------------
+# Persona resolution (unchanged)
+# ---------------------------------------------------------------------------
 
 
 def _resolve_persona(
     persona_name: str,
     project_config: ProjectConfig | None,
-) -> PersonaConfig | None:
-    """Load and merge a persona with optional ProjectConfig overrides.
+) -> Any:
+    """Load and merge a persona with optional ProjectConfig overrides."""
+    from ravn.adapters.personas.loader import PersonaConfig, PersonaLoader
 
-    Resolution order:
-      1. *persona_name* (CLI ``--persona`` flag) — highest priority
-      2. ``project_config.persona`` (RAVN.md) — used when no CLI flag given
-      3. ``None`` — no persona active
-
-    When a persona is found, RAVN.md project fields override persona fields.
-    Returns ``None`` if no persona name resolves to a known persona.
-    """
     loader = PersonaLoader()
 
     name = persona_name.strip() or (
@@ -136,6 +524,105 @@ def _resolve_persona(
     return persona
 
 
+# ---------------------------------------------------------------------------
+# Agent assembly
+# ---------------------------------------------------------------------------
+
+
+def _build_agent(
+    settings: Settings,
+    *,
+    no_tools: bool = False,
+    persona_config: Any | None = None,
+) -> tuple[RavnAgent, Any]:
+    api_key = settings.effective_api_key()
+    if not api_key:
+        typer.echo(
+            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    from ravn.adapters.cli_channel import CliChannel
+    from ravn.budget import IterationBudget
+
+    workspace = _resolve_workspace(settings)
+    llm = _build_llm(settings)
+    channel = CliChannel()
+    permission = _build_permission(
+        settings, workspace, no_tools=no_tools, persona_config=persona_config,
+    )
+    memory = _build_memory(settings)
+    outcome_port, outcome_config = _build_outcome(settings)
+    iteration_budget = IterationBudget(
+        total=settings.iteration_budget.total,
+        near_limit_threshold=settings.iteration_budget.near_limit_threshold,
+    )
+    session = Session()
+    tools = _build_tools(
+        settings, workspace, session, llm, memory, iteration_budget,
+        no_tools=no_tools, persona_config=persona_config,
+    )
+    compressor = _build_compressor(settings, llm)
+    prompt_builder = _build_prompt_builder(settings)
+    pre_hooks, post_hooks = _build_hooks(settings)
+
+    extended_thinking = (
+        settings.llm.extended_thinking if settings.llm.extended_thinking.enabled else None
+    )
+
+    # Apply persona overrides
+    system_prompt = settings.agent.system_prompt
+    max_iterations = settings.agent.max_iterations
+    if persona_config is not None:
+        if persona_config.system_prompt_template:
+            system_prompt = persona_config.system_prompt_template
+        if persona_config.iteration_budget:
+            max_iterations = persona_config.iteration_budget
+
+    agent = RavnAgent(
+        llm=llm,
+        tools=tools,
+        channel=channel,
+        permission=permission,
+        system_prompt=system_prompt,
+        model=settings.agent.model,
+        max_tokens=settings.agent.max_tokens,
+        max_iterations=max_iterations,
+        session=session,
+        pre_tool_hooks=pre_hooks or None,
+        post_tool_hooks=post_hooks or None,
+        user_input_fn=_cli_user_input,
+        memory=memory,
+        iteration_budget=iteration_budget,
+        compressor=compressor,
+        prompt_builder=prompt_builder,
+        outcome_port=outcome_port,
+        outcome_config=outcome_config,
+        extended_thinking=extended_thinking,
+    )
+
+    return agent, channel
+
+
+def _make_slash_ctx(agent: RavnAgent, settings: Settings) -> Any:
+    """Build a SlashCommandContext from the running agent and loaded settings."""
+    from ravn.adapters.slash_commands import SlashCommandContext
+
+    return SlashCommandContext(
+        session=agent.session,
+        tools=agent.tools,
+        max_iterations=agent.max_iterations,
+        llm_adapter_name=agent.llm_adapter_name,
+        permission_mode=settings.permission.mode,
+    )
+
+
+# ---------------------------------------------------------------------------
+# CLI commands
+# ---------------------------------------------------------------------------
+
+
 @app.command()
 def run(
     prompt: str = typer.Argument(default="", help="Initial prompt. If empty, starts REPL."),
@@ -147,8 +634,6 @@ def run(
     ),
 ) -> None:
     """Start a Ravn conversation. Pass a prompt for single-turn, or omit for REPL."""
-    import os
-
     if config:
         os.environ["RAVN_CONFIG"] = config
 
@@ -162,15 +647,16 @@ def run(
 
 async def _chat(
     agent: RavnAgent,
-    channel: CliChannel,
+    channel: Any,
     *,
     settings: Settings,
     prompt: str,
     show_usage: bool,
 ) -> None:
     """Run a single-turn or multi-turn conversation."""
+    from ravn.adapters.slash_commands import handle as handle_slash
+
     if prompt:
-        # Single-turn: slash commands are not meaningful here; pass straight to agent.
         await _run_turn(agent, channel, prompt, show_usage=show_usage, single_turn=True)
         return
 
@@ -196,7 +682,7 @@ async def _chat(
 
 async def _run_turn(
     agent: RavnAgent,
-    channel: CliChannel,
+    channel: Any,
     user_input: str,
     *,
     show_usage: bool,
@@ -223,9 +709,16 @@ def _print_usage(usage: TokenUsage) -> None:
     typer.echo(f"[tokens] {', '.join(parts)}")
 
 
+# ---------------------------------------------------------------------------
+# Approvals CLI
+# ---------------------------------------------------------------------------
+
+
 @approvals_app.command("list")
 def approvals_list() -> None:
     """List all stored approval patterns for the current project."""
+    from ravn.adapters.approval_memory import ApprovalMemory
+
     memory = ApprovalMemory()
     entries = memory.list_entries()
     if not entries:
@@ -245,6 +738,8 @@ def approvals_revoke(
     pattern: str = typer.Argument(help="Command text or pattern to revoke."),
 ) -> None:
     """Revoke an approval pattern so the command will be prompted again."""
+    from ravn.adapters.approval_memory import ApprovalMemory
+
     memory = ApprovalMemory()
     removed = memory.revoke(pattern)
     if removed:
@@ -252,6 +747,11 @@ def approvals_revoke(
     else:
         typer.echo(f"No matching approval found for {pattern!r}", err=True)
         raise typer.Exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Gateway CLI
+# ---------------------------------------------------------------------------
 
 
 gateway_app = typer.Typer(
@@ -289,8 +789,6 @@ def gateway(
               host: 0.0.0.0
               port: 7477
     """
-    import os
-
     if config:
         os.environ["RAVN_CONFIG"] = config
 
@@ -320,12 +818,13 @@ def gateway(
 async def _run_gateway(
     settings: Settings,
     *,
-    persona_config: PersonaConfig | None = None,
+    persona_config: Any | None = None,
 ) -> None:
     """Build and run the gateway until interrupted."""
     from ravn.adapters.channels.gateway import RavnGateway
     from ravn.adapters.channels.gateway_http import HttpGateway
     from ravn.adapters.channels.gateway_telegram import TelegramGateway
+    from ravn.budget import IterationBudget
     from ravn.ports.channel import ChannelPort
 
     api_key = settings.effective_api_key()
@@ -336,19 +835,21 @@ async def _run_gateway(
         )
         raise typer.Exit(1)
 
-    llm = AnthropicAdapter(
-        api_key=api_key,
-        base_url=settings.anthropic.base_url,
-        model=settings.agent.model,
-        max_tokens=settings.agent.max_tokens,
-        max_retries=settings.llm_adapter.max_retries,
-        retry_base_delay=settings.llm_adapter.retry_base_delay,
-        timeout=settings.llm_adapter.timeout,
+    # Shared resources (safe to reuse across sessions)
+    workspace = _resolve_workspace(settings)
+    llm = _build_llm(settings)
+    memory = _build_memory(settings)
+    outcome_port, outcome_config = _build_outcome(settings)
+    compressor = _build_compressor(settings, llm)
+    prompt_builder = _build_prompt_builder(settings)
+    pre_hooks, post_hooks = _build_hooks(settings)
+
+    extended_thinking = (
+        settings.llm.extended_thinking if settings.llm.extended_thinking.enabled else None
     )
 
     system_prompt = settings.agent.system_prompt
     max_iterations = settings.agent.max_iterations
-
     if persona_config is not None:
         if persona_config.system_prompt_template:
             system_prompt = persona_config.system_prompt_template
@@ -356,15 +857,40 @@ async def _run_gateway(
             max_iterations = persona_config.iteration_budget
 
     def _agent_factory(channel: ChannelPort) -> RavnAgent:
+        # Per-session: fresh session, budget, and tools
+        session = Session()
+        budget = IterationBudget(
+            total=settings.iteration_budget.total,
+            near_limit_threshold=settings.iteration_budget.near_limit_threshold,
+        )
+        permission = _build_permission(
+            settings, workspace, no_tools=False, persona_config=persona_config,
+        )
+        tools = _build_tools(
+            settings, workspace, session, llm, memory, budget,
+            persona_config=persona_config,
+        )
+
         return RavnAgent(
             llm=llm,
-            tools=[],
+            tools=tools,
             channel=channel,
-            permission=AllowAllPermission(),
+            permission=permission,
             system_prompt=system_prompt,
             model=settings.agent.model,
             max_tokens=settings.agent.max_tokens,
             max_iterations=max_iterations,
+            session=session,
+            pre_tool_hooks=pre_hooks or None,
+            post_tool_hooks=post_hooks or None,
+            user_input_fn=None,  # Gateway has no stdin
+            memory=memory,
+            iteration_budget=budget,
+            compressor=compressor,
+            prompt_builder=prompt_builder,
+            outcome_port=outcome_port,
+            outcome_config=outcome_config,
+            extended_thinking=extended_thinking,
         )
 
     gw = RavnGateway(settings.gateway, _agent_factory)
