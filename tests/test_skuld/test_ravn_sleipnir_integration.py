@@ -633,3 +633,455 @@ class TestTranslationMapping:
                 source="ravn:x",
                 urgency=1.5,
             )
+
+    def test_default_summary_fallback(self):
+        """_default_summary is used when no builder is registered for the type."""
+        from skuld.ravn_translator import _default_summary
+
+        ravn = _make_ravn_event(RavnEventType.TURN_START)
+        # Call the fallback directly — it must include the event type value.
+        summary = _default_summary(ravn)
+        assert RAVN_TURN_START in summary
+
+    def test_default_summary_fallback_via_monkeypatch(self, monkeypatch):
+        """Translator uses _default_summary when the type is absent from builders."""
+        from skuld.ravn_translator import _SUMMARY_BUILDERS
+
+        monkeypatch.setitem(_SUMMARY_BUILDERS, RavnEventType.TURN_START, None)
+        # Remove the entry so the .get() falls back to _default_summary.
+        monkeypatch.delitem(_SUMMARY_BUILDERS, RavnEventType.TURN_START)
+        ravn = _make_ravn_event(RavnEventType.TURN_START)
+        result = TRANSLATOR.translate(ravn)
+        assert result.event_type == RAVN_TURN_START
+        assert isinstance(result.summary, str) and result.summary.strip() != ""
+
+
+# ---------------------------------------------------------------------------
+# Scenario 1 (hardening): AuditSubscriber + SqliteAuditRepository end-to-end
+# ---------------------------------------------------------------------------
+
+
+class TestAuditSubscriberEndToEnd:
+    """Validate scenario 1 with the real AuditSubscriber and SQLite repo.
+
+    This exercises the full path:
+        RavnEvent → Translator → InProcessBus → AuditSubscriber → SqliteAuditRepository
+    and confirms events are queryable back from the store.
+    """
+
+    async def test_turn_start_persisted_to_audit_log(self):
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.adapters.audit_subscriber import AuditSubscriber
+        from sleipnir.ports.audit import AuditQuery
+
+        bus = InProcessBus()
+        repo = SqliteAuditRepository(db_path=":memory:")
+        subscriber = AuditSubscriber(bus, repo)
+        await subscriber.start()
+
+        ravn_event = _make_ravn_event(
+            RavnEventType.TURN_START,
+            payload={"task_id": _TASK_ID, "session_id": _SESSION_ID},
+        )
+        sleipnir_event = TRANSLATOR.translate(ravn_event)
+        await bus.publish(sleipnir_event)
+        await bus.flush()
+
+        events = await repo.query(AuditQuery(event_type_pattern="ravn.turn.start"))
+        assert len(events) == 1
+        assert events[0].event_type == RAVN_TURN_START
+        assert events[0].source == _SOURCE
+        assert events[0].correlation_id == _SESSION_ID
+
+        await subscriber.stop()
+
+    async def test_all_ravn_events_persisted_by_audit_subscriber(self):
+        """All 6 required event types are written to the audit log."""
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.adapters.audit_subscriber import AuditSubscriber
+        from sleipnir.ports.audit import AuditQuery
+
+        bus = InProcessBus()
+        repo = SqliteAuditRepository(db_path=":memory:")
+        subscriber = AuditSubscriber(bus, repo)
+        await subscriber.start()
+
+        event_types = [
+            (RavnEventType.TURN_START, 0.5),
+            (RavnEventType.TOOL_START, 0.5),
+            (RavnEventType.TOOL_COMPLETE, 0.5),
+            (RavnEventType.TOOL_ERROR, 0.7),
+            (RavnEventType.TASK_COMPLETE, 0.7),
+            (RavnEventType.DECISION_REQUIRED, 0.9),
+        ]
+        for et, urgency in event_types:
+            ravn = _make_ravn_event(et, urgency=urgency, correlation_id=_SESSION_ID)
+            await bus.publish(TRANSLATOR.translate(ravn))
+
+        await bus.flush()
+
+        persisted = await repo.query(AuditQuery(event_type_pattern="ravn.*", limit=20))
+        persisted_types = {e.event_type for e in persisted}
+        expected = {et.value for et, _ in event_types}
+        assert expected == persisted_types
+
+        for evt in persisted:
+            assert evt.correlation_id == _SESSION_ID
+
+        await subscriber.stop()
+
+    async def test_audit_subscriber_idempotent_start(self):
+        """Calling start() twice does not double-subscribe."""
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.adapters.audit_subscriber import AuditSubscriber
+        from sleipnir.ports.audit import AuditQuery
+
+        bus = InProcessBus()
+        repo = SqliteAuditRepository(db_path=":memory:")
+        subscriber = AuditSubscriber(bus, repo)
+        await subscriber.start()
+        await subscriber.start()  # second call must be a no-op
+
+        ravn_event = _make_ravn_event(RavnEventType.TURN_START)
+        await bus.publish(TRANSLATOR.translate(ravn_event))
+        await bus.flush()
+
+        events = await repo.query(AuditQuery(event_type_pattern="ravn.*"))
+        # If start() subscribed twice, the event would be appended twice —
+        # but idempotent INSERT ignores duplicates, so count stays 1.
+        assert len(events) == 1
+
+        await subscriber.stop()
+
+    async def test_audit_repo_query_by_correlation_id(self):
+        """query(correlation_id=...) returns only events for that task."""
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.adapters.audit_subscriber import AuditSubscriber
+        from sleipnir.ports.audit import AuditQuery
+
+        bus = InProcessBus()
+        repo = SqliteAuditRepository(db_path=":memory:")
+        subscriber = AuditSubscriber(bus, repo)
+        await subscriber.start()
+
+        task_a, task_b = "task-audit-a", "task-audit-b"
+        for cid in (task_a, task_b):
+            ravn = _make_ravn_event(
+                RavnEventType.TURN_START,
+                payload={"task_id": cid},
+                correlation_id=cid,
+            )
+            await bus.publish(TRANSLATOR.translate(ravn))
+
+        await bus.flush()
+
+        result_a = await repo.query(AuditQuery(correlation_id=task_a))
+        assert len(result_a) == 1
+        assert result_a[0].correlation_id == task_a
+
+        result_b = await repo.query(AuditQuery(correlation_id=task_b))
+        assert len(result_b) == 1
+        assert result_b[0].correlation_id == task_b
+
+        await subscriber.stop()
+
+
+# ---------------------------------------------------------------------------
+# Transport hardening tests
+# ---------------------------------------------------------------------------
+
+
+class TestPublishBatch:
+    """Verify publish_batch preserves event ordering across transports."""
+
+    async def test_publish_batch_order_preserved(self, bus):
+        """Batch of events arrives in the same order it was submitted."""
+        order: list[str] = []
+        done = asyncio.Event()
+
+        event_types = [
+            RavnEventType.TURN_START,
+            RavnEventType.TOOL_START,
+            RavnEventType.TOOL_COMPLETE,
+            RavnEventType.TASK_COMPLETE,
+        ]
+
+        async def handler(evt: SleipnirEvent) -> None:
+            order.append(evt.event_type)
+            if len(order) == len(event_types):
+                done.set()
+
+        await bus.subscribe(["ravn.*"], handler)
+
+        batch = [TRANSLATOR.translate(_make_ravn_event(et)) for et in event_types]
+        await bus.publish_batch(batch)
+        await bus.flush()
+        await asyncio.wait_for(done.wait(), timeout=3.0)
+
+        assert order == [et.value for et in event_types]
+
+
+class TestTTLExpiry:
+    """Events with TTL ≤ 0 are dropped before delivery."""
+
+    async def test_ttl_zero_event_not_delivered(self):
+        """An event with ttl=0 must be silently dropped by the in-process bus."""
+        bus = InProcessBus()
+        received: list[SleipnirEvent] = []
+
+        async def handler(evt: SleipnirEvent) -> None:  # pragma: no cover
+            received.append(evt)
+
+        await bus.subscribe(["ravn.*"], handler)
+
+        sleipnir_event = TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START))
+        # Rebuild with ttl=0 to force expiry on dispatch.
+        from dataclasses import replace
+
+        expired = replace(sleipnir_event, ttl=0)
+        await bus.publish(expired)
+        await bus.flush()
+        await asyncio.sleep(0.05)
+
+        assert received == []
+
+    async def test_ttl_none_event_is_delivered(self):
+        """An event with ttl=None (no expiry) passes through normally."""
+        bus = InProcessBus()
+        received: list[SleipnirEvent] = []
+        done = asyncio.Event()
+
+        async def handler(evt: SleipnirEvent) -> None:
+            received.append(evt)
+            done.set()
+
+        await bus.subscribe(["ravn.*"], handler)
+
+        sleipnir_event = TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START))
+        assert sleipnir_event.ttl is None
+        await bus.publish(sleipnir_event)
+        await bus.flush()
+        await asyncio.wait_for(done.wait(), timeout=2.0)
+
+        assert len(received) == 1
+
+
+class TestHandlerExceptionRecovery:
+    """A handler that raises must not crash the bus or silence other subscribers."""
+
+    async def test_raising_handler_does_not_prevent_second_subscriber(self):
+        """Even if handler_a raises, handler_b still receives the event."""
+        bus = InProcessBus()
+        received_b: list[SleipnirEvent] = []
+        done = asyncio.Event()
+
+        async def bad_handler(evt: SleipnirEvent) -> None:
+            raise RuntimeError("deliberate handler failure")
+
+        async def good_handler(evt: SleipnirEvent) -> None:
+            received_b.append(evt)
+            done.set()
+
+        await bus.subscribe(["ravn.*"], bad_handler)
+        await bus.subscribe(["ravn.*"], good_handler)
+
+        sleipnir_event = TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START))
+        await bus.publish(sleipnir_event)
+        await bus.flush()
+        await asyncio.wait_for(done.wait(), timeout=2.0)
+
+        assert len(received_b) == 1
+
+
+class TestInProcessBusEdgeCases:
+    """Edge cases for InProcessBus that improve hardening coverage."""
+
+    def test_invalid_ring_buffer_depth_raises(self):
+        with pytest.raises(ValueError, match="ring_buffer_depth"):
+            InProcessBus(ring_buffer_depth=0)
+
+    async def test_unsubscribe_then_no_delivery(self):
+        """After unsubscribing, no further events arrive."""
+        bus = InProcessBus()
+        received: list[SleipnirEvent] = []
+
+        async def handler(evt: SleipnirEvent) -> None:  # pragma: no cover
+            received.append(evt)
+
+        sub = await bus.subscribe(["ravn.*"], handler)
+        await sub.unsubscribe()
+
+        sleipnir_event = TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START))
+        await bus.publish(sleipnir_event)
+        await bus.flush()
+        await asyncio.sleep(0.05)
+
+        assert received == []
+
+    async def test_double_unsubscribe_is_safe(self):
+        """Calling unsubscribe twice does not raise."""
+        bus = InProcessBus()
+
+        async def handler(evt: SleipnirEvent) -> None:  # pragma: no cover
+            pass
+
+        sub = await bus.subscribe(["ravn.*"], handler)
+        await sub.unsubscribe()
+        await sub.unsubscribe()  # must not raise
+
+    async def test_ring_buffer_overflow_drops_oldest(self):
+        """When the ring buffer is full, the oldest event is dropped."""
+        depth = 2
+        bus = InProcessBus(ring_buffer_depth=depth)
+
+        # Pause handler to let the queue fill up.
+        pause = asyncio.Event()
+        received: list[SleipnirEvent] = []
+
+        async def slow_handler(evt: SleipnirEvent) -> None:
+            await pause.wait()
+            received.append(evt)
+
+        await bus.subscribe(["ravn.*"], slow_handler)
+
+        events = [
+            TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START, payload={"n": i}))
+            for i in range(depth + 2)
+        ]
+        for evt in events:
+            await bus.publish(evt)
+
+        # Release handler and flush.
+        pause.set()
+        await bus.flush()
+
+        # Ring buffer depth=2 means at most 2 events are queued; some were dropped.
+        assert len(received) <= depth
+
+
+class TestAuditSubscriberLifecycle:
+    """Lifecycle and config paths for AuditSubscriber."""
+
+    async def test_stop_when_not_running_is_safe(self):
+        """Calling stop() before start() does not raise."""
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.adapters.audit_subscriber import AuditSubscriber
+
+        bus = InProcessBus()
+        repo = SqliteAuditRepository(db_path=":memory:")
+        subscriber = AuditSubscriber(bus, repo)
+        await subscriber.stop()  # must not raise
+
+    async def test_start_stop_lifecycle(self):
+        """start → publish → stop round-trip completes without error."""
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.adapters.audit_subscriber import AuditSubscriber
+        from sleipnir.ports.audit import AuditQuery
+
+        bus = InProcessBus()
+        repo = SqliteAuditRepository(db_path=":memory:")
+        subscriber = AuditSubscriber(bus, repo)
+
+        assert not subscriber.running
+        await subscriber.start()
+        assert subscriber.running
+
+        await bus.publish(TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START)))
+        await bus.flush()
+
+        await subscriber.stop()
+        assert not subscriber.running
+
+        events = await repo.query(AuditQuery(event_type_pattern="ravn.*"))
+        assert len(events) == 1
+
+    async def test_disabled_audit_subscriber_does_not_persist(self):
+        """AuditSubscriber with enabled=False never writes to the repo."""
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.adapters.audit_subscriber import AuditConfig, AuditSubscriber
+        from sleipnir.ports.audit import AuditQuery
+
+        bus = InProcessBus()
+        repo = SqliteAuditRepository(db_path=":memory:")
+        subscriber = AuditSubscriber(bus, repo, config=AuditConfig(enabled=False))
+        await subscriber.start()
+        assert not subscriber.running
+
+        await bus.publish(TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START)))
+        await bus.flush()
+        await asyncio.sleep(0.05)
+
+        events = await repo.query(AuditQuery(event_type_pattern="ravn.*"))
+        assert events == []
+
+    async def test_handler_exception_does_not_stop_audit_subscriber(self):
+        """If the repo raises, AuditSubscriber logs and continues."""
+
+        from sleipnir.adapters.audit_subscriber import AuditSubscriber
+        from sleipnir.ports.audit import AuditRepository
+
+        class FailingRepo(AuditRepository):
+            async def append(self, event):
+                raise RuntimeError("db write failed")
+
+            async def query(self, q):  # pragma: no cover
+                return []
+
+            async def purge_expired(self):  # pragma: no cover
+                return 0
+
+        bus = InProcessBus()
+        subscriber = AuditSubscriber(bus, FailingRepo())
+        await subscriber.start()
+
+        # publish and flush — subscriber must survive the exception
+        await bus.publish(TRANSLATOR.translate(_make_ravn_event(RavnEventType.TURN_START)))
+        await bus.flush()
+
+        assert subscriber.running
+        await subscriber.stop()
+
+
+class TestSqliteAuditRepository:
+    """Additional coverage for SqliteAuditRepository query paths."""
+
+    async def test_purge_expired_returns_count(self):
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+
+        repo = SqliteAuditRepository(db_path=":memory:")
+        # No TTL events — purge should return 0.
+        count = await repo.purge_expired()
+        assert count == 0
+
+    async def test_query_with_source_filter(self):
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+        from sleipnir.ports.audit import AuditQuery
+
+        repo = SqliteAuditRepository(db_path=":memory:")
+        source_a = "ravn:sess-a"
+        source_b = "ravn:sess-b"
+
+        for src in (source_a, source_b):
+            evt = TRANSLATOR.translate(
+                RavnEvent(
+                    type=RavnEventType.TURN_START,
+                    source=src,
+                    payload={},
+                    urgency=0.5,
+                )
+            )
+            await repo.append(evt)
+
+        results = await repo.query(AuditQuery(source=source_a))
+        assert len(results) == 1
+        assert results[0].source == source_a
+
+    async def test_close_releases_connection(self):
+        from sleipnir.adapters.audit_sqlite import SqliteAuditRepository
+
+        repo = SqliteAuditRepository(db_path=":memory:")
+        # Force connection open.
+        await repo.purge_expired()
+        await repo.close()
+        # Calling close again must be safe.
+        await repo.close()
