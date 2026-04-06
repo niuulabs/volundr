@@ -22,6 +22,7 @@ from fastapi import FastAPI, Request, Response
 from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
 from bifrost.config import BifrostConfig, CacheMode
+from bifrost.inbound.observability import create_observability_router
 from bifrost.inbound.routes import create_router
 from bifrost.ports.cache import CachePort
 from bifrost.ports.events import CostEventEmitter
@@ -232,5 +233,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
         cache=cache,
     )
     app.include_router(api_router)
+
+    obs_router = create_observability_router(config=config, router=router, store=store)
+    app.include_router(obs_router)
 
     return app
