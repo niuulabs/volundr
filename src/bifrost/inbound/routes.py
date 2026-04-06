@@ -13,7 +13,7 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -44,15 +44,30 @@ from bifrost.inbound.tracking import (
     _HEADER_QUOTA_WARNING,
     _log_request,
     _stream_with_tracking,
+    emit_cost_events,
 )
 from bifrost.ports.auth import AuthPort
 from bifrost.ports.cache import CachePort
+from bifrost.ports.events import CostEventEmitter
+from bifrost.ports.rules import RoutingContext
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
 from bifrost.router import ModelRouter, RouterError
-from bifrost.translation.models import AnthropicRequest, AnthropicResponse
+from bifrost.translation.models import AnthropicRequest
 
 logger = logging.getLogger(__name__)
+
+# Header injected on responses when the agent's budget is approaching or at the
+# warn threshold.  Callers can inspect this header to adjust their behaviour.
+_HEADER_BUDGET_WARNING = "X-Bifrost-Budget-Warning"
+
+
+def _seconds_until_utc_midnight() -> int:
+    """Return the number of seconds remaining until midnight UTC today."""
+    now = datetime.now(UTC)
+    tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tzinfo=UTC)
+    return max(0, int((tomorrow - now).total_seconds()))
+
 
 # ---------------------------------------------------------------------------
 # Cache key computation
@@ -62,10 +77,10 @@ logger = logging.getLogger(__name__)
 def _compute_cache_key(tenant_id: str, request: AnthropicRequest) -> str:
     """Return a per-tenant SHA-256 cache key for *request*.
 
-    The key covers ``tenant_id``, ``model``, ``system``, and ``messages`` so
-    that two requests with different prompts or from different tenants always
-    get distinct entries.  The ``stream`` flag is intentionally excluded —
-    only non-streaming responses are cached (the flag does not affect content).
+    The key covers all generation-affecting fields so that two requests that
+    would produce different provider responses always get distinct entries.
+    ``stream`` and ``metadata`` are excluded — ``stream`` does not affect
+    content and ``metadata`` is not semantically relevant.
 
     Args:
         tenant_id: Caller's tenant identifier (prevents cross-tenant leakage).
@@ -74,16 +89,79 @@ def _compute_cache_key(tenant_id: str, request: AnthropicRequest) -> str:
     Returns:
         A lowercase hex SHA-256 digest (64 characters).
     """
-    if isinstance(request.system, str):
-        system_str = request.system or ""
-    elif request.system is not None:
-        system_str = json.dumps([b.model_dump() for b in request.system], sort_keys=True)
-    else:
-        system_str = ""
-
-    messages_str = json.dumps([m.model_dump() for m in request.messages], sort_keys=True)
-    payload = f"{tenant_id}:{request.model}:{system_str}:{messages_str}"
+    key_data = request.model_dump(exclude={"stream", "metadata"}, exclude_none=True)
+    key_data["tenant_id"] = tenant_id
+    payload = json.dumps(key_data, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _cache_hit_record(
+    request_id: str,
+    identity,
+    model: str,
+    provider: str,
+    latency_ms: float,
+) -> UsageRecord:
+    """Build a zero-cost ``UsageRecord`` for a cache hit."""
+    return UsageRecord(
+        request_id=request_id,
+        agent_id=identity.agent_id,
+        tenant_id=identity.tenant_id,
+        session_id=identity.session_id,
+        saga_id=identity.saga_id,
+        model=model,
+        provider=provider,
+        input_tokens=0,
+        output_tokens=0,
+        cache_read_tokens=0,
+        cache_write_tokens=0,
+        reasoning_tokens=0,
+        cost_usd=0.0,
+        latency_ms=latency_ms,
+        streaming=False,
+        cache_hit=True,
+        timestamp=datetime.now(UTC),
+    )
+
+
+async def _try_cache_hit(
+    cache: CachePort,
+    key: str,
+    identity,
+    request_id: str,
+    model: str,
+    provider: str,
+    start: float,
+    store: UsageStore,
+    response_transform=None,
+) -> JSONResponse | None:
+    """Return a ``JSONResponse`` on cache hit, or ``None`` on miss.
+
+    Args:
+        cache:              Cache adapter.
+        key:                SHA-256 cache key.
+        identity:           Caller identity (for usage recording).
+        request_id:         Correlation ID for the request.
+        model:              Resolved model name.
+        provider:           Resolved provider name.
+        start:              ``time.monotonic()`` captured at request entry.
+        store:              Usage store for recording the zero-cost hit.
+        response_transform: Optional callable to convert the cached
+                            ``AnthropicResponse`` into a response dict.
+                            When ``None``, ``response.model_dump()`` is used.
+
+    Returns:
+        A ``JSONResponse`` when the cache contained an entry, else ``None``.
+    """
+    cached = await cache.get(key)
+    if cached is None:
+        return None
+    latency_ms = (time.monotonic() - start) * 1000
+    await store.record(
+        _cache_hit_record(request_id, identity, model, provider, latency_ms)
+    )
+    content = response_transform(cached) if response_transform else cached.model_dump()
+    return JSONResponse(content=content)
 
 
 def _cache_hit_record(
@@ -125,17 +203,26 @@ async def _check_quotas(
     config: BifrostConfig,
     store: UsageStore,
     agent_perms: AgentPermissions,
-) -> list[str]:
-    """Check quota limits and return a list of warning strings (empty = OK).
+) -> tuple[list[str], float | None]:
+    """Check quota limits and return warnings plus the agent cost already fetched.
 
     Args:
         agent_perms: Pre-resolved permissions for the caller (avoids a second
                      ``config.permissions_for_agent()`` lookup per request).
 
+    Returns:
+        A 2-tuple of:
+        - ``warnings``         — list of human-readable soft-limit warning strings.
+        - ``agent_cost_today`` — the agent's total cost today (USD) when a per-agent
+                                 budget is configured, else ``None``.  Returned so
+                                 callers can pass it to ``_evaluate_guardrails``
+                                 without issuing a second store round-trip.
+
     Raises:
         HTTPException(429): If any hard limit is exceeded.
     """
     warnings: list[str] = []
+    agent_cost_today: float | None = None
 
     tenant_quota = config.quota_for_tenant(identity.tenant_id)
     agent_quota = agent_perms.quota
@@ -181,22 +268,26 @@ async def _check_quotas(
         if fraction >= tenant_quota.soft_limit_fraction:
             warnings.append(f"tenant_requests_per_hour={used_req}/{limit_req} ({fraction:.0%})")
 
-    # Agent: cost per day (only when a per-agent budget is configured)
+    # Agent: cost per day (only when a per-agent budget is configured).
+    # The fetched cost is returned so _evaluate_guardrails can reuse it
+    # without issuing a duplicate store query.
     if agent_quota.max_cost_per_day > 0.0:
-        agent_cost = await store.agent_cost_today(identity.agent_id)
+        agent_cost_today = await store.agent_cost_today(identity.agent_id)
         limit_cost = agent_quota.max_cost_per_day
-        fraction = agent_cost / limit_cost
+        fraction = agent_cost_today / limit_cost
         if fraction >= 1.0:
             raise HTTPException(
                 status_code=429,
-                detail=(f"Agent daily cost quota exceeded (${agent_cost:.4f}/${limit_cost:.4f})."),
+                detail=(
+                    f"Agent daily cost quota exceeded (${agent_cost_today:.4f}/${limit_cost:.4f})."
+                ),
             )
         if fraction >= agent_quota.soft_limit_fraction:
             warnings.append(
-                f"agent_cost_per_day=${agent_cost:.4f}/${limit_cost:.4f} ({fraction:.0%})"
+                f"agent_cost_per_day=${agent_cost_today:.4f}/${limit_cost:.4f} ({fraction:.0%})"
             )
 
-    return warnings
+    return warnings, agent_cost_today
 
 
 def _check_model_access(
@@ -226,6 +317,88 @@ def _check_model_access(
                 f"Allowed: {agent_perms.allowed_models}"
             ),
         )
+
+
+# ---------------------------------------------------------------------------
+# Guardrail evaluation (budget + context-window)
+# ---------------------------------------------------------------------------
+
+
+async def _evaluate_guardrails(
+    request: AnthropicRequest,
+    identity: AgentIdentity,
+    config: BifrostConfig,
+    store: UsageStore,
+    agent_perms: AgentPermissions,
+    agent_cost_today: float | None = None,
+) -> tuple[AnthropicRequest, RoutingContext, str | None]:
+    """Evaluate budget and context-window guardrails before routing.
+
+    This runs *after* ``_check_quotas`` so the hard-limit 429 (agent budget
+    exhausted) is always raised there first.  This function handles the
+    *soft* budget path: routing to a cheaper model and injecting the
+    ``X-Bifrost-Budget-Warning`` response header.
+
+    Args:
+        request:          Inbound Anthropic-format request (may be mutated).
+        identity:         Authenticated agent identity.
+        config:           Gateway configuration containing guardrail policies.
+        store:            Usage store (queried only when ``agent_cost_today``
+                          is not supplied).
+        agent_perms:      Pre-resolved permissions for the caller.
+        agent_cost_today: Agent cost already fetched by ``_check_quotas``
+                          (avoids a duplicate store round-trip).  When
+                          ``None``, the store is queried directly.
+
+    Returns:
+        A 3-tuple of:
+        - ``request``      — possibly with model overridden (budget warn_action).
+        - ``context``      — ``RoutingContext`` with ``agent_budget_pct`` set so
+                             that declarative budget rules in the rule engine also
+                             fire correctly.
+        - ``budget_warn``  — header value for ``X-Bifrost-Budget-Warning``, or
+                             ``None`` when no warning is applicable.
+
+    Raises:
+        HTTPException(400): When the request exceeds the context-window message limit.
+    """
+    budget_warn: str | None = None
+    agent_budget_pct: float | None = None
+
+    # ── Context-window guardrail ─────────────────────────────────────────────
+    # max_messages is inclusive: a request with exactly max_messages messages
+    # is allowed; only strictly more than max_messages is rejected.
+    cw_cfg = config.guardrails.context_window
+    if cw_cfg is not None and len(request.messages) > cw_cfg.max_messages:
+        raise HTTPException(status_code=400, detail=cw_cfg.reason)
+
+    # ── Budget guardrail ─────────────────────────────────────────────────────
+    # Note: the >= 100% hard limit is enforced upstream by _check_quotas (which
+    # also raises 429 + sets Retry-After).  By the time we reach this point the
+    # agent is guaranteed to be below 100%.  We only handle the warn threshold
+    # here (route to a cheaper model, inject X-Bifrost-Budget-Warning).
+    budget_cfg = config.guardrails.budget
+    agent_quota = agent_perms.quota
+
+    if budget_cfg is not None and agent_quota.max_cost_per_day > 0.0:
+        if agent_cost_today is None:
+            agent_cost_today = await store.agent_cost_today(identity.agent_id)
+        agent_cost = agent_cost_today
+        limit = agent_quota.max_cost_per_day
+        pct_consumed = (agent_cost / limit) * 100.0
+        agent_budget_pct = pct_consumed
+
+        if pct_consumed >= budget_cfg.warn_at_pct:
+            if budget_cfg.warn_action == "route_to":
+                request = request.model_copy(update={"model": budget_cfg.warn_target})
+            budget_warn = (
+                f"budget_consumed={pct_consumed:.1f}% "
+                f"(${agent_cost:.4f}/${limit:.4f}); "
+                f"routed_to={budget_cfg.warn_target}"
+            )
+
+    context = RoutingContext(agent_budget_pct=agent_budget_pct)
+    return request, context, budget_warn
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +449,7 @@ def create_router(
     store: UsageStore,
     pricing_overrides: dict[str, ModelPricing],
     auth_adapter: AuthPort,
+    event_emitter: CostEventEmitter,
     cache: CachePort | None = None,
 ) -> APIRouter:
     """Build and return a configured ``APIRouter`` with all Bifröst routes.
@@ -299,6 +473,24 @@ def create_router(
     else:
         _cache = cache
     api_router = APIRouter()
+
+    async def _emit_events(
+        identity: AgentIdentity,
+        cost: float,
+        tokens: int,
+        model: str,
+        budget_limit: float,
+    ) -> None:
+        await emit_cost_events(
+            emitter=event_emitter,
+            store=store,
+            identity=identity,
+            cost=cost,
+            tokens_used=tokens,
+            model=model,
+            agent_budget_limit=budget_limit,
+            budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
+        )
 
     @api_router.get("/health")
     async def health() -> dict:
@@ -370,18 +562,26 @@ def create_router(
         _check_model_access(identity, request.model, agent_perms)
 
         # --- Quota check (before routing) ---
-        warnings = await _check_quotas(identity, config, store, agent_perms)
+        warnings, agent_cost_today = await _check_quotas(identity, config, store, agent_perms)
+
+        # --- Guardrail evaluation (budget + context-window) ---
+        # Pass agent_cost_today to avoid a duplicate store query.
+        request, routing_ctx, budget_warn = await _evaluate_guardrails(
+            request, identity, config, store, agent_perms, agent_cost_today
+        )
 
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
 
         provider = config.provider_for_model(request.model) or ""
 
+        agent_budget_limit = agent_perms.quota.max_cost_per_day
+
         try:
             if request.stream:
                 stream_resp = StreamingResponse(
                     _stream_with_tracking(
-                        router.stream(request),
+                        router.stream(request, routing_ctx),
                         request.model,
                         start,
                         identity,
@@ -389,6 +589,9 @@ def create_router(
                         pricing_overrides,
                         request_id,
                         provider=provider,
+                        emitter=event_emitter,
+                        agent_budget_limit=agent_budget_limit,
+                        budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
                     ),
                     media_type="text/event-stream",
                     headers={
@@ -399,23 +602,22 @@ def create_router(
                 )
                 if warnings:
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                if budget_warn:
+                    stream_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
                 return stream_resp
 
             # --- Exact response cache (non-streaming only) ---
             cache_key = _compute_cache_key(identity.tenant_id, request)
-            cached: AnthropicResponse | None = await _cache.get(cache_key)
-            if cached is not None:
-                latency_ms = (time.monotonic() - start) * 1000
-                hit_record = _cache_hit_record(
-                    request_id, identity, request.model, provider, latency_ms
-                )
-                await store.record(hit_record)
-                json_resp = JSONResponse(content=cached.model_dump())
+            hit_resp = await _try_cache_hit(
+                _cache, cache_key, identity, request_id,
+                request.model, provider, start, store,
+            )
+            if hit_resp is not None:
                 if warnings:
-                    json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
-                return json_resp
+                    hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return hit_resp
 
-            response = await router.complete(request)
+            response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             data = response.model_dump()
             raw_usage = data.get("usage", {})
@@ -457,11 +659,17 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
+            )
             await _cache.set(cache_key, response, config.cache.default_ttl)
 
             json_resp = JSONResponse(content=data)
             if warnings:
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            if budget_warn:
+                json_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
             return json_resp
 
         except RuleRejectError as exc:
@@ -624,13 +832,23 @@ def create_router(
 
         # --- Quota check (before routing) ---
         try:
-            warnings = await _check_quotas(identity, config, store, agent_perms)
+            warnings, agent_cost_today = await _check_quotas(identity, config, store, agent_perms)
+        except HTTPException as exc:
+            return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
+
+        # --- Guardrail evaluation (budget + context-window) ---
+        # Pass agent_cost_today to avoid a duplicate store query.
+        try:
+            request, routing_ctx, budget_warn = await _evaluate_guardrails(
+                request, identity, config, store, agent_perms, agent_cost_today
+            )
         except HTTPException as exc:
             return openai_error_response(exc.status_code, exc.detail, "rate_limit_error")
 
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
         provider = config.provider_for_model(request.model) or ""
+        agent_budget_limit = agent_perms.quota.max_cost_per_day
 
         try:
             if request.stream:
@@ -638,7 +856,7 @@ def create_router(
                 stream_resp = StreamingResponse(
                     anthropic_stream_to_openai(
                         _stream_with_tracking(
-                            router.stream(request),
+                            router.stream(request, routing_ctx),
                             request.model,
                             start,
                             identity,
@@ -646,6 +864,9 @@ def create_router(
                             pricing_overrides,
                             request_id,
                             provider=provider,
+                            emitter=event_emitter,
+                            agent_budget_limit=agent_budget_limit,
+                            budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
                         ),
                         message_id=message_id,
                         model=request.model,
@@ -659,23 +880,23 @@ def create_router(
                 )
                 if warnings:
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                if budget_warn:
+                    stream_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
                 return stream_resp
 
             # --- Exact response cache (non-streaming only) ---
             cache_key = _compute_cache_key(identity.tenant_id, request)
-            cached = await _cache.get(cache_key)
-            if cached is not None:
-                latency_ms = (time.monotonic() - start) * 1000
-                hit_record = _cache_hit_record(
-                    request_id, identity, request.model, provider, latency_ms
-                )
-                await store.record(hit_record)
-                json_resp = JSONResponse(content=anthropic_response_to_openai(cached))
+            hit_resp = await _try_cache_hit(
+                _cache, cache_key, identity, request_id,
+                request.model, provider, start, store,
+                response_transform=anthropic_response_to_openai,
+            )
+            if hit_resp is not None:
                 if warnings:
-                    json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
-                return json_resp
+                    hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return hit_resp
 
-            response = await router.complete(request)
+            response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
                 input_tokens=response.usage.input_tokens,
@@ -715,11 +936,17 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
+            )
             await _cache.set(cache_key, response, config.cache.default_ttl)
 
             json_resp = JSONResponse(content=anthropic_response_to_openai(response))
             if warnings:
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            if budget_warn:
+                json_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
             return json_resp
 
         except RuleRejectError as exc:
@@ -774,20 +1001,30 @@ def create_router(
             return ollama_error_response(exc.status_code, exc.detail)
 
         try:
-            warnings = await _check_quotas(identity, config, store, agent_perms)
+            warnings, agent_cost_today = await _check_quotas(identity, config, store, agent_perms)
+        except HTTPException as exc:
+            return ollama_error_response(exc.status_code, exc.detail)
+
+        # --- Guardrail evaluation (budget + context-window) ---
+        # Pass agent_cost_today to avoid a duplicate store query.
+        try:
+            request, routing_ctx, budget_warn = await _evaluate_guardrails(
+                request, identity, config, store, agent_perms, agent_cost_today
+            )
         except HTTPException as exc:
             return ollama_error_response(exc.status_code, exc.detail)
 
         request_id = str(raw_request.state.correlation_id)
         start = time.monotonic()
         provider = config.provider_for_model(request.model) or ""
+        agent_budget_limit = agent_perms.quota.max_cost_per_day
 
         try:
             if request.stream:
                 stream_resp = StreamingResponse(
                     stream_translate_fn(
                         _stream_with_tracking(
-                            router.stream(request),
+                            router.stream(request, routing_ctx),
                             request.model,
                             start,
                             identity,
@@ -795,6 +1032,9 @@ def create_router(
                             pricing_overrides,
                             request_id,
                             provider=provider,
+                            emitter=event_emitter,
+                            agent_budget_limit=agent_budget_limit,
+                            budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
                         ),
                         model=request.model,
                         start=start,
@@ -803,29 +1043,27 @@ def create_router(
                 )
                 if warnings:
                     stream_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                if budget_warn:
+                    stream_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
                 return stream_resp
 
             # --- Exact response cache (non-streaming only) ---
             cache_key = _compute_cache_key(identity.tenant_id, request)
-            cached = await _cache.get(cache_key)
-            if cached is not None:
-                latency_ms = (time.monotonic() - start) * 1000
-                hit_record = _cache_hit_record(
-                    request_id, identity, request.model, provider, latency_ms
-                )
-                await store.record(hit_record)
-                created_at = datetime.now(UTC).isoformat()
-                total_ns = int(latency_ms * 1e6)
-                json_resp = JSONResponse(
-                    content=response_translate_fn(
-                        cached, created_at=created_at, total_duration_ns=total_ns
-                    )
-                )
+            hit_resp = await _try_cache_hit(
+                _cache, cache_key, identity, request_id,
+                request.model, provider, start, store,
+                response_transform=lambda cached: response_translate_fn(
+                    cached,
+                    created_at=datetime.now(UTC).isoformat(),
+                    total_duration_ns=int((time.monotonic() - start) * 1e9),
+                ),
+            )
+            if hit_resp is not None:
                 if warnings:
-                    json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
-                return json_resp
+                    hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+                return hit_resp
 
-            response = await router.complete(request)
+            response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
                 input_tokens=response.usage.input_tokens,
@@ -865,6 +1103,10 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            await _emit_events(
+                identity, cost, usage.input_tokens + usage.output_tokens,
+                request.model, agent_budget_limit,
+            )
             await _cache.set(cache_key, response, config.cache.default_ttl)
 
             created_at = datetime.now(UTC).isoformat()
@@ -876,6 +1118,8 @@ def create_router(
             )
             if warnings:
                 json_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
+            if budget_warn:
+                json_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
             return json_resp
 
         except RouterError as exc:

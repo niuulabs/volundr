@@ -200,6 +200,67 @@ class RuleConfig(BaseModel):
         return self
 
 
+class BudgetGuardrailConfig(BaseModel):
+    """Budget-based guardrail: route to cheaper model or reject when budget is exhausted."""
+
+    warn_at_pct: float = Field(
+        default=80.0,
+        description=(
+            "Percentage of daily budget consumed at which the warn action fires (0–100). "
+            "Default: 80 (warn when 80% of the budget is used)."
+        ),
+    )
+    warn_action: Literal["route_to"] = Field(
+        default="route_to",
+        description="Action to take at the warn threshold. Currently only 'route_to' is supported.",
+    )
+    warn_target: str = Field(
+        default="fast",
+        description="Model alias or ID to route to when the warn threshold is reached.",
+    )
+    hard_limit_action: Literal["reject"] = Field(
+        default="reject",
+        description=(
+            "Action to take when the budget is fully exhausted (100%). Only 'reject' is supported."
+        ),
+    )
+
+
+class ContextWindowGuardrailConfig(BaseModel):
+    """Context-window guardrail: reject requests that exceed a message count threshold."""
+
+    max_messages: int = Field(
+        default=50,
+        description="Maximum number of messages allowed in a single request.",
+    )
+    action: Literal["reject"] = Field(
+        default="reject",
+        description="Action to take when the message count exceeds the limit.",
+    )
+    reason: str = Field(
+        default="Context window limit reached",
+        description="Rejection message returned to the caller.",
+    )
+
+
+class GuardrailsConfig(BaseModel):
+    """Container for all declarative guardrail policies."""
+
+    budget: BudgetGuardrailConfig | None = Field(
+        default=None,
+        description=(
+            "Budget-based guardrail. When set, agents approaching their daily cost limit "
+            "are automatically routed to a cheaper model; exhausted agents are rejected."
+        ),
+    )
+    context_window: ContextWindowGuardrailConfig | None = Field(
+        default=None,
+        description=(
+            "Context-window guardrail. When set, requests with too many messages are rejected."
+        ),
+    )
+
+
 class UsageStoreConfig(BaseModel):
     """Configuration for the usage persistence backend."""
 
@@ -238,6 +299,36 @@ class KeyVaultConfig(BaseModel):
             "When set, keys are loaded from this file instead of (or in "
             "addition to) environment variables. "
             "File format: ``provider_name: api_key_value``."
+        ),
+    )
+
+
+class EventsConfig(BaseModel):
+    """Configuration for the Valkyrie cost event emitter."""
+
+    adapter: str = Field(
+        default="null",
+        description="Event emitter adapter. Accepted values: 'null' (default), 'sleipnir'.",
+    )
+    url: str = Field(
+        default="",
+        description=(
+            "AMQP URL for the Sleipnir (RabbitMQ) adapter (e.g. amqp://guest:guest@localhost/)."
+        ),
+    )
+    exchange: str = Field(
+        default="bifrost.events",
+        description="RabbitMQ exchange name.",
+    )
+    exchange_type: str = Field(
+        default="topic",
+        description="RabbitMQ exchange type.",
+    )
+    budget_warning_threshold_pct: float = Field(
+        default=20.0,
+        description=(
+            "Remaining budget percentage at or below which a budget_warning event is "
+            "emitted. Only applies when the agent has a configured daily cost limit."
         ),
     )
 
@@ -366,6 +457,15 @@ class BifrostConfig(BaseModel):
         description="Per-agent model access control and optional budget.",
     )
 
+    # ── Guardrails ───────────────────────────────────────────────────────────
+    guardrails: GuardrailsConfig = Field(
+        default_factory=GuardrailsConfig,
+        description=(
+            "Declarative guardrail policies (budget routing, context-window limits). "
+            "Evaluated before the routing rule engine on every request."
+        ),
+    )
+
     # ── Routing rules ────────────────────────────────────────────────────────
     rules: list[RuleConfig] = Field(
         default_factory=list,
@@ -388,6 +488,12 @@ class BifrostConfig(BaseModel):
             "Provider API key vault configuration. "
             "Keys are loaded at startup and never returned in responses or logs."
         ),
+    )
+
+    # ── Event emission ───────────────────────────────────────────────────────
+    events: EventsConfig = Field(
+        default_factory=EventsConfig,
+        description="Configuration for the Valkyrie cost event emitter.",
     )
 
     # ── Response cache ────────────────────────────────────────────────────────
