@@ -582,21 +582,26 @@ def create_router(
             budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
         )
 
+    _audit_tasks: set[asyncio.Task] = set()
+
     def _schedule_audit(event: AuditEvent) -> None:
         """Schedule audit logging as a fire-and-forget task."""
-        asyncio.create_task(_audit.log(event))  # noqa: RUF006
+        task = asyncio.create_task(_audit.log(event))
+        _audit_tasks.add(task)
+        task.add_done_callback(_audit_tasks.discard)
 
     @api_router.get("/health")
     async def health() -> dict:
         return {"status": "ok"}
 
     @api_router.get("/v1/cache/stats")
-    async def cache_stats() -> dict:
+    async def cache_stats(raw_request: Request) -> dict:
         """Return aggregate cache statistics.
 
         Returns hit/miss counts, hit rate, and saved token counts since the
         process started.  Statistics are per-instance and reset on restart.
         """
+        auth_adapter.extract(raw_request)
         s = _cache.stats()
         return {
             "hits": s.hits,
