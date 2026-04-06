@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters.bash_validator import unwrap_sudo
-from ravn.adapters.permission_enforcer import (
+from ravn.adapters.permission.bash_validator import unwrap_sudo
+from ravn.adapters.permission.enforcer import (
     BashValidator,
     PermissionEnforcer,
     _redact_args,
@@ -804,15 +804,15 @@ class TestFileWriteForMode:
 
 class TestSystemPathPrefixDeduplication:
     def test_system_prefixes_imported_from_file_security(self) -> None:
-        from ravn.adapters.file_security import _SYSTEM_PREFIXES
-        from ravn.adapters.permission_enforcer import _SYSTEM_PATH_PREFIXES
+        from ravn.adapters.permission.enforcer import _SYSTEM_PATH_PREFIXES
+        from ravn.adapters.tools.file_security import _SYSTEM_PREFIXES
 
         # All base prefixes are included
         for prefix in _SYSTEM_PREFIXES:
             assert prefix in _SYSTEM_PATH_PREFIXES
 
     def test_extra_prefixes_added(self) -> None:
-        from ravn.adapters.permission_enforcer import _SYSTEM_PATH_PREFIXES
+        from ravn.adapters.permission.enforcer import _SYSTEM_PATH_PREFIXES
 
         for extra in ("/dev", "/bin", "/sbin", "/lib", "/lib64", "/root"):
             assert extra in _SYSTEM_PATH_PREFIXES
@@ -825,7 +825,7 @@ class TestSystemPathPrefixDeduplication:
 
 class TestBinaryCheckBytes:
     def test_config_binary_check_bytes_uses_constant(self) -> None:
-        from ravn.adapters.file_security import DEFAULT_BINARY_CHECK_BYTES
+        from ravn.adapters.tools.file_security import DEFAULT_BINARY_CHECK_BYTES
 
         e = _enforcer("workspace_write")
         assert e._config_binary_check_bytes() == DEFAULT_BINARY_CHECK_BYTES

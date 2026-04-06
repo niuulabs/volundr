@@ -7,7 +7,7 @@ import logging
 import re
 from pathlib import Path
 
-from ravn.adapters.file_security import (
+from ravn.adapters.tools.file_security import (
     DEFAULT_BINARY_CHECK_BYTES,
     DEFAULT_MAX_READ_BYTES,
     DEFAULT_MAX_WRITE_BYTES,

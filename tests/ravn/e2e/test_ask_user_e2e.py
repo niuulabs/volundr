@@ -16,7 +16,7 @@ import io
 import pytest
 
 from ravn.adapters.cli_channel import CliChannel
-from ravn.adapters.permission_adapter import AllowAllPermission
+from ravn.adapters.permission.allow_deny import AllowAllPermission
 from ravn.adapters.tools.ask_user import AskUserTool
 from ravn.agent import RavnAgent
 from ravn.domain.events import RavnEventType

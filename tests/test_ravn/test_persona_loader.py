@@ -516,7 +516,7 @@ class TestBuildAgentWithPersona:
 
         settings = Settings()
         with (
-            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -533,7 +533,7 @@ class TestBuildAgentWithPersona:
 
         settings = Settings()
         with (
-            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -552,7 +552,7 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -564,7 +564,7 @@ class TestBuildAgentWithPersona:
     def test_read_only_persona_uses_deny_all_permission(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
@@ -572,7 +572,7 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -580,10 +580,10 @@ class TestBuildAgentWithPersona:
 
         assert isinstance(agent._permission, DenyAllPermission)
 
-    def test_non_read_only_persona_uses_allow_all_permission(self) -> None:
+    def test_non_read_only_persona_uses_permission_enforcer(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from ravn.adapters.permission_adapter import AllowAllPermission
+        from ravn.adapters.permission.enforcer import PermissionEnforcer
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
@@ -591,18 +591,18 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
             agent, _ = _build_agent(settings, persona_config=persona)
 
-        assert isinstance(agent._permission, AllowAllPermission)
+        assert isinstance(agent._permission, PermissionEnforcer)
 
     def test_no_tools_flag_overrides_persona_permission(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
@@ -610,7 +610,7 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -633,7 +633,7 @@ class TestCliPersonaFlag:
         from ravn.cli.commands import app
 
         runner = CliRunner()
-        result = runner.invoke(app, ["--help"])
+        result = runner.invoke(app, ["run", "--help"])
         assert result.exit_code == 0
         # Strip ANSI escape codes before checking — typer may colorize output.
         plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
@@ -657,12 +657,12 @@ class TestCliPersonaFlag:
 
         runner = CliRunner()
         with (
-            patch("ravn.cli.commands.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_adapter = MagicMock()
             mock_adapter.stream = _stream
             mock_cls.return_value = mock_adapter
 
-            result = runner.invoke(app, ["--persona", "coding-agent", "hello"])
+            result = runner.invoke(app, ["run", "--persona", "coding-agent", "hello"])
         assert result.exit_code == 0

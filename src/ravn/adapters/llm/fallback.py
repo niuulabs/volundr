@@ -10,10 +10,10 @@ Example config::
 
     llm:
       provider:
-        adapter: ravn.adapters.anthropic_adapter.AnthropicAdapter
+        adapter: ravn.adapters.llm.anthropic.AnthropicAdapter
         kwargs: {api_key: "sk-ant-..."}
       fallbacks:
-        - adapter: ravn.adapters.openai_llm.OpenAICompatibleAdapter
+        - adapter: ravn.adapters.llm.openai.OpenAICompatibleAdapter
           kwargs: {base_url: "https://api.openai.com", api_key: "sk-..."}
 """
 

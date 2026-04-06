@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 
-from ravn.adapters.file_skill_registry import (
+from ravn.adapters.skill.file_registry import (
     _BUILTIN_SKILLS_DIR,
     FileSkillRegistry,
     _discover_from_dir,

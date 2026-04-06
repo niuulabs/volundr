@@ -88,6 +88,7 @@ class RavnAgent:
         outcome_port: OutcomePort | None = None,
         outcome_config: OutcomeConfig | None = None,
         extended_thinking: ExtendedThinkingConfig | None = None,
+        session: Session | None = None,
     ) -> None:
         self._llm = llm
         self._tools = {t.name: t for t in tools}
@@ -115,7 +116,7 @@ class RavnAgent:
         self._input_token_cost_per_million = _oc.input_token_cost_per_million
         self._output_token_cost_per_million = _oc.output_token_cost_per_million
         self._extended_thinking = extended_thinking
-        self._session = Session()
+        self._session = session or Session()
         self._last_compression_result: CompressionResult | None = None
 
     @property
@@ -615,7 +616,10 @@ class RavnAgent:
             return result
 
         for hook in self._pre_tool_hooks:
-            await hook(tool_call)
+            try:
+                await hook(tool_call)
+            except Exception as exc:
+                logger.warning("Pre-tool hook failed for '%s': %s", tool_call.name, exc)
 
         try:
             result = await tool.execute(tool_call.input)
@@ -628,7 +632,10 @@ class RavnAgent:
             )
 
         for hook in self._post_tool_hooks:
-            await hook(tool_call, result)
+            try:
+                await hook(tool_call, result)
+            except Exception as exc:
+                logger.warning("Post-tool hook failed for '%s': %s", tool_call.name, exc)
 
         event_type = RavnEventType.TOOL_RESULT
         await self._channel.emit(

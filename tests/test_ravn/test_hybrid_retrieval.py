@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters._memory_scoring import cosine_similarity, reciprocal_rank_fusion
-from ravn.adapters.sqlite_memory import SqliteMemoryAdapter
+from ravn.adapters.memory.scoring import cosine_similarity, reciprocal_rank_fusion
+from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
 from ravn.domain.models import Episode, Outcome
 from ravn.ports.embedding import EmbeddingPort
 

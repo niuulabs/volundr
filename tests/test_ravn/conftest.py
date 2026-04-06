@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
+from ravn.adapters.permission.allow_deny import AllowAllPermission, DenyAllPermission
 from ravn.domain.models import (
     LLMResponse,
     StopReason,

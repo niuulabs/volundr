@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters.bash_validator import (
+from ravn.adapters.permission.bash_validator import (
     BashValidationPipeline,
     PipelineResult,
 )

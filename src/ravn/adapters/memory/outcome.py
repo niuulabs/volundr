@@ -18,7 +18,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ravn.adapters.sqlite_common import CHARS_PER_TOKEN
+from ravn.adapters.memory.common import CHARS_PER_TOKEN
 from ravn.domain.models import Outcome, TaskOutcome
 from ravn.ports.outcome import OutcomePort
 

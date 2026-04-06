@@ -73,7 +73,7 @@ class LLMProviderConfig(BaseModel):
     """A single LLM provider entry in the fallback chain."""
 
     adapter: str = Field(
-        default="ravn.adapters.anthropic_adapter.AnthropicAdapter",
+        default="ravn.adapters.llm.anthropic.AnthropicAdapter",
         description="Fully-qualified class path for the LLM adapter.",
     )
     kwargs: dict[str, Any] = Field(
@@ -315,7 +315,7 @@ class EmbeddingConfig(BaseModel):
         description="Enable embedding-based semantic search in episodic memory.",
     )
     adapter: str = Field(
-        default="ravn.adapters.sentence_transformer_embedding.SentenceTransformerEmbeddingAdapter",
+        default="ravn.adapters.embedding.sentence_transformer.SentenceTransformerEmbeddingAdapter",
         description="Fully-qualified class path for the embedding adapter.",
     )
     kwargs: dict[str, Any] = Field(
@@ -342,6 +342,10 @@ class SkillConfig(BaseModel):
     enabled: bool = Field(
         default=True,
         description="Enable automatic skill extraction from recurring episode patterns.",
+    )
+    backend: Literal["file", "sqlite"] = Field(
+        default="file",
+        description="Skill storage backend: 'file' (Markdown registry) or 'sqlite'.",
     )
     path: str = Field(
         default="~/.ravn/skills.db",
@@ -785,7 +789,7 @@ class LLMAdapterConfig(BaseModel):
     """Dynamic LLM adapter configuration (legacy; prefer llm.provider)."""
 
     adapter: str = Field(
-        default="ravn.adapters.anthropic_adapter.AnthropicAdapter",
+        default="ravn.adapters.llm.anthropic.AnthropicAdapter",
         description="Fully-qualified class path for the LLM adapter.",
     )
     kwargs: dict[str, Any] = Field(default_factory=dict)
@@ -894,11 +898,33 @@ class HttpChannelConfig(BaseModel):
     )
 
 
+class SkuldChannelConfig(BaseModel):
+    """Skuld WebSocket channel configuration for gateway mode."""
+
+    enabled: bool = Field(default=False)
+    broker_url: str = Field(
+        default="ws://localhost:9000/ws/ravn",
+        description="WebSocket URL of the Skuld broker endpoint.",
+    )
+
+
+class PlatformToolsConfig(BaseModel):
+    """Platform integration tools (Volundr sessions, git, Tyr sagas, tracker)."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Register platform tools (requires Volundr/Tyr backend).",
+    )
+    base_url: str = Field(default="http://localhost:8080")
+    timeout: float = Field(default=30.0)
+
+
 class GatewayChannelsConfig(BaseModel):
     """Per-channel gateway configuration."""
 
     telegram: TelegramChannelConfig = Field(default_factory=TelegramChannelConfig)
     http: HttpChannelConfig = Field(default_factory=HttpChannelConfig)
+    skuld: SkuldChannelConfig = Field(default_factory=SkuldChannelConfig)
 
 
 class GatewayConfig(BaseModel):
@@ -913,6 +939,7 @@ class GatewayConfig(BaseModel):
 
     enabled: bool = Field(default=False)
     channels: GatewayChannelsConfig = Field(default_factory=GatewayChannelsConfig)
+    platform: PlatformToolsConfig = Field(default_factory=PlatformToolsConfig)
 
 
 class LoggingConfig(BaseModel):
@@ -954,7 +981,10 @@ class Settings(BaseSettings):
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     mcp_token_store: MCPTokenStoreConfig = Field(default_factory=MCPTokenStoreConfig)
     hooks: HooksConfig = Field(default_factory=HooksConfig)
-    channels: list[ChannelConfig] = Field(default_factory=list)
+    channels: list[ChannelConfig] = Field(
+        default_factory=list,
+        deprecated="Use gateway.channels instead. This field is ignored.",
+    )
 
     # NIU-431: context management
     iteration_budget: IterationBudgetConfig = Field(default_factory=IterationBudgetConfig)
@@ -993,6 +1023,42 @@ class Settings(BaseSettings):
     def effective_api_key(self) -> str:
         """Return the API key, preferring ANTHROPIC_API_KEY env var."""
         return os.environ.get("ANTHROPIC_API_KEY", "") or self.anthropic.api_key
+
+    def effective_model(self) -> str:
+        """Return the resolved model name.
+
+        Prefers ``llm.model``.  Falls back to ``agent.model`` when
+        ``llm.model`` is at its default but ``agent.model`` has been
+        explicitly set (backward-compat with pre-consolidation configs).
+        """
+        _default = "claude-sonnet-4-6"
+        if self.llm.model != _default:
+            return self.llm.model
+        if self.agent.model != _default:
+            import logging as _log
+
+            _log.getLogger(__name__).warning(
+                "agent.model is deprecated — use llm.model instead",
+            )
+            return self.agent.model
+        return _default
+
+    def effective_max_tokens(self) -> int:
+        """Return the resolved max_tokens.
+
+        Same backward-compat logic as :meth:`effective_model`.
+        """
+        _default = 8192
+        if self.llm.max_tokens != _default:
+            return self.llm.max_tokens
+        if self.agent.max_tokens != _default:
+            import logging as _log
+
+            _log.getLogger(__name__).warning(
+                "agent.max_tokens is deprecated — use llm.max_tokens instead",
+            )
+            return self.agent.max_tokens
+        return _default
 
 
 # ---------------------------------------------------------------------------

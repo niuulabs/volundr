@@ -24,9 +24,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ravn.adapters.fallback_llm import FallbackLLMAdapter
-from ravn.adapters.permission_adapter import AllowAllPermission
-from ravn.adapters.sqlite_memory import SqliteMemoryAdapter
+from ravn.adapters.llm.fallback import FallbackLLMAdapter
+from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
+from ravn.adapters.permission.allow_deny import AllowAllPermission
 from ravn.adapters.tools.session_search import SessionSearchTool
 from ravn.agent import RavnAgent
 from ravn.domain.exceptions import AllProvidersExhaustedError, LLMError

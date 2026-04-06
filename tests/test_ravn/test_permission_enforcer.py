@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters.approval_memory import ApprovalMemory
-from ravn.adapters.permission_enforcer import (
+from ravn.adapters.memory.approval import ApprovalMemory
+from ravn.adapters.permission.enforcer import (
     BashValidator,
     PermissionEnforcer,
     _redact_args,

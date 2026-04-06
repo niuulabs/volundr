@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from ravn.adapters.sqlite_skill import (
+from ravn.adapters.skill.sqlite import (
     SqliteSkillAdapter,
     _dominant_tool,
     _LRUCache,

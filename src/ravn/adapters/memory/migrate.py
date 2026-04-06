@@ -9,7 +9,7 @@ in PostgreSQL (matched by ``episode_id``) are skipped via
 Usage::
 
     import asyncio
-    from ravn.adapters.migrate_memory import migrate_sqlite_to_postgres
+    from ravn.adapters.memory.migrate import migrate_sqlite_to_postgres
 
     count = asyncio.run(
         migrate_sqlite_to_postgres(
@@ -21,7 +21,7 @@ Usage::
 
 Or via the CLI::
 
-    python -m ravn.adapters.migrate_memory \\
+    python -m ravn.adapters.memory.migrate \\
         --sqlite ~/.ravn/memory.db \\
         --dsn "postgresql://user:pass@host/db"
 """

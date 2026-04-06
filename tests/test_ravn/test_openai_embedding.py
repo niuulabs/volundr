@@ -6,7 +6,7 @@ import pytest
 import respx
 from httpx import Response
 
-from ravn.adapters.openai_embedding import (
+from ravn.adapters.embedding.openai import (
     _DEFAULT_DIMENSION,
     _DEFAULT_MODEL,
     OpenAIEmbeddingAdapter,

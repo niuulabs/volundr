@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from ravn.adapters.bifrost_adapter import (
+from ravn.adapters.llm.bifrost import (
     ANTHROPIC_API_VERSION,
     HEADER_AGENT_ID,
     HEADER_SESSION_ID,
@@ -571,7 +571,7 @@ class TestBifrostRetry:
 @respx.mock
 async def test_bifrost_in_fallback_chain() -> None:
     """Bifrost down → falls back to local adapter via FallbackLLMAdapter."""
-    from ravn.adapters.fallback_llm import FallbackLLMAdapter
+    from ravn.adapters.llm.fallback import FallbackLLMAdapter
     from ravn.ports.llm import LLMPort
 
     class _StubLocal(LLMPort):

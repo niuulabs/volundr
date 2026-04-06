@@ -35,8 +35,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ravn.adapters.approval_memory import ApprovalMemory
-from ravn.adapters.bash_validator import (
+from ravn.adapters.memory.approval import ApprovalMemory
+from ravn.adapters.permission.bash_validator import (
     _ALWAYS_BLOCKED,
     _GIT_WRITE_SUBCOMMANDS,
     _NETWORK_COMMANDS,
@@ -48,7 +48,7 @@ from ravn.adapters.bash_validator import (
     _WRITE_COMMANDS,
     unwrap_sudo,
 )
-from ravn.adapters.file_security import (
+from ravn.adapters.tools.file_security import (
     _SYSTEM_PREFIXES,
     DEFAULT_BINARY_CHECK_BYTES,
     PathSecurityError,

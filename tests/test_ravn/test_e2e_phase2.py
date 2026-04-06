@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters.file_tools import EditFileTool, ReadFileTool, WriteFileTool
-from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
-from ravn.adapters.permission_enforcer import PermissionEnforcer
+from ravn.adapters.permission.allow_deny import AllowAllPermission, DenyAllPermission
+from ravn.adapters.permission.enforcer import PermissionEnforcer
+from ravn.adapters.tools.file_tools import EditFileTool, ReadFileTool, WriteFileTool
 from ravn.config import PermissionConfig
 from ravn.domain.events import RavnEventType
 from ravn.domain.exceptions import MaxIterationsError

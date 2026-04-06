@@ -445,7 +445,7 @@ class TestGetActivityLog:
             TyrEvent(event="session.stopped", data={"session_id": "s1"}, owner_id="user-1"),
         ]
         for e in events:
-            asyncio.get_event_loop().run_until_complete(event_bus.emit(e))
+            asyncio.run(event_bus.emit(e))
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
@@ -460,9 +460,7 @@ class TestGetActivityLog:
         import asyncio
 
         for i in range(10):
-            asyncio.get_event_loop().run_until_complete(
-                event_bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
-            )
+            asyncio.run(event_bus.emit(TyrEvent(event="session.spawned", data={"i": i})))
 
         resp = client.get("/api/v1/tyr/dispatcher/log?n=3", headers=_auth_headers())
         assert resp.status_code == 200
@@ -481,7 +479,7 @@ class TestGetActivityLog:
             data={"msg": "dispatched"},
             owner_id="user-1",
         )
-        asyncio.get_event_loop().run_until_complete(event_bus.emit(e))
+        asyncio.run(event_bus.emit(e))
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
@@ -509,9 +507,7 @@ class TestGetActivityLog:
 
         # Emit 50 events — all should be returned with default n=100
         for i in range(50):
-            asyncio.get_event_loop().run_until_complete(
-                event_bus.emit(TyrEvent(event="session.spawned", data={"i": i}))
-            )
+            asyncio.run(event_bus.emit(TyrEvent(event="session.spawned", data={"i": i})))
 
         resp = client.get("/api/v1/tyr/dispatcher/log", headers=_auth_headers())
         assert resp.status_code == 200
