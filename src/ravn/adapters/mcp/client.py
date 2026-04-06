@@ -92,6 +92,18 @@ class MCPServerClient:
         return self._health.state == MCPServerState.CONNECTED
 
     # ------------------------------------------------------------------
+    # Authentication
+    # ------------------------------------------------------------------
+
+    def set_auth_headers(self, headers: dict[str, str]) -> None:
+        """Inject authentication headers into the transport.
+
+        Called by ``MCPAuthTool`` after a successful auth flow.  Delegates to
+        the transport's ``set_auth_headers`` (no-op for stdio).
+        """
+        self._transport.set_auth_headers(headers)
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 

@@ -92,6 +92,13 @@ class MCPManager:
         """Per-server health states keyed by server name."""
         return {c.name: c.health.state for c in self._clients}
 
+    def get_client(self, server_name: str) -> MCPServerClient | None:
+        """Return the live client for *server_name*, or None if not found."""
+        for client in self._clients:
+            if client.name == server_name:
+                return client
+        return None
+
     async def start(self) -> list[ToolPort]:
         """Connect all configured MCP servers and return discovered tools.
 
