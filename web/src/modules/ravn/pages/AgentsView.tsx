@@ -5,8 +5,7 @@ export function AgentsView() {
     <div className={styles.container}>
       <h2 className={styles.heading}>Agent Configuration</h2>
       <p className={styles.description}>
-        Configure Ravn agent settings, platform tool endpoints, and channel
-        delivery options.
+        Configure Ravn agent settings, platform tool endpoints, and channel delivery options.
       </p>
       <section className={styles.section}>
         <h3 className={styles.sectionHeading}>Platform Tools</h3>
