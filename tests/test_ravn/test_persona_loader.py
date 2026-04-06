@@ -633,7 +633,7 @@ class TestCliPersonaFlag:
         from ravn.cli.commands import app
 
         runner = CliRunner()
-        result = runner.invoke(app, ["--help"])
+        result = runner.invoke(app, ["run", "--help"])
         assert result.exit_code == 0
         # Strip ANSI escape codes before checking — typer may colorize output.
         plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
@@ -664,5 +664,5 @@ class TestCliPersonaFlag:
             mock_adapter.stream = _stream
             mock_cls.return_value = mock_adapter
 
-            result = runner.invoke(app, ["--persona", "coding-agent", "hello"])
+            result = runner.invoke(app, ["run", "--persona", "coding-agent", "hello"])
         assert result.exit_code == 0

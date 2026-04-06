@@ -44,7 +44,7 @@ class TestRunCommand:
 
             env_without_key = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
             with patch.dict("os.environ", env_without_key, clear=True):
-                result = runner.invoke(app, ["hi"])
+                result = runner.invoke(app, ["run", "hi"])
                 assert result.exit_code != 0
 
     def test_single_turn_with_mocked_agent(self) -> None:
@@ -65,7 +65,7 @@ class TestRunCommand:
             mock_adapter.stream = _stream
             mock_adapter_cls.return_value = mock_adapter
 
-            result = runner.invoke(app, ["Hello, Ravn!"])
+            result = runner.invoke(app, ["run", "Hello, Ravn!"])
             assert result.exit_code == 0
 
     def test_single_turn_with_show_usage(self) -> None:
@@ -84,7 +84,7 @@ class TestRunCommand:
             mock_adapter.stream = _stream
             mock_adapter_cls.return_value = mock_adapter
 
-            result = runner.invoke(app, ["Hello!", "--show-usage"])
+            result = runner.invoke(app, ["run", "Hello!", "--show-usage"])
             assert result.exit_code == 0
             assert "tokens" in result.output
 
@@ -109,7 +109,7 @@ class TestRunCommand:
             mock_adapter.stream = _stream
             mock_adapter_cls.return_value = mock_adapter
 
-            result = runner.invoke(app, ["Hello!", "--no-tools"])
+            result = runner.invoke(app, ["run", "Hello!", "--no-tools"])
             assert result.exit_code == 0
 
 
@@ -127,7 +127,7 @@ class TestRunTurnErrorHandling:
             mock_adapter.stream = _stream
             mock_adapter_cls.return_value = mock_adapter
 
-            result = runner.invoke(app, ["Hello!"])
+            result = runner.invoke(app, ["run", "Hello!"])
             assert result.exit_code != 0 or "error" in result.output.lower()
 
     async def test_repl_continues_after_error(self) -> None:
@@ -186,7 +186,7 @@ class TestConfigFlag:
             mock_adapter.stream = _stream
             mock_cls.return_value = mock_adapter
 
-            result = runner.invoke(app, ["Hello!", "--config", str(cfg)])
+            result = runner.invoke(app, ["run", "Hello!", "--config", str(cfg)])
 
         assert result.exit_code == 0
 

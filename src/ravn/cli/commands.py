@@ -951,13 +951,15 @@ def approvals_revoke(
 
 
 evolve_app = typer.Typer(
-    name="ravn-evolve",
-    help="Run the Ravn self-improvement pattern extraction pass.",
+    name="evolve",
+    help="Self-improvement pattern extraction.",
     add_completion=False,
+    invoke_without_command=True,
 )
+app.add_typer(evolve_app, name="evolve")
 
 
-@evolve_app.command()
+@evolve_app.callback(invoke_without_command=True)
 def evolve(
     config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
 ) -> None:
