@@ -333,6 +333,68 @@ class EventsConfig(BaseModel):
     )
 
 
+class AuditDetailLevel(StrEnum):
+    """How much detail to capture in each audit log entry."""
+
+    MINIMAL = "minimal"
+    """Timestamp, agent_id, model, tokens, cost, latency only."""
+
+    STANDARD = "standard"
+    """Minimal + provider, session/saga IDs, outcome, status code, rule metadata."""
+
+    FULL = "full"
+    """Standard + prompt content and response content."""
+
+
+class AuditConfig(BaseModel):
+    """Configuration for the request audit log."""
+
+    adapter: str = Field(
+        default="null",
+        description=(
+            "Storage backend. Accepted values: 'null' (default, no-op), "
+            "'postgres', 'sqlite', 'otel'."
+        ),
+    )
+    level: AuditDetailLevel = Field(
+        default=AuditDetailLevel.MINIMAL,
+        description=(
+            "Detail level for each audit entry. "
+            "'minimal' logs timestamp/agent/model/tokens/cost/latency; "
+            "'standard' adds provider/session/outcome/rule metadata; "
+            "'full' also captures prompt and response content."
+        ),
+    )
+    dsn: str = Field(
+        default="",
+        description="PostgreSQL DSN for the postgres adapter.",
+    )
+    dsn_env: str = Field(
+        default="BIFROST_AUDIT_DSN",
+        description="Environment variable holding the PostgreSQL DSN (used when dsn is blank).",
+    )
+    path: str = Field(
+        default="./bifrost_audit.db",
+        description="File path for the SQLite adapter.",
+    )
+    otel_endpoint: str = Field(
+        default="",
+        description="OTLP gRPC endpoint for the otel adapter (e.g. http://localhost:4317).",
+    )
+    retention_days: int = Field(
+        default=90,
+        description=(
+            "Number of days to retain audit records. "
+            "Applies to adapters that support pruning (sqlite, postgres). "
+            "0 = retain indefinitely."
+        ),
+    )
+
+    def effective_dsn(self) -> str:
+        """Return the DSN, falling back to the configured environment variable."""
+        return self.dsn or os.environ.get(self.dsn_env, "")
+
+
 class CacheMode(StrEnum):
     """Which cache backend to use."""
 
@@ -394,6 +456,15 @@ class BifrostConfig(BaseModel):
         description=(
             "How to select and order provider candidates. "
             "Defaults to 'failover' for backwards compatibility."
+        ),
+    )
+    model_routing_strategies: dict[str, RoutingStrategy] = Field(
+        default_factory=dict,
+        description=(
+            "Per-model or per-alias routing strategy overrides. "
+            "Keys are model IDs or alias names; values are routing strategy names. "
+            "When a model matches a key, its strategy overrides the global routing_strategy. "
+            "Example: {'claude-sonnet-4-6': 'failover', 'fast': 'round_robin'}"
         ),
     )
     latency_ewma_alpha: float = Field(
@@ -506,6 +577,16 @@ class BifrostConfig(BaseModel):
         ),
     )
 
+    # ── Audit logging ─────────────────────────────────────────────────────────
+    audit: AuditConfig = Field(
+        default_factory=AuditConfig,
+        description=(
+            "Request audit log configuration. "
+            "Appends one entry per LLM request with configurable detail level. "
+            "Default adapter is 'null' (no audit logging)."
+        ),
+    )
+
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def resolve_alias(self, model: str) -> str:
@@ -533,6 +614,20 @@ class BifrostConfig(BaseModel):
     def effective_pat_secret(self) -> str:
         """Return the PAT signing secret, falling back to the PAT_SECRET env var."""
         return self.pat_secret or os.environ.get("PAT_SECRET", "")
+
+    def routing_strategy_for_model(self, model: str) -> RoutingStrategy:
+        """Return the effective routing strategy for *model*.
+
+        Checks ``model_routing_strategies`` first (exact match on both the
+        raw model name/alias and the resolved canonical name), then falls
+        back to the global ``routing_strategy``.
+        """
+        if model in self.model_routing_strategies:
+            return self.model_routing_strategies[model]
+        canonical = self.resolve_alias(model)
+        if canonical in self.model_routing_strategies:
+            return self.model_routing_strategies[canonical]
+        return self.routing_strategy
 
     def quota_for_tenant(self, tenant_id: str) -> QuotaConfig:
         """Return the quota config for *tenant_id*, falling back to the default."""

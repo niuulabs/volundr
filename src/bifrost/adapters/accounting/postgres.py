@@ -154,7 +154,9 @@ class PostgresAccountingAdapter(PostgresBase, AccountingPort):
         limit: int = 1000,
     ) -> list[RequestRecord]:
         where, params = build_where_with_range(
-            _filters(agent_id, tenant_id, model), since, until,
+            _filters(agent_id, tenant_id, model),
+            since,
+            until,
         )
         limit_idx = len(params) + 1
         sql = f"""
@@ -182,7 +184,9 @@ class PostgresAccountingAdapter(PostgresBase, AccountingPort):
         until: datetime | None = None,
     ) -> AccountingSummary:
         where, params = build_where_with_range(
-            _filters(agent_id, tenant_id, model), since, until,
+            _filters(agent_id, tenant_id, model),
+            since,
+            until,
         )
         pool = await self._get_pool()
         async with pool.acquire() as conn:
@@ -236,7 +240,9 @@ class PostgresAccountingAdapter(PostgresBase, AccountingPort):
         until: datetime | None = None,
     ) -> list[AccountingTimeSeries]:
         where, params = build_where_with_range(
-            _filters(agent_id, tenant_id, model), since, until,
+            _filters(agent_id, tenant_id, model),
+            since,
+            until,
         )
         trunc = "hour" if granularity != "day" else "day"
         sql = f"""

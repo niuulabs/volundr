@@ -23,6 +23,7 @@ from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
 from bifrost.config import BifrostConfig, CacheMode
 from bifrost.inbound.routes import create_router
+from bifrost.ports.audit import AuditPort
 from bifrost.ports.cache import CachePort
 from bifrost.ports.events import CostEventEmitter
 from bifrost.ports.key_vault import KeyVaultPort
@@ -116,6 +117,38 @@ def _build_key_vault(config: BifrostConfig) -> KeyVaultPort:
 
 
 # ---------------------------------------------------------------------------
+# Audit adapter factory
+# ---------------------------------------------------------------------------
+
+
+def _build_audit(config: BifrostConfig) -> AuditPort:
+    """Instantiate the configured audit adapter."""
+    match config.audit.adapter:
+        case "postgres":
+            from bifrost.adapters.audit.postgres import PostgresAuditAdapter
+
+            dsn = config.audit.effective_dsn()
+            if not dsn:
+                raise ValueError(
+                    "PostgreSQL audit adapter requires a DSN. "
+                    "Set audit.dsn in config or the BIFROST_AUDIT_DSN environment variable."
+                )
+            return PostgresAuditAdapter(dsn=dsn)
+        case "sqlite":
+            from bifrost.adapters.audit.sqlite import SQLiteAuditAdapter
+
+            return SQLiteAuditAdapter(path=config.audit.path)
+        case "otel":
+            from bifrost.adapters.audit.otel import OtelAuditAdapter
+
+            return OtelAuditAdapter(otel_endpoint=config.audit.otel_endpoint)
+        case _:
+            from bifrost.adapters.audit.null import NullAuditAdapter
+
+            return NullAuditAdapter()
+
+
+# ---------------------------------------------------------------------------
 # Cache factory
 # ---------------------------------------------------------------------------
 
@@ -183,6 +216,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
     router = ModelRouter(config, rule_engine=rule_engine, key_vault=key_vault)
     store = _build_usage_store(config)
     cache = _build_cache(config)
+    audit = _build_audit(config)
     pricing_overrides = _pricing_overrides(config)
     auth_adapter = build_auth_adapter(config.auth_mode, config.effective_pat_secret())
     event_emitter = _build_event_emitter(config)
@@ -206,6 +240,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
             await store.close()
         await event_emitter.close()
         await cache.close()
+        if hasattr(audit, "close"):
+            await audit.close()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -230,6 +266,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
         auth_adapter=auth_adapter,
         event_emitter=event_emitter,
         cache=cache,
+        audit=audit,
     )
     app.include_router(api_router)
 

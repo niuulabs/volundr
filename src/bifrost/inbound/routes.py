@@ -7,6 +7,7 @@ mounted on the main ``FastAPI`` application.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -19,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from bifrost.auth import AgentIdentity
-from bifrost.config import AgentPermissions, BifrostConfig
+from bifrost.config import AgentPermissions, AuditDetailLevel, BifrostConfig
 from bifrost.domain.models import RequestLog, TokenUsage
 from bifrost.domain.routing import RuleRejectError
 from bifrost.inbound.chat_completions import (
@@ -46,6 +47,7 @@ from bifrost.inbound.tracking import (
     _stream_with_tracking,
     emit_cost_events,
 )
+from bifrost.ports.audit import AuditEvent, AuditPort
 from bifrost.ports.auth import AuthPort
 from bifrost.ports.cache import CachePort
 from bifrost.ports.events import CostEventEmitter
@@ -53,7 +55,7 @@ from bifrost.ports.rules import RoutingContext
 from bifrost.ports.usage_store import UsageRecord, UsageStore
 from bifrost.pricing import ModelPricing, calculate_cost
 from bifrost.router import ModelRouter, RouterError
-from bifrost.translation.models import AnthropicRequest
+from bifrost.translation.models import AnthropicRequest, AnthropicResponse
 
 logger = logging.getLogger(__name__)
 
@@ -157,9 +159,7 @@ async def _try_cache_hit(
     if cached is None:
         return None
     latency_ms = (time.monotonic() - start) * 1000
-    await store.record(
-        _cache_hit_record(request_id, identity, model, provider, latency_ms)
-    )
+    await store.record(_cache_hit_record(request_id, identity, model, provider, latency_ms))
     content = response_transform(cached) if response_transform else cached.model_dump()
     return JSONResponse(content=content)
 
@@ -439,6 +439,81 @@ def _enumerate_models(config: BifrostConfig) -> list[tuple[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# Audit event builder
+# ---------------------------------------------------------------------------
+
+
+def _build_audit_event(
+    *,
+    config: BifrostConfig,
+    request_id: str,
+    identity: AgentIdentity,
+    model: str,
+    provider: str,
+    outcome: str,
+    status_code: int,
+    latency_ms: float,
+    tokens_input: int = 0,
+    tokens_output: int = 0,
+    cost_usd: float = 0.0,
+    cache_hit: bool = False,
+    error_message: str = "",
+    rule_name: str = "",
+    rule_action: str = "",
+    tags: dict | None = None,
+    request: AnthropicRequest | None = None,
+    response: AnthropicResponse | None = None,
+) -> AuditEvent:
+    """Build an ``AuditEvent`` populated according to the configured detail level.
+
+    At ``minimal`` level only the core fields (tokens, cost, latency) are set.
+    At ``standard`` level provider, session/saga IDs, outcome, and rule metadata
+    are also populated.  At ``full`` level prompt and response content are
+    included as well.
+    """
+    level = config.audit.level
+
+    # Minimal: always populated.
+    event = AuditEvent(
+        request_id=request_id,
+        agent_id=identity.agent_id,
+        tenant_id=identity.tenant_id,
+        model=model,
+        timestamp=datetime.now(UTC),
+        tokens_input=tokens_input,
+        tokens_output=tokens_output,
+        cost_usd=cost_usd,
+        latency_ms=latency_ms,
+        cache_hit=cache_hit,
+    )
+
+    if level == AuditDetailLevel.MINIMAL:
+        return event
+
+    # Standard: add provider, session metadata, outcome, status code, rules.
+    event.provider = provider
+    event.session_id = identity.session_id
+    event.saga_id = identity.saga_id
+    event.outcome = outcome
+    event.status_code = status_code
+    event.rule_name = rule_name
+    event.rule_action = rule_action
+    event.tags = tags or {}
+    event.error_message = error_message
+
+    if level == AuditDetailLevel.STANDARD:
+        return event
+
+    # Full: also add prompt/response content.
+    if request is not None:
+        event.prompt_content = json.dumps([m.model_dump() for m in request.messages], default=str)
+    if response is not None:
+        event.response_content = json.dumps(response.model_dump(), default=str)
+
+    return event
+
+
+# ---------------------------------------------------------------------------
 # Router factory
 # ---------------------------------------------------------------------------
 
@@ -451,6 +526,7 @@ def create_router(
     auth_adapter: AuthPort,
     event_emitter: CostEventEmitter,
     cache: CachePort | None = None,
+    audit: AuditPort | None = None,
 ) -> APIRouter:
     """Build and return a configured ``APIRouter`` with all Bifröst routes.
 
@@ -472,6 +548,15 @@ def create_router(
         _cache = DisabledCache()
     else:
         _cache = cache
+
+    _audit: AuditPort
+    if audit is None:
+        from bifrost.adapters.audit.null import NullAuditAdapter
+
+        _audit = NullAuditAdapter()
+    else:
+        _audit = audit
+
     api_router = APIRouter()
 
     async def _emit_events(
@@ -492,9 +577,31 @@ def create_router(
             budget_warning_threshold_pct=config.events.budget_warning_threshold_pct,
         )
 
+    def _schedule_audit(event: AuditEvent) -> None:
+        """Schedule audit logging as a fire-and-forget task."""
+        asyncio.create_task(_audit.log(event))  # noqa: RUF006
+
     @api_router.get("/health")
     async def health() -> dict:
         return {"status": "ok"}
+
+    @api_router.get("/v1/cache/stats")
+    async def cache_stats() -> dict:
+        """Return aggregate cache statistics.
+
+        Returns hit/miss counts, hit rate, and saved token counts since the
+        process started.  Statistics are per-instance and reset on restart.
+        """
+        s = _cache.stats()
+        return {
+            "hits": s.hits,
+            "misses": s.misses,
+            "hit_rate": round(s.hit_rate, 4),
+            "saved_tokens": s.saved_tokens,
+            "saved_input_tokens": s.saved_input_tokens,
+            "saved_output_tokens": s.saved_output_tokens,
+            "entries": s.entries,
+        }
 
     @api_router.post("/admin/reload-keys")
     async def admin_reload_keys(raw_request: Request) -> dict:
@@ -609,10 +716,30 @@ def create_router(
             # --- Exact response cache (non-streaming only) ---
             cache_key = _compute_cache_key(identity.tenant_id, request)
             hit_resp = await _try_cache_hit(
-                _cache, cache_key, identity, request_id,
-                request.model, provider, start, store,
+                _cache,
+                cache_key,
+                identity,
+                request_id,
+                request.model,
+                provider,
+                start,
+                store,
             )
             if hit_resp is not None:
+                _schedule_audit(
+                    _build_audit_event(
+                        config=config,
+                        request_id=request_id,
+                        identity=identity,
+                        model=request.model,
+                        provider=provider,
+                        outcome="cache_hit",
+                        status_code=200,
+                        latency_ms=(time.monotonic() - start) * 1000,
+                        cache_hit=True,
+                        request=request,
+                    )
+                )
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
@@ -659,9 +786,29 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="success",
+                    status_code=200,
+                    latency_ms=latency_ms,
+                    tokens_input=usage.input_tokens,
+                    tokens_output=usage.output_tokens,
+                    cost_usd=cost,
+                    request=request,
+                    response=response,
+                )
+            )
             await _emit_events(
-                identity, cost, usage.input_tokens + usage.output_tokens,
-                request.model, agent_budget_limit,
+                identity,
+                cost,
+                usage.input_tokens + usage.output_tokens,
+                request.model,
+                agent_budget_limit,
             )
             await _cache.set(cache_key, response, config.cache.default_ttl)
 
@@ -673,9 +820,37 @@ def create_router(
             return json_resp
 
         except RuleRejectError as exc:
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="rejected",
+                    status_code=400,
+                    latency_ms=(time.monotonic() - start) * 1000,
+                    error_message=exc.message,
+                    request=request,
+                )
+            )
             raise HTTPException(status_code=400, detail=exc.message) from exc
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="error",
+                    status_code=502,
+                    latency_ms=(time.monotonic() - start) * 1000,
+                    error_message=str(exc),
+                    request=request,
+                )
+            )
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @api_router.get("/v1/usage")
@@ -887,8 +1062,14 @@ def create_router(
             # --- Exact response cache (non-streaming only) ---
             cache_key = _compute_cache_key(identity.tenant_id, request)
             hit_resp = await _try_cache_hit(
-                _cache, cache_key, identity, request_id,
-                request.model, provider, start, store,
+                _cache,
+                cache_key,
+                identity,
+                request_id,
+                request.model,
+                provider,
+                start,
+                store,
                 response_transform=anthropic_response_to_openai,
             )
             if hit_resp is not None:
@@ -937,8 +1118,11 @@ def create_router(
                 )
             )
             await _emit_events(
-                identity, cost, usage.input_tokens + usage.output_tokens,
-                request.model, agent_budget_limit,
+                identity,
+                cost,
+                usage.input_tokens + usage.output_tokens,
+                request.model,
+                agent_budget_limit,
             )
             await _cache.set(cache_key, response, config.cache.default_ttl)
 
@@ -1050,8 +1234,14 @@ def create_router(
             # --- Exact response cache (non-streaming only) ---
             cache_key = _compute_cache_key(identity.tenant_id, request)
             hit_resp = await _try_cache_hit(
-                _cache, cache_key, identity, request_id,
-                request.model, provider, start, store,
+                _cache,
+                cache_key,
+                identity,
+                request_id,
+                request.model,
+                provider,
+                start,
+                store,
                 response_transform=lambda cached: response_translate_fn(
                     cached,
                     created_at=datetime.now(UTC).isoformat(),
@@ -1104,8 +1294,11 @@ def create_router(
                 )
             )
             await _emit_events(
-                identity, cost, usage.input_tokens + usage.output_tokens,
-                request.model, agent_budget_limit,
+                identity,
+                cost,
+                usage.input_tokens + usage.output_tokens,
+                request.model,
+                agent_budget_limit,
             )
             await _cache.set(cache_key, response, config.cache.default_ttl)
 

@@ -183,8 +183,9 @@ class TestPostgresAuditSchemaInit:
             adapter = PostgresAuditAdapter(dsn="postgresql://fake/db")
             await adapter._get_pool()
 
-        # Two execute calls: CREATE TABLE + CREATE INDEXES
-        assert conn.execute.call_count == 2
+        # Three execute calls: CREATE TABLE + CREATE INDEXES + MIGRATE COLUMNS
+        assert conn.execute.call_count == 3
         calls = [c[0][0] for c in conn.execute.call_args_list]
         assert any("CREATE TABLE IF NOT EXISTS bifrost_audit" in sql for sql in calls)
         assert any("CREATE INDEX" in sql for sql in calls)
+        assert any("ALTER TABLE bifrost_audit ADD COLUMN IF NOT EXISTS" in sql for sql in calls)
