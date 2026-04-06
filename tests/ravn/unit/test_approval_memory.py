@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters.approval_memory import (
+from ravn.adapters.memory.approval import (
     _SCHEMA_VERSION,
     ApprovalEntry,
     ApprovalMemory,
 )
-from ravn.adapters.permission_enforcer import PermissionEnforcer
+from ravn.adapters.permission.enforcer import PermissionEnforcer
 from ravn.config import PermissionConfig
 from ravn.context import _git_root
 from ravn.ports.permission import Allow, Deny, NeedsApproval
@@ -374,7 +374,7 @@ class TestApprovalsCliCommands:
         from ravn.cli.commands import approvals_app
 
         monkeypatch.setattr(
-            "ravn.adapters.approval_memory.ApprovalMemory",
+            "ravn.adapters.memory.approval.ApprovalMemory",
             _make_fixed_memory_cls(tmp_path),
         )
         runner = CliRunner()
@@ -391,7 +391,7 @@ class TestApprovalsCliCommands:
         mem.remember("make build")
 
         monkeypatch.setattr(
-            "ravn.adapters.approval_memory.ApprovalMemory",
+            "ravn.adapters.memory.approval.ApprovalMemory",
             _make_fixed_memory_cls(tmp_path),
         )
         runner = CliRunner()
@@ -408,7 +408,7 @@ class TestApprovalsCliCommands:
         mem.remember("make build")
 
         monkeypatch.setattr(
-            "ravn.adapters.approval_memory.ApprovalMemory",
+            "ravn.adapters.memory.approval.ApprovalMemory",
             _make_fixed_memory_cls(tmp_path),
         )
         runner = CliRunner()
@@ -424,7 +424,7 @@ class TestApprovalsCliCommands:
         from ravn.cli.commands import approvals_app
 
         monkeypatch.setattr(
-            "ravn.adapters.approval_memory.ApprovalMemory",
+            "ravn.adapters.memory.approval.ApprovalMemory",
             _make_fixed_memory_cls(tmp_path),
         )
         runner = CliRunner()

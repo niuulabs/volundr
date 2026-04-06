@@ -18,7 +18,7 @@ from typing import Any
 
 import asyncpg
 
-from ravn.adapters._memory_scoring import (
+from ravn.adapters.memory.scoring import (
     _AVG_EPISODE_CHARS,
     _CHARS_PER_TOKEN,
     _OUTCOME_WEIGHTS,

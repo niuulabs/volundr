@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from ravn.adapters.anthropic_adapter import AnthropicAdapter
+from ravn.adapters.llm.anthropic import AnthropicAdapter
 from ravn.domain.exceptions import LLMError
 from ravn.domain.models import StreamEventType
 

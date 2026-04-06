@@ -58,7 +58,7 @@ class TestRunCommand:
             )
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_adapter_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_adapter_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_adapter = MagicMock()
@@ -77,7 +77,7 @@ class TestRunCommand:
             )
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_adapter_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_adapter_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_adapter = MagicMock()
@@ -102,7 +102,7 @@ class TestRunCommand:
             )
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_adapter_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_adapter_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_adapter = MagicMock()
@@ -120,7 +120,7 @@ class TestRunTurnErrorHandling:
             yield  # make it a generator
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_adapter_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_adapter_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_adapter = MagicMock()
@@ -171,7 +171,7 @@ class TestConfigFlag:
         cfg.write_text("agent:\n  model: claude-custom\n")
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_adapter = MagicMock()

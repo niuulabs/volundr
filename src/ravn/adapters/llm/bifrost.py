@@ -13,7 +13,7 @@ agent-identity headers are injected for usage attribution.
 
 from __future__ import annotations
 
-from ravn.adapters.anthropic_adapter import (
+from ravn.adapters.llm.anthropic import (
     ANTHROPIC_API_VERSION,  # noqa: F401 — re-exported for tests
     AnthropicAdapter,
 )

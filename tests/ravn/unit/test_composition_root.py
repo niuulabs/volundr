@@ -25,7 +25,7 @@ def _api_key():
 @pytest.fixture()
 def _mock_anthropic():
     """Mock the AnthropicAdapter so no real HTTP calls are made."""
-    with patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls:
+    with patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls:
         mock_cls.return_value = MagicMock()
         yield mock_cls
 
@@ -45,7 +45,7 @@ class TestBuildLlm:
     def test_default_returns_anthropic_adapter(self, settings: Settings) -> None:
         from ravn.cli.commands import _build_llm
 
-        with patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls:
+        with patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls:
             mock_cls.return_value = MagicMock()
             llm = _build_llm(settings)
 
@@ -56,7 +56,7 @@ class TestBuildLlm:
     def test_anthropic_receives_model_and_max_tokens(self, settings: Settings) -> None:
         from ravn.cli.commands import _build_llm
 
-        with patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls:
+        with patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls:
             mock_cls.return_value = MagicMock()
             _build_llm(settings)
 
@@ -66,18 +66,18 @@ class TestBuildLlm:
 
     @pytest.mark.usefixtures("_api_key")
     def test_with_fallbacks_returns_fallback_adapter(self, settings: Settings) -> None:
-        from ravn.adapters.fallback_llm import FallbackLLMAdapter
+        from ravn.adapters.llm.fallback import FallbackLLMAdapter
         from ravn.cli.commands import _build_llm
         from ravn.config import LLMProviderConfig
 
         settings.llm.fallbacks = [
             LLMProviderConfig(
-                adapter="ravn.adapters.anthropic_adapter.AnthropicAdapter",
+                adapter="ravn.adapters.llm.anthropic.AnthropicAdapter",
                 kwargs={},
             ),
         ]
 
-        with patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls:
+        with patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls:
             mock_cls.return_value = MagicMock()
             llm = _build_llm(settings)
 
@@ -88,10 +88,10 @@ class TestBuildLlm:
         """A non-Anthropic adapter should be loaded from provider config."""
         from ravn.cli.commands import _build_llm
 
-        settings.llm.provider.adapter = "ravn.adapters.anthropic_adapter.AnthropicAdapter"
+        settings.llm.provider.adapter = "ravn.adapters.llm.anthropic.AnthropicAdapter"
         settings.llm.provider.kwargs = {"api_key": "custom-key"}
 
-        with patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls:
+        with patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls:
             mock_cls.return_value = MagicMock()
             _build_llm(settings)
 
@@ -154,7 +154,7 @@ class TestBuildMemory:
 
 class TestBuildPermission:
     def test_allow_all_mode(self, settings: Settings, tmp_path: Path) -> None:
-        from ravn.adapters.permission_adapter import AllowAllPermission
+        from ravn.adapters.permission.allow_deny import AllowAllPermission
         from ravn.cli.commands import _build_permission
 
         settings.permission.mode = "allow_all"
@@ -162,7 +162,7 @@ class TestBuildPermission:
         assert isinstance(perm, AllowAllPermission)
 
     def test_deny_all_mode(self, settings: Settings, tmp_path: Path) -> None:
-        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_permission
 
         settings.permission.mode = "deny_all"
@@ -170,7 +170,7 @@ class TestBuildPermission:
         assert isinstance(perm, DenyAllPermission)
 
     def test_workspace_write_mode(self, settings: Settings, tmp_path: Path) -> None:
-        from ravn.adapters.permission_enforcer import PermissionEnforcer
+        from ravn.adapters.permission.enforcer import PermissionEnforcer
         from ravn.cli.commands import _build_permission
 
         settings.permission.mode = "workspace_write"
@@ -178,7 +178,7 @@ class TestBuildPermission:
         assert isinstance(perm, PermissionEnforcer)
 
     def test_no_tools_overrides_to_deny_all(self, settings: Settings, tmp_path: Path) -> None:
-        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_permission
 
         settings.permission.mode = "allow_all"
@@ -188,7 +188,7 @@ class TestBuildPermission:
     def test_read_only_persona_overrides_to_deny_all(
         self, settings: Settings, tmp_path: Path,
     ) -> None:
-        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_permission
 
         persona = MagicMock(permission_mode="read-only")

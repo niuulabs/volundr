@@ -23,8 +23,8 @@ import httpx
 import pytest
 import respx
 
-from ravn.adapters.anthropic_adapter import AnthropicAdapter
-from ravn.adapters.fallback_llm import FallbackLLMAdapter
+from ravn.adapters.llm.anthropic import AnthropicAdapter
+from ravn.adapters.llm.fallback import FallbackLLMAdapter
 from ravn.agent import (
     RavnAgent,
     _looks_like_planning_task,
@@ -635,7 +635,7 @@ def make_thinking_agent(
     response = make_text_response("Done.")
     llm = ThinkingRecordingLLM(response)
     ch = InMemoryChannel()
-    from ravn.adapters.permission_adapter import AllowAllPermission
+    from ravn.adapters.permission.allow_deny import AllowAllPermission
 
     agent = RavnAgent(
         llm=llm,
@@ -671,7 +671,7 @@ async def test_agent_no_thinking_without_config():
     response = make_text_response("Done.")
     llm = ThinkingRecordingLLM(response)
     ch = InMemoryChannel()
-    from ravn.adapters.permission_adapter import AllowAllPermission
+    from ravn.adapters.permission.allow_deny import AllowAllPermission
 
     agent = RavnAgent(
         llm=llm,
@@ -735,7 +735,7 @@ async def test_agent_thinking_events_emitted_to_channel():
     et = ExtendedThinkingConfig(enabled=True, budget_tokens=4000)
     llm = ThinkingStreamLLM()
     ch = InMemoryChannel()
-    from ravn.adapters.permission_adapter import AllowAllPermission
+    from ravn.adapters.permission.allow_deny import AllowAllPermission
 
     agent = RavnAgent(
         llm=llm,
@@ -764,7 +764,7 @@ async def test_agent_disabled_extended_thinking_no_thinking_param():
     response = make_text_response("Done.")
     llm = ThinkingRecordingLLM(response)
     ch = InMemoryChannel()
-    from ravn.adapters.permission_adapter import AllowAllPermission
+    from ravn.adapters.permission.allow_deny import AllowAllPermission
 
     agent = RavnAgent(
         llm=llm,

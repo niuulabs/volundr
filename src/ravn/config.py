@@ -73,7 +73,7 @@ class LLMProviderConfig(BaseModel):
     """A single LLM provider entry in the fallback chain."""
 
     adapter: str = Field(
-        default="ravn.adapters.anthropic_adapter.AnthropicAdapter",
+        default="ravn.adapters.llm.anthropic.AnthropicAdapter",
         description="Fully-qualified class path for the LLM adapter.",
     )
     kwargs: dict[str, Any] = Field(
@@ -315,7 +315,7 @@ class EmbeddingConfig(BaseModel):
         description="Enable embedding-based semantic search in episodic memory.",
     )
     adapter: str = Field(
-        default="ravn.adapters.sentence_transformer_embedding.SentenceTransformerEmbeddingAdapter",
+        default="ravn.adapters.embedding.sentence_transformer.SentenceTransformerEmbeddingAdapter",
         description="Fully-qualified class path for the embedding adapter.",
     )
     kwargs: dict[str, Any] = Field(
@@ -789,7 +789,7 @@ class LLMAdapterConfig(BaseModel):
     """Dynamic LLM adapter configuration (legacy; prefer llm.provider)."""
 
     adapter: str = Field(
-        default="ravn.adapters.anthropic_adapter.AnthropicAdapter",
+        default="ravn.adapters.llm.anthropic.AnthropicAdapter",
         description="Fully-qualified class path for the LLM adapter.",
     )
     kwargs: dict[str, Any] = Field(default_factory=dict)

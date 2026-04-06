@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters._memory_scoring import _format_episode_block, _recency_score
-from ravn.adapters.sqlite_memory import (
+from ravn.adapters.memory.scoring import _format_episode_block, _recency_score
+from ravn.adapters.memory.sqlite import (
     SqliteMemoryAdapter,
     _combined_score,
     _sanitize_fts_query,

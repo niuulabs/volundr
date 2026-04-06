@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ravn.adapters.permission_adapter import (
+from ravn.adapters.permission.allow_deny import (
     AllowAllPermission,
     AllowListPermission,
     DenyAllPermission,

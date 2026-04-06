@@ -10,7 +10,7 @@ import math
 
 import pytest
 
-from ravn.adapters._memory_scoring import cosine_similarity
+from ravn.adapters.memory.scoring import cosine_similarity
 from ravn.adapters.tools.discovery import ToolDiscovery, ToolSearchTool
 from ravn.domain.models import ToolResult
 from ravn.ports.embedding import EmbeddingPort

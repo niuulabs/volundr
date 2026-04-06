@@ -3,7 +3,7 @@
 Unlike :class:`~ravn.adapters.tools.terminal.TerminalTool` (which keeps a
 persistent shell), this tool spawns a **fresh subprocess per call**, runs
 the command in the workspace root directory, and gates every command through
-:class:`~ravn.adapters.bash_validator.BashValidationPipeline` before
+:class:`~ravn.adapters.permission.bash_validator.BashValidationPipeline` before
 executing.
 
 Features
@@ -22,7 +22,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from ravn.adapters.bash_validator import BashValidationPipeline
+from ravn.adapters.permission.bash_validator import BashValidationPipeline
 from ravn.config import BashToolConfig
 from ravn.domain.models import ToolResult
 from ravn.ports.tool import ToolPort
@@ -42,7 +42,7 @@ class BashTool(ToolPort):
     The tool:
 
     1. Runs the command through the 5-stage
-       :class:`~ravn.adapters.bash_validator.BashValidationPipeline`.
+       :class:`~ravn.adapters.permission.bash_validator.BashValidationPipeline`.
     2. Returns a ``Deny`` error result immediately if any stage blocks
        the command.
     3. Spawns a subprocess (fresh per call) in the workspace root.

@@ -94,7 +94,7 @@ def _build_llm(settings: Settings) -> Any:
     kwargs = _inject_secrets(dict(prov.kwargs), prov.secret_kwargs_env)
 
     # For the default Anthropic adapter inject well-known top-level settings.
-    if prov.adapter == "ravn.adapters.anthropic_adapter.AnthropicAdapter":
+    if prov.adapter == "ravn.adapters.llm.anthropic.AnthropicAdapter":
         kwargs.setdefault("api_key", settings.effective_api_key())
         kwargs.setdefault("base_url", settings.anthropic.base_url)
 
@@ -109,7 +109,7 @@ def _build_llm(settings: Settings) -> Any:
     if not settings.llm.fallbacks:
         return primary
 
-    from ravn.adapters.fallback_llm import FallbackLLMAdapter
+    from ravn.adapters.llm.fallback import FallbackLLMAdapter
 
     providers: list[LLMPort] = [primary]
     for fb in settings.llm.fallbacks:
@@ -141,7 +141,7 @@ def _build_memory(settings: Settings) -> Any:
             logger.warning("Failed to load embedding adapter: %s — falling back to FTS-only", exc)
 
     if backend == "sqlite":
-        from ravn.adapters.sqlite_memory import SqliteMemoryAdapter
+        from ravn.adapters.memory.sqlite import SqliteMemoryAdapter
 
         return SqliteMemoryAdapter(
             path=settings.memory.path,
@@ -160,7 +160,7 @@ def _build_memory(settings: Settings) -> Any:
         )
 
     if backend == "postgres":
-        from ravn.adapters.postgres_memory import PostgresMemoryAdapter
+        from ravn.adapters.memory.postgres import PostgresMemoryAdapter
 
         dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
         dsn = dsn or settings.memory.dsn
@@ -191,7 +191,7 @@ def _build_outcome(settings: Settings) -> tuple[Any, OutcomeConfig | None]:
     if not oc.enabled:
         return None, None
 
-    from ravn.adapters.sqlite_outcome import SQLiteOutcomeAdapter
+    from ravn.adapters.memory.outcome import SQLiteOutcomeAdapter
 
     adapter = SQLiteOutcomeAdapter(
         path=oc.path,
@@ -213,7 +213,7 @@ def _build_permission(
     persona_config: Any | None,
 ) -> Any:
     """Build the permission adapter from config."""
-    from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
+    from ravn.adapters.permission.allow_deny import AllowAllPermission, DenyAllPermission
 
     if no_tools:
         return DenyAllPermission()
@@ -230,8 +230,8 @@ def _build_permission(
         return DenyAllPermission()
 
     # Rich permission enforcer for workspace_write, read_only, prompt modes
-    from ravn.adapters.approval_memory import ApprovalMemory
-    from ravn.adapters.permission_enforcer import PermissionEnforcer
+    from ravn.adapters.memory.approval import ApprovalMemory
+    from ravn.adapters.permission.enforcer import PermissionEnforcer
 
     return PermissionEnforcer(
         config=settings.permission,
@@ -260,15 +260,15 @@ def _build_tools(
     if no_tools:
         return []
 
-    from ravn.adapters.file_tools import (
+    from ravn.adapters.tools.ask_user import AskUserTool
+    from ravn.adapters.tools.bash import BashTool
+    from ravn.adapters.tools.file_tools import (
         EditFileTool,
         GlobSearchTool,
         GrepSearchTool,
         ReadFileTool,
         WriteFileTool,
     )
-    from ravn.adapters.tools.ask_user import AskUserTool
-    from ravn.adapters.tools.bash import BashTool
     from ravn.adapters.tools.git import (
         GitAddTool,
         GitCheckoutTool,
@@ -364,7 +364,7 @@ def _build_tools(
         from ravn.adapters.tools.skill_tools import SkillListTool, SkillRunTool
 
         if settings.skill.backend == "sqlite":
-            from ravn.adapters.sqlite_skill import SqliteSkillAdapter
+            from ravn.adapters.skill.sqlite import SqliteSkillAdapter
 
             skill_port = SqliteSkillAdapter(
                 path=settings.skill.path,
@@ -372,7 +372,7 @@ def _build_tools(
                 cache_max_entries=settings.skill.cache_max_entries,
             )
         else:
-            from ravn.adapters.file_skill_registry import FileSkillRegistry
+            from ravn.adapters.skill.file_registry import FileSkillRegistry
 
             skill_port = FileSkillRegistry(
                 skill_dirs=settings.skill.skill_dirs or None,
@@ -913,7 +913,7 @@ def _print_usage(usage: TokenUsage) -> None:
 @approvals_app.command("list")
 def approvals_list() -> None:
     """List all stored approval patterns for the current project."""
-    from ravn.adapters.approval_memory import ApprovalMemory
+    from ravn.adapters.memory.approval import ApprovalMemory
 
     memory = ApprovalMemory()
     entries = memory.list_entries()
@@ -934,7 +934,7 @@ def approvals_revoke(
     pattern: str = typer.Argument(help="Command text or pattern to revoke."),
 ) -> None:
     """Revoke an approval pattern so the command will be prompted again."""
-    from ravn.adapters.approval_memory import ApprovalMemory
+    from ravn.adapters.memory.approval import ApprovalMemory
 
     memory = ApprovalMemory()
     removed = memory.revoke(pattern)

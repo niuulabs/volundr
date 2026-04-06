@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
+from ravn.adapters.permission.allow_deny import AllowAllPermission, DenyAllPermission
 from ravn.agent import RavnAgent
 from ravn.domain.models import (
     LLMResponse,

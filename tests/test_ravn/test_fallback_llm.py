@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ravn.adapters.fallback_llm import FallbackLLMAdapter
+from ravn.adapters.llm.fallback import FallbackLLMAdapter
 from ravn.domain.exceptions import AllProvidersExhaustedError, LLMError
 from ravn.domain.models import (
     LLMResponse,
@@ -138,7 +138,7 @@ class TestFallbackLLMGenerate:
         fallback = _make_llm()
         adapter = FallbackLLMAdapter([primary, fallback])
 
-        with caplog.at_level(logging.WARNING, logger="ravn.adapters.fallback_llm"):
+        with caplog.at_level(logging.WARNING, logger="ravn.adapters.llm.fallback"):
             await adapter.generate(_MESSAGES, **_KWARGS)
 
         assert any("primary" in record.message for record in caplog.records)
@@ -256,7 +256,7 @@ class TestFallbackLLMStream:
         fallback = _make_llm(text="ok")
         adapter = FallbackLLMAdapter([primary, fallback])
 
-        with caplog.at_level(logging.WARNING, logger="ravn.adapters.fallback_llm"):
+        with caplog.at_level(logging.WARNING, logger="ravn.adapters.llm.fallback"):
             await _collect_stream(adapter)
 
         assert any("primary" in r.message for r in caplog.records)

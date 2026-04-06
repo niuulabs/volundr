@@ -1,7 +1,7 @@
 """Bash command validation pipeline — 5-stage security analysis.
 
 This module is the **single source of truth** for all bash-validation
-constants and helpers.  :mod:`ravn.adapters.permission_enforcer` imports
+constants and helpers.  :mod:`ravn.adapters.permission.enforcer` imports
 directly from here; never define a constant in both places.
 
 Each pipeline stage returns a :class:`StageAllow`, :class:`StageDeny`, or

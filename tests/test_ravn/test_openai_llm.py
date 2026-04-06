@@ -20,7 +20,7 @@ import httpx
 import pytest
 import respx
 
-from ravn.adapters.openai_llm import (
+from ravn.adapters.llm.openai import (
     OpenAICompatibleAdapter,
     _convert_tools,
     _normalise_usage,

@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import ravn.adapters.migrate_memory as _migrate_memory_module
-from ravn.adapters.migrate_memory import migrate_sqlite_to_postgres
+import ravn.adapters.memory.migrate as _migrate_memory_module
+from ravn.adapters.memory.migrate import migrate_sqlite_to_postgres
 
 # ---------------------------------------------------------------------------
 # Helpers

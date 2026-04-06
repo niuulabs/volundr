@@ -516,7 +516,7 @@ class TestBuildAgentWithPersona:
 
         settings = Settings()
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -533,7 +533,7 @@ class TestBuildAgentWithPersona:
 
         settings = Settings()
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -552,7 +552,7 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -564,7 +564,7 @@ class TestBuildAgentWithPersona:
     def test_read_only_persona_uses_deny_all_permission(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
@@ -572,7 +572,7 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -583,7 +583,7 @@ class TestBuildAgentWithPersona:
     def test_non_read_only_persona_uses_permission_enforcer(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from ravn.adapters.permission_enforcer import PermissionEnforcer
+        from ravn.adapters.permission.enforcer import PermissionEnforcer
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
@@ -591,7 +591,7 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -602,7 +602,7 @@ class TestBuildAgentWithPersona:
     def test_no_tools_flag_overrides_persona_permission(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from ravn.adapters.permission_adapter import DenyAllPermission
+        from ravn.adapters.permission.allow_deny import DenyAllPermission
         from ravn.cli.commands import _build_agent
         from ravn.config import Settings
 
@@ -610,7 +610,7 @@ class TestBuildAgentWithPersona:
         settings = Settings()
 
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_cls.return_value = MagicMock()
@@ -657,7 +657,7 @@ class TestCliPersonaFlag:
 
         runner = CliRunner()
         with (
-            patch("ravn.adapters.anthropic_adapter.AnthropicAdapter") as mock_cls,
+            patch("ravn.adapters.llm.anthropic.AnthropicAdapter") as mock_cls,
             patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}),
         ):
             mock_adapter = MagicMock()

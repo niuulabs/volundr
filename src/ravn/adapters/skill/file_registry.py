@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _SKILL_HEADER_RE = re.compile(r"^#\s*skill:\s*(.+)$", re.IGNORECASE)
-_BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
+_BUILTIN_SKILLS_DIR = Path(__file__).parent.parent.parent / "skills"
 
 
 # ---------------------------------------------------------------------------

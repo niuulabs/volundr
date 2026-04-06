@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from ravn.adapters.permission_adapter import AllowAllPermission, DenyAllPermission
+from ravn.adapters.permission.allow_deny import AllowAllPermission, DenyAllPermission
 from ravn.adapters.tools.hooks import (
     _REDACTED,
     _SECRET_PATTERNS,

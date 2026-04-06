@@ -80,7 +80,7 @@ def _make_agent(
     max_iterations: int = 10,
 ) -> tuple[RavnAgent, InMemoryChannel]:
     channel = InMemoryChannel()
-    from ravn.adapters.permission_adapter import AllowAllPermission
+    from ravn.adapters.permission.allow_deny import AllowAllPermission
 
     agent = RavnAgent(
         llm=llm or make_simple_llm(),
@@ -250,7 +250,7 @@ class TestAgentContextCompressor:
         """When a memory port is configured, memory_summary is forwarded to maybe_compress."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from ravn.adapters.permission_adapter import AllowAllPermission
+        from ravn.adapters.permission.allow_deny import AllowAllPermission
         from ravn.agent import RavnAgent
         from ravn.ports.memory import MemoryPort
         from tests.ravn.fixtures.fakes import EchoTool, InMemoryChannel
@@ -393,7 +393,7 @@ class TestAgentPromptBuilder:
         llm = MagicMock(spec=LLMPort)
         llm.stream = capturing_stream
 
-        from ravn.adapters.permission_adapter import AllowAllPermission
+        from ravn.adapters.permission.allow_deny import AllowAllPermission
 
         agent = RavnAgent(
             llm=llm,
@@ -438,7 +438,7 @@ class TestAgentPromptBuilder:
         llm = MagicMock(spec=LLMPort)
         llm.stream = simple_stream
 
-        from ravn.adapters.permission_adapter import AllowAllPermission
+        from ravn.adapters.permission.allow_deny import AllowAllPermission
 
         agent = RavnAgent(
             llm=llm,

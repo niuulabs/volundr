@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from ravn.adapters._memory_scoring import cosine_similarity
+from ravn.adapters.memory.scoring import cosine_similarity
 from ravn.domain.models import ToolResult
 from ravn.ports.embedding import EmbeddingPort
 from ravn.ports.tool import ToolPort

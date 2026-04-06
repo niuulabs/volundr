@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ravn.adapters.file_security import (
+from ravn.adapters.tools.file_security import (
     DEFAULT_BINARY_CHECK_BYTES,
     PathSecurityError,
     is_binary,

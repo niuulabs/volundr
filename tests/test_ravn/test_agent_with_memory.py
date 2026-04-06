@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock
 
-from ravn.adapters.permission_adapter import AllowAllPermission
+from ravn.adapters.permission.allow_deny import AllowAllPermission
 from ravn.agent import (
     RavnAgent,
     _determine_outcome,

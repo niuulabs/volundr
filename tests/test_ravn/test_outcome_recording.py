@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ravn.adapters.permission_adapter import AllowAllPermission
-from ravn.adapters.sqlite_outcome import SQLiteOutcomeAdapter, _format_lessons, _sanitise_fts_query
+from ravn.adapters.memory.outcome import SQLiteOutcomeAdapter, _format_lessons, _sanitise_fts_query
+from ravn.adapters.permission.allow_deny import AllowAllPermission
 from ravn.agent import RavnAgent, _compute_cost
 from ravn.config import OutcomeConfig
 from ravn.domain.models import (
