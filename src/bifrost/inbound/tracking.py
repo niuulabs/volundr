@@ -13,6 +13,7 @@ import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
+import bifrost.metrics as _metrics
 from bifrost.auth import AgentIdentity
 from bifrost.domain.models import RequestLog, TokenUsage
 from bifrost.ports.events import BudgetWarningEvent, CostEventEmitter, RequestCompletedEvent
@@ -149,6 +150,17 @@ async def _stream_with_tracking(
     )
 
     cost = calculate_cost(model, usage, pricing_overrides)
+    _metrics.record_request(
+        provider=provider,
+        model=model,
+        status="200",
+        duration_seconds=latency_ms / 1000.0,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        cache_read_tokens=usage.cache_read_input_tokens,
+        cache_write_tokens=usage.cache_creation_input_tokens,
+        cost_usd=cost,
+    )
     await store.record(
         UsageRecord(
             request_id=request_id,

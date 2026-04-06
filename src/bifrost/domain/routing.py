@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 
+import bifrost.metrics as _metrics
 from bifrost.ports.rules import RoutingContext, RuleAction, RuleEnginePort
 from bifrost.translation.models import AnthropicRequest, ImageBlock, TextBlock
 
@@ -77,6 +78,11 @@ def apply_rules(
     match_result = engine.evaluate(request, context)
     if match_result is None:
         return request
+
+    _metrics.record_rule_hit(
+        rule_name=match_result.rule_name,
+        action=match_result.action.value,
+    )
 
     match match_result.action:
         case RuleAction.ROUTE_TO:

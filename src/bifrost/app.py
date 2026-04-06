@@ -22,6 +22,7 @@ from fastapi import FastAPI, Request, Response
 from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
 from bifrost.config import AuditAdapter, BifrostConfig, CacheMode
+from bifrost.inbound.observability import create_observability_router
 from bifrost.inbound.routes import create_router
 from bifrost.ports.audit import AuditPort
 from bifrost.ports.cache import CachePort
@@ -231,6 +232,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
         # SIGHUP is not available on Windows or in some restricted environments.
         logger.debug("SIGHUP not available on this platform; key rotation via signal disabled")
 
+    obs_router = create_observability_router(config=config, router=router, store=store)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
@@ -239,6 +242,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
             await store.close()
         await event_emitter.close()
         await cache.close()
+        if hasattr(obs_router, "http_client"):
+            await obs_router.http_client.aclose()
         if hasattr(audit_adapter, "close"):
             await audit_adapter.close()
 
@@ -267,6 +272,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
         cache=cache,
     )
     app.include_router(api_router)
+    app.include_router(obs_router)
 
     # Expose the audit adapter on app.state so route handlers can log events.
     app.state.audit = audit_adapter
