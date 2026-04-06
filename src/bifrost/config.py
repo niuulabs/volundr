@@ -346,6 +346,65 @@ class CacheMode(StrEnum):
     """No caching (default). Every request is forwarded to the provider."""
 
 
+class OtelAuditConfig(BaseModel):
+    """OpenTelemetry exporter settings for the OTel audit adapter."""
+
+    endpoint: str = Field(
+        default="http://localhost:4317",
+        description="OTLP gRPC endpoint (e.g. http://otel-collector:4317).",
+    )
+    service_name: str = Field(
+        default="bifrost",
+        description="Service name embedded in the OTel Resource.",
+    )
+
+
+class AuditAdapter(StrEnum):
+    """Supported audit logging backends."""
+
+    NULL = "null"
+    """No-op — discard all audit events (default)."""
+    POSTGRES = "postgres"
+    """Write audit events to PostgreSQL."""
+    OTEL = "otel"
+    """Emit audit events as OpenTelemetry spans."""
+
+
+class AuditConfig(BaseModel):
+    """Configuration for the audit logging backend."""
+
+    adapter: AuditAdapter = Field(
+        default=AuditAdapter.NULL,
+        description=(
+            "Audit backend. Accepted values: 'null' (default, no-op), "
+            "'postgres', 'otel'."
+        ),
+    )
+    path: str = Field(
+        default="./bifrost_audit.db",
+        description="File path for the SQLite audit backend (ignored for other adapters).",
+    )
+    dsn: str = Field(
+        default="",
+        description=(
+            "PostgreSQL DSN for the postgres audit backend. "
+            "Falls back to the BIFROST_AUDIT_DSN environment variable when blank."
+        ),
+    )
+    dsn_env: str = Field(
+        default="BIFROST_AUDIT_DSN",
+        description="Environment variable holding the PostgreSQL DSN (used when dsn is blank).",
+    )
+    otel: OtelAuditConfig = Field(
+        default_factory=OtelAuditConfig,
+        description="OpenTelemetry exporter settings (used when adapter='otel').",
+    )
+
+    def effective_dsn(self) -> str:
+        """Return the DSN, falling back to the configured environment variable."""
+        return self.dsn or os.environ.get(self.dsn_env, "")
+
+
 class CacheConfig(BaseModel):
     """Configuration for the semantic response cache."""
 
@@ -494,6 +553,15 @@ class BifrostConfig(BaseModel):
     events: EventsConfig = Field(
         default_factory=EventsConfig,
         description="Configuration for the Valkyrie cost event emitter.",
+    )
+
+    # ── Audit logging ─────────────────────────────────────────────────────────
+    audit: AuditConfig = Field(
+        default_factory=AuditConfig,
+        description=(
+            "Audit logging configuration. "
+            "Supported adapters: 'null' (default), 'sqlite', 'postgres', 'otel'."
+        ),
     )
 
     # ── Response cache ────────────────────────────────────────────────────────
