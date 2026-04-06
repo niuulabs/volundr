@@ -342,7 +342,7 @@ class TestBuildAudit:
         assert isinstance(adapter, NullAuditAdapter)
 
     def test_otel_adapter_builds_with_config(self, monkeypatch):
-        otel_mod = _load_otel_adapter(monkeypatch)
+        _load_otel_adapter(monkeypatch)
 
         with patch("bifrost.adapters.audit.otel.OtelAuditAdapter") as mock_cls:
             mock_cls.return_value = NullAuditAdapter()
