@@ -282,7 +282,11 @@ class TestSettings:
         assert isinstance(s.memory, MemoryConfig)
         assert isinstance(s.hooks, HooksConfig)
         assert s.mcp_servers == []
-        assert s.channels == []
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            assert s.channels == []
 
     def test_effective_api_key_from_env(self) -> None:
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "env-key"}):
@@ -379,6 +383,8 @@ class TestSettings:
             assert "write" in s.tools.disabled
 
     def test_yaml_channels_section(self, tmp_path) -> None:
+        import warnings
+
         cfg = tmp_path / "ravn.yaml"
         cfg.write_text(
             "channels:\n"
@@ -388,8 +394,10 @@ class TestSettings:
         )
         with patch.dict(os.environ, {"RAVN_CONFIG": str(cfg)}):
             s = Settings()
-            assert len(s.channels) == 1
-            assert s.channels[0].kwargs["result_truncation_limit"] == 200
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                assert len(s.channels) == 1
+                assert s.channels[0].kwargs["result_truncation_limit"] == 200
 
     def test_yaml_context_section(self, tmp_path) -> None:
         cfg = tmp_path / "ravn.yaml"

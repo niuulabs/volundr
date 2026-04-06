@@ -954,7 +954,10 @@ class Settings(BaseSettings):
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     mcp_token_store: MCPTokenStoreConfig = Field(default_factory=MCPTokenStoreConfig)
     hooks: HooksConfig = Field(default_factory=HooksConfig)
-    channels: list[ChannelConfig] = Field(default_factory=list)
+    channels: list[ChannelConfig] = Field(
+        default_factory=list,
+        deprecated="Use gateway.channels instead. This field is ignored.",
+    )
 
     # NIU-431: context management
     iteration_budget: IterationBudgetConfig = Field(default_factory=IterationBudgetConfig)

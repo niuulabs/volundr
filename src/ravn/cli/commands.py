@@ -63,6 +63,17 @@ def _resolve_workspace(settings: Settings) -> Path:
     return Path(ws).resolve() if ws else Path.cwd()
 
 
+def _configure_logging(settings: Settings) -> None:
+    """Apply logging config from settings."""
+    level = getattr(logging, settings.logging.level.upper(), logging.WARNING)
+    fmt = (
+        "%(asctime)s %(name)s %(levelname)s %(message)s"
+        if settings.logging.format == "text"
+        else "%(message)s"
+    )
+    logging.basicConfig(level=level, format=fmt, force=True)
+
+
 # ---------------------------------------------------------------------------
 # Builder: LLM
 # ---------------------------------------------------------------------------
@@ -664,6 +675,7 @@ def run(
         os.environ["RAVN_CONFIG"] = config
 
     settings = Settings()
+    _configure_logging(settings)
     project_config = ProjectConfig.discover()
     persona_config = _resolve_persona(persona, project_config)
     agent, channel = _build_agent(settings, no_tools=no_tools, persona_config=persona_config)
@@ -819,6 +831,7 @@ def gateway(
         os.environ["RAVN_CONFIG"] = config
 
     settings = Settings()
+    _configure_logging(settings)
     project_config = ProjectConfig.discover()
     persona_config = _resolve_persona(persona, project_config)
 
