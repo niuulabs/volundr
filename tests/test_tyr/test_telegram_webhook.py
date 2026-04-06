@@ -93,6 +93,9 @@ class StubSagaRepo(SagaRepository):
     async def delete_saga(self, saga_id: UUID, *, owner_id: str | None = None) -> bool:
         return False
 
+    async def update_saga_status(self, saga_id: UUID, status: SagaStatus) -> None:
+        pass
+
 
 class StubTracker(TrackerPort):
     """In-memory TrackerPort implementation for tests."""

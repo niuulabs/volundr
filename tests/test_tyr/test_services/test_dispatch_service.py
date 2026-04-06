@@ -600,3 +600,140 @@ class TestDispatchIssues:
             auth_token="my-token",
         )
         assert volundr.last_auth_token == "my-token"
+
+
+# -------------------------------------------------------------------
+# Service tests: active-saga filtering and auto-archive
+# -------------------------------------------------------------------
+
+
+class TestActiveSagaFiltering:
+    @pytest.mark.asyncio
+    async def test_skips_complete_sagas(
+        self,
+        tracker: MockTracker,
+        volundr: MockVolundr,
+        dispatcher_repo: MockDispatcherRepo,
+    ):
+        """Sagas with status COMPLETE are not queried from Linear at all."""
+        repo = MockSagaRepo()
+        repo.sagas.append(
+            Saga(
+                id=uuid4(),
+                tracker_id="proj-1",
+                tracker_type="linear",
+                slug="done-project",
+                name="Done",
+                repos=["org/repo"],
+                feature_branch="feat/done",
+                status=SagaStatus.COMPLETE,
+                confidence=0.0,
+                created_at=__import__("datetime").datetime.now(
+                    __import__("datetime").timezone.utc
+                ),
+                base_branch="dev",
+            )
+        )
+        svc = DispatchService(
+            tracker_factory=MockTrackerFactory([tracker]),
+            volundr_factory=MockVolundrFactory(adapters=[volundr]),
+            saga_repo=repo,
+            dispatcher_repo=dispatcher_repo,
+            config=DispatchConfig(),
+        )
+        items = await svc.find_ready_issues("dev-user")
+        assert items == []
+
+    @pytest.mark.asyncio
+    async def test_auto_archives_when_linear_project_completed(
+        self,
+        volundr: MockVolundr,
+        dispatcher_repo: MockDispatcherRepo,
+    ):
+        """When a Linear project is completed, the saga is auto-archived."""
+        completed_tracker = MockTracker()
+        completed_tracker.projects = [
+            TrackerProject(
+                id="proj-done",
+                name="Done Project",
+                description="",
+                status="completed",
+                url="https://linear.app/done",
+                milestone_count=0,
+                issue_count=0,
+            )
+        ]
+        completed_tracker.milestones = {"proj-done": []}
+        completed_tracker.issues = {"proj-done": []}
+
+        class TrackingRepo(MockSagaRepo):
+            def __init__(self) -> None:
+                super().__init__()
+                self.archived: list[tuple] = []
+
+            async def update_saga_status(self, saga_id, status) -> None:
+                self.archived.append((saga_id, status))
+
+        repo = TrackingRepo()
+        saga = Saga(
+            id=uuid4(),
+            tracker_id="proj-done",
+            tracker_type="linear",
+            slug="done",
+            name="Done",
+            repos=["org/repo"],
+            feature_branch="feat/done",
+            status=SagaStatus.ACTIVE,
+            confidence=0.0,
+            created_at=__import__("datetime").datetime.now(
+                __import__("datetime").timezone.utc
+            ),
+            base_branch="dev",
+        )
+        repo.sagas.append(saga)
+
+        svc = DispatchService(
+            tracker_factory=MockTrackerFactory([completed_tracker]),
+            volundr_factory=MockVolundrFactory(adapters=[volundr]),
+            saga_repo=repo,
+            dispatcher_repo=dispatcher_repo,
+            config=DispatchConfig(),
+        )
+        items = await svc.find_ready_issues("dev-user")
+
+        assert items == []
+        assert len(repo.archived) == 1
+        assert repo.archived[0] == (saga.id, SagaStatus.COMPLETE)
+
+    @pytest.mark.asyncio
+    async def test_fetch_saga_data_fallback_without_get_project_full(
+        self,
+        volundr: MockVolundr,
+        saga_repo: MockSagaRepo,
+        dispatcher_repo: MockDispatcherRepo,
+    ):
+        """When an adapter lacks get_project_full, falls back to list_milestones/list_issues."""
+        source = _make_tracker()
+
+        class MinimalTracker:
+            """Tracker without get_project_full — exercises the fallback path."""
+
+            async def list_milestones(self, project_id: str) -> list:
+                return source.milestones.get(project_id, [])
+
+            async def list_issues(self, project_id: str, milestone_id=None) -> list:
+                return source.issues.get(project_id, [])
+
+            async def get_blocked_identifiers(self, project_id: str) -> set:
+                return set()
+
+        svc = DispatchService(
+            tracker_factory=MockTrackerFactory([MinimalTracker()]),
+            volundr_factory=MockVolundrFactory(adapters=[volundr]),
+            saga_repo=saga_repo,
+            dispatcher_repo=dispatcher_repo,
+            config=DispatchConfig(),
+        )
+        # Fallback returns None for project → no auto-archive, issues still returned
+        items = await svc.find_ready_issues("dev-user")
+        assert len(items) > 0

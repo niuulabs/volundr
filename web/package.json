@@ -63,7 +63,7 @@
     }
   },
   "dependencies": {
-    "@codingame/monaco-vscode-accessibility-service-override": "^28.4.1",
+    "@codingame/monaco-vscode-accessibility-service-override": "^30.0.0",
     "@codingame/monaco-vscode-api": "^28.4.1",
     "@codingame/monaco-vscode-authentication-service-override": "^28.4.1",
     "@codingame/monaco-vscode-comments-service-override": "^28.4.1",
@@ -86,7 +86,7 @@
     "@codingame/monaco-vscode-extension-gallery-service-override": "^28.4.1",
     "@codingame/monaco-vscode-extensions-service-override": "^28.4.1",
     "@codingame/monaco-vscode-files-service-override": "^28.4.1",
-    "@codingame/monaco-vscode-git-base-default-extension": "^28.4.1",
+    "@codingame/monaco-vscode-git-base-default-extension": "^30.0.0",
     "@codingame/monaco-vscode-go-default-extension": "^28.4.1",
     "@codingame/monaco-vscode-html-default-extension": "^28.4.1",
     "@codingame/monaco-vscode-ini-default-extension": "^28.4.1",
@@ -97,7 +97,7 @@
     "@codingame/monaco-vscode-json-default-extension": "^28.4.1",
     "@codingame/monaco-vscode-language-detection-worker-service-override": "^28.4.1",
     "@codingame/monaco-vscode-languages-service-override": "^28.4.1",
-    "@codingame/monaco-vscode-less-default-extension": "^28.4.1",
+    "@codingame/monaco-vscode-less-default-extension": "^30.0.0",
     "@codingame/monaco-vscode-lifecycle-service-override": "^28.4.1",
     "@codingame/monaco-vscode-localization-service-override": "^28.4.1",
     "@codingame/monaco-vscode-log-default-extension": "^28.4.1",
@@ -129,7 +129,7 @@
     "@codingame/monaco-vscode-search-result-default-extension": "^28.4.1",
     "@codingame/monaco-vscode-search-service-override": "^28.4.1",
     "@codingame/monaco-vscode-secret-storage-service-override": "^28.4.1",
-    "@codingame/monaco-vscode-share-service-override": "^28.4.1",
+    "@codingame/monaco-vscode-share-service-override": "^30.0.0",
     "@codingame/monaco-vscode-shellscript-default-extension": "^28.4.1",
     "@codingame/monaco-vscode-snippets-service-override": "^28.4.1",
     "@codingame/monaco-vscode-speech-service-override": "^28.4.1",
@@ -181,7 +181,8 @@
     "zustand": "^5.0.12"
   },
   "overrides": {
-    "minimatch": ">=10.2.3"
+    "minimatch": ">=10.2.3",
+    "lodash": ">=4.17.23"
   },
   "devDependencies": {
     "@codingame/esbuild-import-meta-url-plugin": "^1.0.3",
@@ -198,7 +199,7 @@
     "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
+    "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "jsdom": "^29.0.1",
     "prettier": "^3.8.1",

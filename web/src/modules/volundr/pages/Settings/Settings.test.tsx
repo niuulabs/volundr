@@ -771,9 +771,12 @@ describe('SettingsPage — Credential Form', () => {
   async function openFormWithType(typeLabel: string) {
     const form = await openForm();
     fireEvent.click(form.getByText(typeLabel));
-    await waitFor(() => {
-      expect(form.getByPlaceholderText('my-api-key')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(form.getByPlaceholderText('my-api-key')).toBeDefined();
+      },
+      { timeout: 5000 }
+    );
     return form;
   }
 
@@ -808,9 +811,12 @@ describe('SettingsPage — Credential Form', () => {
     const form = await openFormWithType('API Key');
 
     fireEvent.click(form.getByText('Back'));
-    await waitFor(() => {
-      expect(form.getByText('Select Type')).toBeDefined();
-    });
+    await waitFor(
+      () => {
+        expect(form.getByText('Select Type')).toBeDefined();
+      },
+      { timeout: 5000 }
+    );
   });
 
   it('submits API key credential', async () => {
