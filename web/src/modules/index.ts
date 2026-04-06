@@ -7,6 +7,7 @@
  */
 import './volundr/register';
 import './tyr/register';
+import './ravn/register';
 
 // Re-export registry utilities
 export { getModule, getAllModules, registerModule } from './shared/registry';

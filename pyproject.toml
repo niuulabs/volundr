@@ -75,6 +75,7 @@ ravn-gateway = "ravn.cli.commands:gateway_main"
 niuu = "niuu.plugin:NiuuPlugin"
 volundr = "volundr.plugin:VolundrPlugin"
 tyr = "tyr.plugin:TyrPlugin"
+ravn = "ravn.plugin:RavnPlugin"
 
 [project.urls]
 Homepage = "https://github.com/niuulabs/volundr"
