@@ -519,6 +519,132 @@ def _build_prompt_builder(settings: Settings) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# Builder: MCP (async — called after agent construction)
+# ---------------------------------------------------------------------------
+
+
+async def _start_mcp(
+    settings: Settings,
+    agent: RavnAgent,
+) -> Any | None:
+    """Start MCP servers and register discovered tools into the agent.
+
+    Returns the MCPManager instance (for shutdown), or None if no MCP
+    servers are configured.
+    """
+    if not settings.mcp_servers:
+        return None
+
+    from ravn.adapters.mcp.auth import MCPAuthSession
+    from ravn.adapters.mcp.manager import MCPManager
+    from ravn.adapters.tools.mcp import MCPAuthTool
+
+    # Build token store
+    ts_cfg = settings.mcp_token_store
+    if ts_cfg.backend == "openbao":
+        from ravn.adapters.mcp.auth import OpenBaoTokenStore
+
+        store = OpenBaoTokenStore(
+            url=ts_cfg.openbao_url,
+            token_env=ts_cfg.openbao_token_env,
+            mount=ts_cfg.openbao_mount,
+            path_prefix=ts_cfg.openbao_path_prefix,
+        )
+    else:
+        from ravn.adapters.mcp.auth import LocalEncryptedTokenStore
+
+        store = LocalEncryptedTokenStore(path=ts_cfg.local_path)
+
+    auth_session = MCPAuthSession(store)
+    builtin_names = set(agent._tools.keys())
+    manager = MCPManager(settings.mcp_servers, builtin_tool_names=builtin_names)
+
+    try:
+        mcp_tools = await manager.start()
+    except Exception as exc:
+        logger.warning("MCP startup failed: %s — continuing without MCP tools", exc)
+        return None
+
+    # Register discovered tools into the agent
+    for tool in mcp_tools:
+        agent._tools[tool.name] = tool
+
+    # Add the auth tool so the model can trigger auth flows
+    server_configs = {s.name: s for s in settings.mcp_servers if s.enabled}
+    auth_tool = MCPAuthTool(auth_session, server_configs, manager=manager)
+    agent._tools[auth_tool.name] = auth_tool
+
+    logger.info(
+        "MCP started: %d server(s), %d tool(s) discovered",
+        len(settings.mcp_servers),
+        len(mcp_tools),
+    )
+    return manager
+
+
+async def _start_mcp_shared(
+    settings: Settings,
+) -> tuple[Any | None, list[Any]]:
+    """Start MCP servers and return (manager, tools) for gateway use.
+
+    Unlike :func:`_start_mcp`, this does not inject tools into an agent
+    because the gateway creates agents per-session.  The returned tool
+    list should be appended to each session's tool list.
+    """
+    if not settings.mcp_servers:
+        return None, []
+
+    from ravn.adapters.mcp.auth import MCPAuthSession
+    from ravn.adapters.mcp.manager import MCPManager
+    from ravn.adapters.tools.mcp import MCPAuthTool
+
+    ts_cfg = settings.mcp_token_store
+    if ts_cfg.backend == "openbao":
+        from ravn.adapters.mcp.auth import OpenBaoTokenStore
+
+        store = OpenBaoTokenStore(
+            url=ts_cfg.openbao_url,
+            token_env=ts_cfg.openbao_token_env,
+            mount=ts_cfg.openbao_mount,
+            path_prefix=ts_cfg.openbao_path_prefix,
+        )
+    else:
+        from ravn.adapters.mcp.auth import LocalEncryptedTokenStore
+
+        store = LocalEncryptedTokenStore(path=ts_cfg.local_path)
+
+    auth_session = MCPAuthSession(store)
+    manager = MCPManager(settings.mcp_servers)
+
+    try:
+        mcp_tools: list[Any] = await manager.start()
+    except Exception as exc:
+        logger.warning("MCP startup failed: %s — continuing without MCP tools", exc)
+        return None, []
+
+    server_configs = {s.name: s for s in settings.mcp_servers if s.enabled}
+    auth_tool = MCPAuthTool(auth_session, server_configs, manager=manager)
+    mcp_tools.append(auth_tool)
+
+    logger.info(
+        "MCP started: %d server(s), %d tool(s) discovered",
+        len(settings.mcp_servers),
+        len(mcp_tools) - 1,  # exclude auth tool from count
+    )
+    return manager, mcp_tools
+
+
+async def _shutdown_mcp(manager: Any | None) -> None:
+    """Gracefully shut down MCP servers."""
+    if manager is None:
+        return
+    try:
+        await manager.shutdown()
+    except Exception as exc:
+        logger.warning("MCP shutdown error: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # User input function
 # ---------------------------------------------------------------------------
 
@@ -694,28 +820,32 @@ async def _chat(
     """Run a single-turn or multi-turn conversation."""
     from ravn.adapters.slash_commands import handle as handle_slash
 
-    if prompt:
-        await _run_turn(agent, channel, prompt, show_usage=show_usage, single_turn=True)
-        return
+    mcp_manager = await _start_mcp(settings, agent)
+    try:
+        if prompt:
+            await _run_turn(agent, channel, prompt, show_usage=show_usage, single_turn=True)
+            return
 
-    # REPL mode.
-    typer.echo("Ravn — type your message or /help for commands. Ctrl+D to exit.\n")
-    slash_ctx = _make_slash_ctx(agent, settings)
-    while True:
-        try:
-            user_input = input("You: ").strip()
-        except EOFError:
-            break
+        # REPL mode.
+        typer.echo("Ravn — type your message or /help for commands. Ctrl+D to exit.\n")
+        slash_ctx = _make_slash_ctx(agent, settings)
+        while True:
+            try:
+                user_input = input("You: ").strip()
+            except EOFError:
+                break
 
-        if not user_input:
-            continue
+            if not user_input:
+                continue
 
-        slash_output = handle_slash(user_input, slash_ctx)
-        if slash_output is not None:
-            typer.echo(slash_output)
-            continue
+            slash_output = handle_slash(user_input, slash_ctx)
+            if slash_output is not None:
+                typer.echo(slash_output)
+                continue
 
-        await _run_turn(agent, channel, user_input, show_usage=show_usage)
+            await _run_turn(agent, channel, user_input, show_usage=show_usage)
+    finally:
+        await _shutdown_mcp(mcp_manager)
 
 
 async def _run_turn(
@@ -895,6 +1025,9 @@ async def _run_gateway(
         if persona_config.iteration_budget:
             max_iterations = persona_config.iteration_budget
 
+    # Start MCP servers (shared across sessions)
+    mcp_manager, mcp_tools = await _start_mcp_shared(settings)
+
     def _agent_factory(channel: ChannelPort) -> RavnAgent:
         # Per-session: fresh session, budget, and tools
         session = Session()
@@ -909,6 +1042,8 @@ async def _run_gateway(
             settings, workspace, session, llm, memory, budget,
             persona_config=persona_config,
         )
+        # Append shared MCP tools to per-session tool list
+        tools.extend(mcp_tools)
 
         return RavnAgent(
             llm=llm,
@@ -958,6 +1093,7 @@ async def _run_gateway(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        await _shutdown_mcp(mcp_manager)
 
 
 def main() -> None:
