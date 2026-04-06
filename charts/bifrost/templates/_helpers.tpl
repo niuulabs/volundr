@@ -62,17 +62,44 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Return the proper image name
+Return the proper image name (global overrides local)
 */}}
 {{- define "bifrost.image" -}}
-{{- $registry := .Values.image.registry | default "" }}
-{{- $repository := .Values.image.repository }}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion }}
-{{- if $registry }}
-{{- printf "%s/%s:%s" $registry $repository $tag }}
+{{- $registryName := .Values.image.registry -}}
+{{- $repositoryName := .Values.image.repository -}}
+{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+{{- if and .Values.global .Values.global.image -}}
+  {{- if .Values.global.image.registry -}}
+    {{- $registryName = .Values.global.image.registry -}}
+  {{- end -}}
+  {{- if .Values.global.image.tag -}}
+    {{- $tag = .Values.global.image.tag -}}
+  {{- end -}}
+{{- end -}}
+{{- if $registryName }}
+{{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
 {{- else }}
-{{- printf "%s:%s" $repository $tag }}
+{{- printf "%s:%s" $repositoryName $tag -}}
 {{- end }}
+{{- end }}
+
+{{/*
+Return image pull secrets (global, converts strings to objects)
+*/}}
+{{- define "bifrost.imagePullSecrets" -}}
+{{- $secrets := list -}}
+{{- if and .Values.global .Values.global.imagePullSecrets -}}
+  {{- $secrets = .Values.global.imagePullSecrets -}}
+{{- end -}}
+{{- if .Values.imagePullSecrets -}}
+  {{- $secrets = .Values.imagePullSecrets -}}
+{{- end -}}
+{{- if $secrets -}}
+imagePullSecrets:
+  {{- range $secrets }}
+  - name: {{ . }}
+  {{- end }}
+{{- end -}}
 {{- end }}
 
 {{/*
