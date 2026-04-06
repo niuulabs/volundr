@@ -42,8 +42,11 @@ def _make_pool_mock():
     conn.fetch = AsyncMock(return_value=[])
 
     pool = MagicMock()
-    pool.acquire = MagicMock(return_value=MagicMock(__aenter__=AsyncMock(return_value=conn),
-                                                     __aexit__=AsyncMock(return_value=False)))
+    pool.acquire = MagicMock(
+        return_value=MagicMock(
+            __aenter__=AsyncMock(return_value=conn), __aexit__=AsyncMock(return_value=False)
+        )
+    )
     pool.close = AsyncMock()
     return pool, conn
 

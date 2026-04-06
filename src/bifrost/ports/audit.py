@@ -91,3 +91,10 @@ class AuditPort(ABC):
         limit: int = 1000,
     ) -> list[AuditEvent]:
         """Return audit events matching all supplied filters (AND logic)."""
+
+    async def close(self) -> None:
+        """Release any resources held by the adapter.
+
+        Default implementation is a no-op; adapters that hold open connections
+        (database pools, OTLP exporters, etc.) should override this method.
+        """

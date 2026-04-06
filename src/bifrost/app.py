@@ -240,8 +240,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
             await store.close()
         await event_emitter.close()
         await cache.close()
-        if hasattr(audit, "close"):
-            await audit.close()
+        await audit.close()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",

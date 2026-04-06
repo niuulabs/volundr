@@ -1073,6 +1073,20 @@ def create_router(
                 response_transform=anthropic_response_to_openai,
             )
             if hit_resp is not None:
+                _schedule_audit(
+                    _build_audit_event(
+                        config=config,
+                        request_id=request_id,
+                        identity=identity,
+                        model=request.model,
+                        provider=provider,
+                        outcome="cache_hit",
+                        status_code=200,
+                        latency_ms=(time.monotonic() - start) * 1000,
+                        cache_hit=True,
+                        request=request,
+                    )
+                )
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
@@ -1117,6 +1131,23 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="success",
+                    status_code=200,
+                    latency_ms=latency_ms,
+                    tokens_input=usage.input_tokens,
+                    tokens_output=usage.output_tokens,
+                    cost_usd=cost,
+                    request=request,
+                    response=response,
+                )
+            )
             await _emit_events(
                 identity,
                 cost,
@@ -1134,9 +1165,37 @@ def create_router(
             return json_resp
 
         except RuleRejectError as exc:
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="rejected",
+                    status_code=400,
+                    latency_ms=(time.monotonic() - start) * 1000,
+                    error_message=exc.message,
+                    request=request,
+                )
+            )
             return openai_error_response(400, exc.message, "invalid_request_error")
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="error",
+                    status_code=502,
+                    latency_ms=(time.monotonic() - start) * 1000,
+                    error_message=str(exc),
+                    request=request,
+                )
+            )
             return openai_error_response(502, str(exc), "server_error")
 
     # -----------------------------------------------------------------------
@@ -1249,6 +1308,20 @@ def create_router(
                 ),
             )
             if hit_resp is not None:
+                _schedule_audit(
+                    _build_audit_event(
+                        config=config,
+                        request_id=request_id,
+                        identity=identity,
+                        model=request.model,
+                        provider=provider,
+                        outcome="cache_hit",
+                        status_code=200,
+                        latency_ms=(time.monotonic() - start) * 1000,
+                        cache_hit=True,
+                        request=request,
+                    )
+                )
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
@@ -1293,6 +1366,23 @@ def create_router(
                     timestamp=datetime.now(UTC),
                 )
             )
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="success",
+                    status_code=200,
+                    latency_ms=latency_ms,
+                    tokens_input=usage.input_tokens,
+                    tokens_output=usage.output_tokens,
+                    cost_usd=cost,
+                    request=request,
+                    response=response,
+                )
+            )
             await _emit_events(
                 identity,
                 cost,
@@ -1315,8 +1405,38 @@ def create_router(
                 json_resp.headers[_HEADER_BUDGET_WARNING] = budget_warn
             return json_resp
 
+        except RuleRejectError as exc:
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="rejected",
+                    status_code=400,
+                    latency_ms=(time.monotonic() - start) * 1000,
+                    error_message=exc.message,
+                    request=request,
+                )
+            )
+            return ollama_error_response(400, exc.message)
         except RouterError as exc:
             logger.error("Routing failed: %s", exc)
+            _schedule_audit(
+                _build_audit_event(
+                    config=config,
+                    request_id=request_id,
+                    identity=identity,
+                    model=request.model,
+                    provider=provider,
+                    outcome="error",
+                    status_code=502,
+                    latency_ms=(time.monotonic() - start) * 1000,
+                    error_message=str(exc),
+                    request=request,
+                )
+            )
             return ollama_error_response(502, str(exc))
 
     @api_router.get("/api/tags")

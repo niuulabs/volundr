@@ -119,12 +119,12 @@ class SQLiteAuditAdapter(AuditPort):
             return self._conn
         async with self._lock:
             if self._conn is None:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 self._conn = await loop.run_in_executor(None, _init_db, self._path)
         return self._conn
 
     async def _run(self, fn: Any, *args: Any) -> Any:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, partial(fn, *args))
 
     async def log(self, event: AuditEvent) -> None:
