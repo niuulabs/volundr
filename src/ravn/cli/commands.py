@@ -69,21 +69,31 @@ def _resolve_workspace(settings: Settings) -> Path:
 
 
 def _build_llm(settings: Settings) -> Any:
-    """Build the LLM adapter (with optional fallback chain)."""
-    from ravn.adapters.anthropic_adapter import AnthropicAdapter
+    """Build the LLM adapter (with optional fallback chain).
+
+    The primary adapter is loaded dynamically from ``llm.provider.adapter``
+    (defaults to ``AnthropicAdapter``).  Anthropic-specific defaults
+    (``api_key``, ``base_url``) are injected automatically when the default
+    adapter is used.
+    """
     from ravn.ports.llm import LLMPort
 
-    api_key = settings.effective_api_key()
+    prov = settings.llm.provider
+    cls = _import_class(prov.adapter)
+    kwargs = _inject_secrets(dict(prov.kwargs), prov.secret_kwargs_env)
 
-    primary: LLMPort = AnthropicAdapter(
-        api_key=api_key,
-        base_url=settings.anthropic.base_url,
-        model=settings.agent.model,
-        max_tokens=settings.agent.max_tokens,
-        max_retries=settings.llm_adapter.max_retries,
-        retry_base_delay=settings.llm_adapter.retry_base_delay,
-        timeout=settings.llm_adapter.timeout,
-    )
+    # For the default Anthropic adapter inject well-known top-level settings.
+    if prov.adapter == "ravn.adapters.anthropic_adapter.AnthropicAdapter":
+        kwargs.setdefault("api_key", settings.effective_api_key())
+        kwargs.setdefault("base_url", settings.anthropic.base_url)
+
+    kwargs.setdefault("model", settings.effective_model())
+    kwargs.setdefault("max_tokens", settings.effective_max_tokens())
+    kwargs.setdefault("max_retries", settings.llm.max_retries)
+    kwargs.setdefault("retry_base_delay", settings.llm.retry_base_delay)
+    kwargs.setdefault("timeout", settings.llm.timeout)
+
+    primary: LLMPort = cls(**kwargs)
 
     if not settings.llm.fallbacks:
         return primary
@@ -92,9 +102,9 @@ def _build_llm(settings: Settings) -> Any:
 
     providers: list[LLMPort] = [primary]
     for fb in settings.llm.fallbacks:
-        cls = _import_class(fb.adapter)
-        kwargs = _inject_secrets(fb.kwargs, fb.secret_kwargs_env)
-        providers.append(cls(**kwargs))
+        fb_cls = _import_class(fb.adapter)
+        fb_kwargs = _inject_secrets(dict(fb.kwargs), fb.secret_kwargs_env)
+        providers.append(fb_cls(**fb_kwargs))
 
     return FallbackLLMAdapter(providers=providers)
 
@@ -369,7 +379,7 @@ def _build_tools(
     state_tool = RavnStateTool(
         tool_names=[],  # populated after filtering
         permission_mode=settings.permission.mode,
-        model=settings.agent.model,
+        model=settings.effective_model(),
         persona=(
             persona_config.system_prompt_template[:40]
             if persona_config and persona_config.system_prompt_template
@@ -477,7 +487,7 @@ def _build_compressor(settings: Settings, llm: Any) -> Any:
     cm = settings.context_management
     return ContextCompressor(
         llm=llm,
-        model=settings.agent.model,
+        model=settings.effective_model(),
         max_tokens=cm.compression_max_tokens,
         protect_first=cm.protect_first_messages,
         protect_last=cm.effective_protect_last(),
@@ -600,8 +610,8 @@ def _build_agent(
         channel=channel,
         permission=permission,
         system_prompt=system_prompt,
-        model=settings.agent.model,
-        max_tokens=settings.agent.max_tokens,
+        model=settings.effective_model(),
+        max_tokens=settings.effective_max_tokens(),
         max_iterations=max_iterations,
         session=session,
         pre_tool_hooks=pre_hooks or None,
@@ -893,8 +903,8 @@ async def _run_gateway(
             channel=channel,
             permission=permission,
             system_prompt=system_prompt,
-            model=settings.agent.model,
-            max_tokens=settings.agent.max_tokens,
+            model=settings.effective_model(),
+            max_tokens=settings.effective_max_tokens(),
             max_iterations=max_iterations,
             session=session,
             pre_tool_hooks=pre_hooks or None,

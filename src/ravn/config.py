@@ -994,6 +994,42 @@ class Settings(BaseSettings):
         """Return the API key, preferring ANTHROPIC_API_KEY env var."""
         return os.environ.get("ANTHROPIC_API_KEY", "") or self.anthropic.api_key
 
+    def effective_model(self) -> str:
+        """Return the resolved model name.
+
+        Prefers ``llm.model``.  Falls back to ``agent.model`` when
+        ``llm.model`` is at its default but ``agent.model`` has been
+        explicitly set (backward-compat with pre-consolidation configs).
+        """
+        _default = "claude-sonnet-4-6"
+        if self.llm.model != _default:
+            return self.llm.model
+        if self.agent.model != _default:
+            import logging as _log
+
+            _log.getLogger(__name__).warning(
+                "agent.model is deprecated — use llm.model instead",
+            )
+            return self.agent.model
+        return _default
+
+    def effective_max_tokens(self) -> int:
+        """Return the resolved max_tokens.
+
+        Same backward-compat logic as :meth:`effective_model`.
+        """
+        _default = 8192
+        if self.llm.max_tokens != _default:
+            return self.llm.max_tokens
+        if self.agent.max_tokens != _default:
+            import logging as _log
+
+            _log.getLogger(__name__).warning(
+                "agent.max_tokens is deprecated — use llm.max_tokens instead",
+            )
+            return self.agent.max_tokens
+        return _default
+
 
 # ---------------------------------------------------------------------------
 # Project-level config overlay (RAVN.md)
