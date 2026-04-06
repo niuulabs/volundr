@@ -23,6 +23,7 @@ from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
 from bifrost.config import BifrostConfig, CacheMode
 from bifrost.inbound.routes import create_router
+from bifrost.ports.audit import AuditPort
 from bifrost.ports.cache import CachePort
 from bifrost.ports.events import CostEventEmitter
 from bifrost.ports.key_vault import KeyVaultPort
@@ -45,6 +46,41 @@ def _build_rule_engine(config: BifrostConfig) -> RuleEnginePort | None:
     from bifrost.adapters.rules.yaml_engine import YamlRuleEngine
 
     return YamlRuleEngine(rules=config.rules, config=config)
+
+
+# ---------------------------------------------------------------------------
+# Audit adapter factory
+# ---------------------------------------------------------------------------
+
+
+def _build_audit_adapter(config: BifrostConfig) -> AuditPort:
+    """Instantiate the configured audit adapter."""
+    match config.audit.adapter:
+        case "sqlite":
+            from bifrost.adapters.audit.sqlite import SQLiteAuditAdapter
+
+            return SQLiteAuditAdapter(path=config.audit.path)
+        case "postgres":
+            from bifrost.adapters.audit.postgres import PostgresAuditAdapter
+
+            dsn = config.audit.effective_dsn()
+            if not dsn:
+                raise ValueError(
+                    "PostgreSQL audit adapter requires a DSN. "
+                    "Set audit.dsn in config or the BIFROST_AUDIT_DSN environment variable."
+                )
+            return PostgresAuditAdapter(dsn=dsn)
+        case "otel":
+            from bifrost.adapters.audit.otel import OtelAuditAdapter
+
+            return OtelAuditAdapter(
+                endpoint=config.audit.otel.endpoint,
+                service_name=config.audit.otel.service_name,
+            )
+        case _:
+            from bifrost.adapters.audit.null import NullAuditAdapter
+
+            return NullAuditAdapter()
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +222,7 @@ def create_app(config: BifrostConfig) -> FastAPI:
     pricing_overrides = _pricing_overrides(config)
     auth_adapter = build_auth_adapter(config.auth_mode, config.effective_pat_secret())
     event_emitter = _build_event_emitter(config)
+    audit_adapter = _build_audit_adapter(config)
 
     # ── SIGHUP handler — reload keys without restarting ──────────────────────
     def _handle_sighup(signum: int, frame: object) -> None:  # noqa: ARG001
@@ -206,6 +243,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
             await store.close()
         await event_emitter.close()
         await cache.close()
+        if hasattr(audit_adapter, "shutdown"):
+            audit_adapter.shutdown()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
