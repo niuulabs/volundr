@@ -632,4 +632,63 @@ data:
     DROP INDEX IF EXISTS idx_sleipnir_events_correlation;
     DROP INDEX IF EXISTS idx_sleipnir_events_type_ts;
     DROP TABLE IF EXISTS sleipnir_events;
+
+  000026_ravn_episodes.up.sql: |
+    -- Ravn episodic memory tables.
+    -- ravn_episodes: stores one row per recorded agent episode.
+    -- ravn_sessions: stores session lifecycle metadata (populated by future work).
+
+    -- Attempt to enable pgvector for embedding similarity support.
+    -- Silently ignored when the extension is not installed.
+    DO $$
+    BEGIN
+        CREATE EXTENSION IF NOT EXISTS vector;
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'pgvector not available — embedding similarity disabled';
+    END;
+    $$;
+
+    CREATE TABLE IF NOT EXISTS ravn_episodes (
+        episode_id       TEXT PRIMARY KEY,
+        session_id       TEXT NOT NULL,
+        agent_id         TEXT NOT NULL DEFAULT '',
+        timestamp        TIMESTAMP WITH TIME ZONE NOT NULL,
+        summary          TEXT NOT NULL,
+        task_description TEXT NOT NULL,
+        tools_used       TEXT[] NOT NULL DEFAULT '{}',
+        outcome          TEXT NOT NULL,
+        tags             TEXT[] NOT NULL DEFAULT '{}',
+        embedding        TEXT,
+        search_vector    tsvector GENERATED ALWAYS AS (
+            to_tsvector('english',
+                summary || ' ' || task_description || ' ' || array_to_string(tags, ' ')
+            )
+        ) STORED
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ravn_episodes_session_id
+        ON ravn_episodes (session_id);
+
+    CREATE INDEX IF NOT EXISTS idx_ravn_episodes_timestamp
+        ON ravn_episodes (timestamp DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_ravn_episodes_fts
+        ON ravn_episodes USING GIN (search_vector);
+
+    CREATE TABLE IF NOT EXISTS ravn_sessions (
+        session_id    TEXT PRIMARY KEY,
+        agent_id      TEXT NOT NULL DEFAULT '',
+        started_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        ended_at      TIMESTAMP WITH TIME ZONE,
+        message_count INTEGER NOT NULL DEFAULT 0,
+        token_usage   INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ravn_sessions_agent_id
+        ON ravn_sessions (agent_id);
+
+  000026_ravn_episodes.down.sql: |
+    -- Rollback ravn episodic memory tables.
+    DROP TABLE IF EXISTS ravn_sessions;
+    DROP TABLE IF EXISTS ravn_episodes;
 {{- end }}
