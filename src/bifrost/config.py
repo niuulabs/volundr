@@ -346,13 +346,39 @@ class AuditDetailLevel(StrEnum):
     """Standard + prompt content and response content."""
 
 
+class OtelAuditConfig(BaseModel):
+    """OpenTelemetry exporter settings for the OTel audit adapter."""
+
+    endpoint: str = Field(
+        default="http://localhost:4317",
+        description="OTLP gRPC endpoint (e.g. http://otel-collector:4317).",
+    )
+    service_name: str = Field(
+        default="bifrost",
+        description="Service name embedded in the OTel Resource.",
+    )
+
+
+class AuditAdapter(StrEnum):
+    """Supported audit logging backends."""
+
+    NULL = "null"
+    """No-op — discard all audit events (default)."""
+    POSTGRES = "postgres"
+    """Write audit events to PostgreSQL."""
+    SQLITE = "sqlite"
+    """Write audit events to a local SQLite database."""
+    OTEL = "otel"
+    """Emit audit events as OpenTelemetry spans."""
+
+
 class AuditConfig(BaseModel):
     """Configuration for the request audit log."""
 
-    adapter: str = Field(
-        default="null",
+    adapter: AuditAdapter = Field(
+        default=AuditAdapter.NULL,
         description=(
-            "Storage backend. Accepted values: 'null' (default, no-op), "
+            "Audit backend. Accepted values: 'null' (default, no-op), "
             "'postgres', 'sqlite', 'otel'."
         ),
     )
@@ -367,7 +393,10 @@ class AuditConfig(BaseModel):
     )
     dsn: str = Field(
         default="",
-        description="PostgreSQL DSN for the postgres adapter.",
+        description=(
+            "PostgreSQL DSN for the postgres audit backend. "
+            "Falls back to the BIFROST_AUDIT_DSN environment variable when blank."
+        ),
     )
     dsn_env: str = Field(
         default="BIFROST_AUDIT_DSN",
@@ -375,11 +404,11 @@ class AuditConfig(BaseModel):
     )
     path: str = Field(
         default="./bifrost_audit.db",
-        description="File path for the SQLite adapter.",
+        description="File path for the SQLite audit backend (ignored for other adapters).",
     )
-    otel_endpoint: str = Field(
-        default="",
-        description="OTLP gRPC endpoint for the otel adapter (e.g. http://localhost:4317).",
+    otel: OtelAuditConfig = Field(
+        default_factory=OtelAuditConfig,
+        description="OpenTelemetry exporter settings (used when adapter='otel').",
     )
     retention_days: int = Field(
         default=90,

@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+import bifrost.metrics as _metrics
 from bifrost.auth import AgentIdentity
 from bifrost.config import AgentPermissions, AuditDetailLevel, BifrostConfig
 from bifrost.domain.models import RequestLog, TokenUsage
@@ -233,6 +234,7 @@ async def _check_quotas(
         limit = tenant_quota.max_tokens_per_day
         fraction = used / limit
         if fraction >= 1.0:
+            _metrics.record_quota_rejection(agent_id=identity.agent_id)
             raise HTTPException(
                 status_code=429,
                 detail=f"Tenant daily token quota exceeded ({used}/{limit}).",
@@ -246,6 +248,7 @@ async def _check_quotas(
         limit_cost = tenant_quota.max_cost_per_day
         fraction = used_cost / limit_cost
         if fraction >= 1.0:
+            _metrics.record_quota_rejection(agent_id=identity.agent_id)
             raise HTTPException(
                 status_code=429,
                 detail=f"Tenant daily cost quota exceeded (${used_cost:.4f}/${limit_cost:.4f}).",
@@ -261,6 +264,7 @@ async def _check_quotas(
         limit_req = tenant_quota.max_requests_per_hour
         fraction = used_req / limit_req
         if fraction >= 1.0:
+            _metrics.record_quota_rejection(agent_id=identity.agent_id)
             raise HTTPException(
                 status_code=429,
                 detail=f"Tenant hourly request quota exceeded ({used_req}/{limit_req}).",
@@ -276,6 +280,7 @@ async def _check_quotas(
         limit_cost = agent_quota.max_cost_per_day
         fraction = agent_cost_today / limit_cost
         if fraction >= 1.0:
+            _metrics.record_quota_rejection(agent_id=identity.agent_id)
             raise HTTPException(
                 status_code=429,
                 detail=(
@@ -740,10 +745,12 @@ def create_router(
                         request=request,
                     )
                 )
+                _metrics.record_cache_hit(provider=provider, model=request.model)
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
 
+            _metrics.record_cache_miss(provider=provider, model=request.model)
             response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             data = response.model_dump()
@@ -766,6 +773,17 @@ def create_router(
             )
 
             cost = calculate_cost(request.model, usage, pricing_overrides)
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="200",
+                duration_seconds=latency_ms / 1000.0,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_tokens=usage.cache_read_input_tokens,
+                cache_write_tokens=usage.cache_creation_input_tokens,
+                cost_usd=cost,
+            )
             await store.record(
                 UsageRecord(
                     request_id=request_id,
@@ -834,8 +852,20 @@ def create_router(
                     request=request,
                 )
             )
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="400",
+                duration_seconds=(time.monotonic() - start),
+            )
             raise HTTPException(status_code=400, detail=exc.message) from exc
         except RouterError as exc:
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="502",
+                duration_seconds=(time.monotonic() - start),
+            )
             logger.error("Routing failed: %s", exc)
             _schedule_audit(
                 _build_audit_event(
@@ -1087,10 +1117,12 @@ def create_router(
                         request=request,
                     )
                 )
+                _metrics.record_cache_hit(provider=provider, model=request.model)
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
 
+            _metrics.record_cache_miss(provider=provider, model=request.model)
             response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
@@ -1111,6 +1143,17 @@ def create_router(
             )
 
             cost = calculate_cost(request.model, usage, pricing_overrides)
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="200",
+                duration_seconds=latency_ms / 1000.0,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_tokens=0,
+                cache_write_tokens=0,
+                cost_usd=cost,
+            )
             await store.record(
                 UsageRecord(
                     request_id=request_id,
@@ -1179,8 +1222,20 @@ def create_router(
                     request=request,
                 )
             )
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="400",
+                duration_seconds=(time.monotonic() - start),
+            )
             return openai_error_response(400, exc.message, "invalid_request_error")
         except RouterError as exc:
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="502",
+                duration_seconds=(time.monotonic() - start),
+            )
             logger.error("Routing failed: %s", exc)
             _schedule_audit(
                 _build_audit_event(
@@ -1322,10 +1377,12 @@ def create_router(
                         request=request,
                     )
                 )
+                _metrics.record_cache_hit(provider=provider, model=request.model)
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
 
+            _metrics.record_cache_miss(provider=provider, model=request.model)
             response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
@@ -1346,6 +1403,17 @@ def create_router(
             )
 
             cost = calculate_cost(request.model, usage, pricing_overrides)
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="200",
+                duration_seconds=latency_ms / 1000.0,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_tokens=0,
+                cache_write_tokens=0,
+                cost_usd=cost,
+            )
             await store.record(
                 UsageRecord(
                     request_id=request_id,
@@ -1422,6 +1490,12 @@ def create_router(
             )
             return ollama_error_response(400, exc.message)
         except RouterError as exc:
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="502",
+                duration_seconds=(time.monotonic() - start),
+            )
             logger.error("Routing failed: %s", exc)
             _schedule_audit(
                 _build_audit_event(

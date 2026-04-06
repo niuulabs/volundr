@@ -748,9 +748,12 @@ class TestOtelAuditAdapter:
         # Patch the otel module to use our mocked version
         with patch("bifrost.adapters.audit.otel.OtelAuditAdapter") as mock_cls:
             mock_cls.return_value = NullAuditAdapter()
-            cfg = BifrostConfig(audit=AuditConfig(adapter="otel", otel_endpoint=""))
+            cfg = BifrostConfig(audit=AuditConfig(adapter="otel"))
             _build_audit(cfg)
-            mock_cls.assert_called_once_with(otel_endpoint="")
+            mock_cls.assert_called_once_with(
+                otel_endpoint=cfg.audit.otel.endpoint,
+                service_name=cfg.audit.otel.service_name,
+            )
 
 
 class TestOtelAuditAdapterImportError:

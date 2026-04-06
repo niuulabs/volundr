@@ -21,7 +21,8 @@ from fastapi import FastAPI, Request, Response
 
 from bifrost.adapters.auth import build_auth_adapter
 from bifrost.adapters.key_vault import EnvKeyVault
-from bifrost.config import BifrostConfig, CacheMode
+from bifrost.config import AuditAdapter, BifrostConfig, CacheMode
+from bifrost.inbound.observability import create_observability_router
 from bifrost.inbound.routes import create_router
 from bifrost.ports.audit import AuditPort
 from bifrost.ports.cache import CachePort
@@ -46,6 +47,11 @@ def _build_rule_engine(config: BifrostConfig) -> RuleEnginePort | None:
     from bifrost.adapters.rules.yaml_engine import YamlRuleEngine
 
     return YamlRuleEngine(rules=config.rules, config=config)
+
+
+# ---------------------------------------------------------------------------
+# Audit adapter factory
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +130,7 @@ def _build_key_vault(config: BifrostConfig) -> KeyVaultPort:
 def _build_audit(config: BifrostConfig) -> AuditPort:
     """Instantiate the configured audit adapter."""
     match config.audit.adapter:
-        case "postgres":
+        case AuditAdapter.POSTGRES:
             from bifrost.adapters.audit.postgres import PostgresAuditAdapter
 
             dsn = config.audit.effective_dsn()
@@ -134,14 +140,17 @@ def _build_audit(config: BifrostConfig) -> AuditPort:
                     "Set audit.dsn in config or the BIFROST_AUDIT_DSN environment variable."
                 )
             return PostgresAuditAdapter(dsn=dsn)
-        case "sqlite":
+        case AuditAdapter.SQLITE:
             from bifrost.adapters.audit.sqlite import SQLiteAuditAdapter
 
             return SQLiteAuditAdapter(path=config.audit.path)
-        case "otel":
+        case AuditAdapter.OTEL:
             from bifrost.adapters.audit.otel import OtelAuditAdapter
 
-            return OtelAuditAdapter(otel_endpoint=config.audit.otel_endpoint)
+            return OtelAuditAdapter(
+                otel_endpoint=config.audit.otel.endpoint,
+                service_name=config.audit.otel.service_name,
+            )
         case _:
             from bifrost.adapters.audit.null import NullAuditAdapter
 
@@ -232,6 +241,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
         # SIGHUP is not available on Windows or in some restricted environments.
         logger.debug("SIGHUP not available on this platform; key rotation via signal disabled")
 
+    obs_router = create_observability_router(config=config, router=router, store=store)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
@@ -241,6 +252,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
         await event_emitter.close()
         await cache.close()
         await audit.close()
+        if hasattr(obs_router, "http_client"):
+            await obs_router.http_client.aclose()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -268,5 +281,9 @@ def create_app(config: BifrostConfig) -> FastAPI:
         audit=audit,
     )
     app.include_router(api_router)
+    app.include_router(obs_router)
+
+    # Expose the audit adapter on app.state so route handlers can log events.
+    app.state.audit = audit
 
     return app
