@@ -485,6 +485,79 @@ class PermissionConfig(BaseModel):
     )
 
 
+class MCPAuthConfig(BaseModel):
+    """Authentication configuration for a single MCP server.
+
+    auth_type determines which flow is used when ``mcp_auth`` is called.
+    All sensitive values (secrets, API keys) must be referenced via env-var
+    names rather than inlined — Bifrost or the RAVN.md secrets block injects
+    the actual values at runtime.
+    """
+
+    auth_type: str | None = Field(
+        default=None,
+        description=(
+            "Auth flow: 'api_key', 'device_flow', or 'client_credentials'. "
+            "None means no auth required."
+        ),
+    )
+    # OAuth 2.0 (device_flow + client_credentials)
+    token_url: str = Field(default="", description="OAuth token endpoint URL.")
+    client_id: str = Field(default="", description="OAuth client ID.")
+    client_secret_env: str = Field(
+        default="",
+        description="Environment variable name holding the OAuth client secret.",
+    )
+    scope: str = Field(default="", description="Space-separated OAuth scopes.")
+    audience: str = Field(default="", description="OAuth audience claim (optional).")
+    # API key
+    api_key_env: str = Field(
+        default="",
+        description="Environment variable name holding the API key value.",
+    )
+    api_key_header: str = Field(
+        default="Authorization",
+        description="HTTP header used to send the API key.",
+    )
+    api_key_prefix: str = Field(
+        default="Bearer",
+        description="Value prefix, e.g. 'Bearer' or 'ApiKey'.",
+    )
+
+
+class MCPTokenStoreConfig(BaseModel):
+    """Configuration for the MCP token persistence backend.
+
+    'local' (Pi mode): tokens stored in an encrypted JSON file.
+    'openbao' (infra mode): tokens stored in an OpenBao KV v2 secret.
+    """
+
+    backend: Literal["local", "openbao"] = Field(
+        default="local",
+        description="Token store backend: 'local' (encrypted file) or 'openbao'.",
+    )
+    local_path: str = Field(
+        default="~/.ravn/mcp_tokens.json",
+        description="Path for the local encrypted token file.",
+    )
+    openbao_url: str = Field(
+        default="http://openbao:8200",
+        description="OpenBao base URL.",
+    )
+    openbao_token_env: str = Field(
+        default="OPENBAO_TOKEN",
+        description="Environment variable name holding the OpenBao token.",
+    )
+    openbao_mount: str = Field(
+        default="secret",
+        description="OpenBao KV secrets engine mount path.",
+    )
+    openbao_path_prefix: str = Field(
+        default="ravn/mcp",
+        description="Sub-path prefix within the KV mount.",
+    )
+
+
 class MCPServerConfig(BaseModel):
     """Configuration for a single MCP server."""
 
@@ -515,6 +588,10 @@ class MCPServerConfig(BaseModel):
         description="Connection timeout in seconds (SSE transport).",
     )
     enabled: bool = Field(default=True)
+    auth: MCPAuthConfig = Field(
+        default_factory=MCPAuthConfig,
+        description="Authentication configuration for this server.",
+    )
 
 
 class HookConfig(BaseModel):
@@ -875,6 +952,7 @@ class Settings(BaseSettings):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
+    mcp_token_store: MCPTokenStoreConfig = Field(default_factory=MCPTokenStoreConfig)
     hooks: HooksConfig = Field(default_factory=HooksConfig)
     channels: list[ChannelConfig] = Field(default_factory=list)
 

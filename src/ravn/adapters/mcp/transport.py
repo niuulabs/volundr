@@ -43,6 +43,13 @@ class MCPTransport(abc.ABC):
     def is_alive(self) -> bool:
         """Return True if the transport connection is alive."""
 
+    def set_auth_headers(self, headers: dict[str, str]) -> None:
+        """Inject authentication headers into outgoing HTTP requests.
+
+        No-op for transports that do not use HTTP (e.g. stdio).  HTTP and SSE
+        transports override this to merge *headers* into every outgoing POST.
+        """
+
     # ------------------------------------------------------------------
     # Helpers shared by all transports
     # ------------------------------------------------------------------

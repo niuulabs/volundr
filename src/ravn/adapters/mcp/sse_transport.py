@@ -35,6 +35,10 @@ class HTTPTransport(MCPTransport):
         self._timeout = timeout
         self._client: Any = None
         self._started = False
+        self._auth_headers: dict[str, str] = {}
+
+    def set_auth_headers(self, headers: dict[str, str]) -> None:
+        self._auth_headers = dict(headers)
 
     async def start(self) -> None:
         try:
@@ -59,10 +63,11 @@ class HTTPTransport(MCPTransport):
         self._pending_message = None
 
         try:
+            headers = {"Content-Type": "application/json", **self._auth_headers}
             response = await self._client.post(
                 self._url,
                 json=message,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
             )
             response.raise_for_status()
             return response.json()  # type: ignore[return-value]
@@ -110,6 +115,10 @@ class SSETransport(MCPTransport):
         self._client: Any = None
         self._sse_task: asyncio.Task | None = None  # type: ignore[type-arg]
         self._started = False
+        self._auth_headers: dict[str, str] = {}
+
+    def set_auth_headers(self, headers: dict[str, str]) -> None:
+        self._auth_headers = dict(headers)
 
     async def start(self) -> None:
         try:
@@ -178,10 +187,11 @@ class SSETransport(MCPTransport):
         if not self._started or self._post_url is None:
             raise MCPTransportError("SSE transport not started")
         try:
+            headers = {"Content-Type": "application/json", **self._auth_headers}
             response = await self._client.post(
                 self._post_url,
                 json=message,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
                 timeout=self._timeout,
             )
             response.raise_for_status()
