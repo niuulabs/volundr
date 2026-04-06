@@ -199,6 +199,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
         # SIGHUP is not available on Windows or in some restricted environments.
         logger.debug("SIGHUP not available on this platform; key rotation via signal disabled")
 
+    obs_router = create_observability_router(config=config, router=router, store=store)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
@@ -207,6 +209,8 @@ def create_app(config: BifrostConfig) -> FastAPI:
             await store.close()
         await event_emitter.close()
         await cache.close()
+        if hasattr(obs_router, "http_client"):
+            await obs_router.http_client.aclose()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -233,8 +237,6 @@ def create_app(config: BifrostConfig) -> FastAPI:
         cache=cache,
     )
     app.include_router(api_router)
-
-    obs_router = create_observability_router(config=config, router=router, store=store)
     app.include_router(obs_router)
 
     return app

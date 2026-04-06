@@ -313,22 +313,18 @@ class TestReadyzEndpoint:
         config = BifrostConfig(
             providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])}
         )
-        app = create_app(config)
         _store_patch = "bifrost.adapters.memory_store.MemoryUsageStore.summarise"
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_http = AsyncMock()
+        mock_http.head = AsyncMock(return_value=mock_resp)
+        mock_http.aclose = AsyncMock()
         with (
-            patch("bifrost.inbound.observability.httpx.AsyncClient") as mock_client_cls,
+            patch("bifrost.inbound.observability.httpx.AsyncClient", return_value=mock_http),
             patch(_store_patch, new_callable=AsyncMock) as mock_summarise,
         ):
             mock_summarise.return_value = MagicMock()
-            # Simulate a reachable provider
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_http = AsyncMock()
-            mock_http.head = AsyncMock(return_value=mock_resp)
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_http
-
+            app = create_app(config)
             with TestClient(app) as client:
                 resp = client.get("/readyz")
         assert resp.status_code == 200
@@ -339,21 +335,18 @@ class TestReadyzEndpoint:
         config = BifrostConfig(
             providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])}
         )
-        app = create_app(config)
         _store_patch = "bifrost.adapters.memory_store.MemoryUsageStore.summarise"
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_http = AsyncMock()
+        mock_http.head = AsyncMock(return_value=mock_resp)
+        mock_http.aclose = AsyncMock()
         with (
-            patch("bifrost.inbound.observability.httpx.AsyncClient") as mock_client_cls,
+            patch("bifrost.inbound.observability.httpx.AsyncClient", return_value=mock_http),
             patch(_store_patch, new_callable=AsyncMock) as mock_summarise,
         ):
             mock_summarise.side_effect = RuntimeError("db down")
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_http = AsyncMock()
-            mock_http.head = AsyncMock(return_value=mock_resp)
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_http
-
+            app = create_app(config)
             with TestClient(app) as client:
                 resp = client.get("/readyz")
         assert resp.status_code == 503
@@ -364,19 +357,16 @@ class TestReadyzEndpoint:
         config = BifrostConfig(
             providers={"anthropic": ProviderConfig(models=["claude-sonnet-4-6"])}
         )
-        app = create_app(config)
         _store_patch = "bifrost.adapters.memory_store.MemoryUsageStore.summarise"
+        mock_http = AsyncMock()
+        mock_http.head = AsyncMock(side_effect=Exception("connection refused"))
+        mock_http.aclose = AsyncMock()
         with (
-            patch("bifrost.inbound.observability.httpx.AsyncClient") as mock_client_cls,
+            patch("bifrost.inbound.observability.httpx.AsyncClient", return_value=mock_http),
             patch(_store_patch, new_callable=AsyncMock) as mock_summarise,
         ):
             mock_summarise.return_value = MagicMock()
-            mock_http = AsyncMock()
-            mock_http.head = AsyncMock(side_effect=Exception("connection refused"))
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_http
-
+            app = create_app(config)
             with TestClient(app) as client:
                 resp = client.get("/readyz")
         assert resp.status_code == 503

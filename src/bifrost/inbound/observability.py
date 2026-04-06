@@ -14,7 +14,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from bifrost import metrics as _m
 from bifrost.config import BifrostConfig
@@ -42,6 +42,9 @@ def create_observability_router(
         A configured ``APIRouter``.
     """
     obs_router = APIRouter()
+    _http_client = httpx.AsyncClient(timeout=5.0)
+    # Expose the client so the app lifespan can close it on shutdown.
+    obs_router.http_client = _http_client  # type: ignore[attr-defined]
 
     @obs_router.get("/healthz", response_class=PlainTextResponse)
     async def healthz() -> str:
@@ -76,34 +79,29 @@ def create_observability_router(
         # We just need at least one provider base URL to accept a connection.
         # A HEAD request to the base URL is cheap and avoids consuming quota.
         provider_ok = False
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            for provider_name, provider_cfg in config.providers.items():
-                base_url = config.effective_base_url(provider_name)
-                if not base_url:
-                    continue
-                try:
-                    resp = await client.head(base_url)
-                    # Any HTTP response (even 4xx) means the host is reachable.
-                    if resp.status_code < 600:  # noqa: PLR2004
-                        provider_ok = True
-                        break
-                except Exception as exc:
-                    logger.debug(
-                        "readyz: provider %s (%s) unreachable: %s", provider_name, base_url, exc
-                    )
+        for provider_name, provider_cfg in config.providers.items():
+            base_url = config.effective_base_url(provider_name)
+            if not base_url:
+                continue
+            try:
+                resp = await _http_client.head(base_url)
+                # Any HTTP response (even 4xx) means the host is reachable.
+                if resp.status_code < 600:  # noqa: PLR2004
+                    provider_ok = True
+                    break
+            except Exception as exc:
+                logger.debug(
+                    "readyz: provider %s (%s) unreachable: %s", provider_name, base_url, exc
+                )
 
         if not provider_ok and config.providers:
             failures.append("providers: no provider base URL is reachable")
 
         if failures:
-            from fastapi.responses import JSONResponse
-
             return JSONResponse(
                 status_code=503,
                 content={"status": "not_ready", "failures": failures},
             )
-
-        from fastapi.responses import JSONResponse
 
         return JSONResponse(content={"status": "ready"})
 

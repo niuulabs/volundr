@@ -935,10 +935,12 @@ def create_router(
                 response_transform=anthropic_response_to_openai,
             )
             if hit_resp is not None:
+                _metrics.record_cache_hit(provider=provider, model=request.model)
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
 
+            _metrics.record_cache_miss(provider=provider, model=request.model)
             response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
@@ -959,6 +961,17 @@ def create_router(
             )
 
             cost = calculate_cost(request.model, usage, pricing_overrides)
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="200",
+                duration_seconds=latency_ms / 1000.0,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_tokens=0,
+                cache_write_tokens=0,
+                cost_usd=cost,
+            )
             await store.record(
                 UsageRecord(
                     request_id=request_id,
@@ -996,8 +1009,20 @@ def create_router(
             return json_resp
 
         except RuleRejectError as exc:
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="400",
+                duration_seconds=(time.monotonic() - start),
+            )
             return openai_error_response(400, exc.message, "invalid_request_error")
         except RouterError as exc:
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="502",
+                duration_seconds=(time.monotonic() - start),
+            )
             logger.error("Routing failed: %s", exc)
             return openai_error_response(502, str(exc), "server_error")
 
@@ -1111,10 +1136,12 @@ def create_router(
                 ),
             )
             if hit_resp is not None:
+                _metrics.record_cache_hit(provider=provider, model=request.model)
                 if warnings:
                     hit_resp.headers[_HEADER_QUOTA_WARNING] = "; ".join(warnings)
                 return hit_resp
 
+            _metrics.record_cache_miss(provider=provider, model=request.model)
             response = await router.complete(request, routing_ctx)
             latency_ms = (time.monotonic() - start) * 1000
             usage = TokenUsage(
@@ -1135,6 +1162,17 @@ def create_router(
             )
 
             cost = calculate_cost(request.model, usage, pricing_overrides)
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="200",
+                duration_seconds=latency_ms / 1000.0,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_tokens=0,
+                cache_write_tokens=0,
+                cost_usd=cost,
+            )
             await store.record(
                 UsageRecord(
                     request_id=request_id,
@@ -1178,6 +1216,12 @@ def create_router(
             return json_resp
 
         except RouterError as exc:
+            _metrics.record_request(
+                provider=provider,
+                model=request.model,
+                status="502",
+                duration_seconds=(time.monotonic() - start),
+            )
             logger.error("Routing failed: %s", exc)
             return ollama_error_response(502, str(exc))
 
