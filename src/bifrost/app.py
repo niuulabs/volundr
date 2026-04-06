@@ -54,32 +54,6 @@ def _build_rule_engine(config: BifrostConfig) -> RuleEnginePort | None:
 # ---------------------------------------------------------------------------
 
 
-def _build_audit_adapter(config: BifrostConfig) -> AuditPort:
-    """Instantiate the configured audit adapter."""
-    match config.audit.adapter:
-        case AuditAdapter.POSTGRES:
-            from bifrost.adapters.audit.postgres import PostgresAuditAdapter
-
-            dsn = config.audit.effective_dsn()
-            if not dsn:
-                raise ValueError(
-                    "PostgreSQL audit adapter requires a DSN. "
-                    "Set audit.dsn in config or the BIFROST_AUDIT_DSN environment variable."
-                )
-            return PostgresAuditAdapter(dsn=dsn)
-        case AuditAdapter.OTEL:
-            from bifrost.adapters.audit.otel import OtelAuditAdapter
-
-            return OtelAuditAdapter(
-                endpoint=config.audit.otel.endpoint,
-                service_name=config.audit.otel.service_name,
-            )
-        case _:
-            from bifrost.adapters.audit.null import NullAuditAdapter
-
-            return NullAuditAdapter()
-
-
 # ---------------------------------------------------------------------------
 # Usage store factory
 # ---------------------------------------------------------------------------
@@ -146,6 +120,41 @@ def _build_key_vault(config: BifrostConfig) -> KeyVaultPort:
 
         return SecretsFileKeyVault(path=config.key_vault.secrets_file)
     return EnvKeyVault(config)
+
+
+# ---------------------------------------------------------------------------
+# Audit adapter factory
+# ---------------------------------------------------------------------------
+
+
+def _build_audit(config: BifrostConfig) -> AuditPort:
+    """Instantiate the configured audit adapter."""
+    match config.audit.adapter:
+        case AuditAdapter.POSTGRES:
+            from bifrost.adapters.audit.postgres import PostgresAuditAdapter
+
+            dsn = config.audit.effective_dsn()
+            if not dsn:
+                raise ValueError(
+                    "PostgreSQL audit adapter requires a DSN. "
+                    "Set audit.dsn in config or the BIFROST_AUDIT_DSN environment variable."
+                )
+            return PostgresAuditAdapter(dsn=dsn)
+        case AuditAdapter.SQLITE:
+            from bifrost.adapters.audit.sqlite import SQLiteAuditAdapter
+
+            return SQLiteAuditAdapter(path=config.audit.path)
+        case AuditAdapter.OTEL:
+            from bifrost.adapters.audit.otel import OtelAuditAdapter
+
+            return OtelAuditAdapter(
+                otel_endpoint=config.audit.otel.endpoint,
+                service_name=config.audit.otel.service_name,
+            )
+        case _:
+            from bifrost.adapters.audit.null import NullAuditAdapter
+
+            return NullAuditAdapter()
 
 
 # ---------------------------------------------------------------------------
@@ -216,10 +225,10 @@ def create_app(config: BifrostConfig) -> FastAPI:
     router = ModelRouter(config, rule_engine=rule_engine, key_vault=key_vault)
     store = _build_usage_store(config)
     cache = _build_cache(config)
+    audit = _build_audit(config)
     pricing_overrides = _pricing_overrides(config)
     auth_adapter = build_auth_adapter(config.auth_mode, config.effective_pat_secret())
     event_emitter = _build_event_emitter(config)
-    audit_adapter = _build_audit_adapter(config)
 
     # ── SIGHUP handler — reload keys without restarting ──────────────────────
     def _handle_sighup(signum: int, frame: object) -> None:  # noqa: ARG001
@@ -242,10 +251,9 @@ def create_app(config: BifrostConfig) -> FastAPI:
             await store.close()
         await event_emitter.close()
         await cache.close()
+        await audit.close()
         if hasattr(obs_router, "http_client"):
             await obs_router.http_client.aclose()
-        if hasattr(audit_adapter, "close"):
-            await audit_adapter.close()
 
     app = FastAPI(
         title="Bifröst LLM Gateway",
@@ -270,11 +278,12 @@ def create_app(config: BifrostConfig) -> FastAPI:
         auth_adapter=auth_adapter,
         event_emitter=event_emitter,
         cache=cache,
+        audit=audit,
     )
     app.include_router(api_router)
     app.include_router(obs_router)
 
     # Expose the audit adapter on app.state so route handlers can log events.
-    app.state.audit = audit_adapter
+    app.state.audit = audit
 
     return app

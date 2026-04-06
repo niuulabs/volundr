@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 from collections import OrderedDict
 
+from bifrost.adapters.cache._stats import CacheStatsMixin
 from bifrost.ports.cache import CachePort
 from bifrost.translation.models import AnthropicResponse
 
@@ -19,23 +20,27 @@ from bifrost.translation.models import AnthropicResponse
 _Entry = tuple[AnthropicResponse, float]
 
 
-class MemoryCache(CachePort):
+class MemoryCache(CacheStatsMixin, CachePort):
     """Thread-safe (GIL) in-memory LRU cache backed by ``OrderedDict``."""
 
     def __init__(self, max_entries: int = 1000) -> None:
+        super().__init__()
         self._max_entries = max_entries
         self._store: OrderedDict[str, _Entry] = OrderedDict()
 
     async def get(self, key: str) -> AnthropicResponse | None:
         entry = self._store.get(key)
         if entry is None:
+            self._record_miss()
             return None
         response, expiry = entry
         if time.monotonic() > expiry:
             del self._store[key]
+            self._record_miss()
             return None
         # Move to end (most-recently-used position).
         self._store.move_to_end(key)
+        self._record_hit(response)
         return response
 
     async def set(self, key: str, response: AnthropicResponse, ttl: int) -> None:
@@ -46,3 +51,6 @@ class MemoryCache(CachePort):
         # Evict oldest entries when capacity is exceeded.
         while len(self._store) > self._max_entries:
             self._store.popitem(last=False)
+
+    def _cache_entries(self) -> int:
+        return len(self._store)

@@ -66,17 +66,20 @@ class TestPricingFileConfig:
 class TestUsageStoreConfigDsn:
     def test_effective_dsn_uses_dsn_field(self):
         from bifrost.config import UsageStoreConfig
+
         cfg = UsageStoreConfig(adapter="postgres", dsn="postgresql://explicit/db")
         assert cfg.effective_dsn() == "postgresql://explicit/db"
 
     def test_effective_dsn_falls_back_to_env(self, monkeypatch):
         from bifrost.config import UsageStoreConfig
+
         monkeypatch.setenv("BIFROST_USAGE_DSN", "postgresql://from-env/db")
         cfg = UsageStoreConfig(adapter="postgres", dsn="")
         assert cfg.effective_dsn() == "postgresql://from-env/db"
 
     def test_effective_dsn_empty_when_no_env(self, monkeypatch):
         from bifrost.config import UsageStoreConfig
+
         monkeypatch.delenv("BIFROST_USAGE_DSN", raising=False)
         cfg = UsageStoreConfig(adapter="postgres", dsn="")
         assert cfg.effective_dsn() == ""

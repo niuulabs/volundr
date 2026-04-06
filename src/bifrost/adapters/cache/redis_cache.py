@@ -11,16 +11,18 @@ from __future__ import annotations
 
 import logging
 
+from bifrost.adapters.cache._stats import CacheStatsMixin
 from bifrost.ports.cache import CachePort
 from bifrost.translation.models import AnthropicResponse
 
 logger = logging.getLogger(__name__)
 
 
-class RedisCache(CachePort):
+class RedisCache(CacheStatsMixin, CachePort):
     """Redis-backed cache using ``redis.asyncio``."""
 
     def __init__(self, redis_url: str = "redis://localhost:6379") -> None:
+        super().__init__()
         try:
             import redis.asyncio as aioredis
         except ImportError as exc:
@@ -35,10 +37,14 @@ class RedisCache(CachePort):
             data = await self._client.get(key)
         except Exception:
             logger.warning("Redis GET failed for key %s", key, exc_info=True)
+            self._record_miss()
             return None
         if data is None:
+            self._record_miss()
             return None
-        return AnthropicResponse.model_validate_json(data)
+        response = AnthropicResponse.model_validate_json(data)
+        self._record_hit(response)
+        return response
 
     async def set(self, key: str, response: AnthropicResponse, ttl: int) -> None:
         try:

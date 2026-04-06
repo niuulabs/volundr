@@ -1,129 +1,143 @@
-"""OpenTelemetry-backed AuditPort adapter.
+"""OpenTelemetry audit adapter.
 
-Emits each audit event as a completed OTel span so Bifröst integrates with
-any OTel-compatible observability backend (Jaeger, Grafana Tempo, etc.).
+Exports audit events as OTLP log records via the OpenTelemetry Logs SDK.
 
-The adapter is a thin wrapper around the OTel SDK:
-  - A ``TracerProvider`` is created with the configured exporter attached.
-  - ``log()`` creates a span per audit event, sets span attributes, and
-    closes the span immediately (start_time == end_time ≈ now).
-  - ``query()`` is a no-op that always returns an empty list — OTel spans
-    are write-only; queries go to the observability backend directly.
+Requires the optional ``otel`` extra::
 
-The exporter sends spans over gRPC (OTLP) to the configured endpoint.
+    pip install 'bifrost[otel]'
 
-Configuration (via ``OtelAuditConfig``):
-  - ``endpoint``: OTLP gRPC endpoint (e.g. ``http://otel-collector:4317``)
-  - ``service_name``: Service name set on the ``Resource`` (default: ``bifrost``)
+Each audit event is emitted as a single ``LogRecord`` with the event fields
+serialised as log record attributes.  The ``outcome`` field maps to the OTel
+severity level (``ERROR`` for 'error', ``WARN`` for 'rejected'/'quota_exceeded',
+``INFO`` otherwise).
+
+When ``otel_endpoint`` is set, records are exported to that OTLP gRPC endpoint.
+When the endpoint is empty, the ``ConsoleLogExporter`` is used (useful for
+local debugging).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
-from typing import Any
 
 from bifrost.ports.audit import AuditEvent, AuditPort
 
 logger = logging.getLogger(__name__)
 
-# Span name used for all audit events.
-_SPAN_NAME = "bifrost.audit"
+# OTel severity numbers per spec.
+_SEVERITY_INFO = 9
+_SEVERITY_WARN = 13
+_SEVERITY_ERROR = 17
 
 
-def _epoch_nanos(dt: datetime) -> int:
-    """Convert a datetime to nanoseconds since the UNIX epoch."""
-    return int(dt.timestamp() * 1_000_000_000)
-
-
-def _build_attributes(event: AuditEvent) -> dict[str, Any]:
-    """Build OTel span attributes from an AuditEvent."""
-    attrs: dict[str, Any] = {
-        "bifrost.agent_id": event.agent_id,
-        "bifrost.tenant_id": event.tenant_id,
-        "bifrost.model": event.model,
-        "bifrost.outcome": event.outcome,
-        "bifrost.status_code": event.status_code,
-        "bifrost.latency_ms": event.latency_ms,
-    }
-
-    if event.session_id:
-        attrs["bifrost.session_id"] = event.session_id
-    if event.saga_id:
-        attrs["bifrost.saga_id"] = event.saga_id
-    if event.provider:
-        attrs["bifrost.provider"] = event.provider
-    if event.rule_name:
-        attrs["bifrost.rule_matched"] = event.rule_name
-    if event.rule_action:
-        attrs["bifrost.rule_action"] = event.rule_action
-    if event.error_message:
-        attrs["bifrost.error_message"] = event.error_message
-
-    # Flatten tags as bifrost.tag.<key> attributes.
-    for tag_key, tag_value in event.tags.items():
-        attrs[f"bifrost.tag.{tag_key}"] = tag_value
-
-    return attrs
+def _severity(outcome: str) -> tuple[int, str]:
+    """Return (severity_number, severity_text) for *outcome*."""
+    match outcome:
+        case "error":
+            return (_SEVERITY_ERROR, "ERROR")
+        case "rejected" | "quota_exceeded":
+            return (_SEVERITY_WARN, "WARN")
+        case _:
+            return (_SEVERITY_INFO, "INFO")
 
 
 class OtelAuditAdapter(AuditPort):
-    """OTel span-emitting implementation of ``AuditPort``.
+    """OpenTelemetry Logs SDK audit adapter.
 
-    Each call to ``log()`` produces one completed span with all audit
-    attributes set.  The exporter flushes spans to the OTLP endpoint
-    asynchronously via the SDK's batch span processor.
-
-    ``query()`` is not supported (always returns ``[]``) — queries belong
-    to the observability backend (Jaeger, Tempo, etc.).
+    Args:
+        otel_endpoint: OTLP gRPC endpoint URL.  Empty string → ConsoleLogExporter.
+        service_name:  ``service.name`` resource attribute value.
     """
 
     def __init__(
         self,
-        endpoint: str = "http://localhost:4317",
+        otel_endpoint: str = "",
         service_name: str = "bifrost",
     ) -> None:
-        self._endpoint = endpoint
-        self._service_name = service_name
-        self._tracer = self._build_tracer()
+        try:
+            from opentelemetry._logs import set_logger_provider
+            from opentelemetry.sdk._logs import LoggerProvider
+            from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+            from opentelemetry.sdk.resources import Resource
+        except ImportError as exc:
+            raise ImportError(
+                "The opentelemetry-sdk package is required for OTel audit mode. "
+                "Install it with: pip install 'bifrost[otel]'"
+            ) from exc
 
-    def _build_tracer(self) -> Any:
-        """Construct a tracer backed by an OTLP gRPC exporter."""
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-        from opentelemetry.sdk.resources import Resource
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        resource = Resource.create({"service.name": service_name})
+        self._provider = LoggerProvider(resource=resource)
 
-        resource = Resource.create({"service.name": self._service_name})
-        provider = TracerProvider(resource=resource)
-        exporter = OTLPSpanExporter(endpoint=self._endpoint)
-        provider.add_span_processor(BatchSpanProcessor(exporter))
-        self._provider = provider
-        return provider.get_tracer(__name__)
+        if otel_endpoint:
+            try:
+                from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+                    OTLPLogExporter,
+                )
 
-    # ------------------------------------------------------------------
-    # Port implementation
-    # ------------------------------------------------------------------
+                exporter = OTLPLogExporter(endpoint=otel_endpoint)
+            except ImportError as exc:
+                raise ImportError(
+                    "The opentelemetry-exporter-otlp-proto-grpc package is required "
+                    "for OTel OTLP export. Install it with: pip install 'bifrost[otel]'"
+                ) from exc
+        else:
+            from opentelemetry.sdk._logs.export import ConsoleLogExporter
+
+            exporter = ConsoleLogExporter()
+
+        self._provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+        set_logger_provider(self._provider)
+        self._otel_logger = self._provider.get_logger("bifrost.audit")
 
     async def log(self, event: AuditEvent) -> None:
-        """Emit *event* as a completed OTel span.
-
-        The span start and end times are set to the event timestamp so
-        the span shows up at the correct point in the trace timeline.
-        Errors are caught and logged — audit failures must never propagate
-        to callers.
-        """
         try:
-            start_ns = _epoch_nanos(event.timestamp)
-            attributes = _build_attributes(event)
-            with self._tracer.start_as_current_span(
-                _SPAN_NAME,
-                start_time=start_ns,
+            from opentelemetry.sdk._logs import LogRecord
+            from opentelemetry.trace import INVALID_SPAN_CONTEXT
+
+            severity_number, severity_text = _severity(event.outcome)
+
+            attributes = {
+                "bifrost.request_id": event.request_id,
+                "bifrost.agent_id": event.agent_id,
+                "bifrost.tenant_id": event.tenant_id,
+                "bifrost.model": event.model,
+                "bifrost.provider": event.provider,
+                "bifrost.outcome": event.outcome,
+                "bifrost.status_code": event.status_code,
+                "bifrost.latency_ms": event.latency_ms,
+                "bifrost.tokens_input": event.tokens_input,
+                "bifrost.tokens_output": event.tokens_output,
+                "bifrost.cost_usd": event.cost_usd,
+                "bifrost.cache_hit": event.cache_hit,
+                "bifrost.session_id": event.session_id,
+                "bifrost.saga_id": event.saga_id,
+                "bifrost.rule_name": event.rule_name,
+                "bifrost.rule_action": event.rule_action,
+                "bifrost.error_message": event.error_message,
+            }
+            if event.tags:
+                attributes["bifrost.tags"] = json.dumps(event.tags)
+            if event.prompt_content:
+                attributes["bifrost.prompt_content"] = event.prompt_content
+            if event.response_content:
+                attributes["bifrost.response_content"] = event.response_content
+
+            record = LogRecord(
+                timestamp=int(event.timestamp.timestamp() * 1e9),
+                observed_timestamp=int(event.timestamp.timestamp() * 1e9),
+                span_context=INVALID_SPAN_CONTEXT,
+                trace_flags=None,
+                severity_number=severity_number,
+                severity_text=severity_text,
+                body=f"audit: {event.outcome} model={event.model} agent={event.agent_id}",
+                resource=self._provider.resource,
                 attributes=attributes,
-            ):
-                pass  # span ends immediately; all data is in the attributes
+            )
+            self._otel_logger.emit(record)
         except Exception:
-            logger.exception("Failed to emit OTel audit span for %s", event.request_id)
+            logger.exception("OtelAuditAdapter.log failed for %s", event.request_id)
 
     async def query(
         self,
@@ -136,17 +150,12 @@ class OtelAuditAdapter(AuditPort):
         until: datetime | None = None,
         limit: int = 1000,
     ) -> list[AuditEvent]:
-        """Not supported — OTel spans are write-only.
-
-        Returns an empty list.  Use the observability backend (Jaeger,
-        Grafana Tempo, etc.) to query spans.
-        """
+        # OTel is write-only; querying is not supported.
+        logger.warning("OtelAuditAdapter.query is not supported; returning empty list")
         return []
 
     async def close(self) -> None:
-        """Flush pending spans and shut down the provider.
-
-        Safe to call multiple times (idempotent after the first call).
-        """
-        if hasattr(self, "_provider"):
+        try:
             self._provider.shutdown()
+        except Exception:
+            logger.warning("OtelAuditAdapter: error during shutdown", exc_info=True)

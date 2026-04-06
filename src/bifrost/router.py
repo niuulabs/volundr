@@ -137,7 +137,9 @@ class ModelRouter:
                 f"Configured providers: {list(self._config.providers)}"
             )
 
-        match self._config.routing_strategy:
+        strategy = self._config.routing_strategy_for_model(raw_model)
+
+        match strategy:
             case RoutingStrategy.DIRECT:
                 return [(providers[0], model)]
 
@@ -154,7 +156,7 @@ class ModelRouter:
                 return self._latency_optimised_candidates(providers, model)
 
             case _:
-                raise ValueError(f"Unknown routing strategy: {self._config.routing_strategy}")
+                raise ValueError(f"Unknown routing strategy: {strategy}")
 
     def _cost_optimised_candidates(self, providers: list[str], model: str) -> list[tuple[str, str]]:
         """Sort providers cheapest-first by their configured cost_per_token."""

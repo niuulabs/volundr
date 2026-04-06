@@ -1,6 +1,7 @@
-"""No-op AuditPort adapter — discards all audit events.
+"""No-op audit adapter.
 
-Used as the default adapter when no audit backend is configured.
+Used when ``audit.adapter`` is ``'null'`` (the default). All log calls are
+silently discarded and queries always return an empty list.
 """
 
 from __future__ import annotations
@@ -11,17 +12,10 @@ from bifrost.ports.audit import AuditEvent, AuditPort
 
 
 class NullAuditAdapter(AuditPort):
-    """Discards every audit event silently.
-
-    Suitable for development environments or deployments where audit
-    logging is handled by the observability stack rather than Bifröst.
-    """
+    """Discard all audit events. Used when audit logging is disabled."""
 
     async def log(self, event: AuditEvent) -> None:
-        """Discard *event* silently."""
-
-    async def close(self) -> None:
-        """No-op — nothing to shut down."""
+        pass
 
     async def query(
         self,
@@ -34,5 +28,4 @@ class NullAuditAdapter(AuditPort):
         until: datetime | None = None,
         limit: int = 1000,
     ) -> list[AuditEvent]:
-        """Always returns an empty list."""
         return []
