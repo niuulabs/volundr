@@ -365,25 +365,20 @@ def _build_tools(
         except Exception as exc:
             logger.warning("Failed to load custom tool %r: %s", ct.adapter, exc)
 
-    # -- Apply enabled/disabled filters --
-    tools = _filter_tools(tools, settings, persona_config)
-
-    # -- Introspection tools (built last, need final tool names) --
-    tool_names = [t.name for t in tools]
-    tools.append(
-        RavnStateTool(
-            tool_names=tool_names,
-            permission_mode=settings.permission.mode,
-            model=settings.agent.model,
-            persona=(
-                persona_config.system_prompt_template[:40]
-                if persona_config and persona_config.system_prompt_template
-                else ""
-            ),
-            iteration_budget=iteration_budget,
-            memory=memory,
-        )
+    # -- Introspection tools (added before filtering so they can be disabled) --
+    state_tool = RavnStateTool(
+        tool_names=[],  # populated after filtering
+        permission_mode=settings.permission.mode,
+        model=settings.agent.model,
+        persona=(
+            persona_config.system_prompt_template[:40]
+            if persona_config and persona_config.system_prompt_template
+            else ""
+        ),
+        iteration_budget=iteration_budget,
+        memory=memory,
     )
+    tools.append(state_tool)
     tools.append(
         RavnReflectTool(
             llm,
@@ -392,6 +387,12 @@ def _build_tools(
             max_tokens=settings.agent.outcome.reflection_max_tokens,
         )
     )
+
+    # -- Apply enabled/disabled filters --
+    tools = _filter_tools(tools, settings, persona_config)
+
+    # Update state tool with final tool names after filtering
+    state_tool._tool_names = [t.name for t in tools]
 
     return tools
 
@@ -607,6 +608,8 @@ def _build_agent(
         post_tool_hooks=post_hooks or None,
         user_input_fn=_cli_user_input,
         memory=memory,
+        episode_summary_max_chars=settings.agent.episode_summary_max_chars,
+        episode_task_max_chars=settings.agent.episode_task_max_chars,
         iteration_budget=iteration_budget,
         compressor=compressor,
         prompt_builder=prompt_builder,
@@ -898,6 +901,8 @@ async def _run_gateway(
             post_tool_hooks=post_hooks or None,
             user_input_fn=None,  # Gateway has no stdin
             memory=memory,
+            episode_summary_max_chars=settings.agent.episode_summary_max_chars,
+            episode_task_max_chars=settings.agent.episode_task_max_chars,
             iteration_budget=budget,
             compressor=compressor,
             prompt_builder=prompt_builder,

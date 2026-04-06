@@ -616,7 +616,10 @@ class RavnAgent:
             return result
 
         for hook in self._pre_tool_hooks:
-            await hook(tool_call)
+            try:
+                await hook(tool_call)
+            except Exception as exc:
+                logger.warning("Pre-tool hook failed for '%s': %s", tool_call.name, exc)
 
         try:
             result = await tool.execute(tool_call.input)
@@ -629,7 +632,10 @@ class RavnAgent:
             )
 
         for hook in self._post_tool_hooks:
-            await hook(tool_call, result)
+            try:
+                await hook(tool_call, result)
+            except Exception as exc:
+                logger.warning("Post-tool hook failed for '%s': %s", tool_call.name, exc)
 
         event_type = RavnEventType.TOOL_RESULT
         await self._channel.emit(
