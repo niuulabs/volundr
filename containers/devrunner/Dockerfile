@@ -39,6 +39,9 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Upgrade bundled npm to fix GHSA-qffp-2rhf-9h96 (tar) and GHSA-*-minimatch CVEs
+RUN npm install -g npm@11.3.0
+
 # Install Claude Code CLI globally via npm (same method as skuld pod)
 RUN npm install -g @anthropic-ai/claude-code@2.1.81
 
@@ -53,6 +56,9 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg ma
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-16 \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip to fix GHSA-4xh5-x5gv-qwph / GHSA-6vgw-5pg2-w6jp
+RUN pip install --no-cache-dir --upgrade pip==25.0.1
 
 # Common Python packages for web dev
 RUN pip install --no-cache-dir \

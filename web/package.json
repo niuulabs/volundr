@@ -181,7 +181,8 @@
     "zustand": "^5.0.12"
   },
   "overrides": {
-    "minimatch": ">=10.2.3"
+    "minimatch": ">=10.2.3",
+    "lodash": ">=4.17.23"
   },
   "devDependencies": {
     "@codingame/esbuild-import-meta-url-plugin": "^1.0.3",

@@ -1,3 +1,39 @@
+FROM ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c AS builder
+
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    python3.12 \
+    python3.12-venv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up Python virtual environment and upgrade pip immediately
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3.12 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Upgrade pip to latest to avoid GHSA-4xh5-x5gv-qwph / GHSA-6vgw-5pg2-w6jp,
+# then install build backend
+RUN pip install --no-cache-dir --upgrade pip==25.0.1 \
+    && pip install --no-cache-dir hatchling==1.29.0
+
+# Copy volundr package and install
+COPY pyproject.toml README.md /app/
+COPY src/ /app/src/
+RUN pip install --no-cache-dir /app
+
+# Remove pip from the venv so it is absent from the runtime image
+RUN pip uninstall -y pip
+
+# ---------------------------------------------------------------------------
+# Runtime — Node.js stays (needed for claude-code/codex CLI at runtime)
+# ---------------------------------------------------------------------------
 FROM ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c
 
 
@@ -10,7 +46,7 @@ LABEL org.opencontainers.image.source="https://github.com/niuulabs/volundr"
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -19,7 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     python3.12 \
     python3.12-venv \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 24 LTS (pinned keyring + apt source instead of curl|bash)
@@ -29,6 +64,9 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade bundled npm to fix GHSA-qffp-2rhf-9h96 (tar) and GHSA-*-minimatch CVEs
+RUN npm install -g npm@11.3.0
 
 # Install Claude Code CLI globally via npm
 RUN npm install -g @anthropic-ai/claude-code@2.1.81
@@ -41,18 +79,10 @@ RUN existing=$(getent passwd 1000 | cut -d: -f1) && \
     [ -n "$existing" ] && userdel -r "$existing" || true && \
     useradd -m -s /bin/bash -u 1000 skuld
 
-# Set up Python virtual environment
+# Copy the pre-built venv from builder (no pip, no hatchling)
 ENV VIRTUAL_ENV=/opt/venv
-RUN python3.12 -m venv $VIRTUAL_ENV
+COPY --from=builder /opt/venv /opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Install build dependencies
-RUN pip install --no-cache-dir hatchling==1.29.0
-
-# Copy volundr package and install
-COPY pyproject.toml README.md /app/
-COPY src/ /app/src/
-RUN pip install --no-cache-dir /app
 
 # Copy entrypoint
 COPY containers/skuld/entrypoint.sh /app/entrypoint.sh

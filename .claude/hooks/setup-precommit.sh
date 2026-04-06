@@ -19,18 +19,19 @@ if ! python -c "import pre_commit" &> /dev/null; then
     pip install pre-commit==4.5.1 --quiet
 fi
 
-# ruff (Python linter + formatter)
+# ruff (Python linter + formatter) — version pinned for reproducibility
 if ! command -v ruff &> /dev/null; then
     echo "Installing ruff..."
-    pip install ruff --quiet
+    pip install ruff==0.11.2 --quiet
 fi
 
-# trufflehog (secret scanner)
+# trufflehog (secret scanner) — pinned to specific release, not main branch
 if ! command -v trufflehog &> /dev/null; then
     echo "Installing trufflehog..."
+    TRUFFLEHOG_VERSION="v3.88.1"
     TRUFFLEHOG_BIN="${GOPATH:-$HOME/go}/bin"
-    curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
-        | sh -s -- -b "$TRUFFLEHOG_BIN"
+    curl -sSfL "https://raw.githubusercontent.com/trufflesecurity/trufflehog/${TRUFFLEHOG_VERSION}/scripts/install.sh" \
+        | sh -s -- -b "$TRUFFLEHOG_BIN" "${TRUFFLEHOG_VERSION}"
 fi
 
 # web dependencies (prettier, eslint)
