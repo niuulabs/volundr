@@ -111,9 +111,10 @@ packages = ["src/cli", "src/niuu", "src/volundr", "src/tyr", "src/skuld", "src/s
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-v --tb=short -m 'not integration'"
+addopts = "-v --tb=short -m 'not integration and not broker'"
 markers = [
     "integration: tests that require a real PostgreSQL database",
+    "broker: tests that require real message broker services (NATS, RabbitMQ, Redis)",
     "ravn: tests for the Ravn agent module",
     "e2e: end-to-end tests for full agent conversation flows",
 ]
