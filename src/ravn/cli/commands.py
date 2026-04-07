@@ -1454,6 +1454,7 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
                         priority=tc.priority,
                         amqp_url=tc.amqp_url,
                         exchange=tc.exchange,
+                        retry_delay_seconds=tc.retry_delay_seconds,
                     )
                 )
 

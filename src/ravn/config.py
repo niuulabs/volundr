@@ -981,6 +981,10 @@ class TriggerConfig(BaseModel):
     # sleipnir_event transport
     amqp_url: str = Field(default="amqp://guest:guest@localhost/")
     exchange: str = Field(default="sleipnir")
+    retry_delay_seconds: float = Field(
+        default=5.0,
+        description="Seconds to wait before reconnecting on error (sleipnir_event type).",
+    )
     # condition_poll fields
     sensor_prompt: str = Field(
         default="",
@@ -1026,6 +1030,10 @@ class InitiativeConfig(BaseModel):
     default_persona: str = Field(
         default="",
         description="Default persona for initiative tasks.",
+    )
+    heartbeat_interval_seconds: int = Field(
+        default=60,
+        description="Seconds between drive-loop heartbeat log entries.",
     )
     triggers: list[TriggerConfig] = Field(
         default_factory=list,

@@ -19,6 +19,7 @@ import json
 import logging
 import re
 import time
+from typing import IO
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -83,7 +84,7 @@ def _cron_matches(expr: str, dt: datetime) -> bool:
         and _field_matches(dt.hour, hour)
         and _field_matches(dt.day, dom)
         and _field_matches(dt.month, month)
-        and _field_matches(dt.weekday(), dow)  # 0=Monday in Python
+        and _field_matches((dt.weekday() + 1) % 7, dow)  # convert to cron: 0=Sun
     )
 
 
@@ -203,13 +204,13 @@ class CronTrigger:
     # Lock
     # ------------------------------------------------------------------
 
-    def _acquire_lock(self) -> int | None:
+    def _acquire_lock(self) -> IO[str] | None:
         """Try to acquire the cron lock.  Returns fd on success, None on failure."""
         try:
             self._lock_path.parent.mkdir(parents=True, exist_ok=True)
             fd = open(self._lock_path, "w")  # noqa: SIM115
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return fd  # type: ignore[return-value]
+            return fd
         except (OSError, BlockingIOError):
             return None
 

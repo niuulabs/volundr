@@ -341,12 +341,15 @@ def test_cron_matches_specific_time() -> None:
 
 
 def test_cron_matches_weekday() -> None:
-    # Monday = 0 in Python; "1-5" in cron = Mon-Fri
+    # Cron convention: 0=Sun, 1=Mon, ..., 6=Sat; "1-5" = Mon-Fri
     monday = datetime(2026, 4, 6, 8, 0, tzinfo=UTC)  # Monday
     saturday = datetime(2026, 4, 11, 8, 0, tzinfo=UTC)  # Saturday
+    sunday = datetime(2026, 4, 5, 8, 0, tzinfo=UTC)  # Sunday
 
-    assert _cron_matches("0 8 * * 0-4", monday)
-    assert not _cron_matches("0 8 * * 0-4", saturday)
+    assert _cron_matches("0 8 * * 1-5", monday)
+    assert not _cron_matches("0 8 * * 1-5", saturday)
+    assert not _cron_matches("0 8 * * 1-5", sunday)
+    assert _cron_matches("0 8 * * 0", sunday)  # Sunday = 0 in cron
 
 
 # ---------------------------------------------------------------------------

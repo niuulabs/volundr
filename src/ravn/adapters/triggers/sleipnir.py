@@ -33,6 +33,7 @@ class SleipnirEventTrigger:
         priority: int = 10,
         amqp_url: str = "amqp://guest:guest@localhost/",
         exchange: str = "sleipnir",
+        retry_delay_seconds: float = 5.0,
     ) -> None:
         self._name = name
         self._pattern = pattern
@@ -42,6 +43,7 @@ class SleipnirEventTrigger:
         self._priority = priority
         self._amqp_url = amqp_url
         self._exchange = exchange
+        self._retry_delay_seconds = retry_delay_seconds
         self._counter = 0
 
     @property
@@ -72,7 +74,6 @@ class SleipnirEventTrigger:
             logger.warning("aio_pika not installed — SleipnirEventTrigger %r disabled", self._name)
             return
 
-        retry_delay = 5.0
         while True:
             try:
                 await self._connect_and_consume(aio_pika, enqueue)
@@ -83,9 +84,9 @@ class SleipnirEventTrigger:
                     "SleipnirEventTrigger %r connection error: %s — retrying in %.0fs",
                     self._name,
                     exc,
-                    retry_delay,
+                    self._retry_delay_seconds,
                 )
-                await asyncio.sleep(retry_delay)
+                await asyncio.sleep(self._retry_delay_seconds)
 
     async def _connect_and_consume(
         self, aio_pika: object, enqueue: Callable[[AgentTask], Awaitable[None]]

@@ -27,6 +27,8 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 
+from ravn.domain.models import AgentTask
+
 logger = logging.getLogger(__name__)
 
 # Separator used when rendering sections to a plain string.
@@ -344,25 +346,23 @@ def _is_claude(model: str) -> bool:
     return any(lower.startswith(p) for p in _CLAUDE_MODEL_PREFIXES)
 
 
-def build_initiative_prompt(task: object) -> str:
+def build_initiative_prompt(task: AgentTask) -> str:
     """Build the synthetic user message for a drive-loop initiative task.
 
     The returned string is passed directly to ``agent.run_turn()`` in place
     of a human message.  The agent should default to silent output and only
     produce a response starting with ``[SURFACE]`` if something requires
     attention.
-
-    :param task: An :class:`ravn.domain.models.AgentTask` instance.
     """
     return (
-        f"[INITIATIVE TASK — triggered by: {task.triggered_by}]\n"  # type: ignore[attr-defined]
-        f"Title: {task.title}\n"  # type: ignore[attr-defined]
+        f"[INITIATIVE TASK — triggered by: {task.triggered_by}]\n"
+        f"Title: {task.title}\n"
         "\n"
         "You are running autonomously. No human sent this message.\n"
         "\n"
         "Context:\n"
         "<initiative_context>\n"
-        f"{task.initiative_context}\n"  # type: ignore[attr-defined]
+        f"{task.initiative_context}\n"
         "</initiative_context>\n"
         "\n"
         "Output instructions:\n"

@@ -29,15 +29,6 @@ from ravn.prompt_builder import build_initiative_prompt
 
 logger = logging.getLogger(__name__)
 
-# sentinel used to carry priority in heapq-compatible tuple
-_COUNTER = 0
-
-
-def _next_counter() -> int:
-    global _COUNTER
-    _COUNTER += 1
-    return _COUNTER
-
 
 class DriveLoop:
     """Perpetually-running initiative engine.
@@ -68,10 +59,15 @@ class DriveLoop:
         self._semaphore = asyncio.Semaphore(config.max_concurrent_tasks)
         self._journal_path = Path(config.queue_journal_path).expanduser()
         self._source_id = "drive_loop"
+        self._counter = 0
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def _next_counter(self) -> int:
+        self._counter += 1
+        return self._counter
 
     def register_trigger(self, trigger: TriggerPort) -> None:
         """Register a trigger source before calling ``run()``."""
@@ -95,7 +91,7 @@ class DriveLoop:
             )
             return
 
-        counter = _next_counter()
+        counter = self._next_counter()
         await self._queue.put((task.priority, counter, task))
         self._persist_queue()
 
@@ -220,9 +216,8 @@ class DriveLoop:
 
     async def _heartbeat(self) -> None:
         """Emit periodic heartbeat logs (low-overhead; Sleipnir publishing is optional)."""
-        interval = 60  # seconds
         while True:
-            await asyncio.sleep(interval)
+            await asyncio.sleep(self._config.heartbeat_interval_seconds)
             active = len(self._active_tasks)
             queued = self._queue.qsize()
             logger.debug(
@@ -299,7 +294,7 @@ class DriveLoop:
                         task.task_id,
                     )
                     continue
-                counter = _next_counter()
+                counter = self._next_counter()
                 self._queue.put_nowait((task.priority, counter, task))
                 restored += 1
             except Exception as exc:
