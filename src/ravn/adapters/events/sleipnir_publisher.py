@@ -5,22 +5,22 @@ Connects Ravn to the ODIN event backbone.
 
 import abc
 import logging
-import msgpack
-from datetime import datetime, timezone
 from typing import Any
+
+import msgpack
 
 try:
     import pynng
 except ImportError:
     pynng = None
 
-import logging
 
 logger = logging.getLogger(__name__)
 
+
 class EventPublisher(abc.ABC):
     """Abstract base class for event publishing."""
-    
+
     @abc.abstractmethod
     async def publish(self, event: Any) -> None:
         """Publish a RavnEvent."""
@@ -61,15 +61,18 @@ class SleipnirPublisher(EventPublisher):
             self.socket = pynng.Pub(listen=False)
             self.socket.dial(self.address)
             self._is_connected = True
-            logger.info(f"Connected to Sleipnir at {self.address}")
+            logger.info("Connected to Sleipnir at %s", self.address)
         except Exception as e:
-            self.fallback_logger.warning(f"Failed to connect to Sleipnir at {self.address}: {e}. Falling back to CLI.")
+            self.fallback_logger.warning(
+                "Failed to connect to Sleipnir at %s: %s. Falling back to CLI.",
+                self.address,
+                e,
+            )
             self._is_connected = False
 
     async def publish(self, event: Any) -> None:
-        """
-        Publishes a RavnEvent.
-        
+        """Publishes a RavnEvent.
+
         Args:
             event: A RavnEvent instance.
         """
@@ -89,14 +92,16 @@ class SleipnirPublisher(EventPublisher):
         packed_data = msgpack.packb(data, use_bin_type=True)
 
         if not self._is_connected or self.socket is None:
-            self.fallback_logger.info(f"[FALLBACK] {event.type.upper()}: {event.payload}")
+            self.fallback_logger.info("[FALLBACK] %s: %s", event.type.upper(), event.payload)
             return
 
         try:
             self.socket.send(packed_data)
         except Exception as e:
-            self.fallback_logger.warning(f"Failed to publish event to Sleipnir: {e}. Falling back to CLI.")
-            self.fallback_logger.info(f"[FALLBACK] {event.type.upper()}: {event.payload}")
+            self.fallback_logger.warning(
+                "Failed to publish event to Sleipnir: %s. Falling back to CLI.", e,
+            )
+            self.fallback_logger.info("[FALLBACK] %s: %s", event.type.upper(), event.payload)
             # Try to reconnect on next attempt if it was a connection issue
             self._is_connected = False
 

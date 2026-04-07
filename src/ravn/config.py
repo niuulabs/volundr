@@ -946,6 +946,26 @@ class GatewayConfig(BaseModel):
     platform: PlatformToolsConfig = Field(default_factory=PlatformToolsConfig)
 
 
+class SleipnirConfig(BaseModel):
+    """Sleipnir event-backbone publishing configuration (NIU-438).
+
+    When enabled, Ravn publishes every RavnEvent to a RabbitMQ topic exchange
+    so the rest of ODIN (Valkyrie attention model, Tyr, monitoring) can consume
+    agent output without being coupled to a specific session.
+
+    The AMQP URL is read from an environment variable (default:
+    SLEIPNIR_AMQP_URL) rather than stored directly in the config file to avoid
+    accidentally committing credentials.
+    """
+
+    enabled: bool = Field(default=False)
+    amqp_url_env: str = Field(default="SLEIPNIR_AMQP_URL")
+    exchange: str = Field(default="ravn.events")
+    agent_id: str = Field(default="")  # auto: socket.gethostname() when empty
+    reconnect_delay_s: float = Field(default=5.0)
+    publish_timeout_s: float = Field(default=2.0)
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -1003,6 +1023,9 @@ class Settings(BaseSettings):
 
     # NIU-516: Pi-mode gateway
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+
+    # NIU-438: Sleipnir event backbone
+    sleipnir: SleipnirConfig = Field(default_factory=SleipnirConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
