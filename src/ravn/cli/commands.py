@@ -1453,16 +1453,15 @@ async def _run_daemon(
             gw_tasks.append("http")
 
     # Drive loop (initiative tasks)
+    from ravn.adapters.events.noop_publisher import NoOpEventPublisher
+    from ravn.adapters.events.rabbitmq_publisher import RabbitMQEventPublisher
+    from ravn.ports.event_publisher import EventPublisherPort
+
+    event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
     if settings.initiative.enabled:
-        from ravn.adapters.events.noop_publisher import NoOpEventPublisher
-        from ravn.adapters.events.rabbitmq_publisher import RabbitMQEventPublisher
-        from ravn.ports.event_publisher import EventPublisherPort
-
         if settings.sleipnir.enabled:
-            event_publisher: EventPublisherPort = RabbitMQEventPublisher(settings.sleipnir)
-        else:
-            event_publisher = NoOpEventPublisher()
+            event_publisher = RabbitMQEventPublisher(settings.sleipnir)
 
         drive_loop = DriveLoop(
             agent_factory=_agent_factory,
@@ -1501,6 +1500,7 @@ async def _run_daemon(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        await event_publisher.close()
         await _shutdown_mcp(mcp_manager)
 
 
