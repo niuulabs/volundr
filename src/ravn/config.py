@@ -946,6 +946,93 @@ class GatewayConfig(BaseModel):
     platform: PlatformToolsConfig = Field(default_factory=PlatformToolsConfig)
 
 
+class TriggerConfig(BaseModel):
+    """Configuration for a single drive-loop trigger."""
+
+    type: Literal["cron", "sleipnir_event", "condition_poll"] = Field(
+        description="Trigger type.",
+    )
+    name: str = Field(description="Human-readable trigger name.")
+    # cron fields
+    schedule: str = Field(
+        default="",
+        description="Cron expression, natural language, or ISO timestamp (cron type).",
+    )
+    # sleipnir_event fields
+    pattern: str = Field(
+        default="",
+        description="RabbitMQ routing-key pattern to subscribe to (sleipnir_event type).",
+    )
+    context_template: str = Field(
+        default="",
+        description="Jinja2 template rendered with message payload (sleipnir_event type).",
+    )
+    # shared
+    output_mode: str = Field(
+        default="silent",
+        description="Output mode: 'silent', 'ambient', or 'surface'.",
+    )
+    context: str = Field(
+        default="",
+        description="Initiative context passed to the agent as the task prompt (cron type).",
+    )
+    persona: str = Field(default="")
+    priority: int = Field(default=10)
+    # sleipnir_event transport
+    amqp_url: str = Field(default="amqp://guest:guest@localhost/")
+    exchange: str = Field(default="sleipnir")
+    # condition_poll fields
+    sensor_prompt: str = Field(
+        default="",
+        description="Prompt given to the sensor agent (condition_poll type).",
+    )
+    task_context: str = Field(
+        default="",
+        description="Full task context when TRIGGER fires (condition_poll type).",
+    )
+    check_interval_seconds: float = Field(
+        default=300.0,
+        description="Seconds between sensor polls (condition_poll type).",
+    )
+    cooldown_minutes: float = Field(
+        default=60.0,
+        description="Minutes before the trigger can fire again (condition_poll type).",
+    )
+
+
+class InitiativeConfig(BaseModel):
+    """Drive-loop initiative engine configuration (NIU-539)."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable the drive loop / initiative engine.",
+    )
+    max_concurrent_tasks: int = Field(
+        default=3,
+        description="Maximum simultaneous initiative tasks.",
+    )
+    task_queue_max: int = Field(
+        default=50,
+        description="Maximum tasks in the priority queue.",
+    )
+    queue_journal_path: str = Field(
+        default="~/.ravn/daemon/queue.json",
+        description="Path to the queue persistence journal.",
+    )
+    default_output_mode: str = Field(
+        default="silent",
+        description="Default output mode when not specified by a trigger.",
+    )
+    default_persona: str = Field(
+        default="",
+        description="Default persona for initiative tasks.",
+    )
+    triggers: list[TriggerConfig] = Field(
+        default_factory=list,
+        description="Ordered list of trigger configurations.",
+    )
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -1003,6 +1090,9 @@ class Settings(BaseSettings):
 
     # NIU-516: Pi-mode gateway
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+
+    # NIU-539: drive loop / initiative engine
+    initiative: InitiativeConfig = Field(default_factory=InitiativeConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)

@@ -344,6 +344,34 @@ def _is_claude(model: str) -> bool:
     return any(lower.startswith(p) for p in _CLAUDE_MODEL_PREFIXES)
 
 
+def build_initiative_prompt(task: object) -> str:
+    """Build the synthetic user message for a drive-loop initiative task.
+
+    The returned string is passed directly to ``agent.run_turn()`` in place
+    of a human message.  The agent should default to silent output and only
+    produce a response starting with ``[SURFACE]`` if something requires
+    attention.
+
+    :param task: An :class:`ravn.domain.models.AgentTask` instance.
+    """
+    return (
+        f"[INITIATIVE TASK — triggered by: {task.triggered_by}]\n"  # type: ignore[attr-defined]
+        f"Title: {task.title}\n"  # type: ignore[attr-defined]
+        "\n"
+        "You are running autonomously. No human sent this message.\n"
+        "\n"
+        "Context:\n"
+        "<initiative_context>\n"
+        f"{task.initiative_context}\n"  # type: ignore[attr-defined]
+        "</initiative_context>\n"
+        "\n"
+        "Output instructions:\n"
+        "- Default to SILENT. Do not produce output unless something requires attention.\n"
+        "- If you find something worth surfacing, start your response with [SURFACE].\n"
+        "- Do not ask clarifying questions. You have full tool access. Act."
+    )
+
+
 def _format_tool_schemas(tools: list[dict]) -> str:
     """Render tool definitions to a readable text block."""
     if not tools:

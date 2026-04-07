@@ -13,7 +13,7 @@ from typing import Any
 import typer
 
 from ravn.agent import PostToolHook, PreToolHook, RavnAgent
-from ravn.config import OutcomeConfig, ProjectConfig, Settings
+from ravn.config import InitiativeConfig, OutcomeConfig, ProjectConfig, Settings
 from ravn.domain.models import Session, TokenUsage, ToolCall, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -134,7 +134,8 @@ def _build_memory(settings: Settings) -> Any:
         try:
             cls = _import_class(settings.embedding.adapter)
             kwargs = _inject_secrets(
-                settings.embedding.kwargs, settings.embedding.secret_kwargs_env,
+                settings.embedding.kwargs,
+                settings.embedding.secret_kwargs_env,
             )
             embedding_port = cls(**kwargs)
         except Exception as exc:
@@ -294,10 +295,14 @@ def _build_tools(
         # -- File tools --
         ReadFileTool(workspace, max_bytes=fc.max_read_bytes),
         WriteFileTool(
-            workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes,
+            workspace,
+            max_bytes=fc.max_write_bytes,
+            binary_check_bytes=fc.binary_check_bytes,
         ),
         EditFileTool(
-            workspace, max_bytes=fc.max_write_bytes, binary_check_bytes=fc.binary_check_bytes,
+            workspace,
+            max_bytes=fc.max_write_bytes,
+            binary_check_bytes=fc.binary_check_bytes,
         ),
         GlobSearchTool(workspace),
         GrepSearchTool(workspace),
@@ -407,12 +412,14 @@ def _build_tools(
 
         _purl = settings.gateway.platform.base_url
         _ptimeout = settings.gateway.platform.timeout
-        tools.extend([
-            VolundrSessionTool(base_url=_purl, timeout=_ptimeout),
-            VolundrGitTool(base_url=_purl, timeout=_ptimeout),
-            TyrSagaTool(base_url=_purl, timeout=_ptimeout),
-            TrackerIssueTool(base_url=_purl, timeout=_ptimeout),
-        ])
+        tools.extend(
+            [
+                VolundrSessionTool(base_url=_purl, timeout=_ptimeout),
+                VolundrGitTool(base_url=_purl, timeout=_ptimeout),
+                TyrSagaTool(base_url=_purl, timeout=_ptimeout),
+                TrackerIssueTool(base_url=_purl, timeout=_ptimeout),
+            ]
+        )
 
     # -- Introspection tools (added before filtering so they can be disabled) --
     state_tool = RavnStateTool(
@@ -739,7 +746,10 @@ def _build_agent(
     llm = _build_llm(settings)
     channel = CliChannel()
     permission = _build_permission(
-        settings, workspace, no_tools=no_tools, persona_config=persona_config,
+        settings,
+        workspace,
+        no_tools=no_tools,
+        persona_config=persona_config,
     )
     memory = _build_memory(settings)
     outcome_port, outcome_config = _build_outcome(settings)
@@ -749,8 +759,14 @@ def _build_agent(
     )
     session = Session()
     tools = _build_tools(
-        settings, workspace, session, llm, memory, iteration_budget,
-        no_tools=no_tools, persona_config=persona_config,
+        settings,
+        workspace,
+        session,
+        llm,
+        memory,
+        iteration_budget,
+        no_tools=no_tools,
+        persona_config=persona_config,
     )
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
@@ -1164,10 +1180,18 @@ async def _run_gateway(
             near_limit_threshold=settings.iteration_budget.near_limit_threshold,
         )
         permission = _build_permission(
-            settings, workspace, no_tools=False, persona_config=persona_config,
+            settings,
+            workspace,
+            no_tools=False,
+            persona_config=persona_config,
         )
         tools = _build_tools(
-            settings, workspace, session, llm, memory, budget,
+            settings,
+            workspace,
+            session,
+            llm,
+            memory,
+            budget,
             persona_config=persona_config,
         )
         # Append shared MCP tools to per-session tool list
@@ -1222,6 +1246,225 @@ async def _run_gateway(
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         await _shutdown_mcp(mcp_manager)
+
+
+@app.command()
+def daemon(
+    config: str = typer.Option("", "--config", "-c", help="Path to ravn config YAML."),
+    persona: str = typer.Option(
+        "", "--persona", "-p", help="Persona name applied to all daemon sessions."
+    ),
+) -> None:
+    """Start gateway channels AND drive loop simultaneously.  Never exits.
+
+    Channels and triggers are configured via the ``gateway:`` and
+    ``initiative:`` sections of ravn.yaml.  The daemon runs until Ctrl+C
+    or SIGTERM.
+    """
+    if config:
+        os.environ["RAVN_CONFIG"] = config
+
+    settings = Settings()
+    _configure_logging(settings)
+    project_config = ProjectConfig.discover()
+    persona_config = _resolve_persona(persona, project_config)
+
+    asyncio.run(_run_daemon(settings, persona_config=persona_config))
+
+
+async def _run_daemon(
+    settings: Settings,
+    *,
+    persona_config: Any | None = None,
+) -> None:
+    """Build and run the gateway + drive loop until interrupted."""
+    from ravn.adapters.channels.gateway import RavnGateway
+    from ravn.adapters.channels.gateway_http import HttpGateway
+    from ravn.adapters.channels.gateway_telegram import TelegramGateway
+    from ravn.budget import IterationBudget
+    from ravn.drive_loop import DriveLoop
+    from ravn.ports.channel import ChannelPort
+
+    api_key = settings.effective_api_key()
+    if not api_key:
+        typer.echo(
+            "Error: No API key found. Set ANTHROPIC_API_KEY or configure ravn.yaml.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    workspace = _resolve_workspace(settings)
+    llm = _build_llm(settings)
+    memory = _build_memory(settings)
+    outcome_port, outcome_config = _build_outcome(settings)
+    compressor = _build_compressor(settings, llm)
+    prompt_builder = _build_prompt_builder(settings)
+    pre_hooks, post_hooks = _build_hooks(settings)
+
+    extended_thinking = (
+        settings.llm.extended_thinking if settings.llm.extended_thinking.enabled else None
+    )
+
+    system_prompt = settings.agent.system_prompt
+    max_iterations = settings.agent.max_iterations
+    if persona_config is not None:
+        if persona_config.system_prompt_template:
+            system_prompt = persona_config.system_prompt_template
+        if persona_config.iteration_budget:
+            max_iterations = persona_config.iteration_budget
+
+    mcp_manager, mcp_tools = await _start_mcp_shared(settings)
+
+    def _agent_factory(channel: ChannelPort, task_id: str | None = None) -> Any:
+        session = Session()
+        budget = IterationBudget(
+            total=settings.iteration_budget.total,
+            near_limit_threshold=settings.iteration_budget.near_limit_threshold,
+        )
+        permission = _build_permission(
+            settings,
+            workspace,
+            no_tools=False,
+            persona_config=persona_config,
+        )
+        tools = _build_tools(
+            settings,
+            workspace,
+            session,
+            llm,
+            memory,
+            budget,
+            persona_config=persona_config,
+        )
+        tools.extend(mcp_tools)
+
+        return RavnAgent(
+            llm=llm,
+            tools=tools,
+            channel=channel,
+            permission=permission,
+            system_prompt=system_prompt,
+            model=settings.effective_model(),
+            max_tokens=settings.effective_max_tokens(),
+            max_iterations=max_iterations,
+            session=session,
+            pre_tool_hooks=pre_hooks or None,
+            post_tool_hooks=post_hooks or None,
+            user_input_fn=None,
+            memory=memory,
+            episode_summary_max_chars=settings.agent.episode_summary_max_chars,
+            episode_task_max_chars=settings.agent.episode_task_max_chars,
+            iteration_budget=budget,
+            compressor=compressor,
+            prompt_builder=prompt_builder,
+            outcome_port=outcome_port,
+            outcome_config=outcome_config,
+            extended_thinking=extended_thinking,
+        )
+
+    tasks: list[asyncio.Task] = []
+
+    # Gateway channels (human-initiated turns)
+    gw_tasks: list[str] = []
+    if settings.gateway.channels.telegram.enabled or settings.gateway.channels.http.enabled:
+        gw = RavnGateway(settings.gateway, _agent_factory)
+
+        if settings.gateway.channels.telegram.enabled:
+            tg = TelegramGateway(settings.gateway.channels.telegram, gw)
+            tasks.append(asyncio.create_task(tg.run(), name="telegram"))
+            gw_tasks.append("telegram")
+
+        if settings.gateway.channels.http.enabled:
+            ht = HttpGateway(settings.gateway.channels.http, gw)
+            tasks.append(asyncio.create_task(ht.run(), name="http"))
+            gw_tasks.append("http")
+
+    # Drive loop (initiative tasks)
+    trigger_names: list[str] = []
+    if settings.initiative.enabled:
+        drive_loop = DriveLoop(
+            agent_factory=_agent_factory,
+            config=settings.initiative,
+            settings=settings,
+        )
+        _wire_triggers(drive_loop, settings.initiative)
+        trigger_names = [t.name for t in drive_loop._triggers]
+        tasks.append(asyncio.create_task(drive_loop.run(), name="drive_loop"))
+
+    channels_str = ", ".join(gw_tasks) if gw_tasks else "none"
+    triggers_str = ", ".join(trigger_names) if trigger_names else "none"
+    concurrent = settings.initiative.max_concurrent_tasks if settings.initiative.enabled else 0
+
+    typer.echo("ravn daemon started.")
+    typer.echo(f"  Channels: {channels_str}")
+    typer.echo(f"  Triggers: {triggers_str}")
+    typer.echo(
+        f"  Drive loop: {'running' if settings.initiative.enabled else 'disabled'}"
+        + (f" (max {concurrent} concurrent tasks)" if settings.initiative.enabled else "")
+    )
+    typer.echo("Press Ctrl+C to stop.")
+
+    if not tasks:
+        typer.echo("No channels or triggers enabled — daemon has nothing to do.", err=True)
+        return
+
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        pass
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await _shutdown_mcp(mcp_manager)
+
+
+def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
+    """Instantiate trigger adapters from config and register them on drive_loop."""
+    from ravn.domain.models import OutputMode
+
+    for tc in initiative.triggers:
+        output_mode = OutputMode(tc.output_mode) if tc.output_mode else OutputMode.SILENT
+        try:
+            if tc.type == "cron":
+                from ravn.adapters.triggers.cron import CronJob, CronTrigger
+
+                job = CronJob(
+                    name=tc.name,
+                    schedule=tc.schedule,
+                    context=tc.context,
+                    output_mode=output_mode,
+                    persona=tc.persona or None,
+                    priority=tc.priority,
+                )
+                drive_loop.register_trigger(CronTrigger(jobs=[job]))
+
+            elif tc.type == "sleipnir_event":
+                from ravn.adapters.triggers.sleipnir import SleipnirEventTrigger
+
+                drive_loop.register_trigger(
+                    SleipnirEventTrigger(
+                        name=tc.name,
+                        pattern=tc.pattern,
+                        context_template=tc.context_template,
+                        output_mode=output_mode,
+                        persona=tc.persona or None,
+                        priority=tc.priority,
+                        amqp_url=tc.amqp_url,
+                        exchange=tc.exchange,
+                    )
+                )
+
+            elif tc.type == "condition_poll":
+                logger.warning(
+                    "condition_poll trigger %r requires a sensor_agent_factory — skipping",
+                    tc.name,
+                )
+
+        except Exception as exc:
+            logger.error("Failed to wire trigger %r: %s", tc.name, exc)
 
 
 def main() -> None:

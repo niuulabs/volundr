@@ -12,6 +12,14 @@ from uuid import UUID, uuid4
 # ---------------------------------------------------------------------------
 
 
+class OutputMode(StrEnum):
+    """Output mode for initiative (drive loop) tasks."""
+
+    SILENT = "silent"  # agent runs, memory records, nothing delivered
+    AMBIENT = "ambient"  # published to Sleipnir for attention model to route
+    SURFACE = "surface"  # delivered directly via configured channel (Telegram etc.)
+
+
 class TodoStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -287,3 +295,34 @@ class Session:
     def clear_todos(self) -> None:
         """Remove all todo items (call at task start)."""
         self.todos.clear()
+
+
+# ---------------------------------------------------------------------------
+# Initiative / drive loop models (NIU-539)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AgentTask:
+    """A task enqueued by the drive loop for autonomous execution.
+
+    Created by trigger adapters and consumed by DriveLoop._task_executor.
+    The ``session_id`` is auto-generated as ``daemon_{task_id}`` so that
+    episodic memory records for drive-loop turns are distinguishable from
+    human-initiated sessions.
+    """
+
+    task_id: str  # "task_{hex_timestamp}_{counter}" — unique, stable
+    title: str
+    initiative_context: str  # the synthetic "message" given to the agent
+    triggered_by: str  # "cron:morning_check", "event:tyr.raid.stalled"
+    output_mode: OutputMode
+    persona: str | None = None
+    priority: int = 10  # lower = higher priority
+    max_tokens: int | None = None
+    deadline: datetime | None = None  # task discarded if queue time exceeds this
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    session_id: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.session_id = f"daemon_{self.task_id}"
