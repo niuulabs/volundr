@@ -739,12 +739,25 @@ def _build_agent(
         )
         raise typer.Exit(1)
 
+    from ravn.adapters.channels.composite import CompositeChannel
     from ravn.adapters.cli_channel import CliChannel
     from ravn.budget import IterationBudget
+    from ravn.ports.channel import ChannelPort
 
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
-    channel = CliChannel()
+    session = Session()
+    base_channel: CliChannel = CliChannel()
+    channel: ChannelPort = base_channel
+    if settings.sleipnir.enabled:
+        from ravn.adapters.channels.sleipnir import SleipnirChannel
+
+        sleipnir_ch = SleipnirChannel(
+            settings.sleipnir,
+            session_id=str(session.id),
+            task_id=None,
+        )
+        channel = CompositeChannel([base_channel, sleipnir_ch])
     permission = _build_permission(
         settings,
         workspace,
@@ -757,7 +770,6 @@ def _build_agent(
         total=settings.iteration_budget.total,
         near_limit_threshold=settings.iteration_budget.near_limit_threshold,
     )
-    session = Session()
     tools = _build_tools(
         settings,
         workspace,
@@ -1197,10 +1209,23 @@ async def _run_gateway(
         # Append shared MCP tools to per-session tool list
         tools.extend(mcp_tools)
 
+        # Wrap with Sleipnir broadcast when enabled
+        effective_channel: ChannelPort = channel
+        if settings.sleipnir.enabled:
+            from ravn.adapters.channels.composite import CompositeChannel
+            from ravn.adapters.channels.sleipnir import SleipnirChannel
+
+            sleipnir_ch = SleipnirChannel(
+                settings.sleipnir,
+                session_id=str(session.id),
+                task_id=None,
+            )
+            effective_channel = CompositeChannel([channel, sleipnir_ch])
+
         return RavnAgent(
             llm=llm,
             tools=tools,
-            channel=channel,
+            channel=effective_channel,
             permission=permission,
             system_prompt=system_prompt,
             model=settings.effective_model(),

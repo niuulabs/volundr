@@ -22,14 +22,13 @@ class RavnEventType(StrEnum):
 class RavnEvent:
     """An event emitted by the Ravn agent to its output channel."""
 
-    type: (
-        RavnEventType  # THOUGHT, TOOL_START, TOOL_RESULT, RESPONSE, ERROR, DECISION, TASK_COMPLETE
-    )
-    source: str  # Agent instance ID
-    payload: dict  # Event-specific data
-    timestamp: datetime  # ISO8601 timestamp
-    urgency: float  # 0.0-1.0 (hint for Valkyrie attention model)
-    correlation_id: str  # Groups related events
+    # THOUGHT, TOOL_START, TOOL_RESULT, RESPONSE, ERROR, DECISION, TASK_COMPLETE, TASK_STARTED
+    type: RavnEventType
+    source: str               # Agent instance ID
+    payload: dict             # Event-specific data
+    timestamp: datetime       # ISO8601 timestamp
+    urgency: float            # 0.0-1.0 (hint for Valkyrie attention model)
+    correlation_id: str       # Groups related events
     session_id: str
     task_id: str | None = None  # If from a sub-ravn
 
@@ -123,11 +122,7 @@ class RavnEvent:
 
     @classmethod
     def response(
-        cls,
-        source: str,
-        text: str,
-        correlation_id: str,
-        session_id: str,
+        cls, source: str, text: str, correlation_id: str, session_id: str,
         task_id: str | None = None,
     ) -> RavnEvent:
         return cls(
@@ -143,11 +138,7 @@ class RavnEvent:
 
     @classmethod
     def error(
-        cls,
-        source: str,
-        message: str,
-        correlation_id: str,
-        session_id: str,
+        cls, source: str, message: str, correlation_id: str, session_id: str,
         task_id: str | None = None,
     ) -> RavnEvent:
         return cls(
@@ -163,11 +154,7 @@ class RavnEvent:
 
     @classmethod
     def decision_required(
-        cls,
-        source: str,
-        prompt: str,
-        correlation_id: str,
-        session_id: str,
+        cls, source: str, prompt: str, correlation_id: str, session_id: str,
         task_id: str | None = None,
     ) -> RavnEvent:
         return cls(
@@ -198,11 +185,7 @@ class RavnEvent:
 
     @classmethod
     def task_complete(
-        cls,
-        source: str,
-        success: bool,
-        correlation_id: str,
-        session_id: str,
+        cls, source: str, success: bool, correlation_id: str, session_id: str,
         task_id: str | None = None,
     ) -> RavnEvent:
         return cls(

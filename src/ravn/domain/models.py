@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
+
+if TYPE_CHECKING:
+    from ravn.domain.events import RavnEvent
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -295,6 +299,37 @@ class Session:
     def clear_todos(self) -> None:
         """Remove all todo items (call at task start)."""
         self.todos.clear()
+
+
+# ---------------------------------------------------------------------------
+# Sleipnir event envelope (NIU-438)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SleipnirEnvelope:
+    """Routing envelope for publishing RavnEvents to the ODIN event backbone.
+
+    Wraps the existing RavnEvent unchanged and adds routing metadata required
+    by the Valkyrie attention model and downstream consumers.
+
+    Attributes:
+        event:          The domain event, unchanged.
+        source_agent:   Agent instance ID (from config or socket.gethostname()).
+        session_id:     Session this event belongs to.
+        task_id:        Drive-loop task ID, or None for interactive turns.
+        urgency:        0.0–1.0 hint for the Valkyrie attention model.
+        correlation_id: Groups related events within a task/session.
+        published_at:   UTC timestamp of publication.
+    """
+
+    event: RavnEvent
+    source_agent: str
+    session_id: str
+    task_id: str | None
+    urgency: float
+    correlation_id: str
+    published_at: datetime
 
 
 # ---------------------------------------------------------------------------

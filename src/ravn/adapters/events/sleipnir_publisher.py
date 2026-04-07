@@ -14,6 +14,7 @@ try:
 except ImportError:
     pynng = None
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +70,7 @@ class SleipnirPublisher(EventPublisher):
             self._is_connected = False
 
     async def publish(self, event: Any) -> None:
-        """Publish a RavnEvent.
+        """Publishes a RavnEvent.
 
         Args:
             event: A RavnEvent instance.
@@ -95,9 +96,10 @@ class SleipnirPublisher(EventPublisher):
             self.socket.send(packed_data)
         except Exception as e:
             self.fallback_logger.warning(
-                "Failed to publish event to Sleipnir: %s. Falling back to CLI.", e
+                "Failed to publish event to Sleipnir: %s. Falling back to CLI.", e,
             )
             self.fallback_logger.info("[FALLBACK] %s: %s", event.type.upper(), event.payload)
+            # Try to reconnect on next attempt if it was a connection issue
             self._is_connected = False
 
     async def close(self) -> None:

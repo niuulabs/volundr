@@ -94,10 +94,10 @@ class TestAgentInterceptsAskUser:
         assert "Paris" in result.response
         # The agent should have emitted a TOOL_START for ask_user.
         start_events = [e for e in channel.events if e.type == RavnEventType.TOOL_START]
-        assert any(e.payload["tool_name"] == "ask_user" for e in start_events)
+        assert any(e.payload.get("tool_name") == "ask_user" for e in start_events)
         # And a TOOL_RESULT with the answer.
         result_events = [e for e in channel.events if e.type == RavnEventType.TOOL_RESULT]
-        assert any("Paris" in e.payload["result"] for e in result_events)
+        assert any("Paris" in e.payload.get("result", "") for e in result_events)
 
     async def test_intercepts_without_tool_in_registry(self) -> None:
         """Agent intercepts ask_user even if AskUserTool is not in its tools list."""
