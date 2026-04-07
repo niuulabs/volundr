@@ -182,6 +182,7 @@ class TestSleipnirChannelPublishFailure:
         with patch.dict("os.environ", {}, clear=False):
             # Remove the env var if present
             import os
+
             os.environ.pop("SLEIPNIR_AMQP_URL", None)
             # Must not raise
             await channel.emit(_event())
@@ -189,17 +190,19 @@ class TestSleipnirChannelPublishFailure:
     @pytest.mark.asyncio
     async def test_emit_does_not_raise_when_aio_pika_missing(self) -> None:
         """aio_pika ImportError → emit silently drops the event."""
+        import ravn.adapters.channels._rabbitmq_base as base_mod
+
         config = _config()
         channel = SleipnirChannel(config, session_id="sess-1")
 
         with patch.dict("os.environ", {"SLEIPNIR_AMQP_URL": "amqp://localhost"}):
-            with patch.dict("sys.modules", {"aio_pika": None}):
+            with patch.object(base_mod, "aio_pika", None):
                 await channel.emit(_event())
 
     @pytest.mark.asyncio
     async def test_emit_logs_debug_on_publish_failure(self) -> None:
         """A publish exception is logged at DEBUG and not re-raised."""
-        import ravn.adapters.channels.sleipnir as sleipnir_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         config = _config(reconnect_delay_s=0.0)
         channel = SleipnirChannel(config, session_id="sess-1")
@@ -215,8 +218,8 @@ class TestSleipnirChannelPublishFailure:
         fake_aio_pika = MagicMock()
         fake_aio_pika.Message = MagicMock(return_value=MagicMock())
 
-        with patch("ravn.adapters.channels.sleipnir.logger") as mock_logger:
-            with patch.object(sleipnir_mod, "aio_pika", fake_aio_pika):
+        with patch("ravn.adapters.channels._rabbitmq_base.logger") as mock_logger:
+            with patch.object(base_mod, "aio_pika", fake_aio_pika):
                 await channel.emit(_event())
 
         mock_logger.debug.assert_called()
@@ -224,7 +227,7 @@ class TestSleipnirChannelPublishFailure:
     @pytest.mark.asyncio
     async def test_emit_invalidates_connection_after_failure(self) -> None:
         """Exchange is cleared after a publish failure to force reconnect."""
-        import ravn.adapters.channels.sleipnir as sleipnir_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         config = _config(reconnect_delay_s=0.0)
         channel = SleipnirChannel(config, session_id="sess-1")
@@ -238,7 +241,7 @@ class TestSleipnirChannelPublishFailure:
         fake_aio_pika = MagicMock()
         fake_aio_pika.Message = MagicMock(return_value=MagicMock())
 
-        with patch.object(sleipnir_mod, "aio_pika", fake_aio_pika):
+        with patch.object(base_mod, "aio_pika", fake_aio_pika):
             await channel.emit(_event())
 
         assert channel._exchange is None
@@ -248,7 +251,7 @@ class TestSleipnirChannelPublishFailure:
         """SleipnirEnvelope.session_id matches the session passed to constructor."""
         import json
 
-        import ravn.adapters.channels.sleipnir as sleipnir_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         config = _config(reconnect_delay_s=0.0)
         channel = SleipnirChannel(config, session_id="my-special-session")
@@ -272,7 +275,7 @@ class TestSleipnirChannelPublishFailure:
         fake_aio_pika = MagicMock()
         fake_aio_pika.Message = FakeMessage
 
-        with patch.object(sleipnir_mod, "aio_pika", fake_aio_pika):
+        with patch.object(base_mod, "aio_pika", fake_aio_pika):
             await channel.emit(_event())
 
         assert len(captured) == 1
@@ -284,7 +287,7 @@ class TestSleipnirChannelPublishFailure:
         """SleipnirEnvelope.task_id matches the task_id passed to constructor."""
         import json
 
-        import ravn.adapters.channels.sleipnir as sleipnir_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         config = _config(reconnect_delay_s=0.0)
         channel = SleipnirChannel(config, session_id="sess", task_id="drive-task-42")
@@ -308,7 +311,7 @@ class TestSleipnirChannelPublishFailure:
         fake_aio_pika = MagicMock()
         fake_aio_pika.Message = FakeMessage
 
-        with patch.object(sleipnir_mod, "aio_pika", fake_aio_pika):
+        with patch.object(base_mod, "aio_pika", fake_aio_pika):
             await channel.emit(_event())
 
         assert len(captured) == 1
@@ -318,7 +321,7 @@ class TestSleipnirChannelPublishFailure:
     @pytest.mark.asyncio
     async def test_routing_key_format(self) -> None:
         """Routing key uses ravn.<event_type>.<agent_id> format."""
-        import ravn.adapters.channels.sleipnir as sleipnir_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         config = _config(agent_id="my-bot", reconnect_delay_s=0.0)
         channel = SleipnirChannel(config, session_id="sess")
@@ -343,7 +346,7 @@ class TestSleipnirChannelPublishFailure:
         fake_aio_pika.Message = FakeMessage
 
         event = _event(RavnEventType.THOUGHT)
-        with patch.object(sleipnir_mod, "aio_pika", fake_aio_pika):
+        with patch.object(base_mod, "aio_pika", fake_aio_pika):
             await channel.emit(event)
 
         assert routing_keys == ["ravn.thought.my-bot"]
@@ -351,7 +354,7 @@ class TestSleipnirChannelPublishFailure:
     @pytest.mark.asyncio
     async def test_reconnect_not_attempted_before_delay(self) -> None:
         """A second emit within reconnect_delay_s does not attempt a new connection."""
-        import ravn.adapters.channels.sleipnir as sleipnir_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         config = _config(reconnect_delay_s=999.0)
         channel = SleipnirChannel(config, session_id="sess")
@@ -363,7 +366,7 @@ class TestSleipnirChannelPublishFailure:
         fake_aio_pika.connect_robust = AsyncMock()
 
         with patch.dict("os.environ", {"SLEIPNIR_AMQP_URL": "amqp://localhost"}):
-            with patch.object(sleipnir_mod, "aio_pika", fake_aio_pika):
+            with patch.object(base_mod, "aio_pika", fake_aio_pika):
                 await channel.emit(_event())
                 fake_aio_pika.connect_robust.assert_not_called()
 

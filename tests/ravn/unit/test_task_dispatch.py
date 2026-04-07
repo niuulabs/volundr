@@ -271,22 +271,56 @@ class TestHandleMessage:
         assert enqueued[0].deadline is None
 
     @pytest.mark.asyncio
-    async def test_malformed_json_does_not_raise(self) -> None:
-        """A non-JSON message body should not raise — it's treated as empty payload."""
+    async def test_malformed_json_publishes_rejected(self) -> None:
+        """Non-JSON body → publish ravn.task.rejected, do not enqueue."""
         loader = _fake_persona_loader(["autonomous-agent"])
         ch = TaskDispatchChannel(_config(), persona_loader=loader)
 
         enqueued: list[AgentTask] = []
+        published: list[tuple[str, dict]] = []
 
         async def _enqueue(task: AgentTask) -> None:
             enqueued.append(task)
 
-        ch._publish_response = AsyncMock()  # type: ignore[method-assign]
+        async def _fake_publish(routing_key: str, payload: dict) -> None:
+            published.append((routing_key, payload))
+
+        ch._publish_response = _fake_publish  # type: ignore[method-assign]
 
         msg = FakeMessage(b"this is not json")
-        # Should not raise; persona defaults to autonomous-agent
-        # but autonomous-agent is in known personas, so it gets enqueued
         await ch._handle_message(msg, _enqueue)
+
+        assert len(enqueued) == 0
+        assert len(published) == 1
+        rk, payload = published[0]
+        assert rk == ROUTING_REJECTED
+        assert "malformed" in payload["reason"]
+
+    @pytest.mark.asyncio
+    async def test_empty_task_field_is_rejected(self) -> None:
+        """Empty/missing task field → publish ravn.task.rejected, do not enqueue."""
+        loader = _fake_persona_loader(["autonomous-agent"])
+        ch = TaskDispatchChannel(_config(), persona_loader=loader)
+
+        enqueued: list[AgentTask] = []
+        published: list[tuple[str, dict]] = []
+
+        async def _enqueue(task: AgentTask) -> None:
+            enqueued.append(task)
+
+        async def _fake_publish(routing_key: str, payload: dict) -> None:
+            published.append((routing_key, payload))
+
+        ch._publish_response = _fake_publish  # type: ignore[method-assign]
+
+        msg = FakeMessage(_dispatch_payload(task=""))
+        await ch._handle_message(msg, _enqueue)
+
+        assert len(enqueued) == 0
+        assert len(published) == 1
+        rk, payload = published[0]
+        assert rk == ROUTING_REJECTED
+        assert "task" in payload["reason"]
 
     @pytest.mark.asyncio
     async def test_context_included_in_initiative_context(self) -> None:
@@ -422,19 +456,19 @@ class TestPublishResponse:
     @pytest.mark.asyncio
     async def test_no_aio_pika_drops_silently(self) -> None:
         """aio_pika not installed → _publish_response drops silently."""
+        import ravn.adapters.channels._rabbitmq_base as base_mod
+
         ch = TaskDispatchChannel(_config())
-        ch._pub_exchange = MagicMock()
+        ch._exchange = MagicMock()
 
-        import ravn.adapters.channels.event as event_mod
-
-        with patch.object(event_mod, "aio_pika", None):
+        with patch.object(base_mod, "aio_pika", None):
             await ch._publish_response(ROUTING_ACCEPTED, {"task_id": "t1"})
         # No exception
 
     @pytest.mark.asyncio
     async def test_publish_uses_correct_routing_key(self) -> None:
         """_publish_response publishes to the exact routing_key passed in."""
-        import ravn.adapters.channels.event as event_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0))
 
@@ -450,14 +484,14 @@ class TestPublishResponse:
             published_keys.append(routing_key)
 
         mock_exchange.publish.side_effect = fake_publish
-        ch._pub_exchange = mock_exchange
-        ch._pub_connection = AsyncMock()
-        ch._pub_channel = AsyncMock()
+        ch._exchange = mock_exchange
+        ch._connection = AsyncMock()
+        ch._channel = AsyncMock()
 
         fake_pika = MagicMock()
         fake_pika.Message = FakeMsgCls
 
-        with patch.object(event_mod, "aio_pika", fake_pika):
+        with patch.object(base_mod, "aio_pika", fake_pika):
             await ch._publish_response(ROUTING_ACCEPTED, {"task_id": "t1"})
 
         assert published_keys == [ROUTING_ACCEPTED]
@@ -465,31 +499,31 @@ class TestPublishResponse:
     @pytest.mark.asyncio
     async def test_publish_failure_invalidates_connection(self) -> None:
         """Exchange is cleared after publish failure to force reconnect."""
-        import ravn.adapters.channels.event as event_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0))
 
         mock_exchange = AsyncMock()
         mock_exchange.publish.side_effect = RuntimeError("conn reset")
-        ch._pub_exchange = mock_exchange
-        ch._pub_connection = AsyncMock()
-        ch._pub_channel = AsyncMock()
+        ch._exchange = mock_exchange
+        ch._connection = AsyncMock()
+        ch._channel = AsyncMock()
 
         fake_pika = MagicMock()
         fake_pika.Message = MagicMock(return_value=MagicMock())
 
-        with patch.object(event_mod, "aio_pika", fake_pika):
+        with patch.object(base_mod, "aio_pika", fake_pika):
             await ch._publish_response(ROUTING_ACCEPTED, {"task_id": "t1"})
 
-        assert ch._pub_exchange is None
+        assert ch._exchange is None
 
     @pytest.mark.asyncio
     async def test_reconnect_delay_respected(self) -> None:
         """Reconnect is not attempted within reconnect_delay_s."""
         ch = TaskDispatchChannel(_config(reconnect_delay_s=999.0))
-        ch._last_pub_attempt = asyncio.get_event_loop().time()
+        ch._last_connect_attempt = asyncio.get_event_loop().time()
 
-        result = await ch._ensure_pub_exchange()
+        result = await ch._ensure_exchange()
         assert result is None
 
 
@@ -531,7 +565,7 @@ class TestRunMethod:
         """run() retries after a connection error."""
         import ravn.adapters.channels.event as event_mod
 
-        ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0), retry_delay_seconds=0.0)
+        ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0))
         call_count = 0
 
         async def failing_consume(*_args, **_kwargs):
@@ -570,17 +604,17 @@ class TestTriggerPortCompliance:
 
 
 # ---------------------------------------------------------------------------
-# TaskDispatchChannel — _connect_pub success / error paths
+# TaskDispatchChannel — _connect / _ensure_exchange / _invalidate paths
 # ---------------------------------------------------------------------------
 
 
 class TestConnectPub:
     @pytest.mark.asyncio
-    async def test_connect_pub_success_stores_exchange(self) -> None:
-        """_connect_pub sets pub_exchange when connection succeeds."""
+    async def test_connect_success_stores_exchange(self) -> None:
+        """_connect sets _exchange when connection succeeds."""
         import os
 
-        import ravn.adapters.channels.event as event_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0))
 
@@ -595,18 +629,18 @@ class TestConnectPub:
         fake_pika.ExchangeType.TOPIC = "topic"
 
         with patch.dict(os.environ, {"SLEIPNIR_AMQP_URL": "amqp://localhost"}):
-            with patch.object(event_mod, "aio_pika", fake_pika):
-                result = await ch._connect_pub()
+            with patch.object(base_mod, "aio_pika", fake_pika):
+                result = await ch._connect()
 
         assert result is mock_exchange
-        assert ch._pub_exchange is mock_exchange
+        assert ch._exchange is mock_exchange
 
     @pytest.mark.asyncio
-    async def test_connect_pub_failure_returns_none(self) -> None:
-        """_connect_pub returns None when connection raises."""
+    async def test_connect_failure_returns_none(self) -> None:
+        """_connect returns None when connection raises."""
         import os
 
-        import ravn.adapters.channels.event as event_mod
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0))
 
@@ -614,72 +648,67 @@ class TestConnectPub:
         fake_pika.connect_robust = AsyncMock(side_effect=ConnectionError("refused"))
 
         with patch.dict(os.environ, {"SLEIPNIR_AMQP_URL": "amqp://localhost"}):
-            with patch.object(event_mod, "aio_pika", fake_pika):
-                result = await ch._connect_pub()
+            with patch.object(base_mod, "aio_pika", fake_pika):
+                result = await ch._connect()
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_connect_pub_no_aio_pika_returns_none(self) -> None:
-        import ravn.adapters.channels.event as event_mod
+    async def test_connect_no_aio_pika_returns_none(self) -> None:
+        import ravn.adapters.channels._rabbitmq_base as base_mod
 
         ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0))
-        with patch.object(event_mod, "aio_pika", None):
-            result = await ch._connect_pub()
+        with patch.object(base_mod, "aio_pika", None):
+            result = await ch._connect()
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_ensure_pub_exchange_double_check_locking(self) -> None:
+    async def test_ensure_exchange_double_check_locking(self) -> None:
         """Second waiter in lock sees exchange already set."""
         ch = TaskDispatchChannel(_config(reconnect_delay_s=0.0))
 
         sentinel = MagicMock()
 
-        async def _slow_connect():
-            await asyncio.sleep(0)
-            ch._pub_exchange = sentinel
-            return sentinel
-
         # Pre-seed: exchange is None but gets set during the lock wait
         async def _acquire_then_check():
-            async with ch._pub_lock:
+            async with ch._connect_lock:
                 # Another coroutine already set it inside the lock
-                ch._pub_exchange = sentinel
-            return await ch._ensure_pub_exchange()
+                ch._exchange = sentinel
+            return await ch._ensure_exchange()
 
         result = await _acquire_then_check()
         assert result is sentinel
 
     @pytest.mark.asyncio
-    async def test_invalidate_pub_closes_connection(self) -> None:
-        """_invalidate_pub closes existing connection and clears all fields."""
+    async def test_invalidate_closes_connection(self) -> None:
+        """_invalidate closes existing connection and clears all fields."""
         ch = TaskDispatchChannel(_config())
 
         mock_conn = AsyncMock()
-        ch._pub_connection = mock_conn
-        ch._pub_exchange = MagicMock()
-        ch._pub_channel = MagicMock()
+        ch._connection = mock_conn
+        ch._exchange = MagicMock()
+        ch._channel = MagicMock()
 
-        await ch._invalidate_pub()
+        await ch._invalidate()
 
-        assert ch._pub_exchange is None
-        assert ch._pub_channel is None
-        assert ch._pub_connection is None
+        assert ch._exchange is None
+        assert ch._channel is None
+        assert ch._connection is None
         mock_conn.close.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_invalidate_pub_swallows_close_error(self) -> None:
-        """_invalidate_pub does not raise if connection.close() fails."""
+    async def test_invalidate_swallows_close_error(self) -> None:
+        """_invalidate does not raise if connection.close() fails."""
         ch = TaskDispatchChannel(_config())
 
         mock_conn = AsyncMock()
         mock_conn.close.side_effect = RuntimeError("already closed")
-        ch._pub_connection = mock_conn
-        ch._pub_exchange = MagicMock()
+        ch._connection = mock_conn
+        ch._exchange = MagicMock()
 
         # Must not raise
-        await ch._invalidate_pub()
-        assert ch._pub_connection is None
+        await ch._invalidate()
+        assert ch._connection is None
 
 
 # ---------------------------------------------------------------------------
@@ -695,7 +724,7 @@ class TestConnectAndConsume:
 
         import ravn.adapters.channels.event as event_mod
 
-        ch = TaskDispatchChannel(_config(retry_delay_seconds=0.0), retry_delay_seconds=0.0)
+        ch = TaskDispatchChannel(_config())
         enqueued: list = []
 
         async def _enqueue(task):

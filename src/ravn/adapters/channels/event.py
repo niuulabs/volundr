@@ -7,7 +7,7 @@ catalogue; unknown or untrusted personas are immediately rejected.
 Response events published to the same exchange:
 
   ravn.task.accepted  — persona valid, task enqueued for execution
-  ravn.task.rejected  — persona unknown or not trusted
+  ravn.task.rejected  — persona unknown, not trusted, or malformed payload
   ravn.task.progress  — periodic update during execution (caller-driven)
   ravn.task.completed — task finished successfully
   ravn.task.failed    — unrecoverable error during execution
@@ -28,6 +28,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from ravn.adapters.channels._rabbitmq_base import RabbitMQPublishMixin
 from ravn.adapters.personas.loader import PersonaLoader
 from ravn.domain.models import AgentTask, OutputMode
 
@@ -81,7 +82,7 @@ def _build_initiative_context(task_text: str, context: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-class TaskDispatchChannel:
+class TaskDispatchChannel(RabbitMQPublishMixin):
     """Inbound task receiver and outbound response publisher for Sleipnir dispatch.
 
     Subscribes to ``ravn.task.dispatch`` (and the agent-targeted variant
@@ -89,7 +90,8 @@ class TaskDispatchChannel:
 
     For each inbound message:
 
-    1. Parse the dispatch payload.
+    1. Parse the dispatch payload — reject with ``ravn.task.rejected`` if JSON
+       is malformed or the ``task`` field is missing/empty.
     2. Validate the requested persona via ``PersonaLoader``.
     3. If persona unknown → publish ``ravn.task.rejected`` and discard.
     4. If persona valid → publish ``ravn.task.accepted`` and call ``enqueue``.
@@ -104,29 +106,20 @@ class TaskDispatchChannel:
     persona_loader:
         Used to validate persona names from dispatch payloads.  Defaults to a
         standard ``PersonaLoader`` (built-in personas + ``~/.ravn/personas``).
-    retry_delay_seconds:
-        Seconds to wait before reconnecting after a connection error.
     """
+
+    _log_prefix = "task_dispatch"
 
     def __init__(
         self,
         config: SleipnirConfig,
         *,
         persona_loader: PersonaLoader | None = None,
-        retry_delay_seconds: float = 5.0,
     ) -> None:
         self._config = config
         self._agent_id = config.agent_id or socket.gethostname()
         self._persona_loader = persona_loader or PersonaLoader()
-        self._retry_delay_seconds = retry_delay_seconds
-
-        # Lazy publish connection (separate from the consume connection so that
-        # a broken consume connection does not block publishing responses).
-        self._pub_connection: object | None = None
-        self._pub_channel: object | None = None
-        self._pub_exchange: object | None = None
-        self._pub_lock = asyncio.Lock()
-        self._last_pub_attempt: float = 0.0
+        self._init_publish_state()
 
     # ------------------------------------------------------------------
     # TriggerPort-compatible interface
@@ -156,9 +149,9 @@ class TaskDispatchChannel:
                 logger.warning(
                     "task_dispatch: connection error (%s) — retrying in %.0fs",
                     exc,
-                    self._retry_delay_seconds,
+                    self._config.reconnect_delay_s,
                 )
-                await asyncio.sleep(self._retry_delay_seconds)
+                await asyncio.sleep(self._config.reconnect_delay_s)
 
     # ------------------------------------------------------------------
     # Inbound — consume loop
@@ -172,7 +165,7 @@ class TaskDispatchChannel:
                 "task_dispatch: %s not set — subscription disabled, retrying",
                 self._config.amqp_url_env,
             )
-            await asyncio.sleep(self._retry_delay_seconds)
+            await asyncio.sleep(self._config.reconnect_delay_s)
             return
 
         connection = await aio_pika.connect_robust(amqp_url)  # type: ignore[union-attr]
@@ -211,17 +204,49 @@ class TaskDispatchChannel:
         enqueue: Callable[[AgentTask], Awaitable[None]],
     ) -> None:
         """Process one inbound dispatch message."""
+        # ----------------------------------------------------------------
+        # Parse — reject on malformed JSON
+        # ----------------------------------------------------------------
         try:
             payload: dict = json.loads(message.body)  # type: ignore[attr-defined]
         except Exception:
-            payload = {}
+            logger.warning("task_dispatch: malformed JSON — rejecting message")
+            await self._publish_response(
+                ROUTING_REJECTED,
+                {
+                    "task_id": f"dispatch_{int(time.time() * 1000)}",
+                    "reason": "malformed JSON payload",
+                    "agent_id": self._agent_id,
+                },
+            )
+            return
 
         task_id = str(payload.get("task_id") or f"dispatch_{int(time.time() * 1000)}")
         persona_name = str(payload.get("persona") or "autonomous-agent")
-        task_text = str(payload.get("task") or "")
+        task_text = str(payload.get("task") or "").strip()
         context: dict = payload.get("context") or {}
         deadline_str: str | None = payload.get("deadline")
         dispatched_by = str(payload.get("dispatched_by") or "unknown")
+
+        # ----------------------------------------------------------------
+        # Reject empty task
+        # ----------------------------------------------------------------
+        if not task_text:
+            logger.warning(
+                "task_dispatch: missing or empty task field for %s from %s — rejecting",
+                task_id,
+                dispatched_by,
+            )
+            await self._publish_response(
+                ROUTING_REJECTED,
+                {
+                    "task_id": task_id,
+                    "reason": "missing or empty task field",
+                    "dispatched_by": dispatched_by,
+                    "agent_id": self._agent_id,
+                },
+            )
+            return
 
         # ----------------------------------------------------------------
         # Persona validation — reject if unknown
@@ -250,7 +275,7 @@ class TaskDispatchChannel:
         # ----------------------------------------------------------------
         deadline = _parse_deadline(deadline_str)
         initiative_context = _build_initiative_context(task_text, context)
-        title = (task_text[:100] if task_text else f"task from {dispatched_by}").strip()
+        title = task_text[:100].strip()
 
         agent_task = AgentTask(
             task_id=task_id,
@@ -341,15 +366,7 @@ class TaskDispatchChannel:
     # ------------------------------------------------------------------
 
     async def _publish_response(self, routing_key: str, payload: dict) -> None:
-        """Publish *payload* to *routing_key* on the ravn.events exchange.
-
-        Never raises — failures are logged at DEBUG level.
-        """
-        exchange = await self._ensure_pub_exchange()
-        if exchange is None:
-            logger.debug("task_dispatch: pub exchange unavailable, dropping %s", routing_key)
-            return
-
+        """Publish *payload* to *routing_key* on the ravn.events exchange."""
         body = json.dumps(
             {
                 "routing_key": routing_key,
@@ -357,75 +374,4 @@ class TaskDispatchChannel:
                 "published_at": datetime.now(UTC).isoformat(),
             }
         ).encode("utf-8")
-
-        try:
-            if aio_pika is None:
-                return
-            message = aio_pika.Message(  # type: ignore[union-attr]
-                body=body,
-                content_type="application/json",
-            )
-            await asyncio.wait_for(
-                exchange.publish(message, routing_key=routing_key),  # type: ignore[attr-defined]
-                timeout=self._config.publish_timeout_s,
-            )
-        except Exception as exc:
-            logger.debug("task_dispatch: publish failed (%s), dropping %s", exc, routing_key)
-            await self._invalidate_pub()
-
-    async def _ensure_pub_exchange(self) -> object | None:
-        """Return cached publish exchange, reconnecting lazily when needed."""
-        if self._pub_exchange is not None:
-            return self._pub_exchange
-
-        async with self._pub_lock:
-            if self._pub_exchange is not None:
-                return self._pub_exchange
-
-            now = asyncio.get_running_loop().time()
-            if now - self._last_pub_attempt < self._config.reconnect_delay_s:
-                return None
-
-            self._last_pub_attempt = now
-            return await self._connect_pub()
-
-    async def _connect_pub(self) -> object | None:
-        """Establish a dedicated publish connection."""
-        if aio_pika is None:
-            return None
-
-        amqp_url = os.environ.get(self._config.amqp_url_env, "")
-        if not amqp_url:
-            return None
-
-        try:
-            connection = await aio_pika.connect_robust(amqp_url)  # type: ignore[union-attr]
-            channel = await connection.channel()
-            exchange = await channel.declare_exchange(
-                self._config.exchange,
-                aio_pika.ExchangeType.TOPIC,  # type: ignore[union-attr]
-                durable=True,
-            )
-            self._pub_connection = connection
-            self._pub_channel = channel
-            self._pub_exchange = exchange
-            logger.debug(
-                "task_dispatch: pub connected to %s exchange=%s",
-                amqp_url,
-                self._config.exchange,
-            )
-            return exchange
-        except Exception as exc:
-            logger.debug("task_dispatch: pub connection failed (%s), will retry", exc)
-            return None
-
-    async def _invalidate_pub(self) -> None:
-        """Drop cached publish connection so next call reconnects."""
-        self._pub_exchange = None
-        self._pub_channel = None
-        if self._pub_connection is not None:
-            try:
-                await self._pub_connection.close()  # type: ignore[union-attr]
-            except Exception:
-                pass
-        self._pub_connection = None
+        await self._publish_to_exchange(routing_key, body)

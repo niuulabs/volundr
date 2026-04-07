@@ -10,25 +10,19 @@ at DEBUG level so the agent never fails due to Sleipnir being down.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 import socket
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from ravn.adapters.channels._rabbitmq_base import RabbitMQPublishMixin
 from ravn.domain.events import RavnEvent, RavnEventType
 from ravn.domain.models import SleipnirEnvelope
 from ravn.ports.channel import ChannelPort
 
 if TYPE_CHECKING:
     from ravn.config import SleipnirConfig
-
-try:
-    import aio_pika
-except ImportError:  # pragma: no cover
-    aio_pika = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +86,7 @@ def _serialise_envelope(envelope: SleipnirEnvelope) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-class SleipnirChannel(ChannelPort):
+class SleipnirChannel(RabbitMQPublishMixin, ChannelPort):
     """Publishes RavnEvents to RabbitMQ via the Sleipnir event backbone.
 
     Parameters
@@ -106,6 +100,8 @@ class SleipnirChannel(ChannelPort):
         interactive turns.
     """
 
+    _log_prefix = "sleipnir"
+
     def __init__(
         self,
         config: SleipnirConfig,
@@ -117,11 +113,7 @@ class SleipnirChannel(ChannelPort):
         self._session_id = session_id
         self._task_id = task_id
         self._agent_id = config.agent_id or socket.gethostname()
-        self._connection: object | None = None
-        self._channel: object | None = None
-        self._exchange: object | None = None
-        self._last_connect_attempt: float = 0.0
-        self._connect_lock = asyncio.Lock()
+        self._init_publish_state()
 
     # ------------------------------------------------------------------
     # ChannelPort interface
@@ -138,101 +130,6 @@ class SleipnirChannel(ChannelPort):
             correlation_id=event.correlation_id,
             published_at=datetime.now(UTC),
         )
-        await self._publish(envelope)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    async def _publish(self, envelope: SleipnirEnvelope) -> None:
-        """Serialise *envelope* and publish to RabbitMQ, swallowing errors."""
-        exchange = await self._ensure_exchange()
-        if exchange is None:
-            logger.debug(
-                "sleipnir: exchange unavailable, dropping event %s",
-                envelope.event.type,
-            )
-            return
-
         routing_key = f"ravn.{envelope.event.type}.{self._agent_id}"
         body = _serialise_envelope(envelope)
-
-        try:
-            if aio_pika is None:
-                logger.debug("sleipnir: aio_pika not installed, dropping event")
-                return
-
-            message = aio_pika.Message(
-                body=body,
-                content_type="application/json",
-            )
-            await asyncio.wait_for(
-                exchange.publish(message, routing_key=routing_key),
-                timeout=self._config.publish_timeout_s,
-            )
-        except Exception as exc:
-            logger.debug("sleipnir: publish failed (%s), dropping event", exc)
-            await self._invalidate()
-
-    async def _ensure_exchange(self) -> object | None:
-        """Return the cached exchange, (re)connecting lazily if needed."""
-        if self._exchange is not None:
-            return self._exchange
-
-        async with self._connect_lock:
-            # Double-checked locking — another coroutine may have connected.
-            if self._exchange is not None:
-                return self._exchange
-
-            now = asyncio.get_running_loop().time()
-            if now - self._last_connect_attempt < self._config.reconnect_delay_s:
-                return None
-
-            self._last_connect_attempt = now
-            return await self._connect()
-
-    async def _connect(self) -> object | None:
-        """Establish a RabbitMQ connection and declare the topic exchange."""
-        if aio_pika is None:
-            logger.debug("sleipnir: aio_pika not installed, publishing disabled")
-            return None
-
-        amqp_url = os.environ.get(self._config.amqp_url_env, "")
-        if not amqp_url:
-            logger.debug(
-                "sleipnir: %s not set, publishing disabled",
-                self._config.amqp_url_env,
-            )
-            return None
-
-        try:
-            connection = await aio_pika.connect_robust(amqp_url)
-            channel = await connection.channel()
-            exchange = await channel.declare_exchange(
-                self._config.exchange,
-                aio_pika.ExchangeType.TOPIC,
-                durable=True,
-            )
-            self._connection = connection
-            self._channel = channel
-            self._exchange = exchange
-            logger.debug(
-                "sleipnir: connected to %s, exchange=%s",
-                amqp_url,
-                self._config.exchange,
-            )
-            return exchange
-        except Exception as exc:
-            logger.debug("sleipnir: connection failed (%s), will retry", exc)
-            return None
-
-    async def _invalidate(self) -> None:
-        """Drop cached connection state so the next emit attempts to reconnect."""
-        self._exchange = None
-        self._channel = None
-        if self._connection is not None:
-            try:
-                await self._connection.close()  # type: ignore[union-attr]
-            except Exception:
-                pass
-        self._connection = None
+        await self._publish_to_exchange(routing_key, body)
