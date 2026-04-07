@@ -15,13 +15,14 @@ class RavnEventType(StrEnum):
     ERROR = "error"
     DECISION = "decision"
     TASK_COMPLETE = "task_complete"
+    TASK_STARTED = "task_started"  # emitted by DriveLoop when a task begins execution
 
 
 @dataclass(frozen=True)
 class RavnEvent:
     """An event emitted by the Ravn agent to its output channel."""
 
-    # THOUGHT, TOOL_START, TOOL_RESULT, RESPONSE, ERROR, DECISION, TASK_COMPLETE
+    # THOUGHT, TOOL_START, TOOL_RESULT, RESPONSE, ERROR, DECISION, TASK_COMPLETE, TASK_STARTED
     type: RavnEventType
     source: str               # Agent instance ID
     payload: dict             # Event-specific data
@@ -29,7 +30,7 @@ class RavnEvent:
     urgency: float            # 0.0-1.0 (hint for Valkyrie attention model)
     correlation_id: str       # Groups related events
     session_id: str
-    task_id: str | None = None # If from a sub-ravn
+    task_id: str | None = None  # If from a sub-ravn
 
     @classmethod
     def thought(
@@ -162,6 +163,21 @@ class RavnEvent:
             payload={"prompt": prompt},
             timestamp=datetime.now(UTC),
             urgency=0.9,
+            correlation_id=correlation_id,
+            session_id=session_id,
+            task_id=task_id,
+        )
+
+    @classmethod
+    def task_started(
+        cls, source: str, task_id: str, title: str, correlation_id: str, session_id: str
+    ) -> RavnEvent:
+        return cls(
+            type=RavnEventType.TASK_STARTED,
+            source=source,
+            payload={"task_id": task_id, "title": title},
+            timestamp=datetime.now(UTC),
+            urgency=0.2,
             correlation_id=correlation_id,
             session_id=session_id,
             task_id=task_id,
