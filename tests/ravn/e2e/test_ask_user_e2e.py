@@ -62,11 +62,11 @@ class TestAskUserE2E:
 
         # ask_user tool start was emitted.
         tool_starts = [e for e in channel.events if e.type == RavnEventType.TOOL_START]
-        assert any(e.data == "ask_user" for e in tool_starts)
+        assert any(e.payload["tool_name"] == "ask_user" for e in tool_starts)
 
         # ask_user result (the user's answer) was emitted.
         tool_results = [e for e in channel.events if e.type == RavnEventType.TOOL_RESULT]
-        assert any("list" in e.data for e in tool_results)
+        assert any("list" in e.payload["result"] for e in tool_results)
 
     async def test_clarification_injected_into_session(self) -> None:
         """The user's answer must appear in the session history as a tool result."""
@@ -157,7 +157,7 @@ class TestAskUserE2E:
         assert "Alice" in result.response
         # All three answers should appear in tool result events.
         tool_results = [e for e in channel.events if e.type == RavnEventType.TOOL_RESULT]
-        result_texts = " ".join(e.data for e in tool_results)
+        result_texts = " ".join(e.payload["result"] for e in tool_results)
         assert "Alice" in result_texts
         assert "30" in result_texts
         assert "Engineer" in result_texts
