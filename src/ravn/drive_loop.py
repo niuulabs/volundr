@@ -18,8 +18,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
 
+from ravn.adapters.channels.capture import CaptureChannel, TaskResult, TaskResultStore
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
 from ravn.config import InitiativeConfig, Settings
@@ -69,6 +69,7 @@ class DriveLoop:
         self._source_id = "drive_loop"
         self._counter = 0
         self._rpc_handler: MeshRpcHandler | None = None
+        self._result_store: TaskResultStore = TaskResultStore()
 
     # ------------------------------------------------------------------
     # Public API
@@ -122,21 +123,49 @@ class DriveLoop:
             for _prio, _counter, task in list(self._queue._queue)  # type: ignore[attr-defined]
         ]
 
-    def task_status(self, task_id: str) -> Literal["running", "queued", "unknown"]:
+    def task_status(self, task_id: str, include_progress: bool = False) -> str | dict:
         """Return the current status of a task by ID.
 
-        Returns one of:
+        When ``include_progress=False`` (default) returns one of:
         - ``"running"``  — task is actively executing
         - ``"queued"``   — task is in the priority queue, not yet started
         - ``"unknown"``  — task_id not found (may have completed or never existed)
+
+        When ``include_progress=True`` returns a dict::
+
+            {
+                "status": "<running|queued|unknown>",
+                "events": [{"type": ..., "summary": ..., "timestamp": ...}, ...],
+            }
+
+        The event list reflects all events accumulated so far by CaptureChannel.
         """
         if task_id in self._active_tasks:
-            return "running"
+            status = "running"
+        elif task_id in self.queued_task_ids():
+            status = "queued"
+        else:
+            status = "unknown"
 
-        if task_id in self.queued_task_ids():
-            return "queued"
+        if not include_progress:
+            return status
 
-        return "unknown"
+        result = self._result_store.get(task_id)
+        events_data: list[dict] = []
+        if result is not None:
+            events_data = [
+                {
+                    "type": e.type,
+                    "summary": e.summary,
+                    "timestamp": e.timestamp.isoformat(),
+                }
+                for e in result.events
+            ]
+        return {"status": status, "events": events_data}
+
+    def get_result(self, task_id: str) -> TaskResult | None:
+        """Return the full TaskResult for a completed (or running) task, or None."""
+        return self._result_store.get(task_id)
 
     def set_rpc_handler(self, handler: MeshRpcHandler) -> None:
         """Register a coroutine handler for incoming mesh RPC messages.
@@ -227,7 +256,11 @@ class DriveLoop:
 
     async def _run_task(self, task: AgentTask) -> None:
         """Execute a single initiative task."""
-        channel = SilentChannel()
+        if self._settings.cascade.enabled:
+            self._result_store.start(task.task_id, task.triggered_by)
+            channel: ChannelPort = CaptureChannel(task.task_id, self._result_store)
+        else:
+            channel = SilentChannel()
         agent = self._agent_factory(channel, task.task_id)
         prompt = build_initiative_prompt(task)
 
@@ -261,6 +294,7 @@ class DriveLoop:
             success = True
         except asyncio.CancelledError:
             logger.info("drive_loop: task %s cancelled mid-turn", task.task_id)
+            self._result_store.set_status(task.task_id, "cancelled")
             await self._event_publisher.publish(
                 RavnEvent(
                     type=RavnEventType.TASK_COMPLETE,
