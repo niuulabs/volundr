@@ -1440,6 +1440,7 @@ async def _run_daemon(
 
     event_publisher: EventPublisherPort = NoOpEventPublisher()
     trigger_names: list[str] = []
+    drive_loop: Any = None
     if settings.initiative.enabled:
         if settings.sleipnir.enabled:
             event_publisher = RabbitMQEventPublisher(settings.sleipnir)
@@ -1451,6 +1452,11 @@ async def _run_daemon(
             event_publisher=event_publisher,
         )
         _wire_triggers(drive_loop, settings.initiative)
+
+        # Wire cascade tools when enabled (Mode 1 local + optional mesh/spawn)
+        if settings.cascade.enabled:
+            _wire_cascade(drive_loop, settings)
+
         trigger_names = [t.name for t in drive_loop._triggers]
         tasks.append(asyncio.create_task(drive_loop.run(), name="drive_loop"))
 
@@ -1530,6 +1536,136 @@ def _wire_triggers(drive_loop: Any, initiative: InitiativeConfig) -> None:
 
         except Exception as exc:
             logger.error("Failed to wire trigger %r: %s", tc.name, exc)
+
+
+def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
+    """Wire cascade tools and mesh RPC handler onto the drive loop.
+
+    This wires up:
+    - The mesh RPC handler (task_dispatch, task_status, task_cancel)
+    - Cascade tools are registered later when the agent factory is called
+
+    The drive_loop is mutated in-place (set_rpc_handler).
+    """
+    from ravn.adapters.tools.cascade_tools import build_cascade_tools  # noqa: PLC0415
+
+    # Build optional mesh and discovery adapters
+    mesh: Any = None
+    discovery: Any = None
+
+    if settings.mesh.enabled if hasattr(settings.mesh, "enabled") else False:
+        try:
+            mesh = _build_mesh(settings)
+        except Exception as exc:
+            logger.warning("cascade: failed to build mesh adapter: %s", exc)
+
+    if settings.discovery.enabled if hasattr(settings.discovery, "enabled") else False:
+        try:
+            discovery = _build_discovery(settings)
+        except Exception as exc:
+            logger.warning("cascade: failed to build discovery adapter: %s", exc)
+
+    # Build cascade tools (Mode 1 always; Mode 2/3 when mesh/discovery available)
+    cascade_tools = build_cascade_tools(
+        drive_loop=drive_loop,
+        mesh=mesh,
+        discovery=discovery,
+        spawn_adapter=None,  # spawn adapter wired separately if needed
+    )
+    logger.info(
+        "cascade: registered %d tools (mesh=%s, discovery=%s)",
+        len(cascade_tools),
+        mesh is not None,
+        discovery is not None,
+    )
+
+    # Store cascade tools on drive_loop for agent_factory to pick up
+    drive_loop._cascade_tools = cascade_tools
+
+    # Wire the mesh RPC handler
+    async def _handle_mesh_rpc(message: dict) -> dict:
+        msg_type = message.get("type")
+
+        if msg_type == "task_dispatch":
+            task_dict = message.get("task", {})
+            try:
+                from ravn.domain.models import AgentTask, OutputMode  # noqa: PLC0415
+
+                task = AgentTask(
+                    task_id=task_dict["task_id"],
+                    title=task_dict.get("title", "remote task"),
+                    initiative_context=task_dict.get("initiative_context", ""),
+                    triggered_by=task_dict.get("triggered_by", "cascade:remote"),
+                    output_mode=OutputMode(task_dict.get("output_mode", "silent")),
+                    persona=task_dict.get("persona"),
+                    priority=int(task_dict.get("priority", 5)),
+                )
+                await drive_loop.enqueue(task)
+                return {"status": "accepted", "task_id": task.task_id}
+            except Exception as exc:
+                logger.error("cascade: task_dispatch failed: %s", exc)
+                return {"status": "rejected", "error": str(exc)}
+
+        if msg_type == "task_status":
+            task_id = message.get("task_id", "")
+            if task_id == "__list__":
+                active = list(drive_loop._active_tasks.keys())
+                queued = [
+                    task.task_id
+                    for _p, _c, task in list(drive_loop._queue._queue)  # type: ignore[attr-defined]
+                ]
+                return {"active": active, "queued": queued}
+            status = drive_loop.task_status(task_id)
+            return {"task_id": task_id, "status": status}
+
+        if msg_type == "task_cancel":
+            task_id = message.get("task_id", "")
+            await drive_loop.cancel(task_id)
+            return {"status": "cancelled", "task_id": task_id}
+
+        if msg_type == "task_result":
+            # Basic implementation — actual output collection via channel is future work
+            task_id = message.get("task_id", "")
+            status = drive_loop.task_status(task_id)
+            return {"task_id": task_id, "status": status, "output": None}
+
+        return {"error": "unknown_message_type", "type": msg_type}
+
+    drive_loop.set_rpc_handler(_handle_mesh_rpc)
+
+    if mesh is not None and hasattr(mesh, "set_rpc_handler"):
+        mesh.set_rpc_handler(drive_loop.handle_rpc)
+
+
+def _build_mesh(settings: Settings) -> Any:
+    """Build the mesh adapter from config."""
+    mesh_cfg = settings.mesh
+    adapter_path = getattr(mesh_cfg, "adapter", "nng")
+
+    adapter_map = {
+        "nng": "ravn.adapters.mesh.nng_mesh.NngMeshAdapter",
+        "sleipnir": "ravn.adapters.mesh.sleipnir_mesh.SleipnirMeshAdapter",
+        "composite": "ravn.adapters.mesh.composite_mesh.CompositeMeshAdapter",
+    }
+    dotted = adapter_map.get(adapter_path, adapter_path)
+    cls = _import_class(dotted)
+    return cls(settings)
+
+
+def _build_discovery(settings: Settings) -> Any:
+    """Build the discovery adapter from config."""
+    disc_cfg = settings.discovery
+    adapter_path = getattr(disc_cfg, "adapter", "mdns")
+
+    adapter_map = {
+        "mdns": "ravn.adapters.discovery.mdns.MdnsDiscoveryAdapter",
+        "sleipnir": "ravn.adapters.discovery.sleipnir.SleipnirDiscoveryAdapter",
+        "k8s": "ravn.adapters.discovery.k8s.K8sDiscoveryAdapter",
+        "composite": "ravn.adapters.discovery.composite.CompositeDiscoveryAdapter",
+    }
+    dotted = adapter_map.get(adapter_path, adapter_path)
+    cls = _import_class(dotted)
+    return cls(settings)
 
 
 @app.command()
