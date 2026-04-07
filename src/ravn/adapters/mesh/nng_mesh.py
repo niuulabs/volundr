@@ -35,7 +35,9 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
-from ravn.domain.events import RavnEvent, RavnEventType
+from ravn.adapters.mesh._serialization import decode_event as _decode_event
+from ravn.adapters.mesh._serialization import encode_event as _encode_event
+from ravn.domain.events import RavnEvent
 from ravn.ports.mesh import PeerNotFoundError
 
 if TYPE_CHECKING:
@@ -53,42 +55,15 @@ _TOPIC_SEP = b"\x00"
 
 
 def _encode_message(topic: str, event: RavnEvent) -> bytes:
-    body = json.dumps(
-        {
-            "type": event.type,
-            "source": event.source,
-            "payload": event.payload,
-            "timestamp": event.timestamp.isoformat(),
-            "urgency": event.urgency,
-            "correlation_id": event.correlation_id,
-            "session_id": event.session_id,
-            "task_id": event.task_id,
-        }
-    ).encode()
-    return topic.encode() + _TOPIC_SEP + body
+    """Encode *event* as a topic-prefixed nng PUB/SUB frame."""
+    return topic.encode() + _TOPIC_SEP + _encode_event(event)
 
 
 def _decode_message(data: bytes) -> tuple[str, RavnEvent]:
+    """Decode a topic-prefixed nng PUB/SUB frame into *(topic, event)*."""
     sep_idx = data.index(_TOPIC_SEP)
     topic = data[:sep_idx].decode()
-    raw = json.loads(data[sep_idx + 1 :])
-    event = RavnEvent(
-        type=RavnEventType(raw["type"]),
-        source=raw["source"],
-        payload=raw["payload"],
-        timestamp=_parse_dt(raw["timestamp"]),
-        urgency=raw["urgency"],
-        correlation_id=raw["correlation_id"],
-        session_id=raw["session_id"],
-        task_id=raw.get("task_id"),
-    )
-    return topic, event
-
-
-def _parse_dt(ts: str):  # type: ignore[return]
-    from datetime import datetime
-
-    return datetime.fromisoformat(ts)
+    return topic, _decode_event(data[sep_idx + 1 :])
 
 
 class NngMeshAdapter:
@@ -224,9 +199,10 @@ class NngMeshAdapter:
         pub.listen(self._config.pub_sub_address)
         self._pub_socket = pub
 
-        # SUB socket — connect to each known peer's PUB address
+        # SUB socket — connect to each known peer's PUB address.
+        # Subscribe only to registered topics; the nng topic filter uses a
+        # bytes prefix match so only matching frames are delivered.
         sub = pynng.Sub0()  # type: ignore[attr-defined]
-        sub.subscribe(b"")  # subscribe to all topics; filtered in handler
         for topic in self._handlers:
             sub.subscribe(topic.encode())
         self._sub_socket = sub

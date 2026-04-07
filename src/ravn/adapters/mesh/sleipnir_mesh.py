@@ -30,10 +30,11 @@ import logging
 import os
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import datetime
 from typing import TYPE_CHECKING
 
-from ravn.domain.events import RavnEvent, RavnEventType
+from ravn.adapters.mesh._serialization import decode_event as _decode_event
+from ravn.adapters.mesh._serialization import encode_event as _encode_event
+from ravn.domain.events import RavnEvent
 from ravn.ports.mesh import PeerNotFoundError
 
 if TYPE_CHECKING:
@@ -47,35 +48,6 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 _RPC_ROUTING_PREFIX = "ravn.mesh.rpc"
-
-
-def _encode_event(event: RavnEvent) -> bytes:
-    return json.dumps(
-        {
-            "type": event.type,
-            "source": event.source,
-            "payload": event.payload,
-            "timestamp": event.timestamp.isoformat(),
-            "urgency": event.urgency,
-            "correlation_id": event.correlation_id,
-            "session_id": event.session_id,
-            "task_id": event.task_id,
-        }
-    ).encode()
-
-
-def _decode_event(data: bytes) -> RavnEvent:
-    raw = json.loads(data)
-    return RavnEvent(
-        type=RavnEventType(raw["type"]),
-        source=raw["source"],
-        payload=raw["payload"],
-        timestamp=datetime.fromisoformat(raw["timestamp"]),
-        urgency=raw["urgency"],
-        correlation_id=raw["correlation_id"],
-        session_id=raw["session_id"],
-        task_id=raw.get("task_id"),
-    )
 
 
 class SleipnirMeshAdapter:
@@ -215,6 +187,8 @@ class SleipnirMeshAdapter:
                         async for incoming in q_iter:
                             async with incoming.process():
                                 return json.loads(incoming.body)
+                    # Iterator exhausted without delivering a reply.
+                    raise TimeoutError(f"No reply from peer {target_peer_id!r} within {timeout_s}s")
             except TimeoutError as exc:
                 raise TimeoutError(
                     f"No reply from peer {target_peer_id!r} within {timeout_s}s"
