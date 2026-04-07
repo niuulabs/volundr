@@ -1571,6 +1571,7 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
         mesh=mesh,
         discovery=discovery,
         spawn_adapter=None,  # spawn adapter wired separately if needed
+        cascade_config=settings.cascade,
     )
     logger.info(
         "cascade: registered %d tools (mesh=%s, discovery=%s)",
@@ -1606,15 +1607,14 @@ def _wire_cascade(drive_loop: Any, settings: Settings) -> None:
                 logger.error("cascade: task_dispatch failed: %s", exc)
                 return {"status": "rejected", "error": str(exc)}
 
+        if msg_type == "task_list":
+            return {
+                "active": drive_loop.active_task_ids(),
+                "queued": drive_loop.queued_task_ids(),
+            }
+
         if msg_type == "task_status":
             task_id = message.get("task_id", "")
-            if task_id == "__list__":
-                active = list(drive_loop._active_tasks.keys())
-                queued = [
-                    task.task_id
-                    for _p, _c, task in list(drive_loop._queue._queue)  # type: ignore[attr-defined]
-                ]
-                return {"active": active, "queued": queued}
             status = drive_loop.task_status(task_id)
             return {"task_id": task_id, "status": status}
 

@@ -111,9 +111,18 @@ class DriveLoop:
             running.cancel()
             logger.info("drive_loop: cancel requested for task %s", task_id)
 
-    def task_status(
-        self, task_id: str
-    ) -> Literal["running", "queued", "unknown"]:
+    def active_task_ids(self) -> list[str]:
+        """Return task IDs that are currently executing."""
+        return list(self._active_tasks.keys())
+
+    def queued_task_ids(self) -> list[str]:
+        """Return task IDs waiting in the priority queue (not yet started)."""
+        return [
+            task.task_id
+            for _prio, _counter, task in list(self._queue._queue)  # type: ignore[attr-defined]
+        ]
+
+    def task_status(self, task_id: str) -> Literal["running", "queued", "unknown"]:
         """Return the current status of a task by ID.
 
         Returns one of:
@@ -124,9 +133,8 @@ class DriveLoop:
         if task_id in self._active_tasks:
             return "running"
 
-        for _prio, _counter, task in list(self._queue._queue):  # type: ignore[attr-defined]
-            if task.task_id == task_id:
-                return "queued"
+        if task_id in self.queued_task_ids():
+            return "queued"
 
         return "unknown"
 

@@ -42,6 +42,7 @@ class SubprocessSpawnAdapter:
         self._discovery = discovery
         self._ravn_executable = ravn_executable
         self._spawn_timeout_s = spawn_timeout_s
+        self._poll_interval_s: float = _POLL_INTERVAL_S
         # peer_id → (process, tempfile path)
         self._spawned: dict[str, tuple[asyncio.subprocess.Process, Path]] = {}
 
@@ -52,13 +53,10 @@ class SubprocessSpawnAdapter:
         The subprocess is started with ``RAVN_CONFIG`` pointing at that file.
         We then poll DiscoveryPort until the new peer_id appears.
 
-        Raises ``TimeoutError`` if registration does not complete in time.
+        All instances are spawned concurrently via asyncio.gather.
+        Raises ``TimeoutError`` if any instance fails to register in time.
         """
-        peer_ids: list[str] = []
-        for _ in range(count):
-            peer_id = await self._spawn_one(config)
-            peer_ids.append(peer_id)
-        return peer_ids
+        return list(await asyncio.gather(*[self._spawn_one(config) for _ in range(count)]))
 
     async def terminate(self, peer_id: str) -> None:
         """Gracefully terminate a single spawned instance."""
@@ -124,7 +122,7 @@ class SubprocessSpawnAdapter:
         """Poll DiscoveryPort until a new peer with matching persona appears."""
         known: set[str] = set(getattr(self._discovery, "peers", lambda: {})().keys())
         while True:
-            await asyncio.sleep(_POLL_INTERVAL_S)
+            await asyncio.sleep(self._poll_interval_s)
             current: dict = getattr(self._discovery, "peers", lambda: {})()
             new_peers = {pid: p for pid, p in current.items() if pid not in known}
             for pid, peer in new_peers.items():

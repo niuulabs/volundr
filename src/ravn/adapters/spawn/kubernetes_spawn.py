@@ -61,19 +61,17 @@ class KubernetesJobSpawnAdapter:
         self._memory_request = memory_request
         self._gpu_count = gpu_count
         self._extra_env = extra_env or {}
+        self._poll_interval_s: float = _POLL_INTERVAL_S
         # peer_id → job_name
         self._spawned: dict[str, str] = {}
 
     async def spawn(self, count: int, config: SpawnConfig) -> list[str]:
         """Spawn *count* Ravn Kubernetes Jobs and return their peer_ids.
 
+        All Jobs are created concurrently via asyncio.gather.
         Raises ``TimeoutError`` if any instance fails to register.
         """
-        peer_ids: list[str] = []
-        for _ in range(count):
-            peer_id = await self._spawn_one(config)
-            peer_ids.append(peer_id)
-        return peer_ids
+        return list(await asyncio.gather(*[self._spawn_one(config) for _ in range(count)]))
 
     async def terminate(self, peer_id: str) -> None:
         """Delete the Kubernetes Job for a spawned instance."""
@@ -119,7 +117,7 @@ class KubernetesJobSpawnAdapter:
         """Poll DiscoveryPort until a new peer with matching persona appears."""
         known: set[str] = set(getattr(self._discovery, "peers", lambda: {})().keys())
         while True:
-            await asyncio.sleep(_POLL_INTERVAL_S)
+            await asyncio.sleep(self._poll_interval_s)
             current: dict = getattr(self._discovery, "peers", lambda: {})()
             new_peers = {pid: p for pid, p in current.items() if pid not in known}
             for pid, peer in new_peers.items():
@@ -185,9 +183,7 @@ class KubernetesJobSpawnAdapter:
                 ttl_seconds_after_finished=300,
                 backoff_limit=0,
                 template=k8s_client.V1PodTemplateSpec(
-                    metadata=k8s_client.V1ObjectMeta(
-                        labels={"app": "ravn", "job-name": job_name}
-                    ),
+                    metadata=k8s_client.V1ObjectMeta(labels={"app": "ravn", "job-name": job_name}),
                     spec=k8s_client.V1PodSpec(
                         restart_policy="Never",
                         containers=[

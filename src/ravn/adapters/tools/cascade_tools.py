@@ -32,9 +32,10 @@ logger = logging.getLogger(__name__)
 
 _PERMISSION = "cascade:manage"
 
-# Polling config for task_collect
-_COLLECT_POLL_INTERVAL_S = 2.0
-_COLLECT_DEFAULT_TIMEOUT_S = 300.0
+# Defaults — overridden by CascadeConfig when wired through build_cascade_tools()
+_DEFAULT_MESH_DELEGATION_TIMEOUT_S = 30.0
+_DEFAULT_COLLECT_POLL_INTERVAL_S = 2.0
+_DEFAULT_COLLECT_TIMEOUT_S = 300.0
 
 
 def _new_task_id() -> str:
@@ -64,11 +65,13 @@ class TaskCreateTool(ToolPort):
         mesh: MeshPort | None = None,
         discovery: DiscoveryPort | None = None,
         spawn_adapter: SpawnPort | None = None,
+        mesh_delegation_timeout_s: float = _DEFAULT_MESH_DELEGATION_TIMEOUT_S,
     ) -> None:
         self._drive_loop = drive_loop
         self._mesh = mesh
         self._discovery = discovery
         self._spawn = spawn_adapter
+        self._mesh_delegation_timeout_s = mesh_delegation_timeout_s
         # task_id → peer_id for remote tasks
         self._remote_tasks: dict[str, str] = {}
 
@@ -226,7 +229,7 @@ class TaskCreateTool(ToolPort):
             reply = await self._mesh.send(
                 target_peer_id=peer_id,
                 message={"type": "task_dispatch", "task": task_dict},
-                timeout_s=30.0,
+                timeout_s=self._mesh_delegation_timeout_s,
             )
             if reply.get("status") == "accepted":
                 self._remote_tasks[task_id] = peer_id
@@ -274,11 +277,13 @@ class TaskStatusTool(ToolPort):
         drive_loop: DriveLoop,
         mesh: MeshPort | None = None,
         remote_tasks: dict[str, str] | None = None,
+        mesh_delegation_timeout_s: float = _DEFAULT_MESH_DELEGATION_TIMEOUT_S,
     ) -> None:
         self._drive_loop = drive_loop
         self._mesh = mesh
         # Shared dict: task_id → peer_id (populated by TaskCreateTool)
         self._remote_tasks: dict[str, str] = remote_tasks if remote_tasks is not None else {}
+        self._mesh_delegation_timeout_s = mesh_delegation_timeout_s
 
     @property
     def name(self) -> str:
@@ -317,7 +322,7 @@ class TaskStatusTool(ToolPort):
                 reply = await self._mesh.send(
                     target_peer_id=peer_id,
                     message={"type": "task_status", "task_id": task_id},
-                    timeout_s=10.0,
+                    timeout_s=self._mesh_delegation_timeout_s,
                 )
                 return ToolResult(tool_call_id="", content=json.dumps(reply))
             except Exception as exc:
@@ -343,10 +348,12 @@ class TaskListTool(ToolPort):
         drive_loop: DriveLoop,
         mesh: MeshPort | None = None,
         discovery: DiscoveryPort | None = None,
+        mesh_delegation_timeout_s: float = _DEFAULT_MESH_DELEGATION_TIMEOUT_S,
     ) -> None:
         self._drive_loop = drive_loop
         self._mesh = mesh
         self._discovery = discovery
+        self._mesh_delegation_timeout_s = mesh_delegation_timeout_s
 
     @property
     def name(self) -> str:
@@ -372,30 +379,30 @@ class TaskListTool(ToolPort):
 
         if self._mesh is not None and self._discovery is not None:
             peers = self._discovery.peers()
-            remote_results: list[dict] = []
-            for peer_id, peer in peers.items():
+
+            async def _query_peer(peer_id: str) -> dict:
                 try:
                     reply = await asyncio.wait_for(
                         self._mesh.send(
                             target_peer_id=peer_id,
-                            message={"type": "task_status", "task_id": "__list__"},
+                            message={"type": "task_list"},
                         ),
-                        timeout=5.0,
+                        timeout=self._mesh_delegation_timeout_s,
                     )
-                    remote_results.append({"peer_id": peer_id, "reply": reply})
+                    return {"peer_id": peer_id, "reply": reply}
                 except Exception as exc:
-                    remote_results.append({"peer_id": peer_id, "error": str(exc)})
-            result["remote"] = remote_results
+                    return {"peer_id": peer_id, "error": str(exc)}
+
+            remote_results = await asyncio.gather(*[_query_peer(pid) for pid in peers])
+            result["remote"] = list(remote_results)
 
         return ToolResult(tool_call_id="", content=json.dumps(result, indent=2))
 
     def _local_task_list(self) -> dict:
-        active = list(self._drive_loop._active_tasks.keys())
-        queued = [
-            task.task_id
-            for _prio, _counter, task in list(self._drive_loop._queue._queue)  # type: ignore[attr-defined]
-        ]
-        return {"active": active, "queued": queued}
+        return {
+            "active": self._drive_loop.active_task_ids(),
+            "queued": self._drive_loop.queued_task_ids(),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -428,9 +435,7 @@ class TaskStopTool(ToolPort):
     def input_schema(self) -> dict:
         return {
             "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "Task ID to cancel."}
-            },
+            "properties": {"task_id": {"type": "string", "description": "Task ID to cancel."}},
             "required": ["task_id"],
         }
 
@@ -483,8 +488,8 @@ class TaskCollectTool(ToolPort):
         drive_loop: DriveLoop,
         mesh: MeshPort | None = None,
         remote_tasks: dict[str, str] | None = None,
-        poll_interval_s: float = _COLLECT_POLL_INTERVAL_S,
-        default_timeout_s: float = _COLLECT_DEFAULT_TIMEOUT_S,
+        poll_interval_s: float = _DEFAULT_COLLECT_POLL_INTERVAL_S,
+        default_timeout_s: float = _DEFAULT_COLLECT_TIMEOUT_S,
     ) -> None:
         self._drive_loop = drive_loop
         self._mesh = mesh
@@ -512,7 +517,7 @@ class TaskCollectTool(ToolPort):
                 "task_id": {"type": "string", "description": "Task ID to collect."},
                 "timeout_s": {
                     "type": "number",
-                    "description": f"Timeout in seconds (default {_COLLECT_DEFAULT_TIMEOUT_S}).",
+                    "description": f"Timeout in seconds (default {_DEFAULT_COLLECT_TIMEOUT_S}).",
                 },
             },
             "required": ["task_id"],
@@ -793,12 +798,29 @@ def build_cascade_tools(
     mesh: MeshPort | None = None,
     discovery: DiscoveryPort | None = None,
     spawn_adapter: SpawnPort | None = None,
+    cascade_config: object | None = None,
 ) -> list[ToolPort]:
     """Build and return all cascade tools.
 
     Shared ``remote_tasks`` dict wires task_create → task_status/stop/collect
     so they can look up which peer owns a remote task.
+
+    Pass a ``CascadeConfig`` instance as ``cascade_config`` to thread timing
+    values from settings instead of using the built-in defaults.
     """
+    if cascade_config is None:
+        from ravn.config import CascadeConfig as _CascadeConfig  # noqa: PLC0415
+
+        cascade_config = _CascadeConfig()
+
+    delegation_timeout = getattr(
+        cascade_config, "mesh_delegation_timeout_s", _DEFAULT_MESH_DELEGATION_TIMEOUT_S
+    )
+    collect_poll = getattr(
+        cascade_config, "collect_poll_interval_s", _DEFAULT_COLLECT_POLL_INTERVAL_S
+    )
+    collect_timeout = getattr(cascade_config, "collect_timeout_s", _DEFAULT_COLLECT_TIMEOUT_S)
+
     remote_tasks: dict[str, str] = {}
 
     task_create = TaskCreateTool(
@@ -806,16 +828,33 @@ def build_cascade_tools(
         mesh=mesh,
         discovery=discovery,
         spawn_adapter=spawn_adapter,
+        mesh_delegation_timeout_s=delegation_timeout,
     )
     # Share the remote_tasks mapping so other tools can track remote tasks
     task_create._remote_tasks = remote_tasks
 
     tools: list[ToolPort] = [
         task_create,
-        TaskStatusTool(drive_loop=drive_loop, mesh=mesh, remote_tasks=remote_tasks),
-        TaskListTool(drive_loop=drive_loop, mesh=mesh, discovery=discovery),
+        TaskStatusTool(
+            drive_loop=drive_loop,
+            mesh=mesh,
+            remote_tasks=remote_tasks,
+            mesh_delegation_timeout_s=delegation_timeout,
+        ),
+        TaskListTool(
+            drive_loop=drive_loop,
+            mesh=mesh,
+            discovery=discovery,
+            mesh_delegation_timeout_s=delegation_timeout,
+        ),
         TaskStopTool(drive_loop=drive_loop, mesh=mesh, remote_tasks=remote_tasks),
-        TaskCollectTool(drive_loop=drive_loop, mesh=mesh, remote_tasks=remote_tasks),
+        TaskCollectTool(
+            drive_loop=drive_loop,
+            mesh=mesh,
+            remote_tasks=remote_tasks,
+            poll_interval_s=collect_poll,
+            default_timeout_s=collect_timeout,
+        ),
     ]
 
     if discovery is not None:

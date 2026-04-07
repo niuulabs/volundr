@@ -229,6 +229,34 @@ async def test_mesh_rpc_task_status():
 
 
 @pytest.mark.asyncio
+async def test_mesh_rpc_task_list():
+    dl = _make_drive_loop()
+    task = _make_agent_task("list-task")
+    await dl.enqueue(task)
+    dl._active_tasks["active-task"] = MagicMock()
+
+    from ravn.cli.commands import _wire_cascade  # type: ignore[attr-defined]
+
+    settings = MagicMock(spec=Settings)
+    settings.cascade = MagicMock()
+    settings.cascade.enabled = True
+    settings.mesh = MagicMock()
+    settings.mesh.enabled = False
+    settings.discovery = MagicMock()
+    settings.discovery.enabled = False
+
+    with patch("ravn.cli.commands._build_mesh", side_effect=RuntimeError):
+        with patch("ravn.cli.commands._build_discovery", side_effect=RuntimeError):
+            _wire_cascade(dl, settings)
+
+    reply = await dl.handle_rpc({"type": "task_list"})
+    assert "active" in reply
+    assert "queued" in reply
+    assert "active-task" in reply["active"]
+    assert "list-task" in reply["queued"]
+
+
+@pytest.mark.asyncio
 async def test_mesh_rpc_task_cancel():
     dl = _make_drive_loop()
     # Fake an active task
