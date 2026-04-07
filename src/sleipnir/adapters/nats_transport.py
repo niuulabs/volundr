@@ -210,7 +210,7 @@ async def _ensure_stream(
         name=stream_name,
         subjects=[f"{subject_prefix}.>"],
         retention=_parse_retention(retention),
-        max_age=max_age_seconds * _NANOS_PER_SECOND,
+        max_age=max_age_seconds,  # nats-py converts to nanoseconds internally
         max_bytes=max_bytes,
         storage=js_api.StorageType.FILE,
         num_replicas=1,

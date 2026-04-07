@@ -26,8 +26,8 @@ CREATE TABLE IF NOT EXISTS ravn_episodes (
     -- Cast to vector type when pgvector is available: embedding::vector
     embedding        TEXT,
     search_vector    tsvector GENERATED ALWAYS AS (
-        to_tsvector('english',
-            summary || ' ' || task_description || ' ' || array_to_string(tags, ' ')
+        to_tsvector('english'::regconfig,
+            coalesce(summary, '') || ' ' || coalesce(task_description, '') || ' ' || array_to_string(tags, ' ')
         )
     ) STORED
 );
