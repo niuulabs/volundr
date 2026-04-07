@@ -1089,6 +1089,22 @@ class CascadeConfig(BaseModel):
         default=30.0,
         description="Timeout for mesh.send() during task delegation.",
     )
+    stuck_timeout_seconds: int = Field(
+        default=60,
+        description="Seconds of inactivity before a sub-agent is considered stuck.",
+    )
+    loop_detection_threshold: int = Field(
+        default=3,
+        description="Number of consecutive identical tool calls that trigger loop detection.",
+    )
+    on_stuck: str = Field(
+        default="replan",
+        description="Strategy when a stuck sub-agent is detected: retry | replan | escalate | abort.",
+    )
+    max_retries: int = Field(
+        default=2,
+        description="Maximum retry attempts before giving up (used with on_stuck=retry).",
+    )
 
 
 class LoggingConfig(BaseModel):
