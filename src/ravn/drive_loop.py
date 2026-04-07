@@ -18,6 +18,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from ravn.adapters.channels.silent import SilentChannel
 from ravn.adapters.events.noop_publisher import NoOpEventPublisher
@@ -30,6 +31,9 @@ from ravn.ports.trigger import TriggerPort
 from ravn.prompt_builder import build_initiative_prompt
 
 logger = logging.getLogger(__name__)
+
+# Type alias for the mesh RPC handler callable
+MeshRpcHandler = Callable[[dict], Awaitable[dict]]
 
 
 class DriveLoop:
@@ -64,6 +68,7 @@ class DriveLoop:
         self._journal_path = Path(config.queue_journal_path).expanduser()
         self._source_id = "drive_loop"
         self._counter = 0
+        self._rpc_handler: MeshRpcHandler | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -105,6 +110,54 @@ class DriveLoop:
         if running is not None:
             running.cancel()
             logger.info("drive_loop: cancel requested for task %s", task_id)
+
+    def active_task_ids(self) -> list[str]:
+        """Return task IDs that are currently executing."""
+        return list(self._active_tasks.keys())
+
+    def queued_task_ids(self) -> list[str]:
+        """Return task IDs waiting in the priority queue (not yet started)."""
+        return [
+            task.task_id
+            for _prio, _counter, task in list(self._queue._queue)  # type: ignore[attr-defined]
+        ]
+
+    def task_status(self, task_id: str) -> Literal["running", "queued", "unknown"]:
+        """Return the current status of a task by ID.
+
+        Returns one of:
+        - ``"running"``  — task is actively executing
+        - ``"queued"``   — task is in the priority queue, not yet started
+        - ``"unknown"``  — task_id not found (may have completed or never existed)
+        """
+        if task_id in self._active_tasks:
+            return "running"
+
+        if task_id in self.queued_task_ids():
+            return "queued"
+
+        return "unknown"
+
+    def set_rpc_handler(self, handler: MeshRpcHandler) -> None:
+        """Register a coroutine handler for incoming mesh RPC messages.
+
+        The handler is called with the raw message dict and must return a
+        dict reply.  Registered via MeshPort.set_rpc_handler() in _run_daemon().
+        """
+        self._rpc_handler = handler
+
+    async def handle_rpc(self, message: dict) -> dict:
+        """Dispatch an incoming mesh RPC message to the registered handler.
+
+        Falls back to an error reply if no handler is registered.
+        """
+        if self._rpc_handler is None:
+            return {"error": "no_rpc_handler_registered"}
+        try:
+            return await self._rpc_handler(message)
+        except Exception as exc:
+            logger.error("drive_loop: rpc handler raised: %s", exc)
+            return {"error": str(exc)}
 
     # ------------------------------------------------------------------
     # Main run loop

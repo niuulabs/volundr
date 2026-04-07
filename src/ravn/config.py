@@ -1061,6 +1061,36 @@ class InitiativeConfig(BaseModel):
     )
 
 
+class CascadeConfig(BaseModel):
+    """Cascade system configuration (NIU-435).
+
+    Controls the coordinator/flock delegation and ephemeral spawn system.
+    When enabled, cascade tools (task_create, task_status, etc.) are registered
+    on the daemon agent.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable cascade coordinator tools.",
+    )
+    spawn_timeout_s: float = Field(
+        default=30.0,
+        description="Seconds to wait for a spawned peer to register.",
+    )
+    collect_timeout_s: float = Field(
+        default=300.0,
+        description="Default timeout for task_collect (seconds).",
+    )
+    collect_poll_interval_s: float = Field(
+        default=2.0,
+        description="Polling interval for task_collect (seconds).",
+    )
+    mesh_delegation_timeout_s: float = Field(
+        default=30.0,
+        description="Timeout for mesh.send() during task delegation.",
+    )
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -1371,6 +1401,9 @@ class Settings(BaseSettings):
 
     # NIU-538: flock peer discovery
     discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)
+
+    # NIU-435: cascade coordinator / flock delegation / ephemeral spawn
+    cascade: CascadeConfig = Field(default_factory=CascadeConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)
