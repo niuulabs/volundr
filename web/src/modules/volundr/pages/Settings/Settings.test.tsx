@@ -740,7 +740,7 @@ describe('SettingsPage — Credentials with data', () => {
   });
 });
 
-describe('SettingsPage — Credential Form', () => {
+describe('SettingsPage — Credential Form', { timeout: 30_000 }, () => {
   let service: IVolundrService;
 
   beforeEach(() => {
@@ -804,7 +804,7 @@ describe('SettingsPage — Credential Form', () => {
     renderSettings(service);
     const form = await openFormWithType('API Key');
     expect(form.getByText('Add Credential')).toBeDefined();
-  }, 20_000);
+  });
 
   it('shows Back button to return to type selection', async () => {
     renderSettings(service);

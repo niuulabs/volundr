@@ -384,11 +384,19 @@ async def test_publish_message_content_type_is_json():
 
 
 async def test_subscriber_start_declares_exchanges_and_queue():
-    """start() declares DLX, main exchange, and subscriber queue."""
+    """start() declares DLX, main exchange, and subscriber queue.
+
+    Consumption is deferred until first subscribe() call so that
+    pre-existing messages are not consumed before handlers are registered.
+    """
     mocks = _make_amqp_mocks()
     with patch("aio_pika.connect_robust", return_value=mocks["connection"]):
         sub = RabbitMQSubscriber(service_id="ravn:test")
         await sub.start()
+        # consume is deferred — not called until subscribe()
+        mocks["queue"].consume.assert_not_called()
+        await sub.subscribe(["ravn.*"], lambda e: None)
+        mocks["queue"].consume.assert_called_once()
         await sub.stop()
 
     declare_calls = mocks["channel"].declare_exchange.call_args_list
@@ -397,7 +405,6 @@ async def test_subscriber_start_declares_exchanges_and_queue():
     assert DEFAULT_EXCHANGE_NAME in exchange_names
 
     mocks["channel"].declare_queue.assert_called_once()
-    mocks["queue"].consume.assert_called_once()
 
 
 async def test_subscriber_named_queue_is_durable():
@@ -455,6 +462,8 @@ async def test_subscriber_stop_cancels_consumer():
     with patch("aio_pika.connect_robust", return_value=mocks["connection"]):
         sub = RabbitMQSubscriber()
         await sub.start()
+        # Must subscribe to trigger consume before stop can cancel it.
+        await sub.subscribe(["ravn.*"], lambda e: None)
         consumer_tag = sub._consumer_tag
         await sub.stop()
 
