@@ -1156,6 +1156,80 @@ class MeshSleipnirConfig(BaseModel):
     )
 
 
+class DiscoveryMdnsConfig(BaseModel):
+    """mDNS-specific discovery settings (Pi mode)."""
+
+    service_type: str = Field(
+        default="_ravn._tcp.local",
+        description="mDNS service type for flock discovery.",
+    )
+    handshake_timeout_s: float = Field(
+        default=5.0,
+        description="Seconds to wait for HMAC handshake completion.",
+    )
+
+
+class DiscoverySleipnirConfig(BaseModel):
+    """Sleipnir-specific discovery settings (infra mode)."""
+
+    heartbeat_interval_s: float = Field(
+        default=60.0,
+        description="Seconds between Sleipnir announce heartbeats.",
+    )
+    convergence_wait_s: float = Field(
+        default=5.0,
+        description="Seconds to wait on startup for other peers to announce.",
+    )
+    spiffe_audience_env: str = Field(
+        default="SPIFFE_TRUST_DOMAIN",
+        description="Env var containing the SPIFFE trust domain for JWT-SVID validation.",
+    )
+
+
+class DiscoveryK8sConfig(BaseModel):
+    """Kubernetes label adapter settings (infra mode cold-start)."""
+
+    namespace: str = Field(
+        default="",
+        description="K8s namespace to query (empty = all namespaces).",
+    )
+    label_selector: str = Field(
+        default="ravn.niuu.world/role=agent",
+        description="Label selector used to list Ravn pods.",
+    )
+
+
+class DiscoveryConfig(BaseModel):
+    """Flock peer detection configuration (NIU-538).
+
+    ``adapter`` selects the discovery backend:
+    - ``mdns``      — Pi mode, mDNS + HMAC handshake (zeroconf)
+    - ``sleipnir``  — infra mode, pub/sub + SPIFFE JWT validation
+    - ``k8s``       — infra mode, K8s pod label selector
+    - ``composite`` — combines multiple backends
+    """
+
+    adapter: str = Field(
+        default="mdns",
+        description="Discovery backend: 'mdns', 'sleipnir', 'k8s', or 'composite'.",
+    )
+    realm_id_env: str = Field(
+        default="RAVN_REALM_ID",
+        description="Env var carrying the realm_id for infra mode (OpenBao / K8s label).",
+    )
+    heartbeat_interval_s: float = Field(
+        default=30.0,
+        description="Seconds between liveness heartbeats.",
+    )
+    peer_ttl_s: float = Field(
+        default=90.0,
+        description="Seconds of missed heartbeats before a peer is evicted (≈ 3 heartbeats).",
+    )
+    mdns: DiscoveryMdnsConfig = Field(default_factory=DiscoveryMdnsConfig)
+    sleipnir: DiscoverySleipnirConfig = Field(default_factory=DiscoverySleipnirConfig)
+    k8s: DiscoveryK8sConfig = Field(default_factory=DiscoveryK8sConfig)
+
+
 class MeshConfig(BaseModel):
     """Ravn-to-Ravn mesh transport configuration (NIU-517).
 
@@ -1294,6 +1368,9 @@ class Settings(BaseSettings):
 
     # NIU-517: Ravn-to-Ravn mesh transport
     mesh: MeshConfig = Field(default_factory=MeshConfig)
+
+    # NIU-538: flock peer discovery
+    discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)
 
     # Legacy — kept so existing CLI wiring (NIU-426) continues to work
     llm_adapter: LLMAdapterConfig = Field(default_factory=LLMAdapterConfig)

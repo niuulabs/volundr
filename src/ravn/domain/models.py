@@ -519,3 +519,64 @@ class MimirLintReport:
     @property
     def issues_found(self) -> bool:
         return bool(self.orphans or self.contradictions or self.stale or self.gaps)
+
+
+# ---------------------------------------------------------------------------
+# Flock discovery models (NIU-538)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RavnCandidate:
+    """Pre-handshake peer candidate discovered via mDNS or K8s (unverified).
+
+    Carries enough information to attempt a handshake but has not yet proven
+    realm membership.  ``realm_id_hash`` is SHA-256(realm_key)[:16] — the raw
+    secret is never transmitted.
+    """
+
+    peer_id: str
+    realm_id_hash: str  # SHA-256(realm_key)[:16] — not the raw secret
+    host: str
+    rep_address: str | None  # nng REP address
+    pub_address: str | None  # nng PUB address
+    handshake_port: int | None  # temp nng PAIR port for HMAC exchange
+    metadata: dict = field(default_factory=dict)  # raw TXT records / pod annotations
+
+
+@dataclass
+class RavnIdentity:
+    """This Ravn instance's own identity — announced to the flock.
+
+    ``rep_address`` and ``pub_address`` are set by the active mesh adapter
+    on startup so that peers know where to connect.
+    """
+
+    peer_id: str
+    realm_id: str  # raw realm secret (never transmitted — hashed before announcing)
+    persona: str
+    capabilities: list[str]
+    permission_mode: str  # read_only | workspace_write | full_access
+    version: str
+    rep_address: str | None = None  # nng REP address for mesh.send()
+    pub_address: str | None = None  # nng PUB address for mesh.subscribe()
+    spiffe_id: str | None = None  # infra mode only
+    sleipnir_routing_key: str | None = None  # for SleipnirMeshAdapter routing
+
+
+@dataclass
+class RavnPeer(RavnIdentity):
+    """A verified (or pending/rejected) flock member.
+
+    Extends ``RavnIdentity`` with trust metadata and liveness state.
+    ``status`` and ``task_count`` are updated via heartbeat so that the
+    cascade coordinator can pick idle peers.
+    """
+
+    trust_level: Literal["verified", "unverified", "rejected"] = "unverified"
+    first_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_heartbeat: datetime = field(default_factory=lambda: datetime.now(UTC))
+    latency_ms: float | None = None
+    status: Literal["idle", "busy"] = "idle"
+    task_count: int = 0
