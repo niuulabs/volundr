@@ -125,7 +125,7 @@ def _build_llm(settings: Settings) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _build_memory(settings: Settings) -> Any:
+def _build_memory(settings: Settings, llm: Any = None) -> Any:
     """Build the memory adapter (SQLite or Postgres), or None."""
     backend = settings.memory.backend
 
@@ -171,6 +171,34 @@ def _build_memory(settings: Settings) -> Any:
             )
             return None
         return PostgresMemoryAdapter(dsn=dsn)
+
+    if backend == "buri":
+        from ravn.adapters.memory.buri import BuriMemoryAdapter
+
+        dsn = os.environ.get(settings.memory.dsn_env, "") if settings.memory.dsn_env else ""
+        dsn = dsn or settings.memory.dsn
+        if not dsn:
+            logger.warning(
+                "Buri memory backend configured but no DSN provided — memory disabled",
+            )
+            return None
+        bc = settings.buri
+        reflection_model = settings.agent.outcome.reflection_model
+        return BuriMemoryAdapter(
+            dsn=dsn,
+            prefetch_budget=settings.memory.prefetch_budget,
+            prefetch_limit=settings.memory.prefetch_limit,
+            prefetch_min_relevance=settings.memory.prefetch_min_relevance,
+            recency_half_life_days=settings.memory.recency_half_life_days,
+            session_search_truncate_chars=settings.memory.session_search_truncate_chars,
+            cluster_merge_threshold=bc.cluster_merge_threshold,
+            extraction_model=bc.extraction_model,
+            reflection_model=reflection_model,
+            min_confidence=bc.min_confidence,
+            session_summary_max_tokens=bc.session_summary_max_tokens,
+            supersession_cosine_threshold=bc.supersession_cosine_threshold,
+            llm=llm,
+        )
 
     # Custom backend via fully-qualified class path
     try:
@@ -391,6 +419,26 @@ def _build_tools(
     if memory is not None:
         tools.append(RavnMemorySearchTool(memory))
         tools.append(SessionSearchTool(memory))
+
+    # -- Búri knowledge tools (buri backend only) --
+    from ravn.ports.memory import BuriMemoryPort
+
+    if isinstance(memory, BuriMemoryPort):
+        from ravn.adapters.tools.buri_tools import (
+            BuriFactsTool,
+            BuriForgetTool,
+            BuriHistoryTool,
+            BuriRecallTool,
+            BuriRememberTool,
+        )
+
+        tools.extend([
+            BuriRecallTool(memory),
+            BuriFactsTool(memory),
+            BuriHistoryTool(memory),
+            BuriRememberTool(memory, session_id=str(session.id)),
+            BuriForgetTool(memory),
+        ])
 
     # -- Custom tools from config --
     for ct in settings.tools.custom:
@@ -764,7 +812,7 @@ def _build_agent(
         no_tools=no_tools,
         persona_config=persona_config,
     )
-    memory = _build_memory(settings)
+    memory = _build_memory(settings, llm=llm)
     outcome_port, outcome_config = _build_outcome(settings)
     iteration_budget = IterationBudget(
         total=settings.iteration_budget.total,
@@ -1163,7 +1211,7 @@ async def _run_gateway(
     # Shared resources (safe to reuse across sessions)
     workspace = _resolve_workspace(settings)
     llm = _build_llm(settings)
-    memory = _build_memory(settings)
+    memory = _build_memory(settings, llm=llm)
     outcome_port, outcome_config = _build_outcome(settings)
     compressor = _build_compressor(settings, llm)
     prompt_builder = _build_prompt_builder(settings)
