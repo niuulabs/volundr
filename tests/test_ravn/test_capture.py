@@ -533,7 +533,8 @@ class TestTaskCollectToolOutput:
         )
         result = await tool.execute({"task_id": "t1"})
         data = json.loads(result.content)
-        assert data["event_count"] == 5  # set_output only sets output text; events are added via CaptureChannel.emit
+        # set_output only sets output text; events are added via CaptureChannel.emit
+        assert data["event_count"] == 5
 
 
 # ---------------------------------------------------------------------------
